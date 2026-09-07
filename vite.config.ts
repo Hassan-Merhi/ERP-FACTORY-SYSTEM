@@ -3,12 +3,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
-import { heavyListPaginationPlugin } from "./build/viteHeavyListPaginationPlugin";
-import { salesReportBandwidthPlugin } from "./build/viteSalesReportBandwidthPlugin";
-import { salesReportInvalidationPlugin } from "./build/viteSalesReportInvalidationPlugin";
-import { phase1PaginationPlugin } from "./build/vitePhase1PaginationGuardPlugin";
-import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin";
-import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin";
+import { heavyListPaginationPlugin } from "./build/viteHeavyListPaginationPlugin.ts";
+import { salesReportBandwidthPlugin } from "./build/viteSalesReportBandwidthPlugin.ts";
+import { salesReportInvalidationPlugin } from "./build/viteSalesReportInvalidationPlugin.ts";
+import { phase1PaginationPlugin } from "./build/vitePhase1PaginationGuardPlugin.ts";
+import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin.ts";
+import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin.ts";
 
 // `vite build` produces the production artifact, so it must be a production
 // build regardless of the NODE_ENV the surrounding job happens to export. CI

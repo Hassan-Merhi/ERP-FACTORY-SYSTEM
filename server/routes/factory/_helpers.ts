@@ -21,7 +21,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import CryptoJS from "crypto-js";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   resolveStoredFxRate,
   applyFxRate,
@@ -204,7 +204,9 @@ export function isLegacySHA256Hash(hash: string): boolean {
 
 export async function verifySupervisorPassword(password: string, hash: string): Promise<boolean> {
   if (isLegacySHA256Hash(hash)) {
-    return CryptoJS.SHA256(password).toString().toLowerCase() === hash.toLowerCase();
+    const actual = createHash("sha256").update(password, "utf8").digest();
+    const expected = Buffer.from(hash, "hex");
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
   }
   return bcrypt.compare(password, hash);
 }
