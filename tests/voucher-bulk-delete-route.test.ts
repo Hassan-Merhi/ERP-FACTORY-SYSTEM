@@ -299,6 +299,67 @@ describe("POST /api/vouchers/bulk-delete inventory reversal", () => {
     }
   });
 
+  it("reverses an adjustment created through the PATCH route, whose type is stored lowercased", async () => {
+    // Regression: `createStockAdjustment` stores "Production" while
+    // PATCH /api/vouchers/:id/adjustment stores "production". Bulk delete used to
+    // compare case-sensitively, so a real Production voucher created through the
+    // route was classified as consumption and had its quantity ADDED back on
+    // delete — inflating stock by twice the adjusted quantity instead of
+    // cancelling it. Seeding through the route is what makes this test bite.
+    const item = ctx.stockItemIds[1];
+    const voucher = await makeVoucher("Production");
+    const before = await inventoryQty(ctx.locationId, item);
+
+    const created = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      locationId: ctx.locationId,
+      description: "Produced through the route",
+      items: [{ stockItemId: item, quantity: "6", rate: "5" }],
+    });
+    expect(created.status).toBe(200);
+    expect(await inventoryQty(ctx.locationId, item)).toBeCloseTo(before + 6, 3);
+
+    // The stored casing really is lowercase — the premise of this regression.
+    const header = await pool.query<{ adjustment_type: string }>(
+      `SELECT adjustment_type FROM stock_adjustment_vouchers WHERE voucher_id = $1`,
+      [voucher.id]
+    );
+    expect(header.rows[0].adjustment_type).toBe("production");
+
+    expect((await bulkDelete([voucher.id])).body.deletedCount).toBe(1);
+
+    // Back to exactly where we started, not 12 above it.
+    expect(await inventoryQty(ctx.locationId, item)).toBeCloseTo(before, 3);
+  });
+
+  it("reverses a lowercase Mixed adjustment per line sign", async () => {
+    const positive = ctx.stockItemIds[0];
+    const negative = ctx.stockItemIds[1];
+    const voucher = await makeVoucher("Mixed");
+    const positiveBefore = await inventoryQty(ctx.locationId, positive);
+    const negativeBefore = await inventoryQty(ctx.locationId, negative);
+
+    const created = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      locationId: ctx.locationId,
+      items: [
+        { stockItemId: positive, quantity: "5", rate: "3" },
+        { stockItemId: negative, quantity: "-2", rate: "3" },
+      ],
+    });
+    expect(created.status).toBe(200);
+
+    const header = await pool.query<{ adjustment_type: string }>(
+      `SELECT adjustment_type FROM stock_adjustment_vouchers WHERE voucher_id = $1`,
+      [voucher.id]
+    );
+    expect(header.rows[0].adjustment_type).toBe("mixed");
+
+    expect((await bulkDelete([voucher.id])).body.deletedCount).toBe(1);
+
+    // Each line is reversed according to its own sign, so both return to baseline.
+    expect(await inventoryQty(ctx.locationId, positive)).toBeCloseTo(positiveBefore, 3);
+    expect(await inventoryQty(ctx.locationId, negative)).toBeCloseTo(negativeBefore, 3);
+  });
+
   it("leaves inventory alone for an optional adjustment voucher", async () => {
     const item = ctx.stockItemIds[1];
     const voucher = await makeVoucher("Production", { optional: true });
