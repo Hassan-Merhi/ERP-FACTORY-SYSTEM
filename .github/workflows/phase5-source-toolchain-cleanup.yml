@@ -1,0 +1,71 @@
+name: Phase 5 Source Toolchain Cleanup
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.19.0"
+          cache: npm
+
+      - name: Replace remaining CryptoJS SHA-256 usages
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const factoryPath = 'server/routes/factory/_helpers.ts';
+          let factory = fs.readFileSync(factoryPath, 'utf8');
+          if (!factory.includes('import CryptoJS from "crypto-js";')) throw new Error('Expected factory CryptoJS import not found');
+          factory = factory.replace('import CryptoJS from "crypto-js";', 'import { createHash, timingSafeEqual } from "node:crypto";');
+          const legacyExpr = 'return CryptoJS.SHA256(password).toString().toLowerCase() === hash.toLowerCase();';
+          if (!factory.includes(legacyExpr)) throw new Error('Expected factory legacy SHA-256 expression not found');
+          factory = factory.replace(legacyExpr, 'const actual = createHash("sha256").update(password, "utf8").digest();\n    const expected = Buffer.from(hash, "hex");\n    return actual.length === expected.length && timingSafeEqual(actual, expected);');
+          fs.writeFileSync(factoryPath, factory);
+
+          const testPath = 'tests/password-helpers.test.ts';
+          let test = fs.readFileSync(testPath, 'utf8');
+          if (!test.includes('import CryptoJS from "crypto-js";')) throw new Error('Expected test CryptoJS import not found');
+          test = test.replace('import CryptoJS from "crypto-js";', 'import { createHash } from "node:crypto";');
+          test = test.replaceAll('CryptoJS.SHA256("correct horse battery staple").toString()', 'createHash("sha256").update("correct horse battery staple").digest("hex")');
+          test = test.replaceAll('CryptoJS.SHA256("legacy-secret").toString()', 'createHash("sha256").update("legacy-secret").digest("hex")');
+          fs.writeFileSync(testPath, test);
+          NODE
+
+      - name: Record reviewed npm install-script policy
+        run: |
+          npm ci --ignore-scripts --no-audit
+          npm approve-scripts bufferutil esbuild protobufjs puppeteer
+          npm deny-scripts @google/genai core-js
+          echo 'Pending install scripts after review:'
+          npm approve-scripts --allow-scripts-pending
+          echo 'glob@7.2.3 dependency path:'
+          npm explain glob@7.2.3 || true
+
+      - name: Refresh lockfile metadata
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Commit cleanup
+        run: |
+          if git diff --quiet; then
+            echo 'No cleanup diff.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server/routes/factory/_helpers.ts tests/password-helpers.test.ts package.json package-lock.json
+          git commit -m 'refactor(crypto): finish Node crypto migration and npm script policy'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
