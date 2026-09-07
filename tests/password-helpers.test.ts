@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import CryptoJS from "crypto-js";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   hashPassword,
@@ -17,14 +17,14 @@ describe("passwordHelpers", () => {
   });
 
   it("verifies legacy SHA-256 passwords case-insensitively", () => {
-    const hash = CryptoJS.SHA256("correct horse battery staple").toString();
+    const hash = createHash("sha256").update("correct horse battery staple").digest("hex");
     expect(verifyLegacyPassword("correct horse battery staple", hash.toUpperCase())).toBe(true);
     expect(verifyLegacyPassword("wrong password", hash)).toBe(false);
     expect(verifyLegacyPassword("anything", "")).toBe(false);
   });
 
   it("marks a successful legacy login for bcrypt migration", async () => {
-    const hash = CryptoJS.SHA256("legacy-secret").toString();
+    const hash = createHash("sha256").update("legacy-secret").digest("hex");
     await expect(verifyPassword("legacy-secret", hash)).resolves.toEqual({
       valid: true,
       needsMigration: true,

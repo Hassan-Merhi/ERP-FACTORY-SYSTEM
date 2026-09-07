@@ -236,5 +236,13 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "protobufjs@7.6.5": true,
+    "puppeteer@25.9.0": true,
+    "@google/genai": false,
+    "core-js": false
   }
 }
