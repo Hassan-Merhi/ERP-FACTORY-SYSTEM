@@ -89,10 +89,12 @@ describe("requestLogger health metrics", () => {
       total: 0,
       active: 0,
       completed: 0,
+      measuredCompleted: 0,
       success: 0,
       expectedClientResponse: 0,
       clientError: 0,
       clientAbort: 0,
+      streamClosed: 0,
       serverError: 0,
       slow: 0,
       averageDurationMs: 0,
@@ -139,7 +141,9 @@ describe("requestLogger health metrics", () => {
       total: 1,
       active: 0,
       completed: 1,
+      measuredCompleted: 1,
       clientAbort: 1,
+      streamClosed: 0,
       clientAbortPercent: 100,
       success: 0,
       serverError: 0,
@@ -174,12 +178,14 @@ describe("requestLogger health metrics", () => {
       total: 1,
       active: 0,
       completed: 1,
+      measuredCompleted: 1,
       success: 1,
       clientAbort: 0,
+      streamClosed: 0,
     });
   });
 
-  it("treats an EventSource disconnect as expected stream completion instead of an abort or slow request", () => {
+  it("tracks EventSource disconnects separately without diluting measured latency or database averages", () => {
     const req = createRequest("/api/screen-feed/session-1", { accept: "text/event-stream" });
     const res = createResponse();
     const next = vi.fn() as NextFunction;
@@ -192,11 +198,20 @@ describe("requestLogger health metrics", () => {
       total: 1,
       active: 0,
       completed: 1,
-      success: 1,
+      measuredCompleted: 0,
+      success: 0,
       clientAbort: 0,
+      streamClosed: 1,
       slow: 0,
       averageDurationMs: 0,
       maxDurationMs: 0,
+      slowPercent: 0,
+      clientAbortPercent: 0,
+      database: {
+        queryCount: 0,
+        averageQueriesPerRequest: 0,
+        averageDurationMsPerRequest: 0,
+      },
     });
     expect(logger.warn).not.toHaveBeenCalledWith(
       "Client disconnected before response completed",
