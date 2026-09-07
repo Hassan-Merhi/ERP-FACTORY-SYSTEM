@@ -20,25 +20,24 @@ jobs:
         with:
           node-version: "24.19.0"
           cache: npm
-      - name: Finalize package policy and native Vite imports
+      - name: Prepare reviewed install-script policy
+        run: |
+          npm ci --ignore-scripts --no-audit
+          npm approve-scripts bufferutil fsevents
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify strict install-script policy
+        run: |
+          npm ci --no-audit
+          if npm approve-scripts --allow-scripts-pending 2>&1 | grep -q 'not yet covered'; then
+            echo 'Unreviewed install scripts remain.'
+            npm approve-scripts --allow-scripts-pending
+            exit 1
+          fi
+      - name: Make remaining native Vite imports explicit
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const packagePath = 'package.json';
-          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-          pkg.allowScripts ??= {};
-          pkg.allowScripts['bufferutil@4.1.0'] = true;
-          fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
-
           const replacements = new Map([
-            ['vite.config.ts', [
-              ['./build/viteHeavyListPaginationPlugin"', './build/viteHeavyListPaginationPlugin.ts"'],
-              ['./build/viteSalesReportBandwidthPlugin"', './build/viteSalesReportBandwidthPlugin.ts"'],
-              ['./build/viteSalesReportInvalidationPlugin"', './build/viteSalesReportInvalidationPlugin.ts"'],
-              ['./build/vitePhase1PaginationGuardPlugin"', './build/vitePhase1PaginationGuardPlugin.ts"'],
-              ['./build/viteLazyHeavyImportsPlugin"', './build/viteLazyHeavyImportsPlugin.ts"'],
-              ['./build/viteLabelAssetExtractionPlugin"', './build/viteLabelAssetExtractionPlugin.ts"'],
-            ]],
             ['build/vitePhase1PaginationGuardPlugin.ts', [
               ['./vitePhase1PaginationPlugin"', './vitePhase1PaginationPlugin.ts"'],
             ]],
@@ -52,11 +51,6 @@ jobs:
             fs.writeFileSync(file, content);
           }
           NODE
-      - name: Refresh and verify npm metadata
-        run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          npm ci --no-audit
-          test -z "$(npm approve-scripts --allow-scripts-pending 2>&1 | grep 'not yet covered' || true)"
       - name: Verify native Vite config loader
         run: node --max-old-space-size=4096 node_modules/vite/bin/vite.js build --configLoader native
       - name: Commit final mutations
@@ -64,6 +58,6 @@ jobs:
           if git diff --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json vite.config.ts build/vitePhase1PaginationGuardPlugin.ts build/viteHeavyListPaginationPlugin.ts
+          git add package.json package-lock.json build/vitePhase1PaginationGuardPlugin.ts build/viteHeavyListPaginationPlugin.ts
           git commit -m 'chore(toolchain): finalize reviewed scripts and Vite imports'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
