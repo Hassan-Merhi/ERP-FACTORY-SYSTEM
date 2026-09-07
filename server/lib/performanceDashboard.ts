@@ -3,6 +3,8 @@ import { pool } from "../db";
 import { evaluateOperationalAlerts, getOperationalIncidentSnapshot } from "./operationalAlerts";
 import { getRuntimePerformanceSnapshot } from "./runtimePerformance";
 
+const CLIENT_ABORT_STATUS = 499;
+
 interface RequestSample {
   timestamp: number;
   method: string;
@@ -20,6 +22,7 @@ interface RouteAggregate {
   mode: string;
   count: number;
   errors: number;
+  clientAborts: number;
   totalMs: number;
   maxMs: number;
   bytes: number;
@@ -50,6 +53,9 @@ function modeForPath(path: string): string {
   if (path.startsWith("/api/properties/")) return "Properties";
   return "ERP";
 }
+export function resetPerformanceDashboardForTests(): void {
+  samples.length = 0;
+}
 export function recordPerformanceSample(input: Omit<RequestSample, "timestamp" | "mode">): void {
   samples.push({ ...input, timestamp: Date.now(), mode: modeForPath(input.routeTemplate) });
   prune();
@@ -59,7 +65,8 @@ export function getPerformanceDashboardSnapshot() {
   const memory = process.memoryUsage(),
     completed = samples.length,
     durations = samples.map((s) => s.durationMs),
-    errors = samples.filter((s) => s.status >= 500).length;
+    errors = samples.filter((s) => s.status >= 500).length,
+    clientAborts = samples.filter((s) => s.status === CLIENT_ABORT_STATUS).length;
   const slow = samples.filter((s) => s.durationMs >= finiteConfig("SLOW_REQUEST_MS", 500, 0)).length;
   const routeMap = new Map<string, RouteAggregate>();
   for (const sample of samples) {
@@ -70,6 +77,7 @@ export function getPerformanceDashboardSnapshot() {
       mode: sample.mode,
       count: 0,
       errors: 0,
+      clientAborts: 0,
       totalMs: 0,
       maxMs: 0,
       bytes: 0,
@@ -78,6 +86,7 @@ export function getPerformanceDashboardSnapshot() {
     };
     row.count++;
     row.errors += sample.status >= 500 ? 1 : 0;
+    row.clientAborts += sample.status === CLIENT_ABORT_STATUS ? 1 : 0;
     row.totalMs += sample.durationMs;
     row.maxMs = Math.max(row.maxMs, sample.durationMs);
     row.bytes += sample.responseBytes;
@@ -98,6 +107,7 @@ export function getPerformanceDashboardSnapshot() {
       mode,
       requests: rows.length,
       errors: rows.filter((s) => s.status >= 500).length,
+      clientAborts: rows.filter((s) => s.status === CLIENT_ABORT_STATUS).length,
       p95Ms: percentile(
         rows.map((s) => s.durationMs),
         0.95
@@ -116,6 +126,8 @@ export function getPerformanceDashboardSnapshot() {
       requests: completed,
       errors,
       errorPercent: completed ? Math.round((errors / completed) * 10000) / 100 : 0,
+      clientAborts,
+      clientAbortPercent: completed ? Math.round((clientAborts / completed) * 10000) / 100 : 0,
       slow,
       p50Ms: percentile(durations, 0.5),
       p95Ms: percentile(durations, 0.95),
@@ -137,6 +149,10 @@ export function getPerformanceDashboardSnapshot() {
     },
     byMode,
     slowestRoutes: [...routes].sort((a, b) => b.p95Ms - a.p95Ms).slice(0, 20),
+    abortedRoutes: [...routes]
+      .filter((route) => route.clientAborts > 0)
+      .sort((a, b) => b.clientAborts - a.clientAborts || b.maxMs - a.maxMs)
+      .slice(0, 20),
     largestRoutes: [...routes].sort((a, b) => b.averageBytes - a.averageBytes).slice(0, 20),
     busiestRoutes: [...routes].sort((a, b) => b.count - a.count).slice(0, 20),
     runtime,
