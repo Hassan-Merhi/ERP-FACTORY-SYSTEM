@@ -14,6 +14,16 @@ export interface DesignColorOption {
   colorHex?: string;
 }
 
+interface LabelDesignColorRow {
+  id: number;
+  slug: string;
+  label: string;
+  colorHex: string;
+  isDefault: boolean;
+  hasCustom: boolean;
+  lastModified: number | null;
+}
+
 const STATIC_FALLBACK: DesignColorOption[] = A4_DESIGN_OPTIONS.map((o) => ({
   ...o,
   isDefault: true,
@@ -21,14 +31,14 @@ const STATIC_FALLBACK: DesignColorOption[] = A4_DESIGN_OPTIONS.map((o) => ({
   lastModified: null,
 }));
 
-function rowToOption(r: any): DesignColorOption {
+function rowToOption(r: LabelDesignColorRow): DesignColorOption {
   const ts: number | null = r.hasCustom && r.lastModified ? r.lastModified : null;
   // previewUrl is for screen/UI display only (small WebP thumbnail).
   // Custom images use the original URL (stable ?t= timestamp → browser caches correctly).
   // Print always uses getDesignBannerUrl() from labelHtml.ts which uses the full-res original.
   const previewUrl = ts
-    ? `/labels/hmd-${r.slug}.jpg?t=${ts}`                       // custom image, stable cache key
-    : `/labels/previews/hmd-${r.slug}-preview.webp`;            // default → small preview
+    ? `/labels/hmd-${r.slug}.jpg?t=${ts}` // custom image, stable cache key
+    : `/labels/previews/hmd-${r.slug}-preview.webp`; // default → small preview
   return {
     id: r.id,
     slug: r.slug,
@@ -48,9 +58,9 @@ export function useLabelDesignColors() {
     queryKey: ["/api/factory/label-design-colors"],
     queryFn: () =>
       fetch("/api/factory/label-design-colors", { credentials: "include" })
-        .then((r) => r.json())
+        .then((r) => r.json() as Promise<unknown>)
         .then((rows) => {
-          const colors = Array.isArray(rows) ? rows.map(rowToOption) : STATIC_FALLBACK;
+          const colors = Array.isArray(rows) ? (rows as LabelDesignColorRow[]).map(rowToOption) : STATIC_FALLBACK;
           const timestamps: Record<string, number | null> = {};
           for (const c of colors) {
             timestamps[c.value] = c.hasCustom && c.lastModified ? c.lastModified : null;
