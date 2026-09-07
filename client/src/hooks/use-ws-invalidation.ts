@@ -17,6 +17,16 @@ const STABLE_QUERY_PREFIXES = [
 // round costs one request per query on screen.
 const INVALIDATE_DEBOUNCE_MS = 3_000;
 
+// AuthenticatedApp owns the app-wide invalidation socket. Some leaf pages have
+// historically mounted this hook too, which opened duplicate /ws connections
+// in the same browser tab. Keep a module-level owner token so accidental extra
+// mounts become no-ops instead of multiplying long-lived Render connections.
+let activeWsInvalidationOwner: symbol | null = null;
+
+export function resetWsInvalidationOwnerForTests(): void {
+  activeWsInvalidationOwner = null;
+}
+
 export function useWsInvalidation() {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
@@ -31,6 +41,9 @@ export function useWsInvalidation() {
   const missedWhileHiddenRef = useRef(false);
 
   useEffect(() => {
+    const ownerToken = Symbol("ws-invalidation-owner");
+    if (activeWsInvalidationOwner !== null) return;
+    activeWsInvalidationOwner = ownerToken;
     unmountedRef.current = false;
 
     function runInvalidation() {
@@ -133,6 +146,7 @@ export function useWsInvalidation() {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       wsRef.current?.close();
+      if (activeWsInvalidationOwner === ownerToken) activeWsInvalidationOwner = null;
     };
   }, [queryClient]);
 }
