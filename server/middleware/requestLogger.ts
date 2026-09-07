@@ -45,6 +45,7 @@ interface RequestMetrics {
   expectedClientResponse: number;
   clientError: number;
   clientAbort: number;
+  streamClosed: number;
   serverError: number;
   slow: number;
   durationTotalMs: number;
@@ -61,6 +62,7 @@ const metrics: RequestMetrics = {
   expectedClientResponse: 0,
   clientError: 0,
   clientAbort: 0,
+  streamClosed: 0,
   serverError: 0,
   slow: 0,
   durationTotalMs: 0,
@@ -109,6 +111,7 @@ export function resetRequestMetricsForTests(): void {
   metrics.expectedClientResponse = 0;
   metrics.clientError = 0;
   metrics.clientAbort = 0;
+  metrics.streamClosed = 0;
   metrics.serverError = 0;
   metrics.slow = 0;
   metrics.durationTotalMs = 0;
@@ -129,7 +132,8 @@ export function getRequestMetricsSnapshot() {
   const poolIdle = Number(pool.idleCount || 0);
   const poolWaiting = Number(pool.waitingCount || 0);
   const resolved = metrics.success + metrics.expectedClientResponse + metrics.clientError + metrics.serverError;
-  const completed = resolved + metrics.clientAbort;
+  const measuredCompleted = resolved + metrics.clientAbort;
+  const completed = measuredCompleted + metrics.streamClosed;
   const slowRequestThresholdsMs = getSlowRequestThresholdConfig();
 
   return {
@@ -149,16 +153,18 @@ export function getRequestMetricsSnapshot() {
       total: metrics.total,
       active: metrics.active,
       completed,
+      measuredCompleted,
       success: metrics.success,
       expectedClientResponse: metrics.expectedClientResponse,
       clientError: metrics.clientError,
       clientAbort: metrics.clientAbort,
+      streamClosed: metrics.streamClosed,
       serverError: metrics.serverError,
       slow: metrics.slow,
-      averageDurationMs: completed > 0 ? Math.round(metrics.durationTotalMs / completed) : 0,
+      averageDurationMs: measuredCompleted > 0 ? Math.round(metrics.durationTotalMs / measuredCompleted) : 0,
       maxDurationMs: metrics.durationMaxMs,
-      slowPercent: percentage(metrics.slow, completed),
-      clientAbortPercent: percentage(metrics.clientAbort, completed),
+      slowPercent: percentage(metrics.slow, measuredCompleted),
+      clientAbortPercent: percentage(metrics.clientAbort, measuredCompleted),
       serverErrorPercent: percentage(metrics.serverError, resolved),
       slowRequestThresholdMs: slowRequestThresholdsMs.default,
       slowRequestThresholdsMs,
@@ -166,8 +172,10 @@ export function getRequestMetricsSnapshot() {
       database: {
         queryCount: metrics.dbQueryCount,
         totalDurationMs: Math.round(metrics.dbDurationMs),
-        averageQueriesPerRequest: completed > 0 ? Math.round((metrics.dbQueryCount / completed) * 100) / 100 : 0,
-        averageDurationMsPerRequest: completed > 0 ? Math.round(metrics.dbDurationMs / completed) : 0,
+        averageQueriesPerRequest:
+          measuredCompleted > 0 ? Math.round((metrics.dbQueryCount / measuredCompleted) * 100) / 100 : 0,
+        averageDurationMsPerRequest:
+          measuredCompleted > 0 ? Math.round(metrics.dbDurationMs / measuredCompleted) : 0,
       },
     },
     databasePool: {
@@ -263,7 +271,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
           metrics.active = Math.max(0, metrics.active - 1);
           if (completionKind === "stream_closed") {
-            metrics.success += 1;
+            metrics.streamClosed += 1;
             return;
           }
 
