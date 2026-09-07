@@ -18,7 +18,7 @@ function errorMessage(error: unknown): string {
  * the same name as the selected Golden Coast payment account. Missing master
  * data is a configuration problem, not an internal server failure. Classify it
  * as 422 so the whole POS transaction still rolls back atomically while the UI
- * gets an actionable setup error instead of a 500.
+ * receives the existing detailed setup message and a stable machine code.
  */
 export function classifyGoldenCoastPosConfigurationError(
   error: unknown
@@ -30,7 +30,7 @@ export function classifyGoldenCoastPosConfigurationError(
     status: 422,
     body: {
       code: GOLDEN_COAST_HADI_CASH_CONFIGURATION_CODE,
-      message: `${message}. Create or activate the matching Cash/Bank account in HADI, then retry the sale.`,
+      message,
     },
   };
 }
