@@ -4,6 +4,8 @@ import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 
 const { Client } = pg;
 const REPAIR_FLAG = "RUN_WAVE3_INDEX_REPAIR";
+const REPAIR_LOCK_SQL = "SELECT pg_advisory_lock(20260907, 3)";
+const REPAIR_UNLOCK_SQL = "SELECT pg_advisory_unlock(20260907, 3)";
 const REQUIRED_INDEXES = [
   {
     name: "sales_items_voucher_idx",
@@ -76,13 +78,23 @@ async function ensureWave3SalesHotpathIndexes() {
     ssl: resolveDatabaseSsl(connectionString),
     connectionTimeoutMillis: 8_000,
   });
+  let connected = false;
+  let repairLockHeld = false;
 
   try {
     await client.connect();
+    connected = true;
     // CREATE/DROP INDEX CONCURRENTLY must run outside an explicit transaction.
     // Keep lock waits bounded while allowing the index scan enough time to finish.
     await client.query("SET lock_timeout = '30s'");
     await client.query("SET statement_timeout = '10min'");
+
+    // The repair spans multiple concurrent-index statements and therefore cannot
+    // be wrapped in a transaction. Serialize the whole sequence with a session
+    // advisory lock so multiple fresh app instances cannot race through the same
+    // invalid/intermediate index catalog state during a deployment.
+    await client.query(REPAIR_LOCK_SQL);
+    repairLockHeld = true;
 
     for (const expected of REQUIRED_INDEXES) {
       const existing = await readIndexState(client, expected.name);
@@ -123,7 +135,15 @@ async function ensureWave3SalesHotpathIndexes() {
     });
     throw error;
   } finally {
-    await client.end().catch(() => {});
+    if (repairLockHeld) {
+      await client.query(REPAIR_UNLOCK_SQL).catch((error) => {
+        log("WARN", "Failed to explicitly release Wave 3 index repair advisory lock", {
+          errorCode: error?.code,
+          errorMessage: error?.message || String(error),
+        });
+      });
+    }
+    if (connected) await client.end().catch(() => {});
   }
 }
 
