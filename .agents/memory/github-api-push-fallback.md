@@ -3,7 +3,7 @@ name: GitHub push fallback
 description: How to publish a verified branch when the local HTTPS Git remote cannot authenticate.
 ---
 
-When the local Git remote rejects HTTPS credentials, do not ask for or expose a token. Use the already-authorized GitHub connection and the Git database API instead: create blobs or inline tree entries, create a commit whose parent is the current remote base, create the branch ref, then open the pull request.
+When the local Git remote rejects HTTPS credentials, do not ask for or expose a token. Use the already-authorized GitHub connection and the Git database API instead: create blobs or inline tree entries, create a commit whose parent is the current remote base, create the branch ref, then open the pull request. The REST proxy may return a bare 403 while the same connection's GraphQL endpoint works; GraphQL can create the ref, commit, and pull request directly. The repository's Git remote slug may differ from its GraphQL repository name, so query the repository first rather than assuming the remote path.
 
 **Why:** The repository can have valid Replit-managed GitHub authorization even when the container's `git push` credential helper is unavailable. Large tree payloads may exceed the connector request limit, so incremental tree objects based on the prior tree are safer than a single full upload.
 
