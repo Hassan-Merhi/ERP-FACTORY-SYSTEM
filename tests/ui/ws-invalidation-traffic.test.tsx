@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, type Query } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { resetWsInvalidationOwnerForTests, useWsInvalidation } from "@/hooks/use-ws-invalidation";
+import { resetWsInvalidationManagerForTests, useWsInvalidation } from "@/hooks/use-ws-invalidation";
 
 /**
  * Every write in the system broadcasts, and every broadcast makes each
@@ -48,14 +48,14 @@ describe("WebSocket invalidation traffic", () => {
   beforeEach(() => {
     sockets = [];
     visibility = "visible";
-    resetWsInvalidationOwnerForTests();
+    resetWsInvalidationManagerForTests();
     vi.useFakeTimers();
     vi.stubGlobal("WebSocket", FakeSocket as unknown as typeof WebSocket);
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   });
 
   afterEach(() => {
-    resetWsInvalidationOwnerForTests();
+    resetWsInvalidationManagerForTests();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -135,17 +135,22 @@ describe("WebSocket invalidation traffic", () => {
     expect(predicate(queryWithKey("/api/factory/customer-orders?status=LOADING"))).toBe(true);
   });
 
-  it("keeps only one shared invalidation websocket when the hook mounts twice", () => {
+  it("shares one socket and keeps it alive when either duplicate hook unmounts first", () => {
     const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     const first = renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
     const second = renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
     expect(sockets).toHaveLength(1);
 
-    second.unmount();
+    first.unmount();
     expect(sockets[0].close).not.toHaveBeenCalled();
 
-    first.unmount();
+    sockets[0].receiveInvalidate();
+    vi.advanceTimersByTime(3_000);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    second.unmount();
     expect(sockets[0].close).toHaveBeenCalledTimes(1);
   });
 });
