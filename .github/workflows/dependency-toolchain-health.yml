@@ -16,6 +16,7 @@ on:
       - scripts/audit-toolchain-coherence.mjs
       - scripts/verify-dependency-audit.mjs
       - scripts/verify-lockfile-registry.mjs
+      - scripts/verify-workspace-lockfile-hygiene.mjs
   push:
     branches: [main]
     paths:
@@ -31,6 +32,7 @@ on:
       - scripts/audit-toolchain-coherence.mjs
       - scripts/verify-dependency-audit.mjs
       - scripts/verify-lockfile-registry.mjs
+      - scripts/verify-workspace-lockfile-hygiene.mjs
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
@@ -72,6 +74,9 @@ jobs:
       - name: Verify lockfile registry policy
         run: npm run verify:lockfile
 
+      - name: Verify workspace and lockfile hygiene
+        run: node scripts/verify-workspace-lockfile-hygiene.mjs
+
       - name: Verify toolchain coherence
         run: npm run audit:toolchain
 
@@ -104,6 +109,9 @@ jobs:
         env:
           SKIP_GIT_HOOKS: "1"
         run: npm ci --no-audit --bin-links=true
+
+      - name: Verify workspace and lockfile hygiene
+        run: node scripts/verify-workspace-lockfile-hygiene.mjs
 
       - name: Block high or critical advisories in all dependencies
         run: node scripts/verify-dependency-audit.mjs --include-dev

@@ -4,6 +4,26 @@ const PRINTER_NAME_KEY = "LABEL_PRINTER_NAME";
 
 export type PrintMode = "BROWSER" | "ZEBRA_RAW";
 
+interface QzTray {
+  security: {
+    setCertificatePromise: (factory: () => Promise<string>) => void;
+    setSignaturePromise: (factory: () => Promise<string>) => void;
+  };
+  websocket: {
+    isActive: () => boolean;
+    connect: () => Promise<void>;
+  };
+  printers: {
+    find: () => Promise<string[]>;
+  };
+  configs: {
+    create: (printer: string, options: { altPrinting: boolean }) => unknown;
+  };
+  print: (config: unknown, data: Array<{ type: "raw"; format: "plain"; data: string }>) => Promise<void>;
+}
+
+type WindowWithQz = Window & typeof globalThis & { qz?: QzTray };
+
 export function getPrintMode(): PrintMode {
   return (localStorage.getItem(PRINT_MODE_KEY) as PrintMode) || "BROWSER";
 }
@@ -20,17 +40,17 @@ export function setPrinterName(name: string) {
   localStorage.setItem(PRINTER_NAME_KEY, name);
 }
 
-let _qzInstance = null;
+let _qzInstance: QzTray | null = null;
 
-async function loadQzTray(): Promise<any> {
-  if ((window as unknown as (Window & typeof globalThis) & { qz: unknown }).qz)
-    return (window as unknown as (Window & typeof globalThis) & { qz: unknown }).qz;
+async function loadQzTray(): Promise<QzTray> {
+  const existingQz = (window as WindowWithQz).qz;
+  if (existingQz) return existingQz;
 
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/qz-tray@2/qz-tray.min.js";
     script.onload = () => {
-      const qz = (window as any).qz;
+      const qz = (window as WindowWithQz).qz;
       if (qz) {
         qz.security.setCertificatePromise(() => Promise.resolve(""));
         qz.security.setSignaturePromise(() => Promise.resolve(""));
@@ -44,7 +64,7 @@ async function loadQzTray(): Promise<any> {
   });
 }
 
-async function getConnection() {
+async function getConnection(): Promise<QzTray> {
   const qz = await loadQzTray();
   if (!qz.websocket.isActive()) {
     try {
@@ -79,7 +99,7 @@ export async function printRawZpl(zplData: string, printerName?: string): Promis
     altPrinting: false,
   });
 
-  const data = [{ type: "raw", format: "plain", data: zplData }];
+  const data = [{ type: "raw" as const, format: "plain" as const, data: zplData }];
 
   await qz.print(config, data);
 }

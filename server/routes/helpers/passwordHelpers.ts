@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import CryptoJS from "crypto-js";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 const BCRYPT_SALT_ROUNDS = 12;
 
@@ -12,8 +12,10 @@ export function isLegacySHA256Hash(hash: string): boolean {
 }
 
 export function verifyLegacyPassword(password: string, hash: string): boolean {
-  const sha256Hash = CryptoJS.SHA256(password).toString().toLowerCase();
-  return sha256Hash === (hash || "").toLowerCase();
+  if (!isLegacySHA256Hash(hash)) return false;
+  const actual = Buffer.from(createHash("sha256").update(password, "utf8").digest("hex"), "hex");
+  const expected = Buffer.from(hash, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export async function verifyPassword(

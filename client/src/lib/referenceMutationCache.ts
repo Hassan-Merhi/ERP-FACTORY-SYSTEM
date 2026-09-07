@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { queryPathname } from "./frontendDataArchitecture";
 
-type JsonRecord = Record<string, any>;
+type JsonRecord = Record<string, unknown>;
 type ReferenceMutationKind = "list" | "object";
 
 interface ReferenceMutationRule {

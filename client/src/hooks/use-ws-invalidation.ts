@@ -16,7 +16,10 @@ const STABLE_QUERY_PREFIXES = [
 // round of refetching every 800ms. Nobody reads numbers that fast, and each
 // round costs one request per query on screen.
 const INVALIDATE_DEBOUNCE_MS = 3_000;
-const RECONNECT_DELAY_MS = 3_000;
+const RECONNECT_BASE_DELAY_MS = 1_500;
+const RECONNECT_MAX_DELAY_MS = 30_000;
+const OFFLINE_PROBE_DELAY_MS = 30_000;
+const RECONNECT_JITTER_RATIO = 0.2;
 
 // Multiple React surfaces may mount this hook in the same browser tab. Keep a
 // single module-level socket and reference-count subscribers by QueryClient so
@@ -28,7 +31,9 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let managerRunning = false;
 let hadSuccessfulConnection = false;
+let firstConnectionDelayed = false;
 let missedWhileHidden = false;
+let reconnectAttempt = 0;
 
 function shouldInvalidateQuery(query: { queryKey: readonly unknown[] }): boolean {
   const key = query.queryKey[0];
@@ -85,8 +90,25 @@ function websocketTarget(): string {
   return `${protocol}//${window.location.host}/ws`;
 }
 
-function connectSharedSocket(): void {
-  if (!managerRunning || subscribers.size === 0) return;
+function browserIsOnline(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+export function computeWsReconnectDelayMs(attempt: number, randomValue = Math.random()): number {
+  const normalizedAttempt = Math.max(0, Math.min(10, Math.floor(attempt)));
+  const exponential = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** normalizedAttempt);
+  const boundedRandom = Math.max(0, Math.min(1, randomValue));
+  const jitterMultiplier = 1 + (boundedRandom * 2 - 1) * RECONNECT_JITTER_RATIO;
+  return Math.max(1_000, Math.min(RECONNECT_MAX_DELAY_MS, Math.round(exponential * jitterMultiplier)));
+}
+
+function connectSharedSocket(allowOfflineProbe = false): void {
+  if (!managerRunning || subscribers.size === 0 || sharedSocket) return;
+  if (!browserIsOnline() && !allowOfflineProbe) {
+    if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+    scheduleReconnect();
+    return;
+  }
   reconnectTimer = null;
 
   const socket = new WebSocket(websocketTarget());
@@ -94,7 +116,10 @@ function connectSharedSocket(): void {
 
   socket.onopen = () => {
     if (sharedSocket !== socket || !managerRunning) return;
-    if (hadSuccessfulConnection) handleInvalidate();
+    const shouldCatchUp = hadSuccessfulConnection || firstConnectionDelayed;
+    reconnectAttempt = 0;
+    firstConnectionDelayed = false;
+    if (shouldCatchUp) handleInvalidate();
     hadSuccessfulConnection = true;
   };
 
@@ -113,9 +138,7 @@ function connectSharedSocket(): void {
     // restarted. Only the currently registered socket may schedule a reconnect.
     if (sharedSocket !== socket) return;
     sharedSocket = null;
-    if (!managerRunning || subscribers.size === 0) return;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connectSharedSocket, RECONNECT_DELAY_MS);
+    scheduleReconnect();
   };
 
   socket.onerror = () => {
@@ -123,12 +146,53 @@ function connectSharedSocket(): void {
   };
 }
 
+function scheduleReconnect(): void {
+  if (!managerRunning || subscribers.size === 0 || reconnectTimer) return;
+  const online = browserIsOnline();
+  const delayMs = online ? computeWsReconnectDelayMs(reconnectAttempt) : OFFLINE_PROBE_DELAY_MS;
+  reconnectAttempt = online ? Math.min(reconnectAttempt + 1, 10) : 0;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectSharedSocket(!browserIsOnline());
+  }, delayMs);
+}
+
+function handleOnline(): void {
+  if (!managerRunning || subscribers.size === 0 || sharedSocket) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  reconnectAttempt = 0;
+  connectSharedSocket();
+}
+
+function handleOffline(): void {
+  if (!managerRunning) return;
+  reconnectAttempt = 0;
+
+  // navigator.onLine is only a hint. If the existing socket is healthy, keep it
+  // open so a false/transient offline event cannot create a 30-second blackout.
+  if (sharedSocket) {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    return;
+  }
+
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+  scheduleReconnect();
+}
+
 function startManager(): void {
   if (managerRunning) return;
   managerRunning = true;
   hadSuccessfulConnection = false;
+  firstConnectionDelayed = false;
   missedWhileHidden = false;
+  reconnectAttempt = 0;
   document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
   connectSharedSocket();
 }
 
@@ -136,11 +200,15 @@ function stopManager(): void {
   if (!managerRunning && !sharedSocket && !reconnectTimer && !debounceTimer) return;
   managerRunning = false;
   document.removeEventListener("visibilitychange", handleVisibilityChange);
+  window.removeEventListener("online", handleOnline);
+  window.removeEventListener("offline", handleOffline);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (debounceTimer) clearTimeout(debounceTimer);
   reconnectTimer = null;
   debounceTimer = null;
+  reconnectAttempt = 0;
   hadSuccessfulConnection = false;
+  firstConnectionDelayed = false;
   missedWhileHidden = false;
 
   const socket = sharedSocket;
