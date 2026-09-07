@@ -36,7 +36,7 @@ const SKIPPED_PATHS = new Set([
 const startedAt = Date.now();
 
 type DurationBucket = "under100" | "under500" | "under1000" | "under5000" | "over5000";
-type RequestCompletionKind = "finished" | "aborted" | "stream_closed";
+type RequestCompletionKind = "finished" | "aborted" | "server_destroyed" | "stream_closed";
 
 interface RequestMetrics {
   total: number;
@@ -174,8 +174,7 @@ export function getRequestMetricsSnapshot() {
         totalDurationMs: Math.round(metrics.dbDurationMs),
         averageQueriesPerRequest:
           measuredCompleted > 0 ? Math.round((metrics.dbQueryCount / measuredCompleted) * 100) / 100 : 0,
-        averageDurationMsPerRequest:
-          measuredCompleted > 0 ? Math.round(metrics.dbDurationMs / measuredCompleted) : 0,
+        averageDurationMsPerRequest: measuredCompleted > 0 ? Math.round(metrics.dbDurationMs / measuredCompleted) : 0,
       },
     },
     databasePool: {
@@ -201,6 +200,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const initialUserId = session?.userId || req.user?.id;
   const buildVersion = process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || "dev";
   let responseBytes = 0;
+  let serverDestroyError: Error | undefined;
 
   (req as unknown as { requestId: string }).requestId = requestId;
   res.setHeader("X-Request-Id", requestId);
@@ -215,6 +215,11 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     if (chunk != null && typeof chunk !== "function")
       responseBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
     return originalEnd(chunk, ...args);
+  };
+  const originalDestroy = res.destroy.bind(res);
+  (res as typeof res & { destroy: typeof res.destroy }).destroy = function (error?: Error): Response {
+    if (error) serverDestroyError = error;
+    return originalDestroy(error);
   };
 
   runWithTraceContext(
@@ -276,7 +281,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
           }
 
           const aborted = completionKind === "aborted";
-          const statusCode = aborted ? CLIENT_ABORT_STATUS : res.statusCode;
+          const serverDestroyed = completionKind === "server_destroyed";
+          const statusCode = aborted ? CLIENT_ABORT_STATUS : serverDestroyed ? 500 : res.statusCode;
           const durationMs = Date.now() - start;
           const routeTemplate = normaliseRouteTemplate(path, req.route?.path, req.baseUrl || "");
           const databaseMetrics = getRequestPerformanceMetrics();
@@ -302,7 +308,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
             dbQueryCount: databaseMetrics.dbQueryCount,
             dbDurationMs: databaseMetrics.dbDurationMs,
           });
-          if (!aborted) writeSuccessfulActivityAudit(req, statusCode);
+          if (completionKind === "finished") writeSuccessfulActivityAudit(req, statusCode);
 
           if (aborted) metrics.clientAbort += 1;
           else if (statusCode >= 500) metrics.serverError += 1;
@@ -395,7 +401,9 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
         res.on("finish", () => finalizeRequest("finished"));
         res.on("close", () => {
           if (res.writableFinished) return;
-          finalizeRequest(isExpectedLongLivedStream(req, res) ? "stream_closed" : "aborted");
+          finalizeRequest(
+            serverDestroyError ? "server_destroyed" : isExpectedLongLivedStream(req, res) ? "stream_closed" : "aborted"
+          );
         });
 
         next();
