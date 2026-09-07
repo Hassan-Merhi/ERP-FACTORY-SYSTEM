@@ -84,17 +84,19 @@ async function ensureWave3SalesHotpathIndexes() {
   try {
     await client.connect();
     connected = true;
-    // CREATE/DROP INDEX CONCURRENTLY must run outside an explicit transaction.
-    // Keep lock waits bounded while allowing the index scan enough time to finish.
-    await client.query("SET lock_timeout = '30s'");
-    await client.query("SET statement_timeout = '10min'");
 
     // The repair spans multiple concurrent-index statements and therefore cannot
-    // be wrapped in a transaction. Serialize the whole sequence with a session
-    // advisory lock so multiple fresh app instances cannot race through the same
-    // invalid/intermediate index catalog state during a deployment.
+    // be wrapped in a transaction. Acquire the session advisory lock before
+    // applying the shorter DDL lock timeout so peers wait for the serialized
+    // repair instead of failing after 30 seconds while another startup is working.
     await client.query(REPAIR_LOCK_SQL);
     repairLockHeld = true;
+
+    // CREATE/DROP INDEX CONCURRENTLY must run outside an explicit transaction.
+    // Bound DDL lock waits and individual repair statements only after we own the
+    // advisory lock that serializes the full repair sequence.
+    await client.query("SET lock_timeout = '30s'");
+    await client.query("SET statement_timeout = '10min'");
 
     for (const expected of REQUIRED_INDEXES) {
       const existing = await readIndexState(client, expected.name);
