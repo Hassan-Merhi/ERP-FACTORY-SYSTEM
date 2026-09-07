@@ -1,6 +1,6 @@
 /**
  * HTTP request logging and lightweight internal monitoring middleware.
- * Logs failures, slow requests and an optional sample of successful requests.
+ * Logs failures, slow requests, client disconnects and an optional sample of successful requests.
  * Never logs request/response bodies, credentials, cookies or auth headers.
  */
 import { randomUUID } from "crypto";
@@ -22,6 +22,7 @@ import { getBandwidthDiagnosticSnapshot } from "./bandwidthDebug";
 import { handleClientObservability } from "./clientObservability";
 
 const SUCCESS_SAMPLE_RATE = Math.min(1, Math.max(0, Number(process.env.REQUEST_LOG_SAMPLE_RATE || 0)));
+const CLIENT_ABORT_STATUS = 499;
 const SKIPPED_PATHS = new Set([
   "/api/auth/me",
   "/api/health",
@@ -35,6 +36,7 @@ const SKIPPED_PATHS = new Set([
 const startedAt = Date.now();
 
 type DurationBucket = "under100" | "under500" | "under1000" | "under5000" | "over5000";
+type RequestCompletionKind = "finished" | "aborted";
 
 interface RequestMetrics {
   total: number;
@@ -42,6 +44,7 @@ interface RequestMetrics {
   success: number;
   expectedClientResponse: number;
   clientError: number;
+  clientAbort: number;
   serverError: number;
   slow: number;
   durationTotalMs: number;
@@ -57,6 +60,7 @@ const metrics: RequestMetrics = {
   success: 0,
   expectedClientResponse: 0,
   clientError: 0,
+  clientAbort: 0,
   serverError: 0,
   slow: 0,
   durationTotalMs: 0,
@@ -92,13 +96,34 @@ function isMonitoringRole(req: Request): boolean {
   return role === "admin" || role === "developer";
 }
 
+export function resetRequestMetricsForTests(): void {
+  metrics.total = 0;
+  metrics.active = 0;
+  metrics.success = 0;
+  metrics.expectedClientResponse = 0;
+  metrics.clientError = 0;
+  metrics.clientAbort = 0;
+  metrics.serverError = 0;
+  metrics.slow = 0;
+  metrics.durationTotalMs = 0;
+  metrics.durationMaxMs = 0;
+  metrics.dbQueryCount = 0;
+  metrics.dbDurationMs = 0;
+  metrics.durationBuckets.under100 = 0;
+  metrics.durationBuckets.under500 = 0;
+  metrics.durationBuckets.under1000 = 0;
+  metrics.durationBuckets.under5000 = 0;
+  metrics.durationBuckets.over5000 = 0;
+}
+
 export function getRequestMetricsSnapshot() {
   const memory = process.memoryUsage();
   const poolMax = Number(pool.options?.max || 0);
   const poolTotal = Number(pool.totalCount || 0);
   const poolIdle = Number(pool.idleCount || 0);
   const poolWaiting = Number(pool.waitingCount || 0);
-  const completed = metrics.success + metrics.expectedClientResponse + metrics.clientError + metrics.serverError;
+  const resolved = metrics.success + metrics.expectedClientResponse + metrics.clientError + metrics.serverError;
+  const completed = resolved + metrics.clientAbort;
   const slowRequestThresholdsMs = getSlowRequestThresholdConfig();
 
   return {
@@ -121,12 +146,14 @@ export function getRequestMetricsSnapshot() {
       success: metrics.success,
       expectedClientResponse: metrics.expectedClientResponse,
       clientError: metrics.clientError,
+      clientAbort: metrics.clientAbort,
       serverError: metrics.serverError,
       slow: metrics.slow,
       averageDurationMs: completed > 0 ? Math.round(metrics.durationTotalMs / completed) : 0,
       maxDurationMs: metrics.durationMaxMs,
       slowPercent: percentage(metrics.slow, completed),
-      serverErrorPercent: percentage(metrics.serverError, completed),
+      clientAbortPercent: percentage(metrics.clientAbort, completed),
+      serverErrorPercent: percentage(metrics.serverError, resolved),
       slowRequestThresholdMs: slowRequestThresholdsMs.default,
       slowRequestThresholdsMs,
       durationBuckets: { ...metrics.durationBuckets },
@@ -222,12 +249,15 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
           metrics.active += 1;
         }
 
-        res.on("finish", () => {
+        let finalized = false;
+        const finalizeRequest = (completionKind: RequestCompletionKind) => {
           const { method, path } = req;
-          if (!path.startsWith("/api/")) return;
+          if (finalized || !path.startsWith("/api/")) return;
+          finalized = true;
 
           metrics.active = Math.max(0, metrics.active - 1);
-          const statusCode = res.statusCode;
+          const aborted = completionKind === "aborted";
+          const statusCode = aborted ? CLIENT_ABORT_STATUS : res.statusCode;
           const durationMs = Date.now() - start;
           const routeTemplate = normaliseRouteTemplate(path, req.route?.path, req.baseUrl || "");
           const databaseMetrics = getRequestPerformanceMetrics();
@@ -238,7 +268,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
           const locationId = Number(currentSession?.currentLocationId) || undefined;
           const timingClass = classifyRequestTiming(routeTemplate);
           const slowRequestThresholdMs = getSlowRequestThresholdMs(routeTemplate);
-          const expectedClientResponseCode = getExpectedClientResponseCode(res);
+          const expectedClientResponseCode = aborted ? undefined : getExpectedClientResponseCode(res);
 
           updateTraceContext({ routeTemplate, userId, companyId, factoryCompanyId, locationId });
           recordDuration(durationMs);
@@ -253,15 +283,39 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
             dbQueryCount: databaseMetrics.dbQueryCount,
             dbDurationMs: databaseMetrics.dbDurationMs,
           });
-          writeSuccessfulActivityAudit(req, statusCode);
+          if (!aborted) writeSuccessfulActivityAudit(req, statusCode);
 
-          if (statusCode >= 500) metrics.serverError += 1;
+          if (aborted) metrics.clientAbort += 1;
+          else if (statusCode >= 500) metrics.serverError += 1;
           else if (expectedClientResponseCode) metrics.expectedClientResponse += 1;
           else if (statusCode >= 400) metrics.clientError += 1;
           else metrics.success += 1;
 
           const isSlow = durationMs >= slowRequestThresholdMs;
           if (isSlow) metrics.slow += 1;
+
+          if (aborted) {
+            logger.warn("Client disconnected before response completed", {
+              module: "http",
+              action: "client_abort",
+              requestId,
+              routeTemplate,
+              ...(userId != null ? { userId } : {}),
+              ...(companyId != null ? { companyId } : {}),
+              ...(factoryCompanyId != null ? { factoryCompanyId } : {}),
+              ...(locationId != null ? { locationId } : {}),
+              status: CLIENT_ABORT_STATUS,
+              durationMs,
+              responseBytes,
+              dbQueryCount: databaseMetrics.dbQueryCount,
+              dbDurationMs: Math.round(databaseMetrics.dbDurationMs),
+              slow: isSlow,
+              thresholdMs: slowRequestThresholdMs,
+              thresholdClass: timingClass,
+              responseStarted: res.headersSent,
+            });
+            return;
+          }
 
           if (statusCode >= 500) {
             recordOperationalEvent({
@@ -317,6 +371,11 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
             thresholdClass: timingClass,
             ...(expectedClientResponseCode ? { expectedClientResponseCode } : {}),
           });
+        };
+
+        res.on("finish", () => finalizeRequest("finished"));
+        res.on("close", () => {
+          if (!res.writableFinished) finalizeRequest("aborted");
         });
 
         next();
