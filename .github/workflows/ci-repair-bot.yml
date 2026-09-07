@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: read
+      checks: read
       contents: read
       pull-requests: read
       statuses: read
@@ -186,13 +187,25 @@ jobs:
           # `|| true` and the job would report success having neither enabled
           # auto-merge nor, for a ci-repair-blocked pull request, disabled it.
           # Prove the token can read this repository's pull requests first.
+          #
+          # An unusable PAT is reported loudly but must not fail the job. This
+          # workflow runs every 15 minutes against `ref=main`, so a hard exit
+          # here publishes a failed check run on main's head commit and keeps
+          # publishing one until somebody rotates the secret — main goes red
+          # for a credential problem that has nothing to do with the code.
+          # Falling back to the workflow token is not "adopting" the bad PAT:
+          # the bad credential is discarded, and GITHUB_TOKEN can still
+          # perform the safety-critical half of this job (taking a
+          # ci-repair-blocked pull request off auto-merge). What is lost is
+          # only that merges it enables will not trigger CI — exactly the
+          # degradation the unset-secret branch below already accepts.
           if [[ -n "${CI_REPAIR_BOT_TOKEN:-}" ]]; then
             if GH_TOKEN="$CI_REPAIR_BOT_TOKEN" \
               gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=1" >/dev/null 2>&1; then
               export GH_TOKEN="$CI_REPAIR_BOT_TOKEN"
             else
-              echo "::error title=CI_REPAIR_BOT_TOKEN is unusable::The secret is set but cannot read pull requests on $GITHUB_REPOSITORY. It is probably expired or missing repo/pull-request scope. Refusing to run with it, because a silent failure would leave ci-repair-blocked pull requests on auto-merge."
-              exit 1
+              export GH_TOKEN="$WORKFLOW_TOKEN"
+              echo "::warning title=CI_REPAIR_BOT_TOKEN is unusable::The secret is set but cannot read pull requests on $GITHUB_REPOSITORY. It is probably expired or missing repo/pull-request scope. Discarding it and falling back to GITHUB_TOKEN, so merges enabled here will not trigger CI on main until the secret is rotated."
             fi
           else
             export GH_TOKEN="$WORKFLOW_TOKEN"
@@ -324,6 +337,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: read
       pull-requests: read
       statuses: read
