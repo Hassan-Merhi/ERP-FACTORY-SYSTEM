@@ -110,30 +110,10 @@ export function registerCoreAuthRoutes(app: Express) {
       const loginCompanyId = userCompanies.length > 0 ? userCompanies[0].companyId : null;
       const loginCompanyName = userCompanies.length > 0 ? (userCompanies[0] as any).companyName : null;
 
+      // Do not make an outbound request using a client-controlled IP value here.
+      // Login history remains fully recorded; geo fields are intentionally left null.
       void (async () => {
         try {
-          let city: string | null = null;
-          let country: string | null = null;
-          if (
-            clientIp !== "unknown" &&
-            !clientIp.startsWith("127.") &&
-            !clientIp.startsWith("10.") &&
-            !clientIp.startsWith("192.168.") &&
-            !clientIp.startsWith("::1")
-          ) {
-            try {
-              const geoRes = await fetch(`https://ipapi.co/${clientIp}/json/`);
-              if (geoRes.ok) {
-                const geoData = await geoRes.json();
-                if (!geoData.error) {
-                  city = geoData.city || null;
-                  country = geoData.country_name || null;
-                }
-              }
-            } catch (_error) {
-              // Failure here is non-fatal and the surrounding flow continues deliberately.
-            }
-          }
           await db.insert(loginHistory).values({
             userId: user.id,
             username: user.username,
@@ -141,8 +121,8 @@ export function registerCoreAuthRoutes(app: Express) {
             companyName: loginCompanyName,
             ipAddress: clientIp,
             userAgent: userAgentStr,
-            city,
-            country,
+            city: null,
+            country: null,
           });
         } catch (error) {
           logger.error("Failed to record login history:", { error });
