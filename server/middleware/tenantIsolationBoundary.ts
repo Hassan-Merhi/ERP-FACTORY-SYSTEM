@@ -8,6 +8,7 @@ import {
   assertCompaniesAccess,
   CompanyAccessError,
   getAccessibleCompanyIds,
+  isPrivilegedRole,
   sendCompanyAccessError,
 } from "../security/companyAccessBoundary";
 import {
@@ -44,6 +45,8 @@ const SECONDARY_COMPANY_FIELDS = [
   "buyerCompanyId",
 ] as const;
 
+const CROSS_COMPANY_REFERENCE_READ_PATHS = new Set(["/api/locations", "/api/ledger-accounts"]);
+
 function positiveId(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
@@ -71,6 +74,15 @@ const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", 
 function isAuthorizedCrossCompanyPath(path: string): boolean {
   if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
   return path === "/api/global/transactions" || path.startsWith("/api/global/transactions/");
+}
+
+/**
+ * A small compatibility surface for legacy admin/configuration pickers that
+ * intentionally read reference data from another assigned company. The actual
+ * privileged-role and membership checks happen in tenantIsolationBoundary.
+ */
+export function isCrossCompanyReferenceRead(method: string, path: string): boolean {
+  return method.toUpperCase() === "GET" && CROSS_COMPANY_REFERENCE_READ_PATHS.has(path);
 }
 
 async function ensurePinnedFactoryCompany(req: Request): Promise<void> {
@@ -124,10 +136,6 @@ async function ensurePinnedFactoryCompany(req: Request): Promise<void> {
   });
 
   if (!factoryCompanyId) {
-    // Developer company selection can be synthetic and may not have an
-    // explicit userCompanyRoles row for the selected company. Let the
-    // canonical Developer fallback below enforce the server-owned active
-    // company boundary instead of rejecting the request prematurely.
     if (session.currentRole === "Developer" && developerCurrentCompanyId) {
       return;
     }
@@ -148,9 +156,6 @@ async function resolveCanonicalContext(req: Request): Promise<ActiveCompanyPermi
   try {
     return await getActiveCompanyPermissionContext(req);
   } catch (error) {
-    // Developer company selection is intentionally synthetic in the existing
-    // selector. Preserve that one explicit all-company exception while still
-    // requiring the selected server-owned company to be the request boundary.
     if (
       error instanceof ActiveCompanyPermissionContextError &&
       error.code === "ACTIVE_COMPANY_ROLE_REQUIRED" &&
@@ -223,16 +228,12 @@ function logIsolationDenial(req: Request, context: ActiveCompanyPermissionContex
 /**
  * Global tenant boundary installed before application routes.
  *
- * Caller-supplied companyId values are parsed only as requested targets. They
- * never grant authorization. The authoritative company comes from canonical
- * session/company-role state, and even privileged roles must switch the active
- * company before using a primary companyId override. Intercompany source/target
- * fields are allowed only when the user has verified membership in every side.
- *
- * Once authorization succeeds, the same verified identities are installed in
- * the database-scope AsyncLocalStorage. The shared PostgreSQL pool consumes that
- * scope before every lease/query, so Drizzle and raw SQL receive the same RLS
- * boundary without relying on each individual route to remember SET LOCAL.
+ * Caller-supplied companyId values never grant authorization. Ordinary tenant
+ * routes still require primary companyId to equal the active company. The two
+ * legacy reference pickers (locations and ledger accounts) may target another
+ * assigned company only for Admin/Owner/Developer callers and only after
+ * canonical membership verification. Intercompany source/target fields remain
+ * membership checked as well.
  */
 export async function tenantIsolationBoundary(req: Request, res: Response, next: NextFunction) {
   if (!req.path.startsWith("/api")) return next();
@@ -260,11 +261,27 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
         message: "All companyId values in the request must match.",
       });
     }
+
+    let referenceCompanyId: number | null = null;
     if (decision.kind === "company") {
-      assertRequestCompanyMatchesSession(
-        { userId: context.userId, role: context.role, companyId: context.companyId },
-        decision.companyId
-      );
+      const crossCompanyReference =
+        decision.companyId !== context.companyId && isCrossCompanyReferenceRead(req.method, req.path);
+      if (crossCompanyReference) {
+        if (!isPrivilegedRole(context.role)) {
+          throw new CompanyAccessError(
+            403,
+            "Cross-company reference access requires Admin, Owner, or Developer",
+            "CROSS_COMPANY_REFERENCE_FORBIDDEN"
+          );
+        }
+        await assertCompaniesAccess(context.userId, [decision.companyId]);
+        referenceCompanyId = decision.companyId;
+      } else {
+        assertRequestCompanyMatchesSession(
+          { userId: context.userId, role: context.role, companyId: context.companyId },
+          decision.companyId
+        );
+      }
     }
 
     const secondaryCompanyIds = collectSecondaryCompanyIds(req);
@@ -272,14 +289,14 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
       await assertCompaniesAccess(context.userId, secondaryCompanyIds);
     }
 
-    // The All Daybook/global-transactions surface is intentionally cross-company.
-    // Its RLS widening comes only from the server-owned access boundary, never
-    // from client-supplied company IDs. All other requests remain active-company
-    // scoped even when they carry verified intercompany helper fields.
-    const useAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.path);
-    const databaseAuthorizedCompanyIds = useAuthorizedCompanyScope
+    const useGlobalAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.path);
+    const useReferenceAuthorizedCompanyScope = referenceCompanyId !== null;
+    const useAuthorizedCompanyScope = useGlobalAuthorizedCompanyScope || useReferenceAuthorizedCompanyScope;
+    const databaseAuthorizedCompanyIds = useGlobalAuthorizedCompanyScope
       ? [...(await getAccessibleCompanyIds(context.userId))]
-      : secondaryCompanyIds;
+      : useReferenceAuthorizedCompanyScope
+        ? [referenceCompanyId!, ...secondaryCompanyIds]
+        : secondaryCompanyIds;
     const databaseScope = createTenantDatabaseScope(
       context.companyId,
       databaseAuthorizedCompanyIds,
