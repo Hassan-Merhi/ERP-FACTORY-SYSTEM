@@ -13,6 +13,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 export const _tokenKey = () => process.env.SESSION_SECRET ?? "erp-github-token-fallback-key";
 
 const TOKEN_FORMAT_V2 = "v2";
+const GCM_AUTH_TAG_LENGTH = 16;
 
 function modernTokenKey(): Buffer {
   return createHash("sha256").update(_tokenKey(), "utf8").digest();
@@ -34,7 +35,7 @@ function deriveLegacyOpenSslKeyAndIv(passphrase: string, salt: Buffer): { key: B
 
 export function encryptToken(plain: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", modernTokenKey(), iv);
+  const cipher = createCipheriv("aes-256-gcm", modernTokenKey(), iv, { authTagLength: GCM_AUTH_TAG_LENGTH });
   const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
   return [TOKEN_FORMAT_V2, iv.toString("base64"), authTag.toString("base64"), encrypted.toString("base64")].join(":");
@@ -46,8 +47,8 @@ function decryptModernToken(ciphertext: string): string {
   const iv = Buffer.from(ivB64, "base64");
   const authTag = Buffer.from(tagB64, "base64");
   const encrypted = Buffer.from(encryptedB64, "base64");
-  if (iv.length !== 12 || authTag.length !== 16) return "";
-  const decipher = createDecipheriv("aes-256-gcm", modernTokenKey(), iv);
+  if (iv.length !== 12 || authTag.length !== GCM_AUTH_TAG_LENGTH) return "";
+  const decipher = createDecipheriv("aes-256-gcm", modernTokenKey(), iv, { authTagLength: GCM_AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
 }
