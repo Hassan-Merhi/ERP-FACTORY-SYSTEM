@@ -1,3 +1,4 @@
+import type { Pool, PoolClient } from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 const mockPoolQuery = vi.hoisted(() => vi.fn());
@@ -17,7 +18,10 @@ const {
   planHistoricalCurrencyRepairs,
 } = await import("../server/services/accounting/historicalCurrencyRepairCenter");
 
-function voucherRow(overrides: Record<string, unknown> = {}) {
+type RepairRow = Record<string, unknown>;
+type QueryImpl = (text: string, params?: unknown[]) => Promise<{ rows: RepairRow[] }>;
+
+function voucherRow(overrides: RepairRow = {}): RepairRow {
   return {
     id: 20,
     voucher_id: 30,
@@ -36,7 +40,7 @@ function voucherRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function openingRow(overrides: Record<string, unknown> = {}) {
+function openingRow(overrides: RepairRow = {}): RepairRow {
   return {
     id: 41,
     label: "Opening row",
@@ -50,13 +54,28 @@ function openingRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function queryResult(rows: unknown[]) {
+function queryResult(rows: RepairRow[]) {
   return Promise.resolve({ rows });
+}
+
+/**
+ * A pg client double. The service only ever calls `query` and `release`, so the
+ * mock exposes those with real types for assertions and is widened once at the
+ * boundary rather than sprinkling `as any` at every call site.
+ */
+function fakeClient(impl: QueryImpl) {
+  const query = vi.fn(impl);
+  const release = vi.fn();
+  return { query, release, client: { query, release } as unknown as PoolClient & Pool };
+}
+
+function rowsOnce(rows: RepairRow[]) {
+  return fakeClient(() => queryResult(rows));
 }
 
 describe("historical currency repair behavior", () => {
   it("loads voucher entries with company and optional-voucher isolation", async () => {
-    const client = { query: vi.fn().mockReturnValue(queryResult([voucherRow()])) } as any;
+    const { query, client } = rowsOnce([voucherRow()]);
     const result = await loadHistoricalRepairCase(7, "voucherEntry", 20, client);
 
     expect(result).toMatchObject({
@@ -70,13 +89,13 @@ describe("historical currency repair behavior", () => {
       creditAmount: "0",
     });
     expect(result?.versionTag).toMatch(/^[a-f0-9]{64}$/);
-    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("v.company_id = $2"), [20, 7]);
-    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("v.optional = false"), [20, 7]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("v.company_id = $2"), [20, 7]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("v.optional = false"), [20, 7]);
   });
 
   it("loads each supported opening-balance entity and returns null for missing rows", async () => {
     for (const kind of ["ledger", "bank", "customer", "supplier", "employee", "fixedAsset"] as const) {
-      const client = { query: vi.fn().mockReturnValue(queryResult([openingRow({ label: kind })])) } as any;
+      const { query, client } = rowsOnce([openingRow({ label: kind })]);
       const result = await loadHistoricalRepairCase(7, kind, 41, client);
       expect(result).toMatchObject({
         kind,
@@ -87,12 +106,10 @@ describe("historical currency repair behavior", () => {
         currentRate: "1.1",
         currentBaseAmount: "275",
       });
-      expect(client.query).toHaveBeenCalledWith(expect.stringContaining("target.id = $1"), [41, 7]);
+      expect(query).toHaveBeenCalledWith(expect.stringContaining("target.id = $1"), [41, 7]);
     }
 
-    const missing = await loadHistoricalRepairCase(7, "ledger", 999, {
-      query: vi.fn().mockReturnValue(queryResult([])),
-    } as any);
+    const missing = await loadHistoricalRepairCase(7, "ledger", 999, rowsOnce([]).client);
     expect(missing).toBeNull();
   });
 
@@ -176,98 +193,73 @@ describe("historical currency repair behavior", () => {
   });
 
   it("applies a plan atomically and writes an audit row for each repaired item", async () => {
-    const currentRow = voucherRow();
-    const previewClient = { query: vi.fn().mockReturnValue(queryResult([currentRow])) };
-    const loaded = await loadHistoricalRepairCase(7, "voucherEntry", 20, previewClient as any);
-    expect(loaded).not.toBeNull();
+    // Build a genuine plan from the live row, then apply it against a database
+    // whose row has not moved. The version tags must match for the apply to run.
+    mockPoolQuery
+      .mockResolvedValueOnce({ rows: [{ base_currency: "USD" }] })
+      .mockResolvedValueOnce({ rows: [voucherRow()] });
+    const plan = await planHistoricalCurrencyRepairs(7, [
+      { kind: "voucherEntry", id: 20, currency: "EUR", historicalRate: "1.2", note: "approved" },
+    ]);
 
-    const client = { query: vi.fn() as any, release: vi.fn() };
-    client.query.mockImplementation((text: string) => {
-      if (text.includes("voucher_entries ve")) return queryResult([currentRow]);
-      return queryResult([]);
-    });
+    const { query, release, client } = fakeClient((text) =>
+      text.includes("voucher_entries ve") ? queryResult([voucherRow()]) : queryResult([])
+    );
     mockConnect.mockResolvedValue(client);
-    const current = await loadHistoricalRepairCase(7, "voucherEntry", 20, client);
-    expect(current?.versionTag).toBe(loaded?.versionTag);
 
-    const plan = {
-      companyId: 7,
-      createdAt: "2026-02-01T00:00:00.000Z",
-      itemCount: 1,
-      fingerprint: "fingerprint",
-      items: [
-        {
-          input: {
-            kind: "voucherEntry" as const,
-            id: 20,
-            currency: "EUR",
-            historicalRate: "1.2",
-            note: "approved",
-          },
-          before: loaded!,
-          after: {
-            transactionCurrency: "EUR",
-            transactionDebitAmount: "100",
-            transactionCreditAmount: "0",
-            baseDebitAmount: "120",
-            baseCreditAmount: "0",
-            historicalExchangeRate: "1.2",
-            rateConvention: "BASE_PER_TRANSACTION",
-            debitAmount: "120",
-            creditAmount: "0",
-          },
-        },
-      ],
-    };
     const result = await applyHistoricalCurrencyRepairPlan(plan, { userId: "u1", username: "admin" });
-    expect(result).toEqual({ appliedCount: 1, fingerprint: "fingerprint" });
-    expect(client.query).toHaveBeenCalledWith("BEGIN");
-    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE voucher_entries"), expect.any(Array));
-    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO audit_log"), expect.any(Array));
-    expect(client.query).toHaveBeenCalledWith("COMMIT");
-    expect(client.release).toHaveBeenCalled();
+
+    expect(result).toEqual({ appliedCount: 1, fingerprint: plan.fingerprint });
+    expect(query).toHaveBeenCalledWith("BEGIN");
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("UPDATE voucher_entries"), expect.any(Array));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO audit_log"), expect.any(Array));
+    expect(query).toHaveBeenCalledWith("COMMIT");
+    expect(query).not.toHaveBeenCalledWith("ROLLBACK");
+    expect(release).toHaveBeenCalled();
+
+    // The UPDATE must carry the planned normalization, not the pre-repair values.
+    const update = query.mock.calls.find(([text]) => String(text).includes("UPDATE voucher_entries"));
+    expect(update?.[1]).toEqual([
+      plan.items[0].after.transactionCurrency,
+      plan.items[0].after.transactionDebitAmount,
+      plan.items[0].after.transactionCreditAmount,
+      plan.items[0].after.baseDebitAmount,
+      plan.items[0].after.baseCreditAmount,
+      plan.items[0].after.historicalExchangeRate,
+      plan.items[0].after.rateConvention,
+      plan.items[0].after.debitAmount,
+      plan.items[0].after.creditAmount,
+      20,
+    ]);
   });
 
-  it("rolls back when the current snapshot has changed after preview", async () => {
-    const client = { query: vi.fn(), release: vi.fn() };
-    client.query.mockImplementation((text: string) => {
-      if (text.includes("voucher_entries ve")) return queryResult([voucherRow({ historical_exchange_rate: "9.9" })]);
-      return queryResult([]);
-    });
-    mockConnect.mockResolvedValue(client);
+  it("rejects and rolls back a plan whose historical rate moved between preview and apply", async () => {
+    // A genuine preview against the real row (historical rate 1.1) — the plan's
+    // versionTag is the one the service computed, not a hand-written token.
+    mockPoolQuery
+      .mockResolvedValueOnce({ rows: [{ base_currency: "USD" }] })
+      .mockResolvedValueOnce({ rows: [voucherRow({ historical_exchange_rate: "1.1" })] });
+    const plan = await planHistoricalCurrencyRepairs(7, [
+      { kind: "voucherEntry", id: 20, currency: "EUR", historicalRate: "1.2", note: "approved" },
+    ]);
+    expect(plan.items[0].before.currentRate).toBe("1.1");
 
-    const plan: any = {
-      companyId: 7,
-      itemCount: 1,
-      fingerprint: "stale",
-      items: [
-        {
-          input: { kind: "voucherEntry", id: 20, currency: "EUR", historicalRate: "1.2" },
-          before: {
-            kind: "voucherEntry",
-            id: 20,
-            label: "Import invoice",
-            currency: "EUR",
-            rawAmount: "100",
-            currentRate: "1.1",
-            currentBaseAmount: "110",
-            voucherId: 30,
-            voucherDate: "2026-01-10",
-            debitAmount: "100",
-            creditAmount: "0",
-            transactionDebitAmount: "100",
-            transactionCreditAmount: "0",
-            versionTag: "old",
-          },
-          after: {},
-        },
-      ],
-    };
+    // Someone else changed only the historical exchange rate before the apply ran.
+    const { query, release, client } = fakeClient((text) =>
+      text.includes("voucher_entries ve")
+        ? queryResult([voucherRow({ historical_exchange_rate: "9.9" })])
+        : queryResult([])
+    );
+    mockConnect.mockResolvedValue(client);
 
     await expect(applyHistoricalCurrencyRepairPlan(plan, { userId: "u1", username: "admin" })).rejects.toThrow(
       "changed after preview"
     );
-    expect(client.query).toHaveBeenCalledWith("ROLLBACK");
-    expect(client.release).toHaveBeenCalled();
+
+    expect(query).toHaveBeenCalledWith("ROLLBACK");
+    expect(query).not.toHaveBeenCalledWith("COMMIT");
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining("UPDATE voucher_entries"), expect.any(Array));
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining("INSERT INTO audit_log"), expect.any(Array));
+    expect(release).toHaveBeenCalled();
   });
 });
