@@ -25,13 +25,13 @@ jobs:
       - name: Prepare reviewed install-script policy
         run: |
           npm ci --ignore-scripts --no-audit
+          npm approve-scripts bufferutil
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const path = 'package.json';
           const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
           pkg.allowScripts ??= {};
-          pkg.allowScripts['bufferutil@4.1.0'] = true;
-          pkg.allowScripts['fsevents@2.3.3'] = false;
+          pkg.allowScripts.fsevents = false;
           fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           NODE
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
