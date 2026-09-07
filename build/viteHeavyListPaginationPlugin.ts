@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
 
-import { heavyListPaginationPlugin as legacyHeavyListPaginationPlugin } from "./viteHeavyListPaginationPluginLegacy";
+import { heavyListPaginationPlugin as legacyHeavyListPaginationPlugin } from "./viteHeavyListPaginationPluginLegacy.ts";
 
 const STOCK_ENTRY_SUFFIX = "/client/src/pages/StockEntryHistory.tsx";
 const FACTORY_DAYBOOK_SHELL_SUFFIX = "/client/src/pages/factory/FactoryDaybook.tsx";
