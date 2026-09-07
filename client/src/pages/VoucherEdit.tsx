@@ -46,9 +46,7 @@ export default function VoucherEdit() {
   const isSpCompany = selectedCompany?.companyType === "supplier_partner";
 
   const { data: goldenCoastReadiness } = useQuery<GoldenCoastEditReadiness>({
-    queryKey: selectedCompany?.id
-      ? ["/api/sp/golden-coast/phase6/pos-sale/readiness", selectedCompany.id]
-      : [],
+    queryKey: selectedCompany?.id ? ["/api/sp/golden-coast/phase6/pos-sale/readiness", selectedCompany.id] : [],
     enabled: !!isSpCompany && !!selectedCompany?.id,
     retry: false,
     queryFn: async () => {
