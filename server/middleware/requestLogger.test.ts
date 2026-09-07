@@ -28,6 +28,7 @@ import { resetPerformanceDashboardForTests } from "../lib/performanceDashboard";
 import { getRequestMetricsSnapshot, requestLogger, resetRequestMetricsForTests } from "./requestLogger";
 
 interface FakeResponse extends Response {
+  destroy(error?: Error): FakeResponse;
   emit(eventName: string | symbol, ...args: unknown[]): boolean;
   writableFinished: boolean;
 }
@@ -57,8 +58,10 @@ function createResponse(): FakeResponse {
     getHeader: vi.fn((name: string) => headers.get(name.toLowerCase())),
     write: vi.fn(() => true),
     end: vi.fn(),
+    destroy: vi.fn(),
   });
   response.end.mockImplementation(() => response);
+  response.destroy.mockImplementation(() => response);
   return response as unknown as FakeResponse;
 }
 
@@ -183,6 +186,30 @@ describe("requestLogger health metrics", () => {
       clientAbort: 0,
       streamClosed: 0,
     });
+  });
+
+  it("records an application-destroyed response as a server failure instead of a client abort", () => {
+    const req = createRequest("/api/reports/export");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    res.destroy(new Error("export failed"));
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      measuredCompleted: 1,
+      success: 0,
+      clientAbort: 0,
+      serverError: 1,
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Client disconnected before response completed",
+      expect.objectContaining({ action: "client_abort" })
+    );
   });
 
   it("tracks EventSource disconnects separately without diluting measured latency or database averages", () => {
