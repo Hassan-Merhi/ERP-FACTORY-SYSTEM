@@ -118,11 +118,9 @@ export const chatMessageRateLimiter = rateLimit({
   keyGenerator: (req: import("express").Request) =>
     `${req.session?.userId ?? "anon"}_${req.session?.currentCompanyId ?? "0"}`,
   handler: (_req: unknown, res: import("express").Response) => {
-    res
-      .status(429)
-      .json({
-        message: "Too many messages. Please wait a moment before sending again.",
-      });
+    res.status(429).json({
+      message: "Too many messages. Please wait a moment before sending again.",
+    });
   },
   skip: (req: import("express").Request) => !req.session?.userId,
 });
