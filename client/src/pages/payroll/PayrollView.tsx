@@ -357,6 +357,7 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
           bulkBonusMutation={bulkBonusMutation}
           handlePrintBulkBonus={handlePrintBulkBonus}
           locations={locations}
+          allCompanyLocations={allCompanyLocations}
         />
 
         <DepositDialog

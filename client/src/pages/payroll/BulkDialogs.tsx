@@ -2,12 +2,21 @@ import type { usePayrollModel } from "./usePayrollModel";
 
 type PayrollModel = ReturnType<typeof usePayrollModel>;
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { encodeLocationOption } from "./payrollUtils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronRight, Loader2, Printer, RefreshCw } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -66,6 +75,7 @@ interface BulkDialogsProps {
   bulkBonusMutation: PayrollModel["bulkBonusMutation"];
   handlePrintBulkBonus: () => void;
   locations: PayrollModel["locations"];
+  allCompanyLocations: PayrollModel["allCompanyLocations"];
 }
 
 export function BulkDialogs({
@@ -122,6 +132,7 @@ export function BulkDialogs({
   bulkBonusMutation,
   handlePrintBulkBonus,
   locations,
+  allCompanyLocations,
 }: BulkDialogsProps) {
   const { formatAmount } = useCurrencyContext();
 
@@ -504,15 +515,34 @@ export function BulkDialogs({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">Sales % location:</span>
                   <Select value={bulkBonusAutoPctLocationId} onValueChange={setBulkBonusAutoPctLocationId}>
-                    <SelectTrigger className="h-7 text-xs w-44">
+                    <SelectTrigger className="h-7 text-xs w-44" data-testid="select-bulk-bonus-pct-location">
                       <SelectValue placeholder="Select for % bonus" />
                     </SelectTrigger>
                     <SelectContent>
-                      {locations.map((loc) => (
-                        <SelectItem key={loc.id} value={String(loc.id)}>
-                          {loc.name}
-                        </SelectItem>
-                      ))}
+                      <SelectGroup>
+                        <SelectLabel>This Company</SelectLabel>
+                        {locations.map((loc) => (
+                          // The company is part of the value so the sales total
+                          // is read from the company that actually sells at the
+                          // location, not from whoever owns the location row.
+                          <SelectItem key={loc.id} value={encodeLocationOption(loc.id, loc.companyId)}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      {allCompanyLocations.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Other Companies</SelectLabel>
+                          {allCompanyLocations.map((loc) => (
+                            <SelectItem
+                              key={`oc-${loc.companyId}-${loc.id}`}
+                              value={encodeLocationOption(loc.id, loc.companyId)}
+                            >
+                              {loc.name} ({loc.companyName})
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
                     </SelectContent>
                   </Select>
                   {bulkBonusAutoPctLocationId && (

@@ -312,9 +312,9 @@ export const phase3RemainingTranslationsPart13: readonly Phase3SharedUiEntry[] =
   },
   { en: "No bale rows found in Excel", ar: "لا توجد صفات في (إكسل)", fr: "Pas de lignes de balles dans Excel" },
   {
-    en: "No bale sales found for the configured locations in this date range. Check that sales vouchers exist for June.",
-    ar: "لا توجد مبيعات للخلية للمواقع المكوّنة في هذا المدى تحقق من أن قسائم البيع موجودة في حزيران",
-    fr: "Aucune vente de balles n'a été trouvée pour les emplacements configurés dans cette plage de dates. Vérifiez que les bons de vente existent pour juin.",
+    en: "No sales found for the configured locations in this date range. Check the date range, the saved bonus rates, and the Sales % location selection.",
+    ar: "لا توجد مبيعات للمواقع المكوّنة في هذا المدى. تحقق من المدى الزمني ومعدلات المكافأة المحفوظة وموقع نسبة المبيعات المختار.",
+    fr: "Aucune vente n'a été trouvée pour les emplacements configurés dans cette plage de dates. Vérifiez la plage de dates, les taux de prime enregistrés et l'emplacement sélectionné pour le pourcentage des ventes.",
   },
   { en: 'No bale with ref "${ref}"', ar: 'لا ثرثرة مع القزم{{0}}"', fr: 'Pas de balles avec ref "{{0}}"' },
   {

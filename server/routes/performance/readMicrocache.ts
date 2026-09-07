@@ -52,6 +52,7 @@ export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/stock-items/light", 300_000],
   ["/api/stock-items/all-code-aliases", 300_000],
   ["/api/locations", 300_000],
+  ["/api/payroll/bonus-locations", 300_000],
   ["/api/stock-groups", 300_000],
   ["/api/suppliers", 300_000],
   ["/api/employees", 300_000],
@@ -308,7 +309,12 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     void options.publishInvalidation?.();
   }
 
-  function sendEntry(req: Request, res: import("express").Response, entry: ReadMicrocacheEntry, state: "HIT" | "COALESCED"): void {
+  function sendEntry(
+    req: Request,
+    res: import("express").Response,
+    entry: ReadMicrocacheEntry,
+    state: "HIT" | "COALESCED"
+  ): void {
     replayHeaders(res, entry.headers);
     setCacheHeaders(res, entry, state);
     if (etagMatches(req.headers["if-none-match"], entry.etag)) {

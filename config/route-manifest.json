@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 1946,
+  "routeCount": 1947,
   "middlewareMountCount": 117,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1075,6 +1075,7 @@
     "POST /api/payroll/bulk-deposit-employees [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/payroll/bulk-bonus-employees [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/payroll/bulk-withdraw-employees [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/payroll/bonus-locations [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/payroll/sales-summary [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/payroll/auto-calculate-bonuses [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/payroll/bonus-employee [requireAuth > requireNonPOS > <anonymous>]",

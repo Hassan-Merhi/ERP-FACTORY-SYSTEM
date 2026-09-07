@@ -39,6 +39,8 @@ ts-errors*.txt
 # Browser smoke screenshots and reports (regenerated on demand)
 artifacts/responsive-smoke/
 artifacts/bandwidth-smoke/
+artifacts/ux-regression-browser/
+artifacts/ux-regression-startup/
 
 # ESLint machine report written by scripts/run-lint.mjs (regenerated on demand)
 artifacts/lint/

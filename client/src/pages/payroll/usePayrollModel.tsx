@@ -10,7 +10,7 @@ import { getApiRequest } from "@/lib/factoryApi";
 import type { Employee } from "@shared/schema";
 import { usePayrollState } from "./usePayrollState";
 import { usePayrollData } from "./usePayrollData";
-import { cleanTxnDesc, errorMessage } from "./payrollUtils";
+import { cleanTxnDesc, decodeLocationOption, errorMessage } from "./payrollUtils";
 import type { BaleRateResponse, SalesPreview } from "./payrollTypes";
 import {
   depositSchema,
@@ -304,10 +304,10 @@ export function usePayrollModel() {
     try {
       const range =
         bonusSalesPeriod === "thisMonth" ? getThisMonthRange() : { start: bonusSalesStart, end: bonusSalesEnd };
-      const otherLoc = allCompanyLocations.find((location) => location.id === parseInt(bonusSalesLocationId));
-      const sourceParam = otherLoc ? `&sourceCompanyId=${otherLoc.companyId}` : "";
+      const { locationId, sourceCompanyId } = decodeLocationOption(bonusSalesLocationId);
+      const sourceParam = sourceCompanyId ? `&sourceCompanyId=${sourceCompanyId}` : "";
       const res = await fetch(
-        `/api/payroll/sales-summary?locationId=${bonusSalesLocationId}&startDate=${range.start}&endDate=${range.end}${sourceParam}`,
+        `/api/payroll/sales-summary?locationId=${locationId}&startDate=${range.start}&endDate=${range.end}${sourceParam}`,
         { credentials: "include" }
       );
       if (!res.ok) throw new Error(await res.text());
@@ -531,10 +531,16 @@ export function usePayrollModel() {
       const range =
         bulkBonusAutoMonth === "thisMonth" ? getThisMonthRange() : { start: bulkBonusAutoStart, end: bulkBonusAutoEnd };
 
+      // The picker stores "locationId:companyId" so the % bonus is computed from
+      // the sales of the company that sells at the location, which is not always
+      // the company that owns the location row (GC-LSHI).
+      const { locationId: pctLocationId, sourceCompanyId: pctSourceCompanyId } =
+        decodeLocationOption(bulkBonusAutoPctLocationId);
       const res = await modeApiRequest("POST", "/api/payroll/auto-calculate-bonuses", {
         startDate: range.start,
         endDate: range.end,
-        pctLocationId: bulkBonusAutoPctLocationId || null,
+        pctLocationId: pctLocationId || null,
+        pctSourceCompanyId: pctSourceCompanyId || null,
       });
       const { results } = (await res.json()) as {
         results: Array<{ employeeId: number; amount: string; breakdown: string[] }>;
@@ -557,7 +563,7 @@ export function usePayrollModel() {
         toast({
           title: "Nothing calculated",
           description:
-            "No bale sales found for the configured locations in this date range. Check that sales vouchers exist for June.",
+            "No sales found for the configured locations in this date range. Check the date range, the saved bonus rates, and the Sales % location selection.",
           variant: "destructive",
         });
       } else {

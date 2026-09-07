@@ -58,7 +58,18 @@ function isContextOptionalPath(path: string): boolean {
   return false;
 }
 
+/**
+ * Server-trusted cross-company read surfaces.
+ *
+ * Payroll bonuses are configured per source company: an employee of one company
+ * earns on sales a sister company posted (GC-LSHI sells at locations owned by
+ * another company). Those reads stay bounded by getAccessibleCompanyIds, never
+ * by a client-supplied company ID, exactly like the global transactions view.
+ */
+const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", "/api/payroll/auto-calculate-bonuses"]);
+
 function isAuthorizedCrossCompanyPath(path: string): boolean {
+  if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
   return path === "/api/global/transactions" || path.startsWith("/api/global/transactions/");
 }
 

@@ -54,6 +54,11 @@ export const phase3RemainingTranslationsPart09: readonly Phase3SharedUiEntry[] =
   },
   { en: "Failed to fetch order", ar: "فشل في جلب النظام", fr: "Impossible de récupérer l'ordre" },
   {
+    en: "Failed to fetch payroll bonus locations",
+    ar: "فشل في جلب مواقع مكافآت الرواتب",
+    fr: "Impossible de récupérer les emplacements de prime de paie",
+  },
+  {
     en: "Failed to fetch payroll data",
     ar: "فشل في جلب بيانات كشوف المرتبات",
     fr: "Impossible de récupérer les données de la paie",

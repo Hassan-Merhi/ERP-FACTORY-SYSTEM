@@ -12,26 +12,32 @@ type PayrollLocation = { id: number; name: string; companyId: number };
 type PayrollCompanyLocation = PayrollLocation & { companyName: string };
 type PayrollCompanyOption = { id: number; name: string };
 
+export type PayrollBonusLocation = PayrollCompanyLocation & { hasSales: boolean };
+
 /**
  * Payroll bonus source companies can legitimately share location records.
- * Some companies (notably intercompany/sales entities) have sales vouchers at
- * a location owned by another accessible company and therefore have no rows of
- * their own in the locations table. The bonus UI still needs those shared
- * location IDs so it can pair `sourceCompanyId` with the correct sales location.
+ * Companies such as GC-LSHI post their sales against a location row owned by
+ * another accessible company and therefore have no rows of their own in the
+ * locations table. `/api/payroll/bonus-locations` already pairs every
+ * accessible company with the locations it owns *and* the locations its own
+ * sales vouchers reference, so the views below only have to split that list
+ * into the active company and the other companies — while still falling back
+ * to every known location for a company the server listed nothing for, so the
+ * bonus pickers are never empty.
  */
 export function buildPayrollLocationViews(
-  companyLocations: PayrollCompanyLocation[],
+  bonusLocations: PayrollBonusLocation[],
   selectedCompanyId: number,
   otherCompanies: PayrollCompanyOption[]
 ): { locations: PayrollLocation[]; allCompanyLocations: PayrollCompanyLocation[] } {
-  const canonicalById = new Map<number, PayrollCompanyLocation>();
-  for (const location of companyLocations) {
+  const canonicalById = new Map<number, PayrollBonusLocation>();
+  for (const location of bonusLocations) {
     if (!canonicalById.has(location.id)) canonicalById.set(location.id, location);
   }
   const canonicalLocations = Array.from(canonicalById.values());
 
   const locationsForCompany = (companyId: number) => {
-    const owned = companyLocations.filter((location) => location.companyId === companyId);
+    const owned = bonusLocations.filter((location) => location.companyId === companyId);
     return owned.length > 0 ? owned : canonicalLocations;
   };
 
@@ -138,37 +144,31 @@ export function usePayrollData({
     [companies, selectedCompany?.id]
   );
 
-  // Load location ownership for every accessible company in one payroll-scoped
-  // query. The derived views below preserve normal ownership when it exists and
-  // fall back to shared location IDs only for companies that have no locations.
-  const { data: payrollCompanyLocations = [] } = useQuery<PayrollCompanyLocation[]>({
-    queryKey: ["/api/locations", "payroll-options", selectedCompany?.id, companies.map((c) => c.id).join(",")],
+  // Bonus location options come from a payroll-scoped endpoint instead of
+  // /api/locations: that route is gated behind the inventory module and rejects
+  // a companyId other than the active one, so cross-company bonus locations
+  // (and every location of a company that owns none) were silently missing.
+  const { data: payrollCompanyLocations = [] } = useQuery<PayrollBonusLocation[]>({
+    queryKey: ["/api/payroll/bonus-locations", selectedCompany?.id],
     queryFn: async () => {
-      const results: PayrollCompanyLocation[] = [];
-      await Promise.all(
-        companies.map(async (company) => {
-          try {
-            const res = await fetch(`/api/locations?companyId=${company.id}`, { credentials: "include" });
-            if (!res.ok) return;
-            const locs: unknown = await res.json();
-            for (const loc of Array.isArray(locs) ? locs.filter(isRecord) : []) {
-              if (typeof loc.id !== "number" || typeof loc.name !== "string") continue;
-              results.push({
-                id: loc.id,
-                name: loc.name,
-                companyId: company.id,
-                companyName: company.name,
-              });
-            }
-          } catch {
-            // One inaccessible/misconfigured company must not break the entire
-            // payroll page or hide locations from the companies that did load.
-          }
-        })
-      );
-      return results;
+      const res = await fetch("/api/payroll/bonus-locations", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch payroll bonus locations");
+      const payload: unknown = await res.json();
+      const rows = isRecord(payload) && Array.isArray(payload.locations) ? payload.locations : [];
+      return rows.filter(isRecord).flatMap((row) => {
+        if (typeof row.id !== "number" || typeof row.name !== "string" || typeof row.companyId !== "number") return [];
+        return [
+          {
+            id: row.id,
+            name: row.name,
+            companyId: row.companyId,
+            companyName: typeof row.companyName === "string" ? row.companyName : "",
+            hasSales: row.hasSales === true,
+          },
+        ];
+      });
     },
-    enabled: !!selectedCompany?.id && companies.length > 0,
+    enabled: !!selectedCompany?.id,
   });
 
   const { locations, allCompanyLocations } = useMemo(() => {

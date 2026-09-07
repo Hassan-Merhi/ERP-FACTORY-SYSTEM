@@ -7,12 +7,13 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
 import {
+  companies,
   employeeGroupMembers,
   employeeGroups,
   employees,
@@ -21,8 +22,131 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
+import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
+
+export interface BonusLocationOption {
+  id: number;
+  name: string;
+  companyId: number;
+  companyName: string;
+  hasSales: boolean;
+}
+
+/**
+ * Decides which company's sales feed a "% of sales" bonus for a picked location.
+ *
+ * Companies such as GC-LSHI post their sales against a location row owned by
+ * another company, so the location's own `companyId` is the wrong source: it
+ * would total the owning company's sales (or none at all) instead of the sales
+ * of the company the payroll user is working in. Precedence is therefore the
+ * company the UI explicitly paired with the location, then the active company
+ * whenever it actually has sales there, and only then the location owner.
+ */
+export function resolveBonusSalesCompanyId(input: {
+  explicitSourceCompanyId?: number | null;
+  sessionCompanyId: number;
+  locationOwnerCompanyId?: number | null;
+  sessionCompanyHasSales: boolean;
+}): number {
+  const { explicitSourceCompanyId, sessionCompanyId, locationOwnerCompanyId, sessionCompanyHasSales } = input;
+  if (explicitSourceCompanyId && explicitSourceCompanyId > 0) return explicitSourceCompanyId;
+  if (sessionCompanyHasSales) return sessionCompanyId;
+  return locationOwnerCompanyId && locationOwnerCompanyId > 0 ? locationOwnerCompanyId : sessionCompanyId;
+}
+
+async function hasSalesAtLocation(companyId: number, locationId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: vouchers.id })
+    .from(vouchers)
+    .where(
+      and(
+        eq(vouchers.companyId, companyId),
+        eq(vouchers.locationId, locationId),
+        eq(vouchers.voucherType, "Sales"),
+        isNull(vouchers.deletedAt)
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Bonus location options for every company the user can access.
+ *
+ * The payroll UI cannot build this list from /api/locations: that route is
+ * gated behind the inventory module and only knows location ownership, so a
+ * company that sells at a location owned by another company (GC-LSHI) ends up
+ * with an empty picker. Here each company keeps its owned locations and also
+ * gains every location its own Sales vouchers reference.
+ */
+async function loadBonusLocationOptions(userId: string): Promise<BonusLocationOption[]> {
+  const accessibleIds = Array.from(await getAccessibleCompanyIds(userId));
+  if (accessibleIds.length === 0) return [];
+
+  const companyRows = await db
+    .select({ id: companies.id, name: companies.name })
+    .from(companies)
+    .where(inArray(companies.id, accessibleIds));
+  const companyNameById = new Map(companyRows.map((company) => [company.id, company.name]));
+
+  const locationRows = await db
+    .select({ id: locations.id, name: locations.name, companyId: locations.companyId })
+    .from(locations)
+    .where(isNull(locations.deletedAt));
+  const locationNameById = new Map(locationRows.map((location) => [location.id, location.name]));
+
+  const salesRows = await db
+    .selectDistinct({ companyId: vouchers.companyId, locationId: vouchers.locationId })
+    .from(vouchers)
+    .where(
+      and(
+        inArray(vouchers.companyId, accessibleIds),
+        eq(vouchers.voucherType, "Sales"),
+        isNull(vouchers.deletedAt),
+        sql`${vouchers.locationId} IS NOT NULL`
+      )
+    );
+
+  const byKey = new Map<string, BonusLocationOption>();
+  const put = (companyId: number, locationId: number, hasSales: boolean) => {
+    const name = locationNameById.get(locationId);
+    const companyName = companyNameById.get(companyId);
+    if (!name || !companyName) return;
+    const key = `${companyId}|${locationId}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.hasSales = existing.hasSales || hasSales;
+      return;
+    }
+    byKey.set(key, { id: locationId, name, companyId, companyName, hasSales });
+  };
+
+  for (const location of locationRows) {
+    if (companyNameById.has(location.companyId)) put(location.companyId, location.id, false);
+  }
+  for (const row of salesRows) {
+    if (row.locationId != null) put(row.companyId, row.locationId, true);
+  }
+
+  return Array.from(byKey.values()).sort(
+    (a, b) => a.companyName.localeCompare(b.companyName) || a.name.localeCompare(b.name)
+  );
+}
 
 export function registerPayrollBonusRoutes(app: Express) {
+  // Payroll - Location options for bonus rates and % bonuses
+  app.get("/api/payroll/bonus-locations", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
+      const userId = String(req.session.userId ?? req.user?.id ?? "");
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      return res.json({ locations: await loadBonusLocationOptions(userId) });
+    } catch (error: unknown) {
+      logger.error("[/api/payroll/bonus-locations]", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   // Payroll - Sales Summary for bonus calculation
   app.get("/api/payroll/sales-summary", requireAuth, requireNonPOS, async (req, res) => {
     try {
@@ -70,7 +194,7 @@ export function registerPayrollBonusRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { startDate, endDate, pctLocationId } = req.body;
+      const { startDate, endDate, pctLocationId, pctSourceCompanyId } = req.body;
       if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
 
       // Fetch all active employees
@@ -112,16 +236,33 @@ export function registerPayrollBonusRoutes(app: Express) {
 
       // Prefetch pct location if provided
       let pctSales: { totalSalesAmount: string; locationName: string } | null = null;
-      if (pctLocationId) {
+      const pctLocId = pctLocationId ? parseInt(String(pctLocationId)) : NaN;
+      if (Number.isInteger(pctLocId)) {
         try {
-          // Determine company for the pct location
           const [locRow] = await db
             .select({ companyId: locations.companyId })
             .from(locations)
-            .where(eq(locations.id, parseInt(pctLocationId)))
+            .where(eq(locations.id, pctLocId))
             .limit(1);
-          const pctCompanyId = locRow?.companyId ?? companyId;
-          pctSales = await querySales(parseInt(pctLocationId), pctCompanyId);
+          const requestedSourceCompanyId = pctSourceCompanyId ? parseInt(String(pctSourceCompanyId)) : null;
+          // A caller-supplied company never widens access: it is honoured only
+          // when the user is already assigned to it.
+          const accessibleCompanyIds = await getAccessibleCompanyIds(String(req.session.userId ?? req.user?.id ?? ""));
+          const explicitSourceCompanyId =
+            requestedSourceCompanyId && accessibleCompanyIds.has(requestedSourceCompanyId)
+              ? requestedSourceCompanyId
+              : null;
+          // The active company keeps priority over the location owner so a
+          // company selling at a location it does not own (GC-LSHI) totals its
+          // own sales instead of the owner's.
+          const sessionCompanyHasSales = !explicitSourceCompanyId && (await hasSalesAtLocation(companyId, pctLocId));
+          const pctCompanyId = resolveBonusSalesCompanyId({
+            explicitSourceCompanyId,
+            sessionCompanyId: companyId,
+            locationOwnerCompanyId: locRow?.companyId ?? null,
+            sessionCompanyHasSales,
+          });
+          pctSales = await querySales(pctLocId, pctCompanyId);
         } catch {
           // Failure here is non-fatal and the surrounding flow continues deliberately.
         }

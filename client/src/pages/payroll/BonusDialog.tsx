@@ -22,6 +22,7 @@ import { AlertCircle, Loader2, Package, Percent, Plus, RefreshCw, Save, X } from
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { getThisMonthRange } from "./payrollSchemas";
+import { decodeLocationOption, encodeLocationOption } from "./payrollUtils";
 
 interface BonusDialogProps {
   open: boolean;
@@ -173,7 +174,7 @@ export function BonusDialog({
                   <SelectGroup>
                     <SelectLabel>This Company</SelectLabel>
                     {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={String(loc.id)}>
+                      <SelectItem key={loc.id} value={encodeLocationOption(loc.id, loc.companyId)}>
                         {loc.name}
                       </SelectItem>
                     ))}
@@ -182,7 +183,10 @@ export function BonusDialog({
                     <SelectGroup>
                       <SelectLabel>Other Companies</SelectLabel>
                       {allCompanyLocations.map((loc) => (
-                        <SelectItem key={`oc-${loc.id}`} value={String(loc.id)}>
+                        <SelectItem
+                          key={`oc-${loc.companyId}-${loc.id}`}
+                          value={encodeLocationOption(loc.id, loc.companyId)}
+                        >
                           {loc.name} ({loc.companyName})
                         </SelectItem>
                       ))}
@@ -371,20 +375,11 @@ export function BonusDialog({
               {balesRows.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_72px_32px_72px_32px] gap-2 items-center">
                   <Select
-                    value={row.locationId}
+                    value={row.locationId ? encodeLocationOption(row.locationId, row.sourceCompanyId) : ""}
                     onValueChange={(v) => {
-                      const otherLoc = allCompanyLocations.find((l) => l.id === parseInt(v));
+                      const { locationId, sourceCompanyId } = decodeLocationOption(v);
                       setBalesRows((prev) =>
-                        prev.map((r, i) =>
-                          i === idx
-                            ? {
-                                ...r,
-                                locationId: v,
-                                sourceCompanyId: otherLoc ? String(otherLoc.companyId) : "",
-                                qty: "",
-                              }
-                            : r
-                        )
+                        prev.map((r, i) => (i === idx ? { ...r, locationId, sourceCompanyId, qty: "" } : r))
                       );
                     }}
                   >
@@ -395,7 +390,7 @@ export function BonusDialog({
                       <SelectGroup>
                         <SelectLabel>This Company</SelectLabel>
                         {locations.map((loc) => (
-                          <SelectItem key={loc.id} value={String(loc.id)}>
+                          <SelectItem key={loc.id} value={encodeLocationOption(loc.id, loc.companyId)}>
                             {loc.name}
                           </SelectItem>
                         ))}
@@ -404,7 +399,10 @@ export function BonusDialog({
                         <SelectGroup>
                           <SelectLabel>Other Companies</SelectLabel>
                           {allCompanyLocations.map((loc) => (
-                            <SelectItem key={`oc-${loc.id}`} value={String(loc.id)}>
+                            <SelectItem
+                              key={`oc-${loc.companyId}-${loc.id}`}
+                              value={encodeLocationOption(loc.id, loc.companyId)}
+                            >
                               {loc.name} ({loc.companyName})
                             </SelectItem>
                           ))}
