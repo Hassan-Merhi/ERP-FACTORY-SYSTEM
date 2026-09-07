@@ -204,6 +204,22 @@ export function parseGoldenCoastEquitySalesCashInput(input: {
 }
 
 /**
+ * The lower of an account's dated and all-posted credit balances.
+ *
+ * Both ceilings this module enforces are read at the settlement date, but a
+ * backdated settlement must not spend a balance that a later posted debit has
+ * already consumed: a $100 settlement dated before a posted $100 debit would
+ * otherwise pass its ceiling and leave the account $100 in debit. Taking the
+ * lower of the two readings closes that, and matches how the GC Sales Cash
+ * payable is already read.
+ *
+ * Pure so the rule can be tested directly rather than inferred from the route.
+ */
+export function conservativeCreditBalanceUsd(datedUsd: string | number, allPostedUsd: string | number): string {
+  return money(Decimal.min(balanceMoney(datedUsd, "datedUsd"), balanceMoney(allPostedUsd, "allPostedUsd")));
+}
+
+/**
  * Two independent ceilings apply, because two credit-normal balances are being
  * drawn down at once: the settlement can never clear more than Fresh Start is
  * actually owed, and it can never push Hassan's capital negative.

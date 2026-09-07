@@ -12,6 +12,7 @@ import {
   GOLDEN_COAST_EQUITY_SALES_CASH_SOURCE_TYPE,
   GoldenCoastEquitySalesCashError,
   buildGoldenCoastEquitySalesCashPosting,
+  conservativeCreditBalanceUsd,
   goldenCoastEquitySalesCashDigest,
   goldenCoastEquitySalesCashIdempotencyKey,
   parseGoldenCoastEquitySalesCashInput,
@@ -116,6 +117,51 @@ describe("planning both credit-normal drawdowns", () => {
     const result = plan({ amountUsd: "5000.00" }, "5000.00", "5000.00");
     expect(result.gcSalesCashPayableAfterUsd).toBe("0.00");
     expect(result.hassanEquityAfterUsd).toBe("0.00");
+  });
+});
+
+describe("the conservative credit-balance ceiling", () => {
+  it("takes the all-posted balance when a later debit has already spent it", () => {
+    // The case the ratchet exists for: $100 available at the settlement date,
+    // but a later posted debit leaves nothing. Reading only the dated balance
+    // would authorise a settlement that ends with the account in debit.
+    expect(conservativeCreditBalanceUsd("100.00", "0.00")).toBe("0.00");
+  });
+
+  it("takes the dated balance when it is the lower of the two", () => {
+    // A credit posted after the settlement date must not be spent early.
+    expect(conservativeCreditBalanceUsd("40.00", "140.00")).toBe("40.00");
+  });
+
+  it("is unchanged when both readings agree", () => {
+    expect(conservativeCreditBalanceUsd("250.00", "250.00")).toBe("250.00");
+  });
+
+  it("carries a negative balance through rather than flooring it", () => {
+    // Planning rejects a debit-balance equity account outright; masking it as
+    // zero here would turn that refusal into a silent no-op ceiling.
+    expect(conservativeCreditBalanceUsd("10.00", "-5.00")).toBe("-5.00");
+  });
+
+  it("refuses a reading it cannot represent exactly", () => {
+    expect(() => conservativeCreditBalanceUsd("1.0000001", "5.00")).toThrow(GoldenCoastEquitySalesCashError);
+  });
+});
+
+describe("a backdated settlement cannot spend equity a later debit consumed", () => {
+  it("rejects the amount once the conservative ceiling is applied", () => {
+    // $100 dated balance, $0 once every posted entry is counted.
+    const ceiling = conservativeCreditBalanceUsd("100.00", "0.00");
+    try {
+      planGoldenCoastEquitySalesCashSettlement({
+        settlement: parsed({ amountUsd: "100.00" }),
+        gcSalesCashPayableUsd: "9000.00",
+        hassanEquityCreditBalanceUsd: ceiling,
+      });
+      expect.unreachable("the backdated settlement must be rejected");
+    } catch (error) {
+      expect((error as GoldenCoastEquitySalesCashError).code).toBe("GC_EQUITY_SALES_CASH_EXCEEDS_EQUITY");
+    }
   });
 });
 

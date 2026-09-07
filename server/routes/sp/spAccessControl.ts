@@ -102,7 +102,13 @@ export function ensureSpAccessControlStorage(): Promise<void> {
   return storageReady;
 }
 
-function classifyPermission(req: Request): SpPermission {
+/**
+ * Exported so the classification can be asserted behaviourally. Ordering here
+ * is load-bearing — several Golden Coast paths would be claimed by the generic
+ * rules below them — and a string match on this file's source would not prove
+ * which rule actually wins.
+ */
+export function classifyPermission(req: Pick<Request, "path" | "method">): SpPermission {
   const path = req.path;
   const method = req.method.toUpperCase();
   if (

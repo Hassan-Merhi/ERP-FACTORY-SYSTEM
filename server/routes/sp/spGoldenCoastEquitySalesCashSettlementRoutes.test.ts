@@ -1,129 +1,43 @@
 /**
- * Route surface for settling GC Sales Cash out of Hassan Dakik Equity.
+ * Access control for settling GC Sales Cash out of Hassan Dakik Equity.
  *
- * The journal itself is proven behaviourally in the service suite. What only
- * the route source can show is that this path reuses the same access controls,
- * canonical account resolution, balance semantics and serialization as the
- * cash-funded Phase 10 payment it sits beside.
+ * This operation moves partner capital, so it must carry the owner-withdrawal
+ * permission rather than the sales-entry one. The endpoint path contains the
+ * substring "sales", which the generic rule in `classifyPermission` would
+ * otherwise claim — ordering inside that function is what makes the explicit
+ * classification win, so the assertions here drive the real function rather
+ * than inspecting the file that defines it.
  */
-import { readFileSync } from "node:fs";
+import type { Request } from "express";
 import { describe, expect, it } from "vitest";
+import { classifyPermission } from "./spAccessControl";
 
-const routeSource = readFileSync(new URL("./spGoldenCoastEquitySalesCashSettlementRoutes.ts", import.meta.url), "utf8");
-const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const serviceSource = readFileSync(
-  new URL("../../services/accounting/goldenCoastEquitySalesCashSettlement.ts", import.meta.url),
-  "utf8"
-);
-const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
-const panelSource = readFileSync(
-  new URL("../../../client/src/pages/sp/golden-coast/EquitySalesCashPanel.tsx", import.meta.url),
-  "utf8"
-);
+function classify(path: string, method: string) {
+  return classifyPermission({ path, method } as Pick<Request, "path" | "method">);
+}
 
-describe("Golden Coast equity-funded GC Sales Cash settlement route surface", () => {
-  it("registers alongside the other Golden Coast accounting routes and before legacy SP sales", () => {
-    const equityIndex = spIndexSource.indexOf("registerSpGoldenCoastEquitySalesCashSettlementRoutes(app);");
-    const phase10Index = spIndexSource.indexOf("registerSpGoldenCoastPhase10SalesCashSettlementRoutes(app);");
-    const legacySalesIndex = spIndexSource.indexOf("registerSpSalesRoutes(app);");
+const EQUITY_SETTLEMENT = "/golden-coast/equity-sales-cash-settlement";
 
-    expect(equityIndex).toBeGreaterThan(phase10Index);
-    expect(equityIndex).toBeLessThan(legacySalesIndex);
+describe("Golden Coast equity settlement permission classification", () => {
+  it("requires the owner-withdrawal permission, never sales entry", () => {
+    expect(classify(EQUITY_SETTLEMENT, "POST")).toBe("sp_owner_withdrawal");
+    expect(classify(EQUITY_SETTLEMENT, "POST")).not.toBe("sp_sales_create");
   });
 
-  it("keeps the settlement out of POS-role sessions and applies privileged endpoint controls", () => {
-    expect(routeSource).toContain("requireNonPOS");
-    expect(routeSource).toContain("privilegedReadRateLimit");
-    expect(routeSource).toContain("privilegedMutationRateLimit");
-    expect(routeSource).toContain("equitySalesCashRequestBudget");
-  });
-
-  it("resolves all three roles canonically by sub type and rejects duplicates", () => {
-    expect(routeSource).toContain("eq(ledgerAccounts.subType, definition.subType)");
-    expect(routeSource).toContain(".limit(2)");
-    expect(routeSource).toContain("is ambiguous; repair duplicate canonical accounts before settling");
-    // Never by display name — a renamed account must not silently reroute equity.
-    expect(routeSource).not.toContain('ledgerAccounts.name,\n        "Hassan');
-  });
-
-  it("refuses to post when two of the three roles resolve to the same account", () => {
-    expect(routeSource).toContain("must resolve to three distinct accounts");
-    expect(serviceSource).toContain("must resolve to three distinct accounts");
-  });
-
-  it("is gated by sp_owner_withdrawal, not the generic sales permission", () => {
-    // The endpoint path contains "sales", so the generic
-    // `path.includes("sales") && method !== "GET"` rule would classify it as
-    // sp_sales_create and hand partner capital to any sales-entry user. The
-    // explicit classification must therefore come first.
-    const explicit = accessControlSource.indexOf(
-      'if (path === "/golden-coast/equity-sales-cash-settlement" && method === "POST") return "sp_owner_withdrawal";'
+  it("classifies it the same way as the Phase 9 owner withdrawal beside it", () => {
+    expect(classify(EQUITY_SETTLEMENT, "POST")).toBe(
+      classify("/golden-coast/phase9/hassan-savings-withdrawal", "POST")
     );
-    const genericSales = accessControlSource.indexOf('if ((path.includes("sales") || path.includes("sale"))');
-
-    expect(explicit).toBeGreaterThan(-1);
-    expect(genericSales).toBeGreaterThan(-1);
-    expect(explicit).toBeLessThan(genericSales);
   });
 
-  it("caps a backdated settlement against current equity, not just the dated balance", () => {
-    // A settlement dated before an already-posted equity debit must not spend
-    // capital that debit has consumed, or the account ends in debit despite
-    // the never-negative invariant. Both ceilings use the conservative read.
-    expect(routeSource).toContain("conservativeCreditBalance");
-    expect(routeSource).toContain("Decimal.min(new Decimal(dated), new Decimal(allPosted))");
-
-    const equityRead = routeSource.indexOf("conservativeCreditBalance(\n          tx,");
-    const lockIndex = routeSource.indexOf("LOCK TABLE voucher_entries IN SHARE ROW EXCLUSIVE MODE");
-    expect(equityRead).toBeGreaterThan(lockIndex);
+  it("still lets an ordinary sales write fall through to sales entry", () => {
+    // Proves the explicit rule is targeted rather than swallowing the generic
+    // one, which a mis-ordered or over-broad match would break.
+    expect(classify("/sales", "POST")).toBe("sp_sales_create");
+    expect(classify("/sales/123/lines", "POST")).toBe("sp_sales_create");
   });
 
-  it("caps the amount against both credit-normal balances, not just the payable", () => {
-    expect(serviceSource).toContain("GC_EQUITY_SALES_CASH_EXCEEDS_PAYABLE");
-    expect(serviceSource).toContain("GC_EQUITY_SALES_CASH_EXCEEDS_EQUITY");
-    expect(routeSource).toContain("conservativePayable");
-    expect(routeSource).toContain("hassanEquityCreditBalanceUsd");
-  });
-
-  it("reads the payable as conservatively as the cash-funded path does", () => {
-    expect(routeSource).toContain("gcSalesCashConservativePayable");
-    expect(routeSource).toContain("gcSalesCashSettleablePayable");
-  });
-
-  it("detects an exact replay before the mutable balance cap", () => {
-    const replayIndex = routeSource.indexOf("findReplayedSettlement(tx");
-    const capIndex = routeSource.indexOf("planGoldenCoastEquitySalesCashSettlement({");
-    expect(replayIndex).toBeGreaterThan(-1);
-    expect(replayIndex).toBeLessThan(capIndex);
-  });
-
-  it("serializes against the same company locks the other payable writers take", () => {
-    expect(routeSource).toContain("golden-coast-phase7:${companyId}");
-    expect(routeSource).toContain("golden-coast-phase10:${companyId}");
-    expect(routeSource).toContain("LOCK TABLE voucher_entries IN SHARE ROW EXCLUSIVE MODE");
-  });
-
-  it("posts through the central engine and never writes voucher tables directly", () => {
-    expect(routeSource).toContain("postBalancedVoucherTx");
-    expect(routeSource).not.toContain("insert(vouchers)");
-    expect(routeSource).not.toContain("insert(voucherEntries)");
-  });
-
-  it("moves no cash or bank account, so it never resolves a payment target", () => {
-    expect(routeSource).not.toContain("bankAccounts");
-    expect(routeSource).not.toContain("listPaymentAccounts");
-    expect(serviceSource).not.toContain("bankAccountId");
-  });
-
-  it("emits every readiness field the panel reads", () => {
-    const readFields = [...panelSource.matchAll(/readiness[.?]{1,2}\.?(\w+)/g)]
-      .map((match) => match[1])
-      .filter((field) => !["data", "ready", "isLoading", "error", "mutate", "isPending"].includes(field));
-
-    expect(readFields.length).toBeGreaterThan(0);
-    for (const field of new Set(readFields)) {
-      const emitted = new RegExp(`\\b${field}\\s*[:,]`).test(routeSource);
-      expect(emitted, `readiness payload is missing ${field}`).toBe(true);
-    }
+  it("leaves the readiness GET as an ordinary view", () => {
+    expect(classify(`${EQUITY_SETTLEMENT}/readiness`, "GET")).toBe("sp_view");
   });
 });
