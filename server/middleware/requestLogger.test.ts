@@ -1,3 +1,5 @@
+import { EventEmitter } from "node:events";
+import type { NextFunction, Request, Response } from "express";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Hoisted so the vi.mock factory below - which vitest lifts above this line -
@@ -21,7 +23,47 @@ vi.mock("../lib/logger", () => ({
   },
 }));
 
-import { getRequestMetricsSnapshot } from "./requestLogger";
+import { logger } from "../lib/logger";
+import { resetPerformanceDashboardForTests } from "../lib/performanceDashboard";
+import { getRequestMetricsSnapshot, requestLogger, resetRequestMetricsForTests } from "./requestLogger";
+
+interface FakeResponse extends Response {
+  destroy(error?: Error): FakeResponse;
+  emit(eventName: string | symbol, ...args: unknown[]): boolean;
+  writableFinished: boolean;
+}
+
+function createRequest(path = "/api/reports/slow", headers: Request["headers"] = {}): Request {
+  return {
+    method: "GET",
+    path,
+    originalUrl: path,
+    baseUrl: "",
+    headers,
+    session: {},
+    route: { path },
+  } as unknown as Request;
+}
+
+function createResponse(): FakeResponse {
+  const emitter = new EventEmitter();
+  const headers = new Map<string, unknown>();
+  const response = Object.assign(emitter, {
+    statusCode: 200,
+    headersSent: false,
+    writableFinished: false,
+    setHeader: vi.fn((name: string, value: unknown) => {
+      headers.set(name.toLowerCase(), value);
+    }),
+    getHeader: vi.fn((name: string) => headers.get(name.toLowerCase())),
+    write: vi.fn(() => true),
+    end: vi.fn(),
+    destroy: vi.fn(),
+  });
+  response.end.mockImplementation(() => response);
+  response.destroy.mockImplementation(() => response);
+  return response as unknown as FakeResponse;
+}
 
 describe("requestLogger health metrics", () => {
   beforeEach(() => {
@@ -29,6 +71,9 @@ describe("requestLogger health metrics", () => {
     poolState.totalCount = 6;
     poolState.idleCount = 2;
     poolState.waitingCount = 0;
+    resetRequestMetricsForTests();
+    resetPerformanceDashboardForTests();
+    vi.clearAllMocks();
   });
 
   it("reports safe process, request baseline, and pool metrics without connection details", () => {
@@ -47,14 +92,18 @@ describe("requestLogger health metrics", () => {
       total: 0,
       active: 0,
       completed: 0,
+      measuredCompleted: 0,
       success: 0,
       expectedClientResponse: 0,
       clientError: 0,
+      clientAbort: 0,
+      streamClosed: 0,
       serverError: 0,
       slow: 0,
       averageDurationMs: 0,
       maxDurationMs: 0,
       slowPercent: 0,
+      clientAbortPercent: 0,
       serverErrorPercent: 0,
       slowRequestThresholdMs: 1000,
     });
@@ -78,5 +127,122 @@ describe("requestLogger health metrics", () => {
 
     expect(snapshot.status).toBe("degraded");
     expect(snapshot.databasePool.waiting).toBe(3);
+  });
+
+  it("records a disconnected API response exactly once as a client abort", () => {
+    const req = createRequest();
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({ total: 1, active: 1, clientAbort: 0 });
+
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      measuredCompleted: 1,
+      clientAbort: 1,
+      streamClosed: 0,
+      clientAbortPercent: 100,
+      success: 0,
+      serverError: 0,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Client disconnected before response completed",
+      expect.objectContaining({
+        module: "http",
+        action: "client_abort",
+        routeTemplate: "/api/reports/slow",
+        status: 499,
+        responseStarted: false,
+      })
+    );
+
+    res.writableFinished = true;
+    res.emit("finish");
+    expect(getRequestMetricsSnapshot().requests.clientAbort).toBe(1);
+  });
+
+  it("does not reclassify a normally finished response when the socket later closes", () => {
+    const req = createRequest("/api/reports/ok");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    res.writableFinished = true;
+    res.emit("finish");
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      measuredCompleted: 1,
+      success: 1,
+      clientAbort: 0,
+      streamClosed: 0,
+    });
+  });
+
+  it("records an application-destroyed response as a server failure instead of a client abort", () => {
+    const req = createRequest("/api/reports/export");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    res.destroy(new Error("export failed"));
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      measuredCompleted: 1,
+      success: 0,
+      clientAbort: 0,
+      serverError: 1,
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Client disconnected before response completed",
+      expect.objectContaining({ action: "client_abort" })
+    );
+  });
+
+  it("tracks EventSource disconnects separately without diluting measured latency or database averages", () => {
+    const req = createRequest("/api/screen-feed/session-1", { accept: "text/event-stream" });
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      measuredCompleted: 0,
+      success: 0,
+      clientAbort: 0,
+      streamClosed: 1,
+      slow: 0,
+      averageDurationMs: 0,
+      maxDurationMs: 0,
+      slowPercent: 0,
+      clientAbortPercent: 0,
+      database: {
+        queryCount: 0,
+        averageQueriesPerRequest: 0,
+        averageDurationMsPerRequest: 0,
+      },
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Client disconnected before response completed",
+      expect.objectContaining({ action: "client_abort" })
+    );
   });
 });
