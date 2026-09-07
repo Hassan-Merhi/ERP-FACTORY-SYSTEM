@@ -37,6 +37,23 @@ export function usePosImportModel() {
   const [printTime, setPrintTime] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
   const errorsRef = useRef<HTMLDivElement>(null);
+  const importIdentityRef = useRef<{ signature: string; requestId: string } | null>(null);
+
+  const createImportRequestId = () => {
+    if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+    return `pos-import-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  };
+
+  const resolveImportRequestId = (signature: string) => {
+    if (importIdentityRef.current?.signature === signature) return importIdentityRef.current.requestId;
+    const requestId = createImportRequestId();
+    importIdentityRef.current = { signature, requestId };
+    return requestId;
+  };
+
+  const clearImportRequestId = () => {
+    importIdentityRef.current = null;
+  };
 
   const fmtPrint = (n: number, prefix = "") => {
     const fixed = Math.abs(n).toFixed(2);
@@ -164,6 +181,7 @@ export function usePosImportModel() {
       return await res.json();
     },
     onSuccess: (data) => {
+      clearImportRequestId();
       toast({
         title: "Import successful",
         description: `${data.itemsCount} items imported. Total sales: ${data.totalSales}`,
@@ -199,6 +217,7 @@ export function usePosImportModel() {
       return await res.json();
     },
     onSuccess: (data) => {
+      clearImportRequestId();
       toast({
         title: "Credit Sale Import successful",
         description: `${data.itemsCount} items imported. Total: $${data.totalSales} to ${data.customerName}`,
@@ -235,6 +254,7 @@ export function usePosImportModel() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      clearImportRequestId();
       setFile(selectedFile);
       setPreview(null);
       setValidationResult(null);
@@ -242,6 +262,7 @@ export function usePosImportModel() {
   };
 
   const toggleCreditSale = (checked: boolean) => {
+    clearImportRequestId();
     setIsCreditSale(checked);
     setSelectedCashAccount("");
     setSelectedCustomer("");
@@ -301,21 +322,31 @@ export function usePosImportModel() {
   const doImport = () => {
     // Convert CFA rates to USD if needed
     const itemsToImport = toUsdItems(validationResult.validatedItems);
+    const requestPayload = isCreditSale
+      ? {
+          locationId: parseInt(selectedLocation),
+          customerId: parseInt(selectedCustomer),
+          saleDate,
+          items: itemsToImport,
+        }
+      : {
+          locationId: parseInt(selectedLocation),
+          cashAccountId: parseInt(selectedCashAccount),
+          saleDate,
+          items: itemsToImport,
+        };
+    const signature = JSON.stringify({ isCreditSale, ...requestPayload });
+    const requestId = resolveImportRequestId(signature);
+    const payload = {
+      ...requestPayload,
+      clientRequestId: requestId,
+      importBatchId: requestId,
+    };
 
     if (isCreditSale) {
-      creditImportMutation.mutate({
-        locationId: parseInt(selectedLocation),
-        customerId: parseInt(selectedCustomer),
-        saleDate,
-        items: itemsToImport,
-      });
+      creditImportMutation.mutate(payload);
     } else {
-      importMutation.mutate({
-        locationId: parseInt(selectedLocation),
-        cashAccountId: parseInt(selectedCashAccount),
-        saleDate,
-        items: itemsToImport,
-      });
+      importMutation.mutate(payload);
     }
   };
 
