@@ -9,10 +9,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(
-  new URL("./spGoldenCoastEquitySalesCashSettlementRoutes.ts", import.meta.url),
-  "utf8"
-);
+const routeSource = readFileSync(new URL("./spGoldenCoastEquitySalesCashSettlementRoutes.ts", import.meta.url), "utf8");
 const spIndexSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const serviceSource = readFileSync(
   new URL("../../services/accounting/goldenCoastEquitySalesCashSettlement.ts", import.meta.url),
@@ -45,7 +42,7 @@ describe("Golden Coast equity-funded GC Sales Cash settlement route surface", ()
     expect(routeSource).toContain(".limit(2)");
     expect(routeSource).toContain("is ambiguous; repair duplicate canonical accounts before settling");
     // Never by display name — a renamed account must not silently reroute equity.
-    expect(routeSource).not.toContain("ledgerAccounts.name,\n        \"Hassan");
+    expect(routeSource).not.toContain('ledgerAccounts.name,\n        "Hassan');
   });
 
   it("refuses to post when two of the three roles resolve to the same account", () => {

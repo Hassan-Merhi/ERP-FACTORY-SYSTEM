@@ -26,7 +26,15 @@ import {
   type EquitySalesCashReadiness,
   type MutationResult,
 } from "./contracts";
-import { ReadinessState, allowedAmount, makeRequestId, money, readJson, todayIso, useReadinessInvalidation } from "./shared";
+import {
+  ReadinessState,
+  allowedAmount,
+  makeRequestId,
+  money,
+  readJson,
+  todayIso,
+  useReadinessInvalidation,
+} from "./shared";
 
 export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey }) {
   const { toast } = useToast();
@@ -74,7 +82,9 @@ export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey })
       setConfirmation("");
       setRequestId(makeRequestId("gc-esc"));
       toast({
-        title: releaseDebtEnglish(result.replayed ? "Settlement replay confirmed" : "GC Sales Cash settled from equity"),
+        title: releaseDebtEnglish(
+          result.replayed ? "Settlement replay confirmed" : "GC Sales Cash settled from equity"
+        ),
         description: releaseDebtEnglish("The payable and both partner equity balances were refreshed."),
       });
     },
@@ -121,10 +131,7 @@ export function EquitySalesCashPanel({ companyKey }: { companyKey: CompanyKey })
           </div>
           <div className="rounded-md border p-4">
             <p className="text-xs text-muted-foreground">{releaseDebtEnglish("Most that can be settled now")}</p>
-            <p
-              className="mt-1 text-2xl font-semibold tabular-nums"
-              data-testid="text-gc-equity-sales-cash-max"
-            >
+            <p className="mt-1 text-2xl font-semibold tabular-nums" data-testid="text-gc-equity-sales-cash-max">
               {money(readiness?.maxSettlementUsd)}
             </p>
           </div>
