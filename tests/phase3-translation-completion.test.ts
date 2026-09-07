@@ -51,7 +51,7 @@ const entries = [
 
 describe("Phase 3 translation completion", () => {
   it("keeps the complete generated translation inventory", () => {
-    expect(entries).toHaveLength(8195);
+    expect(entries).toHaveLength(8196);
     expect(new Set(entries.map((entry) => entry.en)).size).toBe(entries.length);
   });
 
