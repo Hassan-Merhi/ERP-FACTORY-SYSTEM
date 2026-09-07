@@ -1,4 +1,5 @@
 import "./customerOrderBaleScanAuditBridge.mjs";
+import "./wave3SalesHotpathIndexBridge.mjs";
 
 const FX_API_HOST = "api.frankfurter.app";
 const FX_API_TIMEOUT_MS = 5_000;
