@@ -51,6 +51,7 @@ vi.mock("@/lib/queryClient", () => ({
 }));
 
 import SpGoldenCoast from "@/pages/sp/SpGoldenCoast";
+import { EquitySalesCashPanel } from "@/pages/sp/golden-coast/EquitySalesCashPanel";
 import { GcSalesCashPanel } from "@/pages/sp/golden-coast/GcSalesCashPanel";
 import { HadiCashRoutingPanel } from "@/pages/sp/golden-coast/HadiCashRoutingPanel";
 import { HassanSavingsPanel } from "@/pages/sp/golden-coast/HassanSavingsPanel";
@@ -60,6 +61,7 @@ const PHASE7 = "/api/sp/golden-coast/phase7/sales-cash-transfer";
 const PHASE9 = "/api/sp/golden-coast/phase9/hassan-savings-withdrawal";
 const PHASE10 = "/api/sp/golden-coast/phase10/sales-cash-settlement";
 const PHASE11 = "/api/sp/golden-coast/phase11/profit-splits/monthly-close";
+const EQUITY_SALES_CASH = "/api/sp/golden-coast/equity-sales-cash-settlement";
 
 /** Last body sent through apiRequest, with the URL it was sent to. */
 function lastRequest(): { method: string; url: string; body: any } {
@@ -291,6 +293,73 @@ describe("Phase 10 GC Sales Cash settlement", () => {
     setValue("input-gc-phase10-transfer-fee", "12.50");
 
     expect(screen.getByTestId("button-gc-phase10-submit").hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("GC Sales Cash settled from Hassan equity", () => {
+  beforeEach(() => {
+    harness.readiness.set(`${EQUITY_SALES_CASH}/readiness`, {
+      ready: true,
+      companyId: 42,
+      gcSalesCashAccount: { id: 8, name: "GC Sales Cash" },
+      hassanEquityAccount: { id: 2, name: "Hassan Dakik Equity" },
+      freshStartEquityAccount: { id: 1, name: "Fresh Start FZ Equity" },
+      payableSalesCashUsd: "900.00",
+      availableHassanEquityUsd: "500.00",
+      freshStartEquityUsd: "100000.00",
+      maxSettlementUsd: "500.00",
+      sourceType: "ledger",
+    });
+  });
+
+  function fillSettlement(): void {
+    setValue("input-gc-equity-sales-cash-amount", "500");
+    setValue("input-gc-equity-sales-cash-confirmation", "SETTLE SALES CASH FROM EQUITY");
+  }
+
+  it("posts the amount, reason and confirmation and never a payment account", async () => {
+    render(<EquitySalesCashPanel companyKey={42} />);
+    fillSettlement();
+    setValue("input-gc-equity-sales-cash-reason", "Hassan settles from capital");
+    fireEvent.click(screen.getByTestId("button-gc-equity-sales-cash-submit"));
+
+    await waitFor(() => expect(harness.apiRequest).toHaveBeenCalled());
+    const request = lastRequest();
+    expect(request.url).toBe(EQUITY_SALES_CASH);
+    expect(request.body).toMatchObject({
+      amountUsd: "500",
+      reason: "Hassan settles from capital",
+      confirmation: "SETTLE SALES CASH FROM EQUITY",
+    });
+    // No money moves, so the panel must never name a cash or bank target.
+    expect(request.body.paymentAccount).toBeUndefined();
+    expect(request.body.receiptAccount).toBeUndefined();
+    // The 2x Fresh Start credit is the server's to derive, never the client's.
+    expect(request.body.freshStartEquityCreditUsd).toBeUndefined();
+  });
+
+  it("stays disabled without a reason and the exact confirmation phrase", () => {
+    render(<EquitySalesCashPanel companyKey={42} />);
+    setValue("input-gc-equity-sales-cash-amount", "500");
+    expect(screen.getByTestId("button-gc-equity-sales-cash-submit").hasAttribute("disabled")).toBe(true);
+
+    setValue("input-gc-equity-sales-cash-reason", "Hassan settles from capital");
+    setValue("input-gc-equity-sales-cash-confirmation", "settle sales cash from equity");
+    expect(screen.getByTestId("button-gc-equity-sales-cash-submit").hasAttribute("disabled")).toBe(true);
+
+    setValue("input-gc-equity-sales-cash-confirmation", "SETTLE SALES CASH FROM EQUITY");
+    expect(screen.getByTestId("button-gc-equity-sales-cash-submit").hasAttribute("disabled")).toBe(false);
+  });
+
+  it("caps at the lower of the payable and Hassan's available equity", () => {
+    render(<EquitySalesCashPanel companyKey={42} />);
+    fillSettlement();
+    setValue("input-gc-equity-sales-cash-reason", "Hassan settles from capital");
+    // The payable is 900 but only 500 of equity is available.
+    setValue("input-gc-equity-sales-cash-amount", "500.01");
+
+    expect(screen.getByTestId("button-gc-equity-sales-cash-submit").hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("text-gc-equity-sales-cash-max").textContent).toBe("$500.00");
   });
 });
 

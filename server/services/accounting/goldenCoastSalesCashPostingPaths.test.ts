@@ -34,6 +34,12 @@ import {
   planGoldenCoastPhase7Transfer,
 } from "./goldenCoastPhase7HadiTransfer";
 import {
+  buildGoldenCoastEquitySalesCashPosting,
+  goldenCoastEquitySalesCashDigest,
+  parseGoldenCoastEquitySalesCashInput,
+  planGoldenCoastEquitySalesCashSettlement,
+} from "./goldenCoastEquitySalesCashSettlement";
+import {
   buildGoldenCoastPhase10SettlementPosting,
   goldenCoastPhase10SettlementDigest,
   parseGoldenCoastPhase10SettlementInput,
@@ -228,6 +234,46 @@ describe("Phase 10 payment reduces the payable", () => {
 
     expect(netDebitOnSalesCash(posting.entries as Entry[])).toBe(600);
     expectBalanced(posting.entries as Entry[]);
+  });
+});
+
+// ── Equity-funded payment ────────────────────────────────────────────────────
+
+describe("settling GC Sales Cash from Hassan equity reduces the payable", () => {
+  it("debits GC Sales Cash and moves no cash account at all", () => {
+    const settlement = parseGoldenCoastEquitySalesCashInput({
+      companyId: COMPANY_ID,
+      body: {
+        settlementDate: "2026-09-13",
+        amountUsd: "600.00",
+        clientRequestId: "gc-paths-equity-payment",
+        reference: null,
+        reason: "Hassan settles the Fresh Start payable from capital",
+        confirmation: "SETTLE SALES CASH FROM EQUITY",
+      },
+    });
+    const accounts = {
+      gcSalesCashAccountId: GC_SALES_CASH,
+      hassanEquityAccountId: 102,
+      freshStartEquityAccountId: 101,
+    };
+    const plan = planGoldenCoastEquitySalesCashSettlement({
+      settlement,
+      gcSalesCashPayableUsd: "1800.00",
+      hassanEquityCreditBalanceUsd: "9000.00",
+    });
+    const posting = buildGoldenCoastEquitySalesCashPosting({
+      plan,
+      accounts,
+      settlementDigest: goldenCoastEquitySalesCashDigest({ settlement, accounts }),
+    });
+    const entries = posting.entries as Entry[];
+
+    // Same direction as every other payment path: a payment DEBITS the payable.
+    expect(netDebitOnSalesCash(entries)).toBe(600);
+    // The funding is equity, not money, so nothing lands on a bank account.
+    expect(entries.every((entry) => entry.bankAccountId == null)).toBe(true);
+    expectBalanced(entries);
   });
 });
 

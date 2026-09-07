@@ -14,6 +14,7 @@
  * properties across the whole programme namespace.
  */
 import { describe, expect, it } from "vitest";
+import { goldenCoastEquitySalesCashIdempotencyKey } from "./goldenCoastEquitySalesCashSettlement";
 import { goldenCoastPhase5IdempotencyKey } from "./goldenCoastPhase5PosSale";
 import { goldenCoastPhase6IdempotencyKey } from "./goldenCoastPhase6SpecialLocationDeduction";
 import { goldenCoastPhase7IdempotencyKey } from "./goldenCoastPhase7HadiTransfer";
@@ -40,6 +41,7 @@ function keysForOneCompany(companyId: number, requestId: string): Record<string,
     "phase9:withdrawal": goldenCoastPhase9IdempotencyKey(companyId, requestId),
     "phase10:settlement": goldenCoastPhase10IdempotencyKey(companyId, requestId),
     "phase11:close": goldenCoastPhase11IdempotencyKey(companyId, "2026-09"),
+    "equity-sales-cash:settlement": goldenCoastEquitySalesCashIdempotencyKey(companyId, requestId),
   };
 }
 
