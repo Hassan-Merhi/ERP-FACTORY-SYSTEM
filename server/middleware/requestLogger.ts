@@ -36,7 +36,7 @@ const SKIPPED_PATHS = new Set([
 const startedAt = Date.now();
 
 type DurationBucket = "under100" | "under500" | "under1000" | "under5000" | "over5000";
-type RequestCompletionKind = "finished" | "aborted";
+type RequestCompletionKind = "finished" | "aborted" | "stream_closed";
 
 interface RequestMetrics {
   total: number;
@@ -94,6 +94,12 @@ function percentage(part: number, total: number): number {
 function isMonitoringRole(req: Request): boolean {
   const role = String(req.session?.currentRole || req.user?.role || "").toLowerCase();
   return role === "admin" || role === "developer";
+}
+
+function isExpectedLongLivedStream(req: Request, res: Response): boolean {
+  const accept = String(req.headers.accept || "").toLowerCase();
+  const contentType = String(res.getHeader?.("content-type") || "").toLowerCase();
+  return accept.includes("text/event-stream") || contentType.includes("text/event-stream");
 }
 
 export function resetRequestMetricsForTests(): void {
@@ -256,6 +262,11 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
           finalized = true;
 
           metrics.active = Math.max(0, metrics.active - 1);
+          if (completionKind === "stream_closed") {
+            metrics.success += 1;
+            return;
+          }
+
           const aborted = completionKind === "aborted";
           const statusCode = aborted ? CLIENT_ABORT_STATUS : res.statusCode;
           const durationMs = Date.now() - start;
@@ -375,7 +386,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
         res.on("finish", () => finalizeRequest("finished"));
         res.on("close", () => {
-          if (!res.writableFinished) finalizeRequest("aborted");
+          if (res.writableFinished) return;
+          finalizeRequest(isExpectedLongLivedStream(req, res) ? "stream_closed" : "aborted");
         });
 
         next();
