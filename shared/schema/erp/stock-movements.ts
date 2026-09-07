@@ -215,23 +215,30 @@ export const updateStockAdjustmentSchema = z.object({
 
 export type UpdateStockAdjustment = z.infer<typeof updateStockAdjustmentSchema>;
 
-export const salesItems = pgTable("sales_items", {
-  id: serial("id").primaryKey(),
-  voucherId: integer("voucher_id")
-    .notNull()
-    .references(() => vouchers.id, { onDelete: "cascade" }),
-  stockItemId: integer("stock_item_id")
-    .notNull()
-    .references(() => stockItems.id, { onDelete: "restrict" }),
-  quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
-  sellingPrice: decimal("selling_price", { precision: 15, scale: 6 }).notNull(),
-  costPrice: decimal("cost_price", { precision: 15, scale: 2 }).notNull(),
-  totalSales: decimal("total_sales", { precision: 15, scale: 2 }).notNull(),
-  totalCost: decimal("total_cost", { precision: 15, scale: 2 }).notNull(),
-  profit: decimal("profit", { precision: 15, scale: 2 }).notNull(),
-  configuredPrice: decimal("configured_price", { precision: 15, scale: 6 }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const salesItems = pgTable(
+  "sales_items",
+  {
+    id: serial("id").primaryKey(),
+    voucherId: integer("voucher_id")
+      .notNull()
+      .references(() => vouchers.id, { onDelete: "cascade" }),
+    stockItemId: integer("stock_item_id")
+      .notNull()
+      .references(() => stockItems.id, { onDelete: "restrict" }),
+    quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
+    sellingPrice: decimal("selling_price", { precision: 15, scale: 6 }).notNull(),
+    costPrice: decimal("cost_price", { precision: 15, scale: 2 }).notNull(),
+    totalSales: decimal("total_sales", { precision: 15, scale: 2 }).notNull(),
+    totalCost: decimal("total_cost", { precision: 15, scale: 2 }).notNull(),
+    profit: decimal("profit", { precision: 15, scale: 2 }).notNull(),
+    configuredPrice: decimal("configured_price", { precision: 15, scale: 6 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    voucherIdx: index("sales_items_voucher_idx").on(table.voucherId),
+    stockItemVoucherIdx: index("sales_items_stock_item_voucher_idx").on(table.stockItemId, table.voucherId),
+  })
+);
 
 export const insertSalesItemSchema = createInsertSchema(salesItems)
   .omit({
