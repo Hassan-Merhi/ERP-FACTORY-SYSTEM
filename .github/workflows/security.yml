@@ -30,6 +30,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -80,8 +82,28 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Block verified secrets
+      - name: Reject tracked secret-bearing files
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          while IFS= read -r -d '' file; do
+            lower_file="${file,,}"
+            case "$lower_file" in
+              .env.example|.env.production|client/.env.production|client/.env.capacitor|android/keystore.properties.example)
+                continue
+                ;;
+              .env|.env.*|*/.env|*/.env.*|*.pem|*.key|*.jks|*.keystore|*/keystore.properties)
+                echo "::error file=${file}::Secret-bearing file type must not be tracked in Git."
+                failed=1
+                ;;
+            esac
+          done < <(git ls-files -z)
+          exit "$failed"
+
+      - name: Block verified secrets across reachable history
         uses: trufflesecurity/trufflehog@20652fbbdefffcdaa493a5bf57ab2ac6b1db715b # v3.97.1
         with:
           extra_args: --results=verified

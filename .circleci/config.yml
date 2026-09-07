@@ -1,15 +1,14 @@
 version: 2.1
 
 # The canonical test/build/security work now runs in GitHub Actions. The five
-# CircleCI job names below are retained only because the active main ruleset
-# still requires those exact status contexts. They do not repeat the test
+# CircleCI job names below are retained only because the main protection policy
+# historically required those exact status contexts. They do not repeat the test
 # suites: one fail-closed bridge waits for the GitHub Actions CI workflow on the
 # exact same commit, then releases the five compatibility statuses.
 #
-# This repository is public, so the bridge works without credentials today. If
-# the repository is ever made private, configure a read-only GITHUB_TOKEN (or
-# GH_TOKEN) in CircleCI; the bridge automatically uses it and otherwise fails
-# closed rather than treating an inaccessible API as success.
+# This repository is public, so the bridge can read GitHub Actions anonymously.
+# An optional GITHUB_TOKEN (or GH_TOKEN) may still be supplied to increase API
+# rate-limit headroom; the bridge fails closed on inaccessible or missing evidence.
 executors:
   node24:
     docker:
