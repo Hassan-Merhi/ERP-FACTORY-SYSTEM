@@ -27,6 +27,7 @@ interface UseVoucherEditMutationsOptions {
   exchangeRate: number;
   handleBack: () => void;
   modePrefix: string;
+  goldenCoastParentCompanyId?: number | null;
 }
 
 export function useVoucherEditMutations({
@@ -36,6 +37,7 @@ export function useVoucherEditMutations({
   exchangeRate,
   handleBack,
   modePrefix,
+  goldenCoastParentCompanyId,
 }: UseVoucherEditMutationsOptions) {
   const { toast } = useToast();
   const [_location, navigate] = useLocation();
@@ -88,7 +90,10 @@ export function useVoucherEditMutations({
   const updateSalesMutation = useMutation({
     mutationFn: async (data: SalesFormData) => {
       const salesData = prepareSalesData(data);
-      return await modeApiRequest("PUT", `/api/vouchers/${id}/sales`, salesData);
+      return await modeApiRequest("PUT", `/api/vouchers/${id}/sales`, {
+        ...salesData,
+        targetCompanyId: goldenCoastParentCompanyId ?? undefined,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
