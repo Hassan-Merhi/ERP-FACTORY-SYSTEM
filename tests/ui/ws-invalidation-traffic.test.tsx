@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, type Query } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useWsInvalidation } from "@/hooks/use-ws-invalidation";
+import { resetWsInvalidationOwnerForTests, useWsInvalidation } from "@/hooks/use-ws-invalidation";
 
 /**
  * Every write in the system broadcasts, and every broadcast makes each
@@ -48,12 +48,14 @@ describe("WebSocket invalidation traffic", () => {
   beforeEach(() => {
     sockets = [];
     visibility = "visible";
+    resetWsInvalidationOwnerForTests();
     vi.useFakeTimers();
     vi.stubGlobal("WebSocket", FakeSocket as unknown as typeof WebSocket);
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   });
 
   afterEach(() => {
+    resetWsInvalidationOwnerForTests();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -131,5 +133,19 @@ describe("WebSocket invalidation traffic", () => {
     expect(predicate(queryWithKey("/api/factory/v5/stock-allocation"))).toBe(false);
     expect(predicate(queryWithKey("/api/factory/v5/stock-allocation?pagination=1&page=2&limit=50"))).toBe(false);
     expect(predicate(queryWithKey("/api/factory/customer-orders?status=LOADING"))).toBe(true);
+  });
+
+  it("keeps only one shared invalidation websocket when the hook mounts twice", () => {
+    const client = new QueryClient();
+    const first = renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+    const second = renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    expect(sockets).toHaveLength(1);
+
+    second.unmount();
+    expect(sockets[0].close).not.toHaveBeenCalled();
+
+    first.unmount();
+    expect(sockets[0].close).toHaveBeenCalledTimes(1);
   });
 });
