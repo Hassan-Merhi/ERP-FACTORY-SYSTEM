@@ -25,7 +25,15 @@ jobs:
       - name: Prepare reviewed install-script policy
         run: |
           npm ci --ignore-scripts --no-audit
-          npm approve-scripts bufferutil fsevents
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          pkg.allowScripts ??= {};
+          pkg.allowScripts['bufferutil@4.1.0'] = true;
+          pkg.allowScripts['fsevents@2.3.3'] = false;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Verify strict install-script policy
         run: |
@@ -39,10 +47,19 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const file = 'build/viteHeavyListPaginationPlugin.ts';
-          let content = fs.readFileSync(file, 'utf8');
-          content = content.replaceAll('./viteHeavyListPaginationPluginLegacy"', './viteHeavyListPaginationPluginLegacy.ts"');
-          fs.writeFileSync(file, content);
+          const replacements = new Map([
+            ['build/vitePhase1PaginationGuardPlugin.ts', [
+              ['./vitePhase1PaginationPlugin"', './vitePhase1PaginationPlugin.ts"'],
+            ]],
+            ['build/viteHeavyListPaginationPlugin.ts', [
+              ['./viteHeavyListPaginationPluginLegacy"', './viteHeavyListPaginationPluginLegacy.ts"'],
+            ]],
+          ]);
+          for (const [file, pairs] of replacements) {
+            let content = fs.readFileSync(file, 'utf8');
+            for (const [from, to] of pairs) content = content.replaceAll(from, to);
+            fs.writeFileSync(file, content);
+          }
           NODE
       - name: Verify native Vite config loader
         run: node --max-old-space-size=4096 node_modules/vite/bin/vite.js build --configLoader native
@@ -51,6 +68,6 @@ jobs:
           if git diff --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json build/viteHeavyListPaginationPlugin.ts
+          git add package.json package-lock.json build/vitePhase1PaginationGuardPlugin.ts build/viteHeavyListPaginationPlugin.ts
           git commit -m 'chore(toolchain): finalize reviewed scripts and Vite imports'
-          git push origin "HEAD:${PR_HEAD_REF}"
+          git push origin HEAD:"$PR_HEAD_REF"
