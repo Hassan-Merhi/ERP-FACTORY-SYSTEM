@@ -17,6 +17,13 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { Customer, LedgerAccount, Location } from "./types";
 
+function createImportIdentity(scope: string): string {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return `${scope}:${globalThis.crypto.randomUUID()}`;
+  }
+  return `${scope}:${Date.now()}:${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export function usePosImportModel() {
   const [_location, navigate] = useLocation();
   const { toast } = useToast();
@@ -37,6 +44,13 @@ export function usePosImportModel() {
   const [printTime, setPrintTime] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
   const errorsRef = useRef<HTMLDivElement>(null);
+  const importBatchIdRef = useRef<string>(createImportIdentity("pos-import-batch"));
+  const clientRequestIdRef = useRef<string>(createImportIdentity("pos-import-request"));
+
+  const refreshImportIdentity = () => {
+    importBatchIdRef.current = createImportIdentity("pos-import-batch");
+    clientRequestIdRef.current = createImportIdentity("pos-import-request");
+  };
 
   const fmtPrint = (n: number, prefix = "") => {
     const fixed = Math.abs(n).toFixed(2);
@@ -182,6 +196,7 @@ export function usePosImportModel() {
       });
       setPrintTime(new Date().toLocaleTimeString());
       setShowPrintDialog(true);
+      refreshImportIdentity();
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
@@ -221,6 +236,7 @@ export function usePosImportModel() {
       });
       setPrintTime(new Date().toLocaleTimeString());
       setShowPrintDialog(true);
+      refreshImportIdentity();
     },
     onError: (error: ClientErrorLike) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
@@ -235,6 +251,7 @@ export function usePosImportModel() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      refreshImportIdentity();
       setFile(selectedFile);
       setPreview(null);
       setValidationResult(null);
@@ -301,6 +318,10 @@ export function usePosImportModel() {
   const doImport = () => {
     // Convert CFA rates to USD if needed
     const itemsToImport = toUsdItems(validationResult.validatedItems);
+    const requestIdentity = {
+      importBatchId: importBatchIdRef.current,
+      clientRequestId: clientRequestIdRef.current,
+    };
 
     if (isCreditSale) {
       creditImportMutation.mutate({
@@ -308,6 +329,7 @@ export function usePosImportModel() {
         customerId: parseInt(selectedCustomer),
         saleDate,
         items: itemsToImport,
+        ...requestIdentity,
       });
     } else {
       importMutation.mutate({
@@ -315,6 +337,7 @@ export function usePosImportModel() {
         cashAccountId: parseInt(selectedCashAccount),
         saleDate,
         items: itemsToImport,
+        ...requestIdentity,
       });
     }
   };
