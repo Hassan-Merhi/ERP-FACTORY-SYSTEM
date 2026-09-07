@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: read
+      checks: read
       contents: read
       pull-requests: read
       statuses: read
@@ -186,13 +187,31 @@ jobs:
           # `|| true` and the job would report success having neither enabled
           # auto-merge nor, for a ci-repair-blocked pull request, disabled it.
           # Prove the token can read this repository's pull requests first.
+          #
+          # An unusable PAT is reported loudly but must not fail the job. This
+          # workflow runs every 15 minutes against `ref=main`, so a hard exit
+          # here publishes a failed check run on main's head commit and keeps
+          # publishing one until somebody rotates the secret — main goes red
+          # for a credential problem that has nothing to do with the code.
+          #
+          # The fallback runs the job's safety half only. GITHUB_TOKEN can
+          # still take a ci-repair-blocked pull request off auto-merge, which
+          # is what the hard exit was failing to do. It must NOT enable new
+          # auto-merges: a merge enabled with GITHUB_TOKEN lands a main commit
+          # that starts no workflow run, and `.circleci/config.yml` polls
+          # actions/runs?head_sha=<that commit> for a run named CI sixty times
+          # and then fails closed. Enabling auto-merge here would therefore
+          # trade one red scheduled run for five red required statuses on
+          # every commit it merged — worse than the failure being fixed.
+          allow_new_automerge=true
           if [[ -n "${CI_REPAIR_BOT_TOKEN:-}" ]]; then
             if GH_TOKEN="$CI_REPAIR_BOT_TOKEN" \
               gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=1" >/dev/null 2>&1; then
               export GH_TOKEN="$CI_REPAIR_BOT_TOKEN"
             else
-              echo "::error title=CI_REPAIR_BOT_TOKEN is unusable::The secret is set but cannot read pull requests on $GITHUB_REPOSITORY. It is probably expired or missing repo/pull-request scope. Refusing to run with it, because a silent failure would leave ci-repair-blocked pull requests on auto-merge."
-              exit 1
+              export GH_TOKEN="$WORKFLOW_TOKEN"
+              allow_new_automerge=false
+              echo "::warning title=CI_REPAIR_BOT_TOKEN is unusable::The secret is set but cannot read pull requests on $GITHUB_REPOSITORY. It is probably expired or missing repo/pull-request scope. Discarding it and running upkeep with GITHUB_TOKEN: ci-repair-blocked pull requests are still taken off auto-merge, but no new auto-merge is enabled until the secret is rotated, because merges it lands would receive no CI run on main."
             fi
           else
             export GH_TOKEN="$WORKFLOW_TOKEN"
@@ -225,6 +244,7 @@ jobs:
               OWNER|MEMBER|COLLABORATOR) ;;
               *) continue ;;
             esac
+            [[ "$allow_new_automerge" == true ]] || continue
             gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --auto --squash >/dev/null 2>&1 ||
               merge_failures=$((merge_failures + 1))
           done <<<"$pr_list"
@@ -324,6 +344,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: read
       pull-requests: read
       statuses: read
