@@ -27,7 +27,7 @@ import {
   vouchers,
 } from "@shared/schema";
 
-const FAST_ATTACHMENT_TTL_MS = 10 * 60 * 1000;
+const FAST_ATTACHMENT_TTL_MS = 60 * 60 * 1000;
 const FAST_SEND_TIMEOUT_MS = 12_000;
 const MAX_FAST_ATTACHMENTS = 100;
 
@@ -161,7 +161,7 @@ async function sendFileByUrlAttempt({
       };
     }
 
-    logger.info("[WA fast send] Green API accepted URL delivery", {
+    logger.info("[WA fast send] Green API accepted queued URL delivery", {
       chatId,
       fileName,
       instanceId: settings.instanceId,
@@ -193,20 +193,42 @@ async function sendBufferFast(
   contentType = "application/pdf"
 ): Promise<{ success: boolean; error?: string; mode: "url" | "upload" }> {
   const publicBaseUrl = resolvePublicBaseUrl(req);
-
-  // Local/dev environments are not reachable by Green API. Preserve the old
-  // direct-upload path there instead of making development sends fail.
-  if (!publicBaseUrl) {
-    const fallback = await sendWhatsAppFileByUploadPos(chatId, buffer, fileName, caption, contentType);
-    return { ...fallback, mode: "upload" };
-  }
-
   const settings = await getPosWaSettings();
   if (!settings?.instanceId || !settings?.apiToken) {
-    return { success: false, error: "WhatsApp credentials not configured", mode: "url" };
+    return { success: false, error: "WhatsApp credentials not configured", mode: "upload" };
   }
   if (!settings.enabled) {
-    return { success: false, error: "WhatsApp sending is disabled", mode: "url" };
+    return { success: false, error: "WhatsApp sending is disabled", mode: "upload" };
+  }
+
+  // Prefer multipart upload because Green API receives the actual file bytes in
+  // the same request. The URL fast path only means "queued" and may fetch the
+  // temporary file much later, which previously produced false-success results
+  // when the capability URL had already expired.
+  const uploadPrimary = await sendWhatsAppFileByUploadPos(chatId, buffer, fileName, caption, contentType);
+  if (uploadPrimary.success) {
+    logger.info("[WA fast send] Green API accepted direct upload", {
+      chatId,
+      fileName,
+      instanceId: settings.instanceId,
+      size: buffer.length,
+    });
+    return { success: true, mode: "upload" };
+  }
+
+  logger.warn("[WA fast send] Direct upload failed; trying URL fallback", {
+    chatId,
+    fileName,
+    instanceId: settings.instanceId,
+    uploadError: uploadPrimary.error,
+  });
+
+  if (!publicBaseUrl) {
+    return {
+      success: false,
+      error: uploadPrimary.error || "WhatsApp direct upload failed and no public fallback URL is available",
+      mode: "upload",
+    };
   }
 
   const primaryAttempt = await sendFileByUrlAttempt({
@@ -220,7 +242,7 @@ async function sendBufferFast(
   });
   if (primaryAttempt.success) return { success: true, mode: "url" };
 
-  logger.warn("[WA fast send] Primary URL delivery rejected; trying fallback", {
+  logger.warn("[WA fast send] URL fallback rejected", {
     chatId,
     fileName,
     instanceId: settings.instanceId,
@@ -230,9 +252,7 @@ async function sendBufferFast(
 
   // Green API's Developer plan can return HTTP 466 when the active instance has
   // exhausted its allowed correspondents. If a second ERP WhatsApp instance is
-  // configured, try it immediately before giving up. This is especially useful
-  // for POS where instance 2 is preferred but instance 1 may still be allowed to
-  // message the location group.
+  // configured, try it immediately before giving up.
   if (isGreenApiQuotaFailure(primaryAttempt.status, primaryAttempt.body)) {
     const [mainSettings, posSettings] = await Promise.all([getWaSettingsById(1), getWaSettingsById(2)]);
     const alternate = [mainSettings, posSettings].find(
@@ -254,7 +274,7 @@ async function sendBufferFast(
         contentType,
       });
       if (alternateAttempt.success) {
-        logger.warn("[WA fast send] Recovered through alternate WhatsApp instance", {
+        logger.warn("[WA fast send] Queued URL fallback through alternate WhatsApp instance", {
           chatId,
           fileName,
           primaryInstanceId: settings.instanceId,
@@ -265,21 +285,9 @@ async function sendBufferFast(
     }
   }
 
-  // Preserve the pre-fast-path multipart upload as a final fallback. This also
-  // handles provider-side sendFileByUrl failures that are not chat-limit errors.
-  const uploadFallback = await sendWhatsAppFileByUploadPos(chatId, buffer, fileName, caption, contentType);
-  if (uploadFallback.success) {
-    logger.warn("[WA fast send] Recovered through direct upload fallback", {
-      chatId,
-      fileName,
-      instanceId: settings.instanceId,
-    });
-    return { success: true, mode: "upload" };
-  }
-
   return {
     success: false,
-    error: formatGreenApiFailure(primaryAttempt, uploadFallback.error),
+    error: formatGreenApiFailure(primaryAttempt, uploadPrimary.error),
     mode: "url",
   };
 }
@@ -288,6 +296,10 @@ function serveFastAttachment(req: Request, res: Response): void {
   const entry = fastAttachments.get(req.params.token);
   if (!entry || entry.expiresAt <= Date.now()) {
     if (entry) fastAttachments.delete(req.params.token);
+    logger.warn("[WA fast send] Provider requested an expired or missing attachment", {
+      method: req.method,
+      tokenPrefix: req.params.token?.slice(0, 8),
+    });
     res.status(404).end();
     return;
   }
@@ -297,6 +309,12 @@ function serveFastAttachment(req: Request, res: Response): void {
   res.setHeader("Content-Disposition", `inline; filename="${entry.fileName.replace(/[\r\n"]/g, "_")}"`);
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   res.setHeader("X-Content-Type-Options", "nosniff");
+  logger.info("[WA fast send] Provider fetched queued attachment", {
+    method: req.method,
+    fileName: entry.fileName,
+    size: entry.buffer.length,
+    tokenPrefix: req.params.token?.slice(0, 8),
+  });
   if (req.method === "HEAD") {
     res.status(200).end();
     return;
@@ -389,7 +407,7 @@ async function sendPosStockFast(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    logger.info("POS stock WhatsApp fast send succeeded", {
+    logger.info("POS stock WhatsApp send accepted", {
       module: "whatsappFastSend",
       action: "sendStock",
       companyId,
@@ -397,7 +415,7 @@ async function sendPosStockFast(req: Request, res: Response): Promise<void> {
       mode: result.mode,
       durationMs: Date.now() - startedAt,
     });
-    res.json({ success: true, deliveryMode: result.mode });
+    res.json({ success: true, deliveryMode: result.mode, deliveryStatus: "accepted" });
   } catch (error: unknown) {
     logger.error("[WA fast stock] failed", { error });
     res.status(500).json({ message: getErrorMessage(error) });
@@ -535,7 +553,7 @@ async function sendPosInvoiceFast(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    logger.info("POS invoice WhatsApp fast send succeeded", {
+    logger.info("POS invoice WhatsApp send accepted", {
       module: "whatsappFastSend",
       action: "sendInvoice",
       companyId,
@@ -544,7 +562,7 @@ async function sendPosInvoiceFast(req: Request, res: Response): Promise<void> {
       mode: result.mode,
       durationMs: Date.now() - startedAt,
     });
-    res.json({ success: true, deliveryMode: result.mode });
+    res.json({ success: true, deliveryMode: result.mode, deliveryStatus: "accepted" });
   } catch (error: unknown) {
     logger.error("[WA fast invoice] failed", { error });
     res.status(500).json({ message: getErrorMessage(error) });
@@ -592,7 +610,7 @@ async function sendUploadedPdfFast(req: Request, res: Response): Promise<void> {
       res.status(502).json({ message: result.error ?? "WhatsApp send failed" });
       return;
     }
-    res.json({ success: true, deliveryMode: result.mode });
+    res.json({ success: true, deliveryMode: result.mode, deliveryStatus: "accepted" });
   } catch (error: unknown) {
     logger.error("[WA fast uploaded PDF] failed", { error });
     res.status(500).json({ message: getErrorMessage(error) });
@@ -662,7 +680,7 @@ async function sendAccountStatementFast(req: Request, res: Response): Promise<vo
       return;
     }
 
-    logger.info("Account statement WhatsApp fast send succeeded", {
+    logger.info("Account statement WhatsApp send accepted", {
       module: "whatsappFastSend",
       action: "sendAccountStatement",
       companyId,
@@ -670,7 +688,7 @@ async function sendAccountStatementFast(req: Request, res: Response): Promise<vo
       mode: result.mode,
       durationMs: Date.now() - startedAt,
     });
-    res.json({ success: true, fileName, deliveryMode: result.mode });
+    res.json({ success: true, fileName, deliveryMode: result.mode, deliveryStatus: "accepted" });
   } catch (error: unknown) {
     logger.error("[WA fast account statement] failed", { error });
     res.status(500).json({ message: getErrorMessage(error) });
@@ -679,13 +697,13 @@ async function sendAccountStatementFast(req: Request, res: Response): Promise<vo
 
 export function registerWhatsAppFastSendRoutes(app: Express): void {
   // Capability-token URL used only by Green API to fetch a just-generated file.
-  // Tokens are 256-bit random values and expire automatically after ten minutes.
+  // Tokens are 256-bit random values and expire automatically after one hour.
   app.get("/api/whatsapp/fast-file/:token", serveFastAttachment);
   app.head("/api/whatsapp/fast-file/:token", serveFastAttachment);
 
-  // These handlers intentionally register before the legacy routes. They keep
-  // the same auth/company checks while replacing multi-megabyte multipart
-  // uploads with Green API's sendFileByUrl fast path.
+  // These handlers intentionally register before the legacy routes. Direct
+  // upload is now the reliable primary path; sendFileByUrl remains a fallback
+  // for provider failures and keeps a longer-lived capability URL.
   for (const route of ["/api/pos/send-stock-pdf-backend", "/api/pos/send-stock-pdf"]) {
     app.post(route, requireAuth, enforcePosOperationalPermissionScope, enforcePosCapabilityScope, sendPosStockFast);
   }

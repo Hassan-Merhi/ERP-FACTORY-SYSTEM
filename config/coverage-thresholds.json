@@ -5,7 +5,7 @@
       "lines": 35,
       "statements": 31,
       "functions": 38,
-      "branches": 21
+      "branches": 25
     },
     "perFile": {
       "server/services/accounting/centralPostingEngine.ts": {
