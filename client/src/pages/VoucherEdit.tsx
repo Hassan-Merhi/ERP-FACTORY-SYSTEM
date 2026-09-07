@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeBack } from "@/hooks/use-escape-back";
@@ -26,6 +27,12 @@ import { useVoucherEditQueries } from "./voucher-edit/useVoucherEditQueries";
 import { useVoucherEditMutations } from "./voucher-edit/useVoucherEditMutations";
 import { useVoucherEditState } from "./voucher-edit/useVoucherEditState";
 
+type GoldenCoastEditReadiness = {
+  parentCompanyId?: number | null;
+  code?: string;
+  message?: string;
+};
+
 export default function VoucherEdit() {
   const { formatDisplayDate } = useDateFormat();
   const { id } = useParams<{ id: string }>();
@@ -36,6 +43,26 @@ export default function VoucherEdit() {
   const appMode = useAppMode();
   const modePrefix = useModePrefix();
   const modeApiRequest = getApiRequest(appMode);
+  const isSpCompany = selectedCompany?.companyType === "supplier_partner";
+
+  const { data: goldenCoastReadiness } = useQuery<GoldenCoastEditReadiness>({
+    queryKey: selectedCompany?.id ? ["/api/sp/golden-coast/phase6/pos-sale/readiness", selectedCompany.id] : [],
+    enabled: !!isSpCompany && !!selectedCompany?.id,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch("/api/sp/golden-coast/phase6/pos-sale/readiness", {
+        credentials: "include",
+      });
+      const body = await response.json().catch(() => null);
+      if (response.status === 409 && body?.code === "GC_PHASE6_NOT_CONFIGURED") {
+        return { parentCompanyId: null };
+      }
+      if (!response.ok) {
+        throw new Error(body?.message || response.statusText);
+      }
+      return body;
+    },
+  });
 
   useEscapeBack(() => navigate(`${modePrefix}/vouchers`));
 
@@ -95,6 +122,7 @@ export default function VoucherEdit() {
     exchangeRate: exchangeRate ?? 1,
     handleBack,
     modePrefix,
+    goldenCoastParentCompanyId: goldenCoastReadiness?.parentCompanyId ?? null,
   });
 
   if (voucherLoading)
