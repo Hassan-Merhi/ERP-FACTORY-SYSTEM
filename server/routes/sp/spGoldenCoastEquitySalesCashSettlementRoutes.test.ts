@@ -15,6 +15,7 @@ const serviceSource = readFileSync(
   new URL("../../services/accounting/goldenCoastEquitySalesCashSettlement.ts", import.meta.url),
   "utf8"
 );
+const accessControlSource = readFileSync(new URL("./spAccessControl.ts", import.meta.url), "utf8");
 const panelSource = readFileSync(
   new URL("../../../client/src/pages/sp/golden-coast/EquitySalesCashPanel.tsx", import.meta.url),
   "utf8"
@@ -48,6 +49,33 @@ describe("Golden Coast equity-funded GC Sales Cash settlement route surface", ()
   it("refuses to post when two of the three roles resolve to the same account", () => {
     expect(routeSource).toContain("must resolve to three distinct accounts");
     expect(serviceSource).toContain("must resolve to three distinct accounts");
+  });
+
+  it("is gated by sp_owner_withdrawal, not the generic sales permission", () => {
+    // The endpoint path contains "sales", so the generic
+    // `path.includes("sales") && method !== "GET"` rule would classify it as
+    // sp_sales_create and hand partner capital to any sales-entry user. The
+    // explicit classification must therefore come first.
+    const explicit = accessControlSource.indexOf(
+      'if (path === "/golden-coast/equity-sales-cash-settlement" && method === "POST") return "sp_owner_withdrawal";'
+    );
+    const genericSales = accessControlSource.indexOf('if ((path.includes("sales") || path.includes("sale"))');
+
+    expect(explicit).toBeGreaterThan(-1);
+    expect(genericSales).toBeGreaterThan(-1);
+    expect(explicit).toBeLessThan(genericSales);
+  });
+
+  it("caps a backdated settlement against current equity, not just the dated balance", () => {
+    // A settlement dated before an already-posted equity debit must not spend
+    // capital that debit has consumed, or the account ends in debit despite
+    // the never-negative invariant. Both ceilings use the conservative read.
+    expect(routeSource).toContain("conservativeCreditBalance");
+    expect(routeSource).toContain("Decimal.min(new Decimal(dated), new Decimal(allPosted))");
+
+    const equityRead = routeSource.indexOf("conservativeCreditBalance(\n          tx,");
+    const lockIndex = routeSource.indexOf("LOCK TABLE voucher_entries IN SHARE ROW EXCLUSIVE MODE");
+    expect(equityRead).toBeGreaterThan(lockIndex);
   });
 
   it("caps the amount against both credit-normal balances, not just the payable", () => {

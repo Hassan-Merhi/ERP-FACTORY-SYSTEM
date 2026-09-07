@@ -235,6 +235,27 @@ async function conservativePayable(
   );
 }
 
+/**
+ * The lower of the dated and all-posted credit balances on a credit-normal
+ * account. A backdated settlement must not spend capital that a later posted
+ * debit has already consumed: reading only the dated balance would let a
+ * $100 settlement dated before a posted $100 debit leave the account $100 in
+ * debit, breaking the invariant that Hassan's capital never goes negative.
+ * This is the same conservative rule `conservativePayable` applies to the
+ * payable, and callers hold the voucher-entries lock across both reads.
+ */
+async function conservativeCreditBalance(
+  conn: DbLike,
+  companyId: number,
+  accountId: number,
+  accountLabel: string,
+  cutoffDate?: string
+): Promise<string> {
+  const dated = await creditBalance(conn, companyId, accountId, accountLabel, cutoffDate);
+  const allPosted = await creditBalance(conn, companyId, accountId, accountLabel);
+  return Decimal.min(new Decimal(dated), new Decimal(allPosted)).toFixed(2);
+}
+
 function amountEquals(left: unknown, right: string): boolean {
   try {
     return new Decimal(String(left ?? "0")).equals(new Decimal(right));
@@ -444,7 +465,13 @@ async function handleSettlement(req: Request, res: Response): Promise<void> {
 
       const [gcSalesCashPayableUsd, hassanEquityCreditBalanceUsd] = await Promise.all([
         conservativePayable(tx, companyId, accounts.gcSalesCash.id, settlement.settlementDate),
-        creditBalance(tx, companyId, accounts.hassanEquity.id, accounts.hassanEquity.name, settlement.settlementDate),
+        conservativeCreditBalance(
+          tx,
+          companyId,
+          accounts.hassanEquity.id,
+          accounts.hassanEquity.name,
+          settlement.settlementDate
+        ),
       ]);
       const plan = planGoldenCoastEquitySalesCashSettlement({
         settlement,

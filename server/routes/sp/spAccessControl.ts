@@ -115,6 +115,10 @@ function classifyPermission(req: Request): SpPermission {
   if (path.includes("setup")) return "sp_setup";
   if (path.includes("opening-stock")) return "sp_opening_stock";
   if (path === "/golden-coast/phase9/hassan-savings-withdrawal" && method === "POST") return "sp_owner_withdrawal";
+  // Settling GC Sales Cash from equity moves partner capital, so it must be
+  // classified before the generic sales rule below: the path contains "sales",
+  // which would otherwise grant it to any sales-entry user via sp_sales_create.
+  if (path === "/golden-coast/equity-sales-cash-settlement" && method === "POST") return "sp_owner_withdrawal";
   if (
     path.includes("/report/") ||
     path.includes("/export") ||
