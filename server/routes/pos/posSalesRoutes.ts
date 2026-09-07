@@ -7,6 +7,7 @@ import { requireAuth, canModifyDate } from "../../auth";
 import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { createPosSale } from "../../services/pos/createSaleService";
+import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
 import { isCreatedPosSale } from "../../services/pos/posSaleTypes";
 import { logAudit } from "../helpers/auditHelpers";
 
@@ -20,7 +21,6 @@ export function registerPosSalesRoutes(app: Express): void {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
-      // Detect supplier_partner company — uses split accounting (Cr Payable + Cr Profit) instead of Cr Sales
       const [currentCoRow] = await db
         .select({ companyType: companies.companyType })
         .from(companies)
@@ -76,7 +76,12 @@ export function registerPosSalesRoutes(app: Express): void {
         durationMs: Date.now() - _t,
         error,
       });
-      // Return appropriate status codes for different error types
+
+      const configurationError = classifyGoldenCoastPosConfigurationError(error);
+      if (configurationError) {
+        return res.status(configurationError.status).json(configurationError.body);
+      }
+
       if (getErrorMessage(error).includes("Inventory not found")) {
         return res.status(404).json({ message: getErrorMessage(error) });
       }

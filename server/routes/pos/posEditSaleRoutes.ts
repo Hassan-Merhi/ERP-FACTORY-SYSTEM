@@ -3,6 +3,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth, canModifyDate } from "../../auth";
 import { updatePosSale } from "../../services/pos/edit/updateSaleService";
+import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
 import { logAudit } from "../helpers/auditHelpers";
 
 export function registerPosEditSaleRoutes(app: Express): void {
@@ -84,6 +85,12 @@ export async function handlePosSaleEdit(
       durationMs: Date.now() - _t,
       error,
     });
+
+    const configurationError = classifyGoldenCoastPosConfigurationError(error);
+    if (configurationError) {
+      return res.status(configurationError.status).json(configurationError.body);
+    }
+
     if (getErrorMessage(error).includes("Inventory not found")) {
       return res.status(404).json({ message: getErrorMessage(error) });
     }
