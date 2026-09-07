@@ -192,9 +192,17 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                   const qty = parseFloat(item.quantity);
                   const adjustmentRate = parseFloat(item.rate);
                   const absoluteQty = Math.abs(qty);
+                  // `adjustment_type` is stored in both casings: createStockAdjustment
+                  // writes "Production"/"Consumption"/"Mixed" while the
+                  // PATCH /api/vouchers/:id/adjustment path writes them lowercased.
+                  // Comparing case-sensitively here classified a lowercase
+                  // "production" row as consumption and ADDED its quantity back on
+                  // delete instead of subtracting it, inflating stock by twice the
+                  // adjusted quantity. Normalise, as import-cycle/balance.ts and
+                  // ledger/initialize-balances.ts already do for the same column.
+                  const normalisedAdjustmentType = (adjustmentVoucher.adjustmentType || "").toLowerCase();
                   const isProduction =
-                    adjustmentVoucher.adjustmentType === "Production" ||
-                    (adjustmentVoucher.adjustmentType === "Mixed" && qty > 0);
+                    normalisedAdjustmentType === "production" || (normalisedAdjustmentType === "mixed" && qty > 0);
 
                   if (isProduction) {
                     // Production added inventory, so reverse by subtracting

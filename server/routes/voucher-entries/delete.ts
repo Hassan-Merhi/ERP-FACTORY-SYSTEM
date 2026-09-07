@@ -178,9 +178,12 @@ export function registerVoucherDeleteRoutes(app: Express) {
               const adjustmentRate = parseFloat(item.rate);
               const absoluteQty = Math.abs(qty);
 
+              // Same stored-casing hazard as the bulk path: see the note in
+              // voucher-entries/bulk-delete.ts. A lowercase "production" row was
+              // reversed the wrong way round, adding stock instead of removing it.
+              const normalisedAdjustmentType = (adjustmentVoucher.adjustmentType || "").toLowerCase();
               const isProduction =
-                adjustmentVoucher.adjustmentType === "Production" ||
-                (adjustmentVoucher.adjustmentType === "Mixed" && qty > 0);
+                normalisedAdjustmentType === "production" || (normalisedAdjustmentType === "mixed" && qty > 0);
 
               if (isProduction) {
                 // Production added inventory, so reverse by subtracting
