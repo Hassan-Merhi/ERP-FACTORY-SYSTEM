@@ -32,13 +32,13 @@ interface FakeResponse extends Response {
   writableFinished: boolean;
 }
 
-function createRequest(path = "/api/reports/slow"): Request {
+function createRequest(path = "/api/reports/slow", headers: Request["headers"] = {}): Request {
   return {
     method: "GET",
     path,
     originalUrl: path,
     baseUrl: "",
-    headers: {},
+    headers,
     session: {},
     route: { path },
   } as unknown as Request;
@@ -46,11 +46,15 @@ function createRequest(path = "/api/reports/slow"): Request {
 
 function createResponse(): FakeResponse {
   const emitter = new EventEmitter();
+  const headers = new Map<string, unknown>();
   const response = Object.assign(emitter, {
     statusCode: 200,
     headersSent: false,
     writableFinished: false,
-    setHeader: vi.fn(),
+    setHeader: vi.fn((name: string, value: unknown) => {
+      headers.set(name.toLowerCase(), value);
+    }),
+    getHeader: vi.fn((name: string) => headers.get(name.toLowerCase())),
     write: vi.fn(() => true),
     end: vi.fn(),
   });
@@ -173,5 +177,30 @@ describe("requestLogger health metrics", () => {
       success: 1,
       clientAbort: 0,
     });
+  });
+
+  it("treats an EventSource disconnect as expected stream completion instead of an abort or slow request", () => {
+    const req = createRequest("/api/screen-feed/session-1", { accept: "text/event-stream" });
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    requestLogger(req, res, next);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.emit("close");
+
+    expect(getRequestMetricsSnapshot().requests).toMatchObject({
+      total: 1,
+      active: 0,
+      completed: 1,
+      success: 1,
+      clientAbort: 0,
+      slow: 0,
+      averageDurationMs: 0,
+      maxDurationMs: 0,
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Client disconnected before response completed",
+      expect.objectContaining({ action: "client_abort" })
+    );
   });
 });
