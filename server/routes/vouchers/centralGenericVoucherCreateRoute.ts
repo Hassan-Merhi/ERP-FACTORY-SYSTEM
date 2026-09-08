@@ -6,10 +6,7 @@ import { db, type DbTransaction } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import {
-  PostingValidationError,
-  postBalancedVoucherTx,
-} from "../../services/accounting/centralPostingEngine";
+import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import {

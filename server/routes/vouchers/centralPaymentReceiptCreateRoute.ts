@@ -7,10 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
-import {
-  PostingValidationError,
-  postBalancedVoucherTx,
-} from "../../services/accounting/centralPostingEngine";
+import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { buildFactoryDaybookPosting } from "../../services/accounting/daybookConvergence";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
