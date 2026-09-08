@@ -13,13 +13,18 @@ on:
       - .github/agents/bug-repair.agent.md
   status:
   schedule:
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    # The status and pull_request hooks are the primary wake-ups. Keep only a
+    # low-frequency fallback so a stuck/red PR cannot create twelve new runs
+    # per hour while the hosted-runner queue is already busy.
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: ci-repair-pr-watch-${{ github.event.pull_request.number || github.run_id }}
+  # Coalesce fallback/status events instead of assigning every scheduled run a
+  # unique group. Pull requests still keep one independent watcher per PR.
+  group: ci-repair-pr-watch-${{ github.event.pull_request.number || github.event.sha || github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -193,7 +198,7 @@ jobs:
       reason: ci-repair automation deployed to main
 
   watchdog-wake:
-    name: Five-minute fallback scan for red PRs
+    name: Hourly fallback scan for red PRs
     if: github.event_name == 'schedule'
     permissions:
       actions: write

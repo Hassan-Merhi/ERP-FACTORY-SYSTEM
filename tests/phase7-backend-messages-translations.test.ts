@@ -28,6 +28,15 @@ describe("Phase 7 backend-message translations", () => {
     expect(translatePhase7BackendMessageText("Security audit unavailable", "fr")).toBe(
       "Audit de sécurité indisponible"
     );
+    expect(
+      translatePhase7BackendMessageText("Golden Coast owner-withdrawal clearing account is duplicated", "fr")
+    ).toBe("Le compte de compensation des retraits du propriétaire de Golden Coast est dupliqué");
+    expect(
+      translatePhase7BackendMessageText(
+        "GC-OWNER-WITHDRAWAL is already used by another ledger role; repair the chart of accounts first",
+        "ar"
+      )
+    ).toBe("GC-OWNER-WITHDRAWAL مستخدم بالفعل لدور آخر في دفتر الأستاذ؛ أصلح دليل الحسابات أولاً");
   });
 
   it("translates factory production bonus labels and templates", () => {

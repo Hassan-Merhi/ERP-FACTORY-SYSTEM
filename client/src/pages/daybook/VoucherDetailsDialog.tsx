@@ -22,8 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getVoucherTypeBadge } from "@/lib/voucherTypeBadge";
 
-import type { VoucherDetailsDialogProps } from "./voucherdetailsdialog/types";
 import type { ViewVoucherEntry } from "./types";
+import type { VoucherDetailsDialogProps } from "./voucherdetailsdialog/types";
 import { createEntryNameResolver } from "./voucherdetailsdialog/utils";
 import { PurchaseVoucherEntries } from "./voucherdetailsdialog/PurchaseVoucherEntries";
 import { SalesVoucherEntries } from "./voucherdetailsdialog/SalesVoucherEntries";
