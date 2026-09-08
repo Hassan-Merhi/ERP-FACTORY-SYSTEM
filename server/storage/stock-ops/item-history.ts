@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, pool } from "../../db";
+import { db, pool, type RawQueryRow } from "../../db";
 import * as schema from "@shared/schema";
 
 export async function getLastPurchaseOrderForItem(stockItemId: number, companyId: number) {
@@ -119,8 +119,25 @@ export async function getAllSalesForItem(stockItemId: number, companyId: number,
     .orderBy(sql`${schema.vouchers.voucherDate} DESC`);
 }
 
-export async function getInventoryLocationsByItem(stockItemId: number, companyId: number) {
-  const results = await db.execute(sql`
+/**
+ * One row of the per-location inventory projection. The numeric columns are
+ * `decimal`, which the driver returns as strings, so they are declared that way
+ * rather than being assumed to be numbers by whoever consumes the result.
+ */
+export interface InventoryLocationRow {
+  locationId: number;
+  locationName: string;
+  locationCode: string;
+  quantity: string;
+  averageRate: string;
+  totalValue: string;
+}
+
+export async function getInventoryLocationsByItem(
+  stockItemId: number,
+  companyId: number
+): Promise<InventoryLocationRow[]> {
+  const results = await db.execute<RawQueryRow<InventoryLocationRow>>(sql`
     SELECT DISTINCT ON (i.location_id)
       i.location_id as "locationId",
       l.name as "locationName",
@@ -135,7 +152,7 @@ export async function getInventoryLocationsByItem(stockItemId: number, companyId
       AND i.quantity::numeric > 0
     ORDER BY i.location_id, i.last_updated DESC
   `);
-  return (results.rows as any[]).sort((a, b) => (a.locationName || "").localeCompare(b.locationName || ""));
+  return [...results.rows].sort((a, b) => (a.locationName || "").localeCompare(b.locationName || ""));
 }
 
 export async function getVoucherHistoryForItem(stockItemId: number, companyId: number) {

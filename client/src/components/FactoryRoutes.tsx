@@ -10,6 +10,7 @@
  */
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Switch, Route, Redirect } from "wouter";
+import type { ShellUser } from "@/app/shellUser";
 import {
   AccountingCreate,
   Agents,
@@ -110,7 +111,7 @@ const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/Factory
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
 
 interface FactoryRoutesProps {
-  user: any;
+  user: ShellUser;
   myAccess:
     | {
         fullAccess?: boolean;

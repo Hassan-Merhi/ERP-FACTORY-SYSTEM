@@ -1,17 +1,24 @@
 import { useState, useEffect, useRef, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, GripVertical, LogOut } from "lucide-react";
+import { ChevronDown, GripVertical, LogOut, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SidebarHeader, SidebarFooter } from "@/components/ui/sidebar";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 
+/**
+ * A navigation glyph. Every call site passes a lucide-react icon, which is a
+ * component taking the SVG props these primitives set (`className`, `style`).
+ * Typing it this way rather than as `any` means a non-component — or a
+ * component that cannot be styled — is rejected at the definition site.
+ */
+export type NavIcon = LucideIcon;
+
 export interface NavItem {
   title: string;
   url: string;
-  icon: any;
-  [key: string]: any;
+  icon: NavIcon;
 }
 
 export interface NavSection {
@@ -21,7 +28,6 @@ export interface NavSection {
   items: NavItem[];
   /** When true, section is only shown to Developer-role users. */
   devOnly?: boolean;
-  [key: string]: any;
 }
 
 const baseLinkClasses = "relative flex items-center gap-2.5 rounded-md py-1.5 pl-3 pr-2.5 text-sm transition-colors";
@@ -79,7 +85,7 @@ export function SidebarNavLink({ item, color, testId, trailing, draggable }: Sid
 
 interface SidebarFlatLinkProps {
   href: string;
-  icon: any;
+  icon: NavIcon;
   label: string;
   color?: string;
   badge?: number;
@@ -330,7 +336,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
 }
 
 interface ModuleHeaderProps {
-  icon: any;
+  icon: NavIcon;
   label: string;
   tagline: string;
   /** CSS color used for the brand icon tile background. */
@@ -378,7 +384,8 @@ export function ModuleHeader({ icon: Icon, label, tagline, accent }: ModuleHeade
 }
 
 interface ModuleFooterProps {
-  user?: { username?: string; role?: string };
+  /** Nullable because the session user's role is nullable at the API boundary. */
+  user?: { username?: string | null; role?: string | null };
   /** Tailwind classes for the avatar tint (defaults to accent-colored). */
   avatarClassName?: string;
   /** Module accent color — used as avatar background when no avatarClassName is set. */

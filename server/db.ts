@@ -241,6 +241,16 @@ export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  */
 export type DatabaseOrTransaction = Database | DbTransaction;
 
+/**
+ * A row shape for `db.execute` / `tx.execute`.
+ *
+ * Drizzle constrains that generic to `Record<string, unknown>`. Wrapping a
+ * precise row interface here at the call site keeps the interface itself free
+ * of a catch-all index signature, which would otherwise hide a misspelled
+ * column in every consumer of the result.
+ */
+export type RawQueryRow<TRow> = TRow & Record<string, unknown>;
+
 /** The application's pg connection pool. */
 export type DatabasePool = typeof pool;
 

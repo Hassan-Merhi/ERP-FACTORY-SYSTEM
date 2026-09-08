@@ -1,7 +1,30 @@
 import type ExcelJS from "exceljs";
-import type { Sheet as FortuneSheet } from "@fortune-sheet/core";
+import type { Cell as FortuneCell, Sheet as FortuneSheet } from "@fortune-sheet/core";
+import { asRecord } from "@shared/typeGuards";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** One side of a Fortune Sheet cell border, as the editor serializes it. */
+interface FortuneCellBorder {
+  style?: number | string;
+  color?: string;
+}
+
+/**
+ * A Fortune Sheet cell as this converter consumes it.
+ *
+ * `@fortune-sheet/core`'s exported `Cell` is incomplete for round-tripping: it
+ * has no per-side border record (`b`), which the editor does write, and it
+ * types the text-wrap flag `tb` as a string although saved sheets carry it as a
+ * number. Extending the library type here names exactly what the declaration is
+ * missing while leaving every other field checked against the library.
+ */
+type SyncedFortuneCell = Omit<FortuneCell, "tb"> & {
+  b?: Partial<Record<FortuneBorderSide, FortuneCellBorder>>;
+  tb?: string | number;
+};
+
+type FortuneBorderSide = "l" | "r" | "t" | "b";
 
 export type ExcelSpreadsheetData = {
   mode: "excel";
@@ -11,14 +34,14 @@ export type ExcelSpreadsheetData = {
 
 export type SpreadsheetData = ExcelSpreadsheetData | FortuneSheet[];
 
-export function isExcelMode(data: any): data is ExcelSpreadsheetData {
-  return (
-    data !== null &&
-    typeof data === "object" &&
-    !Array.isArray(data) &&
-    data.mode === "excel" &&
-    typeof data.rawXlsx === "string"
-  );
+/**
+ * A saved spreadsheet is opaque JSON from a `jsonb` column, so it arrives as
+ * `unknown` and this guard is what makes it usable — the narrowing is the point
+ * of the function, and it must not start from a type it never verified.
+ */
+export function isExcelMode(data: unknown): data is ExcelSpreadsheetData {
+  const record = asRecord(data);
+  return record?.mode === "excel" && typeof record.rawXlsx === "string";
 }
 
 // ─── Base64 helpers ──────────────────────────────────────────────────────────
@@ -84,7 +107,7 @@ function hexToArgb(hex?: string): string {
 }
 
 /** Iterates Fortune Sheet cells regardless of sparse (celldata) or dense (data) format */
-function iterateFortuneCells(sheet: FortuneSheet, cb: (r: number, c: number, v: any) => void): void {
+function iterateFortuneCells(sheet: FortuneSheet, cb: (r: number, c: number, v: SyncedFortuneCell) => void): void {
   const s = sheet;
   if (Array.isArray(s.celldata)) {
     for (const { r, c, v } of s.celldata) {
@@ -103,7 +126,7 @@ function iterateFortuneCells(sheet: FortuneSheet, cb: (r: number, c: number, v: 
 }
 
 /** Maps Fortune Sheet cell value object into an ExcelJS cell */
-function applyFortuneStyleToCell(excelCell: ExcelJS.Cell, v: any): void {
+function applyFortuneStyleToCell(excelCell: ExcelJS.Cell, v: SyncedFortuneCell | null): void {
   if (!v) {
     excelCell.value = null;
     return;
@@ -157,7 +180,7 @@ function applyFortuneStyleToCell(excelCell: ExcelJS.Cell, v: any): void {
   // Borders
   if (v.b) {
     const border: Partial<ExcelJS.Borders> = {};
-    const sides: [string, keyof ExcelJS.Borders][] = [
+    const sides: [FortuneBorderSide, keyof ExcelJS.Borders][] = [
       ["l", "left"],
       ["r", "right"],
       ["t", "top"],
@@ -222,10 +245,12 @@ export async function syncFortuneToXlsx(rawXlsx: string, sheets: FortuneSheet[])
     let maxExcelR = 0;
     let maxExcelC = 0;
     try {
-      const dim = (ws as any).dimensions;
+      // ExcelJS types `dimensions` as a Range, whose bottom/right are the
+      // 1-based last used row and column.
+      const dim = ws.dimensions;
       if (dim) {
-        maxExcelR = Math.max(0, (dim.bottom ?? dim.e?.r ?? 0) - 1);
-        maxExcelC = Math.max(0, (dim.right ?? dim.e?.c ?? 0) - 1);
+        maxExcelR = Math.max(0, (dim.bottom ?? 0) - 1);
+        maxExcelC = Math.max(0, (dim.right ?? 0) - 1);
       }
     } catch {
       // ignore

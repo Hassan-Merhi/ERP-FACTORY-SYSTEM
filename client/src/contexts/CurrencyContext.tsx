@@ -2,6 +2,15 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Company, UserPreferences } from "@shared/schema";
+import type { Serialized } from "@shared/apiTypes";
+
+/**
+ * `/api/user-preferences` returns the saved row when one exists and a bare
+ * `{ dateFormat }` default when it does not, so every other field is optional
+ * on the wire even though the column is NOT NULL in the table.
+ */
+type UserPreferencesResponse = Partial<Serialized<UserPreferences>> & { dateFormat: string };
 
 export type Currency = "USD" | "CFA";
 
@@ -63,7 +72,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   });
 
   // Fetch user preferences (includes preferredCurrency for logged-in users)
-  const { data: userPrefs } = useQuery<any>({
+  const { data: userPrefs } = useQuery<UserPreferencesResponse>({
     queryKey: ["/api/user-preferences"],
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -91,7 +100,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   }, [userPrefs?.preferredCurrency]);
 
   // Fetch company details to get baseCurrency and displayCurrency
-  const { data: company, isLoading: isLoadingCompanyQuery } = useQuery<any>({
+  const { data: company, isLoading: isLoadingCompanyQuery } = useQuery<Serialized<Company>>({
     queryKey: [`/api/companies/${selectedCompany?.id}`],
     enabled: !!selectedCompany?.id,
   });

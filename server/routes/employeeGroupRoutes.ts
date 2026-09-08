@@ -131,7 +131,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
       const allGroups = await storage.getAllEmployeeGroups(req.session.currentCompanyId);
-      const workerGroups = allGroups.filter((g) => (g.groupType || g.group_type) === "Worker");
+      const workerGroups = allGroups.filter((g) => g.groupType === "Worker");
       res.json(workerGroups);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -145,10 +145,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
       }
       const companyId = req.session.currentCompanyId;
       const allGroups = await storage.getAllEmployeeGroups(companyId);
-      const workerGroups = allGroups.filter((g) => {
-        const type = g.groupType || g.group_type;
-        return type === "Worker";
-      });
+      const workerGroups = allGroups.filter((g) => g.groupType === "Worker");
 
       // Get members for each group, filtering by company for security
       const groupsWithMembers = await Promise.all(
@@ -157,6 +154,11 @@ export function registerEmployeeGroupRoutes(app: Express) {
           // Get full worker details for each member, ensuring they belong to the same company
           const members = await Promise.all(
             memberRecords.map(async (m) => {
+              // employeeId comes through a LEFT JOIN, so a membership whose
+              // employee row is gone carries null. The lookup below would match
+              // nothing for it anyway; skipping it saves a query and keeps the
+              // filter below as the single place a missing worker is dropped.
+              if (m.employeeId === null) return undefined;
               const [worker] = await db
                 .select()
                 .from(employees)

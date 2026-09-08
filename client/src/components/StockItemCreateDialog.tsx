@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitErrorHandler } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -126,10 +126,10 @@ export function StockItemCreateDialog({ open, onOpenChange }: StockItemCreateDia
     } as InsertStockItem);
   };
 
-  const onInvalid = (errors: any) => {
+  const onInvalid: SubmitErrorHandler<FormValues> = (errors) => {
     const errorMessages = Object.values(errors)
-      .map((err: any) => err.message)
-      .filter(Boolean);
+      .map((err) => (typeof err?.message === "string" ? err.message : undefined))
+      .filter((message): message is string => Boolean(message));
 
     if (errorMessages.length > 0) {
       toast({

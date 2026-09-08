@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest } from "@/lib/queryClient";
+import { intercompanyApprovalMessage, parseIntercompanyApproval } from "@/lib/intercompanyApproval";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { liveCountQueryPolicy, stableReferenceQueryPolicy } from "@/lib/queryPolicies";
 import { Button } from "@/components/ui/button";
@@ -207,10 +208,12 @@ export function NotificationsCenter() {
   };
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, destLedgerAccountId }: { id: number; destLedgerAccountId: number }) =>
-      apiRequest("POST", `/api/intercompany-requests/${id}/approve`, { destLedgerAccountId }),
-    onSuccess: (data: any) => {
-      toast({ title: "Approved", description: `Mirror voucher ${data.voucherNumber} created.` });
+    mutationFn: async ({ id, destLedgerAccountId }: { id: number; destLedgerAccountId: number }) => {
+      const response = await apiRequest("POST", `/api/intercompany-requests/${id}/approve`, { destLedgerAccountId });
+      return parseIntercompanyApproval(await response.json());
+    },
+    onSuccess: (result) => {
+      toast({ title: "Approved", description: intercompanyApprovalMessage(result) });
       invalidateIC();
       setApproveReq(null);
       setSelectedAccountId("");

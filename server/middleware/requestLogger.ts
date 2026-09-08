@@ -205,17 +205,41 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   (req as unknown as { requestId: string }).requestId = requestId;
   res.setHeader("X-Request-Id", requestId);
 
+  const countChunk = (chunk: unknown): void => {
+    if (chunk == null || typeof chunk === "function") return;
+    responseBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+  };
+
+  // Both wrappers mirror the overload set of the method they replace and
+  // dispatch on which trailing form the caller used, so the forwarded call is
+  // checked against the real signature rather than an `any[]` spread.
+  type WriteCallback = (error: Error | null | undefined) => void;
   const originalWrite = res.write.bind(res);
-  (res as typeof res & { write: typeof res.write }).write = function (chunk, ...args: any[]): boolean {
-    if (chunk != null) responseBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
-    return originalWrite(chunk, ...args);
+  (res as typeof res & { write: typeof res.write }).write = function (
+    chunk: unknown,
+    encodingOrCallback?: BufferEncoding | WriteCallback,
+    callback?: WriteCallback
+  ): boolean {
+    countChunk(chunk);
+    if (typeof encodingOrCallback === "function") return originalWrite(chunk, encodingOrCallback);
+    if (encodingOrCallback === undefined) return originalWrite(chunk, callback);
+    return originalWrite(chunk, encodingOrCallback, callback);
   };
+
+  type EndCallback = () => void;
   const originalEnd = res.end.bind(res);
-  (res as typeof res & { end: typeof res.end }).end = function (chunk?, ...args: any[]): Response {
-    if (chunk != null && typeof chunk !== "function")
-      responseBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
-    return originalEnd(chunk, ...args);
+  (res as typeof res & { end: typeof res.end }).end = function (
+    chunkOrCallback?: unknown,
+    encodingOrCallback?: BufferEncoding | EndCallback,
+    callback?: EndCallback
+  ): Response {
+    countChunk(chunkOrCallback);
+    if (typeof chunkOrCallback === "function") return originalEnd(chunkOrCallback);
+    if (typeof encodingOrCallback === "function") return originalEnd(chunkOrCallback, encodingOrCallback);
+    if (encodingOrCallback === undefined) return originalEnd(chunkOrCallback, callback);
+    return originalEnd(chunkOrCallback, encodingOrCallback, callback);
   };
+
   const originalDestroy = res.destroy.bind(res);
   (res as typeof res & { destroy: typeof res.destroy }).destroy = function (error?: Error): Response {
     if (error) serverDestroyError = error;

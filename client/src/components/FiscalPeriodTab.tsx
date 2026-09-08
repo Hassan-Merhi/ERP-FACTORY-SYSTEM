@@ -26,6 +26,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CalendarRange, AlertTriangle, CheckCircle } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import type { FiscalPeriodClosure, LedgerAccount } from "@shared/schema";
+import type { Serialized } from "@shared/apiTypes";
 
 const fiscalCloseSchema = z
   .object({
@@ -62,20 +64,20 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
   const isAuthorized = userRole === "Admin" || userRole === "Owner" || userRole === "Developer";
 
   // Fetch Equity ledger accounts for the current company
-  const { data: equityAccounts = [], isLoading: isLoadingAccounts } = useQuery<any[]>({
+  const { data: equityAccounts = [], isLoading: isLoadingAccounts } = useQuery<Serialized<LedgerAccount>[]>({
     queryKey: ["/api/ledger-accounts", { companyId: currentCompanyId, accountType: "Equity" }],
     queryFn: async () => {
       if (!currentCompanyId) return [];
       const response = await fetch(`/api/ledger-accounts?accountType=Equity`);
       if (!response.ok) throw new Error("Failed to fetch equity accounts");
-      const allAccounts = await response.json();
-      return allAccounts.filter((acc: Record<string, unknown>) => acc.companyId === currentCompanyId);
+      const allAccounts: Serialized<LedgerAccount>[] = await response.json();
+      return allAccounts.filter((acc) => acc.companyId === currentCompanyId);
     },
     enabled: !!currentCompanyId,
   });
 
   // Fetch fiscal period closures for the current company
-  const { data: closures = [], isLoading: isLoadingClosures } = useQuery<any[]>({
+  const { data: closures = [], isLoading: isLoadingClosures } = useQuery<Serialized<FiscalPeriodClosure>[]>({
     queryKey: ["/api/fiscal-period/closures", { companyId: currentCompanyId }],
     enabled: !!currentCompanyId,
   });

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { UseFormReturn, UseFieldArrayReturn } from "react-hook-form";
+import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Button } from "@/components/ui/button";
@@ -34,14 +34,15 @@ import { cn } from "@/lib/utils";
 import { AccountAutocomplete } from "@/components/AccountAutocomplete";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
 import AccountSidebar, { Account } from "@/components/AccountSidebar";
-import { VoucherEntriesTable } from "@/components/vouchers/VoucherEntriesTable";
+import { VoucherEntriesTable, type VoucherEntry } from "@/components/vouchers/VoucherEntriesTable";
+import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { VoucherSourceCard } from "@/components/vouchers/VoucherSourceCard";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 export interface PaymentReceiptTabProps {
-  form: UseFormReturn<any>;
-  fieldArray: UseFieldArrayReturn<any, "entries", "id">;
-  entries: any[];
+  form: UseFormReturn<VoucherFormData>;
+  fieldArray: UseFieldArrayReturn<VoucherFormData, "entries", "id">;
+  entries: VoucherEntry[];
   total: number;
   paymentAccountId: number;
   paymentAccountType: string;
@@ -62,7 +63,7 @@ export interface PaymentReceiptTabProps {
   handleAmountCommit: (rowIndex: number) => void;
   handlePrint: () => void;
   handleExportVoucher?: (detailed: boolean) => void;
-  onSubmit: (values: any) => void;
+  onSubmit: SubmitHandler<VoucherFormData>;
   activeTab: "payment" | "receipt";
   activeRowIndex: number | null;
   setActiveRowIndex: (index: number | null) => void;
