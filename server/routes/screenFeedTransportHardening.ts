@@ -40,7 +40,7 @@ function frameEtag(userId: string, frame: any): string {
     frame?.captureFailure?.stage ?? "",
     frame?.captureFailure?.reason ?? "",
   ].join(":");
-  const digest = createHash("sha1").update(identity).digest("hex");
+  const digest = createHash("sha256").update(identity).digest("hex");
   return `W/"screen-feed-${digest}"`;
 }
 
