@@ -84,22 +84,22 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
   },
   {
     en: "Golden Coast owner-withdrawal clearing account is duplicated",
-    ar: "حساب تسوية سحوبات المالك في Golden Coast مكرر",
-    fr: "Le compte de compensation des retraits du propriétaire Golden Coast est en double",
+    ar: "حساب مقاصة سحوبات مالك غولدن كوست مكرر",
+    fr: "Le compte de compensation des retraits du propriétaire de Golden Coast est dupliqué",
   },
   {
     en: "${GC_OWNER_WITHDRAWAL_CLEARING_CODE} is already used by another ledger role; repair the chart of accounts first",
-    ar: "${GC_OWNER_WITHDRAWAL_CLEARING_CODE} مستخدم بالفعل لدور دفتري آخر؛ أصلح شجرة الحسابات أولاً",
-    fr: "${GC_OWNER_WITHDRAWAL_CLEARING_CODE} est déjà utilisé par un autre rôle comptable ; réparez d’abord le plan comptable",
+    ar: "{0} مستخدم بالفعل لدور آخر في دفتر الأستاذ؛ أصلح دليل الحسابات أولاً",
+    fr: "{0} est déjà utilisé par un autre rôle du grand livre ; corrigez d’abord le plan comptable",
   },
   {
     en: "Could not provision Golden Coast owner-withdrawal clearing account",
-    ar: "تعذّر إنشاء حساب تسوية سحوبات المالك في Golden Coast",
-    fr: "Impossible de créer le compte de compensation des retraits du propriétaire Golden Coast",
+    ar: "تعذر إنشاء حساب مقاصة سحوبات مالك غولدن كوست",
+    fr: "Impossible de créer le compte de compensation des retraits du propriétaire de Golden Coast",
   },
   {
     en: "WhatsApp could not authenticate with any configured Green API instance. Update the WhatsApp Instance ID/API Token in Settings, then try again.",
-    ar: "تعذّر على واتساب المصادقة مع أي مثيل Green API مُكوَّن. حدّث معرّف مثيل واتساب/رمز API في الإعدادات ثم أعد المحاولة.",
-    fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’ID d’instance WhatsApp / le jeton API dans les Paramètres, puis réessayez.",
+    ar: "تعذر على واتساب المصادقة مع أي مثيل Green API مُكوّن. حدّث معرّف مثيل واتساب ورمز API في الإعدادات، ثم حاول مرة أخرى.",
+    fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres, puis réessayez.",
   },
 ];

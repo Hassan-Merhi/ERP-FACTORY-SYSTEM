@@ -43,9 +43,7 @@ async function enforcePosInventoryCostBoundary(req: Request, res: Response, next
     const permissions = await hydrateSessionNamedPermissions(db, req.session);
     canViewCost = permissions.includes(POS_INVENTORY_COST_PERMISSION);
   } catch {
-    // Sensitive values fail closed if the permission store cannot be read:
-    // canViewCost is still false here, because the only assignment to it is the
-    // last statement in the try block.
+    // Sensitive values fail closed if the permission store cannot be read.
   }
 
   if (canViewCost) return next();
