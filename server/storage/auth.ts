@@ -1,4 +1,4 @@
-import { eq, and, or, sql, asc } from "drizzle-orm";
+import { eq, and, or, sql, asc, type SQL } from "drizzle-orm";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { db } from "../db";
 import * as schema from "@shared/schema";
@@ -71,7 +71,9 @@ export async function updateCompany(id: number, updates: Partial<InsertCompany>)
 }
 
 export async function deleteCompany(id: number): Promise<void> {
-  const safe = async (query: any) => {
+  // Each statement is a drizzle SQL fragment; tables that predate a migration
+  // may not exist, which is the only error this swallows.
+  const safe = async (query: SQL) => {
     try {
       await db.execute(query);
     } catch (e: unknown) {

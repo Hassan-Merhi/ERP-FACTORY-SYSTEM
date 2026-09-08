@@ -103,18 +103,7 @@ export const customerService = {
       }
     }
     const code = await nextCustomerCode(companyId);
-    const customer = await storage.createCustomer({ ...parsed, code } as {
-      companyId: number;
-      legalName: string;
-      phone?: string | null | undefined;
-      active?: boolean | undefined;
-      statementNote?: string | null | undefined;
-      deletedAt?: Date | null | undefined;
-      openingBalance?: string | undefined;
-      openingBalanceSide?: "" | "Dr" | "Cr" | undefined;
-      ledgerAccountId?: number | undefined;
-      paymentTermsDays?: number | null | undefined;
-    });
+    const customer = await storage.createCustomer({ ...parsed, code });
 
     await writeCustomerAudit({
       ...actor,

@@ -33,6 +33,16 @@ function createProgressLogger(onProgress?: ExportProgress): ExportProgress {
   );
 }
 
+/**
+ * The only company fields this exporter reads: the id it fetches a workbook
+ * for, and the name it uses for the ZIP entry and the progress log. Callers
+ * pass full company rows, which satisfy this structurally.
+ */
+export interface ExportCompany {
+  id: number;
+  name: string;
+}
+
 function attachArchiveLogging(arc: ExportArchive): void {
   arc.on("warning", (error: unknown) => {
     logger.warn("Export ZIP archiver warning", {
@@ -45,7 +55,7 @@ function attachArchiveLogging(arc: ExportArchive): void {
 
 async function appendCompanyWorkbooks(
   arc: ExportArchive,
-  companies: any[],
+  companies: readonly ExportCompany[],
   fromDate: string | undefined,
   toDate: string | undefined,
   log: ExportProgress
@@ -95,7 +105,7 @@ async function appendCompanyWorkbooks(
 
 async function streamFullExportZipUnsafe(
   destination: Writable,
-  companies: any[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: ExportProgress
@@ -147,7 +157,7 @@ async function streamFullExportZipUnsafe(
  */
 export async function streamFullExportZip(
   destination: Writable,
-  companies: any[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: ExportProgress
@@ -158,7 +168,7 @@ export async function streamFullExportZip(
 }
 
 async function buildFullExportZipUnsafe(
-  companies: any[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: ExportProgress
@@ -202,7 +212,7 @@ async function buildFullExportZipUnsafe(
  * require final bytes. It is still serialized through the heavy-export slot.
  */
 export async function buildFullExportZip(
-  companies: any[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: ExportProgress

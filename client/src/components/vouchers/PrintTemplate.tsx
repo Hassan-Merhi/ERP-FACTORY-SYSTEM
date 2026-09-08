@@ -2,11 +2,12 @@ import { format } from "date-fns";
 
 // Local shape matching how this component actually uses entries (accountId is
 // only used by callers for filtering before passing entries in, not read here).
+// Callers pass richer rows; structural typing accepts those without this needing
+// an index signature that would hide a misspelled field.
 interface VoucherEntry {
   accountId?: number;
   accountName: string;
   amount: string;
-  [key: string]: any;
 }
 
 export const PrintTemplate = ({

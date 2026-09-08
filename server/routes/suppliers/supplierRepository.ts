@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { stockGroups } from "@shared/schema";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { companyScopedSuppliers, type InsertCompanyScopedSupplier } from "@shared/schema/supplierCompanyScope";
+import type { CreateSupplierInput } from "../../storage/suppliers";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
@@ -22,11 +23,11 @@ export const supplierRepository = {
     return storage.getSupplierByCode(code, companyId);
   },
 
-  create(values: any) {
+  create(values: CreateSupplierInput) {
     return storage.createSupplier(values);
   },
 
-  update(supplierId: number, values: any, companyId: number) {
+  update(supplierId: number, values: Partial<InsertCompanyScopedSupplier>, companyId: number) {
     return storage.updateSupplier(supplierId, values, companyId);
   },
 
@@ -59,8 +60,8 @@ export const supplierRepository = {
         and(
           eq(companyScopedSuppliers.id, supplierId),
           eq(companyScopedSuppliers.companyId, companyId),
-          isNull(companyScopedSuppliers.deletedAt),
-        ),
+          isNull(companyScopedSuppliers.deletedAt)
+        )
       )
       .returning();
     return updated ?? null;

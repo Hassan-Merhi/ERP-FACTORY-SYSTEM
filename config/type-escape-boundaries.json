@@ -19,104 +19,9 @@
     "excludeFiles": [],
     "ratchetBucket": 1,
     "baseline": {
-      "client/src/components/ExchangeRateSettings.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/components/FactoryRoutes.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/components/FiscalPeriodTab.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/components/NotificationsCenter.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/components/PropertiesSidebar.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/components/StockItemCreateDialog.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/components/sidebar/sidebarPrimitives.tsx": [
-        5,
-        0,
-        0
-      ],
-      "client/src/components/vouchers/AccountCombobox.tsx": [
-        0,
-        1,
-        0
-      ],
-      "client/src/components/vouchers/PaymentReceiptTab.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/components/vouchers/PrintTemplate.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/components/vouchers/VoucherEntriesTable.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/contexts/CurrencyContext.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/hooks/useLabelDesignColors.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/hooks/useVoucherEntries.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/lib/excelSync.ts": [
-        3,
-        1,
-        0
-      ],
       "client/src/lib/lazyRetry.ts": [
         1,
         0,
-        0
-      ],
-      "client/src/lib/offlinePrep.ts": [
-        5,
-        0,
-        0
-      ],
-      "client/src/lib/referenceMutationCache.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/lib/whatsapp-prompt.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/lib/zebraPrint.ts": [
-        1,
-        1,
         0
       ],
       "client/src/pages/AICommandCenter.tsx": [
@@ -1679,21 +1584,6 @@
         0,
         0
       ],
-      "server/helpers/buildFullExportZip.ts": [
-        5,
-        0,
-        0
-      ],
-      "server/helpers/calculateNetPositionAsOf.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/helpers/generateStockPdf.ts": [
-        0,
-        1,
-        0
-      ],
       "server/index.ts": [
         2,
         0,
@@ -1742,26 +1632,6 @@
       "server/lib/workerBalesBilingualPdfGenerator.ts": [
         0,
         2,
-        0
-      ],
-      "server/middleware/activityAudit.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/middleware/companyUserRoleScope.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/middleware/deletedItemCompanyScope.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/middleware/requestLogger.ts": [
-        2,
-        0,
         0
       ],
       "server/routes/accountCurrencyRoutes.ts": [
@@ -2819,11 +2689,6 @@
         0,
         0
       ],
-      "server/routes/suppliers/supplierRepository.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/transfers/simpleCompanyTransferService.ts": [
         2,
         0,
@@ -2861,11 +2726,6 @@
       ],
       "server/routes/vouchers/centralPaymentReceiptLifecycleRoute.ts": [
         1,
-        0,
-        0
-      ],
-      "server/routes/vouchers/sales-update/sales.ts": [
-        0,
         0,
         0
       ],
@@ -2917,16 +2777,6 @@
       "server/seedDev.ts": [
         0,
         1,
-        0
-      ],
-      "server/services/accounting/databasePostingDependencies.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/services/accounting/voucherPostingService.ts": [
-        2,
-        0,
         0
       ],
       "server/services/export-excel/sheet-helpers.ts": [
@@ -3058,70 +2908,10 @@
         1,
         0,
         0
-      ],
-      "server/storage/accounting/customers.ts": [
-        0,
-        2,
-        0
-      ],
-      "server/storage/accounting/ledger-accounts.ts": [
-        0,
-        1,
-        0
-      ],
-      "server/storage/accounting/spreadsheets.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/storage/accounting/stock-transactions.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/storage/auth.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/storage/containers-store/offload.ts": [
-        0,
-        2,
-        0
-      ],
-      "server/storage/employees.ts": [
-        3,
-        1,
-        0
-      ],
-      "server/storage/factory/production.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/storage/stock-ops/cost-prices.ts": [
-        2,
-        1,
-        0
-      ],
-      "server/storage/stock-ops/item-history.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/storage/stock-ops/transfers-create.ts": [
-        0,
-        3,
-        0
-      ],
-      "server/storage/suppliers.ts": [
-        0,
-        2,
-        0
       ]
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1658
+    "typeEscapeCeiling": 1565
   }
 }

@@ -1,15 +1,12 @@
 import { useRef } from "react";
 import { UseFormReturn } from "react-hook-form";
+import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 
-export interface VoucherEntry {
-  accountType: "ledger" | "bank" | "supplier" | "employee" | "fixedAsset";
-  accountId: number;
-  accountName: string;
-  amount: string;
-}
+/** One entry row, taken from the voucher form's schema rather than restated. */
+export type VoucherEntry = VoucherFormData["entries"][number];
 
 interface UseVoucherEntriesProps {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<VoucherFormData>;
 }
 
 export function useVoucherEntries({ form }: UseVoucherEntriesProps) {

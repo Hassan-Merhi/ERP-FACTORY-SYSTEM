@@ -1,4 +1,4 @@
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import {
   addInventoryValues,
@@ -15,6 +15,7 @@ import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
+import { lockInventoryRow } from "../inventoryRowLock";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -106,10 +107,7 @@ export async function createStockTransfer(
       transferItems.push(transferItem);
 
       if (!isOptional) {
-        const sourceInventoryRows = await (tx as any).execute(
-          sql`SELECT * FROM inventory WHERE location_id = ${item.sourceLocationId} AND stock_item_id = ${item.stockItemId} FOR UPDATE`
-        );
-        const sourceInventory = sourceInventoryRows.rows?.[0] || sourceInventoryRows[0];
+        const sourceInventory = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
 
         if (sourceInventory) {
           const currentQty = toInventoryDecimal(sourceInventory.quantity);
@@ -128,10 +126,7 @@ export async function createStockTransfer(
             .where(eq(schema.inventory.id, sourceInventory.id));
         }
 
-        const destInventoryRows = await (tx as any).execute(
-          sql`SELECT * FROM inventory WHERE location_id = ${destinationLocationId} AND stock_item_id = ${item.stockItemId} FOR UPDATE`
-        );
-        const destInventory = destInventoryRows.rows?.[0] || destInventoryRows[0];
+        const destInventory = await lockInventoryRow(tx, destinationLocationId, item.stockItemId);
 
         if (destInventory) {
           const currentQty = toInventoryDecimal(destInventory.quantity);
@@ -299,10 +294,7 @@ export async function createStockAdjustment(
       let actualTotalAmount = multiplyInventoryValues(absoluteQuantity, rate);
 
       if (!isOptional) {
-        const currentInventoryRows = await (tx as any).execute(
-          sql`SELECT * FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${item.stockItemId} FOR UPDATE`
-        );
-        const currentInventory = currentInventoryRows.rows?.[0] || currentInventoryRows[0];
+        const currentInventory = await lockInventoryRow(tx, locationId, item.stockItemId);
 
         if (currentInventory) {
           const currentQty = toInventoryDecimal(currentInventory.quantity);
