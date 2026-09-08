@@ -171,13 +171,6 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
                 </div>
               )}
 
-              {role.role === "POS" && selectedCompany?.id && Number(role.companyId) !== Number(selectedCompany.id) && (
-                <p className="mt-1.5 px-1 text-xs text-muted-foreground">
-                  Switch to {companies.find((c) => c.id === role.companyId)?.name || `Company ${role.companyId}`} to manage
-                  this POS user's cost-price access.
-                </p>
-              )}
-
               {activeEditorRoleId === role.id && (
                 <div className="mt-2">
                   <InlineRoleEditor
