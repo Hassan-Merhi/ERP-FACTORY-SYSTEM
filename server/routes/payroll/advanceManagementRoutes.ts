@@ -9,6 +9,7 @@ import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import type { AttendanceStatusRow } from "../../services/payroll/factoryPayrollGenerationPolicy";
 import {
   factoryWorkers,
   factoryDaybookEntries,
@@ -144,7 +145,11 @@ function _computeMonthlyPay(salary: number, startStr: string, endStr: string): n
 // Helper: Compute monthly pay from actual attendance records.
 // Monthly payroll uses attendance-based calculation (Present/Late = 1 day, Half Day = 0.5 day)
 // rather than calendar-day proration to match actual work performed.
-function _computeMonthlyPayFromAttendance(baseSalary: number, periodStart: string, attendanceRows: any[]): number {
+function _computeMonthlyPayFromAttendance(
+  baseSalary: number,
+  periodStart: string,
+  attendanceRows: readonly AttendanceStatusRow[]
+): number {
   const daysInMonth = (dateStr: string) => {
     const d = new Date(dateStr);
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();

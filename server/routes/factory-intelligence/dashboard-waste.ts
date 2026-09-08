@@ -126,7 +126,10 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
           reason: reason || null,
           // factory_waste_entries.created_by is an integer column; session ids are
           // numeric strings, matching how the POS routes coerce them.
-          createdBy: Number.isFinite(Number(req.session.userId)) ? Number(req.session.userId) : null,
+          // The column is a varchar holding users.id. It used to be narrowed to a
+          // number, which silently dropped attribution for any non-numeric id;
+          // the session value is stored as-is now.
+          createdBy: req.session.userId ?? null,
         })
         .returning();
 

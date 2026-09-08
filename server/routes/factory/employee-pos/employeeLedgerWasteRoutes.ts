@@ -1,7 +1,7 @@
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import type { Express } from "express";
-import { db } from "../../../db";
+import type { Express, Request, Response } from "express";
+import { db, type RawQueryRow } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
@@ -19,6 +19,26 @@ import {
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
+/**
+ * A bale row from the waste-ledger projections.
+ *
+ * The aliases are quoted in SQL so the columns arrive camelCased, and the two
+ * weight/cost columns are cast to `::float` in the query, so they really are
+ * numbers here rather than the decimal strings a raw `numeric` would give.
+ * `totalCost` is only selected by the ledger query, not the dispatch one.
+ */
+interface WasteLedgerBaleRow {
+  id: number;
+  productId: number | null;
+  productName?: string | null;
+  articleCode: string | null;
+  status: string;
+  referenceNumber: string | null;
+  weightKg: number;
+  totalCost?: number;
+  wasteDispatchId: number | null;
+}
+
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export function registerEmployeeLedgerWasteRoutes(app: Express) {
@@ -33,7 +53,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         // Load all relevant data
         const [allBalesRaw, allProducts, allCategories, pendingOrderBaleIdsRaw, staleOrderBaleIdsRaw] =
           await Promise.all([
-            db.execute(sql`
+            db.execute<RawQueryRow<WasteLedgerBaleRow>>(sql`
           SELECT
             fb.id,
             fb.product_id AS "productId",
@@ -122,7 +142,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
           return p.categoryId ? wasteCategories.has(p.categoryId) : false;
         }
 
-        function getProductLabel(bale: any): {
+        function getProductLabel(bale: WasteLedgerBaleRow): {
           productName: string;
           articleCode: string;
           categoryName: string;
@@ -139,7 +159,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         }
 
         // Use production (cost) price per bale from product
-        function getSellingPrice(bale: any): number {
+        function getSellingPrice(bale: WasteLedgerBaleRow): number {
           const p = bale.productId ? productMap.get(bale.productId) : null;
           return parseFloat(p?.productionPrice || "0") || 0;
         }
@@ -174,10 +194,11 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
           bucket: Map<string, BucketRow>,
           key: string,
           label: ReturnType<typeof getProductLabel>,
-          bale: any
+          bale: WasteLedgerBaleRow
         ) {
           const existing = bucket.get(key);
-          const w = parseFloat(bale.weightKg) || 0;
+          // weightKg is cast to ::float in the query, so it is already a number.
+          const w = Number.isFinite(bale.weightKg) ? bale.weightKg : 0;
           const c = getSellingPrice(bale); // selling price replaces cost
           const ref: string = bale.referenceNumber || "";
           const detail: BaleDetail = { id: bale.id, ref, weightKg: w, totalCost: c };
@@ -285,13 +306,15 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
 
   // Lazy-loaded bale-level detail for a single section + product row of the Bale Ledger.
   // Keeps the main /api/factory/bale-ledger response small by not returning baleDetails there.
-  app.get("/api/factory/bale-ledger/details", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/bale-ledger/details", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const section = String(req.query.section || "");
-      const productIdParam = req.query.productId;
+      // A query parameter is only a string when it appears once; anything else
+      // (repeated key, nested object) is not a product id.
+      const productIdParam = typeof req.query.productId === "string" ? req.query.productId : undefined;
       const validSections = ["currentStock", "wasteStock", "sold", "wasteDispatched", "pendingLoading"];
       if (!validSections.includes(section)) {
         return res.status(400).json({ message: "Invalid section" });
@@ -301,7 +324,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
 
       const [allBalesRaw, allProducts, allCategories, pendingOrderBaleIdsRaw, staleOrderBaleIdsRaw] = await Promise.all(
         [
-          db.execute(sql`
+          db.execute<RawQueryRow<WasteLedgerBaleRow>>(sql`
           SELECT
             fb.id,
             fb.product_id AS "productId",
@@ -372,12 +395,12 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         if (!p) return false;
         return p.categoryId ? wasteCategories.has(p.categoryId) : false;
       }
-      function getSellingPrice(bale: any): number {
+      function getSellingPrice(bale: WasteLedgerBaleRow): number {
         const p = bale.productId ? productMap.get(bale.productId) : null;
         return parseFloat(p?.productionPrice || "0") || 0;
       }
 
-      function classify(bale: any): string {
+      function classify(bale: WasteLedgerBaleRow): string {
         if (bale.status === "SOLD") {
           return pendingOrderBaleIds.has(Number(bale.id)) ? "pendingLoading" : "sold";
         } else if (bale.status === "FINALIZED") {
@@ -673,7 +696,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
     }
   );
 
-  app.post("/api/factory/waste-dispatch/submit", requireAuth, async (req: any, res: import("express").Response) => {
+  app.post("/api/factory/waste-dispatch/submit", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -686,7 +709,10 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         return res.status(400).json({ message: "dispatchDate is required" });
       }
 
-      const userId = req.session.user?.id || null;
+      // `session.user` is never populated anywhere in this codebase — the login
+      // flows set `session.userId` — so reading an id off it always produced
+      // null and every waste dispatch was recorded with no creator.
+      const userId = req.session.userId ?? null;
 
       const [lastDispatch] = await db
         .select({ dispatchNumber: factoryBaleWasteDispatches.dispatchNumber })

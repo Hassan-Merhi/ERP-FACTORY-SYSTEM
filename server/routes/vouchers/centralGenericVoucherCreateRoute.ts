@@ -9,7 +9,6 @@ import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import {
   PostingValidationError,
   postBalancedVoucherTx,
-  type CentralPostingResult,
 } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
@@ -21,7 +20,6 @@ import { triggerIntercompanyNotifications } from "../intercompanyNotificationRou
 import { buildVoucherChangesForCreate, getCurrentExchangeRate, logAudit, snapshotVoucherEntries } from "../_helpers";
 
 const postingDependencies = createDatabasePostingDependencies();
-type PersistedPostingResult = CentralPostingResult<any, any>;
 type CustomerLinkedLedgerRow = { id: number; ledgerAccountId: number | null };
 
 async function resolveCustomerLinkedLedgersTx(input: {
@@ -113,7 +111,7 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
         },
       });
 
-      const posted = (await postBalancedVoucherTx(tx, built.request, postingDependencies)) as PersistedPostingResult;
+      const posted = await postBalancedVoucherTx(tx, built.request, postingDependencies);
 
       if (!posted.replayed) {
         await applyEmployeeBalanceDeltasTx({

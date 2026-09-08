@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getVoucherTypeBadge } from "@/lib/voucherTypeBadge";
 
 import type { VoucherDetailsDialogProps } from "./voucherdetailsdialog/types";
+import type { ViewVoucherEntry } from "./types";
 import { createEntryNameResolver } from "./voucherdetailsdialog/utils";
 import { PurchaseVoucherEntries } from "./voucherdetailsdialog/PurchaseVoucherEntries";
 import { SalesVoucherEntries } from "./voucherdetailsdialog/SalesVoucherEntries";
@@ -34,10 +35,12 @@ const GC_OWNER_WITHDRAWAL_CLEARING_NAME = "gc owner withdrawal clearing";
 const GC_SALES_CASH_NAME = "gc sales cash";
 
 function normalizedAccountName(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
-function projectGcOwnerWithdrawalForDisplay(entries: any[], entryBalances: Record<number, string>) {
+function projectGcOwnerWithdrawalForDisplay(entries: ViewVoucherEntry[], entryBalances: Record<number, string>) {
   const isOwnerWithdrawal = entries.some(
     (entry) => normalizedAccountName(entry?.accountName) === GC_OWNER_WITHDRAWAL_CLEARING_NAME
   );

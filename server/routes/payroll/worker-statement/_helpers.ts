@@ -10,6 +10,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { factoryDaybookEntries, ledgerAccounts } from "@shared/schema";
+import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
 
 /** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
 export function getFactoryCompanyId(req: import("express").Request): number | undefined {
@@ -142,7 +143,7 @@ export function computeMonthlyPay(salary: number, startStr: string, endStr: stri
 export function computeMonthlyPayFromAttendance(
   baseSalary: number,
   periodStart: string,
-  attendanceRows: any[]
+  attendanceRows: readonly AttendanceStatusRow[]
 ): number {
   const daysInMonth = (dateStr: string) => {
     const d = new Date(dateStr);

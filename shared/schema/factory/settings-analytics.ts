@@ -100,7 +100,10 @@ export const factoryWasteEntries = pgTable(
     wasteType: varchar("waste_type", { length: 50 }),
     kgWaste: decimal("kg_waste", { precision: 15, scale: 3 }).notNull(),
     reason: text("reason"),
-    createdBy: integer("created_by"),
+    // users.id is a varchar, and startup migration 002 converts this column to
+    // character varying. Declaring it as integer made `drizzle-kit push` fail
+    // against any database where that migration had already run.
+    createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -351,7 +354,11 @@ export const factoryBaleWasteDispatches = pgTable(
     totalBales: integer("total_bales").notNull().default(0),
     totalWeightKg: decimal("total_weight_kg", { precision: 15, scale: 3 }).notNull().default("0"),
     totalCostWrittenOff: decimal("total_cost_written_off", { precision: 15, scale: 2 }).notNull().default("0"),
-    createdBy: integer("created_by"),
+    // users.id is a varchar, and startup migration 002 converts this column to
+    // character varying on any database that still has the original integer.
+    // Declaring it as integer contradicted both, so a `drizzle-kit push` could
+    // try to convert a live varchar column back to integer.
+    createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({

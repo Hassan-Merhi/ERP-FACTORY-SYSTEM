@@ -6,10 +6,21 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
-import { db } from "../../../../db";
+import { db, type RawQueryRow } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { toFiniteNumber } from "@shared/typeGuards";
+
+/**
+ * One unpaid employee advance, read under the payroll transaction for FIFO
+ * deduction. `remaining_balance` is a numeric column, so it arrives as a
+ * decimal string and is parsed rather than coerced.
+ */
+interface OutstandingAdvanceRow {
+  id: number;
+  remaining_balance: string | null;
+}
 
 export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
   // POST /api/factory/employees/bulk-payroll - bulk payroll deposit for multiple employees
@@ -154,15 +165,15 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
 
           // Deduct outstanding advance balances FIFO (same as ERP payroll)
           if (deduction > 0) {
-            const outstanding = await tx.execute(sql`
-              SELECT * FROM employee_advances
+            const outstanding = await tx.execute<RawQueryRow<OutstandingAdvanceRow>>(sql`
+              SELECT id, remaining_balance FROM employee_advances
               WHERE company_id = ${companyId} AND employee_id = ${empId} AND fully_paid = false
               ORDER BY advance_date ASC, id ASC
             `);
             let remaining = deduction;
-            for (const adv of outstanding.rows as any[]) {
+            for (const adv of outstanding.rows) {
               if (remaining <= 0.001) break;
-              const bal = parseFloat(adv.remaining_balance || "0");
+              const bal = toFiniteNumber(adv.remaining_balance) ?? 0;
               if (bal <= 0) continue;
               const toDeduct = Math.min(remaining, bal);
               const newBal = Math.max(0, bal - toDeduct);

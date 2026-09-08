@@ -2,7 +2,14 @@ import type { DbTransaction } from "../../db";
 import { createHash } from "crypto";
 import { sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import type { VoucherEntryInsertFields, VoucherInsertFields, VoucherWithEntries } from "./accountingTypes";
+import type {
+  PostedVoucher,
+  PostedVoucherEntry,
+  PostedVoucherWithEntries,
+  VoucherEntryInsertFields,
+  VoucherInsertFields,
+  VoucherWithEntries,
+} from "./accountingTypes";
 import { insertVoucherWithEntriesTx } from "./voucherPostingService";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { resultRows } from "../../lib/queryResult";
@@ -47,7 +54,7 @@ export interface PostingIdempotencyStore {
     companyId: number;
     source: PostingSourceIdentity;
     requestFingerprint: string;
-  }): Promise<VoucherWithEntries | null>;
+  }): Promise<PostedVoucherWithEntries | null>;
   record(input: {
     tx: DbTransaction;
     companyId: number;
@@ -319,7 +326,7 @@ export async function postBalancedVoucherTx(
   tx: DbTransaction,
   request: CentralPostingRequest,
   dependencies: CentralPostingDependencies
-): Promise<CentralPostingResult> {
+): Promise<CentralPostingResult<PostedVoucher, PostedVoucherEntry>> {
   const totals = validateCentralPostingRequest(request);
   const companyId = request.voucher.companyId;
   const requestFingerprint = buildPostingRequestFingerprint(request);

@@ -18,6 +18,10 @@ import { eq, and, or } from "drizzle-orm";
 import { recalculateOrderTotals } from "../../factory/_helpers";
 import { customerOrderCharges, customerOrders, factoryDaybookEntries as fde } from "@shared/schema";
 import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvidence";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+
+/** The columns a voucher edit may set, checked against the vouchers table. */
+type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
 export function registerVoucherWithEntriesRoutes(app: Express) {
   // Update a voucher with all entries (completely replace entries)
@@ -68,7 +72,8 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
 
       let updatedVoucher;
       const createdEntries = [];
-      let oldEntries: any[] = [];
+      // The rows replaced by this edit, kept for the audit snapshot below.
+      let oldEntries: (typeof voucherEntries.$inferSelect)[] = [];
 
       const oldLocationId = existingVoucher.locationId;
       const newLocationId = voucher.locationId !== undefined ? voucher.locationId : oldLocationId;
@@ -86,7 +91,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
       try {
         oldEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
 
-        const voucherUpdates: any = {
+        const voucherUpdates: VoucherUpdate = {
           voucherType: voucher.voucherType,
           voucherDate: voucher.voucherDate,
           description: voucher.description !== undefined ? voucher.description || null : existingVoucher.description,

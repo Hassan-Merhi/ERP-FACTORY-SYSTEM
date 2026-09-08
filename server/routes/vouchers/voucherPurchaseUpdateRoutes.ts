@@ -18,6 +18,10 @@ import { adjustInventory } from "../../inventoryHelper";
 import { nextCanonicalSourceRevision } from "../../services/inventory/canonicalSourceRevision";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+
+/** The columns a voucher edit may set, checked against the vouchers table. */
+type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -104,7 +108,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
           .where(eq(containers.id, po.containerId));
       }
 
-      const voucherUpdates: any = { totalAmount: totalAmount.toFixed(2) };
+      const voucherUpdates: VoucherUpdate = { totalAmount: totalAmount.toFixed(2) };
       if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
       if (description !== undefined) voucherUpdates.description = description;
       const updated = await db.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
@@ -316,7 +320,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
           .where(eq(stockAdjustmentVouchers.id, adjustmentVoucher.id));
 
         const parsedLocationId = newLocationId;
-        const voucherUpdates: any = { totalAmount: totalAmount.toFixed(2), locationId: parsedLocationId };
+        const voucherUpdates: VoucherUpdate = { totalAmount: totalAmount.toFixed(2), locationId: parsedLocationId };
         const location = await storage.getLocationById(parsedLocationId);
         if (location) voucherUpdates.locationName = location.name;
         if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;

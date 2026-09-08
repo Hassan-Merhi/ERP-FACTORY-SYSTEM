@@ -5,6 +5,7 @@
  */
 import { factoryDaybookEntries } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
+import type { AttendanceStatusRow } from "../../services/payroll/factoryPayrollGenerationPolicy";
 
 /**
  * Daybook writing and the pro-rata pay calculations shared by the payroll
@@ -99,7 +100,7 @@ export function computeMonthlyPay(salary: number, startStr: string, endStr: stri
 export function computeMonthlyPayFromAttendance(
   baseSalary: number,
   periodStart: string,
-  attendanceRows: any[]
+  attendanceRows: readonly AttendanceStatusRow[]
 ): number {
   const daysInMonth = (dateStr: string) => {
     const d = new Date(dateStr);

@@ -11,6 +11,7 @@ import path from "path";
 import fs from "fs";
 import { factoryDaybookEntries, factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
+import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
 
 /** Normalize a USD voucher entry (IDENTITY convention). Returns dual-currency fields spread-ready. */
 export function normUsd(debit: string | number, credit: string | number) {
@@ -194,7 +195,7 @@ export function computeMonthlyPay(salary: number, startStr: string, endStr: stri
 export function computeMonthlyPayFromAttendance(
   baseSalary: number,
   periodStart: string,
-  attendanceRows: any[]
+  attendanceRows: readonly AttendanceStatusRow[]
 ): number {
   const daysInMonth = (dateStr: string) => {
     const d = new Date(dateStr);

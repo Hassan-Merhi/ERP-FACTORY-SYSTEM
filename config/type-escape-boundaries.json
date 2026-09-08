@@ -1834,11 +1834,6 @@
         0,
         0
       ],
-      "server/routes/factory-payroll/_helpers.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/factory-payroll/production-bonuses.ts": [
         2,
         0,
@@ -2049,11 +2044,6 @@
         0,
         0
       ],
-      "server/routes/factory/docs-users/daybookEditRoutes.ts": [
-        3,
-        3,
-        0
-      ],
       "server/routes/factory/docs-users/docsRoutes.ts": [
         1,
         0,
@@ -2069,17 +2059,7 @@
         0,
         0
       ],
-      "server/routes/factory/employee-pos/employee-crud/bulk-payroll.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/factory/employee-pos/employee-crud/crud.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/factory/employee-pos/employee-crud/payroll-preview.ts": [
         1,
         0,
         0
@@ -2091,11 +2071,6 @@
       ],
       "server/routes/factory/employee-pos/employeeAttendanceRoutes.ts": [
         2,
-        0,
-        0
-      ],
-      "server/routes/factory/employee-pos/employeeLedgerWasteRoutes.ts": [
-        7,
         0,
         0
       ],
@@ -2399,11 +2374,6 @@
         0,
         0
       ],
-      "server/routes/ledger/initialize-balances.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/location/locationWhatsappScheduleRoutes.ts": [
         3,
         0,
@@ -2429,22 +2399,7 @@
         0,
         0
       ],
-      "server/routes/payroll/advance-accounting/_helpers.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/payroll/advanceManagementRoutes.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/payroll/core/_helpers.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/payroll/worker-statement/_helpers.ts": [
         1,
         0,
         0
@@ -2460,11 +2415,6 @@
         0
       ],
       "server/routes/payroll/worker-stats-advances/advanceAdminRoutes.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/payroll/worker-stats-advances/helpers.ts": [
         1,
         0,
         0
@@ -2699,27 +2649,7 @@
         0,
         0
       ],
-      "server/routes/transporterStatementRoutes.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralGenericVoucherCreateRoute.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralJournalCreateRoute.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/vouchers/centralPaymentReceiptCreateRoute.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralPaymentReceiptDeleteRoute.ts": [
         1,
         0,
         0
@@ -2729,42 +2659,12 @@
         0,
         0
       ],
-      "server/routes/vouchers/sales-update/update.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/vouchers/transfer/transfer.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/transfer/with-entries.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherDetailBatching.ts": [
-        0,
-        4,
-        0
-      ],
-      "server/routes/vouchers/voucherJournalRoutes.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherPaymentRoutes.ts": [
-        2,
+        1,
         0,
         0
       ],
       "server/routes/vouchers/voucherPurchaseUpdateRoutes.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherQueryRoutes.ts": [
         2,
         0,
         0
@@ -2912,6 +2812,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1565
+    "typeEscapeCeiling": 1515
   }
 }

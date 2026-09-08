@@ -7,7 +7,22 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { db } from "../../db";
+import { db, type RawQueryRow } from "../../db";
+import { toFiniteNumber } from "@shared/typeGuards";
+
+/**
+ * Per-account opening balance plus its posted debit/credit totals.
+ *
+ * Every amount here is a `numeric` column or a `SUM(numeric)`, which the driver
+ * returns as a decimal string, and the opening columns are nullable for an
+ * account that never had one set.
+ */
+interface AccountBalanceAggregateRow {
+  opening_balance: string | null;
+  opening_balance_side: string | null;
+  total_debit: string | null;
+  total_credit: string | null;
+}
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import {
@@ -58,7 +73,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
 
         // Single-query aggregate replaces N+1 (fetch accounts → per-account entry fetch)
         const getAccountTypeBalance = async (accountType: string, isLiability: boolean = false) => {
-          const rows = await db.execute(sql`
+          const rows = await db.execute<RawQueryRow<AccountBalanceAggregateRow>>(sql`
               SELECT
                 la.opening_balance,
                 la.opening_balance_side,
@@ -80,9 +95,9 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
             `);
 
           let totalBalance = 0;
-          for (const row of rows.rows as any[]) {
-            const openingBalanceRaw = parseFloat(row.opening_balance || "0");
-            const openingSide = (row.opening_balance_side as string) || "Dr";
+          for (const row of rows.rows) {
+            const openingBalanceRaw = toFiniteNumber(row.opening_balance) ?? 0;
+            const openingSide = row.opening_balance_side || "Dr";
             const signedOpening = isLiability
               ? openingSide === "Cr"
                 ? openingBalanceRaw
@@ -90,8 +105,8 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
               : openingSide === "Dr"
                 ? openingBalanceRaw
                 : -openingBalanceRaw;
-            const debit = parseFloat(row.total_debit || "0");
-            const credit = parseFloat(row.total_credit || "0");
+            const debit = toFiniteNumber(row.total_debit) ?? 0;
+            const credit = toFiniteNumber(row.total_credit) ?? 0;
             totalBalance += signedOpening + (isLiability ? credit - debit : debit - credit);
           }
           return totalBalance;

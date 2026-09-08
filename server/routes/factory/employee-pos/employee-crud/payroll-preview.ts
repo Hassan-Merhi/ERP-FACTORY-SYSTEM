@@ -6,11 +6,22 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
-import { db } from "../../../../db";
+import { db, type RawQueryRow } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { sqlArray } from "../../../../lib/sqlArray";
+import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+
+/**
+ * Outstanding advance balance per employee. `SUM(numeric)` comes back as a
+ * string, and the grouped id as whatever the driver maps int4 to, so both are
+ * validated rather than coerced.
+ */
+interface AdvanceBalanceRow {
+  employee_id: number | string | null;
+  total_balance: string | null;
+}
 
 export function registerFactoryEmployeePayrollPreviewRoutes(app: Express) {
   // GET /api/factory/employee-payroll-preview?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -57,7 +68,7 @@ export function registerFactoryEmployeePayrollPreviewRoutes(app: Express) {
       }
 
       // Get outstanding advance balances per employee
-      const advResult = await db.execute(sql`
+      const advResult = await db.execute<RawQueryRow<AdvanceBalanceRow>>(sql`
         SELECT employee_id, SUM(remaining_balance::numeric) as total_balance
         FROM employee_advances
         WHERE company_id = ${companyId} AND fully_paid = false
@@ -65,8 +76,10 @@ export function registerFactoryEmployeePayrollPreviewRoutes(app: Express) {
         GROUP BY employee_id
       `);
       const advMap: Record<number, number> = {};
-      for (const row of advResult.rows as any[]) {
-        advMap[Number(row.employee_id)] = parseFloat(row.total_balance || "0");
+      for (const row of advResult.rows) {
+        const employeeId = toPositiveInteger(row.employee_id);
+        if (employeeId === undefined) continue;
+        advMap[employeeId] = toFiniteNumber(row.total_balance) ?? 0;
       }
 
       // Days in the month (use startDate's month)

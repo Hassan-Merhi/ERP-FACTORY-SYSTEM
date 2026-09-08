@@ -14,7 +14,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import type { VoucherEntryInsertFields, VoucherWithEntries } from "./accountingTypes";
+import type { PostedVoucherWithEntries, VoucherEntryInsertFields } from "./accountingTypes";
 import {
   PostingValidationError,
   type CentralPostingDependencies,
@@ -155,7 +155,7 @@ async function loadVoucherWithEntries(input: {
   companyId: number;
   voucherId: number;
   idempotencyKey: string;
-}): Promise<VoucherWithEntries> {
+}): Promise<PostedVoucherWithEntries> {
   const { tx, companyId, voucherId, idempotencyKey } = input;
   if (!Number.isInteger(voucherId) || voucherId <= 0) {
     throw new PostingValidationError(

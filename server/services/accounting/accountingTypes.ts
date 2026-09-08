@@ -11,6 +11,8 @@
  * for any CFA or non-USD voucher so the posting service can persist all fields.
  */
 
+import type { voucherEntries, vouchers } from "@shared/schema";
+
 /** Minimal shape needed to insert a voucher row. */
 export interface VoucherInsertFields {
   companyId: number;
@@ -82,3 +84,17 @@ export interface VoucherWithEntries<V = unknown, E = unknown> {
   voucher: V;
   entries: E[];
 }
+
+/**
+ * The persisted rows the posting engine hands back.
+ *
+ * Both of its return paths — a fresh insert and an idempotent replay — read the
+ * real `vouchers` / `voucher_entries` rows, so the result can name them instead
+ * of leaving callers to assert `CentralPostingResult<any, any>`. The import is
+ * type-only, so this module still pulls in no runtime schema code.
+ */
+export type PostedVoucher = typeof vouchers.$inferSelect;
+
+export type PostedVoucherEntry = typeof voucherEntries.$inferSelect;
+
+export type PostedVoucherWithEntries = VoucherWithEntries<PostedVoucher, PostedVoucherEntry>;
