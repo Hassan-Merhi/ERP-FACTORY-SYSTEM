@@ -52,12 +52,18 @@ export function firstDefined(...candidates: unknown[]): unknown {
   return undefined;
 }
 
-/** A trimmed non-empty string, or `null`. Numbers are accepted and stringified. */
+/**
+ * The value as a string, or `null` when it is neither a string nor a finite
+ * number.
+ *
+ * Deliberately verbatim: it does not trim, and it does not turn `""` into
+ * `null`. Callers read these into slots typed `string | null`, and at least one
+ * caller filters on `status !== null`, so collapsing an empty string to `null`
+ * would silently drop events that the untyped version kept. Whether a blank
+ * field should count as absent is a separate question from typing it.
+ */
 export function jsonString(value: unknown): string | null {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed === "" ? null : trimmed;
-  }
+  if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return null;
 }
