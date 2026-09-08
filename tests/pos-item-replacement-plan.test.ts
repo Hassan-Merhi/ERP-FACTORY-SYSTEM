@@ -3,7 +3,7 @@ import {
   buildPosReplacementSaleItems,
   type PosItemReplacementInput,
   type PosReplacementSourceLine,
-} from "../server/services/pos/itemReplacementService";
+} from "../server/services/pos/itemReplacementPlan";
 
 function replacementMap(...rows: PosItemReplacementInput[]): Map<number, PosItemReplacementInput[]> {
   const map = new Map<number, PosItemReplacementInput[]>();
