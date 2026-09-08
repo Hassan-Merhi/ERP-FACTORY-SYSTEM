@@ -16,6 +16,7 @@ import { useMemo } from "react";
 import { useRecentNav } from "@/hooks/use-recent-nav";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Clock } from "lucide-react";
+import type { ShellUser } from "@/app/shellUser";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -57,7 +58,7 @@ const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
   { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
 ];
 
-export function PropertiesSidebar({ user }: { user?: any }) {
+export function PropertiesSidebar({ user }: { user?: ShellUser }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(

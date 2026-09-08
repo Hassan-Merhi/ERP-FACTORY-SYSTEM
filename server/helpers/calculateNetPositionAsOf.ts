@@ -6,13 +6,43 @@
  * per-month sheets.
  */
 
-import { db } from "../db";
+import { db, type RawQueryRow } from "../db";
 import { storage } from "../storage";
 import { locations, employees, suppliers, containers } from "@shared/schema";
 import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
 import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../netPositionHelper";
 import { calculateHistoricalLocationInventory } from "../routes/_helpers";
 import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
+import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+
+/**
+ * The two grouped balance projections read below.
+ *
+ * PostgreSQL returns `SUM(numeric)` as a string and returns NULL for a group
+ * with no rows, so the amount columns are declared as they really arrive and
+ * are parsed through `toFiniteNumber` rather than coerced blindly — `Number(null)`
+ * would post a silent zero into a balance.
+ */
+interface GroupedBalanceRow {
+  total_debit: string | number | null;
+  total_credit: string | number | null;
+}
+
+interface LedgerBalanceRow extends GroupedBalanceRow {
+  ledger_account_id: number | string | null;
+}
+
+interface PartyBalanceRow extends GroupedBalanceRow {
+  supplier_id: number | string | null;
+  employee_id: number | string | null;
+}
+
+function groupedAmounts(row: GroupedBalanceRow): { debit: number; credit: number } {
+  return {
+    debit: toFiniteNumber(row.total_debit) ?? 0,
+    credit: toFiniteNumber(row.total_credit) ?? 0,
+  };
+}
 
 export interface NetPositionLineItem {
   label: string;
@@ -47,7 +77,7 @@ export async function calculateNetPositionAsOf(
   //   suppGrouped  — filters by VOUCHER's company_id for supplier/employee
   //                  balances, which are always booked to the voucher's company.
   const [acctGrouped, suppGrouped] = await Promise.all([
-    db.execute(sql`
+    db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
       SELECT
         ve.ledger_account_id,
         SUM(CAST(ve.debit_amount  AS numeric)) AS total_debit,
@@ -61,7 +91,7 @@ export async function calculateNetPositionAsOf(
         AND v.voucher_date <= ${toDate}
       GROUP BY ve.ledger_account_id
     `),
-    db.execute(sql`
+    db.execute<RawQueryRow<PartyBalanceRow>>(sql`
       SELECT
         ve.supplier_id,
         ve.employee_id,
@@ -82,27 +112,25 @@ export async function calculateNetPositionAsOf(
   const supplierBalances = new Map<number, { debit: number; credit: number }>();
   const employeeBalances = new Map<number, { debit: number; credit: number }>();
 
-  for (const row of acctGrouped.rows as any[]) {
-    const d = parseFloat(row.total_debit || "0");
-    const c = parseFloat(row.total_credit || "0");
-    if (row.ledger_account_id != null) {
-      const id = Number(row.ledger_account_id);
+  for (const row of acctGrouped.rows) {
+    const { debit, credit } = groupedAmounts(row);
+    const id = toPositiveInteger(row.ledger_account_id);
+    if (id !== undefined) {
       const cur = accountBalances.get(id) || { debit: 0, credit: 0 };
-      accountBalances.set(id, { debit: cur.debit + d, credit: cur.credit + c });
+      accountBalances.set(id, { debit: cur.debit + debit, credit: cur.credit + credit });
     }
   }
-  for (const row of suppGrouped.rows as any[]) {
-    const d = parseFloat(row.total_debit || "0");
-    const c = parseFloat(row.total_credit || "0");
-    if (row.supplier_id != null) {
-      const id = Number(row.supplier_id);
-      const cur = supplierBalances.get(id) || { debit: 0, credit: 0 };
-      supplierBalances.set(id, { debit: cur.debit + d, credit: cur.credit + c });
+  for (const row of suppGrouped.rows) {
+    const { debit, credit } = groupedAmounts(row);
+    const supplierId = toPositiveInteger(row.supplier_id);
+    if (supplierId !== undefined) {
+      const cur = supplierBalances.get(supplierId) || { debit: 0, credit: 0 };
+      supplierBalances.set(supplierId, { debit: cur.debit + debit, credit: cur.credit + credit });
     }
-    if (row.employee_id != null) {
-      const id = Number(row.employee_id);
-      const cur = employeeBalances.get(id) || { debit: 0, credit: 0 };
-      employeeBalances.set(id, { debit: cur.debit + d, credit: cur.credit + c });
+    const employeeId = toPositiveInteger(row.employee_id);
+    if (employeeId !== undefined) {
+      const cur = employeeBalances.get(employeeId) || { debit: 0, credit: 0 };
+      employeeBalances.set(employeeId, { debit: cur.debit + debit, credit: cur.credit + credit });
     }
   }
 

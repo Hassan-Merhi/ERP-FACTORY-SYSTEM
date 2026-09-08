@@ -148,18 +148,7 @@ export function registerPosCustomerRoutes(app: Express): void {
         code = `CUST${suffix.toString().padStart(3, "0")}`;
       }
 
-      const customer = await storage.createCustomer({ ...parsed, code } as {
-        companyId: number;
-        legalName: string;
-        phone?: string | null | undefined;
-        active?: boolean | undefined;
-        statementNote?: string | null | undefined;
-        deletedAt?: Date | null | undefined;
-        openingBalance?: string | undefined;
-        openingBalanceSide?: "" | "Dr" | "Cr" | undefined;
-        ledgerAccountId?: number | undefined;
-        paymentTermsDays?: number | null | undefined;
-      });
+      const customer = await storage.createCustomer({ ...parsed, code });
 
       const customerAccountCode = `CUST-${customer.code}`;
       // Use getOrCreateLedgerAccount to survive soft-deleted duplicates that

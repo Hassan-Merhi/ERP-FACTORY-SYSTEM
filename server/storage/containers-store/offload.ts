@@ -4,7 +4,7 @@ import {
 } from "../../services/accounting/infrastructureVoucherIdentity";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { logger } from "../../lib/logger";
 import {
@@ -23,6 +23,7 @@ import type { POLineItem, ContainerOffload } from "@shared/schema";
 import { getLocationById } from "../inventory";
 import { getContainerById, getPurchaseOrdersByContainer } from "./containers";
 import { getLineItemsByPO } from "./line-items-charges";
+import { lockInventoryRow } from "../inventoryRowLock";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -96,10 +97,7 @@ export async function offloadContainer(
     for (const correction of inventoryCostCorrections) {
       const correctRate = toInventoryDecimal(correction.correctRate);
       if (!correctRate.isPositive() || !validCorrectionItemIds.has(correction.stockItemId)) continue;
-      const correctionRows = await (tx as any).execute(
-        sql`SELECT * FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${correction.stockItemId} FOR UPDATE`
-      );
-      const correctionRow = correctionRows.rows?.[0] || correctionRows[0];
+      const correctionRow = await lockInventoryRow(tx, locationId, correction.stockItemId);
       if (!correctionRow) continue;
       const existingQuantity = toInventoryDecimal(correctionRow.quantity);
       if (!existingQuantity.isPositive()) continue;
@@ -135,10 +133,7 @@ export async function offloadContainer(
 
       if (!newRate.isFinite()) throw new Error(`Calculated rate is infinite for stock item ${stockItemId}`);
 
-      const existingRows = await (tx as any).execute(
-        sql`SELECT * FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId} FOR UPDATE`
-      );
-      const existing = existingRows.rows?.[0] || existingRows[0];
+      const existing = await lockInventoryRow(tx, locationId, stockItemId);
 
       if (existing) {
         const existingQuantity = toInventoryDecimal(existing.quantity);

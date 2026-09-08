@@ -16,6 +16,8 @@ import { RefreshCw, Plus, TrendingUp } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import type { Company, ExchangeRate } from "@shared/schema";
+import type { Serialized } from "@shared/apiTypes";
 
 const exchangeRateFormSchema = z.object({
   rate: z
@@ -43,12 +45,12 @@ export function ExchangeRateSettings() {
     },
   });
 
-  const { data: company } = useQuery<any>({
+  const { data: company } = useQuery<Serialized<Company>>({
     queryKey: [`/api/companies/${selectedCompany?.id}`],
     enabled: !!selectedCompany?.id,
   });
 
-  const { data: exchangeRates = [], isLoading } = useQuery<any[]>({
+  const { data: exchangeRates = [], isLoading } = useQuery<Serialized<ExchangeRate>[]>({
     queryKey: ["/api/exchange-rates"],
     enabled: !!selectedCompany?.id && !!company?.displayCurrency,
   });

@@ -17,6 +17,11 @@ import {
   visibleUserIdsForCompany,
   type CompanyUserRoleRow,
 } from "../services/security/companyUserAdminScopePolicy";
+import { asRecord } from "@shared/typeGuards";
+
+function hasCompanyId(row: unknown): row is { companyId: number } {
+  return typeof asRecord(row)?.companyId === "number";
+}
 
 async function loadRoleRows(userId?: string): Promise<CompanyUserRoleRow[]> {
   const query = db
@@ -30,7 +35,14 @@ async function loadRoleRows(userId?: string): Promise<CompanyUserRoleRow[]> {
   return userId ? await query.where(eq(userCompanyRoles.userId, userId)) : await query;
 }
 
-function installJsonArrayFilter(res: Response, filter: (rows: any[]) => any[]): void {
+/**
+ * Filter an array JSON response before it leaves the process.
+ *
+ * The rows are whatever the downstream handler serialized, so they are
+ * genuinely `unknown` here — each filter narrows the fields it depends on
+ * rather than assuming a shape this middleware never validated.
+ */
+function installJsonArrayFilter(res: Response, filter: (rows: unknown[]) => unknown[]): void {
   const originalJson = res.json.bind(res);
   res.json = (body: unknown) => originalJson(Array.isArray(body) ? filter(body) : body);
 }
@@ -71,7 +83,12 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
   if (method === "GET" && path === "/api/users") {
     const roleRows = await loadRoleRows();
     const visibleIds = visibleUserIdsForCompany(roleRows, companyId);
-    installJsonArrayFilter(res, (rows) => rows.filter((row) => typeof row?.id === "string" && visibleIds.has(row.id)));
+    installJsonArrayFilter(res, (rows) =>
+      rows.filter((row) => {
+        const id = asRecord(row)?.id;
+        return typeof id === "string" && visibleIds.has(id);
+      })
+    );
     return true;
   }
 
@@ -83,7 +100,10 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
     );
     visibleSessionUserIds.add(sessionUserId);
     installJsonArrayFilter(res, (rows) =>
-      rows.filter((row) => typeof row?.userId === "string" && visibleSessionUserIds.has(row.userId))
+      rows.filter((row) => {
+        const userId = asRecord(row)?.userId;
+        return typeof userId === "string" && visibleSessionUserIds.has(userId);
+      })
     );
     return true;
   }
@@ -110,7 +130,9 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
     if (!canAccessTargetUser(targetRows, targetUserId, companyId, actorRole)) {
       return deny(req, res, companyId, "USER_COMPANY_SCOPE_DENIED", "User not found");
     }
-    installJsonArrayFilter(res, (rows) => filterRolesForCompany(rows, companyId));
+    // Rows without a numeric companyId could never match the active company, so
+    // dropping them in the guard leaves the filtered result unchanged.
+    installJsonArrayFilter(res, (rows) => filterRolesForCompany(rows.filter(hasCompanyId), companyId));
     return true;
   }
 

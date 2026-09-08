@@ -22,6 +22,7 @@ import {
   type PostingSourceIdentity,
 } from "./centralPostingEngine";
 import { assertCustomerLinkedLedgerPairs } from "./customerLinkedLedgerValidation";
+import type { CompanyScopedTable } from "../../types/companyScopedTable";
 
 const LEGACY_IDEMPOTENCY_TABLE = "accounting_posting_idempotency";
 const POSTING_AUDIT_TABLE = "accounting_postings";
@@ -84,19 +85,17 @@ async function assertCompanyOwnedIds(input: {
   tx: DbTransaction;
   companyId: number;
   ids: number[];
-  table: any;
-  idColumn: any;
-  companyColumn: any;
+  table: CompanyScopedTable;
   label: string;
 }) {
-  const { tx, companyId, ids, table, idColumn, companyColumn, label } = input;
+  const { tx, companyId, ids, table, label } = input;
   if (ids.length === 0) return;
 
   const rows = await tx
-    .select({ id: idColumn })
+    .select({ id: table.id })
     .from(table)
-    .where(and(eq(companyColumn, companyId), inArray(idColumn, ids)));
-  const found = new Set(rows.map((row: { id: number }) => Number(row.id)));
+    .where(and(eq(table.companyId, companyId), inArray(table.id, ids)));
+  const found = new Set(rows.map((row) => Number(row.id)));
   const missing = ids.filter((id) => !found.has(id));
   if (missing.length > 0) {
     throw new PostingValidationError(
@@ -203,8 +202,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: [positiveId(voucher.locationId, "locationId")],
             table: locations,
-            idColumn: locations.id,
-            companyColumn: locations.companyId,
             label: "Location",
           });
         }
@@ -215,8 +212,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.ledgerAccountId,
             table: ledgerAccounts,
-            idColumn: ledgerAccounts.id,
-            companyColumn: ledgerAccounts.companyId,
             label: "Ledger account",
           }),
           assertCompanyOwnedIds({
@@ -224,8 +219,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.bankAccountId,
             table: bankAccounts,
-            idColumn: bankAccounts.id,
-            companyColumn: bankAccounts.companyId,
             label: "Bank account",
           }),
           assertCompanyOwnedIds({
@@ -233,8 +226,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.fixedAssetId,
             table: fixedAssets,
-            idColumn: fixedAssets.id,
-            companyColumn: fixedAssets.companyId,
             label: "Fixed asset",
           }),
           assertCompanyOwnedIds({
@@ -242,8 +233,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.supplierId,
             table: companyScopedSuppliers,
-            idColumn: companyScopedSuppliers.id,
-            companyColumn: companyScopedSuppliers.companyId,
             label: "Supplier",
           }),
           assertCompanyOwnedIds({
@@ -251,8 +240,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.employeeId,
             table: employees,
-            idColumn: employees.id,
-            companyColumn: employees.companyId,
             label: "Employee",
           }),
           assertCompanyOwnedIds({
@@ -260,8 +247,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.customerId,
             table: customers,
-            idColumn: customers.id,
-            companyColumn: customers.companyId,
             label: "Customer",
           }),
           assertCompanyOwnedIds({
@@ -269,8 +254,6 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
             companyId,
             ids: targets.factorySupplierId,
             table: factorySuppliers,
-            idColumn: factorySuppliers.id,
-            companyColumn: factorySuppliers.companyId,
             label: "Factory supplier",
           }),
         ]);

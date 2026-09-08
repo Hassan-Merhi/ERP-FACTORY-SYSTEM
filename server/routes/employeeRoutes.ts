@@ -116,6 +116,7 @@ export function registerEmployeeRoutes(app: Express) {
   app.post("/api/employees", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const parsed = insertEmployeeSchema.parse(req.body);
+      let resolvedCode: string;
 
       // Auto-generate code from name if not provided
       if (!parsed.code) {
@@ -136,16 +137,17 @@ export function registerEmployeeRoutes(app: Express) {
           code = `${baseCode}${suffix}`;
           suffix++;
         }
-        parsed.code = code;
+        resolvedCode = code;
       } else {
         // Check for duplicate code if manually provided
         const existing = await storage.getEmployeeByCode(parsed.code);
         if (existing) {
           return res.status(400).json({ message: "Employee code already exists" });
         }
+        resolvedCode = parsed.code;
       }
 
-      let employee = await storage.createEmployee(parsed);
+      let employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
 
       // Initialize currentBalance to opening balance if provided
       if (parsed.openingBalance && parseFloat(parsed.openingBalance) > 0) {

@@ -23,97 +23,47 @@ import {
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import { resolveActiveCompanyId } from "../routes/helpers/resolveActiveCompanyId";
-import {
-  classifyDeletedItemScope,
-  type DeletedItemScopeType,
-} from "../services/security/deletedItemScopePolicy";
+import { classifyDeletedItemScope, type DeletedItemScopeType } from "../services/security/deletedItemScopePolicy";
+import type { CompanyScopedTable } from "../types/companyScopedTable";
+
+/**
+ * Which table owns each deletable entity. The table alone is enough: the
+ * ownership probe below reads `id`/`companyId` off it, so a mapping can no
+ * longer name one table and another table's columns.
+ */
+const SCOPE_TABLES: Partial<Record<DeletedItemScopeType, CompanyScopedTable>> = {
+  location: locations,
+  stockItem: stockItems,
+  stockGroup: stockGroups,
+  ledgerAccount: ledgerAccounts,
+  employee: employees,
+  customer: customers,
+  bankAccount: bankAccounts,
+  voucher: vouchers,
+  orphanedPosSale: vouchers,
+  factoryCategory: factoryCategories,
+  factoryBaleProduct: factoryBaleProducts,
+  factoryContainer: factoryContainers,
+  factoryRawStock: factoryRawStock,
+  factoryRawMaterialAdjustment: factoryRawMaterialAdjustments,
+  factoryMixBatch: factoryMixBatches,
+  factoryBale: factoryBales,
+  customerProforma: customerProformas,
+  customerOrder: customerOrders,
+};
 
 async function loadCompanyId(type: DeletedItemScopeType, id: number): Promise<number | null> {
-  const mappings: Partial<
-    Record<DeletedItemScopeType, { table: any; idColumn: any; companyColumn: any }>
-  > = {
-    location: { table: locations, idColumn: locations.id, companyColumn: locations.companyId },
-    stockItem: { table: stockItems, idColumn: stockItems.id, companyColumn: stockItems.companyId },
-    stockGroup: { table: stockGroups, idColumn: stockGroups.id, companyColumn: stockGroups.companyId },
-    ledgerAccount: {
-      table: ledgerAccounts,
-      idColumn: ledgerAccounts.id,
-      companyColumn: ledgerAccounts.companyId,
-    },
-    employee: { table: employees, idColumn: employees.id, companyColumn: employees.companyId },
-    customer: { table: customers, idColumn: customers.id, companyColumn: customers.companyId },
-    bankAccount: {
-      table: bankAccounts,
-      idColumn: bankAccounts.id,
-      companyColumn: bankAccounts.companyId,
-    },
-    voucher: { table: vouchers, idColumn: vouchers.id, companyColumn: vouchers.companyId },
-    orphanedPosSale: { table: vouchers, idColumn: vouchers.id, companyColumn: vouchers.companyId },
-    factoryCategory: {
-      table: factoryCategories,
-      idColumn: factoryCategories.id,
-      companyColumn: factoryCategories.companyId,
-    },
-    factoryBaleProduct: {
-      table: factoryBaleProducts,
-      idColumn: factoryBaleProducts.id,
-      companyColumn: factoryBaleProducts.companyId,
-    },
-    factoryContainer: {
-      table: factoryContainers,
-      idColumn: factoryContainers.id,
-      companyColumn: factoryContainers.companyId,
-    },
-    factoryRawStock: {
-      table: factoryRawStock,
-      idColumn: factoryRawStock.id,
-      companyColumn: factoryRawStock.companyId,
-    },
-    factoryRawMaterialAdjustment: {
-      table: factoryRawMaterialAdjustments,
-      idColumn: factoryRawMaterialAdjustments.id,
-      companyColumn: factoryRawMaterialAdjustments.companyId,
-    },
-    factoryMixBatch: {
-      table: factoryMixBatches,
-      idColumn: factoryMixBatches.id,
-      companyColumn: factoryMixBatches.companyId,
-    },
-    factoryBale: {
-      table: factoryBales,
-      idColumn: factoryBales.id,
-      companyColumn: factoryBales.companyId,
-    },
-    customerProforma: {
-      table: customerProformas,
-      idColumn: customerProformas.id,
-      companyColumn: customerProformas.companyId,
-    },
-    customerOrder: {
-      table: customerOrders,
-      idColumn: customerOrders.id,
-      companyColumn: customerOrders.companyId,
-    },
-  };
+  const table = SCOPE_TABLES[type];
+  if (!table) return null;
 
-  const mapping = mappings[type];
-  if (!mapping) return null;
-
-  const [row] = await db
-    .select({ companyId: mapping.companyColumn })
-    .from(mapping.table)
-    .where(eq(mapping.idColumn, id))
-    .limit(1);
-  return row?.companyId ?? null;
+  const [row] = await db.select({ companyId: table.companyId }).from(table).where(eq(table.id, id)).limit(1);
+  // The driver types this column as unknown; a deleted row's company is only
+  // usable as a scope decision when it really is a positive integer.
+  const companyId = Number(row?.companyId);
+  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
 }
 
-function deny(
-  req: Request,
-  res: Response,
-  reason: string,
-  status: number,
-  message: string
-): false {
+function deny(req: Request, res: Response, reason: string, status: number, message: string): false {
   logger.error(
     JSON.stringify({
       event: "deleted_item_scope_denied",
@@ -130,10 +80,7 @@ function deny(
   return false;
 }
 
-export async function enforceDeletedItemCompanyScope(
-  req: Request,
-  res: Response
-): Promise<boolean> {
+export async function enforceDeletedItemCompanyScope(req: Request, res: Response): Promise<boolean> {
   const match = classifyDeletedItemScope(req.path);
   if (!match) return true;
 
@@ -154,11 +101,7 @@ export async function enforceDeletedItemCompanyScope(
       );
     }
 
-    const [supplier] = await db
-      .select({ id: suppliers.id })
-      .from(suppliers)
-      .where(eq(suppliers.id, match.id))
-      .limit(1);
+    const [supplier] = await db.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.id, match.id)).limit(1);
     if (!supplier) return deny(req, res, "DELETED_ITEM_NOT_FOUND", 404, "Item not found");
     return true;
   }

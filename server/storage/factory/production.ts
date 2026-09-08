@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 export async function getProductionBalesByLocation(
   companyId: number,
@@ -122,12 +123,20 @@ export async function getProductionBaleByBarcode(
   return bale;
 }
 
+/**
+ * The insert schema takes `pressedAt` as an ISO string (that is what the client
+ * sends) while the column is a timestamp, so the value is converted here rather
+ * than in three separate places behind an `any`.
+ */
+type ProductionBaleInsert = typeof schema.productionBales.$inferInsert;
+
+function toProductionBaleInsert(bale: schema.InsertProductionBale): ProductionBaleInsert {
+  const { pressedAt, ...rest } = bale;
+  return pressedAt ? { ...rest, pressedAt: new Date(pressedAt) } : rest;
+}
+
 export async function createProductionBale(bale: schema.InsertProductionBale): Promise<schema.ProductionBale> {
-  const baleData: any = { ...bale };
-  if (bale.pressedAt) {
-    baleData.pressedAt = new Date(bale.pressedAt);
-  }
-  const [created] = await db.insert(schema.productionBales).values(baleData).returning();
+  const [created] = await db.insert(schema.productionBales).values(toProductionBaleInsert(bale)).returning();
   return created;
 }
 
@@ -135,10 +144,12 @@ export async function updateProductionBale(
   id: number,
   updates: Partial<schema.InsertProductionBale>
 ): Promise<schema.ProductionBale> {
-  const updateData: any = { ...updates, updatedAt: sql`now()` };
-  if (updates.pressedAt) {
-    updateData.pressedAt = new Date(updates.pressedAt);
-  }
+  const { pressedAt, ...rest } = updates;
+  const updateData: PgUpdateSetSource<typeof schema.productionBales> = {
+    ...rest,
+    ...(pressedAt ? { pressedAt: new Date(pressedAt) } : {}),
+    updatedAt: sql`now()`,
+  };
   const [updated] = await db
     .update(schema.productionBales)
     .set(updateData)
@@ -157,14 +168,7 @@ export async function bulkCreateProductionBales(
   bales: schema.InsertProductionBale[]
 ): Promise<schema.ProductionBale[]> {
   if (bales.length === 0) return [];
-  const balesData = bales.map((bale) => {
-    const data: any = { ...bale };
-    if (bale.pressedAt) {
-      data.pressedAt = new Date(bale.pressedAt);
-    }
-    return data;
-  });
-  return await db.insert(schema.productionBales).values(balesData).returning();
+  return await db.insert(schema.productionBales).values(bales.map(toProductionBaleInsert)).returning();
 }
 
 export async function updateProductionBaleFromScan(

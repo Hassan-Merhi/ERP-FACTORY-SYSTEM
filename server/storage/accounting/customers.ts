@@ -5,13 +5,12 @@ import * as schema from "@shared/schema";
 export async function getAllCustomers(companyId: number, search?: string, limit?: number): Promise<schema.Customer[]> {
   const conditions = [eq(schema.customers.companyId, companyId), isNull(schema.customers.deletedAt)];
   if (search) conditions.push(ilike(schema.customers.legalName, `%${search}%`));
-  let query = db
+  const query = db
     .select()
     .from(schema.customers)
     .where(and(...conditions))
-    .orderBy(schema.customers.legalName) as any;
-  if (limit) query = query.limit(limit);
-  return await query;
+    .orderBy(schema.customers.legalName);
+  return limit ? await query.limit(limit) : await query;
 }
 
 export async function getCustomerById(id: number): Promise<schema.Customer | undefined> {
@@ -27,11 +26,16 @@ export async function getCustomerByCode(code: string, companyId: number): Promis
   return customer;
 }
 
-export async function createCustomer(customer: schema.InsertCustomer): Promise<schema.Customer> {
-  const [newCustomer] = await db
-    .insert(schema.customers)
-    .values(customer as any)
-    .returning();
+/**
+ * The insert schema omits `code` because it is allocated server-side, but the
+ * column is NOT NULL — so the code is part of this function's contract rather
+ * than something the row happens to carry. Stating it here is what lets the
+ * insert be checked instead of asserted.
+ */
+export type CreateCustomerInput = schema.InsertCustomer & { code: string };
+
+export async function createCustomer(customer: CreateCustomerInput): Promise<schema.Customer> {
+  const [newCustomer] = await db.insert(schema.customers).values(customer).returning();
   return newCustomer;
 }
 
