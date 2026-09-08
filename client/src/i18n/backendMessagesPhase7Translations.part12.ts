@@ -82,4 +82,24 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "حساب الائتمان بين الشركات المُكوّن ${configuredAccountId} مفقود أو غير نشط أو ينتمي إلى شركة أخرى",
     fr: "Le compte de crédit intersociétés configuré ${configuredAccountId} est introuvable, inactif ou appartient à une autre société",
   },
+  {
+    en: "Golden Coast owner-withdrawal clearing account is duplicated",
+    ar: "حساب مقاصة سحوبات مالك غولدن كوست مكرر",
+    fr: "Le compte de compensation des retraits du propriétaire de Golden Coast est dupliqué",
+  },
+  {
+    en: "${GC_OWNER_WITHDRAWAL_CLEARING_CODE} is already used by another ledger role; repair the chart of accounts first",
+    ar: "{0} مستخدم بالفعل لدور آخر في دفتر الأستاذ؛ أصلح دليل الحسابات أولاً",
+    fr: "{0} est déjà utilisé par un autre rôle du grand livre ; corrigez d’abord le plan comptable",
+  },
+  {
+    en: "Could not provision Golden Coast owner-withdrawal clearing account",
+    ar: "تعذر إنشاء حساب مقاصة سحوبات مالك غولدن كوست",
+    fr: "Impossible de créer le compte de compensation des retraits du propriétaire de Golden Coast",
+  },
+  {
+    en: "WhatsApp could not authenticate with any configured Green API instance. Update the WhatsApp Instance ID/API Token in Settings, then try again.",
+    ar: "تعذر على واتساب المصادقة مع أي مثيل Green API مُكوّن. حدّث معرّف مثيل واتساب ورمز API في الإعدادات، ثم حاول مرة أخرى.",
+    fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres, puis réessayez.",
+  },
 ];
