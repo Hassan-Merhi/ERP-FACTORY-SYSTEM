@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import { logger } from "../lib/logger";
 import { logAudit, type AuditAction } from "../routes/helpers/auditHelpers";
+import { asRecord } from "@shared/typeGuards";
 
 interface ActivityAuditMatch {
   action: AuditAction;
@@ -17,8 +18,14 @@ function parseRouteId(path: string): number | null {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
+/**
+ * Pick the whitelisted scalar fields out of a request body for the audit trail.
+ *
+ * The body is whatever the client sent, so it stays `unknown` and is narrowed
+ * to an indexable record here; a non-object body simply contributes no fields.
+ */
 function compactChanges(
-  body: any,
+  body: unknown,
   extra?: Record<string, unknown>
 ): Record<string, { old: unknown; new: unknown }> | null {
   const safeKeys = [
@@ -41,9 +48,10 @@ function compactChanges(
     "scope",
     "mode",
   ];
+  const source = asRecord(body);
   const changes: Record<string, { old: unknown; new: unknown }> = {};
   for (const key of safeKeys) {
-    const value = body?.[key];
+    const value = source?.[key];
     if (value === undefined || value === null || typeof value === "object") continue;
     changes[key] = { old: null, new: typeof value === "string" ? value.slice(0, 160) : value };
   }

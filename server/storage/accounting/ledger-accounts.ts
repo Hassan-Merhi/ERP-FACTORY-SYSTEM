@@ -52,10 +52,16 @@ export async function getLedgerAccountByName(name: string, companyId: number): P
   return account;
 }
 
-export async function createLedgerAccount(account: InsertLedgerAccount): Promise<LedgerAccount> {
-  // Explicitly strip id/createdAt so a caller that accidentally passes a full
-  // LedgerAccount object (structural typing) never includes id in the INSERT.
-  const { id: _id, createdAt: _ca, ...fields } = account as any;
+/**
+ * Callers sometimes hand over a whole persisted row rather than a fresh insert
+ * payload — structural typing accepts it — so the parameter admits the two
+ * persistence-owned fields and the body strips them. Declaring them here rather
+ * than casting keeps the strip visible to the compiler.
+ */
+export async function createLedgerAccount(
+  account: InsertLedgerAccount & Partial<Pick<LedgerAccount, "id" | "createdAt">>
+): Promise<LedgerAccount> {
+  const { id: _id, createdAt: _ca, ...fields } = account;
   const [created] = await db
     .insert(schema.ledgerAccounts)
     .values({

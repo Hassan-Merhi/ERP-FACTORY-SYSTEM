@@ -13,15 +13,37 @@
  * from bypassing that contract accidentally.
  */
 
+import type { PgInsertValue } from "drizzle-orm/pg-core";
 import { vouchers, voucherEntries } from "@shared/schema";
 import type { PostingSourceIdentity } from "./centralPostingEngine";
 import type { VoucherInsertFields, VoucherEntryInsertFields, VoucherWithEntries } from "./accountingTypes";
 
+type PostingTable = typeof vouchers | typeof voucherEntries;
+
 type VoucherRow = typeof vouchers.$inferSelect;
 type VoucherEntryRow = typeof voucherEntries.$inferSelect;
 
+/**
+ * The insert builder shape this module consumes, narrowed to the two calls it
+ * actually makes: `.values(...)` followed by `.returning()`. Declaring it
+ * structurally (rather than importing Drizzle's builder type) keeps this
+ * primitive usable with the caller-supplied transaction handle and with the
+ * test double, while still checking that the values handed to `.values()`
+ * match the table's insert shape and that the returned rows are typed.
+ */
+interface InsertBuilderLike<TTable extends PostingTable> {
+  values(value: PgInsertValue<TTable>): { returning(): Promise<TTable["$inferSelect"][]> };
+  values(values: PgInsertValue<TTable>[]): { returning(): Promise<TTable["$inferSelect"][]> };
+}
+
+/**
+ * The slice of a Drizzle transaction this primitive needs. The table type
+ * parameter carries the row shape through, so `buildVoucherValues` and
+ * `buildEntryValues` are checked against the real schema instead of being
+ * erased by an `any` builder, and the inserted rows come back typed.
+ */
 interface TransactionLike {
-  insert(table: any): any;
+  insert<TTable extends PostingTable>(table: TTable): InsertBuilderLike<TTable>;
 }
 
 interface DatabaseLike {
@@ -100,7 +122,7 @@ export async function insertVoucherWithEntriesTx(
 ): Promise<VoucherWithEntries<VoucherRow, VoucherEntryRow>> {
   requireSourceIdentity(source);
 
-  const [voucher] = (await tx.insert(vouchers).values(buildVoucherValues(voucherFields)).returning()) as VoucherRow[];
+  const [voucher] = await tx.insert(vouchers).values(buildVoucherValues(voucherFields)).returning();
   if (!voucher || typeof voucher !== "object" || !("id" in voucher)) {
     throw new Error("Voucher insert did not return a persisted voucher");
   }

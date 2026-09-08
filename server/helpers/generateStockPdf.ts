@@ -187,11 +187,10 @@ export async function generateStockPdf(
   let rowIndex = 0; // used for alternating rows
 
   // ── Page-bottom helper ───────────────────────────────────────────────────────
+  // PDFKit exposes maxY() as a method on the current page (height minus the
+  // bottom margin), so the previous runtime fallbacks were unreachable.
   function pageBottom(): number {
-    const page = doc.page as any;
-    if (typeof page.maxY === "function") return page.maxY() as number;
-    if (typeof page.maxY === "number") return page.maxY;
-    return page.height - (page.margins?.bottom ?? 40);
+    return doc.page.maxY();
   }
 
   function ensureSpace(need: number): void {

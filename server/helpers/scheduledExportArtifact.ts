@@ -5,6 +5,7 @@ import {
   type TemporaryExportArchiveResult,
 } from "./temporaryExportArchive";
 import type { ExportAttachmentSource } from "./exportAttachmentSource";
+import type { ExportCompany } from "./buildFullExportZip";
 
 export interface ScheduledExportArtifact {
   attachment: ExportAttachmentSource;
@@ -17,7 +18,7 @@ export interface ScheduledExportArtifact {
 
 export async function createScheduledExportArtifact(
   label: string,
-  companies: Record<string, unknown>[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: (msg: string, level?: "info" | "success" | "warning" | "error") => void
@@ -51,7 +52,7 @@ export async function createScheduledExportArtifact(
 
 export async function withScheduledExportArtifact<T>(
   label: string,
-  companies: Record<string, unknown>[],
+  companies: readonly ExportCompany[],
   fromDate: string | undefined,
   toDate: string | undefined,
   work: (artifact: ScheduledExportArtifact) => Promise<T>,

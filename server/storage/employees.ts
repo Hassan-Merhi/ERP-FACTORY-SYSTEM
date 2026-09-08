@@ -145,11 +145,16 @@ export async function getEmployeeById(id: number): Promise<Employee | undefined>
   return employee;
 }
 
-export async function createEmployee(employee: InsertEmployee): Promise<Employee> {
-  const [created] = await db
-    .insert(schema.employees)
-    .values([employee as any])
-    .returning();
+/**
+ * `code` is optional on the Zod insert schema — the route derives one from the
+ * employee's name when the client omits it — but the column is NOT NULL and
+ * unique. Requiring it here means the route's allocation has to happen before
+ * the call rather than being assumed to have happened.
+ */
+export type CreateEmployeeInput = InsertEmployee & { code: string };
+
+export async function createEmployee(employee: CreateEmployeeInput): Promise<Employee> {
+  const [created] = await db.insert(schema.employees).values([employee]).returning();
   return created;
 }
 
@@ -248,7 +253,10 @@ export async function deleteEmployee(
 
 // Employee Groups
 
-export async function getAllEmployeeGroups(companyId: number): Promise<any[]> {
+/** A group row with the "Employee" default applied for legacy rows that predate the column. */
+export type EmployeeGroupWithType = schema.EmployeeGroup & { groupType: string };
+
+export async function getAllEmployeeGroups(companyId: number): Promise<EmployeeGroupWithType[]> {
   const results = await db
     .select()
     .from(schema.employeeGroups)
@@ -287,7 +295,21 @@ export async function deleteEmployeeGroup(id: number): Promise<void> {
   await db.delete(schema.employeeGroups).where(eq(schema.employeeGroups.id, id));
 }
 
-export async function getEmployeeGroupMembers(groupId: number): Promise<any[]> {
+/**
+ * A group membership joined to its employee. The employee columns come through
+ * a LEFT JOIN, so every one of them is nullable when the employee row is gone.
+ */
+export interface EmployeeGroupMember {
+  id: number;
+  employeeId: number | null;
+  employeeCode: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  department: string | null;
+}
+
+export async function getEmployeeGroupMembers(groupId: number): Promise<EmployeeGroupMember[]> {
   const results = await db
     .select({
       id: schema.employeeGroupMembers.id,
@@ -336,7 +358,33 @@ export async function removeEmployeeFromGroup(groupId: number, employeeId: numbe
 
 // Salary Advances
 
-export async function getAllSalaryAdvances(companyId: number): Promise<any[]> {
+/**
+ * A salary advance with its employee's display fields resolved.
+ *
+ * `amount`/`remainingBalance` are `decimal` columns and therefore arrive as
+ * strings. `employeeCode` is normalized to "" and `employeeName` is always
+ * populated, so neither is nullable on this shape even though the underlying
+ * LEFT JOIN can miss.
+ */
+export interface SalaryAdvanceWithEmployee {
+  id: number;
+  companyId: number;
+  employeeId: number;
+  advanceDate: string;
+  amount: string;
+  remainingBalance: string;
+  voucherId: number | null;
+  notes: string | null;
+  fullyPaid: boolean;
+  isOpeningBalance: boolean;
+  createdAt: Date;
+  employeeCode: string;
+  employeeFirstName: string | null;
+  employeeLastName: string | null;
+  employeeName: string;
+}
+
+export async function getAllSalaryAdvances(companyId: number): Promise<SalaryAdvanceWithEmployee[]> {
   const rows = await db
     .select({
       id: schema.salaryAdvances.id,

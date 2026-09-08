@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { pipeline } from "stream/promises";
 import type { Response } from "express";
-import { streamFullExportZip, type StreamExportZipResult } from "./buildFullExportZip";
+import { type ExportCompany, streamFullExportZip, type StreamExportZipResult } from "./buildFullExportZip";
 
 const EXPORT_FILE_PREFIX = "erp-export-";
 const DEFAULT_STALE_ARCHIVE_AGE_MS = 60 * 60 * 1000;
@@ -64,7 +64,7 @@ void cleanupStaleTemporaryExportArchives();
 
 export async function createTemporaryExportArchive(
   jobId: string,
-  companies: unknown[],
+  companies: readonly ExportCompany[],
   fromDate?: string,
   toDate?: string,
   onProgress?: (msg: string, level?: "info" | "success" | "warning" | "error") => void

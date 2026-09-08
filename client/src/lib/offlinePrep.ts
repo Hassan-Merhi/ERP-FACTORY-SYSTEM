@@ -1,4 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
+import { asRecord, isNonEmptyString, isRecord, toPositiveInteger } from "@shared/typeGuards";
 import { db, type CachedEntity, type OfflineMeta } from "./db";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -9,8 +10,14 @@ export interface DatasetSpec {
   endpoint: string;
   /** Dexie table key on `db` to bulk-save CachedEntities into, or null = offlinePackages */
   tableKey: keyof typeof db | null;
-  /** Extract array of items from API response (handles any response shape) */
-  extractItems: (data: any, companyId: number) => CachedEntity[];
+  /**
+   * Extract the cacheable items from an API response.
+   *
+   * The payload comes straight off the network and the endpoints do not agree
+   * on a wrapper shape, so it stays `unknown` and is narrowed by the helpers
+   * below rather than being asserted into a row type this module never checked.
+   */
+  extractItems: (data: unknown, companyId: number) => CachedEntity[];
 }
 
 export interface PrepPack {
@@ -51,7 +58,35 @@ export interface OfflineReadiness {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toEntity(id: string | number, companyId: number, data: any): CachedEntity {
+/** One item from a cached payload: an object whose individual fields are untrusted. */
+type CachedItem = Record<string, unknown>;
+
+/**
+ * The identifier to cache an item under.
+ *
+ * Ids arrive as either a number or a string depending on the endpoint. Anything
+ * else means the payload did not carry a usable id, so the caller's fallback is
+ * used instead of silently caching under "undefined".
+ */
+function entityId(value: unknown, fallback: string | number): string | number {
+  return typeof value === "string" || typeof value === "number" ? value : fallback;
+}
+
+/**
+ * Map a payload's items to cache entities keyed by each item's own id.
+ *
+ * An item that carries no usable id has no stable cache key. Writing all such
+ * items under one substitute key would have each overwrite the last, so they
+ * are skipped instead.
+ */
+function entitiesById(data: unknown, companyId: number, prefix = ""): CachedEntity[] {
+  return extractArray(data).flatMap((item) => {
+    const id = entityId(item.id, "");
+    return id === "" ? [] : [toEntity(prefix ? `${prefix}${id}` : id, companyId, item)];
+  });
+}
+
+function toEntity(id: string | number, companyId: number, data: unknown): CachedEntity {
   return {
     id,
     companyId,
@@ -61,8 +96,8 @@ function toEntity(id: string | number, companyId: number, data: any): CachedEnti
   };
 }
 
-function extractArray(data: any) {
-  if (Array.isArray(data)) return data;
+function extractArray(data: unknown): CachedItem[] {
+  if (Array.isArray(data)) return data.filter(isRecord);
   // Common wrapper shapes
   for (const key of [
     "items",
@@ -81,10 +116,11 @@ function extractArray(data: any) {
     "suppliers",
     "categories",
   ]) {
-    if (Array.isArray(data?.[key])) return data[key];
+    const wrapped = asRecord(data)?.[key];
+    if (Array.isArray(wrapped)) return wrapped.filter(isRecord);
   }
   // Single object — wrap it
-  if (data && typeof data === "object") return [data];
+  if (isRecord(data)) return [data];
   return [];
 }
 
@@ -101,14 +137,21 @@ function buildPacks(): PrepPack[] {
           label: "Current user",
           endpoint: "/api/auth/me",
           tableKey: "users",
-          extractItems: (data, cid) => [toEntity(data.id ?? "me", cid, data)],
+          extractItems: (data, cid) => [toEntity(entityId(asRecord(data)?.id, "me"), cid, data)],
         },
         {
           id: "companies",
           label: "Companies",
           endpoint: "/api/user/companies",
           tableKey: "companies",
-          extractItems: (data, _cid) => extractArray(data).map((c) => toEntity(c.id, c.id, c)),
+          extractItems: (data, _cid) =>
+            extractArray(data).flatMap((c) => {
+              // Companies are cached under their own id, so a payload without a
+              // numeric id has nowhere to go and is dropped rather than cached
+              // under a company scope that does not exist.
+              const companyId = toPositiveInteger(c.id);
+              return companyId === undefined ? [] : [toEntity(companyId, companyId, c)];
+            }),
         },
         {
           id: "companySettings",
@@ -130,7 +173,9 @@ function buildPacks(): PrepPack[] {
           endpoint: "/api/exchange-rates",
           tableKey: null,
           extractItems: (data, cid) =>
-            extractArray(data).map((r) => toEntity(`er_${r.id ?? Math.random()}`, cid, r)),
+            // Exchange-rate rows without an id still belong in the cache: the
+            // page reads them as a list rather than by key.
+            extractArray(data).map((r) => toEntity(`er_${entityId(r.id, Math.random())}`, cid, r)),
         },
       ],
     },
@@ -143,28 +188,28 @@ function buildPacks(): PrepPack[] {
           label: "Locations",
           endpoint: "/api/locations",
           tableKey: "locations",
-          extractItems: (data, cid) => extractArray(data).map((l) => toEntity(l.id, cid, l)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "ledgerAccounts",
           label: "Ledger accounts",
           endpoint: "/api/ledger-accounts",
           tableKey: "ledgerAccounts",
-          extractItems: (data, cid) => extractArray(data).map((a) => toEntity(a.id, cid, a)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "suppliers",
           label: "ERP suppliers",
           endpoint: "/api/suppliers",
           tableKey: "suppliers",
-          extractItems: (data, cid) => extractArray(data).map((s) => toEntity(s.id, cid, s)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "customers",
           label: "Customers",
           endpoint: "/api/customers",
           tableKey: "customers",
-          extractItems: (data, cid) => extractArray(data).map((c) => toEntity(c.id, cid, c)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "stockItems",
@@ -173,7 +218,7 @@ function buildPacks(): PrepPack[] {
           // for offline lookups.  The full 649 KB payload is not required here.
           endpoint: "/api/stock-items/light",
           tableKey: "stockItems",
-          extractItems: (data, cid) => extractArray(data).map((s) => toEntity(s.id, cid, s)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "inventory",
@@ -183,8 +228,12 @@ function buildPacks(): PrepPack[] {
           extractItems: (data, cid) =>
             // Backend returns paginated { data, ... } — handle both flat-array
             // and paginated-object formats for forward/backward compatibility.
-            (Array.isArray(data) ? data : (data?.data ?? [])).map((i: any) =>
-              toEntity(`${i.stockItemId ?? i.stock_item_id}_${i.locationId ?? i.location_id}`, cid, i)
+            (Array.isArray(data) ? data.filter(isRecord) : extractArray(asRecord(data)?.data ?? [])).map((i) =>
+              toEntity(
+                `${entityId(i.stockItemId ?? i.stock_item_id, "")}_${entityId(i.locationId ?? i.location_id, "")}`,
+                cid,
+                i
+              )
             ),
         },
       ],
@@ -198,21 +247,21 @@ function buildPacks(): PrepPack[] {
           label: "POS drafts",
           endpoint: "/api/pos/drafts",
           tableKey: null,
-          extractItems: (data, cid) => extractArray(data).map((d) => toEntity(`pos_draft_${d.id}`, cid, d)),
+          extractItems: (data, cid) => entitiesById(data, cid, "pos_draft_"),
         },
         {
           id: "baleProducts",
           label: "Bale products (ERP)",
           endpoint: "/api/bale-products",
           tableKey: null,
-          extractItems: (data, cid) => extractArray(data).map((b) => toEntity(`bp_${b.id}`, cid, b)),
+          extractItems: (data, cid) => entitiesById(data, cid, "bp_"),
         },
         {
           id: "employees",
           label: "Employees",
           endpoint: "/api/employees",
           tableKey: "employees",
-          extractItems: (data, cid) => extractArray(data).map((e) => toEntity(e.id, cid, e)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
       ],
     },
@@ -225,56 +274,56 @@ function buildPacks(): PrepPack[] {
           label: "Factory suppliers",
           endpoint: "/api/factory/suppliers",
           tableKey: "factorySuppliers",
-          extractItems: (data, cid) => extractArray(data).map((s) => toEntity(s.id, cid, s)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "factoryCategories",
           label: "Factory categories",
           endpoint: "/api/factory/categories",
           tableKey: "factoryCategories",
-          extractItems: (data, cid) => extractArray(data).map((c) => toEntity(c.id, cid, c)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "factoryBaleProducts",
           label: "Factory bale products",
           endpoint: "/api/factory/bale-products",
           tableKey: "factoryBaleProducts",
-          extractItems: (data, cid) => extractArray(data).map((b) => toEntity(b.id, cid, b)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "factoryContainers",
           label: "Containers",
           endpoint: "/api/factory/containers",
           tableKey: "factoryContainers",
-          extractItems: (data, cid) => extractArray(data).map((c) => toEntity(c.id, cid, c)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "factoryRawStock",
           label: "Raw stock entries",
           endpoint: "/api/factory/raw-stock",
           tableKey: "factoryRawStock",
-          extractItems: (data, cid) => extractArray(data).map((r) => toEntity(r.id, cid, r)),
+          extractItems: (data, cid) => entitiesById(data, cid),
         },
         {
           id: "factorySuppliersWithBalances",
           label: "Supplier balances",
           endpoint: "/api/factory/suppliers/with-balances",
           tableKey: null,
-          extractItems: (data, cid) => extractArray(data).map((s) => toEntity(`fsb_${s.id}`, cid, s)),
+          extractItems: (data, cid) => entitiesById(data, cid, "fsb_"),
         },
         {
           id: "factoryDaybook",
           label: "Factory daybook",
           endpoint: "/api/factory/daybook",
           tableKey: null,
-          extractItems: (data, cid) => extractArray(data).map((e) => toEntity(e.id ?? Math.random(), cid, e)),
+          extractItems: (data, cid) => extractArray(data).map((e) => toEntity(entityId(e.id, Math.random()), cid, e)),
         },
         {
           id: "factoryFxRates",
           label: "FX rates",
           endpoint: "/api/factory/fx-rates",
           tableKey: null,
-          extractItems: (data, cid) => extractArray(data).map((r) => toEntity(r.id ?? Math.random(), cid, r)),
+          extractItems: (data, cid) => extractArray(data).map((r) => toEntity(entityId(r.id, Math.random()), cid, r)),
         },
       ],
     },
@@ -538,18 +587,31 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
     if (supplierEntities.length > 0) {
       total += supplierEntities.length;
       for (const entity of supplierEntities) {
-        let supplier: any = {};
+        let supplier: CachedItem = {};
         try {
-          supplier = JSON.parse(entity.data);
+          supplier = asRecord(JSON.parse(entity.data)) ?? {};
         } catch {
           /* skip */
         }
-        const label = supplier.name || `Supplier ${supplier.id ?? entity.id}`;
+        const supplierId = toPositiveInteger(supplier.id);
+        const label = isNonEmptyString(supplier.name) ? supplier.name : `Supplier ${supplierId ?? entity.id}`;
+        const datasetId = `ledger_${supplierId ?? entity.id}`;
         emit("preparing", `Caching ledger: ${label}…`);
+
+        // A cached supplier without a usable id cannot address the ledger
+        // endpoint — this used to request `/suppliers/undefined/...` and wait
+        // for the server to reject it. Dropping the step and its slot in the
+        // progress total is equivalent and saves a round trip. Entities are
+        // cached by id, so this is unreachable for a cache this module wrote.
+        if (supplierId === undefined) {
+          total -= 1;
+          continue;
+        }
+
         try {
-          const r = await fetch(`/api/factory/suppliers/${supplier.id}/broker-statement`, { credentials: "include" });
+          const r = await fetch(`/api/factory/suppliers/${supplierId}/broker-statement`, { credentials: "include" });
           results.push({
-            datasetId: `ledger_${supplier.id}`,
+            datasetId,
             label,
             packId: "factory",
             success: r.ok,
@@ -558,7 +620,7 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
           });
         } catch {
           // Non-fatal: network down or route not yet visited — SW cache miss is fine
-          results.push({ datasetId: `ledger_${supplier.id}`, label, packId: "factory", success: true, count: 0 });
+          results.push({ datasetId, label, packId: "factory", success: true, count: 0 });
         }
       }
     }

@@ -15,15 +15,12 @@ export async function getAllSuppliers(
   if (search) {
     conditions.push(ilike(companyScopedSuppliers.legalName, `%${search}%`));
   }
-  let query = db
+  const query = db
     .select()
     .from(companyScopedSuppliers)
     .where(and(...conditions))
-    .orderBy(asc(companyScopedSuppliers.legalName)) as any;
-  if (limit) {
-    query = query.limit(limit);
-  }
-  return await query;
+    .orderBy(asc(companyScopedSuppliers.legalName));
+  return limit ? await query.limit(limit) : await query;
 }
 
 export async function getSupplierByCode(code: string, companyId?: number): Promise<CompanyScopedSupplier | undefined> {
@@ -46,11 +43,17 @@ export async function getSupplierById(id: number, companyId?: number): Promise<C
   return supplier;
 }
 
-export async function createSupplier(supplier: InsertCompanyScopedSupplier): Promise<CompanyScopedSupplier> {
-  const [created] = await db
-    .insert(companyScopedSuppliers)
-    .values(supplier as any)
-    .returning();
+/**
+ * `code` and `email` are optional on the Zod insert schema — callers may propose
+ * a code, and the form leaves email blank — but both columns are NOT NULL with
+ * no default. The supplier service already allocates a unique code and
+ * normalizes email to "" before calling, so requiring them here turns a
+ * would-be NOT NULL violation at runtime into a compile error.
+ */
+export type CreateSupplierInput = InsertCompanyScopedSupplier & { code: string; email: string };
+
+export async function createSupplier(supplier: CreateSupplierInput): Promise<CompanyScopedSupplier> {
+  const [created] = await db.insert(companyScopedSuppliers).values(supplier).returning();
   return created;
 }
 

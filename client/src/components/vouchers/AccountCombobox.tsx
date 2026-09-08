@@ -101,7 +101,8 @@ export function AccountCombobox({
     ...customers.map((c) => ({
       type: "customer" as const,
       id: c.id,
-      name: c.legalName || (c as any).name || "",
+      // legal_name is NOT NULL, so there is no second name field to fall back to.
+      name: c.legalName,
     })),
   ].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 

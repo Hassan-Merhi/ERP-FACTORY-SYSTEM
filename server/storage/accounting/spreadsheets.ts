@@ -28,7 +28,9 @@ export async function getSpreadsheet(id: number, companyId: number): Promise<sch
 export async function createSpreadsheet(
   companyId: number,
   name: string,
-  data: any,
+  // A jsonb column: the sheet payload is opaque to storage, and `updateSpreadsheet`
+  // already declares it this way.
+  data: unknown,
   createdBy?: string
 ): Promise<schema.Spreadsheet> {
   const [row] = await db

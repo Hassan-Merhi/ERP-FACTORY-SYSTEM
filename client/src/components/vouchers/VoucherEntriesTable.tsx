@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { UseFormReturn, UseFieldArrayReturn } from "react-hook-form";
+import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -20,17 +21,15 @@ const ENTRY_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   factorySupplier: { label: "F.Supp", cls: "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300" },
 };
 
-export interface VoucherEntry {
-  accountType: "ledger" | "bank" | "supplier" | "employee" | "fixedAsset" | "customer" | "factorySupplier";
-  accountId: number;
-  accountName: string;
-  amount: string;
-  narration?: string;
-}
+/**
+ * One row of the entries table, derived from the voucher form's own Zod schema
+ * so the table and the form cannot drift apart.
+ */
+export type VoucherEntry = VoucherFormData["entries"][number];
 
 interface VoucherEntriesTableProps {
-  form: UseFormReturn<any>;
-  fieldArray: UseFieldArrayReturn<any, "entries", "id">;
+  form: UseFormReturn<VoucherFormData>;
+  fieldArray: UseFieldArrayReturn<VoucherFormData, "entries", "id">;
   entries: VoucherEntry[];
   total: number;
   mode: "payment" | "receipt";
