@@ -71,10 +71,11 @@ function isContextOptionalPath(path: string): boolean {
  */
 const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", "/api/payroll/auto-calculate-bonuses"]);
 
-function isAuthorizedCrossCompanyPath(path: string): boolean {
+function isAuthorizedCrossCompanyPath(method: string, path: string): boolean {
   if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
   if (path === "/api/purchase-orders/parent-freight-accounts") return true;
   if (/^\/api\/purchase-orders\/\d+\/sync-parent-voucher$/.test(path)) return true;
+  if (method.toUpperCase() === "PATCH" && /^\/api\/purchase-orders\/\d+$/.test(path)) return true;
   return path === "/api/global/transactions" || path.startsWith("/api/global/transactions/");
 }
 
@@ -291,7 +292,7 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
       await assertCompaniesAccess(context.userId, secondaryCompanyIds);
     }
 
-    const useGlobalAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.path);
+    const useGlobalAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.method, req.path);
     const useReferenceAuthorizedCompanyScope = referenceCompanyId !== null;
     const useAuthorizedCompanyScope = useGlobalAuthorizedCompanyScope || useReferenceAuthorizedCompanyScope;
     const databaseAuthorizedCompanyIds = useGlobalAuthorizedCompanyScope
