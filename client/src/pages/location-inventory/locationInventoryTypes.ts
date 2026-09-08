@@ -23,8 +23,8 @@ export interface InventoryItem {
   locationId: number;
   stockItemId: number;
   quantity: string;
-  averageRate: string;
-  totalValue: string;
+  averageRate: string | null;
+  totalValue: string | null;
   stockItemCode: string;
   stockItemName: string;
   stockItemUom: string;
