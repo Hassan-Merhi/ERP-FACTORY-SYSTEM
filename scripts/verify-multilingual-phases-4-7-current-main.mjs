@@ -17,6 +17,7 @@ const backendAggregator = requireFile("client/src/i18n/backendMessagesPhase7Tran
 const backendPart9 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part9.ts");
 const backendPart10 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part10.ts");
 const backendPart11 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part11.ts");
+const backendPart12 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part12.ts");
 
 const bundles = [
   {
@@ -26,7 +27,7 @@ const bundles = [
     parts: 4,
     translatorImport: "translatePhase4SupplierPartnerText",
     test: "tests/phase4-supplier-partner-translations.test.ts",
-    expectedCount: 235,
+    expectedCount: 241,
   },
   {
     phase: 5,
@@ -50,12 +51,12 @@ const bundles = [
     phase: 7,
     name: "Backend Messages",
     aggregator: "client/src/i18n/backendMessagesPhase7Translations.ts",
-    parts: 11,
+    parts: 12,
     translatorImport: "translatePhase7BackendMessageText",
     test: "tests/phase7-backend-messages-translations.test.ts",
     // The current mainline catalogue contains the reviewed backend-message
     // entries recorded by the Phase 7 translation contract.
-    expectedCount: 614,
+    expectedCount: 643,
   },
 ];
 
@@ -114,6 +115,7 @@ for (const token of [
 for (const [part, source] of [
   [10, backendPart10],
   [11, backendPart11],
+  [12, backendPart12],
 ]) {
   if (!source.includes("export const backendMessagesPhase7TranslationsPart")) {
     failures.push(`Backend Messages part ${part} does not export its reviewed translation bundle`);

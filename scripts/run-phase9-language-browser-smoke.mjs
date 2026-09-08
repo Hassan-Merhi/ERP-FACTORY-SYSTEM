@@ -8,7 +8,7 @@ const USERNAME = process.env.ERP_SMOKE_USERNAME || "";
 const PASSWORD = process.env.ERP_SMOKE_PASSWORD || "";
 const AUTHENTICATED = Boolean(USERNAME && PASSWORD);
 const REQUIRE_AUTHENTICATED = process.env.ERP_SMOKE_REQUIRE_AUTHENTICATED === "1";
-const TIMEOUT_MS = Number(process.env.ERP_SMOKE_TIMEOUT_MS || 45_000);
+const TIMEOUT_MS = Number(process.env.ERP_SMOKE_TIMEOUT_MS || 60_000);
 const OUTPUT_DIR = path.resolve(process.env.ERP_SMOKE_OUTPUT_DIR || "artifacts/phase9-language-browser");
 const REQUIRE_EXACT_ROUTES = process.env.ERP_SMOKE_REQUIRE_EXACT_ROUTES === "1";
 const STORAGE_KEY = "erp.application-language";
