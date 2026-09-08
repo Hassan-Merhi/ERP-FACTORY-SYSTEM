@@ -9,6 +9,11 @@ import { getActiveInventoryCompanyId, parseInventoryListFilters } from "./invent
 export function registerInventoryListRoutes(app: Express) {
   app.get("/api/inventory", requireAuth, async (req, res) => {
     try {
+      // POS inventory access must stay location-scoped via
+      // /api/locations/:locationId/inventory, where assigned-location and cost
+      // permissions are both enforced. The company-wide list is not safe for POS.
+      if (req.user?.role === "POS") return res.status(403).json({ message: "Forbidden" });
+
       const companyId = getActiveInventoryCompanyId(req);
       const filters = parseInventoryListFilters(req);
       return res.json(await getInventoryPage(companyId, filters));
