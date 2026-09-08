@@ -7,8 +7,8 @@ interface InventoryItem {
   locationId: number;
   stockItemId: number;
   quantity: string;
-  averageRate: string;
-  totalValue: string;
+  averageRate: string | null;
+  totalValue: string | null;
   stockItemCode: string;
   stockItemName: string;
   stockItemUom: string;
@@ -47,6 +47,11 @@ export function InventoryTable({
   inventory,
   selectedGroup,
 }: InventoryTableProps) {
+  // The server is authoritative: unauthorized POS responses have cost fields
+  // nulled. If cost is present, this POS user has the explicit per-company
+  // inventory.cost.view permission.
+  const canViewCost = !posUser || inventory.some((item) => item.averageRate !== null && item.averageRate !== undefined);
+
   return (
     <Card className="border-none shadow-none bg-transparent">
       <div>
@@ -64,10 +69,10 @@ export function InventoryTable({
               ) : (
                 <>
                   <th className="text-left px-3 font-medium">Category</th>
-                  <th className={`text-right px-3 font-medium ${posUser ? "pr-6" : ""}`}>Quantity</th>
+                  <th className={`text-right px-3 font-medium ${canViewCost ? "" : "pr-6"}`}>Quantity</th>
                 </>
               )}
-              {!posUser && (
+              {canViewCost && (
                 <>
                   <th className="text-right px-3 font-medium">Avg Rate</th>
                   <th className="text-right px-3 pr-6 font-medium">Total Value</th>
@@ -79,7 +84,7 @@ export function InventoryTable({
             {filteredStockItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan={posUser ? (showMovement ? 5 : 3) : showMovement ? 7 : 5}
+                  colSpan={canViewCost ? (showMovement ? 7 : 5) : showMovement ? 5 : 3}
                   className="text-center py-8 text-muted-foreground"
                 >
                   {itemSearchTerm ? "No items found matching your search" : "No items in this group"}
@@ -164,13 +169,13 @@ export function InventoryTable({
                         <span className="ml-2 text-xs font-normal text-muted-foreground">BL</span>
                       </td>
                     )}
-                    {!posUser && (
+                    {canViewCost && (
                       <>
                         <td className="px-3 text-right font-mono text-sm text-muted-foreground">
-                          {formatAmount(parseFloat(item.averageRate))}
+                          {formatAmount(parseFloat(item.averageRate || "0"))}
                         </td>
                         <td className="px-3 text-right font-mono font-semibold">
-                          {formatAmount(parseFloat(item.totalValue))}
+                          {formatAmount(parseFloat(item.totalValue || "0"))}
                         </td>
                       </>
                     )}
@@ -220,7 +225,7 @@ export function InventoryTable({
                     <span className="ml-3">BL</span>
                   </td>
                 )}
-                {!posUser && (
+                {canViewCost && (
                   <>
                     <td className="px-3"></td>
                     <td className="px-3 text-right font-mono font-bold">
