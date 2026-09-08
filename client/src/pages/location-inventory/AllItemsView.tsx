@@ -7,7 +7,7 @@ interface AllItemsViewProps {
   totalItems: number;
   totalQty: number;
   totalValue: number;
-  posUser?: any;
+  canViewCost: boolean;
   formatAmount: (v: number) => string;
   itemSearchTerm: string;
   setItemSearchTerm: (v: string) => void;
@@ -24,7 +24,7 @@ export function AllItemsView({
   totalItems,
   totalQty,
   totalValue,
-  posUser,
+  canViewCost,
   formatAmount,
   itemSearchTerm,
   setItemSearchTerm,
@@ -46,7 +46,7 @@ export function AllItemsView({
           {Math.floor(totalQty).toLocaleString()}
         </span>{" "}
         BL total
-        {!posUser && (
+        {canViewCost && (
           <>
             <span className="text-muted-foreground">·</span>
             <span className="font-semibold text-foreground">{formatAmount(totalValue)}</span> total value
@@ -74,7 +74,7 @@ export function AllItemsView({
         setSelectedRowIndex={setSelectedRowIndex}
         navigate={navigate}
         formatAmount={formatAmount}
-        posUser={posUser}
+        canViewCost={canViewCost}
         itemSearchTerm={itemSearchTerm}
         inventory={inventory}
         selectedGroup={null}
