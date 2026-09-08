@@ -102,7 +102,13 @@ export function ensureSpAccessControlStorage(): Promise<void> {
   return storageReady;
 }
 
-function classifyPermission(req: Request): SpPermission {
+/**
+ * Exported so the classification can be asserted behaviourally. Ordering here
+ * is load-bearing — several Golden Coast paths would be claimed by the generic
+ * rules below them — and a string match on this file's source would not prove
+ * which rule actually wins.
+ */
+export function classifyPermission(req: Pick<Request, "path" | "method">): SpPermission {
   const path = req.path;
   const method = req.method.toUpperCase();
   if (
@@ -115,6 +121,10 @@ function classifyPermission(req: Request): SpPermission {
   if (path.includes("setup")) return "sp_setup";
   if (path.includes("opening-stock")) return "sp_opening_stock";
   if (path === "/golden-coast/phase9/hassan-savings-withdrawal" && method === "POST") return "sp_owner_withdrawal";
+  // Settling GC Sales Cash from equity moves partner capital, so it must be
+  // classified before the generic sales rule below: the path contains "sales",
+  // which would otherwise grant it to any sales-entry user via sp_sales_create.
+  if (path === "/golden-coast/equity-sales-cash-settlement" && method === "POST") return "sp_owner_withdrawal";
   if (
     path.includes("/report/") ||
     path.includes("/export") ||

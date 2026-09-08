@@ -14,6 +14,7 @@ import { registerSpGoldenCoastFreshStartHadiPaymentRoutes } from "./spGoldenCoas
 import { registerSpGoldenCoastPhase8ContainerOffloadRoutes } from "./spGoldenCoastPhase8ContainerOffloadRoutes";
 import { registerSpGoldenCoastPhase9HassanSavingsWithdrawalRoutes } from "./spGoldenCoastPhase9HassanSavingsWithdrawalRoutes";
 import { registerSpGoldenCoastPhase10SalesCashSettlementRoutes } from "./spGoldenCoastPhase10SalesCashSettlementRoutes";
+import { registerSpGoldenCoastEquitySalesCashSettlementRoutes } from "./spGoldenCoastEquitySalesCashSettlementRoutes";
 import { registerSpGoldenCoastPhase11MonthlyCloseRoutes } from "./spGoldenCoastPhase11MonthlyCloseRoutes";
 import { registerSpGoldenCoastLegacySalesGuard } from "./spGoldenCoastLegacySalesGuard";
 import { registerSpContainerRoutes } from "./spContainerRoutes";
@@ -92,6 +93,7 @@ export function registerSpRoutes(app: Express) {
   registerSpGoldenCoastPhase8ContainerOffloadRoutes(app);
   registerSpGoldenCoastPhase9HassanSavingsWithdrawalRoutes(app);
   registerSpGoldenCoastPhase10SalesCashSettlementRoutes(app);
+  registerSpGoldenCoastEquitySalesCashSettlementRoutes(app);
   // Mount before generic SP reports so Golden Coast's legacy client-calculated
   // profit-split mutation is retired before the old handler can run.
   registerSpGoldenCoastPhase11MonthlyCloseRoutes(app);

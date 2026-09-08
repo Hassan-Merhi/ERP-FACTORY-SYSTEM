@@ -468,15 +468,26 @@ async function handleReadiness(req: Request, res: Response): Promise<void> {
       resolveSharedChargesAccount(db, companyId, false),
     ]);
     const rawBalance = new Decimal(balanceUsd).toDecimalPlaces(2);
-    const payableBalance = gcSalesCashSettleablePayable(gcSalesCashPayableBalance(rawBalance.toFixed()));
+    // Credit-normal payable: positive is still owed, negative means overpaid.
+    // The settleable figure floors that at zero so an overpaid account never
+    // invites a further payment.
+    const payableBalanceUsd = gcSalesCashPayableBalance(rawBalance.toFixed());
+    const payableBalance = gcSalesCashSettleablePayable(payableBalanceUsd);
     res.json({
       ready: paymentAccounts.length > 0 && new Decimal(payableBalance).gt(0),
       companyId,
       gcSalesCashAccount,
+      // The panel reads settleableSalesCashUsd / rawSalesCashPayableBalanceUsd /
+      // receiptAccounts. The older payableSalesCashUsd, rawSalesCashDebitBalanceUsd
+      // and paymentAccounts spellings stay on the payload so already-shipped
+      // mobile and desktop builds keep reading the same readiness response.
+      settleableSalesCashUsd: payableBalance,
       payableSalesCashUsd: payableBalance,
+      rawSalesCashPayableBalanceUsd: payableBalanceUsd,
       rawSalesCashDebitBalanceUsd: rawBalance.toFixed(2),
       // A transfer fee can only be charged when Shared Charges is configured.
       sharedChargesAccount,
+      receiptAccounts: paymentAccounts,
       paymentAccounts,
       sourceType: GOLDEN_COAST_PHASE10_SOURCE_TYPE,
     });

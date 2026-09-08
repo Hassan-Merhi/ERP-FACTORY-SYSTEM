@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 1947,
+  "routeCount": 1949,
   "middlewareMountCount": 117,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1802,6 +1802,8 @@
     "POST /api/sp/golden-coast/phase9/hassan-savings-withdrawal [<anonymous> > <anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/sp/golden-coast/phase10/sales-cash-settlement/readiness [<anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/sp/golden-coast/phase10/sales-cash-settlement [<anonymous> > <anonymous> > requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/sp/golden-coast/equity-sales-cash-settlement/readiness [<anonymous> > requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/sp/golden-coast/equity-sales-cash-settlement [<anonymous> > <anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/sp/golden-coast/phase11/profit-splits/monthly-close/readiness [<anonymous> > requireAuth > requireNonPOS > readiness]",
     "POST /api/sp/golden-coast/phase11/profit-splits/monthly-close [<anonymous> > <anonymous> > requireAuth > requireNonPOS > closeMonth]",
     "POST /api/sp/profit-splits [<anonymous> > <anonymous> > requireAuth > retireLegacyGoldenCoastProfitSplit]",

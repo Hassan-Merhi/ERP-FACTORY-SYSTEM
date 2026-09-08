@@ -11,11 +11,14 @@ export const PHASE9_READINESS = "/api/sp/golden-coast/phase9/hassan-savings-with
 export const PHASE9_WITHDRAWAL = "/api/sp/golden-coast/phase9/hassan-savings-withdrawal";
 export const PHASE10_READINESS = "/api/sp/golden-coast/phase10/sales-cash-settlement/readiness";
 export const PHASE10_SETTLEMENT = "/api/sp/golden-coast/phase10/sales-cash-settlement";
+export const EQUITY_SALES_CASH_READINESS = "/api/sp/golden-coast/equity-sales-cash-settlement/readiness";
+export const EQUITY_SALES_CASH_SETTLEMENT = "/api/sp/golden-coast/equity-sales-cash-settlement";
 export const PHASE11_READINESS = "/api/sp/golden-coast/phase11/profit-splits/monthly-close/readiness";
 export const PHASE11_CLOSE = "/api/sp/golden-coast/phase11/profit-splits/monthly-close";
 
 export const HASSAN_SAVINGS_CONFIRMATION = "WITHDRAW HASSAN SAVINGS";
 export const MONTHLY_CLOSE_CONFIRMATION = "FINALIZE SP PROFIT SPLIT";
+export const EQUITY_SALES_CASH_CONFIRMATION = "SETTLE SALES CASH FROM EQUITY";
 
 export const GOLDEN_COAST_TABS = ["overview", "hadi", "savings", "sales-cash", "monthly-close"] as const;
 export type GoldenCoastTab = (typeof GOLDEN_COAST_TABS)[number];
@@ -79,6 +82,22 @@ export interface Phase10Readiness {
   /** Expense account a transfer fee is booked to; null when not configured. */
   sharedChargesAccount: { id: number; name: string } | null;
   receiptAccounts: CashAccountOption[];
+  sourceType: string;
+}
+
+export interface EquitySalesCashReadiness {
+  ready: boolean;
+  companyId: number;
+  gcSalesCashAccount: { id: number; name?: string };
+  hassanEquityAccount: { id: number; name?: string };
+  freshStartEquityAccount: { id: number; name?: string };
+  /** Credit-normal payable still owed to Fresh Start, floored at zero. */
+  payableSalesCashUsd: string;
+  /** Credit-normal Hassan Dakik Equity balance available to settle from. */
+  availableHassanEquityUsd: string;
+  freshStartEquityUsd: string;
+  /** One input drives both debits, so this is the lower of the two above. */
+  maxSettlementUsd: string;
   sourceType: string;
 }
 
