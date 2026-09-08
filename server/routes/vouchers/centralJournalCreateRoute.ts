@@ -20,6 +20,7 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import { erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { buildManualJournalPostingRequest } from "../../services/accounting/manualJournalPosting";
+import { transformGoldenCoastOwnerWithdrawalJournal } from "../../services/accounting/goldenCoastOwnerWithdrawalJournal";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
@@ -206,11 +207,27 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       return;
     }
 
+    const ownerWithdrawal = await transformGoldenCoastOwnerWithdrawalJournal({ companyId, entries });
+    const postingEntries = ownerWithdrawal.entries;
+
+    if (ownerWithdrawal.transformed) {
+      logger.info("Golden Coast owner withdrawal journal transformed", {
+        module: "vouchers",
+        action: "createJournalCentral",
+        companyId,
+        userId,
+        amountUsd: ownerWithdrawal.amountUsd,
+        gcSalesCashAccountId: ownerWithdrawal.gcSalesCashAccountId,
+        hassanEquityAccountId: ownerWithdrawal.hassanEquityAccountId,
+        clearingAccountId: ownerWithdrawal.clearingAccountId,
+      });
+    }
+
     const built = buildManualJournalPostingRequest({
       companyId,
       voucherNumber: `JOURNAL-${Date.now()}`,
       voucherDate,
-      entries,
+      entries: postingEntries,
       notes,
       currency: currency || "USD",
       exchangeRate: exchangeRate ?? null,
@@ -219,7 +236,7 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       actor: {
         userId: userId ?? null,
         username: req.session.username || "unknown",
-        reason: "Manual journal creation",
+        reason: ownerWithdrawal.transformed ? "Golden Coast owner withdrawal" : "Manual journal creation",
       },
     });
 
@@ -326,6 +343,7 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       companyId,
       voucherId: result.voucher.id,
       replayed: result.replayed,
+      ownerWithdrawal: ownerWithdrawal.transformed,
       durationMs: Date.now() - startedAt,
     });
 
@@ -335,6 +353,13 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       whatsapp,
       replayed: result.replayed,
       clientRequestId: built.clientRequestId,
+      ownerWithdrawal: ownerWithdrawal.transformed
+        ? {
+            amountUsd: ownerWithdrawal.amountUsd,
+            gcSalesCashAccountId: ownerWithdrawal.gcSalesCashAccountId,
+            hassanEquityAccountId: ownerWithdrawal.hassanEquityAccountId,
+          }
+        : undefined,
     });
   } catch (error: unknown) {
     logger.error("central journal create failed", {
