@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
@@ -15,7 +15,7 @@ import { eq, and, inArray } from "drizzle-orm";
 const MAX_INVENTORY_RATE_STOCK_ITEM_IDS = 250;
 const POS_INVENTORY_COST_PERMISSION = "inventory.cost.view";
 
-async function canViewInventoryCost(req: any): Promise<boolean> {
+async function canViewInventoryCost(req: Request): Promise<boolean> {
   if (req.user?.role !== "POS") return true;
   try {
     const permissions = await hydrateSessionNamedPermissions(db, req.session);
