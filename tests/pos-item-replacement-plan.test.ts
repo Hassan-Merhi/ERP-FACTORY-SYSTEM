@@ -16,13 +16,14 @@ function replacementMap(...rows: PosItemReplacementInput[]): Map<number, PosItem
 }
 
 describe("POS item replacement sale-line planning", () => {
-  it("turns a sold quantity of 5 into 4 old + 1 replacement while preserving the sale price", () => {
+  it("turns a sold quantity of 5 into 4 old + 1 replacement while preserving the sale price and total", () => {
     const original: PosReplacementSourceLine[] = [
       {
         id: 101,
         stockItemId: 10,
         quantity: "5.000",
         sellingPrice: "25.000000",
+        totalSales: "125.00",
       },
     ];
 
@@ -37,11 +38,13 @@ describe("POS item replacement sale-line planning", () => {
         stockItemId: 10,
         quantity: "4",
         sellingPrice: "25.000000",
+        totalSales: "100.00",
       },
       {
         stockItemId: 20,
         quantity: "1",
         sellingPrice: "25.000000",
+        totalSales: "25.00",
       },
     ]);
     expect(result.replacedQuantity).toBe("1");
@@ -54,6 +57,7 @@ describe("POS item replacement sale-line planning", () => {
         stockItemId: 30,
         quantity: "5.000",
         sellingPrice: "10.500000",
+        totalSales: "52.50",
       },
     ];
 
@@ -67,24 +71,27 @@ describe("POS item replacement sale-line planning", () => {
         stockItemId: 31,
         quantity: "5",
         sellingPrice: "10.500000",
+        totalSales: "52.50",
       },
     ]);
     expect(result.replacedQuantity).toBe("5");
   });
 
-  it("leaves unrelated POS lines unchanged and preserves their ids", () => {
+  it("leaves unrelated POS lines unchanged and preserves their ids and rounded totals", () => {
     const original: PosReplacementSourceLine[] = [
       {
         id: 301,
         stockItemId: 40,
         quantity: "3.000",
         sellingPrice: "8.000000",
+        totalSales: "24.00",
       },
       {
         id: 302,
         stockItemId: 50,
         quantity: "2.000",
         sellingPrice: "12.000000",
+        totalSales: "24.00",
       },
     ];
 
@@ -98,6 +105,7 @@ describe("POS item replacement sale-line planning", () => {
       stockItemId: 50,
       quantity: "2.000",
       sellingPrice: "12.000000",
+      totalSales: "24.00",
     });
   });
 
@@ -108,6 +116,7 @@ describe("POS item replacement sale-line planning", () => {
         stockItemId: 60,
         quantity: "6.000",
         sellingPrice: "15.000000",
+        totalSales: "90.00",
       },
     ];
 
@@ -125,18 +134,55 @@ describe("POS item replacement sale-line planning", () => {
         stockItemId: 60,
         quantity: "3",
         sellingPrice: "15.000000",
+        totalSales: "45.00",
       },
       {
         stockItemId: 61,
         quantity: "2",
         sellingPrice: "15.000000",
+        totalSales: "30.00",
       },
       {
         stockItemId: 62,
         quantity: "1",
         sellingPrice: "15.000000",
+        totalSales: "15.00",
       },
     ]);
     expect(result.replacedQuantity).toBe("3");
+  });
+
+  it("keeps the original rounded cents when a fractional line is split", () => {
+    const original: PosReplacementSourceLine[] = [
+      {
+        id: 501,
+        stockItemId: 70,
+        quantity: "1.000",
+        sellingPrice: "0.030000",
+        totalSales: "0.03",
+      },
+    ];
+
+    const result = buildPosReplacementSaleItems(
+      original,
+      replacementMap({ saleItemId: 501, replacementStockItemId: 71, quantity: 0.5 })
+    );
+
+    expect(result.items).toEqual([
+      {
+        id: 501,
+        stockItemId: 70,
+        quantity: "0.5",
+        sellingPrice: "0.030000",
+        totalSales: "0.02",
+      },
+      {
+        stockItemId: 71,
+        quantity: "0.5",
+        sellingPrice: "0.030000",
+        totalSales: "0.01",
+      },
+    ]);
+    expect(result.items.reduce((sum, row) => sum + Number(row.totalSales), 0)).toBeCloseTo(0.03, 10);
   });
 });
