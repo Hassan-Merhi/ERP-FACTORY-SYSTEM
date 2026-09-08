@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { toInventoryDecimal } from "../../lib/inventoryMath";
+import { POS_INTERNAL_TOTAL_SALES_OVERRIDE } from "./edit/posEditInternalSymbols";
 
 export interface PosItemReplacementInput {
   saleItemId: number;
@@ -22,6 +23,7 @@ export interface PosReplacementEditedLine {
   sellingPrice: string;
   /** Exact rounded amount allocated from the original sale line. */
   totalSales?: string;
+  [POS_INTERNAL_TOTAL_SALES_OVERRIDE]?: true;
 }
 
 /**
@@ -51,6 +53,7 @@ export function buildPosReplacementSaleItems(
         quantity: originalItem.quantity,
         sellingPrice: originalItem.sellingPrice,
         totalSales: originalItem.totalSales,
+        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
       });
       continue;
     }
@@ -69,6 +72,7 @@ export function buildPosReplacementSaleItems(
         stockItemId: originalItem.stockItemId,
         quantity: remainingQty.toString(),
         sellingPrice: originalItem.sellingPrice,
+        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
       });
     }
 
@@ -77,6 +81,7 @@ export function buildPosReplacementSaleItems(
         stockItemId: replacement.replacementStockItemId,
         quantity: toInventoryDecimal(replacement.quantity).toString(),
         sellingPrice: originalItem.sellingPrice,
+        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
       });
       replacedQuantity = replacedQuantity.plus(toInventoryDecimal(replacement.quantity));
     }
