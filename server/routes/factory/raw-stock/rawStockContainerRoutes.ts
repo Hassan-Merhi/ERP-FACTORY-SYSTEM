@@ -5,8 +5,12 @@ import { getClientDate } from "../../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
-import { applyPostOffloadChargeMutation, type AccountingContext } from "../../../services/factory/post-offload-charge";
-import { cascadeContainerCostChange } from "../../../services/factory/rawStockCostCascade";
+import {
+  applyPostOffloadChargeMutation,
+  type AccountingContext,
+  type PostOffloadMutationResult,
+} from "../../../services/factory/post-offload-charge";
+import { cascadeContainerCostChange, type CascadeResult } from "../../../services/factory/rawStockCostCascade";
 import { computeCorrectContainerCost } from "../../../services/factory/raw-stock-recalc";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
 import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
@@ -326,7 +330,7 @@ export function registerRawStockContainerRoutes(app: Express) {
       const oldContainerTotalUsd = parseFloat(container.finalPayableAmountUsd || "0");
 
       let lastResult = null;
-      const allCascadeResults: any[] = [];
+      const allCascadeResults: CascadeResult[] = [];
 
       await db.transaction(async (tx) => {
         for (let i = 0; i < validCharges.length; i++) {
@@ -396,7 +400,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         supplierLockedRateOldExact: r.supplierLockedRateBefore,
         supplierLockedRateNewExact: r.supplierLockedRateAfter,
         rawStockRateWasStale: false,
-        affectedBatches: (cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+        affectedBatches: (cascadeResult?.affectedBatches ?? []).map((b) => ({
           batchId: b.batchId,
           batchCode: b.batchCode,
           status: b.status ?? null,
@@ -528,7 +532,10 @@ export function registerRawStockContainerRoutes(app: Express) {
         }
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // Assigned inside the transaction callback, so TypeScript cannot see the
+        // assignment: declared optional and asserted once after the await instead
+        // of typed `any`.
+        let mutResult: PostOffloadMutationResult | undefined;
 
         try {
           await db.transaction(async (tx) => {
@@ -559,13 +566,16 @@ export function registerRawStockContainerRoutes(app: Express) {
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
+        // Unreachable: db.transaction either assigns mutResult or rejects into
+        // the catch above. The check exists so the result is non-optional below.
+        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
 
         res.json({
           message: "Post-offload charge updated",
           ...mutResult,
           supplierLockedRateOldExact: mutResult.supplierLockedRateBefore,
           supplierLockedRateNewExact: mutResult.supplierLockedRateAfter,
-          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b) => ({
             batchId: b.batchId,
             batchCode: b.batchCode,
             status: b.status ?? null,
@@ -608,7 +618,10 @@ export function registerRawStockContainerRoutes(app: Express) {
 
         const txDate = undoDate || getClientDate(req);
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // Assigned inside the transaction callback, so TypeScript cannot see the
+        // assignment: declared optional and asserted once after the await instead
+        // of typed `any`.
+        let mutResult: PostOffloadMutationResult | undefined;
 
         try {
           await db.transaction(async (tx) => {
@@ -628,6 +641,9 @@ export function registerRawStockContainerRoutes(app: Express) {
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
+        // Unreachable: db.transaction either assigns mutResult or rejects into
+        // the catch above. The check exists so the result is non-optional below.
+        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
 
         if (mutResult.alreadyUndone) {
           return res.json({ message: "Charge was already undone", alreadyUndone: true, chargeId });
@@ -638,7 +654,7 @@ export function registerRawStockContainerRoutes(app: Express) {
           ...mutResult,
           supplierLockedRateOldExact: mutResult.supplierLockedRateBefore,
           supplierLockedRateNewExact: mutResult.supplierLockedRateAfter,
-          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b) => ({
             batchId: b.batchId,
             batchCode: b.batchCode,
             status: b.status ?? null,
@@ -683,7 +699,10 @@ export function registerRawStockContainerRoutes(app: Express) {
         if (!container) return res.status(404).json({ message: "Container not found" });
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // Assigned inside the transaction callback, so TypeScript cannot see the
+        // assignment: declared optional and asserted once after the await instead
+        // of typed `any`.
+        let mutResult: PostOffloadMutationResult | undefined;
 
         try {
           await db.transaction(async (tx) => {
@@ -703,6 +722,9 @@ export function registerRawStockContainerRoutes(app: Express) {
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
+        // Unreachable: db.transaction either assigns mutResult or rejects into
+        // the catch above. The check exists so the result is non-optional below.
+        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
 
         res.json({
           message: "Legacy charge supplier rate rebuilt successfully",

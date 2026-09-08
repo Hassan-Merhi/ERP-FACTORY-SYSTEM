@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db, pool } from "../../db";
 import { requireAuth } from "../../auth";
+import { isRecord } from "@shared/typeGuards";
 import { statusBuilderSheets } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
 import multer from "multer";
@@ -17,23 +18,28 @@ const upload = multer({ storage: multer.memoryStorage() });
 type CellVal = number | string | null;
 type SRow = { id?: string; label: string; cells: unknown[] };
 
-function getColLabel(col: any): string {
+function getColLabel(col: unknown): string {
   if (typeof col === "string") return col;
-  return col?.label ?? "";
+  if (!isRecord(col)) return "";
+  const label = col.label;
+  return label === null || label === undefined ? "" : String(label);
 }
 
-function getCellRawValue(cell: any): CellVal {
+function getCellRawValue(cell: unknown): CellVal {
   if (cell === null || cell === undefined) return null;
   if (typeof cell === "number" || typeof cell === "string") return cell;
-  if (typeof cell === "object" && "value" in cell) return cell.value ?? null;
+  if (isRecord(cell) && "value" in cell) {
+    const value = cell.value;
+    return typeof value === "number" || typeof value === "string" ? value : null;
+  }
   return null;
 }
 
 // Human-readable representation of a cell for the history log: manual values
 // are shown as-is, linked cells are shown as "→ linked" since the resolved
 // number lives on another sheet and isn't meaningful to diff here.
-function describeCellForLog(cell: any): string {
-  if (cell && typeof cell === "object" && "value" in cell) {
+function describeCellForLog(cell: unknown): string {
+  if (isRecord(cell) && "value" in cell) {
     if (cell.link) return "→ linked";
     return cell.value === null || cell.value === undefined ? "" : String(cell.value);
   }
@@ -45,9 +51,9 @@ async function logStatusBuilderChanges(
   sheetId: number,
   sheetName: string,
   oldRows: SRow[],
-  oldColumns: any[],
+  oldColumns: unknown[],
   newRows: SRow[],
-  newColumns: any[],
+  newColumns: unknown[],
   changedBy: string | undefined
 ) {
   const colLabels = newColumns.map(getColLabel);
@@ -155,7 +161,7 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
   });
 
   // ── Update a sheet ─────────────────────────────────────────────────────────
-  app.put("/api/factory/status-builder/sheets/:id", requireAuth, async (req: any, res) => {
+  app.put("/api/factory/status-builder/sheets/:id", requireAuth, async (req: import("express").Request, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const id = parseId(req.params.id);
@@ -191,10 +197,10 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
           id,
           updated.name,
           (existing.rows as SRow[]) ?? [],
-          (existing.columns as any[]) ?? [],
+          Array.isArray(existing.columns) ? (existing.columns as unknown[]) : [],
           rows as SRow[],
           columns ?? existing.columns,
-          req.user?.username || req.user?.name
+          req.user?.username
         ).catch((e) => logger.error("[StatusBuilder] history log failed:", { error: e.message }));
       }
 
@@ -269,7 +275,7 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
       for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
         const sheetName = wb.SheetNames[sheetIdx];
         const ws = wb.Sheets[sheetName];
-        const rawData: any[][] = xlsxUtils.sheet_to_json(ws, { header: 1, defval: null });
+        const rawData = xlsxUtils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
 
         if (!rawData || rawData.length === 0) {
           const [s] = await db
@@ -385,7 +391,7 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
       const wb = xlsxUtils.book_new();
 
       for (const sheet of sheets) {
-        const rawColumns = (sheet.columns as any[]) ?? [];
+        const rawColumns: unknown[] = Array.isArray(sheet.columns) ? sheet.columns : [];
         const rows = (sheet.rows as SRow[]) ?? [];
         const colLabels = rawColumns.map(getColLabel);
 

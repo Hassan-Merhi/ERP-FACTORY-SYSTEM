@@ -5,6 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
+import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
@@ -30,7 +31,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
   app.post(
     "/api/factory/raw-stock/recalculate-used",
     requireAuth,
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       try {
         if (!checkFactoryAdmin(req, res)) return;
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -208,8 +209,8 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
 
           // Single audit record for the whole batch
           await logAudit({
-            userId: req.session.userId,
-            username: req.session.username || req.session.userId,
+            userId: requireSessionUserId(req),
+            username: req.session.username || requireSessionUserId(req),
             companyId,
             action: "update",
             tableName: "factory_raw_stock",
@@ -243,7 +244,7 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
   app.post(
     "/api/factory/raw-stock/recalculate-bale-costs",
     requireAuth,
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       try {
         if (!checkFactoryAdmin(req, res)) return;
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -318,8 +319,8 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
         }
 
         await logAudit({
-          userId: req.session.userId,
-          username: req.session.username || req.session.userId,
+          userId: requireSessionUserId(req),
+          username: req.session.username || requireSessionUserId(req),
           companyId,
           action: "update",
           tableName: "factory_bales",

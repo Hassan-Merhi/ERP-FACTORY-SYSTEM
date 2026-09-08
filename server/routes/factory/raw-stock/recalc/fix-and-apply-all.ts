@@ -5,6 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
+import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
@@ -63,7 +64,7 @@ export function registerRawStockRecalcApplyAllRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/apply-all-safe",
     requireAuth,
     requireRole(...ADMIN_ROLES),
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
@@ -108,7 +109,7 @@ export function registerRawStockRecalcApplyAllRoutes(app: Express) {
           const tokenPayload: ApplyAllSafeTokenPayload = {
             companyId,
             safeContainerIds: dryRun.safeContainerIds,
-            userId: req.session.userId,
+            userId: requireSessionUserId(req),
             expiresAt: Date.now() + REPAIR_TOKEN_TTL_MS,
             includeHistoricalContainers: wantsHistorical,
             includeCompletedBatches: wantsCompletedBatches,
@@ -159,8 +160,8 @@ export function registerRawStockRecalcApplyAllRoutes(app: Express) {
           onAudit: async (tx, result) => {
             await logAudit(
               {
-                userId: req.session.userId,
-                username: req.session.username || req.session.userId,
+                userId: requireSessionUserId(req),
+                username: req.session.username || requireSessionUserId(req),
                 companyId,
                 action: "update",
                 tableName: "factory_raw_stock",

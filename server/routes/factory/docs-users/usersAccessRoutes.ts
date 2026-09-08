@@ -44,75 +44,82 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
   // Factory User Management
   // ───────────────────────────────────────────────
 
-  app.get("/api/factory/users", requireAuth, async (req: any, res: import("express").Response) => {
-    try {
-      // Factory user management is tenant scoped. Never use a cached/pinned
-      // company different from the authenticated request company here; Phase 3
-      // RLS and the application boundary must agree on the same tenant.
-      const companyId = req.session.currentCompanyId;
-      const currentRole = req.session.currentRole;
-      const requestRole = req.user?.role;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!canManageFactoryUsers(currentRole, requestRole)) {
-        return res.status(403).json({ message: "Only Admin or Owner can manage users" });
+  app.get(
+    "/api/factory/users",
+    requireAuth,
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        // Factory user management is tenant scoped. Never use a cached/pinned
+        // company different from the authenticated request company here; Phase 3
+        // RLS and the application boundary must agree on the same tenant.
+        const companyId = req.session.currentCompanyId;
+        const currentRole = req.session.currentRole;
+        const requestRole = req.user?.role;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!canManageFactoryUsers(currentRole, requestRole)) {
+          return res.status(403).json({ message: "Only Admin or Owner can manage users" });
+        }
+
+        const companyUsers = await db
+          .select({
+            id: users.id,
+            username: users.username,
+            active: users.active,
+            createdAt: users.createdAt,
+            companyRole: userCompanyRoles.role,
+          })
+          .from(users)
+          .innerJoin(
+            userCompanyRoles,
+            and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId))
+          );
+
+        const isDeveloper = requesterIsDeveloper(currentRole, requestRole);
+        const visibleUsers = companyUsers.filter((user) => isDeveloper || user.companyRole !== "Developer");
+
+        const profiles = await db
+          .select()
+          .from(factoryUserProfiles)
+          .where(eq(factoryUserProfiles.companyId, companyId));
+        const access = await db
+          .select()
+          .from(factoryUserPageAccess)
+          .where(eq(factoryUserPageAccess.companyId, companyId));
+
+        const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
+        const accessMap = new Map<string, string[]>();
+        access.forEach((entry) => {
+          if (!accessMap.has(entry.userId)) accessMap.set(entry.userId, []);
+          accessMap.get(entry.userId)!.push(entry.pageKey);
+        });
+
+        const result = visibleUsers.map(({ companyRole: _companyRole, ...user }) => {
+          const profile = profileMap.get(user.id);
+          return {
+            ...user,
+            displayName: profile?.displayName || null,
+            hasErpAccess: profile?.hasErpAccess ?? true,
+            hasFactoryAccess: profile?.hasFactoryAccess ?? true,
+            hiddenCostFields: profile?.hiddenCostFields ?? [],
+            hideAllCosts: profile?.hideAllCosts ?? false,
+            pageAccess: accessMap.get(user.id) || [],
+          };
+        });
+
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error("Error fetching factory users:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const companyUsers = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          active: users.active,
-          createdAt: users.createdAt,
-          companyRole: userCompanyRoles.role,
-        })
-        .from(users)
-        .innerJoin(
-          userCompanyRoles,
-          and(eq(userCompanyRoles.userId, users.id), eq(userCompanyRoles.companyId, companyId))
-        );
-
-      const isDeveloper = requesterIsDeveloper(currentRole, requestRole);
-      const visibleUsers = companyUsers.filter((user) => isDeveloper || user.companyRole !== "Developer");
-
-      const profiles = await db.select().from(factoryUserProfiles).where(eq(factoryUserProfiles.companyId, companyId));
-      const access = await db
-        .select()
-        .from(factoryUserPageAccess)
-        .where(eq(factoryUserPageAccess.companyId, companyId));
-
-      const profileMap = new Map(profiles.map((profile) => [profile.userId, profile]));
-      const accessMap = new Map<string, string[]>();
-      access.forEach((entry) => {
-        if (!accessMap.has(entry.userId)) accessMap.set(entry.userId, []);
-        accessMap.get(entry.userId)!.push(entry.pageKey);
-      });
-
-      const result = visibleUsers.map(({ companyRole: _companyRole, ...user }) => {
-        const profile = profileMap.get(user.id);
-        return {
-          ...user,
-          displayName: profile?.displayName || null,
-          hasErpAccess: profile?.hasErpAccess ?? true,
-          hasFactoryAccess: profile?.hasFactoryAccess ?? true,
-          hiddenCostFields: profile?.hiddenCostFields ?? [],
-          hideAllCosts: profile?.hideAllCosts ?? false,
-          pageAccess: accessMap.get(user.id) || [],
-        };
-      });
-
-      res.json(result);
-    } catch (error: unknown) {
-      logger.error("Error fetching factory users:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.post(
     "/api/factory/users",
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -191,7 +198,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -325,7 +332,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -369,103 +376,118 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     }
   );
 
-  app.get("/api/factory/my-access", requireAuth, async (req: any, res: import("express").Response) => {
-    try {
-      const userId = req.session.userId;
-      const currentCompanyId = req.session.currentCompanyId;
-      const pinnedFactoryId = req.session.factoryCompanyId;
-      const cachedFactoryName = req.session.factoryCompanyName as string | undefined;
-      const role = req.session.currentRole;
+  app.get(
+    "/api/factory/my-access",
+    requireAuth,
+    async (req: import("express").Request, res: import("express").Response) => {
+      try {
+        const userId = req.session.userId;
+        const currentCompanyId = req.session.currentCompanyId;
+        const pinnedFactoryId = req.session.factoryCompanyId;
+        const cachedFactoryName = req.session.factoryCompanyName;
+        const role = req.session.currentRole;
 
-      if (!currentCompanyId || !userId) return res.status(400).json({ message: "No company or user" });
+        if (!currentCompanyId || !userId) return res.status(400).json({ message: "No company or user" });
 
-      // A pinned factory company is only a cache hint. It can never widen the
-      // authenticated tenant context. Cross-company fallback to the first active
-      // factory used to let a normal session discover/use another tenant.
-      if (
-        pinnedFactoryId === currentCompanyId &&
-        cachedFactoryName &&
-        (role === "Admin" || role === "Owner" || role === "Developer")
-      ) {
+        // A pinned factory company is only a cache hint. It can never widen the
+        // authenticated tenant context. Cross-company fallback to the first active
+        // factory used to let a normal session discover/use another tenant.
+        if (
+          pinnedFactoryId === currentCompanyId &&
+          cachedFactoryName &&
+          (role === "Admin" || role === "Owner" || role === "Developer")
+        ) {
+          res.set("Cache-Control", "private, max-age=120");
+          return res.json({
+            fullAccess: true,
+            pageKeys: [],
+            hasErpAccess: true,
+            hasFactoryAccess: true,
+            hiddenCostFields: [],
+            hideAllCosts: false,
+            companyId: currentCompanyId,
+            companyName: cachedFactoryName,
+          });
+        }
+
+        const [current] = await db
+          .select({ id: companies.id, name: companies.name, companyType: companies.companyType })
+          .from(companies)
+          .where(eq(companies.id, currentCompanyId))
+          .limit(1);
+        if (!current) return res.status(404).json({ message: "Company not found" });
+
+        const companyId = current.id;
+        const companyName = current.name;
+        if (current.companyType === "factory") {
+          req.session.factoryCompanyId = companyId;
+          req.session.factoryCompanyName = companyName;
+        } else {
+          delete req.session.factoryCompanyId;
+          delete req.session.factoryCompanyName;
+        }
+
+        if (role === "Admin" || role === "Owner" || role === "Developer") {
+          res.set("Cache-Control", "private, max-age=120");
+          return res.json({
+            fullAccess: true,
+            pageKeys: [],
+            hasErpAccess: true,
+            hasFactoryAccess: true,
+            hiddenCostFields: [],
+            hideAllCosts: false,
+            companyId,
+            companyName,
+          });
+        }
+
+        const [profile] = await db
+          .select({
+            hasErpAccess: factoryUserProfiles.hasErpAccess,
+            hasFactoryAccess: factoryUserProfiles.hasFactoryAccess,
+            hiddenCostFields: factoryUserProfiles.hiddenCostFields,
+            hideAllCosts: factoryUserProfiles.hideAllCosts,
+          })
+          .from(factoryUserProfiles)
+          .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, userId)));
+
+        const hasErpAccess = profile ? profile.hasErpAccess : true;
+        const hasFactoryAccess = profile ? profile.hasFactoryAccess : true;
+        const hideAllCosts = profile?.hideAllCosts ?? false;
+        const ALL_COST_KEYS = [
+          "inventory_avg_rate",
+          "inventory_total_value",
+          "inventory_sell_price",
+          "inventory_sell_value",
+          "bale_history_cost_per_kg",
+          "bale_history_total_cost",
+          "bales_list_cost_per_kg",
+          "hide_proforma_price",
+        ];
+        const hiddenCostFields = hideAllCosts ? ALL_COST_KEYS : (profile?.hiddenCostFields ?? []);
+
+        const access = await db
+          .select({ pageKey: factoryUserPageAccess.pageKey })
+          .from(factoryUserPageAccess)
+          .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
+
         res.set("Cache-Control", "private, max-age=120");
-        return res.json({
-          fullAccess: true,
-          pageKeys: [],
-          hasErpAccess: true,
-          hasFactoryAccess: true,
-          hiddenCostFields: [],
-          hideAllCosts: false,
-          companyId: currentCompanyId,
-          companyName: cachedFactoryName,
-        });
-      }
+        if (access.length === 0) {
+          return res.json({
+            fullAccess: true,
+            pageKeys: [],
+            hasErpAccess,
+            hasFactoryAccess,
+            hiddenCostFields,
+            hideAllCosts,
+            companyId,
+            companyName,
+          });
+        }
 
-      const [current] = await db
-        .select({ id: companies.id, name: companies.name, companyType: companies.companyType })
-        .from(companies)
-        .where(eq(companies.id, currentCompanyId))
-        .limit(1);
-      if (!current) return res.status(404).json({ message: "Company not found" });
-
-      const companyId = current.id;
-      const companyName = current.name;
-      if (current.companyType === "factory") {
-        req.session.factoryCompanyId = companyId;
-        req.session.factoryCompanyName = companyName;
-      } else {
-        delete req.session.factoryCompanyId;
-        delete req.session.factoryCompanyName;
-      }
-
-      if (role === "Admin" || role === "Owner" || role === "Developer") {
-        res.set("Cache-Control", "private, max-age=120");
-        return res.json({
-          fullAccess: true,
-          pageKeys: [],
-          hasErpAccess: true,
-          hasFactoryAccess: true,
-          hiddenCostFields: [],
-          hideAllCosts: false,
-          companyId,
-          companyName,
-        });
-      }
-
-      const [profile] = await db
-        .select({
-          hasErpAccess: factoryUserProfiles.hasErpAccess,
-          hasFactoryAccess: factoryUserProfiles.hasFactoryAccess,
-          hiddenCostFields: factoryUserProfiles.hiddenCostFields,
-          hideAllCosts: factoryUserProfiles.hideAllCosts,
-        })
-        .from(factoryUserProfiles)
-        .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, userId)));
-
-      const hasErpAccess = profile ? profile.hasErpAccess : true;
-      const hasFactoryAccess = profile ? profile.hasFactoryAccess : true;
-      const hideAllCosts = profile?.hideAllCosts ?? false;
-      const ALL_COST_KEYS = [
-        "inventory_avg_rate",
-        "inventory_total_value",
-        "inventory_sell_price",
-        "inventory_sell_value",
-        "bale_history_cost_per_kg",
-        "bale_history_total_cost",
-        "bales_list_cost_per_kg",
-        "hide_proforma_price",
-      ];
-      const hiddenCostFields = hideAllCosts ? ALL_COST_KEYS : (profile?.hiddenCostFields ?? []);
-
-      const access = await db
-        .select({ pageKey: factoryUserPageAccess.pageKey })
-        .from(factoryUserPageAccess)
-        .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
-
-      res.set("Cache-Control", "private, max-age=120");
-      if (access.length === 0) {
-        return res.json({
-          fullAccess: true,
-          pageKeys: [],
+        res.json({
+          fullAccess: false,
+          pageKeys: access.map((entry) => entry.pageKey),
           hasErpAccess,
           hasFactoryAccess,
           hiddenCostFields,
@@ -473,21 +495,10 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           companyId,
           companyName,
         });
+      } catch (error: unknown) {
+        logger.error("Error fetching my access:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      res.json({
-        fullAccess: false,
-        pageKeys: access.map((entry) => entry.pageKey),
-        hasErpAccess,
-        hasFactoryAccess,
-        hiddenCostFields,
-        hideAllCosts,
-        companyId,
-        companyName,
-      });
-    } catch (error: unknown) {
-      logger.error("Error fetching my access:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

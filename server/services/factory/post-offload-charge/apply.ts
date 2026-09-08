@@ -25,6 +25,7 @@ import {
 } from "./legacy-links";
 import { computeRemainingFraction, loadActiveCharges, loadCostInputs } from "./loaders";
 import { PostOffloadMutationParams, PostOffloadMutationResult } from "./types";
+import type { CascadeResult } from "../rawStockCostCascade";
 
 export async function applyPostOffloadChargeMutation(
   tx: DbTransaction,
@@ -402,7 +403,7 @@ export async function applyPostOffloadChargeMutation(
 
     const isLegacyUnknownBaseline =
       chargeRow.supplierLockedRateBefore === null && params.legacyBaselineRate !== undefined;
-    let cascadeResult = null;
+    let cascadeResult: CascadeResult | null = null;
 
     // Update container cost
     await updateContainerCost(tx, containerId, newCost);
@@ -737,7 +738,7 @@ export async function applyPostOffloadChargeMutation(
       ? new Decimal(supplierLockedRateBefore).times(dAuthKg).toFixed(6)
       : null;
 
-    let cascadeResult: any;
+    let cascadeResult: CascadeResult;
     const isLegacyUnknownBaseline =
       chargeRow.supplierLockedRateBefore === null && params.legacyBaselineRate !== undefined;
 
