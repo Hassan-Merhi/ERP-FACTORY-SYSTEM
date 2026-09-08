@@ -7,6 +7,7 @@
  */
 import type { Express } from "express";
 import { registerGoldenCoastAccountsEquityPresentation } from "./golden-coast-equity-presentation";
+import { registerGoldenCoastVoucherSidebarPresentation } from "./golden-coast-voucher-sidebar-presentation";
 import { registerAccountListRoutes } from "./all";
 import { registerAccountPayableRoutes } from "./payables";
 import { registerAccountLedgerListRoutes } from "./all-ledger";
@@ -20,6 +21,7 @@ export function registerAccountRoutes(app: Express) {
   registerAccountListRoutes(app);
   registerAccountPayableRoutes(app);
   registerAccountLedgerListRoutes(app);
+  registerGoldenCoastVoucherSidebarPresentation(app);
   registerAccountVoucherSidebarRoutes(app);
   registerAccountLedgerBalanceRoutes(app);
   registerAccountSubModules(app);
