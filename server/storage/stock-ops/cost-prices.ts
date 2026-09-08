@@ -1,10 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { db, type RawQueryRow } from "../../db";
+import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { getStockItemByCodeOrAlias } from "../inventory";
 import { toFiniteNumber } from "@shared/typeGuards";
+import { lockInventoryRow } from "../inventoryRowLock";
 
 // ---------------------------------------------------------------------------
 
@@ -25,16 +26,12 @@ export async function updateCostPricesByBarcode(
       }
 
       await db.transaction(async (tx) => {
-        // The row is locked FOR UPDATE, so it is read through raw SQL rather
-        // than the query builder. `quantity` is a NOT NULL numeric column, so
-        // it arrives as a decimal string and is parsed rather than coerced:
-        // a blind parseFloat of a non-numeric would write "NaN" into totalValue.
-        const inventoryRows = await tx.execute<RawQueryRow<{ id: number; quantity: string }>>(
-          sql`SELECT id, quantity FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${stockItem.id} FOR UPDATE`
-        );
-        const inventory = inventoryRows.rows[0];
+        const inventory = await lockInventoryRow(tx, locationId, stockItem.id);
 
         if (inventory) {
+          // `quantity` is a NOT NULL numeric column, so it arrives as a decimal
+          // string and is parsed rather than coerced: a blind parseFloat of a
+          // non-numeric would write "NaN" into totalValue.
           const quantity = toFiniteNumber(inventory.quantity);
           if (quantity === undefined) {
             errors.push(`Inventory quantity is not a number for barcode: ${update.barcode}`);

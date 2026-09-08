@@ -2,61 +2,221 @@
   "version": 1,
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
-    { "path": "server/chat/reports/implementations/phase3ReportShard.ts", "reason": "Report shard receives the already-authorized company context from the chat report orchestrator." },
-    { "path": "server/chat/reports/implementations/phase5ReportShard.ts", "reason": "Report shard receives the already-authorized company context from the chat report orchestrator." },
-    { "path": "server/helpers/generateInvoicePdf.ts", "reason": "PDF generation is called after the owning invoice or voucher has been company-authorized." },
-    { "path": "server/index.ts", "reason": "Startup repair queries run in controlled migration context, not from caller-supplied request identity." },
-    { "path": "server/inventoryHelper.ts", "reason": "Inventory mutations are invoked inside company-scoped transactional write paths." },
-    { "path": "server/lib/transporterAllocation.ts", "reason": "Ledger IDs are resolved from the already company-scoped allocation flow." },
-    { "path": "server/routes/accountTransactionPaginationRoutes.ts", "reason": "Account and voucher ownership is validated before the pagination query executes." },
-    { "path": "server/routes/accountTransactionRoutes.ts", "reason": "Account and voucher ownership is validated before the transaction query executes." },
-    { "path": "server/routes/admin/deleted-items/orphaned-records.ts", "reason": "Administrative cleanup operates only on records selected by the company-scoped orphan scan." },
-    { "path": "server/routes/admin/repair/inventory-values.ts", "reason": "Repair targets are selected through the company-scoped administrative repair flow." },
-    { "path": "server/routes/balance-repair/apply.ts", "reason": "Repair targets are produced by the company-scoped dry-run token and apply flow." },
-    { "path": "server/routes/balance-repair/undo.ts", "reason": "Undo targets are validated by the company-scoped repair audit before mutation." },
-    { "path": "server/routes/bankAssetRoutes.ts", "reason": "Bank and fixed-asset queries use the active company boundary before loading entries." },
-    { "path": "server/routes/containerTrackingRoutes.ts", "reason": "Tracking routes validate container ownership before loading tracking records." },
-    { "path": "server/routes/containers/accounting/number.ts", "reason": "Container-number maintenance runs after the container ownership guard." },
-    { "path": "server/routes/factory/employee-pos/employee-crud/recalculate.ts", "reason": "Factory employee recalculation is pinned to the active factory company." },
-    { "path": "server/routes/factory/employee-pos/employeeAdvancesBonusRoutes.ts", "reason": "Factory employee financial writes run inside the active factory company scope." },
-    { "path": "server/routes/factory/factoryProductionPlannerRoutes.ts", "reason": "Planner queries carry the active factory company through their route-owned transaction." },
-    { "path": "server/routes/factory/shipping-containers/rows.ts", "reason": "Shipping-container rows are reached through the factory company boundary and parent ownership." },
-    { "path": "server/routes/fiscal-transfers/revisions-write.ts", "reason": "Revision writes are protected by the migrated-voucher company guard." },
-    { "path": "server/routes/git/gitAgentRoutes.ts", "reason": "Git reporting loads only resources selected by the active company context." },
-    { "path": "server/routes/payroll/_payrollAccountingHelper.ts", "reason": "Payroll accounting helpers receive the active factory company from their route caller." },
-    { "path": "server/routes/payroll/core/migrations.ts", "reason": "Payroll migration maintenance is explicitly company-selected and guarded before execution." },
-    { "path": "server/routes/rental/rentalPaymentsAccrualRoutes.ts", "reason": "Rental accrual writes use the active company rental scope." },
-    { "path": "server/routes/rental/units-contracts/guarantees.ts", "reason": "Rental guarantee queries are reached through the active company rental scope." },
-    { "path": "server/routes/sp-migration/_helpers.ts", "reason": "Supplier Partner migration helpers use the exact source/target company pair supplied by the migration guard." },
-    { "path": "server/routes/sp-migration/spMigrationRunRoutes.ts", "reason": "Supplier Partner migration runs require the source/target company authorization boundary." },
-    { "path": "server/routes/sp-migration/spMigrationSalesRoutes.ts", "reason": "Supplier Partner migration sales use the authorized source/target company pair." },
-    { "path": "server/routes/sp/spMigrationCutoverReadiness.ts", "reason": "Cutover readiness is computed only for the authorized Supplier Partner company pair." },
-    { "path": "server/routes/sp/spMigrationPhase2Charges.ts", "reason": "Supplier Partner charge migration uses the authorized source/target company pair." },
-    { "path": "server/routes/stats/salesReportBandwidthRoutes.ts", "reason": "Sales report queries use the active company reporting boundary." },
-    { "path": "server/routes/stock/groups-items/bulk-ops.ts", "reason": "Bulk stock operations validate the active company before loading item rows." },
-    { "path": "server/routes/stock/stockItemManageRoutes.ts", "reason": "Stock-item management validates item ownership in the active company." },
-    { "path": "server/routes/stock/transfer-adj/item-write.ts", "reason": "Transfer and adjustment writes run inside the active company inventory transaction." },
-    { "path": "server/routes/voucher-entries/bulk-delete.ts", "reason": "Bulk entry deletion is guarded by the owning voucher company boundary." },
-    { "path": "server/services/container-tracking/bulk.ts", "reason": "Tracking service receives company-authorized container IDs from its route caller." },
-    { "path": "server/services/container-tracking/eta.ts", "reason": "Tracking service receives company-authorized container IDs from its route caller." },
-    { "path": "server/services/container-tracking/persistence.ts", "reason": "Tracking persistence receives company-authorized container IDs from its service caller." },
-    { "path": "server/services/container-tracking/track-due.ts", "reason": "Scheduled tracking selects containers through the company-scoped scheduler context." },
-    { "path": "server/services/container-tracking/track-now.ts", "reason": "Immediate tracking receives company-authorized container IDs from its caller." },
-    { "path": "server/services/container-tracking/track-one.ts", "reason": "Single-container tracking receives a company-authorized container ID." },
-    { "path": "server/services/containers/offload-lifecycle/execute.ts", "reason": "Offload lifecycle writes run in the company-scoped inventory transaction." },
-    { "path": "server/services/factory/postOffloadReconciliation.ts", "reason": "Factory reconciliation receives the active factory company from the offload transaction." },
-    { "path": "server/services/pos/buildSaleItems.ts", "reason": "POS sale item construction runs inside the assigned POS company transaction." },
-    { "path": "server/services/pos/deductSaleInventory.ts", "reason": "POS inventory deduction runs inside the assigned POS company transaction." },
-    { "path": "server/services/scheduler/maintenance.ts", "reason": "Maintenance jobs select their company scope before running data repairs." },
-    { "path": "server/startup/runServerStartupMigrations.ts", "reason": "Startup migrations and one-time repairs run in controlled process-level maintenance context across all companies, outside request handling and without caller-supplied tenant identity." },
-    { "path": "server/stockItemSchemaRepairBridge.mjs", "reason": "Startup stock_items schema repair reads column names from information_schema and issues ADD COLUMN DDL under the explicit maintenance capability; it never reads or writes a stock_items row." },
-    { "path": "server/startup-schema/005-orphan-fk-repairs.ts", "reason": "Startup orphan repair is controlled maintenance, not caller-driven data access." },
-    { "path": "server/startup-schema/010-security-notifications-and-precision.ts", "reason": "Startup schema maintenance is controlled and idempotent, not caller-driven data access." },
-    { "path": "server/storage/accounting/voucher-writes.ts", "reason": "Voucher storage writes execute inside the caller's company-scoped transaction." },
-    { "path": "server/storage/accounting/vouchers.ts", "reason": "Voucher storage reads are reached after the owning company scope is established." },
-    { "path": "server/storage/containers-store/offload.ts", "reason": "Offload storage locks inventory inside the company-scoped offload transaction." },
-    { "path": "server/storage/stock-ops/cost-prices.ts", "reason": "Cost-price storage locks inventory inside the company-scoped stock transaction." },
-    { "path": "server/storage/stock-ops/transfers-create.ts", "reason": "Transfer creation locks inventory inside the company-scoped transaction." },
-    { "path": "server/storage/stock-ops/transfers-update.ts", "reason": "Transfer and adjustment updates lock inventory inside the company-scoped transaction." }
+    {
+      "path": "server/chat/reports/implementations/phase3ReportShard.ts",
+      "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
+    },
+    {
+      "path": "server/chat/reports/implementations/phase5ReportShard.ts",
+      "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
+    },
+    {
+      "path": "server/helpers/generateInvoicePdf.ts",
+      "reason": "PDF generation is called after the owning invoice or voucher has been company-authorized."
+    },
+    {
+      "path": "server/index.ts",
+      "reason": "Startup repair queries run in controlled migration context, not from caller-supplied request identity."
+    },
+    {
+      "path": "server/inventoryHelper.ts",
+      "reason": "Inventory mutations are invoked inside company-scoped transactional write paths."
+    },
+    {
+      "path": "server/lib/transporterAllocation.ts",
+      "reason": "Ledger IDs are resolved from the already company-scoped allocation flow."
+    },
+    {
+      "path": "server/routes/accountTransactionPaginationRoutes.ts",
+      "reason": "Account and voucher ownership is validated before the pagination query executes."
+    },
+    {
+      "path": "server/routes/accountTransactionRoutes.ts",
+      "reason": "Account and voucher ownership is validated before the transaction query executes."
+    },
+    {
+      "path": "server/routes/admin/deleted-items/orphaned-records.ts",
+      "reason": "Administrative cleanup operates only on records selected by the company-scoped orphan scan."
+    },
+    {
+      "path": "server/routes/admin/repair/inventory-values.ts",
+      "reason": "Repair targets are selected through the company-scoped administrative repair flow."
+    },
+    {
+      "path": "server/routes/balance-repair/apply.ts",
+      "reason": "Repair targets are produced by the company-scoped dry-run token and apply flow."
+    },
+    {
+      "path": "server/routes/balance-repair/undo.ts",
+      "reason": "Undo targets are validated by the company-scoped repair audit before mutation."
+    },
+    {
+      "path": "server/routes/bankAssetRoutes.ts",
+      "reason": "Bank and fixed-asset queries use the active company boundary before loading entries."
+    },
+    {
+      "path": "server/routes/containerTrackingRoutes.ts",
+      "reason": "Tracking routes validate container ownership before loading tracking records."
+    },
+    {
+      "path": "server/routes/containers/accounting/number.ts",
+      "reason": "Container-number maintenance runs after the container ownership guard."
+    },
+    {
+      "path": "server/routes/factory/employee-pos/employee-crud/recalculate.ts",
+      "reason": "Factory employee recalculation is pinned to the active factory company."
+    },
+    {
+      "path": "server/routes/factory/employee-pos/employeeAdvancesBonusRoutes.ts",
+      "reason": "Factory employee financial writes run inside the active factory company scope."
+    },
+    {
+      "path": "server/routes/factory/factoryProductionPlannerRoutes.ts",
+      "reason": "Planner queries carry the active factory company through their route-owned transaction."
+    },
+    {
+      "path": "server/routes/factory/shipping-containers/rows.ts",
+      "reason": "Shipping-container rows are reached through the factory company boundary and parent ownership."
+    },
+    {
+      "path": "server/routes/fiscal-transfers/revisions-write.ts",
+      "reason": "Revision writes are protected by the migrated-voucher company guard."
+    },
+    {
+      "path": "server/routes/git/gitAgentRoutes.ts",
+      "reason": "Git reporting loads only resources selected by the active company context."
+    },
+    {
+      "path": "server/routes/payroll/_payrollAccountingHelper.ts",
+      "reason": "Payroll accounting helpers receive the active factory company from their route caller."
+    },
+    {
+      "path": "server/routes/payroll/core/migrations.ts",
+      "reason": "Payroll migration maintenance is explicitly company-selected and guarded before execution."
+    },
+    {
+      "path": "server/routes/rental/rentalPaymentsAccrualRoutes.ts",
+      "reason": "Rental accrual writes use the active company rental scope."
+    },
+    {
+      "path": "server/routes/rental/units-contracts/guarantees.ts",
+      "reason": "Rental guarantee queries are reached through the active company rental scope."
+    },
+    {
+      "path": "server/routes/sp-migration/_helpers.ts",
+      "reason": "Supplier Partner migration helpers use the exact source/target company pair supplied by the migration guard."
+    },
+    {
+      "path": "server/routes/sp-migration/spMigrationRunRoutes.ts",
+      "reason": "Supplier Partner migration runs require the source/target company authorization boundary."
+    },
+    {
+      "path": "server/routes/sp-migration/spMigrationSalesRoutes.ts",
+      "reason": "Supplier Partner migration sales use the authorized source/target company pair."
+    },
+    {
+      "path": "server/routes/sp/spMigrationCutoverReadiness.ts",
+      "reason": "Cutover readiness is computed only for the authorized Supplier Partner company pair."
+    },
+    {
+      "path": "server/routes/sp/spMigrationPhase2Charges.ts",
+      "reason": "Supplier Partner charge migration uses the authorized source/target company pair."
+    },
+    {
+      "path": "server/routes/stats/salesReportBandwidthRoutes.ts",
+      "reason": "Sales report queries use the active company reporting boundary."
+    },
+    {
+      "path": "server/routes/stock/groups-items/bulk-ops.ts",
+      "reason": "Bulk stock operations validate the active company before loading item rows."
+    },
+    {
+      "path": "server/routes/stock/stockItemManageRoutes.ts",
+      "reason": "Stock-item management validates item ownership in the active company."
+    },
+    {
+      "path": "server/routes/stock/transfer-adj/item-write.ts",
+      "reason": "Transfer and adjustment writes run inside the active company inventory transaction."
+    },
+    {
+      "path": "server/routes/voucher-entries/bulk-delete.ts",
+      "reason": "Bulk entry deletion is guarded by the owning voucher company boundary."
+    },
+    {
+      "path": "server/services/container-tracking/bulk.ts",
+      "reason": "Tracking service receives company-authorized container IDs from its route caller."
+    },
+    {
+      "path": "server/services/container-tracking/eta.ts",
+      "reason": "Tracking service receives company-authorized container IDs from its route caller."
+    },
+    {
+      "path": "server/services/container-tracking/persistence.ts",
+      "reason": "Tracking persistence receives company-authorized container IDs from its service caller."
+    },
+    {
+      "path": "server/services/container-tracking/track-due.ts",
+      "reason": "Scheduled tracking selects containers through the company-scoped scheduler context."
+    },
+    {
+      "path": "server/services/container-tracking/track-now.ts",
+      "reason": "Immediate tracking receives company-authorized container IDs from its caller."
+    },
+    {
+      "path": "server/services/container-tracking/track-one.ts",
+      "reason": "Single-container tracking receives a company-authorized container ID."
+    },
+    {
+      "path": "server/services/containers/offload-lifecycle/execute.ts",
+      "reason": "Offload lifecycle writes run in the company-scoped inventory transaction."
+    },
+    {
+      "path": "server/services/factory/postOffloadReconciliation.ts",
+      "reason": "Factory reconciliation receives the active factory company from the offload transaction."
+    },
+    {
+      "path": "server/services/pos/buildSaleItems.ts",
+      "reason": "POS sale item construction runs inside the assigned POS company transaction."
+    },
+    {
+      "path": "server/services/pos/deductSaleInventory.ts",
+      "reason": "POS inventory deduction runs inside the assigned POS company transaction."
+    },
+    {
+      "path": "server/services/scheduler/maintenance.ts",
+      "reason": "Maintenance jobs select their company scope before running data repairs."
+    },
+    {
+      "path": "server/startup-schema/005-orphan-fk-repairs.ts",
+      "reason": "Startup orphan repair is controlled maintenance, not caller-driven data access."
+    },
+    {
+      "path": "server/startup-schema/010-security-notifications-and-precision.ts",
+      "reason": "Startup schema maintenance is controlled and idempotent, not caller-driven data access."
+    },
+    {
+      "path": "server/startup/runServerStartupMigrations.ts",
+      "reason": "Startup migrations and one-time repairs run in controlled process-level maintenance context across all companies, outside request handling and without caller-supplied tenant identity."
+    },
+    {
+      "path": "server/stockItemSchemaRepairBridge.mjs",
+      "reason": "Startup stock_items schema repair reads column names from information_schema and issues ADD COLUMN DDL under the explicit maintenance capability; it never reads or writes a stock_items row."
+    },
+    {
+      "path": "server/storage/accounting/voucher-writes.ts",
+      "reason": "Voucher storage writes execute inside the caller's company-scoped transaction."
+    },
+    {
+      "path": "server/storage/accounting/vouchers.ts",
+      "reason": "Voucher storage reads are reached after the owning company scope is established."
+    },
+    {
+      "path": "server/storage/inventoryRowLock.ts",
+      "reason": "Single SELECT ... FOR UPDATE inventory lock shared by the stock-transfer, adjustment, cost-price and container-offload writes. It is only ever called with a transaction handle from inside those company-scoped write transactions, which resolve the location and stock item under the active company before locking the row."
+    },
+    {
+      "path": "server/storage/stock-ops/transfers-update.ts",
+      "reason": "Transfer and adjustment updates lock inventory inside the company-scoped transaction."
+    }
   ]
 }
