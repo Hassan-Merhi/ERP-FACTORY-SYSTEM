@@ -156,11 +156,10 @@ export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | 
  */
 export async function getGreenInstanceState(instanceId: string, apiToken: string): Promise<GreenInstanceState> {
   try {
-    const response = await fetchGreenApiWithAuthFallback(
-      { instanceId, apiToken },
-      "getStateInstance",
-      { method: "GET", signal: AbortSignal.timeout(8000) }
-    );
+    const response = await fetchGreenApiWithAuthFallback({ instanceId, apiToken }, "getStateInstance", {
+      method: "GET",
+      signal: AbortSignal.timeout(8000),
+    });
     if (!response.ok) return "unknown";
     const json = await response.json().catch(() => null);
     const state: string = json?.stateInstance ?? "unknown";
@@ -227,15 +226,11 @@ async function sendGreenApiFileUpload({
     form.append("file", materializedBuffer, { filename: fileName, contentType: mimeType });
 
     const multipartBody = form.getBuffer();
-    const response = await fetchGreenApiWithAuthFallback(
-      settings,
-      "sendFileByUpload",
-      {
-        method: "POST",
-        body: toArrayBuffer(multipartBody),
-        headers: form.getHeaders(),
-      }
-    );
+    const response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUpload", {
+      method: "POST",
+      body: toArrayBuffer(multipartBody),
+      headers: form.getHeaders(),
+    });
 
     if (!response.ok) {
       const body = await response.text();
