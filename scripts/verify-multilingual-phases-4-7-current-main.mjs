@@ -27,7 +27,7 @@ const bundles = [
     parts: 4,
     translatorImport: "translatePhase4SupplierPartnerText",
     test: "tests/phase4-supplier-partner-translations.test.ts",
-    expectedCount: 241,
+    expectedCount: 251,
   },
   {
     phase: 5,
