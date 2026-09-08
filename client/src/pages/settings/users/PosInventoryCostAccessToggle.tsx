@@ -1,8 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DollarSign } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { translatePosInventoryCostText, type PosInventoryCostTranslationKey } from "@/i18n/posInventoryCostTranslations";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const POS_INVENTORY_COST_PERMISSION = "inventory.cost.view";
 
@@ -19,6 +21,8 @@ interface SecurityPermissionsResponse {
 
 export function PosInventoryCostAccessToggle({ userId, companyId }: PosInventoryCostAccessToggleProps) {
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const tr = (key: PosInventoryCostTranslationKey) => translatePosInventoryCostText(key, language);
   const endpoint = `/api/admin/users/${userId}/security-permissions`;
   const queryKey = [endpoint, companyId] as const;
 
@@ -26,7 +30,7 @@ export function PosInventoryCostAccessToggle({ userId, companyId }: PosInventory
     queryKey,
     queryFn: async () => {
       const res = await fetch(endpoint, { credentials: "include" });
-      if (!res.ok) throw new Error("Unable to load security permissions");
+      if (!res.ok) throw new Error(tr("loadPermissionsFailed"));
       return res.json();
     },
     staleTime: 30_000,
@@ -35,42 +39,32 @@ export function PosInventoryCostAccessToggle({ userId, companyId }: PosInventory
 
   const mutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      if (!data) throw new Error("Permissions are still loading");
-      if (data.companyId !== companyId) {
-        throw new Error("Switch to this company before changing POS cost access");
-      }
+      if (!data) throw new Error(tr("permissionsLoading"));
+      if (data.companyId !== companyId) throw new Error(tr("switchCompany"));
 
       const next = new Set(data.permissions);
       if (enabled) next.add(POS_INVENTORY_COST_PERMISSION);
       else next.delete(POS_INVENTORY_COST_PERMISSION);
 
       const res = await apiRequest("PUT", endpoint, { permissions: Array.from(next).sort() });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.message || "Failed to update POS cost access");
-      }
       return res.json() as Promise<SecurityPermissionsResponse>;
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKey, updated);
       toast({
-        title: updated.permissions.includes(POS_INVENTORY_COST_PERMISSION) ? "Cost price enabled" : "Cost price hidden",
-        description: "This POS user's stock inventory cost access has been updated for this company.",
+        title: updated.permissions.includes(POS_INVENTORY_COST_PERMISSION) ? tr("enabledTitle") : tr("hiddenTitle"),
+        description: tr("updatedDescription"),
       });
     },
     onError: (error: Error) => {
-      toast({ title: "Could not update cost access", description: error.message, variant: "destructive" });
+      toast({ title: tr("updateErrorTitle"), description: error.message || tr("updateFailed"), variant: "destructive" });
     },
   });
 
   const enabled = data?.permissions.includes(POS_INVENTORY_COST_PERMISSION) === true;
 
   if (isError) {
-    return (
-      <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
-        Cost-price permission could not be loaded. You may need Security Permissions access.
-      </div>
-    );
+    return <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">{tr("loadError")}</div>;
   }
 
   return (
@@ -78,17 +72,15 @@ export function PosInventoryCostAccessToggle({ userId, companyId }: PosInventory
       <div className="flex items-start gap-2 min-w-0">
         <DollarSign className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
-          <p className="text-sm font-medium">Show cost price in Stock Inventory</p>
-          <p className="text-xs text-muted-foreground">
-            Allows this POS user to see Avg Rate and Total Value in assigned locations. Other POS users remain hidden.
-          </p>
+          <p className="text-sm font-medium">{tr("title")}</p>
+          <p className="text-xs text-muted-foreground">{tr("description")}</p>
         </div>
       </div>
       <Switch
         checked={enabled}
         onCheckedChange={(checked) => mutation.mutate(checked)}
         disabled={isLoading || !data || mutation.isPending}
-        aria-label="Show inventory cost price for this POS user"
+        aria-label={tr("ariaLabel")}
         data-testid={`switch-pos-inventory-cost-${userId}-${companyId}`}
       />
     </div>
