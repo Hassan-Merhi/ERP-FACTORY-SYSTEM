@@ -16,7 +16,9 @@ import type { Request } from "express";
 export function requireSessionUserId(req: Request): string {
   const userId = req.session.userId;
   if (!userId) {
-    throw new Error("Authenticated session is missing a user id");
+    // An internal invariant code, not user-facing copy: `requireAuth` rejects a
+    // session without a user before any handler body runs.
+    throw new Error("session_user_id_missing");
   }
   return userId;
 }

@@ -532,14 +532,13 @@ export function registerRawStockContainerRoutes(app: Express) {
         }
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        // Assigned inside the transaction callback, so TypeScript cannot see the
-        // assignment: declared optional and asserted once after the await instead
-        // of typed `any`.
-        let mutResult: PostOffloadMutationResult | undefined;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "EDIT",
               companyId,
               containerId,
@@ -559,17 +558,13 @@ export function registerRawStockContainerRoutes(app: Express) {
                 supplierId: supplierId ? parseInt(supplierId) : null,
               },
               accountingCtx: acctCtx,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-        // Unreachable: db.transaction either assigns mutResult or rejects into
-        // the catch above. The check exists so the result is non-optional below.
-        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
-
         res.json({
           message: "Post-offload charge updated",
           ...mutResult,
@@ -618,14 +613,13 @@ export function registerRawStockContainerRoutes(app: Express) {
 
         const txDate = undoDate || getClientDate(req);
         const userId = String(req.session.userId || req.user?.id || "system");
-        // Assigned inside the transaction callback, so TypeScript cannot see the
-        // assignment: declared optional and asserted once after the await instead
-        // of typed `any`.
-        let mutResult: PostOffloadMutationResult | undefined;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "UNDO",
               companyId,
               containerId,
@@ -634,17 +628,13 @@ export function registerRawStockContainerRoutes(app: Express) {
               userId,
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
               legacyBaselineRate: legacyBaselineRate !== undefined ? parseFloat(legacyBaselineRate) : undefined,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-        // Unreachable: db.transaction either assigns mutResult or rejects into
-        // the catch above. The check exists so the result is non-optional below.
-        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
-
         if (mutResult.alreadyUndone) {
           return res.json({ message: "Charge was already undone", alreadyUndone: true, chargeId });
         }
@@ -699,14 +689,13 @@ export function registerRawStockContainerRoutes(app: Express) {
         if (!container) return res.status(404).json({ message: "Container not found" });
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        // Assigned inside the transaction callback, so TypeScript cannot see the
-        // assignment: declared optional and asserted once after the await instead
-        // of typed `any`.
-        let mutResult: PostOffloadMutationResult | undefined;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "LEGACY_REBUILD",
               companyId,
               containerId,
@@ -715,17 +704,13 @@ export function registerRawStockContainerRoutes(app: Express) {
               userId,
               legacyBaselineRate: parseFloat(legacyBaselineRate),
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-        // Unreachable: db.transaction either assigns mutResult or rejects into
-        // the catch above. The check exists so the result is non-optional below.
-        if (!mutResult) throw new Error("Post-offload charge mutation returned no result");
-
         res.json({
           message: "Legacy charge supplier rate rebuilt successfully",
           ...mutResult,
