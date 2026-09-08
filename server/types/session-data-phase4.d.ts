@@ -18,6 +18,15 @@ declare module "express-session" {
     name?: string;
     email?: string;
     passkeyChallenge?: string;
+    /**
+     * Named security permissions cached on the session by
+     * hydrateSessionNamedPermissions, together with the company they were
+     * loaded for. Both are written by that function and read by every named
+     * permission check; declaring them here removes the `SecuritySession`
+     * casts each security adapter used to redeclare for itself.
+     */
+    securityPermissions?: string[];
+    securityPermissionsCompanyId?: number | null;
     user?: {
       role?: string;
     };

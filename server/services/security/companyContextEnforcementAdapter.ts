@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import type { SessionData } from "express-session";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { persistSecurityEvent } from "./securityAuditRuntime";
@@ -43,7 +44,7 @@ function assertionValues(req: Request, fields: string[]): number[] {
 }
 
 export function decideExplicitCompanyContext(
-  session: any,
+  session: SessionData,
   requestAssertions: number[] = [],
   includeLegacyFactorySessionAssertion = true
 ): CompanyContextDecision {
@@ -76,7 +77,7 @@ export function decideExplicitCompanyContext(
  * assertions must always match the company selected by the route policy.
  */
 export function decideRouteCompanyContext(
-  session: any,
+  session: SessionData,
   path: string,
   requestAssertions: number[] = [],
   includeLegacyFactorySessionAssertion = true
