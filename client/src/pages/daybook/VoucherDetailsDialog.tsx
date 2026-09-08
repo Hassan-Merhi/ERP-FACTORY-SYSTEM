@@ -30,6 +30,49 @@ import { LedgerVoucherEntries } from "./voucherdetailsdialog/LedgerVoucherEntrie
 import { VoucherRevisionHistory } from "./voucherdetailsdialog/VoucherRevisionHistory";
 
 const PROFIT_FILTERS = ["all", "gain", "loss", "even"] as const;
+const GC_OWNER_WITHDRAWAL_CLEARING_NAME = "gc owner withdrawal clearing";
+const GC_SALES_CASH_NAME = "gc sales cash";
+
+function normalizedAccountName(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function projectGcOwnerWithdrawalForDisplay(entries: any[], entryBalances: Record<number, string>) {
+  const isOwnerWithdrawal = entries.some(
+    (entry) => normalizedAccountName(entry?.accountName) === GC_OWNER_WITHDRAWAL_CLEARING_NAME
+  );
+  if (!isOwnerWithdrawal) return { entries, entryBalances };
+
+  const projectedEntries = entries.flatMap((entry) => {
+    const accountName = normalizedAccountName(entry?.accountName);
+    if (accountName === GC_OWNER_WITHDRAWAL_CLEARING_NAME) return [];
+
+    if (
+      accountName === GC_SALES_CASH_NAME &&
+      parseFloat(entry?.debitAmount || "0") > 0 &&
+      parseFloat(entry?.creditAmount || "0") === 0
+    ) {
+      return [
+        {
+          ...entry,
+          debitAmount: "0",
+          creditAmount: entry.debitAmount,
+        },
+      ];
+    }
+
+    return [entry];
+  });
+
+  const projectedBalances = { ...entryBalances };
+  for (const entry of projectedEntries) {
+    if (normalizedAccountName(entry?.accountName) !== GC_SALES_CASH_NAME) continue;
+    const raw = Number(projectedBalances[entry.id]);
+    if (Number.isFinite(raw)) projectedBalances[entry.id] = String(Math.abs(raw));
+  }
+
+  return { entries: projectedEntries, entryBalances: projectedBalances };
+}
 
 export function VoucherDetailsDialog({
   open,
@@ -89,6 +132,10 @@ export function VoucherDetailsDialog({
     selectedVoucher.voucherType === "Sales" ||
     selectedVoucher.voucherType === "POS";
   const isSalesLike = selectedVoucher.voucherType === "Sales" || selectedVoucher.voucherType === "POS";
+  const gcOwnerWithdrawalPresentation =
+    selectedVoucher.voucherType === "Journal"
+      ? projectGcOwnerWithdrawalForDisplay(viewVoucherEntries, entryBalances)
+      : { entries: viewVoucherEntries, entryBalances };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -201,12 +248,12 @@ export function VoucherDetailsDialog({
                 ) : (
                   <LedgerVoucherEntries
                     selectedVoucher={selectedVoucher}
-                    viewVoucherEntries={viewVoucherEntries}
+                    viewVoucherEntries={gcOwnerWithdrawalPresentation.entries}
                     isPOSUser={isPOSUser}
                     isStockTransferType={isStockTransferType}
                     transferDetail={transferDetail}
                     cashAccountBalance={cashAccountBalance}
-                    entryBalances={entryBalances}
+                    entryBalances={gcOwnerWithdrawalPresentation.entryBalances}
                     formatAmount={formatAmount}
                     resolveEntryName={resolveEntryName}
                     user={user}
