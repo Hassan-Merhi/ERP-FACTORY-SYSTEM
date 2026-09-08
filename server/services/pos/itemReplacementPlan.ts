@@ -26,6 +26,16 @@ export interface PosReplacementEditedLine {
   [POS_INTERNAL_TOTAL_SALES_OVERRIDE]?: true;
 }
 
+function markTrustedTotal<T extends PosReplacementEditedLine>(row: T): T {
+  Object.defineProperty(row, POS_INTERNAL_TOTAL_SALES_OVERRIDE, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return row;
+}
+
 /**
  * Split sale lines for a replacement without changing what the customer paid.
  *
@@ -47,14 +57,15 @@ export function buildPosReplacementSaleItems(
   for (const originalItem of originalItems) {
     const lineReplacements = replacementsBySaleItem.get(originalItem.id) || [];
     if (!lineReplacements.length) {
-      editedItems.push({
-        id: originalItem.id,
-        stockItemId: originalItem.stockItemId,
-        quantity: originalItem.quantity,
-        sellingPrice: originalItem.sellingPrice,
-        totalSales: originalItem.totalSales,
-        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
-      });
+      editedItems.push(
+        markTrustedTotal({
+          id: originalItem.id,
+          stockItemId: originalItem.stockItemId,
+          quantity: originalItem.quantity,
+          sellingPrice: originalItem.sellingPrice,
+          totalSales: originalItem.totalSales,
+        })
+      );
       continue;
     }
 
@@ -72,7 +83,6 @@ export function buildPosReplacementSaleItems(
         stockItemId: originalItem.stockItemId,
         quantity: remainingQty.toString(),
         sellingPrice: originalItem.sellingPrice,
-        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
       });
     }
 
@@ -81,7 +91,6 @@ export function buildPosReplacementSaleItems(
         stockItemId: replacement.replacementStockItemId,
         quantity: toInventoryDecimal(replacement.quantity).toString(),
         sellingPrice: originalItem.sellingPrice,
-        [POS_INTERNAL_TOTAL_SALES_OVERRIDE]: true,
       });
       replacedQuantity = replacedQuantity.plus(toInventoryDecimal(replacement.quantity));
     }
@@ -100,7 +109,7 @@ export function buildPosReplacementSaleItems(
           .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
         allocated = allocated.plus(segmentTotal);
       }
-      editedItems.push({ ...segment, totalSales: segmentTotal.toFixed(2) });
+      editedItems.push(markTrustedTotal({ ...segment, totalSales: segmentTotal.toFixed(2) }));
     });
   }
 
