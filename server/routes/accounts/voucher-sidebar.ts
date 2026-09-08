@@ -10,7 +10,14 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { resolveParentCompanyId, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
-import { vouchers, voucherEntries, factorySuppliers, factoryContainers, factorySupplierPayments } from "@shared/schema";
+import {
+  vouchers,
+  voucherEntries,
+  ledgerAccounts,
+  factorySuppliers,
+  factoryContainers,
+  factorySupplierPayments,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 export function registerAccountVoucherSidebarRoutes(app: Express) {
@@ -41,7 +48,14 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
       const isFactoryCompany = currentCompany?.companyType === "factory";
       const isPropertiesCompany = currentCompany?.companyType === "properties";
 
-      // Phase 2: all independent fetches in parallel (allEntries runs concurrently with others)
+      // Phase 2: all independent fetches in parallel.
+      //
+      // IMPORTANT: ledger balances are scoped by ledger-account ownership, not
+      // voucher ownership. Migrated/intercompany vouchers may legitimately keep
+      // their original voucher.company_id while their ledger entry points at an
+      // account now owned by the selected company. Net Position already uses this
+      // rule; the voucher sidebar must use the same source or journal previews can
+      // show the exact opposite running balance from the balance sheet.
       const [
         ledgersRaw,
         banks,
@@ -53,6 +67,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         fPayments,
         companyVouchers,
         allEntries,
+        ledgerAccountEntries,
       ] = await Promise.all([
         storage.getAllLedgerAccounts(companyId, true), // include hidden so cash/loan/bank accounts appear in pickers
         storage.getAllBankAccounts(companyId),
@@ -82,12 +97,33 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           .from(vouchers)
           .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
           .execute(),
-        // Fetch all entries using a SQL subquery instead of first fetching IDs then inArray
+        // Company-scoped entries remain authoritative for supplier, bank,
+        // employee, fixed-asset and factory-supplier balances.
         db
           .select()
           .from(voucherEntries)
           .where(
             sql`${voucherEntries.voucherId} IN (SELECT id FROM vouchers WHERE company_id = ${companyId} AND optional = false AND deleted_at IS NULL)`
+          )
+          .execute(),
+        // Ledger balances intentionally follow the ledger account's company.
+        // This mirrors statsNetPositionRoutes and keeps journal "New Bal" in
+        // sync with the balance sheet after account/voucher migrations.
+        db
+          .select({
+            ledgerAccountId: voucherEntries.ledgerAccountId,
+            debitAmount: voucherEntries.debitAmount,
+            creditAmount: voucherEntries.creditAmount,
+          })
+          .from(voucherEntries)
+          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+          .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
+          .where(
+            and(
+              eq(ledgerAccounts.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt)
+            )
           )
           .execute(),
       ]);
@@ -111,8 +147,6 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         companyVouchers.map((v) => [v.id, { currency: v.currency || "USD", exchangeRate: v.exchangeRate || "1" }])
       );
 
-      // allEntries already fetched in parallel above (see Promise.all)
-
       // Group entries by account type and calculate balances
       const ledgerBalances = new Map<number, { debits: number; credits: number }>();
       const bankBalances = new Map<number, { debits: number; credits: number }>();
@@ -122,17 +156,20 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
       const factorySupplierBalances = new Map<number, number>();
       const customerBalances = new Map<number, { debits: number; credits: number }>();
 
+      for (const entry of ledgerAccountEntries) {
+        if (!entry.ledgerAccountId) continue;
+        const debit = parseFloat(entry.debitAmount || "0");
+        const credit = parseFloat(entry.creditAmount || "0");
+        const existing = ledgerBalances.get(entry.ledgerAccountId) || { debits: 0, credits: 0 };
+        ledgerBalances.set(entry.ledgerAccountId, {
+          debits: existing.debits + debit,
+          credits: existing.credits + credit,
+        });
+      }
+
       for (const entry of allEntries) {
         const debit = parseFloat(entry.debitAmount || "0");
         const credit = parseFloat(entry.creditAmount || "0");
-
-        if (entry.ledgerAccountId) {
-          const existing = ledgerBalances.get(entry.ledgerAccountId) || { debits: 0, credits: 0 };
-          ledgerBalances.set(entry.ledgerAccountId, {
-            debits: existing.debits + debit,
-            credits: existing.credits + credit,
-          });
-        }
 
         if (entry.bankAccountId) {
           const existing = bankBalances.get(entry.bankAccountId) || { debits: 0, credits: 0 };
