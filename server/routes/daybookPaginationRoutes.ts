@@ -170,6 +170,15 @@ export function registerDaybookPaginationRoutes(app: Express): void {
                   WHEN ${hideStockTransferAmountsParam}::boolean
                    AND LOWER(REPLACE(v.voucher_type, ' ', '')) = 'stocktransfer'
                     THEN 0
+                  WHEN v.voucher_type = 'Journal'
+                   AND EXISTS (
+                     SELECT 1
+                     FROM voucher_entries ve
+                     JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+                     WHERE ve.voucher_id = v.id
+                       AND la.sub_type = 'gc_owner_withdrawal_clearing'
+                   )
+                    THEN v.total_amount::numeric / 2
                   ELSE v.total_amount
                 END,
               'currency', v.currency,
