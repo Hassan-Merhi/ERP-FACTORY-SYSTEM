@@ -21,16 +21,40 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
         `SELECT weekly_report_wa_group_chat_id, instance_id, api_token, enabled FROM whatsapp_settings WHERE id = 1`
       );
       const s = r.rows?.[0];
-      if (!s?.weekly_report_wa_group_chat_id) {
+      const groupChatId = String(s?.weekly_report_wa_group_chat_id ?? "").trim();
+      const instanceId = String(s?.instance_id ?? "").trim();
+      const apiToken = String(s?.api_token ?? "").trim();
+
+      if (!groupChatId) {
         return res
           .status(400)
           .json({ message: "No WhatsApp group configured. Go to Settings → Export Settings to configure one." });
       }
-      if (!s.instance_id || !s.api_token) {
+      if (!instanceId || !apiToken) {
         return res.status(400).json({ message: "WhatsApp credentials not configured." });
       }
       if (!s.enabled) {
         return res.status(400).json({ message: "WhatsApp sending is disabled." });
+      }
+
+      // Green API credentials/group ids are copied from the console and can
+      // accidentally be saved with leading/trailing whitespace. That turns a
+      // valid token into a 401 because the token is part of the request URL.
+      // Normalize the persisted values before the shared WhatsApp service
+      // re-reads row id=1 for this send.
+      if (
+        groupChatId !== s.weekly_report_wa_group_chat_id ||
+        instanceId !== s.instance_id ||
+        apiToken !== s.api_token
+      ) {
+        await pool.query(
+          `UPDATE whatsapp_settings
+              SET weekly_report_wa_group_chat_id = $1,
+                  instance_id = $2,
+                  api_token = $3
+            WHERE id = 1`,
+          [groupChatId, instanceId, apiToken]
+        );
       }
 
       const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, "");
@@ -40,15 +64,21 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
       const caption = `Mix Batch Details — ${today}`;
 
       const { sendWhatsAppFileToChatId } = await import("../../services/whatsappService");
-      const result = await sendWhatsAppFileToChatId(
-        s.weekly_report_wa_group_chat_id,
-        buffer,
-        finalFileName,
-        caption,
-        "image/png"
-      );
+      const result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, caption, "image/png");
       if (!result.success) {
-        return res.status(500).json({ message: result.error || "Failed to send" });
+        const errorMessage = result.error || "Failed to send";
+        if (/Green API 401\b/i.test(errorMessage)) {
+          logger.warn("[mix-batch-wa] Green API rejected configured credentials", {
+            instanceId,
+            groupChatId,
+          });
+          return res.status(502).json({
+            message:
+              "WhatsApp credentials were rejected by Green API. Re-save the current Instance ID and API Token in Settings → Export Settings, then try again.",
+            code: "WHATSAPP_AUTH_REJECTED",
+          });
+        }
+        return res.status(502).json({ message: errorMessage });
       }
       // Non-fatal: audit write must not block the WhatsApp confirmation response
       try {
