@@ -859,18 +859,13 @@
         0,
         0
       ],
-      "client/src/pages/location-inventory/AllItemsView.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/location-inventory/CombinedStockView.tsx": [
         7,
         0,
         0
       ],
       "client/src/pages/location-inventory/InventoryTable.tsx": [
-        2,
+        1,
         0,
         0
       ],
@@ -2912,6 +2907,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1565
+    "typeEscapeCeiling": 1563
   }
 }
