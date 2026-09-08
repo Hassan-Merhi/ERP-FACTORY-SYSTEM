@@ -114,6 +114,11 @@ const serverMessageTranslations = [
     ar: "استبدال أصناف نقاط البيع متاح من نظام ERP فقط",
     fr: "Le remplacement d’articles POS est disponible uniquement depuis l’ERP",
   },
+  {
+    en: "You do not have access to POS item replacement",
+    ar: "ليس لديك صلاحية الوصول إلى استبدال أصناف نقاط البيع",
+    fr: "Vous n’avez pas accès au remplacement d’articles POS",
+  },
   { en: "No company selected", ar: "لم يتم اختيار شركة", fr: "Aucune société sélectionnée" },
   { en: "Invalid filters", ar: "عوامل التصفية غير صالحة", fr: "Filtres non valides" },
   { en: "Invalid replacement request", ar: "طلب الاستبدال غير صالح", fr: "Demande de remplacement non valide" },
@@ -121,6 +126,16 @@ const serverMessageTranslations = [
     en: "At least one replacement is required",
     ar: "يلزم تحديد عملية استبدال واحدة على الأقل",
     fr: "Au moins un remplacement est requis",
+  },
+  {
+    en: "One or more selected POS sale items no longer exist",
+    ar: "صنف واحد أو أكثر من أصناف مبيعات نقاط البيع المحددة لم يعد موجودًا",
+    fr: "Un ou plusieurs articles de vente POS sélectionnés n’existent plus",
+  },
+  {
+    en: "Sale item ${saleItemId} changed while the correction was loading",
+    ar: "تغير صنف البيع ${saleItemId} أثناء تحميل التصحيح",
+    fr: "L’article de vente ${saleItemId} a changé pendant le chargement de la correction",
   },
   {
     en: "Sale item ${saleItemId} was not found in this company",
@@ -166,6 +181,11 @@ const serverMessageTranslations = [
     en: "Failed to update voucher ${voucherNumber}",
     ar: "تعذر تحديث السند ${voucherNumber}",
     fr: "Échec de la mise à jour de la pièce ${voucherNumber}",
+  },
+  {
+    en: "POS item replacement failed",
+    ar: "فشل استبدال أصناف نقاط البيع",
+    fr: "Échec du remplacement d’articles POS",
   },
   {
     en: "Updated ${count} POS sale",
