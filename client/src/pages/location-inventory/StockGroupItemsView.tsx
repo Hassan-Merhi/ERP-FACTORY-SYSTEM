@@ -8,6 +8,7 @@ import type { InventoryItem, StockGroupSummary } from "./locationInventoryTypes"
 interface StockGroupItemsViewProps {
   selectedGroup: StockGroupSummary;
   posUser?: any;
+  canViewCost: boolean;
   formatAmount: (v: number) => string;
   setArchiveDialogOpen: (v: boolean) => void;
   itemSearchTerm: string;
@@ -27,6 +28,7 @@ interface StockGroupItemsViewProps {
 export function StockGroupItemsView({
   selectedGroup,
   posUser,
+  canViewCost,
   formatAmount,
   setArchiveDialogOpen,
   itemSearchTerm,
@@ -61,7 +63,7 @@ export function StockGroupItemsView({
               </span>{" "}
               BL total
             </span>
-            {!posUser && (
+            {canViewCost && (
               <span>
                 <span className="font-semibold text-foreground">
                   {formatAmount(selectedGroup.totalValue)}
@@ -123,7 +125,7 @@ export function StockGroupItemsView({
         setSelectedRowIndex={setSelectedRowIndex}
         navigate={navigate}
         formatAmount={formatAmount}
-        posUser={posUser}
+        canViewCost={canViewCost}
         itemSearchTerm={itemSearchTerm}
         inventory={inventory}
         selectedGroup={selectedGroup}
