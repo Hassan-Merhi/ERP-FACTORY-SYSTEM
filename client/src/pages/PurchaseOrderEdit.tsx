@@ -4,6 +4,7 @@ import { useRoute, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,9 +78,9 @@ export default function PurchaseOrderEdit() {
   const { data: parentFreightAccounts } = useQuery<
     Array<{ id: number; name: string; code: string; accountType: string }>
   >({
-    queryKey: ["/api/purchase-orders/parent-freight-accounts"],
+    queryKey: companyQueryKey("/api/purchase-orders/parent-freight-accounts", selectedCompany?.id),
     retry: false,
-    enabled: !isFactory,
+    enabled: Boolean(selectedCompany?.id) && !isFactory,
   });
 
   const isNew = poId === null;
