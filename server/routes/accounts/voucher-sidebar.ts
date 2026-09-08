@@ -300,12 +300,21 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         // Ledger accounts — all included (customer mirror ledgers appear alongside the customer entry)
         ...ledgers.map((account) => {
           const movements = ledgerBalances.get(account.id) || { debits: 0, credits: 0 };
-          const balance = calculateSignedBalance(
+          const signedLedgerBalance = calculateSignedBalance(
             account.openingBalance || "0",
             account.openingBalanceSide,
             movements.debits,
             movements.credits
           );
+          const isGoldenCoastSalesCash =
+            currentCompany?.companyType === "supplier_partner" &&
+            account.subType === "sp_payable" &&
+            (account.name || "").trim().toLowerCase() === "gc sales cash";
+          // Golden Coast Net Position deliberately shows its credit-normal sales
+          // settlement ledger as cash under What We Have. Keep the journal picker
+          // on that same presentation sign: positive means the displayed GC cash
+          // available, so CR lowers it and DR raises it in the user's journal UI.
+          const balance = isGoldenCoastSalesCash ? -signedLedgerBalance : signedLedgerBalance;
 
           return {
             id: account.id,
