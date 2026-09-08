@@ -51,7 +51,7 @@ export function registerLocationInventoryRoutes(app: Express) {
       if (!(await canViewInventoryCost(req))) {
         return res.status(403).json({
           code: "POS_INVENTORY_COST_FORBIDDEN",
-          message: "Cost price access is not enabled for this POS user",
+          message: "Forbidden",
         });
       }
 
@@ -310,7 +310,7 @@ export function registerLocationInventoryRoutes(app: Express) {
       if (includeCost && !(await canViewInventoryCost(req))) {
         return res.status(403).json({
           code: "POS_INVENTORY_COST_FORBIDDEN",
-          message: "Cost price access is not enabled for this POS user",
+          message: "Forbidden",
         });
       }
 
@@ -364,7 +364,7 @@ export function registerLocationInventoryRoutes(app: Express) {
         if (includeCost && !(await canViewInventoryCost(req))) {
           return res.status(403).json({
             code: "POS_INVENTORY_COST_FORBIDDEN",
-            message: "Cost price access is not enabled for this POS user",
+            message: "Forbidden",
           });
         }
 
