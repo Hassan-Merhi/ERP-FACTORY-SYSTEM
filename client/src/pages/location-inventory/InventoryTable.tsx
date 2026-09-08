@@ -28,7 +28,7 @@ interface InventoryTableProps {
   setSelectedRowIndex: (idx: number) => void;
   navigate: (path: string) => void;
   formatAmount: (amt: number) => string;
-  posUser?: any;
+  canViewCost: boolean;
   itemSearchTerm: string;
   inventory: InventoryItem[];
   selectedGroup: any;
@@ -42,16 +42,11 @@ export function InventoryTable({
   setSelectedRowIndex,
   navigate,
   formatAmount,
-  posUser,
+  canViewCost,
   itemSearchTerm,
   inventory,
   selectedGroup,
 }: InventoryTableProps) {
-  // The server is authoritative: unauthorized POS responses have cost fields
-  // nulled. If cost is present, this POS user has the explicit per-company
-  // inventory.cost.view permission.
-  const canViewCost = !posUser || inventory.some((item) => item.averageRate !== null && item.averageRate !== undefined);
-
   return (
     <Card className="border-none shadow-none bg-transparent">
       <div>
