@@ -25,7 +25,7 @@ const replacementSchema = z.object({
 
 const bulkReplacementSchema = z.object({
   locationId: z.coerce.number().int().positive(),
-  replacements: z.array(replacementSchema).min(1).max(100),
+  replacements: z.array(replacementSchema).min(1).max(500),
 });
 
 async function ensureErpCorrectionAccess(req: any, res: any): Promise<boolean> {
