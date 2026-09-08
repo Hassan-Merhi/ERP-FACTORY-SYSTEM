@@ -1654,11 +1654,6 @@
         0,
         0
       ],
-      "server/routes/admin/companySettingsRoutes.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/admin/deleted-items/list.ts": [
         1,
         0,
@@ -1684,27 +1679,12 @@
         2,
         0
       ],
-      "server/routes/admin/securityPermissionRoutes.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/aiAgentRoutes.ts": [
         2,
         0,
         0
       ],
-      "server/routes/auth/coreAuthRoutes.ts": [
-        1,
-        2,
-        0
-      ],
       "server/routes/auth/sessionRepository.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/auth/userAccessRoutes.ts": [
         1,
         0,
         0
@@ -1990,33 +1970,13 @@
         0
       ],
       "server/routes/factory/docs-users/baleRelabelRoutes.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/factory/docs-users/chatRoutes.ts": [
-        0,
-        7,
-        0
-      ],
-      "server/routes/factory/docs-users/companyExportRoutes.ts": [
-        2,
+        1,
         0,
         0
       ],
       "server/routes/factory/docs-users/companyImportRoutes.ts": [
         8,
         0,
-        0
-      ],
-      "server/routes/factory/docs-users/daybookEditRoutes.ts": [
-        3,
-        3,
-        0
-      ],
-      "server/routes/factory/docs-users/freightRoutes.ts": [
-        1,
-        1,
         0
       ],
       "server/routes/factory/employee-pos/employee-crud/bulk-payroll.ts": [
@@ -2439,11 +2399,6 @@
         0,
         0
       ],
-      "server/routes/sp/spMigrationCutoverUsers.ts": [
-        3,
-        0,
-        0
-      ],
       "server/routes/sp/spMigrationFinalVerification.ts": [
         1,
         0,
@@ -2471,11 +2426,6 @@
       ],
       "server/routes/sp/spMigrationPhase4Routes.ts": [
         2,
-        0,
-        0
-      ],
-      "server/routes/sp/spMigrationPhase4Users.ts": [
-        8,
         0,
         0
       ],
@@ -2556,11 +2506,6 @@
       ],
       "server/routes/supplierProformaRoutes.ts": [
         4,
-        0,
-        0
-      ],
-      "server/routes/transfers/simpleCompanyTransferService.ts": [
-        2,
         0,
         0
       ],
@@ -2739,16 +2684,6 @@
         0,
         0
       ],
-      "server/services/security/companyContextEnforcementAdapter.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/security/namedPermissionService.ts": [
-        3,
-        0,
-        0
-      ],
       "server/services/shared/ttlCache.ts": [
         2,
         0,
@@ -2782,6 +2717,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1487
+    "typeEscapeCeiling": 1445
   }
 }
