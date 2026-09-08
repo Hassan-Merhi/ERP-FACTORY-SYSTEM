@@ -588,7 +588,7 @@ export const insertContainerFreightPaymentSchema = createInsertSchema(containerF
     amount: z.string().min(1, "Amount is required"),
     method: z.string().optional().nullable(),
     reference: z.string().optional().nullable(),
-    createdBy: z.number().optional().nullable(),
+    createdBy: z.string().optional().nullable(),
   });
 
 export type InsertContainerFreightPayment = z.infer<typeof insertContainerFreightPaymentSchema>;
