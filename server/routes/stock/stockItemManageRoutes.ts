@@ -6,6 +6,9 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
 import { insertStockItemCodeAliasSchema } from "@shared/schema";
 import { sql } from "drizzle-orm";
+import type { RawQueryRow } from "../../db";
+import type { InsertStockItem } from "@shared/schema";
+import { toFiniteNumber } from "@shared/typeGuards";
 
 export function registerStockItemManageRoutes(app: Express) {
   app.patch("/api/stock-items/:id", requireAuth, requireNonPOS, async (req, res) => {
@@ -32,7 +35,7 @@ export function registerStockItemManageRoutes(app: Express) {
       }
 
       // Trim and validate required fields
-      const updates: any = {};
+      const updates: Partial<InsertStockItem> = {};
 
       if (req.body.code !== undefined) {
         const trimmedCode = String(req.body.code).trim();
@@ -58,9 +61,12 @@ export function registerStockItemManageRoutes(app: Express) {
         updates.uom = trimmedUom;
       }
 
-      if (req.body.barcode !== undefined) {
-        updates.barcode = req.body.barcode ? String(req.body.barcode).trim() : null;
-      }
+      // NOTE: `stock_items` has no `barcode` column - barcodes live in
+      // `stock_item_code_aliases`. A previous `updates: any` hid the fact that
+      // Drizzle silently drops an unknown key, so any `barcode` sent by the
+      // client was already discarded before reaching SQL. The assignment is
+      // omitted rather than reinstated: persisting it would be a behaviour
+      // change (alias rows carry their own uniqueness semantics).
 
       if (req.body.stockGroupId !== undefined) {
         if (req.body.stockGroupId === null) {
@@ -151,10 +157,10 @@ export function registerStockItemManageRoutes(app: Express) {
       }
 
       // Check if item has ANY inventory record (regardless of quantity)
-      const anyInventory = await db.execute(
+      const anyInventory = await db.execute<RawQueryRow<{ count: string | number }>>(
         sql`SELECT COUNT(*) as count FROM inventory WHERE stock_item_id = ${stockItemId}`
       );
-      const inventoryCount = parseInt((anyInventory.rows as any[])[0]?.count || "0");
+      const inventoryCount = toFiniteNumber(anyInventory.rows[0]?.count) ?? 0;
 
       if (inventoryCount > 0) {
         return res.status(400).json({
