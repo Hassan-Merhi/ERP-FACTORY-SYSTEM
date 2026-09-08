@@ -63,8 +63,42 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
       const finalFileName = String(fileName || `MixBatch_${today}.png`);
       const caption = `Mix Batch Details — ${today}`;
 
-      const { sendWhatsAppFileToChatId } = await import("../../services/whatsappService");
-      const result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, caption, "image/png");
+      const { sendWhatsAppFileToChatId, sendWhatsAppFileToChatIdPos, getWaSettingsById } = await import(
+        "../../services/whatsappService"
+      );
+
+      let result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, caption, "image/png");
+      let usedFallback = false;
+
+      // A 401 means the primary Green API instance cannot authenticate. If a
+      // second (POS) WhatsApp instance is configured, automatically try it so
+      // the user still gets the report instead of seeing an avoidable error.
+      if (!result.success && /Green API 401\b/i.test(result.error || "")) {
+        const posSettings = await getWaSettingsById(2);
+        if (posSettings?.instanceId && posSettings?.apiToken && posSettings.enabled) {
+          logger.warn("[mix-batch-wa] primary WhatsApp auth failed; trying POS instance fallback", {
+            instanceId,
+            groupChatId,
+          });
+          const fallbackResult = await sendWhatsAppFileToChatIdPos(
+            groupChatId,
+            buffer,
+            finalFileName,
+            caption,
+            "image/png"
+          );
+          if (fallbackResult.success) {
+            result = fallbackResult;
+            usedFallback = true;
+          } else {
+            logger.warn("[mix-batch-wa] POS instance fallback also failed", {
+              groupChatId,
+              error: fallbackResult.error,
+            });
+          }
+        }
+      }
+
       if (!result.success) {
         const errorMessage = result.error || "Failed to send";
         if (/Green API 401\b/i.test(errorMessage)) {
@@ -74,12 +108,13 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
           });
           return res.status(502).json({
             message:
-              "WhatsApp credentials were rejected by Green API. Re-save the current Instance ID and API Token in Settings → Export Settings, then try again.",
+              "WhatsApp could not authenticate with any configured Green API instance. Update the WhatsApp Instance ID/API Token in Settings, then try again.",
             code: "WHATSAPP_AUTH_REJECTED",
           });
         }
         return res.status(502).json({ message: errorMessage });
       }
+
       // Non-fatal: audit write must not block the WhatsApp confirmation response
       try {
         const waCompanyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -92,13 +127,22 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
             tableName: "reports",
             recordId: null,
             recordIdentifier: `Mix Batch Details — ${today}`,
-            changes: { format: { old: null, new: "image/png" } },
+            changes: {
+              format: { old: null, new: "image/png" },
+              whatsappInstance: { old: null, new: usedFallback ? "pos-fallback" : "main" },
+            },
           });
         }
       } catch (auditErr) {
         logger.error("[mix-batch-wa] audit write failed:", { error: auditErr });
       }
-      res.json({ ok: true, message: "Mix batch image sent to WhatsApp group." });
+      res.json({
+        ok: true,
+        message: usedFallback
+          ? "Mix batch image sent to WhatsApp group using the backup WhatsApp instance."
+          : "Mix batch image sent to WhatsApp group.",
+        usedFallback,
+      });
     } catch (err: unknown) {
       logger.error("[mix-batch-wa] send error:", { error: err });
       res.status(500).json({ message: getErrorMessage(err) });
