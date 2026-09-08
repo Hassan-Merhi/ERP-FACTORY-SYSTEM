@@ -9,6 +9,7 @@ import { eq, and } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
+import { POS_INTERNAL_TOTAL_SALES_OVERRIDE } from "./posEditInternalSymbols";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 import {
@@ -72,10 +73,11 @@ export async function rebuildSaleItems(
     const costPrice = toInventoryDecimal(oldItem?.costPrice ?? inventoryRecord?.averageRate);
     const effectiveSellingPrice = toInventoryDecimal(sellingPrice);
 
-    // Correction flows may provide the exact rounded line amount so splitting a
-    // historical line cannot change the customer-paid total through cent rounding.
+    // Only trusted in-process callers can preserve an exact historical rounded
+    // line total. JSON requests cannot serialize the symbol marker below, so a
+    // normal POS edit always derives totalSales from quantity × selling price.
     const totalSales =
-      item.totalSales !== undefined && item.totalSales !== null
+      item[POS_INTERNAL_TOTAL_SALES_OVERRIDE] === true && item.totalSales !== undefined && item.totalSales !== null
         ? toInventoryDecimal(item.totalSales)
         : multiplyInventoryValues(sellQty, effectiveSellingPrice);
     const totalCost = multiplyInventoryValues(sellQty, costPrice);
