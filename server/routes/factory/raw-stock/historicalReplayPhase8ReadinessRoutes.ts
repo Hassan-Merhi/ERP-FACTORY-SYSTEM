@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { requireAuth, requireRole } from "../../../auth";
 import { pool } from "../../../db";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -103,61 +103,56 @@ async function latestReplayForCompany(companyId: number): Promise<LatestReplayRo
  * bound to the configured release, company, user, algorithm, and exact replay token.
  */
 export function registerHistoricalReplayPhase8ReadinessRoutes(app: Express): void {
-  app.get(
-    READINESS_PATH,
-    requireAuth,
-    requireRole(...ADMIN_ROLES),
-    async (req: import("express").Request, res: import("express").Response) => {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.get(READINESS_PATH, requireAuth, requireRole(...ADMIN_ROLES), async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      try {
-        const [schema, preview] = await Promise.all([
-          inspectHistoricalReplayProductionSchema(pool as ReplayQueryExecutor),
-          previewHistoricalCostReplayWithExecutor(pool as ReplayQueryExecutor, companyId),
-        ]);
-        const control = readHistoricalReplayProductionControl();
-        const safety = evaluateHistoricalReplaySafetyReadiness(preview);
-        const readyForApplyAuthorization =
-          historicalReplayAuthorizationReady({
-            control,
-            schema,
-            safety,
-          }) &&
-          safety.applicableSupplierCount > 0 &&
-          safety.applicableChangeCount > 0;
-        const latestReplay = schema.ready ? await latestReplayForCompany(companyId) : null;
-
-        return res.json({
-          phase: "V8",
-          generatedAt: new Date().toISOString(),
-          companyId,
-          algorithmVersion: REPLAY_ALGORITHM_VERSION,
-          readinessVersion: historicalReplayReadinessVersion(),
-          readyForApplyAuthorization,
-          control: {
-            enabled: control.enabled,
-            releaseId: control.releaseId,
-            configurationErrors: control.configurationErrors,
-          },
+    try {
+      const [schema, preview] = await Promise.all([
+        inspectHistoricalReplayProductionSchema(pool as ReplayQueryExecutor),
+        previewHistoricalCostReplayWithExecutor(pool as ReplayQueryExecutor, companyId),
+      ]);
+      const control = readHistoricalReplayProductionControl();
+      const safety = evaluateHistoricalReplaySafetyReadiness(preview);
+      const readyForApplyAuthorization =
+        historicalReplayAuthorizationReady({
+          control,
           schema,
           safety,
-          latestReplay,
-          instructions: readyForApplyAuthorization
-            ? "Re-run Prepare immediately before Apply. The authorization is short-lived and bound to that exact prepared replay token."
-            : "Apply remains blocked. Resolve every reported configuration, schema, safety, or no-change condition before preparing an authorized apply.",
-        });
-      } catch (error: unknown) {
-        logger.error("[historical-replay v8 readiness] error", { error });
-        return res.status(500).json({
-          message: getErrorMessage(error) || "Failed to inspect Historical Replay production readiness",
-          code: (error as { code?: string }).code,
-        });
-      }
-    }
-  );
+        }) &&
+        safety.applicableSupplierCount > 0 &&
+        safety.applicableChangeCount > 0;
+      const latestReplay = schema.ready ? await latestReplayForCompany(companyId) : null;
 
-  app.post(APPLY_PATH, requireAuth, async (req: import("express").Request, res: import("express").Response, next) => {
+      return res.json({
+        phase: "V8",
+        generatedAt: new Date().toISOString(),
+        companyId,
+        algorithmVersion: REPLAY_ALGORITHM_VERSION,
+        readinessVersion: historicalReplayReadinessVersion(),
+        readyForApplyAuthorization,
+        control: {
+          enabled: control.enabled,
+          releaseId: control.releaseId,
+          configurationErrors: control.configurationErrors,
+        },
+        schema,
+        safety,
+        latestReplay,
+        instructions: readyForApplyAuthorization
+          ? "Re-run Prepare immediately before Apply. The authorization is short-lived and bound to that exact prepared replay token."
+          : "Apply remains blocked. Resolve every reported configuration, schema, safety, or no-change condition before preparing an authorized apply.",
+      });
+    } catch (error: unknown) {
+      logger.error("[historical-replay v8 readiness] error", { error });
+      return res.status(500).json({
+        message: getErrorMessage(error) || "Failed to inspect Historical Replay production readiness",
+        code: (error as { code?: string }).code,
+      });
+    }
+  });
+
+  app.post(APPLY_PATH, requireAuth, async (req: Request, res: Response, next) => {
     const confirmationToken = typeof req.body?.confirmationToken === "string" ? req.body.confirmationToken : "";
     const isPrepare = confirmationToken.length === 0;
     const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

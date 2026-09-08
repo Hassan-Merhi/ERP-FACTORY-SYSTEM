@@ -14,7 +14,7 @@
  * data (and especially the repair action) is financial and must not be
  * exposed to ordinary factory users.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { requireSessionUserId } from "../../../lib/sessionUser";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -81,7 +81,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
     "/api/factory/suppliers/fx-diagnostic",
     requireAuth,
     requireRole(...ADMIN_ROLES),
-    async (req: import("express").Request, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -281,7 +281,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
     "/api/factory/suppliers/fx-diagnostic/repair",
     requireAuth,
     requireRole(...ADMIN_ROLES),
-    async (req: import("express").Request, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });

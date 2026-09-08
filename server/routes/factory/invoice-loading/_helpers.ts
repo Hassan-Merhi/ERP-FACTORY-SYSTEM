@@ -4,6 +4,7 @@
  * Extracted verbatim from the former single-file factoryInvoiceLoadingRoutes.ts.
  */
 import { db } from "../../../db";
+import type { Request } from "express";
 import {
   customerOrders,
   customerOrderLines,
@@ -17,7 +18,7 @@ import type { Alignment, Border, Cell, CellValue, Worksheet } from "exceljs";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-export function getCompanyId(req: import("express").Request): number | null {
+export function getCompanyId(req: Request): number | null {
   return req.session.factoryCompanyId || req.session.currentCompanyId || null;
 }
 
