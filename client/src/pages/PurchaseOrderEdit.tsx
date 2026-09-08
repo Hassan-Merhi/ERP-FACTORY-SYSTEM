@@ -4,6 +4,7 @@ import { useRoute, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { companyQueryKey } from "@/lib/companyQueryScope";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,9 +78,9 @@ export default function PurchaseOrderEdit() {
   const { data: parentFreightAccounts } = useQuery<
     Array<{ id: number; name: string; code: string; accountType: string }>
   >({
-    queryKey: ["/api/purchase-orders/parent-freight-accounts"],
+    queryKey: companyQueryKey("/api/purchase-orders/parent-freight-accounts", selectedCompany?.id),
     retry: false,
-    enabled: !isFactory,
+    enabled: Boolean(selectedCompany?.id) && !isFactory,
   });
 
   const isNew = poId === null;
@@ -599,68 +600,67 @@ export default function PurchaseOrderEdit() {
                     className="text-right"
                     data-testid="input-freight"
                   />
-                  {parseFloat(freight) > 0 &&
-                    (isFactory || (parentFreightAccounts && parentFreightAccounts.length > 0)) && (
-                      <div className="space-y-1.5">
-                        <div className="flex gap-1 flex-wrap">
+                  {parseFloat(freight) > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex gap-1 flex-wrap">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={freightPaidBy === "supplier" ? "default" : "outline"}
+                          onClick={() => {
+                            setFreightPaidBy("supplier");
+                            setFreightOwnAccountId(null);
+                            setFreightParentAccountId(null);
+                          }}
+                          data-testid="button-freight-by-supplier"
+                        >
+                          By Supplier
+                        </Button>
+                        {isFactory && (
                           <Button
                             type="button"
                             size="sm"
-                            variant={freightPaidBy === "supplier" ? "default" : "outline"}
+                            variant={freightPaidBy === "own" ? "default" : "outline"}
                             onClick={() => {
-                              setFreightPaidBy("supplier");
-                              setFreightOwnAccountId(null);
+                              setFreightPaidBy("own");
                               setFreightParentAccountId(null);
                             }}
-                            data-testid="button-freight-by-supplier"
+                            data-testid="button-freight-by-own"
                           >
-                            By Supplier
+                            Own Account
                           </Button>
-                          {isFactory && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={freightPaidBy === "own" ? "default" : "outline"}
-                              onClick={() => {
-                                setFreightPaidBy("own");
-                                setFreightParentAccountId(null);
-                              }}
-                              data-testid="button-freight-by-own"
-                            >
-                              Own Account
-                            </Button>
-                          )}
-                          {!isFactory && parentFreightAccounts && parentFreightAccounts.length > 0 && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={freightPaidBy === "parent" ? "default" : "outline"}
-                              onClick={() => {
-                                setFreightPaidBy("parent");
-                                setFreightOwnAccountId(null);
-                              }}
-                              data-testid="button-freight-by-parent"
-                            >
-                              Parent Co.
-                            </Button>
-                          )}
-                        </div>
-                        {freightPaidBy === "own" && (
-                          <FreightAccountPicker
-                            value={freightOwnAccountId?.toString() ?? ""}
-                            onValueChange={(value) => setFreightOwnAccountId(value ? parseInt(value) : null)}
-                            accounts={ledgerAccounts ?? []}
-                          />
                         )}
-                        {freightPaidBy === "parent" && (
-                          <FreightAccountPicker
-                            value={freightParentAccountId?.toString() ?? ""}
-                            onValueChange={(value) => setFreightParentAccountId(value ? parseInt(value) : null)}
-                            accounts={parentFreightAccounts ?? []}
-                          />
+                        {!isFactory && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={freightPaidBy === "parent" ? "default" : "outline"}
+                            onClick={() => {
+                              setFreightPaidBy("parent");
+                              setFreightOwnAccountId(null);
+                            }}
+                            data-testid="button-freight-by-parent"
+                          >
+                            Parent Co.
+                          </Button>
                         )}
                       </div>
-                    )}
+                      {freightPaidBy === "own" && (
+                        <FreightAccountPicker
+                          value={freightOwnAccountId?.toString() ?? ""}
+                          onValueChange={(value) => setFreightOwnAccountId(value ? parseInt(value) : null)}
+                          accounts={ledgerAccounts ?? []}
+                        />
+                      )}
+                      {freightPaidBy === "parent" && (
+                        <FreightAccountPicker
+                          value={freightParentAccountId?.toString() ?? ""}
+                          onValueChange={(value) => setFreightParentAccountId(value ? parseInt(value) : null)}
+                          accounts={parentFreightAccounts ?? []}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="surcharge">Surcharge</Label>
