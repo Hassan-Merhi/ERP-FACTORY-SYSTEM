@@ -527,10 +527,10 @@ export async function getAgentDutyWaGroups(): Promise<Record<string, string>> {
   const r = res.rows[0];
   return {
     groups: r.agent_duty_wa_groups ?? {},
-    instanceId: cleanGreenApiCredential(r.instance_id),
-    apiToken: cleanGreenApiCredential(r.api_token),
+    instanceId: r.instance_id ?? "",
+    apiToken: r.api_token ?? "",
     enabled: r.enabled ?? false,
-  } as unknown as Record<string, string>;
+  };
 }
 
 export async function getAgentDutyWaCredentials(): Promise<{
