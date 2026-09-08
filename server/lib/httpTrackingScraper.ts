@@ -18,6 +18,8 @@
 
 import type { ParcelsAppShipment } from "./parcelsAppClient";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { firstDefined, jsonArray, jsonPath, jsonString } from "./externalJson";
+import { asRecord } from "@shared/typeGuards";
 import { logger } from "./logger";
 
 export interface HttpScraperResult {
@@ -104,30 +106,36 @@ async function tryMsc(containerNumber: string): Promise<HttpScraperResult> {
       signal: ctrl.signal,
     });
     if (!resp.ok) return { success: false, shipment: null, error: `MSC HTTP ${resp.status}` };
-    const data = await resp.json();
-    const activities: any[] = data?.TrackingDetails?.TrackingActivities ?? data?.trackingActivities ?? [];
+    const data: unknown = await resp.json();
+    const activities = jsonArray(
+      firstDefined(jsonPath(data, "TrackingDetails", "TrackingActivities"), jsonPath(data, "trackingActivities"))
+    );
     if (!activities.length) return { success: false, shipment: null, error: "MSC: no activities" };
     const events = activities.map((a) => ({
-      date: a.ActivityDate ?? a.date ?? "",
-      status: a.ActivityDescription ?? a.description ?? "",
-      location: a.Location ?? a.location ?? "",
+      date: jsonString(firstDefined(jsonPath(a, "ActivityDate"), jsonPath(a, "date"))) ?? "",
+      status: jsonString(firstDefined(jsonPath(a, "ActivityDescription"), jsonPath(a, "description"))) ?? "",
+      location: jsonString(firstDefined(jsonPath(a, "Location"), jsonPath(a, "location"))) ?? "",
     }));
     const latest = events[0];
     // Try dedicated ETA fields first, then scan activities for an ETA event.
-    let etaRaw: string | null =
-      data?.TrackingDetails?.ETA ??
-      data?.TrackingDetails?.VesselETA ??
-      data?.TrackingDetails?.EstimatedTimeOfArrival ??
-      data?.TrackingDetails?.EstimatedArrival ??
-      data?.eta ??
-      null;
+    let etaRaw: string | null = jsonString(
+      firstDefined(
+        jsonPath(data, "TrackingDetails", "ETA"),
+        jsonPath(data, "TrackingDetails", "VesselETA"),
+        jsonPath(data, "TrackingDetails", "EstimatedTimeOfArrival"),
+        jsonPath(data, "TrackingDetails", "EstimatedArrival"),
+        jsonPath(data, "eta")
+      )
+    );
     if (!etaRaw) {
       const etaActivity = activities.find((a) => {
-        const desc = ((a.ActivityDescription ?? a.description ?? "") as string).toLowerCase();
+        const desc = (
+          jsonString(firstDefined(jsonPath(a, "ActivityDescription"), jsonPath(a, "description"))) ?? ""
+        ).toLowerCase();
         return desc.includes("estimated time of arrival") || desc.includes("estimated arrival") || desc === "eta";
       });
       if (etaActivity) {
-        etaRaw = etaActivity.ActivityDate ?? etaActivity.date ?? null;
+        etaRaw = jsonString(firstDefined(jsonPath(etaActivity, "ActivityDate"), jsonPath(etaActivity, "date")));
       }
     }
     const shipment = toShipment(containerNumber, latest?.status ?? null, latest?.location ?? null, etaRaw, events);
@@ -153,16 +161,21 @@ async function tryHapag(containerNumber: string): Promise<HttpScraperResult> {
       }
     );
     if (!resp.ok) return { success: false, shipment: null, error: `Hapag HTTP ${resp.status}` };
-    const data = await resp.json();
-    const moves: any[] = data?.containerJourneys?.[0]?.containerMoves ?? data?.moves ?? [];
+    const data: unknown = await resp.json();
+    const moves = jsonArray(
+      firstDefined(jsonPath(data, "containerJourneys", 0, "containerMoves"), jsonPath(data, "moves"))
+    );
     if (!moves.length) return { success: false, shipment: null, error: "Hapag: no moves" };
     const events = moves.map((m) => ({
-      date: m.eventDateTime ?? m.date ?? "",
-      status: m.transportModeDescription ?? m.event ?? m.status ?? "",
-      location: m.portOfCall ?? m.location ?? "",
+      date: jsonString(firstDefined(jsonPath(m, "eventDateTime"), jsonPath(m, "date"))) ?? "",
+      status:
+        jsonString(
+          firstDefined(jsonPath(m, "transportModeDescription"), jsonPath(m, "event"), jsonPath(m, "status"))
+        ) ?? "",
+      location: jsonString(firstDefined(jsonPath(m, "portOfCall"), jsonPath(m, "location"))) ?? "",
     }));
     const latest = events[0];
-    const etaRaw = data?.containerJourneys?.[0]?.eta ?? data?.eta ?? null;
+    const etaRaw = jsonString(firstDefined(jsonPath(data, "containerJourneys", 0, "eta"), jsonPath(data, "eta")));
     const shipment = toShipment(containerNumber, latest?.status ?? null, latest?.location ?? null, etaRaw, events);
     return { success: true, shipment, rawResponse: data };
   } catch (err: unknown) {
@@ -183,17 +196,17 @@ async function tryCosco(containerNumber: string): Promise<HttpScraperResult> {
       }
     );
     if (!resp.ok) return { success: false, shipment: null, error: `COSCO HTTP ${resp.status}` };
-    const data = await resp.json();
-    const detail = data?.data?.content?.[0];
+    const data: unknown = await resp.json();
+    const detail = jsonPath(data, "data", "content", 0);
     if (!detail) return { success: false, shipment: null, error: "COSCO: no data" };
-    const moves: any[] = detail.movementActivities ?? detail.activities ?? [];
+    const moves = jsonArray(firstDefined(jsonPath(detail, "movementActivities"), jsonPath(detail, "activities")));
     const events = moves.map((m) => ({
-      date: m.eventDate ?? m.date ?? "",
-      status: m.activity ?? m.status ?? "",
-      location: m.location ?? "",
+      date: jsonString(firstDefined(jsonPath(m, "eventDate"), jsonPath(m, "date"))) ?? "",
+      status: jsonString(firstDefined(jsonPath(m, "activity"), jsonPath(m, "status"))) ?? "",
+      location: jsonString(jsonPath(m, "location")) ?? "",
     }));
     const latest = events[0];
-    const etaRaw = detail.estimatedArrivalDate ?? detail.eta ?? null;
+    const etaRaw = jsonString(firstDefined(jsonPath(detail, "estimatedArrivalDate"), jsonPath(detail, "eta")));
     const shipment = toShipment(containerNumber, latest?.status ?? null, latest?.location ?? null, etaRaw, events);
     return { success: true, shipment, rawResponse: data };
   } catch (err: unknown) {
@@ -214,16 +227,16 @@ async function tryEvergreen(containerNumber: string): Promise<HttpScraperResult>
       }
     );
     if (!resp.ok) return { success: false, shipment: null, error: `Evergreen HTTP ${resp.status}` };
-    const data = await resp.json();
-    const moves: any[] = data?.EventList ?? data?.events ?? [];
+    const data: unknown = await resp.json();
+    const moves = jsonArray(firstDefined(jsonPath(data, "EventList"), jsonPath(data, "events")));
     if (!moves.length) return { success: false, shipment: null, error: "Evergreen: no events" };
     const events = moves.map((m) => ({
-      date: m.EventDate ?? m.date ?? "",
-      status: m.EventName ?? m.status ?? "",
-      location: m.PortName ?? m.location ?? "",
+      date: jsonString(firstDefined(jsonPath(m, "EventDate"), jsonPath(m, "date"))) ?? "",
+      status: jsonString(firstDefined(jsonPath(m, "EventName"), jsonPath(m, "status"))) ?? "",
+      location: jsonString(firstDefined(jsonPath(m, "PortName"), jsonPath(m, "location"))) ?? "",
     }));
     const latest = events[0];
-    const etaRaw = data?.ETA ?? data?.eta ?? null;
+    const etaRaw = jsonString(firstDefined(jsonPath(data, "ETA"), jsonPath(data, "eta")));
     const shipment = toShipment(containerNumber, latest?.status ?? null, latest?.location ?? null, etaRaw, events);
     return { success: true, shipment, rawResponse: data };
   } catch (err: unknown) {
@@ -260,15 +273,47 @@ async function _tryMaerskHtml(containerNumber: string): Promise<HttpScraperResul
         const props = nextData?.props?.pageProps ?? {};
         const td = props?.tracking ?? props?.trackingData ?? props?.container ?? props?.shipment;
         if (td) {
-          const rawEvents: any[] = td.events ?? td.movements ?? td.milestones ?? td.containers?.[0]?.events ?? [];
+          const rawEvents = jsonArray(
+            firstDefined(
+              jsonPath(td, "events"),
+              jsonPath(td, "movements"),
+              jsonPath(td, "milestones"),
+              jsonPath(td, "containers", 0, "events")
+            )
+          );
           if (rawEvents.length > 0) {
             const events = rawEvents.map((e) => ({
-              date: e.eventDateTime ?? e.eventDate ?? e.timestamp ?? e.date ?? "",
-              status: e.activityName ?? e.eventCode ?? e.status ?? e.description ?? "",
-              location: e.location?.portName ?? e.portName ?? (typeof e.location === "string" ? e.location : "") ?? "",
+              date:
+                jsonString(
+                  firstDefined(
+                    jsonPath(e, "eventDateTime"),
+                    jsonPath(e, "eventDate"),
+                    jsonPath(e, "timestamp"),
+                    jsonPath(e, "date")
+                  )
+                ) ?? "",
+              status:
+                jsonString(
+                  firstDefined(
+                    jsonPath(e, "activityName"),
+                    jsonPath(e, "eventCode"),
+                    jsonPath(e, "status"),
+                    jsonPath(e, "description")
+                  )
+                ) ?? "",
+              location:
+                jsonString(
+                  firstDefined(jsonPath(e, "location", "portName"), jsonPath(e, "portName"), jsonPath(e, "location"))
+                ) ?? "",
             }));
             const latest = events[0];
-            const etaRaw = td.eta ?? td.estimatedTimeOfArrival ?? td.estimatedArrival ?? null;
+            const etaRaw = jsonString(
+              firstDefined(
+                jsonPath(td, "eta"),
+                jsonPath(td, "estimatedTimeOfArrival"),
+                jsonPath(td, "estimatedArrival")
+              )
+            );
             return {
               success: true,
               shipment: toShipment(containerNumber, latest?.status ?? null, latest?.location ?? null, etaRaw, events),
@@ -284,13 +329,13 @@ async function _tryMaerskHtml(containerNumber: string): Promise<HttpScraperResul
     // application/json script tags (some Next.js versions)
     for (const m of html.matchAll(/<script[^>]+type="application\/json"[^>]*>([\s\S]*?)<\/script>/gi)) {
       try {
-        const data = JSON.parse(m[1]);
-        const events: any[] = data?.events ?? data?.movements ?? [];
+        const data: unknown = JSON.parse(m[1]);
+        const events = jsonArray(firstDefined(jsonPath(data, "events"), jsonPath(data, "movements")));
         if (events.length > 0) {
           const mapped = events.map((e) => ({
-            date: e.date ?? e.eventDateTime ?? "",
-            status: e.status ?? e.activityName ?? "",
-            location: e.location ?? e.portName ?? "",
+            date: jsonString(firstDefined(jsonPath(e, "date"), jsonPath(e, "eventDateTime"))) ?? "",
+            status: jsonString(firstDefined(jsonPath(e, "status"), jsonPath(e, "activityName"))) ?? "",
+            location: jsonString(firstDefined(jsonPath(e, "location"), jsonPath(e, "portName"))) ?? "",
           }));
           return {
             success: true,
@@ -355,18 +400,29 @@ async function _tryPageHtml(containerNumber: string): Promise<HttpScraperResult>
   }
 }
 
-function extractFromNuxt(payload: any, containerNumber: string): ParcelsAppShipment | null {
-  if (!payload || typeof payload !== "object") return null;
-  const candidates: any[] =
-    payload?.shipments ?? payload?.parcels ?? payload?.data?.shipments ?? payload?.data?.parcels ?? [];
+function extractFromNuxt(payload: unknown, containerNumber: string): ParcelsAppShipment | null {
+  const record = asRecord(payload);
+  if (!record) return null;
+  const candidates = jsonArray(
+    firstDefined(
+      jsonPath(record, "shipments"),
+      jsonPath(record, "parcels"),
+      jsonPath(record, "data", "shipments"),
+      jsonPath(record, "data", "parcels")
+    )
+  );
   if (candidates.length) {
     const match =
-      candidates.find((s) => s?.trackingId === containerNumber || s?.id === containerNumber) ?? candidates[0];
-    if (match?.trackingId || match?.id) return match as ParcelsAppShipment;
+      candidates.find((s) => jsonPath(s, "trackingId") === containerNumber || jsonPath(s, "id") === containerNumber) ??
+      candidates[0];
+    // The caller only reads trackingId/id/states off this, and the payload is a
+    // third-party Nuxt blob, so presence of an identifier is the whole contract.
+    if (jsonPath(match, "trackingId") || jsonPath(match, "id")) return match as ParcelsAppShipment;
   }
   for (const key of ["data", "state", "fetch", "nuxt", "payload"]) {
-    if (payload[key] && typeof payload[key] === "object") {
-      const found = extractFromNuxt(payload[key], containerNumber);
+    const nested = record[key];
+    if (asRecord(nested)) {
+      const found = extractFromNuxt(nested, containerNumber);
       if (found) return found;
     }
   }
