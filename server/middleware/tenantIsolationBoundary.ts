@@ -73,6 +73,7 @@ const AUTHORIZED_CROSS_COMPANY_PATHS = new Set(["/api/payroll/bonus-locations", 
 
 function isAuthorizedCrossCompanyPath(path: string): boolean {
   if (AUTHORIZED_CROSS_COMPANY_PATHS.has(path)) return true;
+  if (path === "/api/purchase-orders/parent-freight-accounts") return true;
   if (/^\/api\/purchase-orders\/\d+\/sync-parent-voucher$/.test(path)) return true;
   return path === "/api/global/transactions" || path.startsWith("/api/global/transactions/");
 }
