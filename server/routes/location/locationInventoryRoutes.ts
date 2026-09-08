@@ -8,10 +8,29 @@ import { requireAuth, checkPOSLocation } from "../../auth";
 import { calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { generateStockPdf } from "../../helpers/generateStockPdf";
+import { hydrateSessionNamedPermissions } from "../../services/security/namedPermissionService";
 import { inventory, stockItems, companies, stockGroups } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
 const MAX_INVENTORY_RATE_STOCK_ITEM_IDS = 250;
+const POS_INVENTORY_COST_PERMISSION = "inventory.cost.view";
+
+async function canViewInventoryCost(req: any): Promise<boolean> {
+  if (req.user?.role !== "POS") return true;
+  try {
+    const permissions = await hydrateSessionNamedPermissions(db, req.session);
+    return permissions.includes(POS_INVENTORY_COST_PERMISSION);
+  } catch (error: unknown) {
+    // Cost data is sensitive. If the permission service is unavailable, keep the
+    // stock page usable but fail closed by withholding cost from POS users.
+    logger.warn("[inventory] Could not resolve POS cost permission; hiding cost", {
+      error: getErrorMessage(error),
+      userId: req.session?.userId ?? null,
+      companyId: req.session?.currentCompanyId ?? null,
+    });
+    return false;
+  }
+}
 
 export function registerLocationInventoryRoutes(app: Express) {
   app.get("/api/locations/:locationId/inventory-rates", requireAuth, checkPOSLocation, async (req, res) => {
@@ -27,6 +46,13 @@ export function registerLocationInventoryRoutes(app: Express) {
       }
       if (location.companyId !== req.session.currentCompanyId) {
         return res.status(403).json({ message: "Access denied: Location belongs to a different company" });
+      }
+
+      if (!(await canViewInventoryCost(req))) {
+        return res.status(403).json({
+          code: "POS_INVENTORY_COST_FORBIDDEN",
+          message: "Cost price access is not enabled for this POS user",
+        });
       }
 
       const stockItemIdsParam = req.query.stockItemIds as string;
@@ -90,6 +116,7 @@ export function registerLocationInventoryRoutes(app: Express) {
       }
 
       const includeZero = req.query.includeZero === "true";
+      const canViewCost = await canViewInventoryCost(req);
 
       // High-frequency interactive callers can request only the identity/quantity
       // fields they need without registering a second route or downloading the
@@ -97,7 +124,6 @@ export function registerLocationInventoryRoutes(app: Express) {
       if (req.query.profile === "light") {
         const includePricing = req.query.includePricing === "true";
         const rows = await storage.getLocationInventory(location.companyId, locationId, includeZero);
-        const isPOS = req.user?.role === "POS";
         const compactRows = rows.map((item) => {
           const compact: Record<string, unknown> = {
             locationId: item.locationId,
@@ -109,7 +135,7 @@ export function registerLocationInventoryRoutes(app: Express) {
           };
 
           if (includePricing) {
-            compact.averageRate = isPOS ? null : (item.averageRate ?? null);
+            compact.averageRate = canViewCost ? (item.averageRate ?? null) : null;
             compact.lastSellingPrice = item.lastSellingPrice ?? null;
           }
 
@@ -160,9 +186,10 @@ export function registerLocationInventoryRoutes(app: Express) {
         inventory = await storage.getLocationInventory(inventoryCompanyId, locationId, includeZero);
       }
 
-      // Filter sensitive data for POS users (they should only see quantity)
+      // Cost is hidden from POS by default. Only the explicitly granted
+      // inventory.cost.view permission exposes average rate / total value.
       const isPOS = req.user?.role === "POS";
-      if (isPOS) {
+      if (isPOS && !canViewCost) {
         const filteredInventory = inventory.map((item) => ({
           ...item,
           averageRate: null,
@@ -199,22 +226,29 @@ export function registerLocationInventoryRoutes(app: Express) {
         });
       }
 
+      const canViewCost = await canViewInventoryCost(req);
       const inventory = await storage.getLocationInventory(req.session.currentCompanyId!, locationId);
 
       // Filter out zero-quantity items
       const filteredInventory = inventory.filter((item) => parseFloat(item.quantity || "0") !== 0);
 
-      // Build Excel workbook data
-      const workbookData = filteredInventory.map((item) => ({
-        "Item Code": item.stockItemCode || "",
-        "Item Name": item.stockItemName || "",
-        "Group Code": item.stockGroupCode || "",
-        "Group Name": item.stockGroupName || "Unassigned",
-        UOM: item.stockItemUom || "",
-        Quantity: parseFloat(item.quantity || "0"),
-        "Cost/Unit": parseFloat(item.averageRate || "0"),
-        "Total Value": parseFloat(item.totalValue || "0"),
-      }));
+      // Build Excel workbook data. Cost columns are only included when the
+      // current user is authorized to view cost.
+      const workbookData = filteredInventory.map((item) => {
+        const row: Record<string, string | number> = {
+          "Item Code": item.stockItemCode || "",
+          "Item Name": item.stockItemName || "",
+          "Group Code": item.stockGroupCode || "",
+          "Group Name": item.stockGroupName || "Unassigned",
+          UOM: item.stockItemUom || "",
+          Quantity: parseFloat(item.quantity || "0"),
+        };
+        if (canViewCost) {
+          row["Cost/Unit"] = parseFloat(item.averageRate || "0");
+          row["Total Value"] = parseFloat(item.totalValue || "0");
+        }
+        return row;
+      });
 
       // Use XLSX to create workbook (via ExcelJS if available, else JSON export)
       const XLSX = await import("xlsx-js-style");
@@ -228,8 +262,7 @@ export function registerLocationInventoryRoutes(app: Express) {
         { wch: 25 },
         { wch: 10 },
         { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
+        ...(canViewCost ? [{ wch: 15 }, { wch: 15 }] : []),
       ];
       worksheet["!cols"] = colWidths;
 
@@ -274,6 +307,12 @@ export function registerLocationInventoryRoutes(app: Express) {
       const companyName = co?.name || "Company";
 
       const includeCost = req.query.includeCost !== "0" && req.query.includeCost !== "false";
+      if (includeCost && !(await canViewInventoryCost(req))) {
+        return res.status(403).json({
+          code: "POS_INVENTORY_COST_FORBIDDEN",
+          message: "Cost price access is not enabled for this POS user",
+        });
+      }
 
       const { buffer } = await generateStockPdf(companyId, companyName, locationId, location.name, includeCost);
 
@@ -322,6 +361,12 @@ export function registerLocationInventoryRoutes(app: Express) {
         const companyName = co?.name || "Company";
 
         const includeCost = req.query.includeCost !== "0" && req.query.includeCost !== "false";
+        if (includeCost && !(await canViewInventoryCost(req))) {
+          return res.status(403).json({
+            code: "POS_INVENTORY_COST_FORBIDDEN",
+            message: "Cost price access is not enabled for this POS user",
+          });
+        }
 
         const { buffer, rowCount } = await generateStockPdf(
           companyId,
