@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { toInventoryDecimal } from "../../lib/inventoryMath";
 
 export interface PosItemReplacementInput {
@@ -11,6 +12,7 @@ export interface PosReplacementSourceLine {
   stockItemId: number;
   quantity: string;
   sellingPrice: string;
+  totalSales: string;
 }
 
 export interface PosReplacementEditedLine {
@@ -18,14 +20,20 @@ export interface PosReplacementEditedLine {
   stockItemId: number;
   quantity: string;
   sellingPrice: string;
+  /** Exact rounded amount allocated from the original sale line. */
+  totalSales?: string;
 }
 
 /**
  * Split sale lines for a replacement without changing what the customer paid.
  *
  * The remaining portion keeps the original sales_item id so the normal POS
- * edit flow preserves its historical cost. The replacement portion deliberately
- * has no id, which makes rebuildSaleItems cost the new item from current stock.
+ * edit flow preserves its historical cost. Replacement portions deliberately
+ * have no id, which makes rebuildSaleItems cost the new item from current stock.
+ *
+ * Rounded line revenue is allocated across split portions and forced to sum to
+ * the original stored totalSales. This avoids a 0.03 line becoming 0.04 after a
+ * 0.5/0.5 split due to independent cent rounding.
  */
 export function buildPosReplacementSaleItems(
   originalItems: PosReplacementSourceLine[],
@@ -42,6 +50,7 @@ export function buildPosReplacementSaleItems(
         stockItemId: originalItem.stockItemId,
         quantity: originalItem.quantity,
         sellingPrice: originalItem.sellingPrice,
+        totalSales: originalItem.totalSales,
       });
       continue;
     }
@@ -53,8 +62,9 @@ export function buildPosReplacementSaleItems(
     );
     const remainingQty = originalQty.minus(replaceQty);
 
+    const segments: Array<Omit<PosReplacementEditedLine, "totalSales">> = [];
     if (remainingQty.isPositive()) {
-      editedItems.push({
+      segments.push({
         id: originalItem.id,
         stockItemId: originalItem.stockItemId,
         quantity: remainingQty.toString(),
@@ -63,13 +73,30 @@ export function buildPosReplacementSaleItems(
     }
 
     for (const replacement of lineReplacements) {
-      editedItems.push({
+      segments.push({
         stockItemId: replacement.replacementStockItemId,
         quantity: toInventoryDecimal(replacement.quantity).toString(),
         sellingPrice: originalItem.sellingPrice,
       });
       replacedQuantity = replacedQuantity.plus(toInventoryDecimal(replacement.quantity));
     }
+
+    const originalRoundedTotal = toInventoryDecimal(originalItem.totalSales);
+    let allocated = new Decimal(0);
+    segments.forEach((segment, index) => {
+      let segmentTotal: Decimal;
+      if (index === segments.length - 1) {
+        segmentTotal = originalRoundedTotal.minus(allocated);
+      } else {
+        const qty = toInventoryDecimal(segment.quantity);
+        segmentTotal = originalRoundedTotal
+          .times(qty)
+          .dividedBy(originalQty)
+          .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+        allocated = allocated.plus(segmentTotal);
+      }
+      editedItems.push({ ...segment, totalSales: segmentTotal.toFixed(2) });
+    });
   }
 
   return { items: editedItems, replacedQuantity: replacedQuantity.toString() };
