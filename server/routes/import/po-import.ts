@@ -24,6 +24,46 @@ import {
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { supplierService } from "../suppliers/supplierService";
 
+/**
+ * The shape this route requires of the `preview` payload posted back from the
+ * import wizard.
+ *
+ * `preview` arrives on `req.body`, so it is client-supplied and unvalidated;
+ * the handlers below previously reached into it through `(p: any)` and
+ * `items as any[]`. Declaring what is actually read - and nothing more - means
+ * a payload the wizard stops sending is a compile error here rather than an
+ * `undefined` that reaches a purchase order total.
+ */
+interface PoImportPreviewItem {
+  poNumber: string;
+  barcode: string;
+  itemName: string;
+  quantity: number;
+  rate: number;
+  lineTotal: number;
+  currency?: string;
+  stockItemId?: number | null;
+}
+
+interface PoImportPreviewCharges {
+  freight?: number;
+  surcharge?: number;
+  fumigation?: number;
+  documentCharges?: number;
+  discount?: number;
+  otherCharges?: number;
+}
+
+interface PoImportPreviewContainer {
+  containerNumber: string;
+  items: PoImportPreviewItem[];
+  charges: PoImportPreviewCharges;
+  itemsCount: number;
+  itemsTotal: number;
+  chargesTotal: number;
+  grandTotal: number;
+}
+
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
     try {
@@ -75,7 +115,9 @@ export function registerPoImportRoutes(app: Express) {
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
       // Validate all items in the preview
-      const containerPreview = preview.find((p: any) => p.containerNumber === containerNumber);
+      const containerPreview = (preview as PoImportPreviewContainer[]).find(
+        (p) => p.containerNumber === containerNumber
+      );
       if (!containerPreview) {
         errors.push("Container data not found in preview");
       } else {
@@ -184,7 +226,16 @@ export function registerPoImportRoutes(app: Express) {
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
       // Validate all items in the preview
-      const containerPreview = preview.find((p: any) => p.containerNumber === containerNumber);
+      const containerPreview = (preview as PoImportPreviewContainer[]).find(
+        (p) => p.containerNumber === containerNumber
+      );
+      // The validation endpoint reports this as an error and stops; this one
+      // used to walk straight into containerPreview.items and throw a
+      // TypeError mid-import, surfacing as a 500 after partial work. Typing the
+      // payload made the unguarded lookup visible.
+      if (!containerPreview) {
+        return res.status(400).json({ message: "Container data not found in preview" });
+      }
       if (!containerPreview) {
         validationErrors.push("Container data not found in preview");
       } else {
@@ -281,7 +332,7 @@ export function registerPoImportRoutes(app: Express) {
       }
 
       // Group items by PO
-      const poGroups = containerPreview.items.reduce((acc: any, item: any) => {
+      const poGroups = containerPreview.items.reduce<Record<string, PoImportPreviewItem[]>>((acc, item) => {
         if (!acc[item.poNumber]) {
           acc[item.poNumber] = [];
         }
@@ -359,9 +410,10 @@ export function registerPoImportRoutes(app: Express) {
         containerOtherCharges > 0;
 
       // Calculate total items value across all POs for pro-rating charges
-      const totalAllItemsValue = Object.values(poGroups).reduce((sum: number, items) => {
-        return sum + (items as any[]).reduce((s, item) => s + item.lineTotal, 0);
-      }, 0);
+      const totalAllItemsValue = Object.values(poGroups).reduce(
+        (sum, items) => sum + items.reduce((s, item) => s + item.lineTotal, 0),
+        0
+      );
 
       // Track allocated charges for remainder reconciliation
       let allocatedFreight = 0,
@@ -376,7 +428,7 @@ export function registerPoImportRoutes(app: Express) {
       for (let poIndex = 0; poIndex < poEntries.length; poIndex++) {
         const [poNumber, items] = poEntries[poIndex];
         const isLastPO = poIndex === poEntries.length - 1;
-        const poItems = items as any[];
+        const poItems = items;
         const poItemsTotal = poItems.reduce((sum, item) => sum + item.lineTotal, 0);
 
         // Pro-rate charges based on this PO's items proportion of total
@@ -791,7 +843,7 @@ export function registerPoImportRoutes(app: Express) {
             containerId: container.id,
             supplierId,
             voucherId: voucher.id,
-            currency: poItems[0].currency,
+            currency: poItems[0]?.currency,
             itemsTotal: poItemsTotal.toString(),
             freight: poFreight.toString(),
             surcharge: poSurcharge.toString(),
@@ -852,8 +904,9 @@ export function registerPoImportRoutes(app: Express) {
       ];
 
       for (const charge of chargeTypesForContainer) {
-        if (charge.amount > 0) {
-          const actualAmount = charge.isNegative ? -charge.amount : charge.amount;
+        const chargeAmount = charge.amount ?? 0;
+        if (chargeAmount > 0) {
+          const actualAmount = charge.isNegative ? -chargeAmount : chargeAmount;
 
           // Create container charge record (for display only - charges are in PO voucher)
           await storage.createContainerCharge({
