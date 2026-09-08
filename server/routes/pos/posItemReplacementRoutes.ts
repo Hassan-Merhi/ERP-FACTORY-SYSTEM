@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { storage } from "../../storage";
 import {
   applyPosItemReplacements,
   listPosItemReplacementCandidates,
@@ -27,9 +28,26 @@ const bulkReplacementSchema = z.object({
   replacements: z.array(replacementSchema).min(1).max(100),
 });
 
-function ensureErpCorrectionAccess(req: any, res: any): boolean {
-  if (req.user?.role === "POS") {
+async function ensureErpCorrectionAccess(req: any, res: any): Promise<boolean> {
+  const role = req.session?.currentRole ?? req.user?.role;
+  if (role === "POS") {
     res.status(403).json({ message: "POS item replacement is available from ERP only" });
+    return false;
+  }
+
+  const companyId = req.session?.currentCompanyId;
+  const userId = req.session?.userId;
+  if (!companyId || !userId) {
+    res.status(400).json({ message: "No company selected" });
+    return false;
+  }
+
+  // Mirror /api/my-erp-pages: Admin/Developer have full ERP access, while
+  // every other ERP role must explicitly have the POS feature assigned.
+  if (role === "Admin" || role === "Developer") return true;
+  const pageKeys = await storage.getErpUserPageAccess(companyId, userId);
+  if (!pageKeys.includes("pos")) {
+    res.status(403).json({ message: "You do not have access to POS item replacement" });
     return false;
   }
   return true;
@@ -37,19 +55,15 @@ function ensureErpCorrectionAccess(req: any, res: any): boolean {
 
 export function registerPosItemReplacementRoutes(app: Express): void {
   app.get("/api/pos/item-replacements/candidates", requireAuth, async (req, res) => {
-    if (!ensureErpCorrectionAccess(req, res)) return;
-    if (!req.session.currentCompanyId) {
-      return res.status(400).json({ message: "No company selected" });
-    }
-
-    const parsed = candidateQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid filters" });
-    }
-
     try {
+      if (!(await ensureErpCorrectionAccess(req, res))) return;
+      const parsed = candidateQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid filters" });
+      }
+
       const rows = await listPosItemReplacementCandidates({
-        companyId: req.session.currentCompanyId,
+        companyId: req.session.currentCompanyId!,
         ...parsed.data,
       });
       return res.json({ rows, count: rows.length, capped: rows.length >= 500 });
@@ -66,22 +80,19 @@ export function registerPosItemReplacementRoutes(app: Express): void {
   });
 
   app.post("/api/pos/item-replacements", requireAuth, async (req, res) => {
-    if (!ensureErpCorrectionAccess(req, res)) return;
-    if (!req.session.currentCompanyId || !req.session.userId) {
-      return res.status(400).json({ message: "No company selected" });
-    }
-
-    const parsed = bulkReplacementSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid replacement request" });
-    }
-
     try {
+      if (!(await ensureErpCorrectionAccess(req, res))) return;
+
+      const parsed = bulkReplacementSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid replacement request" });
+      }
+
       const result = await applyPosItemReplacements(
         {
-          companyId: req.session.currentCompanyId,
+          companyId: req.session.currentCompanyId!,
           locationId: parsed.data.locationId,
-          userId: req.session.userId,
+          userId: req.session.userId!,
           username: req.session.username || "unknown",
           userRole: req.user?.role,
           canSellNegativeStock: req.user?.canSellNegativeStock || false,
