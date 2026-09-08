@@ -20,6 +20,75 @@ export interface PosItemReplacementActor {
   canSellNegativeStock: boolean;
 }
 
+export interface PosReplacementSourceLine {
+  id: number;
+  stockItemId: number;
+  quantity: string;
+  sellingPrice: string;
+}
+
+export interface PosReplacementEditedLine {
+  id?: number;
+  stockItemId: number;
+  quantity: string;
+  sellingPrice: string;
+}
+
+/**
+ * Split sale lines for a replacement without changing what the customer paid.
+ *
+ * The remaining portion keeps the original sales_item id so the normal POS
+ * edit flow preserves its historical cost. The replacement portion deliberately
+ * has no id, which makes rebuildSaleItems cost the new item from current stock.
+ */
+export function buildPosReplacementSaleItems(
+  originalItems: PosReplacementSourceLine[],
+  replacementsBySaleItem: Map<number, PosItemReplacementInput[]>
+): { items: PosReplacementEditedLine[]; replacedQuantity: string } {
+  const editedItems: PosReplacementEditedLine[] = [];
+  let replacedQuantity = toInventoryDecimal(0);
+
+  for (const originalItem of originalItems) {
+    const lineReplacements = replacementsBySaleItem.get(originalItem.id) || [];
+    if (!lineReplacements.length) {
+      editedItems.push({
+        id: originalItem.id,
+        stockItemId: originalItem.stockItemId,
+        quantity: originalItem.quantity,
+        sellingPrice: originalItem.sellingPrice,
+      });
+      continue;
+    }
+
+    const originalQty = toInventoryDecimal(originalItem.quantity);
+    const replaceQty = lineReplacements.reduce(
+      (sum, row) => sum.plus(toInventoryDecimal(row.quantity)),
+      toInventoryDecimal(0)
+    );
+    const remainingQty = originalQty.minus(replaceQty);
+
+    if (remainingQty.isPositive()) {
+      editedItems.push({
+        id: originalItem.id,
+        stockItemId: originalItem.stockItemId,
+        quantity: remainingQty.toString(),
+        sellingPrice: originalItem.sellingPrice,
+      });
+    }
+
+    for (const replacement of lineReplacements) {
+      editedItems.push({
+        stockItemId: replacement.replacementStockItemId,
+        quantity: toInventoryDecimal(replacement.quantity).toString(),
+        sellingPrice: originalItem.sellingPrice,
+      });
+      replacedQuantity = replacedQuantity.plus(toInventoryDecimal(replacement.quantity));
+    }
+  }
+
+  return { items: editedItems, replacedQuantity: replacedQuantity.toString() };
+}
+
 export async function listPosItemReplacementCandidates(params: {
   companyId: number;
   locationId: number;
@@ -79,7 +148,6 @@ export async function applyPosItemReplacements(
     .select({
       saleItem: salesItems,
       voucherId: vouchers.id,
-      voucherCompanyId: vouchers.companyId,
       voucherLocationId: vouchers.locationId,
       voucherDeletedAt: vouchers.deletedAt,
       voucherType: vouchers.voucherType,
@@ -152,10 +220,7 @@ export async function applyPosItemReplacements(
   const voucherIds = Array.from(new Set(requestedSaleRows.map((row) => row.voucherId)));
   const voucherRows = await db.select().from(vouchers).where(inArray(vouchers.id, voucherIds));
   const voucherById = new Map(voucherRows.map((row) => [row.id, row]));
-  const allSaleItems = await db
-    .select()
-    .from(salesItems)
-    .where(inArray(salesItems.voucherId, voucherIds));
+  const allSaleItems = await db.select().from(salesItems).where(inArray(salesItems.voucherId, voucherIds));
   const saleItemsByVoucher = new Map<number, typeof allSaleItems>();
   for (const row of allSaleItems) {
     const current = saleItemsByVoucher.get(row.voucherId) || [];
@@ -184,45 +249,8 @@ export async function applyPosItemReplacements(
     }
 
     const originalItems = (saleItemsByVoucher.get(voucherId) || []).sort((a, b) => a.id - b.id);
-    const editedItems: Array<{ id?: number; stockItemId: number; quantity: string; sellingPrice: string }> = [];
-
-    for (const originalItem of originalItems) {
-      const lineReplacements = replacementsBySaleItem.get(originalItem.id) || [];
-      if (!lineReplacements.length) {
-        editedItems.push({
-          id: originalItem.id,
-          stockItemId: originalItem.stockItemId,
-          quantity: originalItem.quantity,
-          sellingPrice: originalItem.sellingPrice,
-        });
-        continue;
-      }
-
-      const originalQty = toInventoryDecimal(originalItem.quantity);
-      const replaceQty = lineReplacements.reduce(
-        (sum, row) => sum.plus(toInventoryDecimal(row.quantity)),
-        toInventoryDecimal(0)
-      );
-      const remainingQty = originalQty.minus(replaceQty);
-
-      if (remainingQty.isPositive()) {
-        editedItems.push({
-          id: originalItem.id,
-          stockItemId: originalItem.stockItemId,
-          quantity: remainingQty.toString(),
-          sellingPrice: originalItem.sellingPrice,
-        });
-      }
-
-      for (const replacement of lineReplacements) {
-        editedItems.push({
-          stockItemId: replacement.replacementStockItemId,
-          quantity: toInventoryDecimal(replacement.quantity).toString(),
-          sellingPrice: originalItem.sellingPrice,
-        });
-        replacedQuantity = replacedQuantity.plus(toInventoryDecimal(replacement.quantity));
-      }
-    }
+    const built = buildPosReplacementSaleItems(originalItems, replacementsBySaleItem);
+    replacedQuantity = replacedQuantity.plus(toInventoryDecimal(built.replacedQuantity));
 
     const result = await updatePosSale({
       voucherId,
@@ -233,7 +261,7 @@ export async function applyPosItemReplacements(
       canSellNegativeStock: actor.canSellNegativeStock,
       body: {
         description: voucher.description,
-        items: editedItems,
+        items: built.items,
         isCreditSale: Boolean(voucher.isCreditSale),
         voucherDate: voucher.voucherDate,
         locationId: voucher.locationId,
@@ -241,10 +269,14 @@ export async function applyPosItemReplacements(
     });
 
     if (result.status !== 200) {
+      const baseMessage = result.body?.message || `Failed to update voucher ${voucher.voucherNumber}`;
+      const partialMessage = completedVoucherIds.length
+        ? `${baseMessage}. ${completedVoucherIds.length} earlier POS sale${completedVoucherIds.length === 1 ? " was" : "s were"} already updated.`
+        : baseMessage;
       return {
         status: result.status,
         body: {
-          message: result.body?.message || `Failed to update voucher ${voucher.voucherNumber}`,
+          message: partialMessage,
           failedVoucherId: voucherId,
           completedVoucherIds,
         },
