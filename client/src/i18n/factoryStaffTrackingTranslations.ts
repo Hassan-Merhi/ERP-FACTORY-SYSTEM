@@ -23,9 +23,9 @@ const factoryStaffTrackingTranslations = {
     fr: "Ouvriers, employés, objectifs de production, présence et assurance",
   },
   productionSubtitle: {
-    en: "Set bale targets, record production and see the difference by worker category.",
-    ar: "حدد أهداف البالات وسجل الإنتاج واعرض الفرق حسب فئة العامل.",
-    fr: "Définissez les objectifs de balles, saisissez la production et affichez l’écart par catégorie d’ouvrier.",
+    en: "Set bale targets and compare them with production recorded automatically from factory data.",
+    ar: "حدد أهداف البالات وقارنها بالإنتاج المسجل تلقائياً من بيانات المصنع.",
+    fr: "Définissez les objectifs de balles et comparez-les à la production enregistrée automatiquement depuis les données de l’usine.",
   },
   attendanceSubtitle: {
     en: "Only absent workers from your saved production groups are shown below.",
@@ -96,6 +96,41 @@ const factoryStaffTrackingTranslations = {
     en: "Failed to save factory tracking data",
     ar: "تعذر حفظ بيانات متابعة المصنع",
     fr: "Impossible d’enregistrer les données de suivi de l’usine",
+  },
+  copyYesterday: { en: "Copy Yesterday", ar: "نسخ أمس", fr: "Copier hier" },
+  copyingYesterday: { en: "Copying…", ar: "جارٍ النسخ…", fr: "Copie…" },
+  yesterdayCopied: {
+    en: "Yesterday's production targets copied",
+    ar: "تم نسخ أهداف إنتاج أمس",
+    fr: "Objectifs de production d’hier copiés",
+  },
+  noYesterdayProduction: {
+    en: "No saved production targets were found for yesterday",
+    ar: "لم يتم العثور على أهداف إنتاج محفوظة لأمس",
+    fr: "Aucun objectif de production enregistré n’a été trouvé pour hier",
+  },
+  copyYesterdayFailed: {
+    en: "Could not copy yesterday's production",
+    ar: "تعذر نسخ إنتاج أمس",
+    fr: "Impossible de copier la production d’hier",
+  },
+  endProduction: { en: "End Production", ar: "إنهاء الإنتاج", fr: "Terminer la production" },
+  endingProduction: { en: "Ending…", ar: "جارٍ الإنهاء…", fr: "Finalisation…" },
+  productionEnded: {
+    en: "Production ended and this day is locked",
+    ar: "تم إنهاء الإنتاج وتم قفل هذا اليوم",
+    fr: "Production terminée et journée verrouillée",
+  },
+  productionLocked: { en: "Production Ended", ar: "تم إنهاء الإنتاج", fr: "Production terminée" },
+  productionLockedDetail: {
+    en: "This day is frozen. Any production recorded after the cutoff rolls into the next production day.",
+    ar: "تم تجميد هذا اليوم. أي إنتاج يُسجل بعد وقت الإغلاق يُرحّل إلى يوم الإنتاج التالي.",
+    fr: "Cette journée est figée. Toute production enregistrée après la clôture passe au jour de production suivant.",
+  },
+  endProductionFailed: {
+    en: "Could not end production",
+    ar: "تعذر إنهاء الإنتاج",
+    fr: "Impossible de terminer la production",
   },
   attendanceReport: {
     en: "Attendance Absence Report",
