@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { randomBytes } from "crypto";
@@ -6,13 +6,14 @@ import { randomBytes } from "crypto";
 import { requireAuth, requireLogin } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { requireSessionUserId } from "../../lib/sessionUser";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import {
   advanceCurrentSessionAfterPasswordChange,
   replacePasswordAndRevokeSessions,
 } from "../../services/security/userPasswordChangeService";
-import { loginHistory, users } from "@shared/schema";
+import { companies, loginHistory, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
 
@@ -75,6 +76,21 @@ export function registerCoreAuthRoutes(app: Express) {
       if (!user.active) return res.status(403).json({ message: "Account is inactive" });
       const userCompanies = await storage.getUserCompaniesWithRoles(user.id);
 
+      // getUserCompaniesWithRoles returns plain user_company_roles rows, which
+      // carry no company name. Both reads below used to be `(row as any).companyName`
+      // and so were always undefined: the session and login_history recorded no
+      // company name at all. Resolve it the same way the company-switch route does.
+      const firstCompanyId = userCompanies.length > 0 ? userCompanies[0].companyId : null;
+      let firstCompanyName: string | null = null;
+      if (firstCompanyId) {
+        const [companyRow] = await db
+          .select({ name: companies.name })
+          .from(companies)
+          .where(eq(companies.id, firstCompanyId))
+          .limit(1);
+        firstCompanyName = companyRow?.name ?? null;
+      }
+
       await new Promise<void>((resolve, reject) => {
         req.session.regenerate((error) => (error ? reject(error) : resolve()));
       });
@@ -101,14 +117,14 @@ export function registerCoreAuthRoutes(app: Express) {
         req.session.daybookEditDays = firstCompany.daybookEditDays;
         req.session.canAccessCustomers = firstCompany.canAccessCustomers;
         req.session.canDeleteRecords = firstCompany.canDeleteRecords;
-        req.session.currentCompanyName = (firstCompany as any).companyName || null;
+        req.session.currentCompanyName = firstCompanyName;
       }
 
       const clientIp =
         (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
       const userAgentStr = req.headers["user-agent"] || "unknown";
-      const loginCompanyId = userCompanies.length > 0 ? userCompanies[0].companyId : null;
-      const loginCompanyName = userCompanies.length > 0 ? (userCompanies[0] as any).companyName : null;
+      const loginCompanyId = firstCompanyId;
+      const loginCompanyName = firstCompanyName;
 
       // Do not make an outbound request using a client-controlled IP value here.
       // Login history remains fully recorded; geo fields are intentionally left null.
@@ -180,9 +196,9 @@ export function registerCoreAuthRoutes(app: Express) {
     });
   });
 
-  app.patch("/api/me/password", requireLogin, async (req: any, res: import("express").Response) => {
+  app.patch("/api/me/password", requireLogin, async (req: Request, res: Response) => {
     try {
-      const userId: string = req.session.userId;
+      const userId = requireSessionUserId(req);
       const { currentPassword, newPassword, confirmPassword } = req.body;
       if (!currentPassword || !newPassword || !confirmPassword)
         return res.status(400).json({ message: "All password fields are required." });

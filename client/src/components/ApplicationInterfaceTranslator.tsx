@@ -22,6 +22,10 @@ import {
 } from "@/i18n/backendMessagesPhase7Translations";
 import { translateFactoryProductionPlannerText } from "@/i18n/factoryProductionPlannerTranslations";
 import { translateFactoryInsuranceText } from "@/i18n/factoryInsuranceTranslations";
+import {
+  isPosItemReplacementText,
+  translatePosItemReplacementLiteral,
+} from "@/i18n/posItemReplacement.applicationTranslations";
 
 const HARD_EXCLUDED_SELECTOR = [
   "code",
@@ -103,7 +107,8 @@ function isApprovedNonVisualText(value: string): boolean {
     isPhase4SupplierPartnerText(value) ||
     isPhase5PropertiesRentalsText(value) ||
     isPhase6ReportsExportsText(value) ||
-    isPhase7BackendMessageText(value)
+    isPhase7BackendMessageText(value) ||
+    isPosItemReplacementText(value)
   );
 }
 
@@ -114,6 +119,7 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
     translateTabsFiltersText(value, language) ??
     translateVoucherKpiText(value, language) ??
     translatePhase7BackendMessageText(value, language) ??
+    translatePosItemReplacementLiteral(value, language) ??
     translateFactoryProductionPlannerText(value, language) ??
     translateFactoryInsuranceText(value, language) ??
     translatePhase6ReportsExportsText(value, language) ??

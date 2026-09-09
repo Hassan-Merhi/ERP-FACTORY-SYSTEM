@@ -14,8 +14,9 @@ export function sumProformaQuantityLimit(lines: Array<{ quantity: unknown }>): n
 export function shouldEnforceProformaOverload(options: {
   ignoreProforma: boolean;
   allowBypassOverload: boolean;
+  isReinstatingRemovedBale?: boolean;
 }): boolean {
-  return !options.ignoreProforma && !options.allowBypassOverload;
+  return !options.ignoreProforma && !options.allowBypassOverload && !options.isReinstatingRemovedBale;
 }
 
 export function shouldRequireProformaMembership(options: {

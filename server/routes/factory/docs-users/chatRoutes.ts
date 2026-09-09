@@ -5,6 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
+import { requireSessionUserId } from "../../../lib/sessionUser";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { broadcast } from "../../../wsServer";
@@ -49,7 +50,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.post("/api/chat/typing", requireAuth, async (req: Request, res: Response) => {
     try {
-      const senderId = (req.session as any).userId;
+      const senderId = requireSessionUserId(req);
       const { receiverId, isTyping } = req.body;
       if (!receiverId) return res.status(400).json({ message: "receiverId required" });
       if (isTyping) {
@@ -65,7 +66,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.get("/api/chat/typing/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session).userId;
+      const currentUserId = req.session.userId;
       const otherUserId = req.params.userId;
       const record = typingStatus.get(otherUserId);
       const isTyping = !!record && record.receiverId === currentUserId && record.until > Date.now();
@@ -77,7 +78,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.get("/api/chat/users", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const allUsers = await db
         .select({
           id: users.id,
@@ -141,7 +142,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.get("/api/chat/conversations/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const otherUserId = req.params.userId;
 
       const messages = await db
@@ -163,7 +164,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.post("/api/chat/messages", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const parsed = insertDirectMessageSchema.parse({
         ...req.body,
         senderId: currentUserId,
@@ -193,7 +194,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.post("/api/chat/mark-read/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const senderId = req.params.userId;
 
       await db
@@ -215,7 +216,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.delete("/api/chat/messages/:userId", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const otherUserId = req.params.userId;
 
       await db
@@ -235,7 +236,7 @@ export function registerFactoryChatRoutes(app: Express) {
 
   app.get("/api/chat/unread-count", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentUserId = (req.session as any).userId;
+      const currentUserId = requireSessionUserId(req);
       const [result] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(directMessages)

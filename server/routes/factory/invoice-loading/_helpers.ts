@@ -4,6 +4,7 @@
  * Extracted verbatim from the former single-file factoryInvoiceLoadingRoutes.ts.
  */
 import { db } from "../../../db";
+import type { Request } from "express";
 import {
   customerOrders,
   customerOrderLines,
@@ -13,10 +14,11 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+import type { Alignment, Border, Cell, CellValue, Worksheet } from "exceljs";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-export function getCompanyId(req: import("express").Request): number | null {
+export function getCompanyId(req: Request): number | null {
   return req.session.factoryCompanyId || req.session.currentCompanyId || null;
 }
 
@@ -59,14 +61,17 @@ export async function buildLoadingSummary(invoiceId: number, companyId: number, 
   const _invoiceBalesRawResult = await db.execute(
     sql`SELECT * FROM customer_order_bales WHERE order_id = ${invoiceId}`
   );
-  const _invoiceBalesRows: any[] = resultRows(_invoiceBalesRawResult);
-  const invoiceBalesRaw = _invoiceBalesRows.map((r) => ({
-    id: r.id as number,
-    baleId: r.bale_id as number,
+  // Columns are read off `Record<string, unknown>` rows because the SELECT * above
+  // deliberately does not name them: each value is coerced here rather than
+  // asserted, so a column that is absent in production still yields the same
+  // defaults the untyped version produced.
+  const invoiceBalesRaw = resultRows(_invoiceBalesRawResult).map((r) => ({
+    id: Number(r.id),
+    baleId: Number(r.bale_id),
     baleReference: String(r.bale_reference ?? ""),
     articleCode: r.article_code != null ? String(r.article_code) : null,
     baleName: r.bale_name != null ? String(r.bale_name) : null,
-    weight: r.weight,
+    weight: r.weight != null ? String(r.weight) : "",
     priceUsed: String(r.price_used ?? "0"),
   }));
 
@@ -221,16 +226,16 @@ export async function buildLoadingSummary(invoiceId: number, companyId: number, 
  * Declared at module scope so the four export handlers that share them can
  * live in separate modules.
  */
-export function cellFill(cell: any, argb: string) {
+export function cellFill(cell: Cell, argb: string) {
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 /** Apply thin borders to all four sides of a cell */
-export function cellBorder(cell: any) {
-  const s = { style: "thin", color: { argb: "FFD1D5DB" } };
+export function cellBorder(cell: Cell) {
+  const s: Partial<Border> = { style: "thin", color: { argb: "FFD1D5DB" } };
   cell.border = { top: s, left: s, bottom: s, right: s };
 }
 /** Style a section-header row (dark navy bg, white bold) */
-export function sectionHeader(ws: any, rowNum: number, value: string, cols: number) {
+export function sectionHeader(ws: Worksheet, rowNum: number, value: string, cols: number) {
   const row = ws.getRow(rowNum);
   const cell = row.getCell(1);
   cell.value = value;
@@ -240,7 +245,7 @@ export function sectionHeader(ws: any, rowNum: number, value: string, cols: numb
   row.height = 20;
 }
 /** Style a column-header row (light blue bg, dark blue bold) */
-export function colHeaders(ws: any, rowNum: number, headers: string[]) {
+export function colHeaders(ws: Worksheet, rowNum: number, headers: string[]) {
   const row = ws.getRow(rowNum);
   headers.forEach((h, i) => {
     const cell = row.getCell(i + 1);
@@ -254,9 +259,9 @@ export function colHeaders(ws: any, rowNum: number, headers: string[]) {
 }
 /** Style a data cell */
 export function dataCell(
-  cell: any,
-  value: any,
-  opts: { bold?: boolean; color?: string; align?: string; fill?: string } = {}
+  cell: Cell,
+  value: CellValue,
+  opts: { bold?: boolean; color?: string; align?: Alignment["horizontal"]; fill?: string } = {}
 ) {
   cell.value = value;
   cell.font = { bold: opts.bold ?? false, color: { argb: opts.color ?? "FF111827" }, size: 10 };

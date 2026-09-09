@@ -1,3 +1,5 @@
+import type { SessionData } from "express-session";
+import { isRecord } from "@shared/typeGuards";
 import type { DatabaseOrTransaction, DatabasePool, DbTransaction } from "../../db";
 import { and, eq } from "drizzle-orm";
 import { userCompanyRoles, userSecurityPermissions } from "@shared/schema";
@@ -26,11 +28,14 @@ export class SecuritySchemaUnavailableError extends Error {
   }
 }
 
-function postgresErrorCode(error: any): string {
-  return String(error?.code || error?.cause?.code || "");
+function postgresErrorCode(error: unknown): string {
+  if (!isRecord(error)) return "";
+  const cause = error.cause;
+  const causeCode = isRecord(cause) ? cause.code : undefined;
+  return String(error.code || causeCode || "");
 }
 
-function isSecuritySchemaError(error: any): boolean {
+function isSecuritySchemaError(error: unknown): boolean {
   const code = postgresErrorCode(error);
   return code === "42P01" || code === "42703";
 }
@@ -99,10 +104,15 @@ export async function replaceNamedPermissions(
   return permissions;
 }
 
-export async function hydrateSessionNamedPermissions(db: DatabaseOrTransaction, session: any): Promise<string[]> {
-  const userId = session?.userId;
-  const companyId = session?.currentCompanyId;
-  if (!userId || !Number.isSafeInteger(companyId) || companyId <= 0) {
+export async function hydrateSessionNamedPermissions(
+  db: DatabaseOrTransaction,
+  session: SessionData
+): Promise<string[]> {
+  const userId = session.userId;
+  const companyId = session.currentCompanyId;
+  // `typeof companyId === "number"` is what narrows it for the calls below;
+  // Number.isSafeInteger(undefined) is already false, so the guard is unchanged.
+  if (!userId || typeof companyId !== "number" || !Number.isSafeInteger(companyId) || companyId <= 0) {
     session.securityPermissions = [];
     session.securityPermissionsCompanyId = null;
     return [];

@@ -20,20 +20,12 @@ export interface PrivilegedRouteOptions {
   allowDryRun?: boolean;
 }
 
-type SecuritySession = Request["session"] & {
-  securityPermissions?: string[];
-  securityPermissionsCompanyId?: number | null;
-  passwordConfirmedAt?: number;
-  username?: string;
-  currentUsername?: string;
-};
-
 function normalizedText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function actorFromRequest(req: Request): AuthorizationActor | null {
-  const session = req.session as SecuritySession;
+  const session = req.session;
   const companyId = session.currentCompanyId;
   const role = session.currentRole;
   const userId = session.userId;
@@ -45,8 +37,10 @@ function actorFromRequest(req: Request): AuthorizationActor | null {
 }
 
 function auditUsername(req: Request): string {
-  const session = req.session as SecuritySession;
-  return session.currentUsername || session.username || String(session.userId || "anonymous");
+  const session = req.session;
+  // `currentUsername` is read nowhere else and assigned nowhere in the
+  // server; `username` is what login stores.
+  return session.username || String(session.userId || "anonymous");
 }
 
 async function recordPrivilegedDecision(
@@ -55,7 +49,7 @@ async function recordPrivilegedDecision(
   outcome: "allowed" | "denied",
   reasonCode: string
 ) {
-  const session = req.session as SecuritySession;
+  const session = req.session;
   await persistSecurityEvent(
     db,
     {
@@ -97,7 +91,7 @@ export function requirePrivilegedOperation(options: PrivilegedRouteOptions) {
     }
 
     try {
-      await hydrateSessionNamedPermissions(db, req.session as SecuritySession);
+      await hydrateSessionNamedPermissions(db, req.session);
       authorizePrivilegedOperation({
         actor: actorFromRequest(req),
         companyId,
@@ -111,7 +105,7 @@ export function requirePrivilegedOperation(options: PrivilegedRouteOptions) {
         idempotencyKey: normalizedText(body.idempotencyKey),
         sourceType: options.sourceType,
         sourceId: normalizedText(body.sourceId),
-        passwordConfirmedAt: (req.session as SecuritySession).passwordConfirmedAt,
+        passwordConfirmedAt: req.session.passwordConfirmedAt,
       });
       await recordPrivilegedDecision(req, options, "allowed", "AUTHORIZED");
       return next();

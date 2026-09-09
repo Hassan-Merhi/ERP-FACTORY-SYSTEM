@@ -60,6 +60,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
+import type { CompanyScopedTable } from "../../../types/companyScopedTable";
 
 export function registerFactoryCompanyExportRoutes(app: Express) {
   app.get("/api/factory/export-company-data", requireAuth, async (req: Request, res: Response) => {
@@ -67,9 +68,12 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const byCompany = (table: any) => eq(table.companyId, companyId);
+      // CompanyScopedTable constrains the argument to a table that actually
+      // carries a companyId column, so a table without one is a compile error
+      // rather than a silently unscoped export.
+      const byCompany = (table: CompanyScopedTable) => eq(table.companyId, companyId);
 
-      const data: Record<string, any[]> = {};
+      const data: Record<string, unknown[]> = {};
 
       data.locations = await db.select().from(locations).where(byCompany(locations));
       data.ledger_accounts = await db.select().from(ledgerAccounts).where(byCompany(ledgerAccounts));
@@ -81,9 +85,10 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
       data.exchange_rates = await db.select().from(exchangeRates).where(byCompany(exchangeRates));
       data.customers = await db.select().from(customers).where(byCompany(customers));
       data.customer_balances = await db.select().from(customerBalances).where(byCompany(customerBalances));
-      data.vouchers = await db.select().from(vouchers).where(byCompany(vouchers));
+      const voucherRows = await db.select().from(vouchers).where(byCompany(vouchers));
+      data.vouchers = voucherRows;
 
-      const voucherIds = data.vouchers.map((v) => v.id);
+      const voucherIds = voucherRows.map((v) => v.id);
       if (voucherIds.length > 0) {
         data.voucher_entries = await db
           .select()
@@ -113,9 +118,10 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
         .from(factoryOffloadAdditionalCharges)
         .where(byCompany(factoryOffloadAdditionalCharges));
       data.factory_duty_audit_log = await db.select().from(factoryDutyAuditLog).where(byCompany(factoryDutyAuditLog));
-      data.factory_mix_batches = await db.select().from(factoryMixBatches).where(byCompany(factoryMixBatches));
+      const mixBatchRows = await db.select().from(factoryMixBatches).where(byCompany(factoryMixBatches));
+      data.factory_mix_batches = mixBatchRows;
 
-      const mixBatchIds = data.factory_mix_batches.map((b) => b.id);
+      const mixBatchIds = mixBatchRows.map((b) => b.id);
       if (mixBatchIds.length > 0) {
         data.factory_mix_batch_sources = await db
           .select()
@@ -141,12 +147,10 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
         .select()
         .from(factoryWorkerDocuments)
         .where(byCompany(factoryWorkerDocuments));
-      data.factory_daybook_entries = await db
-        .select()
-        .from(factoryDaybookEntries)
-        .where(byCompany(factoryDaybookEntries));
+      const daybookRows = await db.select().from(factoryDaybookEntries).where(byCompany(factoryDaybookEntries));
+      data.factory_daybook_entries = daybookRows;
 
-      const daybookIds = data.factory_daybook_entries.map((e) => e.id);
+      const daybookIds = daybookRows.map((e) => e.id);
       if (daybookIds.length > 0) {
         data.factory_daybook_entry_edits = await db
           .select()
@@ -176,8 +180,9 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
         .from(factoryContainerProfitSnapshots)
         .where(byCompany(factoryContainerProfitSnapshots));
 
-      data.customer_proformas = await db.select().from(customerProformas).where(byCompany(customerProformas));
-      const proformaIds = data.customer_proformas.map((p) => p.id);
+      const proformaRows = await db.select().from(customerProformas).where(byCompany(customerProformas));
+      data.customer_proformas = proformaRows;
+      const proformaIds = proformaRows.map((p) => p.id);
       if (proformaIds.length > 0) {
         data.customer_proforma_lines = await db
           .select()
@@ -191,8 +196,9 @@ export function registerFactoryCompanyExportRoutes(app: Express) {
         .select()
         .from(customerInvoiceSequences)
         .where(eq(customerInvoiceSequences.companyId, companyId));
-      data.customer_orders = await db.select().from(customerOrders).where(byCompany(customerOrders));
-      const orderIds = data.customer_orders.map((o) => o.id);
+      const orderRows = await db.select().from(customerOrders).where(byCompany(customerOrders));
+      data.customer_orders = orderRows;
+      const orderIds = orderRows.map((o) => o.id);
       if (orderIds.length > 0) {
         data.customer_order_lines = await db
           .select()
