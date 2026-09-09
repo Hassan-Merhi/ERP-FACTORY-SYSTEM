@@ -5,6 +5,7 @@ import {
   type RealtimeInvalidationMessage,
   type RealtimeInvalidationTopic,
 } from "@shared/realtimeInvalidation";
+import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
 
 // Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
@@ -94,6 +95,7 @@ function createPendingInvalidation(): PendingInvalidation {
 // child-first effect ordering cannot steal ownership from the app shell. The
 // socket lives until the last subscriber unmounts.
 const subscribers = new Map<QueryClient, number>();
+const chatEventSubscribers = new Set<(event: RealtimeChatEvent) => void>();
 let sharedSocket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -211,6 +213,10 @@ function handleInvalidate(message: RealtimeInvalidationMessage): void {
   }, INVALIDATE_DEBOUNCE_MS);
 }
 
+function dispatchChatEvent(event: RealtimeChatEvent): void {
+  for (const subscriber of chatEventSubscribers) subscriber(event);
+}
+
 function handleVisibilityChange(): void {
   if (document.visibilityState !== "visible" || !missedWhileHidden) return;
   missedWhileHidden = false;
@@ -260,8 +266,11 @@ function connectSharedSocket(allowOfflineProbe = false): void {
   socket.onmessage = (event) => {
     if (sharedSocket !== socket || !managerRunning) return;
     try {
-      const message = parseRealtimeInvalidationMessage(JSON.parse(event.data as string));
-      if (message) handleInvalidate(message);
+      const payload = JSON.parse(event.data as string) as unknown;
+      const invalidation = parseRealtimeInvalidationMessage(payload);
+      if (invalidation) handleInvalidate(invalidation);
+      const chatEvent = parseRealtimeChatEvent(payload);
+      if (chatEvent) dispatchChatEvent(chatEvent);
     } catch {
       // Malformed or absent payload — ignore rather than surface a parse error.
     }
@@ -368,8 +377,14 @@ function subscribe(queryClient: QueryClient): () => void {
   };
 }
 
+export function subscribeRealtimeChatEvents(handler: (event: RealtimeChatEvent) => void): () => void {
+  chatEventSubscribers.add(handler);
+  return () => chatEventSubscribers.delete(handler);
+}
+
 export function resetWsInvalidationManagerForTests(): void {
   subscribers.clear();
+  chatEventSubscribers.clear();
   stopManager();
 }
 
