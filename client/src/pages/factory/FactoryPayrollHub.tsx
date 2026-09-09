@@ -8,6 +8,7 @@ import { FactoryStaffTracking } from "@/pages/factory/FactoryStaffTracking";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
+import "./factoryTrackingModern.css";
 
 type Section = "workers" | "employees" | "production-targets" | "attendance-register" | "insurance";
 
@@ -94,12 +95,12 @@ export default function FactoryPayrollHub() {
           </div>
         )}
         {activeSection === "production-targets" && (
-          <div className="p-4">
+          <div className="factory-tracking-modern factory-tracking-production">
             <FactoryProductionTargets />
           </div>
         )}
         {activeSection === "attendance-register" && (
-          <div className="p-4">
+          <div className="factory-tracking-modern factory-tracking-attendance">
             <FactoryStaffTracking mode="attendance" />
           </div>
         )}
