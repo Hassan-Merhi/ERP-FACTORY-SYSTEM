@@ -185,7 +185,9 @@ export function registerFactoryChatRoutes(app: Express) {
 
       typingStatus.delete(currentUserId);
 
-      broadcast({ type: "invalidate" });
+      // Chat intentionally crosses company scope, but only chat-related queries
+      // should wake up in other companies.
+      broadcast({ type: "invalidate", topics: ["communications"] });
       res.json(msg);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
