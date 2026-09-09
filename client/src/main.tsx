@@ -1,4 +1,5 @@
 import "./lib/requestStormGuard";
+import "./lib/forcedApiRefresh";
 import "./lib/accountingRequestFetchGuard";
 import "./lib/v5AllocationPaginationClient";
 import "./lib/operationalPhase4BandwidthFetch";
