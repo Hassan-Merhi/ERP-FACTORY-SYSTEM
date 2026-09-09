@@ -14,11 +14,12 @@ env:
   NODE_ENV: test
   SESSION_SECRET: po-import-pr-verify
   ENABLE_SCHEDULERS: "false"
+  PORT: "5000"
 
 jobs:
   po-import-regression:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:18
@@ -43,7 +44,30 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
+      - name: Build for startup migration verification
+        run: npm run build
       - name: Prepare test database schema
         run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Run application startup migrations
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/po-import-startup.txt" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
+          for _attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > "$RUNNER_TEMP/po-import-health.json"; then
+              cat "$RUNNER_TEMP/po-import-health.json"
+              exit 0
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Application exited before startup migrations became ready."
+              cat "$RUNNER_TEMP/po-import-startup.txt"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Timed out waiting for application startup migrations."
+          cat "$RUNNER_TEMP/po-import-startup.txt"
+          exit 1
       - name: PO Import regression tests
         run: npx vitest run tests/startup-schema-integrity.test.ts tests/po-import-parent-accounting.test.ts
