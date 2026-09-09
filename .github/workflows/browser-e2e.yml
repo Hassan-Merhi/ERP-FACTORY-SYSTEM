@@ -1,7 +1,7 @@
 name: Browser E2E
 
 on:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - "client/**"
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: browser-e2e-${{ github.event.pull_request.number || github.ref }}
+  group: browser-e2e-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
