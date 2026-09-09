@@ -20,7 +20,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
-import { useWsInvalidation } from "@/hooks/use-ws-invalidation";
+import { subscribeRealtimeChatEvents } from "@/hooks/use-ws-invalidation";
 import type { DirectMessage } from "@shared/schema";
 
 interface ChatUser {
@@ -46,15 +46,16 @@ export default function Chat() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingActiveRef = useRef(false);
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { toast } = useToast();
-
-  useWsInvalidation();
 
   const { data: chatUsers = [], isLoading: usersLoading } = useQuery<ChatUser[]>({
     queryKey: ["/api/chat/users"],
@@ -71,26 +72,35 @@ export default function Chat() {
     enabled: !!selectedUserId,
   });
 
-  const isTyping = false;
+  const isTyping = typingUserId === selectedUserId;
 
   const sendTypingSignal = useCallback(
-    (isTyping: boolean) => {
+    (typing: boolean) => {
       if (!selectedUserId) return;
       fetch("/api/chat/typing", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiverId: selectedUserId, isTyping }),
+        body: JSON.stringify({ receiverId: selectedUserId, isTyping: typing }),
       }).catch(() => {});
     },
     [selectedUserId]
   );
 
+  const stopLocalTyping = useCallback(() => {
+    if (!typingActiveRef.current) return;
+    typingActiveRef.current = false;
+    sendTypingSignal(false);
+  }, [sendTypingSignal]);
+
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setMessageText(e.target.value);
-    sendTypingSignal(true);
+    if (!typingActiveRef.current) {
+      typingActiveRef.current = true;
+      sendTypingSignal(true);
+    }
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => sendTypingSignal(false), 3000);
+    typingTimeoutRef.current = setTimeout(stopLocalTyping, 3000);
   };
 
   const sendMutation = useMutation({
@@ -105,11 +115,13 @@ export default function Chat() {
       return await modeApiRequest("POST", "/api/chat/messages", data);
     },
     onSuccess: () => {
+      // The direct WebSocket event normally patches the conversation first. A
+      // focused invalidation remains as recovery if the socket was reconnecting.
       queryClient.invalidateQueries({ queryKey: ["/api/chat/conversations", selectedUserId] });
       queryClient.invalidateQueries({ queryKey: ["/api/chat/users"] });
       setMessageText("");
       setPendingFile(null);
-      sendTypingSignal(false);
+      stopLocalTyping();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       inputRef.current?.focus();
     },
@@ -129,6 +141,7 @@ export default function Chat() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/chat/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/chat/unread-count"] });
     },
   });
 
@@ -142,7 +155,7 @@ export default function Chat() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chat/conversations", selectedUserId] });
+      queryClient.setQueryData<DirectMessage[]>(["/api/chat/conversations", selectedUserId], []);
       queryClient.invalidateQueries({ queryKey: ["/api/chat/users"] });
       setClearConfirmOpen(false);
       toast({ title: "Conversation cleared" });
@@ -151,6 +164,56 @@ export default function Chat() {
       toast({ title: "Failed to clear messages", variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    return subscribeRealtimeChatEvents((event) => {
+      if (event.type === "message:new") {
+        const message = event.message;
+        if (selectedUserId && (message.senderId === selectedUserId || message.receiverId === selectedUserId)) {
+          queryClient.setQueryData<DirectMessage[]>(["/api/chat/conversations", selectedUserId], (current) => {
+            if (!current || current.some((row) => row.id === message.id)) return current;
+            return [...current, message];
+          });
+        }
+
+        if (document.visibilityState === "visible") {
+          void queryClient.invalidateQueries({ queryKey: ["/api/chat/users"], refetchType: "active" });
+          void queryClient.invalidateQueries({ queryKey: ["/api/chat/unread-count"], refetchType: "active" });
+        }
+        return;
+      }
+
+      if (event.type === "typing:update") {
+        if (event.senderId !== selectedUserId) return;
+        if (typingIndicatorTimeoutRef.current) clearTimeout(typingIndicatorTimeoutRef.current);
+        setTypingUserId(event.isTyping ? event.senderId : null);
+        if (event.isTyping && event.until) {
+          typingIndicatorTimeoutRef.current = setTimeout(
+            () => setTypingUserId((current) => (current === event.senderId ? null : current)),
+            Math.max(0, event.until - Date.now())
+          );
+        }
+        return;
+      }
+
+      if (event.type === "conversation:cleared") {
+        if (selectedUserId && event.userIds.includes(selectedUserId)) {
+          queryClient.setQueryData<DirectMessage[]>(["/api/chat/conversations", selectedUserId], []);
+        }
+      }
+
+      if (document.visibilityState === "visible") {
+        void queryClient.invalidateQueries({ queryKey: ["/api/chat/users"], refetchType: "active" });
+        void queryClient.invalidateQueries({ queryKey: ["/api/chat/unread-count"], refetchType: "active" });
+        if (event.type === "message:read" && selectedUserId === event.readerId) {
+          void queryClient.invalidateQueries({
+            queryKey: ["/api/chat/conversations", selectedUserId],
+            refetchType: "active",
+          });
+        }
+      }
+    });
+  }, [selectedUserId]);
 
   useEffect(() => {
     if (selectedUserId) {
@@ -165,8 +228,13 @@ export default function Chat() {
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (typingIndicatorTimeoutRef.current) clearTimeout(typingIndicatorTimeoutRef.current);
+      if (typingActiveRef.current) {
+        typingActiveRef.current = false;
+        sendTypingSignal(false);
+      }
     };
-  }, []);
+  }, [sendTypingSignal]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
