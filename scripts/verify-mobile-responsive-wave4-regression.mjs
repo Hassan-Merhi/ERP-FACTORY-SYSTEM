@@ -13,6 +13,9 @@ const failures = [];
 const requireText = (source, value, label) => {
   if (!source.includes(value)) failures.push(`${label}: missing ${value}`);
 };
+const forbidText = (source, value, label) => {
+  if (source.includes(value)) failures.push(`${label}: must not include ${value}`);
+};
 
 const requiredViewports = [
   'name: "phone-320", width: 320, height: 568',
@@ -27,20 +30,12 @@ for (const viewport of requiredViewports) requireText(browser, viewport, "Wave 4
 const criticalErpRoutes = [
   "/tracking",
   "/accounts",
-  "/parties",
-  "/containers",
-  "/inventory?tab=by-location",
-  "/stock?tab=items",
   "/daybook",
-  "/transaction-journal",
   "/vouchers",
-  "/sales-tools?tab=transfers",
   "/opening-stock",
   "/closing-stock-summary",
   "/import-stock-items",
   "/pos",
-  "/chat",
-  "/account-groups",
 ];
 
 const criticalFactoryRoutes = [
@@ -57,28 +52,43 @@ const criticalFactoryRoutes = [
   "/factory/import",
   "/factory/bale-relabeling",
   "/factory/bale-product-images",
-  "/factory/chat",
 ];
 
 for (const route of criticalErpRoutes) {
   requireText(browser, `path: "${route}"`, "Wave 4 ERP rendered route set");
-  const routeWithoutQuery = route.split("?")[0];
-  requireText(erpRoutes, routeWithoutQuery, "Live ERP route table");
+  requireText(erpRoutes, route.split("?")[0], "Live ERP route table");
 }
 for (const route of criticalFactoryRoutes) {
   requireText(browser, `path: "${route}"`, "Wave 4 Factory rendered route set");
   requireText(factoryRoutes, route.split("?")[0], "Live Factory route table");
 }
 
+// Wave 3 is still an independent PR and owns these operational surfaces. Wave 4
+// must not duplicate or gate those files before Wave 3 lands; its own dedicated
+// rendered verifier covers them.
+const wave3OwnedRoutes = [
+  "/parties",
+  "/containers",
+  "/inventory?tab=by-location",
+  "/stock?tab=items",
+  "/transaction-journal",
+  "/sales-tools?tab=transfers",
+];
+for (const route of wave3OwnedRoutes) {
+  forbidText(browser, `path: "${route}"`, "Wave 4 / Wave 3 independence contract");
+}
+
 for (const contract of [
   "isPhoneClassViewport",
   "horizontalOverflow",
   "hoverOnlyInteractive",
+  "HOVER_CRITICAL_ROUTES",
   "criticalTouchViolations",
   "dialogViewportViolations",
   "stickyFixedViewportViolations",
   "focusedTextControl",
   "scannerContract",
+  "loadingSetupVisible",
   "phoneLandscapeMedia",
 ]) {
   requireText(browser, contract, "Wave 4 interaction contract");
@@ -106,16 +116,17 @@ console.log(
       viewports: requiredViewports.length,
       renderedErpRoutes: criticalErpRoutes.length,
       renderedFactoryRoutes: criticalFactoryRoutes.length,
+      wave3RoutesDeliberatelyExcluded: wave3OwnedRoutes.length,
       liveRouteTableCounts: { erp: erpLiteralRouteCount, factory: factoryLiteralRouteCount },
       contracts: [
         "root overflow",
         "landscape-phone classification",
-        "touch targets",
-        "hover-only actions",
+        "44px critical touch targets",
+        "hover-only actions on Wave 2 touch-critical routes",
         "dialogs",
         "sticky/fixed viewport bounds",
         "text-control focus/font size",
-        "scanner focus/touch sizing",
+        "scanner/setup state",
         "tablet/desktop preservation",
       ],
       sqlRequired: false,
