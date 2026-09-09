@@ -18,6 +18,7 @@ import { installErpNavigationHistory } from "@/lib/erp-navigation-history";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
+import "@/erp-mobile-operations.css";
 
 interface ErpShellProps {
   user: ShellUser;
