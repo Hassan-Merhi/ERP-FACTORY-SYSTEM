@@ -28,9 +28,9 @@ const factoryStaffTrackingTranslations = {
     fr: "Définissez les objectifs de balles, saisissez la production et affichez l’écart par catégorie d’ouvrier.",
   },
   attendanceSubtitle: {
-    en: "Organize factory staff by category, mark Present / Absent / New, and add notes.",
-    ar: "نظّم موظفي المصنع حسب الفئة وحدد حاضر / غائب / جديد وأضف الملاحظات.",
-    fr: "Classez le personnel de l’usine par catégorie, indiquez Présent / Absent / Nouveau et ajoutez des notes.",
+    en: "Only absent workers from your saved production groups are shown below.",
+    ar: "يظهر أدناه فقط العمال الغائبون من مجموعات الإنتاج المحفوظة لديك.",
+    fr: "Seuls les ouvriers absents de vos groupes de production enregistrés sont affichés ci-dessous.",
   },
   period: { en: "Period", ar: "الفترة", fr: "Période" },
   daily: { en: "Daily", ar: "يومي", fr: "Quotidien" },
@@ -50,9 +50,9 @@ const factoryStaffTrackingTranslations = {
   absent: { en: "Absent", ar: "غائب", fr: "Absent" },
   new: { en: "New", ar: "جديد", fr: "Nouveau" },
   searchPlaceholder: {
-    en: "Search name, code or category...",
-    ar: "ابحث بالاسم أو الرمز أو الفئة...",
-    fr: "Rechercher par nom, code ou catégorie...",
+    en: "Search name, code or group...",
+    ar: "ابحث بالاسم أو الرمز أو المجموعة...",
+    fr: "Rechercher par nom, code ou groupe...",
   },
   person: { en: "Person", ar: "الشخص", fr: "Personne" },
   category: { en: "Category", ar: "الفئة", fr: "Catégorie" },
@@ -69,6 +69,11 @@ const factoryStaffTrackingTranslations = {
     en: "No matching factory staff.",
     ar: "لا يوجد موظفون مطابقون في المصنع.",
     fr: "Aucun membre du personnel correspondant.",
+  },
+  noAbsentWorkers: {
+    en: "No absent workers in the selected groups.",
+    ar: "لا يوجد عمال غائبون في المجموعات المحددة.",
+    fr: "Aucun ouvrier absent dans les groupes sélectionnés.",
   },
   worker: { en: "Worker", ar: "عامل", fr: "Ouvrier" },
   employee: { en: "Employee", ar: "موظف", fr: "Employé" },
@@ -91,6 +96,32 @@ const factoryStaffTrackingTranslations = {
     ar: "تعذر حفظ بيانات متابعة المصنع",
     fr: "Impossible d’enregistrer les données de suivi de l’usine",
   },
+  attendanceReport: {
+    en: "Attendance Absence Report",
+    ar: "تقرير الغياب",
+    fr: "Rapport des absences",
+  },
+  sendWhatsappImage: {
+    en: "Send WhatsApp Image",
+    ar: "إرسال صورة عبر واتساب",
+    fr: "Envoyer l’image WhatsApp",
+  },
+  sendingWhatsappImage: {
+    en: "Sending image…",
+    ar: "جارٍ إرسال الصورة…",
+    fr: "Envoi de l’image…",
+  },
+  whatsappImageSent: {
+    en: "Attendance image sent to WhatsApp group",
+    ar: "تم إرسال صورة الحضور إلى مجموعة واتساب",
+    fr: "Image de présence envoyée au groupe WhatsApp",
+  },
+  whatsappImageFailed: {
+    en: "Failed to send attendance image",
+    ar: "تعذر إرسال صورة الحضور",
+    fr: "Impossible d’envoyer l’image de présence",
+  },
+  dailyTotal: { en: "Daily Total", ar: "الإجمالي اليومي", fr: "Total du jour" },
 } as const;
 
 export type FactoryStaffTrackingTranslationKey = keyof typeof factoryStaffTrackingTranslations;
