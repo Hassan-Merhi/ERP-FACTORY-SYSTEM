@@ -127,6 +127,14 @@ async function selectCompany(page, companyCode) {
   }, companyCode);
 }
 
+async function waitForRealtimeReady(page) {
+  await page.waitForFunction(
+    () => document.documentElement.dataset.realtimeStatus === "ready",
+    { timeout: timeoutMs }
+  );
+  return page.evaluate(() => document.documentElement.dataset.realtimeStatus || null);
+}
+
 function normalizeInventoryPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (payload && Array.isArray(payload.data)) return payload.data;
@@ -227,6 +235,7 @@ try {
 
   await runCase("two-session POS write auto-refreshes watched inventory", watcherPage, async () => {
     const { initialQuantity } = await openWatchedInventory(watcherPage);
+    const realtimeStatus = await waitForRealtimeReady(watcherPage);
     const watchedRequests = [];
     const onRequest = (request) => {
       try {
@@ -269,6 +278,7 @@ try {
     }
 
     return {
+      realtimeStatus,
       initialQuantity,
       refreshedQuantity,
       automaticInventoryRequests: watchedRequests.length,
@@ -287,6 +297,7 @@ try {
     const responsePromise = waitForInventoryResponse(watcherPage);
     await watcherPage.click(`[data-testid="card-location-${fixture.erp.locationId}"]`);
     const response = await responsePromise;
+    const realtimeStatus = await waitForRealtimeReady(watcherPage);
     const shell = await watcherPage.evaluate(() => ({
       width: window.innerWidth,
       hasMain: Boolean(document.getElementById("main-content")),
@@ -298,6 +309,7 @@ try {
     }
     return {
       viewportWidth: shell.width,
+      realtimeStatus,
       inventoryStatus: response.status,
       quantity: quantityForItem(response.body, fixture.erp.stockItemId),
     };
