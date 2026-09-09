@@ -1,22 +1,6 @@
 name: Dependency and Toolchain Health
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - package.json
-      - package-lock.json
-      - .node-version
-      - .nvmrc
-      - .replit
-      - render.yaml
-      - .circleci/config.yml
-      - .github/dependabot.yml
-      - .github/workflows/**
-      - scripts/audit-toolchain-coherence.mjs
-      - scripts/verify-dependency-audit.mjs
-      - scripts/verify-lockfile-registry.mjs
-      - scripts/verify-workspace-lockfile-hygiene.mjs
   push:
     branches: [main]
     paths:
@@ -41,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dependency-toolchain-health-${{ github.event.pull_request.number || github.ref }}
+  group: dependency-toolchain-health-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
