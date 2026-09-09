@@ -45,6 +45,21 @@
       "automerge": false
     },
     {
+      "description": "Hold the Android build tooling at the Capacitor 8 template baseline that scripts/audit-platform-modernization.mjs enforces. @capacitor/android 8.x pins com.android.tools.build:gradle:8.13.0 in its own module, so bumping AGP, Gradle or the google-services plugin past that baseline puts the app build ahead of the Capacitor version it has to link against. Raise these together with a Capacitor major, not on their own.",
+      "matchManagers": [
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.google.gms:google-services",
+        "androidx.appcompat:appcompat",
+        "gradle"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
       "description": "Require explicit approval for database, authentication, document-generation, and spreadsheet runtime dependencies",
       "matchDatasources": [
         "npm"

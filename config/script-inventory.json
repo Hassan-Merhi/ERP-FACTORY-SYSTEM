@@ -14,7 +14,9 @@
     "audit-coverage-ratchet.mjs": "Reads coverage/ — requires a coverage run.",
     "audit-lint-warnings.mjs": "Reads artifacts/lint/eslint-report.json — requires npm run lint.",
     "audit-god-file-boundaries.mjs": "Reports reviewed growth allowances as failures; the gate is tests/god-file-boundaries.test.ts, which consults config/ci-ratchet-allowances.json.",
-    "verify-startup-migrations.mjs": "Reads /api/health/db from a running application — requires npm run build and a started server against a provisioned database."
+    "verify-startup-migrations.mjs": "Reads /api/health/db from a running application — requires npm run build and a started server against a provisioned database.",
+    "verify-mobile-responsive-wave2-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
+    "verify-mobile-responsive-wave4-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL."
   },
   "knownFailing": {}
 }

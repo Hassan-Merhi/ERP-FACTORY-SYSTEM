@@ -219,6 +219,22 @@ const serverMessageTranslations = [
     ar: "تم تحديث ${count} عمليات بيع في نقاط البيع",
     fr: "${count} ventes POS mises à jour",
   },
+  // The two literals below are registered in their exact source form, the way the
+  // `${originalQty.toString()}` variant above already is. The phase-14 i18n audit
+  // compares scanner findings against the English source text, and the runtime
+  // matcher turns each `${...}` into a capture group, so one entry covers both the
+  // audit and the rendered string. The trailing plural-suffix capture is English
+  // grammar and is deliberately unused by the Arabic and French templates.
+  {
+    en: "${displayQty(result.replacedQuantity)} qty replaced across ${result.updatedVoucherIds.length} sale${result.updatedVoucherIds.length === 1 ? \"\" : \"s\"}.",
+    ar: "تم استبدال كمية ${qty} عبر ${sales} عملية بيع.",
+    fr: "${qty} remplacé sur ${sales} vente(s).",
+  },
+  {
+    en: "Updated ${committed.updatedVoucherIds.length} POS sale${committed.updatedVoucherIds.length === 1 ? \"\" : \"s\"}",
+    ar: "تم تحديث ${count} عملية بيع في نقاط البيع",
+    fr: "${count} vente(s) POS mise(s) à jour",
+  },
 ] as const satisfies readonly Translation[];
 
 const directLiteralTranslations = new Map<string, Translation>();
