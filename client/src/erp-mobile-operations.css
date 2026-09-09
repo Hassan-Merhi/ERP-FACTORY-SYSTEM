@@ -63,7 +63,8 @@
     min-height: 44px !important;
   }
 
-  .erp-mobile-touch-target {
+  .erp-mobile-touch-target,
+  [data-erp-route] button {
     min-width: 44px;
   }
 
@@ -83,6 +84,7 @@
   [data-erp-route="/accounts"] button[class*="opacity-0"],
   [data-erp-route="/parties"] button[class*="opacity-0"],
   [data-erp-route="/parties"] div[class*="opacity-0"],
+  [data-erp-route="/containers"] button[class*="opacity-0"],
   [data-erp-route="/settings"] button[class*="opacity-0"],
   [data-erp-route="/settings"] div[class*="invisible"] {
     opacity: 1 !important;
@@ -116,7 +118,8 @@
     min-height: 44px !important;
   }
 
-  .erp-mobile-touch-target {
+  .erp-mobile-touch-target,
+  [data-erp-route] button {
     min-width: 44px;
   }
 
@@ -135,9 +138,41 @@
   [data-erp-route="/accounts"] button[class*="opacity-0"],
   [data-erp-route="/parties"] button[class*="opacity-0"],
   [data-erp-route="/parties"] div[class*="opacity-0"],
+  [data-erp-route="/containers"] button[class*="opacity-0"],
   [data-erp-route="/settings"] button[class*="opacity-0"],
   [data-erp-route="/settings"] div[class*="invisible"] {
     opacity: 1 !important;
     visibility: visible !important;
+  }
+
+  /* Keep existing phone card/list UIs active on landscape phones wider than 768px. */
+  [data-erp-route="/inventory"] [class~="md:hidden"],
+  [data-erp-route="/stock"] [class~="md:hidden"],
+  [data-erp-route="/sales-tools"] [class~="md:hidden"],
+  [data-erp-route="/optional-vouchers"] [class~="md:hidden"],
+  [data-erp-route^="/stock-items/"] [class~="md:hidden"],
+  [data-erp-route="/barcode-manager"] [class~="md:hidden"],
+  [data-erp-route="/orphaned-records"] [class~="md:hidden"],
+  [data-erp-route="/deleted-items"] [class~="md:hidden"] {
+    display: block !important;
+  }
+
+  [data-erp-route="/inventory"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/stock"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/sales-tools"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/optional-vouchers"] [class~="hidden"][class~="md:block"],
+  [data-erp-route^="/stock-items/"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/barcode-manager"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/orphaned-records"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/deleted-items"] [class~="hidden"][class~="md:block"] {
+    display: none !important;
+  }
+
+  /* Literal desktop viewport caps are replaced by the shared visual viewport on phone-class devices. */
+  [data-erp-route="/daybook"] [data-table-scroll-region],
+  [data-erp-route="/transaction-journal"] [data-table-scroll-region],
+  [data-erp-route="/vouchers"] [data-table-scroll-region],
+  [data-erp-route="/optional-vouchers"] [data-table-scroll-region] {
+    max-height: calc(var(--app-viewport-height) - 10rem) !important;
   }
 }
