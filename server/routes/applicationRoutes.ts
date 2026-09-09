@@ -87,11 +87,17 @@ import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfig
 import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 
+function usesDedicatedRealtimeEvents(url: string): boolean {
+  const path = url.split("?", 1)[0];
+  return path === "/api/chat" || path.startsWith("/api/chat/");
+}
+
 function registerWriteInvalidationSignal(app: Express): void {
   app.use((req, res, next) => {
-    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
+    const url = req.originalUrl || req.url;
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method) && !usesDedicatedRealtimeEvents(url)) {
       const companyId = resolveActiveCompanyId(req);
-      const invalidation = classifyRealtimeWrite(req.originalUrl || req.url, req.body);
+      const invalidation = classifyRealtimeWrite(url, req.body);
       res.on("finish", () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           broadcast({ type: "invalidate", ...invalidation }, { companyId });
