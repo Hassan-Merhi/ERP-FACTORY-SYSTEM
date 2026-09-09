@@ -51,13 +51,21 @@ export function registerFactoryChatRoutes(app: Express) {
   app.post("/api/chat/typing", requireAuth, async (req: Request, res: Response) => {
     try {
       const senderId = requireSessionUserId(req);
-      const { receiverId, isTyping } = req.body;
+      const receiverId = typeof req.body?.receiverId === "string" ? req.body.receiverId : "";
+      const isTyping = Boolean(req.body?.isTyping);
       if (!receiverId) return res.status(400).json({ message: "receiverId required" });
-      if (isTyping) {
-        typingStatus.set(senderId, { receiverId, until: Date.now() + 5000 });
+
+      const until = isTyping ? Date.now() + 5000 : null;
+      if (isTyping && until) {
+        typingStatus.set(senderId, { receiverId, until });
       } else {
         typingStatus.delete(senderId);
       }
+
+      broadcast(
+        { type: "typing:update", senderId, receiverId, isTyping, until },
+        { userIds: [receiverId] }
+      );
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -184,10 +192,7 @@ export function registerFactoryChatRoutes(app: Express) {
         .returning();
 
       typingStatus.delete(currentUserId);
-
-      // Chat intentionally crosses company scope, but only chat-related queries
-      // should wake up in other companies.
-      broadcast({ type: "invalidate", topics: ["communications"] });
+      broadcast({ type: "message:new", message: msg }, { userIds: [currentUserId, parsed.receiverId] });
       res.json(msg);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -210,6 +215,7 @@ export function registerFactoryChatRoutes(app: Express) {
           )
         );
 
+      broadcast({ type: "message:read", readerId: currentUserId, senderId }, { userIds: [currentUserId, senderId] });
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -230,6 +236,10 @@ export function registerFactoryChatRoutes(app: Express) {
           )
         );
 
+      broadcast(
+        { type: "conversation:cleared", userIds: [currentUserId, otherUserId] },
+        { userIds: [currentUserId, otherUserId] }
+      );
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
