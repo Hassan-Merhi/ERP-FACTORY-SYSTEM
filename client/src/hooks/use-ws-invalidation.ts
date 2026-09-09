@@ -176,6 +176,27 @@ function invalidateActiveQueries(invalidation: PendingInvalidation): void {
   }
 }
 
+function invalidateChatMetadata(): void {
+  if (!managerRunning) return;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    missedWhileHidden = true;
+    return;
+  }
+
+  for (const queryClient of subscribers.keys()) {
+    void queryClient.invalidateQueries(
+      {
+        refetchType: "active",
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === "/api/chat/users" || key === "/api/chat/unread-count";
+        },
+      },
+      { cancelRefetch: false }
+    );
+  }
+}
+
 function flushPendingInvalidation(): void {
   if (!pendingInvalidation.blanket && pendingInvalidation.topics.size === 0) return;
   const invalidation = pendingInvalidation;
@@ -216,6 +237,7 @@ function handleInvalidate(message: RealtimeInvalidationMessage): void {
 }
 
 function dispatchChatEvent(event: RealtimeChatEvent): void {
+  if (event.type !== "typing:update") invalidateChatMetadata();
   for (const subscriber of chatEventSubscribers) subscriber(event);
 }
 
