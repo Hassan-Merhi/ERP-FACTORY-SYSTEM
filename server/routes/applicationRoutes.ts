@@ -4,6 +4,7 @@ import { createServer, type Server } from "http";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { broadcast } from "../wsServer";
+import { classifyRealtimeWrite } from "../../shared/realtimeInvalidation";
 import { registerAccountRoutes } from "./accounts";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerApprovalRoutes } from "./approvalRoutes";
@@ -89,9 +90,10 @@ function registerWriteInvalidationSignal(app: Express): void {
   app.use((req, res, next) => {
     if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
       const companyId = Number(req.session?.currentCompanyId) || null;
+      const invalidation = classifyRealtimeWrite(req.originalUrl || req.url, req.body);
       res.on("finish", () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          broadcast({ type: "invalidate" }, { companyId });
+          broadcast({ type: "invalidate", ...invalidation }, { companyId });
         }
       });
     }
