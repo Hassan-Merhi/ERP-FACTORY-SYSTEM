@@ -1,15 +1,6 @@
 name: Performance & Database Safety
 
 on:
-  pull_request:
-    paths:
-      - "server/**"
-      - "scripts/**"
-      - "render.yaml"
-      - "docs/program-6d-query-classifications.json"
-      - "docs/program-6d-phase10-current-review.json"
-      - "docs/archive/program-6d-database-query-optimization.md"
-      - ".github/workflows/performance-database-safety.yml"
   push:
     branches:
       - main
