@@ -133,13 +133,11 @@ body {
 
   /*
    * Hover-only actions are inaccessible on touch screens. Keep the existing
-   * desktop hover treatment, but make interactive actions permanently visible
-   * when the primary pointer is coarse. This covers legacy ERP/Factory rows
-   * (Agents, Account Groups, Raw Production, image cards, customer/supplier
-   * actions, etc.) without changing their handlers or desktop presentation.
+   * desktop hover treatment, but make hover-hidden affordances permanently
+   * visible when the primary pointer is coarse. Avoid :has() here so this
+   * remains compatible with the documented Firefox 110+ baseline.
    */
-  #main-content :where(button, a)[class*="opacity-0"][class*="group-hover:opacity-100"],
-  #main-content :where([class*="opacity-0"][class*="group-hover:opacity-100"]:has(button)) {
+  #main-content [class*="opacity-0"][class*="group-hover:opacity-100"] {
     opacity: 1 !important;
   }
 
@@ -194,27 +192,30 @@ body {
   /*
    * Phase 1 critical legacy master/detail layouts.
    *
-   * These pages were authored as permanent desktop split panes. On phones the
-   * fixed 16/18rem navigation pane left almost no room for the working pane.
-   * Stack the panes and give the list a bounded local scroll area instead.
+   * Stable route markers come from WorkspaceRouteBoundary, so these rules do
+   * not depend on :has() and work across the documented browser baseline.
    * Tablet/desktop layout remains untouched because these overrides stop at md.
    */
-  [data-ux-consistency-boundary]:has([data-testid="button-add-agent"]) > .flex.h-full,
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen > .flex,
-  [data-ux-consistency-boundary]:has([data-testid="chat-page"]) > [data-testid="chat-page"] {
+  [data-workspace-route^="/agents"] > .flex.h-full,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full,
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex,
+  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
+  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
     flex-direction: column !important;
     width: 100%;
     min-width: 0;
   }
 
   /* Agents: list first, statement second, both usable without horizontal pan. */
-  [data-ux-consistency-boundary]:has([data-testid="button-add-agent"]) > .flex.h-full {
+  [data-workspace-route^="/agents"] > .flex.h-full,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full {
     height: auto !important;
     min-height: 100%;
     overflow: visible;
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-add-agent"]) > .flex.h-full > .w-72 {
+  [data-workspace-route^="/agents"] > .flex.h-full > .w-72,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .w-72 {
     width: 100% !important;
     max-height: min(42dvh, 22rem);
     flex: none;
@@ -222,31 +223,33 @@ body {
     border-bottom: 1px solid hsl(var(--border));
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-add-agent"]) > .flex.h-full > .flex-1 {
+  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 {
     width: 100%;
     min-width: 0;
     overflow: visible;
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="text-agent-account-name"]) > .flex.h-full > .flex-1 > .p-6 {
+  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1 > .p-6,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 > .p-6 {
     padding: 0.75rem !important;
   }
 
   /* Account Groups: replace the fixed 18rem split with a stacked phone flow. */
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen {
+  [data-workspace-route^="/account-groups"] > .min-h-screen {
     min-height: 100%;
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen > .border-b {
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .border-b {
     padding-inline: 0.75rem !important;
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen > .flex {
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex {
     height: auto !important;
     min-height: 0;
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen > .flex > .w-72 {
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .w-72 {
     width: 100% !important;
     max-height: min(44dvh, 24rem);
     flex: none;
@@ -254,17 +257,24 @@ body {
     border-bottom: 1px solid hsl(var(--border));
   }
 
-  [data-ux-consistency-boundary]:has([data-testid="button-create-group"]) > .min-h-screen > .flex > .flex-1 {
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .flex-1 {
     width: 100%;
     min-width: 0;
     padding: 0.75rem !important;
     overflow: visible;
   }
 
-  /* Chat: conversations become a bounded top pane and messages use full width. */
-  [data-ux-consistency-boundary]:has([data-testid="chat-page"]) > [data-testid="chat-page"] {
-    height: auto !important;
-    min-height: calc(var(--app-viewport-height) - 7rem);
+  /*
+   * Chat: keep a definite phone-height flex container. The conversation list
+   * and message history then scroll locally instead of growing the workspace
+   * and forcing incoming-message scrollIntoView calls to move the whole page.
+   */
+  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
+  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
+    height: calc(var(--app-viewport-height) - 7rem) !important;
+    max-height: calc(var(--app-viewport-height) - 7rem);
+    min-height: 0;
+    overflow: hidden;
     gap: 0.75rem;
   }
 
@@ -277,7 +287,8 @@ body {
   [data-testid="chat-page"] > .flex-1 {
     width: 100%;
     min-width: 0;
-    min-height: min(58dvh, 34rem);
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
