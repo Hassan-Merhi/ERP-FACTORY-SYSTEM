@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 interface StockItem {
   id: number;
   name: string;
-  [key: string]: unknown;
 }
 
 export function StockItemCombobox({
