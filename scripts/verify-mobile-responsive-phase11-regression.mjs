@@ -8,6 +8,7 @@ const checks = [
   ["Phase 6 core ERP", "node", ["scripts/verify-mobile-responsive-phase6-core-erp.mjs"]],
   ["Phase 7 Factory", "node", ["scripts/verify-mobile-responsive-phase7-factory.mjs"]],
   ["Wave 2 Factory floor", "node", ["scripts/verify-mobile-responsive-wave2-factory-floor.mjs"]],
+  ["Wave 4 exhaustive responsive regression", "node", ["scripts/verify-mobile-responsive-wave4-regression.mjs"]],
   ["Phase 8 POS", "node", ["scripts/verify-mobile-responsive-phase8-pos.mjs"]],
   ["Phase 9 dashboards and reports", "node", ["scripts/verify-mobile-responsive-phase9-reports.mjs"]],
   ["Phase 10 performance and offline", "node", ["scripts/verify-mobile-responsive-phase10-performance.mjs"]],
