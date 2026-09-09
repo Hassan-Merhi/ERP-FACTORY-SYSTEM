@@ -1,7 +1,7 @@
 name: Phase 15 Final 100/100 Certification
 
 on:
-  pull_request:
+  push:
     branches: [main]
     paths:
       - ".github/workflows/phase15-final-certification.yml"
@@ -12,7 +12,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: phase15-final-certification-${{ github.event.pull_request.number || github.ref }}
+  group: phase15-final-certification-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
       PGSSLMODE: disable
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
       PORT: "5000"
-      CERT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CERT_SHA: ${{ github.sha }}
     steps:
       - name: Mark Phase 15 certification pending
         env:
@@ -60,7 +60,7 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${CERT_SHA}" \
             --data '{"state":"pending","context":"phase15/final-100-certification","description":"Phase 15 final certification is running"}'
 
-      - name: Checkout exact PR head
+      - name: Checkout exact certification commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.CERT_SHA }}
