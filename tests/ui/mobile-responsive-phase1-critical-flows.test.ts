@@ -8,25 +8,40 @@ function source(path: string): string {
 describe("Mobile repair Phase 1 critical flows", () => {
   it("keeps desktop split panes while stacking the critical legacy flows only below md", () => {
     const compat = source("client/src/mobile-browser-compat.css");
+    const boundary = source("client/src/components/ui/workspace-route-boundary.tsx");
 
     expect(compat).toContain("@media (max-width: 767px) {");
-    expect(compat).toContain('[data-testid="button-add-agent"]');
-    expect(compat).toContain('[data-testid="button-create-group"]');
-    expect(compat).toContain('[data-testid="chat-page"]');
+    expect(compat).toContain('[data-workspace-route^="/agents"]');
+    expect(compat).toContain('[data-workspace-route^="/factory/agents"]');
+    expect(compat).toContain('[data-workspace-route^="/account-groups"]');
+    expect(compat).toContain('[data-workspace-route^="/chat"]');
+    expect(compat).toContain('[data-workspace-route^="/factory/chat"]');
     expect(compat).toContain("flex-direction: column !important");
     expect(compat).toContain("Tablet/desktop layout remains untouched because these overrides stop at md.");
+    expect(boundary).toContain("data-workspace-route={routeKey}");
+    expect(boundary).toContain("routeKey={resetKey}");
   });
 
-  it("uses bounded local list panes instead of permanent phone-width desktop sidebars", () => {
+  it("uses Firefox-baseline-safe selectors for the critical phone layouts", () => {
+    const compat = source("client/src/mobile-browser-compat.css");
+
+    expect(compat).not.toContain(":has(");
+    expect(compat).toContain("documented Firefox 110+ baseline");
+  });
+
+  it("uses bounded local list panes and keeps long chat history internally scrollable", () => {
     const compat = source("client/src/mobile-browser-compat.css");
 
     expect(compat).toContain("max-height: min(42dvh, 22rem)");
     expect(compat).toContain("max-height: min(44dvh, 24rem)");
     expect(compat).toContain("max-height: min(36dvh, 20rem)");
-    expect(compat).toContain("min-height: calc(var(--app-viewport-height) - 7rem)");
+    expect(compat).toContain("height: calc(var(--app-viewport-height) - 7rem) !important");
+    expect(compat).toContain("max-height: calc(var(--app-viewport-height) - 7rem)");
+    expect(compat).toContain("min-height: 0");
+    expect(compat).toContain("overflow: hidden");
   });
 
-  it("keeps the CSS selectors anchored to the current Agents, Account Groups, and Chat markup", () => {
+  it("keeps the responsive contracts anchored to the current Agents, Account Groups, and Chat markup", () => {
     const agents = source("client/src/pages/Agents.tsx");
     const groups = source("client/src/pages/AccountGroups.tsx");
     const chat = source("client/src/pages/Chat.tsx");
@@ -47,7 +62,7 @@ describe("Mobile repair Phase 1 critical flows", () => {
     const rawStock = source("client/src/pages/factory/production-raw-stock/RawStockTable.tsx");
 
     expect(compat).toContain('@media (max-width: 767px), (pointer: coarse)');
-    expect(compat).toContain('button, a)[class*="opacity-0"][class*="group-hover:opacity-100"]');
+    expect(compat).toContain('[class*="opacity-0"][class*="group-hover:opacity-100"]');
     expect(compat).toContain("opacity: 1 !important");
 
     expect(rawStock).toContain("opacity-0 group-hover:opacity-100");
