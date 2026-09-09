@@ -1,14 +1,15 @@
 name: Dependency Review
 
 on:
-  pull_request:
+  push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: dependency-review-${{ github.event.pull_request.number || github.ref }}
+  group: dependency-review-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -39,9 +40,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      # GitHub's dependency-review API requires GitHub Advanced Security on a
-      # private repository. Keep this status context meaningful on the current
-      # plan by running the repository's reviewed high/critical vulnerability
-      # gate instead of a check that can only fail on account configuration.
+      # Keep this status context meaningful by running the repository's reviewed
+      # high/critical vulnerability gate on the code that actually reached main.
       - name: Block high/critical dependency vulnerabilities
         run: npm run verify:dependency-audit

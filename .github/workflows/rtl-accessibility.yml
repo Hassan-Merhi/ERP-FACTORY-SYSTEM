@@ -1,21 +1,6 @@
 name: RTL and Accessibility
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "client/src/app/**"
-      - "client/src/components/**"
-      - "client/src/contexts/ApplicationLanguageContext.tsx"
-      - "client/src/i18n/**"
-      - "client/src/styles/**"
-      - "config/i18n-phase14-baseline.json"
-      - "scripts/audit-i18n-phase14.mjs"
-      - "scripts/verify-program7d-accessibility-responsive.mjs"
-      - "tests/phase14-i18n-release-gate.test.ts"
-      - "tests/phase8-rtl-responsive-accessibility.test.ts"
-      - "vitest.config.i18n-contracts.ts"
-      - ".github/workflows/rtl-accessibility.yml"
   push:
     branches: [main]
   workflow_dispatch:
