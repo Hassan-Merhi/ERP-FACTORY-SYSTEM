@@ -8,7 +8,6 @@ const FACTORY_STAFF_TRACKING_TABLE_SQL = `
     period_end date NOT NULL,
     person_type varchar(20) NOT NULL,
     person_id integer NOT NULL,
-    group_name varchar(200),
     category varchar(150),
     target_bales numeric(12, 2),
     produced_bales numeric(12, 2),
@@ -24,8 +23,10 @@ const FACTORY_STAFF_TRACKING_TABLE_SQL = `
     CONSTRAINT factory_staff_tracking_period_order_check CHECK (period_end >= period_start),
     CONSTRAINT factory_staff_tracking_target_nonnegative CHECK (target_bales IS NULL OR target_bales >= 0),
     CONSTRAINT factory_staff_tracking_produced_nonnegative CHECK (produced_bales IS NULL OR produced_bales >= 0)
-  );
+  )
+`;
 
+const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
   ALTER TABLE factory_staff_tracking_entries
     ADD COLUMN IF NOT EXISTS group_name varchar(200);
 
@@ -63,4 +64,9 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   for (const statement of factoryStaffTrackingSchema) {
     await database.query(statement);
   }
+
+  // Keep the pinned startupMigrations array stable while still applying the
+  // production-day locking schema on every boot. Production calls this ensure
+  // path unconditionally even when the bulk startup migration pass is disabled.
+  await database.query(FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL);
 }
