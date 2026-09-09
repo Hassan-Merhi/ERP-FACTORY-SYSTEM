@@ -1,30 +1,12 @@
 name: CI Repair Failure Trigger
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, reopened, synchronize, ready_for_review]
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/ci-repair-bot.yml
-      - .github/workflows/ci-repair-failure-trigger.yml
-      - .github/workflows/ci-repair-sweep.yml
-      - .github/agents/bug-repair.agent.md
-  status:
-  schedule:
-    # The status and pull_request hooks are the primary wake-ups. Keep only a
-    # low-frequency fallback so a stuck/red PR cannot create twelve new runs
-    # per hour while the hosted-runner queue is already busy.
-    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  # Coalesce fallback/status events instead of assigning every scheduled run a
-  # unique group. Pull requests still keep one independent watcher per PR.
-  group: ci-repair-pr-watch-${{ github.event.pull_request.number || github.event.sha || github.event_name }}
+  group: ci-repair-pr-watch-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -65,8 +47,6 @@ jobs:
             --jq '[.labels[].name] | any(. == "ci-repair-blocked")')"
           [[ "$blocked" == false ]] || exit 0
 
-          # Give all normal PR workflows and external status providers time to
-          # register before deciding that the head is already settled.
           sleep 20
 
           for iteration in $(seq 1 210); do
@@ -88,7 +68,6 @@ jobs:
             failed_statuses="$(jq '[.statuses[] | select(.state == "failure" or .state == "error")] | length' <<<"$statuses_json")"
 
             if (( failed_checks > 0 || failed_statuses > 0 )); then
-              # Never queue a second repair run behind one that is already working.
               active_runs="$(
                 gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci-repair-bot.yml/runs?per_page=50" \
                   --jq '[.workflow_runs[] | select(
@@ -114,8 +93,6 @@ jobs:
             observed_checks="$(jq '[.check_runs[] | select(.name != "Watch trusted PR checks for repair")] | length' <<<"$checks_json")"
             observed_statuses="$(jq '.statuses | length' <<<"$statuses_json")"
 
-            # After a short registration window, a head with observed checks and
-            # no remaining work is settled and needs no repair wake-up.
             if (( iteration >= 3 && observed_checks + observed_statuses > 0 && active_checks == 0 && pending_statuses == 0 )); then
               exit 0
             fi
@@ -165,7 +142,6 @@ jobs:
             *) exit 0 ;;
           esac
 
-          # Never queue a second repair run behind one that is already working.
           active_runs="$(
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci-repair-bot.yml/runs?per_page=50" \
               --jq '[.workflow_runs[] | select(
@@ -183,9 +159,6 @@ jobs:
 
   deployment-sweep:
     name: Sweep red PRs after CI repair automation lands
-    # GitHub cron is best-effort and has never been a dependable wake-up for
-    # PRs that were already red before a bot change reached main, so a change
-    # to the CI repair automation itself sweeps for eligible red PRs at once.
     if: github.event_name == 'push'
     permissions:
       actions: write
