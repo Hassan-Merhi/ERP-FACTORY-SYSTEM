@@ -37,6 +37,7 @@ interface TrackingRow {
   personId: number;
   name: string;
   code: string | null;
+  groupName?: string;
   category: string;
   targetBales: number | null;
   producedBales: number | null;
@@ -54,7 +55,7 @@ interface TrackingResponse {
 }
 
 interface TrackingCategoryGroup {
-  category: string;
+  label: string;
   rows: TrackingRow[];
 }
 
@@ -126,6 +127,39 @@ function SummaryTile({ label, value, icon }: { label: string; value: string | nu
   );
 }
 
+function CategoryInput({
+  value,
+  placeholder,
+  onCommit,
+}: {
+  value: string;
+  placeholder: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    if (draft !== value) onCommit(draft);
+  };
+
+  return (
+    <Input
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      placeholder={placeholder}
+      className="h-8 w-full min-w-0"
+    />
+  );
+}
+
 export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
@@ -171,7 +205,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
           personId: row.personId,
           category: row.category,
           targetBales: mode === "production" ? row.targetBales : null,
-          producedBales: mode === "production" ? row.producedBales : null,
+          producedBales: null,
           status: row.status,
           notes: mode === "attendance" ? row.notes : "",
         })),
@@ -202,25 +236,26 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
         !needle ||
         row.name.toLowerCase().includes(needle) ||
         row.category.toLowerCase().includes(needle) ||
+        (row.groupName || "").toLowerCase().includes(needle) ||
         (row.code || "").toLowerCase().includes(needle);
       if (!matchesSearch) continue;
 
-      const category = row.category.trim();
-      const groupKey = category.toLocaleLowerCase();
+      const label = (mode === "production" ? row.groupName : row.category)?.trim() || "";
+      const groupKey = label.toLocaleLowerCase();
       const existing = groups.get(groupKey);
       if (existing) {
         existing.rows.push(row);
       } else {
-        groups.set(groupKey, { category, rows: [row] });
+        groups.set(groupKey, { label, rows: [row] });
       }
     }
 
     return [...groups.values()]
       .sort((left, right) => {
-        if (!left.category && !right.category) return 0;
-        if (!left.category) return 1;
-        if (!right.category) return -1;
-        return left.category.localeCompare(right.category, undefined, { sensitivity: "base", numeric: true });
+        if (!left.label && !right.label) return 0;
+        if (!left.label) return 1;
+        if (!right.label) return -1;
+        return left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true });
       })
       .map((group) => ({
         ...group,
@@ -228,7 +263,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
           left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true })
         ),
       }));
-  }, [rows, search]);
+  }, [mode, rows, search]);
 
   const totals = useMemo(() => {
     const target = rows.reduce((sum, row) => sum + (row.targetBales ?? 0), 0);
@@ -353,10 +388,10 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
               <TableHead className="min-w-[220px]">{tr("person")}</TableHead>
-              <TableHead className="min-w-[180px]">{tr("category")}</TableHead>
-              {mode === "production" && <TableHead className="w-[130px] text-right">{tr("target")}</TableHead>}
-              {mode === "production" && <TableHead className="w-[130px] text-right">{tr("produced")}</TableHead>}
-              {mode === "production" && <TableHead className="w-[120px] text-right">{tr("difference")}</TableHead>}
+              <TableHead className="w-[150px] min-w-[150px] max-w-[150px]">{tr("category")}</TableHead>
+              {mode === "production" && <TableHead className="w-[120px] text-right">{tr("target")}</TableHead>}
+              {mode === "production" && <TableHead className="w-[110px] text-right">{tr("produced")}</TableHead>}
+              {mode === "production" && <TableHead className="w-[110px] text-right">{tr("difference")}</TableHead>}
               <TableHead className="w-[145px]">{tr("status")}</TableHead>
               {mode === "attendance" && <TableHead className="min-w-[260px]">{tr("notes")}</TableHead>}
             </TableRow>
@@ -376,11 +411,11 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
               </TableRow>
             ) : (
               groupedVisibleRows.map((group) => (
-                <Fragment key={group.category.toLocaleLowerCase() || "__blank-category__"}>
+                <Fragment key={group.label.toLocaleLowerCase() || "__blank-category__"}>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableCell colSpan={tableColumnCount} className="border-y py-2.5">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold">{group.category || "—"}</span>
+                        <span className="text-sm font-semibold">{group.label || "—"}</span>
                         <Badge variant="secondary" className="font-normal tabular-nums">
                           {group.rows.length}
                         </Badge>
@@ -408,10 +443,10 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Input
+                        <TableCell className="w-[150px] min-w-[150px] max-w-[150px]">
+                          <CategoryInput
                             value={row.category}
-                            onChange={(e) => setRow(sourceIndex, { category: e.target.value })}
+                            onCommit={(category) => setRow(sourceIndex, { category })}
                             placeholder={tr("categoryStation")}
                           />
                         </TableCell>
@@ -421,7 +456,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
                               type="number"
                               min="0"
                               step="1"
-                              className="text-right tabular-nums"
+                              className="h-8 text-right tabular-nums"
                               value={row.targetBales ?? ""}
                               onChange={(e) =>
                                 setRow(sourceIndex, {
@@ -432,19 +467,8 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
                           </TableCell>
                         )}
                         {mode === "production" && (
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="1"
-                              className="text-right tabular-nums"
-                              value={row.producedBales ?? ""}
-                              onChange={(e) =>
-                                setRow(sourceIndex, {
-                                  producedBales: e.target.value === "" ? null : Number(e.target.value),
-                                })
-                              }
-                            />
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {row.producedBales ?? 0}
                           </TableCell>
                         )}
                         {mode === "production" && (
