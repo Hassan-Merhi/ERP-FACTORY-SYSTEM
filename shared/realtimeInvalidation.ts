@@ -107,6 +107,19 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     topics = ["pos", "inventory", "accounting"];
   } else if (startsWithAny(path, ["/api/stock-transfers", "/api/stock-transfer"])) {
     topics = ["inventory", "accounting"];
+  } else if (
+    startsWithAny(path, [
+      "/api/suppliers",
+      "/api/customers",
+      "/api/employees",
+      "/api/stock-groups",
+      "/api/stock-categories",
+      "/api/stock-grades",
+      "/api/company-settings",
+      "/api/user/preferences",
+    ])
+  ) {
+    topics = ["reference"];
   } else if (startsWithAny(path, ["/api/inventory", "/api/locations", "/api/stock", "/api/bales"])) {
     topics = ["inventory"];
   } else if (
@@ -122,25 +135,14 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     ])
   ) {
     topics = ["accounting"];
+  } else if (path.startsWith("/api/factory/daybook")) {
+    topics = ["factory", "accounting"];
   } else if (startsWithAny(path, ["/api/factory/payroll", "/api/factory-payroll"])) {
-    topics = ["factory", "payroll"];
+    topics = ["factory", "payroll", "accounting"];
   } else if (path.startsWith("/api/factory")) {
     topics = ["factory"];
-  } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp/"])) {
+  } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp"])) {
     topics = ["containers", "inventory", "accounting"];
-  } else if (
-    startsWithAny(path, [
-      "/api/suppliers",
-      "/api/customers",
-      "/api/employees",
-      "/api/stock-groups",
-      "/api/stock-categories",
-      "/api/stock-grades",
-      "/api/company-settings",
-      "/api/user/preferences",
-    ])
-  ) {
-    topics = ["reference"];
   } else if (
     startsWithAny(path, [
       "/api/notifications",
@@ -148,6 +150,7 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
       "/api/business-alerts",
       "/api/chat",
       "/api/user-notes",
+      "/api/presence",
     ])
   ) {
     topics = ["communications"];
