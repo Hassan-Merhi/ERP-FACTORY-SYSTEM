@@ -53,13 +53,13 @@ function formatScanDateTime(value: string | null) {
 function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!model.orderId) return null;
   return (
-    <div className="mb-3">
-      <div className="flex items-center justify-between mb-1">
+    <div className="mb-3 min-w-0" data-testid="container-loading-scan-controls">
+      <div className="mb-2 flex min-w-0 flex-col gap-2 sm:mb-1 sm:flex-row sm:items-center sm:justify-between">
         <label className="text-sm font-medium">
           <ScanLine className="inline h-4 w-4 mr-1" />
           Scan Bale
         </label>
-        <div className="flex items-center gap-1">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1">
           <Button
             type="button"
             size="sm"
@@ -68,8 +68,8 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             aria-pressed={model.ignoreProforma}
             className={
               model.ignoreProforma
-                ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
-                : "text-muted-foreground"
+                ? "min-w-0 bg-amber-500 px-2 text-white hover:bg-amber-600 sm:px-3"
+                : "min-w-0 px-2 text-muted-foreground sm:px-3"
             }
             title={
               model.ignoreProforma
@@ -78,24 +78,29 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             }
             data-testid="button-ignore-proforma"
           >
-            <ShieldOff className="h-3 w-3 mr-1" />
-            {model.ignoreProforma ? "Ignore Proforma: ON" : "Ignore Proforma"}
+            <ShieldOff className="h-3 w-3 shrink-0 sm:mr-1" />
+            <span className="hidden truncate min-[360px]:inline">
+              {model.ignoreProforma ? "Ignore: ON" : "Ignore Proforma"}
+            </span>
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() => model.importFileRef.current?.click()}
+            className="min-w-0 px-2 sm:px-3"
             data-testid="button-import-excel"
           >
-            <Upload className="h-3 w-3 mr-1" />
-            Import from Excel
+            <Upload className="h-3 w-3 shrink-0 sm:mr-1" />
+            <span className="truncate">Import Excel</span>
           </Button>
           <Button
             size="sm"
             variant="ghost"
             onClick={() => model.downloadTemplate("ref")}
+            className="px-2"
             data-testid="button-template-ref"
             title="Download Ref Number template"
+            aria-label="Download Ref Number template"
           >
             <Download className="h-3 w-3" />
           </Button>
@@ -116,7 +121,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
         onKeyDown={model.handleScan}
         placeholder="Scan barcode, ref no., article code, item name (partial ok)…"
         disabled={!model.orderId || !model.selectedLocationId || model.addBaleMutation.isPending}
-        className={`text-lg h-12 font-mono ${model.scanInputClass}`}
+        className={`h-12 min-w-0 font-mono text-base sm:text-lg ${model.scanInputClass}`}
         autoFocus
         data-testid="input-scan-code"
       />
@@ -155,11 +160,11 @@ function BaleGroups({
             onClick={() => model.toggleGroup(group.articleCode)}
             data-testid={`button-toggle-group-${group.articleCode}`}
           >
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" data-testid={`badge-article-${group.articleCode}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              <Badge variant="outline" className="shrink-0" data-testid={`badge-article-${group.articleCode}`}>
                 {group.articleCode}
               </Badge>
-              <span className="text-sm font-medium">{group.baleName}</span>
+              <span className="min-w-0 truncate text-sm font-medium">{group.baleName}</span>
             </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <span>Qty: {group.bales.length}</span>
@@ -220,7 +225,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!orderId || baleRemovals.length === 0) return null;
   return (
     <div className="rounded-xl border overflow-hidden mt-4">
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <button
           className="w-full flex items-center justify-between gap-2 text-sm font-medium"
           onClick={() => model.setShowRemovalLog((v) => !v)}
@@ -291,13 +296,13 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
   const scanAuditByBaleId = useMemo(() => new Map(scanAuditRows.map((entry) => [entry.id, entry])), [scanAuditRows]);
 
   return (
-    <div className="lg:w-[60%] flex flex-col min-h-0">
+    <div className="flex min-h-0 min-w-0 flex-col lg:w-[60%]">
       <div
         className={`flex-1 flex flex-col min-h-0 rounded-xl border overflow-hidden transition-colors duration-300 ${scanFlash === "success" ? "ring-4 ring-green-500" : scanFlash === "error" ? "ring-2 ring-red-500" : ""}`}
       >
         {/* Scanned bales header strip */}
         <div
-          className={`flex items-center justify-between gap-2 px-4 py-3 border-b flex-wrap transition-colors duration-300 ${scanFlash === "success" ? "bg-green-50 dark:bg-green-950" : scanFlash === "error" ? "bg-red-50 dark:bg-red-950/30" : "bg-muted/20"}`}
+          className={`flex items-center justify-between gap-2 px-3 py-3 sm:px-4 border-b flex-wrap transition-colors duration-300 ${scanFlash === "success" ? "bg-green-50 dark:bg-green-950" : scanFlash === "error" ? "bg-red-50 dark:bg-red-950/30" : "bg-muted/20"}`}
         >
           <h2 className="font-semibold text-sm" data-testid="text-bales-header">
             Scanned Bales
@@ -322,7 +327,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
             </Button>
           </div>
         </div>
-        <div className="flex flex-col flex-1 min-h-0 p-4">
+        <div className="flex flex-col flex-1 min-h-0 min-w-0 p-3 sm:p-4">
           <ScanControls model={model} />
 
           {viewMode === "detailed" && lastScannedRef && (
@@ -344,7 +349,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-w-0 overflow-y-auto">
             <BaleGroups model={model} scanAuditByBaleId={scanAuditByBaleId} />
           </div>
         </div>
