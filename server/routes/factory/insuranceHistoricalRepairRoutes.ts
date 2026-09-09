@@ -115,20 +115,20 @@ async function inspectHistoricalInsuranceJournals(companyId: number): Promise<{
       continue;
     }
 
-    if (expenseDebit > 0 && expenseCredit === 0 && liabilityDebits === 0 && liabilityCredits > 0) {
+    if (expenseDebit === 0 && expenseCredit > 0 && liabilityDebits > 0 && liabilityCredits === 0) {
       continue;
     }
 
-    const allLiabilitiesReversed = liabilityEntries.every(
-      (entry) => money(entry.debitAmount) > 0 && money(entry.creditAmount) === 0
+    const allLiabilitiesOnLegacyCreditSide = liabilityEntries.every(
+      (entry) => money(entry.debitAmount) === 0 && money(entry.creditAmount) > 0
     );
-    const isLegacyReversed = expenseDebit === 0 && expenseCredit > 0 && allLiabilitiesReversed;
+    const isLegacyReversed = expenseDebit > 0 && expenseCredit === 0 && allLiabilitiesOnLegacyCreditSide;
     if (!isLegacyReversed) {
       skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "MIXED_OR_AMBIGUOUS_ENTRY_DIRECTION" });
       continue;
     }
 
-    if (Math.abs(expenseCredit - liabilityDebits) > 0.01) {
+    if (Math.abs(expenseDebit - liabilityCredits) > 0.01) {
       skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "UNBALANCED_REVERSED_JOURNAL" });
       continue;
     }
@@ -137,7 +137,7 @@ async function inspectHistoricalInsuranceJournals(companyId: number): Promise<{
       voucherId,
       voucherNumber: first.voucherNumber,
       voucherDate: first.voucherDate,
-      total: expenseCredit,
+      total: expenseDebit,
       entries,
     });
   }
