@@ -84,12 +84,13 @@ import { registerSalaryAdvanceRoutes } from "./employees/salaryAdvanceRoutes";
 import { registerLegacyHealthRoutes } from "./core/healthRoutes";
 import { registerPermissionBoundaryRoutes } from "./core/permissionBoundaryRoutes";
 import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfigRoutes";
+import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 
 function registerWriteInvalidationSignal(app: Express): void {
   app.use((req, res, next) => {
     if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) {
-      const companyId = Number(req.session?.currentCompanyId) || null;
+      const companyId = resolveActiveCompanyId(req);
       const invalidation = classifyRealtimeWrite(req.originalUrl || req.url, req.body);
       res.on("finish", () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
