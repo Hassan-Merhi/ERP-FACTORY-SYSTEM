@@ -11,9 +11,8 @@ on:
       - .github/workflows/ci-repair-failure-trigger.yml
       - .github/workflows/ci-repair-sweep.yml
       - .github/agents/bug-repair.agent.md
-  status:
   schedule:
-    # The status and pull_request hooks are the primary wake-ups. Keep only a
+    # The pull_request hook is the primary wake-up. Keep only a
     # low-frequency fallback so a stuck/red PR cannot create twelve new runs
     # per hour while the hosted-runner queue is already busy.
     - cron: "17 * * * *"
@@ -22,7 +21,7 @@ on:
 permissions: {}
 
 concurrency:
-  # Coalesce fallback/status events instead of assigning every scheduled run a
+  # Coalesce fallback events instead of assigning every scheduled run a
   # unique group. Pull requests still keep one independent watcher per PR.
   group: ci-repair-pr-watch-${{ github.event.pull_request.number || github.event.sha || github.event_name }}
   cancel-in-progress: true

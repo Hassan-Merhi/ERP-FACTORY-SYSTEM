@@ -182,7 +182,7 @@ export default function POSItemReplacement() {
     () => activeStockItems.filter((item) => item.id !== sourceItem?.id),
     [activeStockItems, sourceItem?.id]
   );
-  const rows = candidateData?.rows ?? [];
+  const rows = useMemo(() => candidateData?.rows ?? [], [candidateData]);
   const replacementLastSoldPrice = replacementLastSoldPriceData?.sellingPrice ?? null;
 
   const selectedReplacements = useMemo(() => {
