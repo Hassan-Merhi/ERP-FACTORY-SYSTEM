@@ -104,6 +104,7 @@ jobs:
           done
 
           node scripts/run-phase9-language-browser-smoke.mjs
+          node scripts/verify-mobile-responsive-wave3-browser.mjs
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
       - name: Focused responsive tests
