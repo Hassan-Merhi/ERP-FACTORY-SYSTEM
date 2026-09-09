@@ -12,7 +12,11 @@ on:
       - "client/src/pages/location-inventory/**"
       - "server/routes/applicationRoutes.ts"
       - "server/routes/performance/readMicrocache.ts"
+      - "server/routes/performance/realtimeReadFreshness.test.ts"
       - "shared/realtimeInvalidation.ts"
+      - "tests/ui/ws-invalidation-traffic.test.tsx"
+      - "tests/ui/realtime-wave5-cache-policy.test.ts"
+      - "tests/ui/realtime-wave6-hardening.test.ts"
       - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
       - "scripts/run-wave6-realtime-browser-e2e.mjs"
       - "package.json"
@@ -88,11 +92,15 @@ jobs:
       - name: Install Chrome
         run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
 
-      - name: Verify Wave 6 realtime unit contracts
+      - name: Verify Wave 6 realtime frontend contracts
         run: |
           node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts \
             tests/ui/ws-invalidation-traffic.test.tsx \
-            tests/ui/realtime-wave5-cache-policy.test.ts
+            tests/ui/realtime-wave5-cache-policy.test.ts \
+            tests/ui/realtime-wave6-hardening.test.ts
+
+      - name: Verify Wave 6 server freshness contract
+        run: node node_modules/vitest/vitest.mjs run server/routes/performance/realtimeReadFreshness.test.ts
 
       - name: Production build
         run: |
