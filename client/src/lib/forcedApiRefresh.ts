@@ -1,55 +1,40 @@
-type ForceToken = symbol;
+import type { QueryKey } from "@tanstack/react-query";
+import { queryClient } from "./queryClient";
 
-const queuedForcedReads = new Map<string, Set<ForceToken>>();
+export async function forcedApiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+  headers.set("x-bypass-request-storm-guard", "1");
 
-function normalizeRequestKey(requestUrl: string): string {
-  const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
-  const url = new URL(requestUrl, base);
-  return `${url.pathname}${url.search}`;
+  return fetch(input, {
+    ...(init ?? {}),
+    method: init?.method || (input instanceof Request ? input.method : "GET"),
+    headers,
+    cache: "reload",
+  });
 }
 
 /**
- * Queue exactly one cache-bypassing GET for the supplied API URL.
+ * Refresh an existing JSON React Query from the authenticated server instead of
+ * accepting either the browser request-storm cache or the server read microcache.
  *
- * Tokens are caller-owned rather than counted globally so cleanup from one
- * cancelled refetch cannot consume another caller's queued forced read.
+ * This is intentionally opt-in for explicit user actions only. Automatic
+ * polling, WebSocket invalidations and normal navigation remain cache-friendly.
  */
-export function queueForcedApiRead(requestUrl: string): () => void {
-  const key = normalizeRequestKey(requestUrl);
-  const token = Symbol(key);
-  const tokens = queuedForcedReads.get(key) ?? new Set<ForceToken>();
-  tokens.add(token);
-  queuedForcedReads.set(key, tokens);
-
-  return () => {
-    const current = queuedForcedReads.get(key);
-    if (!current) return;
-    current.delete(token);
-    if (current.size === 0) queuedForcedReads.delete(key);
-  };
-}
-
-/** Called only by the request-storm guard immediately before issuing a GET. */
-export function consumeForcedApiRead(url: URL): boolean {
-  const key = `${url.pathname}${url.search}`;
-  const tokens = queuedForcedReads.get(key);
-  if (!tokens || tokens.size === 0) return false;
-
-  const token = tokens.values().next().value as ForceToken | undefined;
-  if (token) tokens.delete(token);
-  if (tokens.size === 0) queuedForcedReads.delete(key);
-  return true;
-}
-
-/**
- * Run an existing React Query refetch as a true server refresh.
- * Normal polling, realtime invalidations and remounts remain cache-friendly.
- */
-export async function forceQueryRefetch<T>(requestUrl: string, refetch: () => Promise<T>): Promise<T> {
-  const cancelQueuedRead = queueForcedApiRead(requestUrl);
-  try {
-    return await refetch();
-  } finally {
-    cancelQueuedRead();
-  }
+export async function forceJsonQueryRefresh<T>(
+  queryKey: QueryKey,
+  requestUrl: string,
+  init?: RequestInit
+): Promise<T> {
+  return queryClient.fetchQuery<T>({
+    queryKey,
+    staleTime: 0,
+    queryFn: async () => {
+      const response = await forcedApiFetch(requestUrl, {
+        credentials: "include",
+        ...(init ?? {}),
+      });
+      if (!response.ok) throw new Error(`Forced refresh failed: ${response.status}`);
+      return response.json() as Promise<T>;
+    },
+  });
 }
