@@ -115,7 +115,7 @@ export default function FactoryBaleTracking() {
 
   if (me && !isDeveloper) {
     return (
-      <div className="p-4 max-w-2xl mx-auto space-y-5">
+      <div className="mx-auto max-w-2xl space-y-5 p-3 sm:p-4">
         <PageHeader title="Bale Tracking" />
         <Card>
           <CardContent className="pt-6 pb-6 text-center text-muted-foreground">
@@ -127,7 +127,7 @@ export default function FactoryBaleTracking() {
   }
 
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-5">
+    <div className="mx-auto max-w-2xl space-y-5 p-3 sm:p-4" data-testid="factory-bale-tracking-page">
       <PageHeader title="Bale Tracking" />
 
       {/* Search box */}
@@ -136,9 +136,9 @@ export default function FactoryBaleTracking() {
           <p className="text-sm text-muted-foreground mb-3">
             Enter a bale reference number to see its current status — in stock, reserved for dispatch, or sold.
           </p>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <ScanLine className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="flex flex-col gap-2 min-[420px]:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <ScanLine className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={inputRef}
                 className="pl-9"
@@ -153,6 +153,7 @@ export default function FactoryBaleTracking() {
             <Button
               onClick={() => doSearch(query)}
               disabled={loading || !query.trim()}
+              className="w-full min-[420px]:w-auto"
               data-testid="button-search-bale"
             >
               <Search className="w-4 h-4 mr-1.5" />
@@ -177,8 +178,8 @@ export default function FactoryBaleTracking() {
       {!loading && error && (
         <Card>
           <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">
-              Bale <span className="font-mono font-semibold text-foreground">{submitted}</span> was not found.
+            <p className="break-words text-sm text-muted-foreground">
+              Bale <span className="break-all font-mono font-semibold text-foreground">{submitted}</span> was not found.
             </p>
             <p className="text-xs text-muted-foreground mt-1">{error}</p>
           </CardContent>
@@ -191,29 +192,31 @@ export default function FactoryBaleTracking() {
           {/* Status header card */}
           <Card>
             <CardContent className="pt-4">
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                <Badge className={`${statusCfg.color} text-sm px-3 py-1`} data-testid="badge-bale-status">
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <Badge className={`${statusCfg.color} px-3 py-1 text-sm`} data-testid="badge-bale-status">
                   {statusCfg.label}
                 </Badge>
-                <span className="font-mono font-bold text-lg" data-testid="text-bale-reference">
+                <span className="min-w-0 break-all font-mono text-lg font-bold" data-testid="text-bale-reference">
                   {submitted}
                 </span>
               </div>
 
               {baleInfo && (
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm min-[420px]:grid-cols-2">
                   {baleInfo.articleCode && (
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Article Code</p>
-                      <p className="font-mono font-medium" data-testid="text-bale-article">
+                      <p className="break-all font-mono font-medium" data-testid="text-bale-article">
                         {baleInfo.articleCode}
                       </p>
                     </div>
                   )}
                   {baleInfo.productName && (
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Product</p>
-                      <p data-testid="text-bale-product">{baleInfo.productName}</p>
+                      <p className="break-words" data-testid="text-bale-product">
+                        {baleInfo.productName}
+                      </p>
                     </div>
                   )}
                   {baleInfo.weightKg && (
@@ -239,11 +242,11 @@ export default function FactoryBaleTracking() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-4">
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                  <div>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm min-[420px]:grid-cols-2">
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Batch</p>
                     <button
-                      className="font-mono font-semibold text-blue-600 dark:text-blue-400 hover:underline text-left"
+                      className="max-w-full break-all text-left font-mono font-semibold text-blue-600 hover:underline dark:text-blue-400"
                       onClick={() => navigate(`/factory/dispatch-batches/${result.dispatch!.batchId}`)}
                       data-testid="link-batch"
                     >
@@ -256,14 +259,16 @@ export default function FactoryBaleTracking() {
                       {result.dispatch.batchStatus}
                     </Badge>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Customer</p>
-                    <p data-testid="text-dispatch-customer">{result.dispatch.customerName || "—"}</p>
+                    <p className="break-words" data-testid="text-dispatch-customer">
+                      {result.dispatch.customerName || "—"}
+                    </p>
                   </div>
                   {result.dispatch.proformaName && (
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Proforma</p>
-                      <p>{result.dispatch.proformaName}</p>
+                      <p className="break-words">{result.dispatch.proformaName}</p>
                     </div>
                   )}
                   <div>
@@ -283,9 +288,9 @@ export default function FactoryBaleTracking() {
                     </div>
                   )}
                   {result.dispatch.driverName && (
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Driver</p>
-                      <p>{result.dispatch.driverName}</p>
+                      <p className="break-words">{result.dispatch.driverName}</p>
                     </div>
                   )}
                   {result.dispatch.amount && (
@@ -300,16 +305,17 @@ export default function FactoryBaleTracking() {
 
                 {/* Invoice info if sold */}
                 {result.dispatch.invoiceNumber && result.dispatch.orderId && (
-                  <div className="mt-4 pt-3 border-t flex items-center justify-between">
-                    <div>
+                  <div className="mt-4 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Invoice</p>
-                      <p className="font-mono font-semibold" data-testid="text-invoice-number">
+                      <p className="break-all font-mono font-semibold" data-testid="text-invoice-number">
                         {result.dispatch.invoiceNumber}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant="outline"
+                      className="w-full sm:w-auto"
                       onClick={() => navigate(`/factory/sales/invoices/${result.dispatch!.orderId}`)}
                       data-testid="button-view-invoice"
                     >
@@ -319,10 +325,11 @@ export default function FactoryBaleTracking() {
                   </div>
                 )}
 
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex justify-stretch sm:justify-end">
                   <Button
                     size="sm"
                     variant="outline"
+                    className="w-full sm:w-auto"
                     onClick={() => navigate(`/factory/dispatch-batches/${result.dispatch!.batchId}`)}
                     data-testid="button-view-batch"
                   >
@@ -338,8 +345,8 @@ export default function FactoryBaleTracking() {
           {!result.dispatch && result.status === "IN_STOCK" && (
             <Card>
               <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Clock className="w-4 h-4" />
+                <div className="flex items-start gap-2 text-sm text-muted-foreground sm:items-center">
+                  <Clock className="mt-0.5 w-4 h-4 shrink-0 sm:mt-0" />
                   This bale is currently in stock and has not been assigned to any dispatch batch.
                 </div>
               </CardContent>
