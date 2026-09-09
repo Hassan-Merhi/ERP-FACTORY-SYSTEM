@@ -14,12 +14,17 @@ export function normalizeBroadcastCompanyIds(values: readonly unknown[]): number
   return [...ids];
 }
 
+export function normalizeBroadcastUserId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const userId = value.trim();
+  return userId.length > 0 ? userId : null;
+}
+
 /**
  * Whether a socket belonging to one or more authorized company contexts should
  * receive a message scoped to `messageCompanyId`.
  *
- * Unscoped messages reach everyone: chat crosses companies and server-wide
- * notices must not be filtered. Tenant-scoped messages fail closed until at
+ * Unscoped messages reach everyone. Tenant-scoped messages fail closed until at
  * least one authenticated company context resolves.
  */
 export function shouldDeliverBroadcastToCompanies(
@@ -29,6 +34,20 @@ export function shouldDeliverBroadcastToCompanies(
   if (messageCompanyId === undefined || messageCompanyId === null) return true;
   if (!socketCompanyIds?.length) return false;
   return socketCompanyIds.includes(messageCompanyId);
+}
+
+/**
+ * User-targeted messages fail closed. This is used for cross-company realtime
+ * features such as direct chat, where waking every authenticated browser would
+ * defeat the purpose of targeted delivery.
+ */
+export function shouldDeliverBroadcastToUser(
+  socketUserId: string | null | undefined,
+  recipientUserIds: readonly string[] | null | undefined
+): boolean {
+  if (recipientUserIds === undefined || recipientUserIds === null) return true;
+  if (recipientUserIds.length === 0 || !socketUserId) return false;
+  return recipientUserIds.includes(socketUserId);
 }
 
 /** Backward-compatible single-company policy used by existing callers/tests. */
