@@ -33,14 +33,14 @@
       "automerge": false
     },
     {
-      "description": "Hold TypeScript below 7 until typescript-eslint supports it (typescript-eslint#10940); TS 7 removes the JS compiler API that scripts/audit-type-escapes.mjs uses and makes typescript-eslint throw on load, which takes lint and the type-escape ratchet down repo-wide.",
+      "description": "Hold TypeScript below 6.1 until typescript-eslint supports a newer compiler API (typescript-eslint#10940). typescript-eslint 8.x reads the TypeScript compiler API and supports it through <6.1; TypeScript 7 removes that API entirely, which takes both npm run lint and scripts/audit-type-escapes.mjs down repo-wide.",
       "matchDatasources": [
         "npm"
       ],
       "matchPackageNames": [
         "typescript"
       ],
-      "allowedVersions": "<7",
+      "allowedVersions": "<6.1",
       "dependencyDashboardApproval": true,
       "automerge": false
     },
