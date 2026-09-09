@@ -1,33 +1,6 @@
 name: Resilience Rehearsal
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/resilience-rehearsal.yml"
-      - ".github/workflows/exact-main-certification.yml"
-      - "client/src/lib/clientObservability.ts"
-      - "docs/operations/database-backup-rollback-recovery.md"
-      - "docs/operations/external-alerting-checklist.md"
-      - "drizzle.config.ts"
-      - "migrations/**"
-      - "package.json"
-      - "package-lock.json"
-      - "scripts/verify-database-backup.mjs"
-      - "scripts/verify-final-production-readiness.mjs"
-      - "scripts/verify-migration-registry.mjs"
-      - "scripts/verify-phase11-12-observability-disaster-recovery.mjs"
-      - "scripts/verify-phase11-operational-monitoring.mjs"
-      - "scripts/verify-program1-observability-foundation.mjs"
-      - "server/lib/observabilityBootstrap.ts"
-      - "server/lib/operationalAlerts.ts"
-      - "server/lib/operationalAlertRuntime.ts"
-      - "server/lib/schedulerObservability.ts"
-      - "server/routes/admin/operationalMonitoringRoutes.ts"
-      - "server/runtimeObservability.mjs"
-      - "server/services/operations/operationalHealthService.ts"
-      - "server/services/scheduler/**"
-      - "shared/schema/**"
-      - "tests/scheduler-tick-guard.test.ts"
   push:
     branches: [main]
   schedule:
