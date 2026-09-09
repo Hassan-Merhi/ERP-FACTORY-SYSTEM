@@ -19,7 +19,9 @@ const VIEWPORTS = [
   { name: "phone-320", width: 320, height: 568, isMobile: true, hasTouch: true },
   { name: "phone-360", width: 360, height: 800, isMobile: true, hasTouch: true },
   { name: "phone-390", width: 390, height: 844, isMobile: true, hasTouch: true },
+  { name: "tablet-768", width: 768, height: 1024, isMobile: true, hasTouch: true },
   { name: "phone-landscape", width: 844, height: 390, isMobile: true, hasTouch: true },
+  { name: "desktop-1440", width: 1440, height: 900, isMobile: false, hasTouch: false },
 ];
 
 const ROUTE_GROUPS = [
@@ -51,6 +53,46 @@ async function settle(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function closeLanguageOnboarding(page) {
+  const dialogSelector = '[data-testid="language-onboarding-dialog"]';
+  const dialogOpen = await page.evaluate((selector) => {
+    const dialog = document.querySelector(selector);
+    if (!(dialog instanceof HTMLElement)) return false;
+    const style = window.getComputedStyle(dialog);
+    return style.display !== "none" && style.visibility !== "hidden";
+  }, dialogSelector);
+
+  if (!dialogOpen) return;
+
+  await page.click('[data-testid="language-onboarding-en"]');
+  await page.waitForFunction(
+    () => !document.querySelector('[data-testid="language-onboarding-continue"]')?.hasAttribute("disabled"),
+    { timeout: TIMEOUT_MS },
+  );
+
+  const continueSelector = '[data-testid="language-onboarding-continue"]';
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (attempt === 1) await page.click(continueSelector);
+    else await page.evaluate((selector) => document.querySelector(selector)?.click(), continueSelector);
+
+    try {
+      await page.waitForFunction(
+        (selector) => {
+          const dialog = document.querySelector(selector);
+          if (!(dialog instanceof HTMLElement)) return true;
+          const style = window.getComputedStyle(dialog);
+          return dialog.dataset.state === "closed" || style.display === "none" || style.visibility === "hidden";
+        },
+        { timeout: Math.min(TIMEOUT_MS, 5_000) },
+        dialogSelector,
+      );
+      return;
+    } catch {
+      if (attempt === 3) throw new Error("Language onboarding did not close after 3 attempts");
+    }
+  }
+}
+
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
   await page.waitForSelector('[data-testid="input-username"]', { visible: true, timeout: TIMEOUT_MS });
@@ -62,33 +104,7 @@ async function login(page) {
     { timeout: TIMEOUT_MS },
   );
   await settle(page);
-
-  const onboarding = '[data-testid="language-onboarding-dialog"]';
-  const onboardingVisible = await page.evaluate((selector) => {
-    const element = document.querySelector(selector);
-    if (!(element instanceof HTMLElement)) return false;
-    const style = window.getComputedStyle(element);
-    return style.display !== "none" && style.visibility !== "hidden";
-  }, onboarding);
-
-  if (onboardingVisible) {
-    await page.click('[data-testid="language-onboarding-en"]');
-    await page.waitForFunction(
-      () => !document.querySelector('[data-testid="language-onboarding-continue"]')?.hasAttribute("disabled"),
-      { timeout: TIMEOUT_MS },
-    );
-    await page.click('[data-testid="language-onboarding-continue"]');
-    await page.waitForFunction(
-      (selector) => {
-        const element = document.querySelector(selector);
-        if (!(element instanceof HTMLElement)) return true;
-        const style = window.getComputedStyle(element);
-        return element.dataset.state === "closed" || style.display === "none" || style.visibility === "hidden";
-      },
-      { timeout: TIMEOUT_MS },
-      onboarding,
-    );
-  }
+  await closeLanguageOnboarding(page);
 }
 
 async function selectCompany(page, companyCode) {
@@ -185,7 +201,7 @@ function assertState(state, viewport, route) {
       failures.push(`${label}: chat is ${state.flexDirection || "unknown"} instead of stacked column layout`);
     }
     if (!shouldStack && state.flexDirection === "column") {
-      failures.push(`${label}: desktop/tablet chat unexpectedly uses the phone column layout`);
+      failures.push(`${label}: tablet/desktop chat unexpectedly uses the phone column layout`);
     }
   }
   return failures;
