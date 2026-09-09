@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 
 const checks = [
+  ["Critical mobile flows", "node", ["scripts/verify-mobile-responsive-phase1-critical-flows.mjs"]],
   ["Phase 4 forms and dialogs", "node", ["scripts/verify-phase10-dialog-form-consistency.mjs"]],
   ["Phase 5 tables and data lists", "node", ["scripts/verify-mobile-responsive-phase5-tables.mjs"]],
   ["Phase 6 core ERP", "node", ["scripts/verify-mobile-responsive-phase6-core-erp.mjs"]],
