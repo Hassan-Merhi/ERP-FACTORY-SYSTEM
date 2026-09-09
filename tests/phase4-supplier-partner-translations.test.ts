@@ -7,9 +7,9 @@ import {
 
 describe("Phase 4 Supplier Partner translations", () => {
   it("covers every reviewed Supplier Partner phrase exactly once", () => {
-    // 235 frozen Phase 4 phrases plus six reviewed current-main additions.
-    expect(supplierPartnerPhase4Translations).toHaveLength(241);
-    expect(new Set(supplierPartnerPhase4Translations.map((entry) => entry.en)).size).toBe(241);
+    // 235 frozen Phase 4 phrases plus sixteen reviewed current-main additions.
+    expect(supplierPartnerPhase4Translations).toHaveLength(251);
+    expect(new Set(supplierPartnerPhase4Translations.map((entry) => entry.en)).size).toBe(251);
 
     for (const entry of supplierPartnerPhase4Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -24,6 +24,9 @@ describe("Phase 4 Supplier Partner translations", () => {
     expect(translatePhase4SupplierPartnerText("Supplier Partner setup complete", "ar")).toBe("اكتمل إعداد شريك المورد");
     expect(translatePhase4SupplierPartnerText("Unresolved stock code", "fr")).toBe("Code de stock non résolu");
     expect(translatePhase4SupplierPartnerText("Link item first", "ar")).toBe("اربط الصنف أولاً");
+    expect(translatePhase4SupplierPartnerText("Supplier Partner Setup", "fr")).toBe(
+      "Configuration du Partenaire fournisseur"
+    );
   });
 
   it("preserves dynamic company, voucher and migration identifiers", () => {
