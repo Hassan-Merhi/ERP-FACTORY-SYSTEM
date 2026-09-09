@@ -1,21 +1,20 @@
 const MANUAL_REFRESH_WINDOW_MS = 500;
 let manualRefreshUntil = 0;
 
+function requestUrl(input: RequestInfo | URL): URL | null {
+  try {
+    if (typeof input === "string") return new URL(input, window.location.origin);
+    if (input instanceof URL) return new URL(input.toString(), window.location.origin);
+    return new URL(input.url, window.location.origin);
+  } catch {
+    return null;
+  }
+}
+
 function isApiGet(input: RequestInfo | URL, init?: RequestInit): boolean {
   const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
   if (method !== "GET") return false;
-
-  try {
-    const url =
-      typeof input === "string"
-        ? new URL(input, window.location.origin)
-        : input instanceof URL
-          ? new URL(input.toString(), window.location.origin)
-          : new URL(input.url, window.location.origin);
-    return url.origin === window.location.origin && url.pathname.startsWith("/api/");
-  } catch {
-    return false;
-  }
+  return requestUrl(input)?.pathname.startsWith("/api/") === true;
 }
 
 export function isManualRefreshControl(target: EventTarget | null): boolean {
@@ -35,12 +34,20 @@ export function isManualRefreshWindowActive(now = Date.now()): boolean {
   return now <= manualRefreshUntil;
 }
 
+export function forcedRefreshRequestInput(input: RequestInfo | URL): RequestInfo | URL {
+  const url = requestUrl(input);
+  if (!url) return input;
+  url.searchParams.set("__refresh", "1");
+
+  if (input instanceof Request) return new Request(url.toString(), input);
+  if (input instanceof URL) return url;
+  return url.toString();
+}
+
 export function forcedRefreshRequestInit(input: RequestInfo | URL, init?: RequestInit): RequestInit {
-  const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-  headers.set("x-bypass-request-storm-guard", "1");
   return {
     ...(init ?? {}),
-    headers,
+    headers: init?.headers || (input instanceof Request ? input.headers : undefined),
     cache: "reload",
   };
 }
@@ -59,13 +66,13 @@ export function installForcedApiRefresh(): void {
     true
   );
 
-  // requestStormGuard is installed before this module. Feeding its wrapper an
-  // explicit bypass header makes it skip the browser snapshot/coalescing path;
-  // the same header reaches readMicrocache and skips the server cache too.
+  // requestStormGuard is installed before this module. `cache: reload` makes its
+  // browser-side guard bypass local reuse; `__refresh=1` is the server's existing
+  // cache-bypass marker and avoids a custom-header CORS preflight on Capacitor.
   const guardedFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     if (!isManualRefreshWindowActive() || !isApiGet(input, init)) return guardedFetch(input, init);
-    return guardedFetch(input, forcedRefreshRequestInit(input, init));
+    return guardedFetch(forcedRefreshRequestInput(input), forcedRefreshRequestInit(input, init));
   };
 }
 
