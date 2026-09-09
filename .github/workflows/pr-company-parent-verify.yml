@@ -66,4 +66,5 @@ jobs:
           cat "$RUNNER_TEMP/company-parent-startup.txt"
           exit 1
       - run: npx vitest run tests/company-parent-link.test.ts
-      - run: npm run type-check
+      - name: TypeScript check
+        run: npm run check
