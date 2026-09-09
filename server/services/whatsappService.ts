@@ -37,8 +37,62 @@ export interface WaRecipient {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
+type GreenApiCredentials = Pick<WaSettings, "instanceId" | "apiToken">;
+
+function cleanGreenApiCredential(value: unknown): string {
+  // Green API puts both values directly in the request URL. Copy/paste can add
+  // spaces, line breaks, BOMs or zero-width characters, all of which turn an
+  // otherwise-valid credential into a provider-side 401.
+  return String(value ?? "").replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
+}
+
 function baseUrl(instanceId: string, apiToken: string, method: string): string {
-  return `https://api.green-api.com/waInstance${instanceId}/${method}/${apiToken}`;
+  const cleanInstanceId = cleanGreenApiCredential(instanceId);
+  const cleanApiToken = cleanGreenApiCredential(apiToken);
+  return `https://api.green-api.com/waInstance${cleanInstanceId}/${method}/${cleanApiToken}`;
+}
+
+async function getGreenApiAuthFallback(current: GreenApiCredentials): Promise<GreenApiCredentials | null> {
+  const currentInstanceId = cleanGreenApiCredential(current.instanceId);
+  const currentApiToken = cleanGreenApiCredential(current.apiToken);
+  const [main, pos] = await Promise.all([getWaSettingsById(1), getWaSettingsById(2)]);
+
+  const alternate = [main, pos].find((candidate) => {
+    if (!candidate?.enabled || !candidate.instanceId || !candidate.apiToken) return false;
+    return candidate.instanceId !== currentInstanceId || candidate.apiToken !== currentApiToken;
+  });
+
+  return alternate ? { instanceId: alternate.instanceId, apiToken: alternate.apiToken } : null;
+}
+
+async function fetchGreenApiWithAuthFallback(
+  credentials: GreenApiCredentials,
+  method: string,
+  init: RequestInit
+): Promise<Response> {
+  const primaryInstanceId = cleanGreenApiCredential(credentials.instanceId);
+  const primaryApiToken = cleanGreenApiCredential(credentials.apiToken);
+  const primary = await fetch(baseUrl(primaryInstanceId, primaryApiToken, method), init);
+  if (primary.status !== 401) return primary;
+
+  const alternate = await getGreenApiAuthFallback({ instanceId: primaryInstanceId, apiToken: primaryApiToken });
+  if (!alternate) return primary;
+
+  logger.warn("[WhatsApp] Green API rejected primary credentials; retrying configured backup instance", {
+    primaryInstanceId,
+    fallbackInstanceId: alternate.instanceId,
+    method,
+  });
+
+  const fallback = await fetch(baseUrl(alternate.instanceId, alternate.apiToken, method), init);
+  if (fallback.ok) {
+    logger.warn("[WhatsApp] Green API backup credentials accepted after primary 401", {
+      primaryInstanceId,
+      fallbackInstanceId: alternate.instanceId,
+      method,
+    });
+  }
+  return fallback;
 }
 
 /** Normalise a plain phone number to chatId format (243XXXXXXXX → 243XXXXXXXX@c.us) */
@@ -63,8 +117,8 @@ export async function getWaSettingsById(id: number): Promise<WaSettings | null> 
   if (!res.rows?.length) return null;
   const r = res.rows[0];
   return {
-    instanceId: r.instance_id ?? "",
-    apiToken: r.api_token ?? "",
+    instanceId: cleanGreenApiCredential(r.instance_id),
+    apiToken: cleanGreenApiCredential(r.api_token),
     enabled: r.enabled ?? false,
     monthlyAutoSend: r.monthly_auto_send ?? false,
     dailyAutoSend: r.daily_auto_send ?? false,
@@ -102,8 +156,10 @@ export type GreenInstanceState = "authorized" | "notAuthorized" | "sleepMode" | 
  */
 export async function getGreenInstanceState(instanceId: string, apiToken: string): Promise<GreenInstanceState> {
   try {
-    const url = baseUrl(instanceId, apiToken, "getStateInstance");
-    const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(8000) });
+    const response = await fetchGreenApiWithAuthFallback({ instanceId, apiToken }, "getStateInstance", {
+      method: "GET",
+      signal: AbortSignal.timeout(8000),
+    });
     if (!response.ok) return "unknown";
     const json = await response.json().catch(() => null);
     const state: string = json?.stateInstance ?? "unknown";
@@ -115,8 +171,7 @@ export async function getGreenInstanceState(instanceId: string, apiToken: string
 }
 
 export async function fetchGreenApiChats(instanceId: string, apiToken: string): Promise<GreenChat[]> {
-  const url = baseUrl(instanceId, apiToken, "getChats");
-  const response = await fetch(url, { method: "GET" });
+  const response = await fetchGreenApiWithAuthFallback({ instanceId, apiToken }, "getChats", { method: "GET" });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Green API getChats error ${response.status}: ${body}`);
@@ -159,7 +214,6 @@ async function sendGreenApiFileUpload({
   caption: string;
   mimeType: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const url = baseUrl(settings.instanceId, settings.apiToken, "sendFileByUpload");
   const sizeBytes = getExportAttachmentSize(buffer);
 
   return withSerializedExportAttachmentBuffer(buffer, async (materializedBuffer) => {
@@ -172,7 +226,7 @@ async function sendGreenApiFileUpload({
     form.append("file", materializedBuffer, { filename: fileName, contentType: mimeType });
 
     const multipartBody = form.getBuffer();
-    const response = await fetch(url, {
+    const response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUpload", {
       method: "POST",
       body: toArrayBuffer(multipartBody),
       headers: form.getHeaders(),
@@ -233,8 +287,7 @@ export async function sendWhatsAppTextToChatId(
     return { success: false, error: "WhatsApp sending is disabled" };
   }
 
-  const url = baseUrl(settings.instanceId, settings.apiToken, "sendMessage");
-  const response = await fetch(url, {
+  const response = await fetchGreenApiWithAuthFallback(settings, "sendMessage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chatId, message }),
@@ -262,8 +315,7 @@ export async function sendWhatsAppFileByUrlToChatIdPos(
     return { success: false, error: "WhatsApp sending is disabled" };
   }
 
-  const url = baseUrl(settings.instanceId, settings.apiToken, "sendFileByUrl");
-  const response = await fetch(url, {
+  const response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUrl", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chatId, urlFile: fileUrl, fileName, caption }),
@@ -310,8 +362,7 @@ export async function sendWhatsAppTextToChatIdPos(
     return { success: false, error: "WhatsApp sending is disabled" };
   }
 
-  const url = baseUrl(settings.instanceId, settings.apiToken, "sendMessage");
-  const response = await fetch(url, {
+  const response = await fetchGreenApiWithAuthFallback(settings, "sendMessage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chatId, message }),
@@ -340,15 +391,13 @@ export async function sendWhatsAppText(
     return { success: false, sent: 0, failed: 0, errors: ["No active WhatsApp recipients"] };
   }
 
-  const url = baseUrl(settings.instanceId, settings.apiToken, "sendMessage");
-
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
 
   for (const r of recipients) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchGreenApiWithAuthFallback(settings, "sendMessage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chatId: r.chatId, message }),
@@ -434,8 +483,8 @@ export async function getContainersWaSettings(): Promise<ContainersWaSettings | 
   if (!res.rows?.length) return null;
   const r = res.rows[0];
   return {
-    instanceId: r.instance_id ?? "",
-    apiToken: r.api_token ?? "",
+    instanceId: cleanGreenApiCredential(r.instance_id),
+    apiToken: cleanGreenApiCredential(r.api_token),
     enabled: r.enabled ?? false,
     groupChatId: r.containers_wa_group_chat_id ?? "",
     scheduleEnabled: r.containers_wa_schedule_enabled ?? false,
@@ -492,8 +541,8 @@ export async function getAgentDutyWaCredentials(): Promise<{
   const r = res.rows[0];
   return {
     groups: r.agent_duty_wa_groups ?? {},
-    instanceId: r.instance_id ?? "",
-    apiToken: r.api_token ?? "",
+    instanceId: cleanGreenApiCredential(r.instance_id),
+    apiToken: cleanGreenApiCredential(r.api_token),
     enabled: r.enabled ?? false,
   };
 }

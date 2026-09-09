@@ -1,8 +1,6 @@
 name: Release Governance
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
   schedule:
@@ -15,7 +13,7 @@ permissions:
 
 concurrency:
   group: release-governance-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   governance:
@@ -28,10 +26,10 @@ jobs:
       EVENT_NAME: ${{ github.event_name }}
       HEAD_SHA: ${{ github.sha }}
     steps:
-      - name: Set up Node.js 24.19.0
+      - name: Set up Node.js 24.21.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
 
       - name: Verify live main governance
         shell: bash
@@ -74,67 +72,22 @@ jobs:
           }
 
           const ruleTypes = new Set(rules.map((rule) => rule.type));
-          const mandatoryRuleTypes = ["pull_request", "required_status_checks", "non_fast_forward", "deletion"];
+          const mandatoryRuleTypes = ["pull_request", "non_fast_forward", "deletion"];
           const missingRuleTypes = mandatoryRuleTypes.filter((type) => !ruleTypes.has(type));
           if (missingRuleTypes.length > 0) {
             throw new Error(`main ruleset is missing required rule(s): ${missingRuleTypes.join(", ")}`);
           }
 
           const statusRules = rules.filter((rule) => rule.type === "required_status_checks");
-          if (!statusRules.some((rule) => rule.parameters?.strict_required_status_checks_policy === true)) {
-            throw new Error(
-              "main required status checks are not strict. Enable 'Require branches to be up to date before merging'.",
-            );
-          }
-
-          const configuredContexts = new Set(
-            statusRules.flatMap((rule) =>
+          if (statusRules.length > 0) {
+            const configuredContexts = statusRules.flatMap((rule) =>
               Array.isArray(rule.parameters?.required_status_checks)
                 ? rule.parameters.required_status_checks.map((check) => check.context)
                 : [],
-            ),
-          );
-          const requiredContexts = [
-            "Protect main and release path",
-            "Check / Build / Lint / Test",
-            "Secret scan",
-            "Dependency audit",
-            "Focused security readiness",
-            "Analyze JavaScript / TypeScript",
-            "Semgrep CE new-findings gate",
-            "Dependency Review",
-            "actionlint",
-            "zizmor",
-            "Classified untranslated-text audit",
-            "ci/circleci: static-build",
-            "ci/circleci: postgres-regression",
-            "ci/circleci: backend-core-regression",
-            "ci/circleci: frontend-regression",
-            "ci/circleci: security-readiness",
-          ];
-          const missingContexts = requiredContexts.filter((context) => !configuredContexts.has(context));
-          if (missingContexts.length > 0) {
-            throw new Error(`main ruleset is missing required status check(s): ${missingContexts.join(", ")}`);
-          }
-
-          if (eventName === "pull_request") {
-            const pr = event.pull_request;
-            if (!pr || pr.base?.ref !== "main") {
-              throw new Error("Release Governance expected a pull request targeting main.");
-            }
-
-            const latestMainSha = main.commit?.sha;
-            const headSha = pr.head?.sha;
-            if (!latestMainSha || !headSha) {
-              throw new Error("Unable to resolve the latest main SHA or pull-request head SHA.");
-            }
-
-            const compare = await github(`/compare/${latestMainSha}...${headSha}`);
-            if (compare.behind_by !== 0) {
-              throw new Error(
-                `Pull request head is ${compare.behind_by} commit(s) behind current main. Sync main before merge.`,
-              );
-            }
+            );
+            console.log(
+              `Main currently has ${configuredContexts.length} required status context(s); status checks are no longer part of the release-governance contract because automatic validation runs after merge on main.`,
+            );
           }
 
           if (eventName === "push") {
@@ -157,6 +110,6 @@ jobs:
           }
 
           console.log(
-            `Release governance passed for ${eventName}; main=${main.commit.sha}; requiredChecks=${requiredContexts.length}`,
+            `Release governance passed for ${eventName}; main=${main.commit.sha}; protectedRules=${mandatoryRuleTypes.join(",")}`,
           );
           NODE

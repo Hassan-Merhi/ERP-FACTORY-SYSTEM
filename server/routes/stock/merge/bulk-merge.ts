@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import {
   addInventoryValues,
@@ -26,11 +26,13 @@ import {
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 export function registerStockItemBulkMergeRoutes(app: Express) {
-  app.post("/api/stock-items/bulk-merge", requireAuth, requireNonPOS, async (req: any, res: import("express").Response) => {
+  app.post("/api/stock-items/bulk-merge", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const userId: number = req.user?.id ?? req.session.userId;
+      // `users.id` is a varchar UUID and `session.userId` is a string; the old
+      // `: number` annotation was untrue and only survived because `req` was `any`.
+      const userId = req.user?.id ?? req.session.userId ?? "";
 
       const pairs: { oldCode: string; keepCode: string }[] = req.body.pairs ?? [];
       if (!Array.isArray(pairs) || pairs.length === 0)
@@ -86,7 +88,12 @@ export function registerStockItemBulkMergeRoutes(app: Express) {
       for (const pair of pairs) {
         const { oldCode, keepCode } = pair;
         if (!oldCode || !keepCode) {
-          results.push({ oldCode: oldCode ?? "", keepCode: keepCode ?? "", status: "skipped", reason: "Missing code" });
+          results.push({
+            oldCode: oldCode ?? "",
+            keepCode: keepCode ?? "",
+            status: "skipped",
+            reason: "Missing code",
+          });
           continue;
         }
 

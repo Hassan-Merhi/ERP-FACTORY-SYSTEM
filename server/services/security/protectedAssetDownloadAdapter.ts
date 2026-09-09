@@ -16,13 +16,8 @@ interface ContainerDocumentAsset extends ProtectedAssetRecord {
   fileData: string | null;
 }
 
-type SecuritySession = Request["session"] & {
-  factoryCompanyId?: number;
-  securityPermissions?: string[];
-};
-
 function actorFromRequest(req: Request): AuthorizationActor | null {
-  const session = req.session as SecuritySession;
+  const session = req.session;
   const companyId = session.currentCompanyId;
   if (!session.userId || !session.currentRole || !companyId) return null;
   if (session.factoryCompanyId != null && session.factoryCompanyId !== companyId) return null;

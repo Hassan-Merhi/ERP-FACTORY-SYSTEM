@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getClientDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -26,7 +26,7 @@ export function registerFactoryDocsRoutes(app: Express) {
   // Validates admin credentials and grants a 10-minute session override token
   // that allows non-admin users to perform admin-only actions after approval.
   // ─────────────────────────────────────────────────────────────────────────────
-  app.post("/api/factory/admin-verify", requireAuth, async (req: any, res: import("express").Response) => {
+  app.post("/api/factory/admin-verify", requireAuth, async (req: Request, res: Response) => {
     try {
       const { username, password } = req.body as { username?: string; password?: string };
       if (!username || !password) {
@@ -93,7 +93,7 @@ export function registerFactoryDocsRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/container-doc-types", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/container-doc-types", requireAuth, async (req: Request, res: Response) => {
     try {
       const rows = await db.select().from(containerDocumentTypes).orderBy(containerDocumentTypes.label);
       res.json(rows);
@@ -102,7 +102,7 @@ export function registerFactoryDocsRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/container-doc-types", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/container-doc-types", requireAuth, async (req: Request, res: Response) => {
     try {
       const [row] = await db.insert(containerDocumentTypes).values(req.body).returning();
       res.json(row);
@@ -113,7 +113,7 @@ export function registerFactoryDocsRoutes(app: Express) {
 
   // ─────── CONTAINER DOCUMENTS (upload / list / delete) ───────
 
-  app.get("/api/factory/containers/:containerId/documents", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/containers/:containerId/documents", requireAuth, async (req: Request, res: Response) => {
     try {
       const containerId = Number(req.params.containerId);
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -142,7 +142,7 @@ export function registerFactoryDocsRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/containers/:containerId/documents", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/containers/:containerId/documents", requireAuth, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
       const pathLib = await import("path");
@@ -230,54 +230,61 @@ export function registerFactoryDocsRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/factory/containers/:containerId/documents/:docId", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
-    try {
-      const containerId = Number(req.params.containerId);
-      const docId = Number(req.params.docId);
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+  app.delete(
+    "/api/factory/containers/:containerId/documents/:docId",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const containerId = Number(req.params.containerId);
+        const docId = Number(req.params.docId);
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
 
-      if (!companyId || !(await verifyContainerOwnership(containerId, companyId))) {
-        return res.status(403).json({ message: "Access denied" });
+        if (!companyId || !(await verifyContainerOwnership(containerId, companyId))) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const [deleted] = await db
+          .delete(containerDocuments)
+          .where(and(eq(containerDocuments.id, docId), eq(containerDocuments.containerId, containerId)))
+          .returning();
+        if (!deleted) return res.status(404).json({ message: "Document not found" });
+
+        const fs = await import("fs");
+        const path = await import("path");
+        const filePath = path.default.join(process.cwd(), "uploads", deleted.storageKey);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        await writeDaybookEntry(db, {
+          companyId: companyId || deleted.companyId,
+          txDate: req.body?.txDate || getClientDate(req),
+          txType: "DOC_DELETE",
+          referenceId: containerId,
+          referenceTable: "containers",
+          description: `Deleted document: ${deleted.fileName} from container #${containerId}`,
+          metaJson: JSON.stringify({ docId: deleted.id, fileName: deleted.fileName }),
+          createdBy: req.session.userId || undefined,
+        });
+
+        const allDocs = await db
+          .select()
+          .from(containerDocuments)
+          .where(eq(containerDocuments.containerId, containerId));
+        const allDocTypes = await db.select().from(containerDocumentTypes);
+        const requiredTypes = allDocTypes.filter((dt) => dt.isRequired);
+        const uploadedTypeIds = new Set(allDocs.map((d) => d.docTypeId));
+        const allComplete = requiredTypes.length > 0 && requiredTypes.every((rt) => uploadedTypeIds.has(rt.id));
+        await db.update(containers).set({ docReceived: allComplete }).where(eq(containers.id, containerId));
+
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [deleted] = await db
-        .delete(containerDocuments)
-        .where(and(eq(containerDocuments.id, docId), eq(containerDocuments.containerId, containerId)))
-        .returning();
-      if (!deleted) return res.status(404).json({ message: "Document not found" });
-
-      const fs = await import("fs");
-      const path = await import("path");
-      const filePath = path.default.join(process.cwd(), "uploads", deleted.storageKey);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
-      await writeDaybookEntry(db, {
-        companyId: companyId || deleted.companyId,
-        txDate: req.body?.txDate || getClientDate(req),
-        txType: "DOC_DELETE",
-        referenceId: containerId,
-        referenceTable: "containers",
-        description: `Deleted document: ${deleted.fileName} from container #${containerId}`,
-        metaJson: JSON.stringify({ docId: deleted.id, fileName: deleted.fileName }),
-        createdBy: req.session.userId || undefined,
-      });
-
-      const allDocs = await db.select().from(containerDocuments).where(eq(containerDocuments.containerId, containerId));
-      const allDocTypes = await db.select().from(containerDocumentTypes);
-      const requiredTypes = allDocTypes.filter((dt) => dt.isRequired);
-      const uploadedTypeIds = new Set(allDocs.map((d) => d.docTypeId));
-      const allComplete = requiredTypes.length > 0 && requiredTypes.every((rt) => uploadedTypeIds.has(rt.id));
-      await db.update(containers).set({ docReceived: allComplete }).where(eq(containers.id, containerId));
-
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Authenticated, path-traversal-safe file serving.
   // Only the document's owner company can download a container-doc file.
-  app.get("/api/factory/uploads/:folder/:filename", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/uploads/:folder/:filename", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(403).json({ message: "Access denied" });

@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
@@ -44,7 +44,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
   // Factory User Management
   // ───────────────────────────────────────────────
 
-  app.get("/api/factory/users", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/users", requireAuth, async (req: Request, res: Response) => {
     try {
       // Factory user management is tenant scoped. Never use a cached/pinned
       // company different from the authenticated request company here; Phase 3
@@ -112,7 +112,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -191,7 +191,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -325,7 +325,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     requireAuth,
     privilegedMutationRateLimit,
     requirePasswordConfirmation,
-    async (req: any, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;
         const currentRole = req.session.currentRole;
@@ -369,12 +369,12 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
     }
   );
 
-  app.get("/api/factory/my-access", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/my-access", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.session.userId;
       const currentCompanyId = req.session.currentCompanyId;
       const pinnedFactoryId = req.session.factoryCompanyId;
-      const cachedFactoryName = req.session.factoryCompanyName as string | undefined;
+      const cachedFactoryName = req.session.factoryCompanyName;
       const role = req.session.currentRole;
 
       if (!currentCompanyId || !userId) return res.status(400).json({ message: "No company or user" });

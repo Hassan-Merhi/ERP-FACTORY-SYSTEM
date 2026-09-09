@@ -1,4 +1,6 @@
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { firstRow } from "../../lib/queryResult";
+import { toFiniteNumber } from "@shared/typeGuards";
 import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db, pool } from "../../db";
@@ -331,7 +333,7 @@ export function registerCompanySettingsRoutes(app: Express) {
         ),
       ]);
 
-      const pick = (r: any) => Number((r.rows ?? r)[0]?.n ?? 0);
+      const pick = (result: unknown) => toFiniteNumber(firstRow<{ n: number }>(result)?.n) ?? 0;
 
       res.json({
         timestamp: new Date().toISOString(),

@@ -4,7 +4,8 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
+import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
@@ -32,7 +33,7 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/zero-cost-sources",
     requireAuth,
     requireRole(...ADMIN_ROLES),
-    async (req: import("express").Request, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -56,7 +57,7 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/zero-cost-sources/apply",
     requireAuth,
     requireRole(...ADMIN_ROLES),
-    async (req: any, res: import("express").Response) => {
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -87,7 +88,7 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
             companyId,
             sourceIds: parsedIds,
             manualRates: parsedManualRates,
-            userId: req.session.userId,
+            userId: requireSessionUserId(req),
             expiresAt: Date.now() + REPAIR_TOKEN_TTL_MS,
           };
           const token = signRepairToken(tokenPayload);
@@ -132,8 +133,8 @@ export function registerRawStockZeroCostSourceRoutes(app: Express) {
           onAudit: async (tx, result) => {
             await logAudit(
               {
-                userId: req.session.userId,
-                username: req.session.username || req.session.userId,
+                userId: requireSessionUserId(req),
+                username: req.session.username || requireSessionUserId(req),
                 companyId,
                 action: "update",
                 tableName: "factory_mix_batch_sources",

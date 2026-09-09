@@ -29,7 +29,6 @@ export default function ProductionRawStock() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
 
-  // Dialog States
   const [offloadDialogOpen, setOffloadDialogOpen] = useState(false);
   const [categoriesDialogOpen, setCategoriesDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
@@ -38,17 +37,14 @@ export default function ProductionRawStock() {
   const [createMixBatchOpen, setCreateMixBatchOpen] = useState(false);
   const [editBatch, setEditBatch] = useState<FactoryMixBatch | null>(null);
 
-  // Data States
   const [adjustingRow, setAdjustingRow] = useState<any>(null);
   const [adjIsNewMaterial, setAdjIsNewMaterial] = useState(false);
   const [deductingRow, setDeductingRow] = useState<any>(null);
   const [addToBatchSource, setAddToBatchSource] = useState<any>(null);
   const [mixBatchDate, setMixBatchDate] = useState(() => new Date().toISOString().substring(0, 10));
 
-  // Ref for WhatsApp printable card
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  // Queries
   const { data: rawStock, isLoading: _rawStockLoading } = useQuery<any[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
@@ -77,7 +73,6 @@ export default function ProductionRawStock() {
     enabled: !!mixBatchDate,
   });
 
-  // Mutations
   const offloadMutation = useMutation({
     mutationFn: async (data) => {
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/offload", data);
@@ -141,8 +136,6 @@ export default function ProductionRawStock() {
 
   const addToBatchMutation = useMutation({
     mutationFn: async (data: any) => {
-      // Never send costPerKg for a supplier source — the server always applies the
-      // supplier's locked rate and ignores any client-supplied cost.
       const res = await modeApiRequest("POST", `/api/factory/mix-batches/${data.batchId}/top-up`, {
         supplierSources: [{ supplierId: data.supplierId, weightKg: data.weightKg }],
       });
@@ -197,13 +190,6 @@ export default function ProductionRawStock() {
 
   const kpiData = useMemo(() => {
     const rs = rawStock || [];
-    // Total Used $ = SUM of each mix-batch source's own recorded totalCost (the
-    // supplier's locked rate AT THE TIME that source was created), summed server-side
-    // per supplier into row.usedValueUsd. NOT one global blended mix-batch rate ×
-    // total used kg — that drifts the instant two suppliers/batches have different
-    // rates. This keeps Free Stock Value + Total Used Value reconciling against
-    // Total Received Value under one documented formula, since every kg's value is
-    // attributed to the rate it actually carried when it moved.
     const totalUsed = rs.reduce((sum, r) => sum + parseFloat(r.usedKg || "0"), 0);
     return {
       totalReceived: rs.reduce((sum, r) => sum + parseFloat(r.receivedKg || "0"), 0),
@@ -219,23 +205,23 @@ export default function ProductionRawStock() {
   }, [rawStock]);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-amber-500/30 to-amber-600/10 border border-amber-500/25 shrink-0">
+    <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6" data-testid="production-raw-stock-page">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/30 to-amber-600/10">
             <FlaskConical className="h-4.5 w-4.5 text-amber-500" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-lg font-bold leading-tight">Raw Production</h1>
-            <p className="text-xs text-muted-foreground leading-tight">
+            <p className="text-xs leading-tight text-muted-foreground">
               Raw stock inventory and daily mix batch management
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <Button
             onClick={() => setCreateMixBatchOpen(true)}
-            className="h-9 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400"
+            className="h-11 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400 sm:h-9"
             data-testid="button-create-mix-batch"
           >
             <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
@@ -243,7 +229,7 @@ export default function ProductionRawStock() {
           </Button>
           <Button
             onClick={() => setOffloadDialogOpen(true)}
-            className="h-9 gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+            className="h-11 gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-9"
             data-testid="button-offload-container"
           >
             <ArrowDown className="h-4 w-4" /> Offload Container
@@ -251,7 +237,7 @@ export default function ProductionRawStock() {
           <Button
             variant="outline"
             onClick={() => setCategoriesDialogOpen(true)}
-            className="h-9 gap-2 rounded-lg border-amber-500/40 bg-amber-500/5 px-3 text-xs font-semibold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/60 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300"
+            className="h-11 gap-2 rounded-lg border-amber-500/40 bg-amber-500/5 px-3 text-xs font-semibold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/60 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-9 sm:w-auto"
             data-testid="button-manage-categories"
           >
             <Tag className="h-4 w-4" /> Categories
@@ -261,8 +247,8 @@ export default function ProductionRawStock() {
 
       <KpiCards {...kpiData} />
 
-      <div className="grid gap-6">
-        <section className="space-y-4">
+      <div className="grid min-w-0 gap-4 sm:gap-6">
+        <section className="min-w-0 space-y-4">
           <RawStockTable
             rawStock={rawStock || []}
             onAdjust={(row) => {
@@ -291,7 +277,7 @@ export default function ProductionRawStock() {
           />
         </section>
 
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <MixBatchList
             mixBatches={mixBatches || []}
             isLoading={mixBatchesLoading}
@@ -310,7 +296,6 @@ export default function ProductionRawStock() {
         </section>
       </div>
 
-      {/* Dialogs */}
       <CreateMixBatchDialog
         open={createMixBatchOpen}
         onOpenChange={setCreateMixBatchOpen}

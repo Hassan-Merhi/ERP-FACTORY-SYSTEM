@@ -110,17 +110,17 @@ export default function BaleProductImages() {
   const images = imagesQuery.data ?? [];
 
   return (
-    <div className="flex flex-col md:flex-row h-full min-h-0">
+    <div className="flex h-full min-h-0 min-w-0 flex-col md:flex-row" data-testid="bale-product-images-page">
       {/* ── Left: Product List ─────────────────────────────────── */}
       <div
-        className={`flex-shrink-0 flex-col md:w-72 md:border-r ${showList ? "flex border-b md:border-b-0" : "hidden md:flex"}`}
+        className={`min-w-0 flex-shrink-0 flex-col md:w-72 md:border-r ${showList ? "flex border-b md:border-b-0" : "hidden md:flex"}`}
       >
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold mb-3" data-testid="text-product-list-title">
+        <div className="border-b p-3 sm:p-4">
+          <h2 className="mb-3 text-lg font-semibold" data-testid="text-product-list-title">
             Bale Products
           </h2>
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-8"
               placeholder="Search products..."
@@ -137,13 +137,13 @@ export default function BaleProductImages() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : filteredProducts.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8 px-4">No products found</p>
+            <p className="px-4 py-8 text-center text-sm text-muted-foreground">No products found</p>
           ) : (
             <div className="divide-y">
               {filteredProducts.map((p) => (
                 <button
                   key={p.id}
-                  className={`w-full text-left px-4 py-3 hover-elevate transition-colors ${
+                  className={`w-full px-4 py-3 text-left transition-colors hover-elevate ${
                     selectedProduct?.id === p.id ? "bg-accent text-accent-foreground" : ""
                   }`}
                   onClick={() => {
@@ -152,8 +152,8 @@ export default function BaleProductImages() {
                   }}
                   data-testid={`button-product-${p.id}`}
                 >
-                  <div className="font-medium text-sm truncate">{p.name}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{p.articleCode}</div>
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{p.articleCode}</div>
                 </button>
               ))}
             </div>
@@ -162,32 +162,33 @@ export default function BaleProductImages() {
       </div>
 
       {/* ── Right: Image Manager ───────────────────────────────── */}
-      <div className={`flex-1 flex-col min-w-0 overflow-y-auto ${!showList ? "flex" : "hidden md:flex"}`}>
+      <div className={`min-w-0 flex-1 flex-col overflow-y-auto ${!showList ? "flex" : "hidden md:flex"}`}>
         {!selectedProduct ? (
-          <div className="flex flex-col items-center justify-center flex-1 text-center p-8 text-muted-foreground">
-            <Images className="h-12 w-12 mb-4 opacity-30" />
+          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
+            <Images className="mb-4 h-12 w-12 opacity-30" />
             <p className="text-sm">Select a product to manage its images</p>
           </div>
         ) : (
-          <div className="p-6 space-y-6">
+          <div className="space-y-4 p-3 sm:space-y-6 sm:p-6">
             {/* Mobile back button */}
-            <div className="md:hidden -mb-2">
+            <div className="-mb-1 md:hidden sm:-mb-2">
               <Button variant="ghost" size="sm" onClick={() => setShowList(true)} data-testid="button-back-to-products">
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Back to Products
               </Button>
             </div>
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0">
                 <PageHeader title={selectedProduct.name} />
-                <p className="text-muted-foreground text-sm mt-1">
+                <p className="mt-1 break-words text-sm text-muted-foreground">
                   Article code: <span className="font-mono font-medium">{selectedProduct.articleCode}</span>
                 </p>
               </div>
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadMutation.isPending}
+                className="w-full sm:w-auto"
                 data-testid="button-upload-image"
               >
                 {uploadMutation.isPending ? (
@@ -217,16 +218,16 @@ export default function BaleProductImages() {
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
+              className={`cursor-pointer rounded-md border-2 border-dashed p-5 text-center transition-colors sm:p-8 ${
                 dragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"
               }`}
               data-testid="dropzone-images"
             >
-              <ImagePlus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <ImagePlus className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                Drag & drop images here, or <span className="text-primary font-medium">click to browse</span>
+                Drag & drop images here, or <span className="font-medium text-primary">click to browse</span>
               </p>
-              <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP — max 10 MB each</p>
+              <p className="mt-1 text-xs text-muted-foreground">PNG, JPG, WebP — max 10 MB each</p>
             </div>
 
             {/* Image grid */}
@@ -235,32 +236,33 @@ export default function BaleProductImages() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : images.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
+              <div className="py-8 text-center text-sm text-muted-foreground">
                 No images yet. Upload the first one above.
               </div>
             ) : (
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="mb-3 flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">
                     {images.length} image{images.length !== 1 ? "s" : ""}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
                   {images.map((img) => (
-                    <Card key={img.id} className="overflow-hidden group relative" data-testid={`card-image-${img.id}`}>
-                      <div className="aspect-square bg-muted relative">
+                    <Card key={img.id} className="group relative overflow-hidden" data-testid={`card-image-${img.id}`}>
+                      <div className="relative aspect-square bg-muted">
                         <img
                           src={img.url}
                           alt={img.fileName ?? "product image"}
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors md:bg-black/0 md:group-hover:bg-black/40">
                           <Button
                             size="icon"
                             variant="destructive"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
                             onClick={() => deleteMutation.mutate(img.id)}
                             disabled={deleteMutation.isPending}
+                            aria-label={`Delete ${img.fileName ?? "product image"}`}
                             data-testid={`button-delete-image-${img.id}`}
                           >
                             {deleteMutation.isPending && deleteMutation.variables === img.id ? (
@@ -273,7 +275,7 @@ export default function BaleProductImages() {
                       </div>
                       <CardContent className="p-2">
                         <p
-                          className="text-xs text-muted-foreground truncate"
+                          className="truncate text-xs text-muted-foreground"
                           title={img.fileName ?? undefined}
                           data-testid={`text-image-filename-${img.id}`}
                         >

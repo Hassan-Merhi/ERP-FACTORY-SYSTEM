@@ -8,7 +8,7 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { eq, and, or, desc, sql, inArray, ilike } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
@@ -214,22 +214,25 @@ export function registerBaleLookupRoutes(app: Express) {
           if (wk) directWorkerName = wk.fullName;
         }
 
-        // Check if this bale is in an active LOADING order
+        // Check if this bale is in a non-deleted outbound order.
+        // Soft-deleted orders are historical records only and must not make a bale look loaded.
         const [directOrderBale] = await db
-          .select({ orderId: customerOrderBales.orderId })
+          .select({ orderId: customerOrderBales.orderId, status: customerOrders.status })
           .from(customerOrderBales)
-          .where(sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`)
+          .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
+          .where(
+            and(
+              sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`,
+              eq(customerOrders.companyId, companyId),
+              isNull(customerOrders.deletedAt)
+            )
+          )
           .limit(1);
         let directLoadedOnOrder = null;
         let directIsInLoadingOrder = false;
         if (directOrderBale) {
-          const [directOrder] = await db
-            .select({ status: customerOrders.status })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, directOrderBale.orderId))
-            .limit(1);
-          if (directOrder?.status === "LOADING") directIsInLoadingOrder = true;
-          directLoadedOnOrder = directOrder || null;
+          if (directOrderBale.status === "LOADING") directIsInLoadingOrder = true;
+          directLoadedOnOrder = { status: directOrderBale.status };
         }
 
         // If the bale's stored status is IN_STOCK but it's already on a finalized order,
@@ -459,7 +462,7 @@ export function registerBaleLookupRoutes(app: Express) {
       // ── Check if this bale was loaded onto an outbound customer order ──
       // Fetch ALL assignments for this bale reference and pick the best-status one.
       // A bale can appear in multiple orders (e.g. moved from a cancelled order to a
-      // finalized invoice). Without ordering we'd show the oldest/cancelled one first.
+      // finalized invoice). Deleted orders are historical only and are excluded.
       const statusPriority: Record<string, number> = {
         FINALIZED: 0,
         SOLD: 1,
@@ -477,13 +480,19 @@ export function registerBaleLookupRoutes(app: Express) {
         .where(sql`LOWER(TRIM(${customerOrderBales.baleReference})) = LOWER(TRIM(${referenceNumber}))`);
 
       if (orderBaleRows.length > 0) {
-        // Fetch all matching orders in one query
-        const orderIds = orderBaleRows.map((r) => r.orderId);
+        // Fetch all matching non-deleted orders for the current company in one query.
+        const orderIds = [...new Set(orderBaleRows.map((r) => r.orderId))];
         const orders = await db
           .select()
           .from(customerOrders)
           .leftJoin(customers, eq(customerOrders.customerId, customers.id))
-          .where(inArray(customerOrders.id, orderIds));
+          .where(
+            and(
+              inArray(customerOrders.id, orderIds),
+              eq(customerOrders.companyId, companyId),
+              isNull(customerOrders.deletedAt)
+            )
+          );
 
         if (orders.length > 0) {
           // Pick the order with the best (lowest priority number) status
@@ -668,7 +677,8 @@ export function registerBaleLookupRoutes(app: Express) {
           bale = baleMatches[0];
         }
 
-        // Guard: refuse if bale is on any finalized/locked customer order
+        // Guard: refuse if bale is on any finalized/locked non-deleted customer order.
+        // A deleted test/order must not keep a bale permanently locked.
         const orderBaleRows = await db
           .select({ orderId: customerOrderBales.orderId })
           .from(customerOrderBales)
@@ -679,7 +689,13 @@ export function registerBaleLookupRoutes(app: Express) {
           const orders = await db
             .select({ status: customerOrders.status })
             .from(customerOrders)
-            .where(inArray(customerOrders.id, orderIds));
+            .where(
+              and(
+                inArray(customerOrders.id, orderIds),
+                eq(customerOrders.companyId, companyId),
+                isNull(customerOrders.deletedAt)
+              )
+            );
           if (orders.some((order) => ["FINALIZED", "VERIFIED", "DISPATCHED", "SOLD"].includes(order.status))) {
             return res
               .status(409)
@@ -782,7 +798,7 @@ export function registerBaleLookupRoutes(app: Express) {
           return res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" });
         }
 
-        // Guard: locked order
+        // Guard: locked non-deleted order only.
         const orderBaleRows = await db
           .select({ orderId: customerOrderBales.orderId })
           .from(customerOrderBales)
@@ -793,7 +809,13 @@ export function registerBaleLookupRoutes(app: Express) {
           const orders = await db
             .select({ status: customerOrders.status })
             .from(customerOrders)
-            .where(inArray(customerOrders.id, orderIds));
+            .where(
+              and(
+                inArray(customerOrders.id, orderIds),
+                eq(customerOrders.companyId, companyId),
+                isNull(customerOrders.deletedAt)
+              )
+            );
           if (orders.some((order) => ["FINALIZED", "VERIFIED", "DISPATCHED", "SOLD"].includes(order.status))) {
             return res
               .status(409)

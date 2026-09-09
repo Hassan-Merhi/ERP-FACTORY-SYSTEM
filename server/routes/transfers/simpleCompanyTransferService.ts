@@ -32,7 +32,9 @@ function buildTransferReversalRequest(input: {
   transferId: number;
   side: TransferSide;
   transferDate: string;
-  snapshot: { voucher: any; entries: any[] };
+  // Exactly what transferRepository.getVoucherSnapshotTx resolves to, so the
+  // reversal payload tracks the vouchers/voucher_entries schema automatically.
+  snapshot: NonNullable<Awaited<ReturnType<typeof transferRepository.getVoucherSnapshotTx>>>;
   actor: PostingActor;
 }): CentralPostingRequest {
   const { transferId, side, transferDate, snapshot, actor } = input;

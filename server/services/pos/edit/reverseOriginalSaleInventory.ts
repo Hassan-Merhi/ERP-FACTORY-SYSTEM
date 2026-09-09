@@ -34,8 +34,9 @@ export async function reverseOriginalSaleInventory(
       existingVoucher.companyId
     );
 
-    // The stock came back at the cost it left at — the reversal must not
-    // restate the cost basis, which is why no rate is passed above either.
+    // Include the sales_item id in the canonical identity. A valid sale can
+    // contain more than one row for the same stock item, and each row must post
+    // its own reversal instead of being mistaken for an idempotent replay.
     if (canonicalRevision !== undefined && !oldQuantity.isZero()) {
       await postStockMovementTx(
         tx,
@@ -50,7 +51,7 @@ export async function reverseOriginalSaleInventory(
           source: {
             sourceType: "pos-sale",
             sourceId: String(existingVoucher.id),
-            idempotencyKey: `pos-sale:${existingVoucher.id}:rev${canonicalRevision}:reverse:${oldItem.stockItemId}`,
+            idempotencyKey: `pos-sale:${existingVoucher.id}:rev${canonicalRevision}:reverse:${oldItem.stockItemId}:line:${oldItem.id}`,
           },
           allowNegativeStock: true,
         },

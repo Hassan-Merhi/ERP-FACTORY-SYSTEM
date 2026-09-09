@@ -10,11 +10,42 @@ function requestCompanyId(req: import("express").Request): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function rowsOf<T = any>(result: any): T[] {
-  return Array.isArray(result?.rows) ? result.rows : [];
+/**
+ * One grouped bale-ledger row. The aliases are quoted in SQL so the columns
+ * arrive camelCased, and the three aggregates are cast to int/float in the
+ * query, so they really are numbers rather than the strings a bare SUM returns.
+ */
+interface LedgerSummaryRow {
+  section: LedgerSection;
+  productId: number | null;
+  productName: string | null;
+  articleCode: string | null;
+  categoryName: string | null;
+  baleCount: number;
+  totalWeightKg: number;
+  totalCost: number;
 }
 
-function ledgerTotals(rows: any[]) {
+/** One bale in the per-section detail list; both amounts are cast to float in SQL. */
+interface LedgerBaleDetailRow {
+  id: number;
+  ref: string;
+  weightKg: number;
+  totalCost: number;
+}
+
+/** A ledger row after its section has been stripped for bucketing. */
+type LedgerBucketRow = Omit<LedgerSummaryRow, "section">;
+
+const LEDGER_SECTIONS = ["currentStock", "wasteStock", "sold", "wasteDispatched", "pendingLoading"] as const;
+
+type LedgerSection = (typeof LEDGER_SECTIONS)[number];
+
+function isLedgerSection(value: unknown): value is LedgerSection {
+  return (LEDGER_SECTIONS as readonly unknown[]).includes(value);
+}
+
+function ledgerTotals(rows: readonly LedgerBucketRow[]) {
   return rows.reduce(
     (total, row) => ({
       baleCount: total.baleCount + Number(row.baleCount || 0),
@@ -71,7 +102,7 @@ const LEDGER_CLASSIFICATION_SQL = `
 `;
 
 async function sendLedgerSummary(companyId: number, res: import("express").Response): Promise<void> {
-  const result = await pool.query(
+  const result = await pool.query<LedgerSummaryRow>(
     `WITH classified AS (
        SELECT
          fb.id,
@@ -112,18 +143,16 @@ async function sendLedgerSummary(companyId: number, res: import("express").Respo
     [companyId]
   );
 
-  const buckets: Record<string, any[]> = {
+  const buckets: Record<LedgerSection, LedgerBucketRow[]> = {
     currentStock: [],
     wasteStock: [],
     sold: [],
     wasteDispatched: [],
     pendingLoading: [],
   };
-  for (const row of rowsOf(result)) {
-    if (buckets[row.section]) {
-      const { section: _section, ...bucketRow } = row;
-      buckets[row.section].push(bucketRow);
-    }
+  for (const row of result.rows) {
+    const { section, ...bucketRow } = row;
+    if (isLedgerSection(section)) buckets[section].push(bucketRow);
   }
 
   const totals = {
@@ -146,7 +175,11 @@ async function sendLedgerSummary(companyId: number, res: import("express").Respo
   res.json({ ...buckets, totals: { ...totals, grand } });
 }
 
-async function sendLedgerDetails(companyId: number, req: import("express").Request, res: import("express").Response): Promise<void> {
+async function sendLedgerDetails(
+  companyId: number,
+  req: import("express").Request,
+  res: import("express").Response
+): Promise<void> {
   const section = String(req.query.section || "");
   const validSections = new Set(["currentStock", "wasteStock", "sold", "wasteDispatched", "pendingLoading"]);
   if (!validSections.has(section)) {
@@ -165,7 +198,7 @@ async function sendLedgerDetails(companyId: number, req: import("express").Reque
   const productClause = productId === null ? "fb.product_id IS NULL" : "fb.product_id = $3";
   if (productId !== null) params.push(productId);
 
-  const result = await pool.query(
+  const result = await pool.query<LedgerBaleDetailRow>(
     `WITH classified AS (
        SELECT
          fb.id,
@@ -201,7 +234,7 @@ async function sendLedgerDetails(companyId: number, req: import("express").Reque
 
   res.set("X-ERP-Payload-Profile", "bale-ledger-detail-sql");
   res.set("Cache-Control", "private, max-age=300");
-  res.json({ baleDetails: rowsOf(result) });
+  res.json({ baleDetails: result.rows });
 }
 
 /**

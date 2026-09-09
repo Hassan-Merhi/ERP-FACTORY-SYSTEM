@@ -5,6 +5,8 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { asRecord, isNonEmptyString, toPositiveInteger } from "@shared/typeGuards";
 import { getClientDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -28,8 +30,6 @@ import {
   factoryAdvanceRepayments,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
-import { asRecord, isNonEmptyString, toPositiveInteger } from "@shared/typeGuards";
 
 export function registerFactoryDaybookEditRoutes(app: Express) {
   // ─────── DAYBOOK ENTRY EDIT ───────
@@ -41,7 +41,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const userId = session.userId || null;
+      const userId = session.userId ?? null;
       const { reason, description, amountCurrency, amountUsd, currencyCode, fxRateToUsd, txDate } = req.body;
 
       if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
@@ -215,8 +215,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const userId = session.userId || null;
+      const userId = session.userId ?? null;
 
       const currentRole = (session.currentRole || session.role || "").toLowerCase();
       if (!["admin", "owner", "developer"].includes(currentRole)) {
@@ -248,9 +247,10 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           .json({ message: `txType '${entry.txType}' is not a cost entry — use the standard edit endpoint` });
       }
 
-      // Parse metaJson to determine exact source. The column is free-form JSON
-      // written by several producers, so it stays `unknown` and each field is
-      // narrowed where it is read rather than trusted as a shape.
+      // Parse metaJson to determine exact source
+      // metaJson is free-form persisted JSON, so it stays `unknown` until each
+      // field below is coerced; asRecord keeps a non-object payload from
+      // becoming property reads on a string or array.
       let meta: Record<string, unknown> = {};
       try {
         meta = asRecord(JSON.parse(entry.metaJson || "{}")) ?? {};

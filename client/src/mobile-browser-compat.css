@@ -215,6 +215,27 @@ body {
   }
 }
 
+/*
+ * Wave 2 Factory floor cards use Tailwind's md breakpoint for their ordinary
+ * portrait-phone/tablet split. A touch phone in landscape can be wider than
+ * 768px while still needing the compact card interaction model. Limit this
+ * override to short-height coarse-pointer devices so 768x1024 tablets and
+ * desktop layouts retain their existing md+ presentation.
+ */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-testid="raw-stock-mobile-list"],
+  [data-testid="mix-batch-mobile-list"],
+  [data-testid="v5-mobile-list"] {
+    display: block !important;
+  }
+
+  [data-testid="raw-stock-mobile-list"] + div,
+  [data-testid="mix-batch-mobile-list"] + div,
+  [data-testid="v5-mobile-list"] + div {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:focus-within {
     scroll-behavior: auto;

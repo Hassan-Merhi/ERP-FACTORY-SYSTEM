@@ -8,13 +8,13 @@
  * sales-item reads under one transaction lock. Concurrent edits therefore use
  * the latest committed sale state instead of stale pre-transaction snapshots.
  */
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { logAudit, recalculateIntercompanyForDate } from "../../../routes/_helpers";
 import { salesItems, voucherEntries, stockItems, vouchers } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
-import type { HandlerErrorResult, UpdatePosSaleParams } from "./posEditSaleTypes";
+import type { HandlerErrorResult, SpEditAccountingContext, UpdatePosSaleParams } from "./posEditSaleTypes";
 import { fetchSpEditAccountingContext, fetchSpEditDeductionPerQty } from "./posEditSaleHelpers";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import {
@@ -39,14 +39,33 @@ function err(result: HandlerErrorResult) {
   return { status: result.status, body: result.body };
 }
 
-export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ status: number; body: any }> {
+export interface PosSaleUpdateTransactionResult {
+  error?: HandlerErrorResult;
+  existingVoucher?: any;
+  targetLocationId?: number;
+  grandTotal?: number;
+  totalQtySoldEdit?: number;
+  isGoldenCoastEdit?: boolean;
+}
+
+/**
+ * Apply one POS sale edit using a caller-owned transaction.
+ *
+ * The public updatePosSale() wrapper still opens its own transaction for normal
+ * single-sale edits. Bulk correction tools can call this core repeatedly inside
+ * one outer transaction so either every voucher edit commits or none do.
+ */
+export async function applyPosSaleUpdateTx(
+  tx: DbTransaction,
+  params: UpdatePosSaleParams,
+  spContext: SpEditAccountingContext
+): Promise<PosSaleUpdateTransactionResult> {
   const { voucherId, currentCompanyId, userId, username, userRole, canSellNegativeStock, body } = params;
-
-  // Detect supplier_partner for SP-specific accounting on edit
-  const spContextResult = await fetchSpEditAccountingContext(currentCompanyId);
-  if ("error" in spContextResult) return err(spContextResult.error);
-  const { isSpCompanyEdit, editSpPayableAccountId, editSpDeductionClrAccountId } = spContextResult.context;
-
+  const {
+    isSpCompanyEdit,
+    editSpPayableAccountId,
+    editSpDeductionClrAccountId,
+  } = spContext;
   const {
     description,
     items,
@@ -58,13 +77,175 @@ export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ stat
   } = body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
-    return { status: 400, body: { message: "At least one item is required" } };
+    return { error: { status: 400, body: { message: "At least one item is required" } } };
+  }
+  validateItemsPositive(items);
+
+  const [lockedVoucher] = await tx
+    .select()
+    .from(vouchers)
+    .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, currentCompanyId)))
+    .for("update");
+
+  if (!lockedVoucher || lockedVoucher.deletedAt) {
+    return { error: { status: 404, body: { message: "Voucher not found" } } };
+  }
+  if (lockedVoucher.voucherType !== "Sales") {
+    return {
+      error: {
+        status: 400,
+        body: { message: "Only Sales vouchers can be updated with this endpoint" },
+      },
+    };
+  }
+  const blockedVoucherReason = voucherMutationBlockReason(lockedVoucher);
+  if (blockedVoucherReason) {
+    return { error: { status: 403, body: { message: blockedVoucherReason } } };
   }
 
+  const restrictionResult = applyPosRoleRestrictions(userRole, newLocationId, lockedVoucher.locationId);
+  if ("error" in restrictionResult) return restrictionResult;
+
+  if (!lockedVoucher.locationId) {
+    return { error: { status: 400, body: { message: "Existing sale is missing a location" } } };
+  }
+
+  const { targetLocationId, oldLocationId, locationChanged } = resolveEditLocations(
+    lockedVoucher.locationId,
+    newLocationId
+  );
+
+  if (locationChanged) {
+    const newLocationResult = await validateNewLocationBelongsToCompany(
+      targetLocationId,
+      oldLocationId,
+      currentCompanyId,
+      tx
+    );
+    if ("error" in newLocationResult) return newLocationResult;
+  }
+
+  const editSpDeductionPerQty = await fetchSpEditDeductionPerQty(isSpCompanyEdit, targetLocationId, tx);
+  const oldEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
+  const oldSalesItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucherId)).for("update");
+  oldSalesItems.sort((a, b) => a.stockItemId - b.stockItemId);
+
+  const canonicalRevision = await nextCanonicalSourceRevision(
+    tx,
+    lockedVoucher.companyId,
+    "pos-sale",
+    String(voucherId)
+  );
+
+  const isGoldenCoastEdit = isSpCompanyEdit && (await isGoldenCoastPosCompany(tx, currentCompanyId));
+  const clientSaleId = String(lockedVoucher.clientSaleId ?? "").trim();
+  if (isGoldenCoastEdit && clientSaleId && !lockedVoucher.isCreditSale) {
+    await reverseGoldenCoastPosAccountingTx({
+      tx,
+      companyId: currentCompanyId,
+      clientSaleId,
+      revision: canonicalRevision,
+      actor: { userId, username, reason: `Edit Golden Coast POS sale ${lockedVoucher.voucherNumber}` },
+    });
+  }
+
+  const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
+  await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
+  await clearOldSaleRecords(tx, voucherId);
+
+  const rebuildResult = await rebuildSaleItems(tx, {
+    voucherId,
+    targetLocationId,
+    items,
+    oldItemsMap,
+    canSellNegativeStock,
+    companyId: lockedVoucher.companyId,
+    canonicalRevision,
+  });
+
+  await updateVoucherRecord(tx, {
+    voucherId,
+    description,
+    grandTotal: rebuildResult.grandTotal,
+    locationChanged,
+    targetLocationId,
+    oldLocationId,
+    voucherDate,
+    isCreditSale: Boolean(isCreditSale),
+  });
+
+  await rebuildSaleAccountingEntries(tx, {
+    voucherId,
+    oldEntries,
+    grandTotal: rebuildResult.grandTotal,
+    paymentAccountType: rawPaymentAccountType,
+    paymentAccountId: rawPaymentAccountId,
+    isSpCompanyEdit,
+    editSpPayableAccountId,
+    editSpDeductionClrAccountId,
+    totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
+    editSpDeductionPerQty,
+    currency: lockedVoucher.currency || "USD",
+    exchangeRate: lockedVoucher.exchangeRate ? String(lockedVoucher.exchangeRate) : null,
+  });
+
+  if (isGoldenCoastEdit && clientSaleId && !isCreditSale) {
+    const oldPaymentEntry = oldEntries.find((entry) => Number(entry.debitAmount ?? 0) > 0);
+    const normalizedPaymentType =
+      rawPaymentAccountType === "bank" || rawPaymentAccountType === "cash"
+        ? rawPaymentAccountType
+        : oldPaymentEntry?.bankAccountId
+          ? "bank"
+          : "cash";
+    const normalizedPaymentId = Number(
+      rawPaymentAccountId || oldPaymentEntry?.bankAccountId || oldPaymentEntry?.ledgerAccountId || 0
+    );
+    if (!Number.isInteger(normalizedPaymentId) || normalizedPaymentId <= 0) {
+      throw new Error("Golden Coast POS edit requires a valid cash or bank payment account");
+    }
+    const payableAmount = Math.max(
+      0,
+      Number((rebuildResult.grandTotal - rebuildResult.totalQtySoldEdit * editSpDeductionPerQty).toFixed(2))
+    );
+    await postGoldenCoastPosAccountingTx({
+      tx,
+      companyId: currentCompanyId,
+      locationId: targetLocationId,
+      clientSaleId,
+      revision: `edit${canonicalRevision}`,
+      saleDate: String(voucherDate || lockedVoucher.voucherDate),
+      amountUsd: rebuildResult.grandTotal,
+      paymentAccountType: normalizedPaymentType,
+      paymentAccountId: normalizedPaymentId,
+      supplierPayableAccountId: editSpPayableAccountId!,
+      payableAmountUsd: payableAmount,
+      actor: { userId, username, reason: `Edit Golden Coast itemized POS sale ${lockedVoucher.voucherNumber}` },
+    });
+  }
+
+  return {
+    existingVoucher: lockedVoucher,
+    targetLocationId,
+    grandTotal: rebuildResult.grandTotal,
+    totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
+    isGoldenCoastEdit,
+  };
+}
+
+export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ status: number; body: any }> {
+  const { voucherId, currentCompanyId, userId, username, userRole, body } = params;
+
+  const spContextResult = await fetchSpEditAccountingContext(currentCompanyId);
+  if ("error" in spContextResult) return err(spContextResult.error);
+
+  const { items, isCreditSale, voucherDate, locationId: newLocationId } = body;
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return { status: 400, body: { message: "At least one item is required" } };
+  }
   validateItemsPositive(items);
 
   // Fast validation before opening the transaction. The same state-sensitive
-  // checks are repeated against the locked voucher below.
+  // checks are repeated against the locked voucher in applyPosSaleUpdateTx().
   const voucherResult = await loadAndValidateExistingVoucher(voucherId, currentCompanyId);
   if ("error" in voucherResult) return err(voucherResult.error);
   const preExistingVoucher = voucherResult.existingVoucher;
@@ -77,178 +258,13 @@ export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ stat
   const preRestrictionResult = applyPosRoleRestrictions(userRole, newLocationId, preExistingVoucher.locationId);
   if ("error" in preRestrictionResult) return err(preRestrictionResult.error);
 
-  const paymentAccountType = rawPaymentAccountType;
-  const paymentAccountId = rawPaymentAccountId;
-
-  const transactionResult: any = await db.transaction(async (tx) => {
-    const [lockedVoucher] = await tx
-      .select()
-      .from(vouchers)
-      .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, currentCompanyId)))
-      .for("update");
-
-    if (!lockedVoucher || lockedVoucher.deletedAt) {
-      return { error: { status: 404, body: { message: "Voucher not found" } } };
-    }
-    if (lockedVoucher.voucherType !== "Sales") {
-      return {
-        error: {
-          status: 400,
-          body: { message: "Only Sales vouchers can be updated with this endpoint" },
-        },
-      };
-    }
-    const blockedVoucherReason = voucherMutationBlockReason(lockedVoucher);
-    if (blockedVoucherReason) {
-      return { error: { status: 403, body: { message: blockedVoucherReason } } };
-    }
-
-    const restrictionResult = applyPosRoleRestrictions(userRole, newLocationId, lockedVoucher.locationId);
-    if ("error" in restrictionResult) return restrictionResult;
-
-    if (!lockedVoucher.locationId) {
-      return { error: { status: 400, body: { message: "Existing sale is missing a location" } } };
-    }
-
-    const { targetLocationId, oldLocationId, locationChanged } = resolveEditLocations(
-      lockedVoucher.locationId,
-      newLocationId
-    );
-
-    if (locationChanged) {
-      const newLocationResult = await validateNewLocationBelongsToCompany(
-        targetLocationId,
-        oldLocationId,
-        currentCompanyId,
-        tx
-      );
-      if ("error" in newLocationResult) return newLocationResult;
-    }
-
-    const editSpDeductionPerQty = await fetchSpEditDeductionPerQty(isSpCompanyEdit, targetLocationId, tx);
-
-    // Voucher entries are loaded after the voucher lock, so account preservation
-    // and historical currency reconstruction use the latest committed edit.
-    const oldEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-
-    // Lock the current sales items in the same transaction. A second edit waits,
-    // then sees the first edit's committed voucher, entries, location, and items.
-    const oldSalesItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucherId)).for("update");
-    oldSalesItems.sort((a, b) => a.stockItemId - b.stockItemId);
-
-    // Each edit appends its own reversal and reissue to the append-only
-    // journal, so it needs an idempotency key of its own.
-    const canonicalRevision = await nextCanonicalSourceRevision(
-      tx,
-      lockedVoucher.companyId,
-      "pos-sale",
-      String(voucherId)
-    );
-
-    const isGoldenCoastEdit = isSpCompanyEdit && (await isGoldenCoastPosCompany(tx, currentCompanyId));
-    const clientSaleId = String(lockedVoucher.clientSaleId ?? "").trim();
-    if (isGoldenCoastEdit && clientSaleId && !lockedVoucher.isCreditSale) {
-      await reverseGoldenCoastPosAccountingTx({
-        tx,
-        companyId: currentCompanyId,
-        clientSaleId,
-        revision: canonicalRevision,
-        actor: { userId, username, reason: `Edit Golden Coast POS sale ${lockedVoucher.voucherNumber}` },
-      });
-    }
-
-    const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-
-    await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
-    await clearOldSaleRecords(tx, voucherId);
-
-    const rebuildResult = await rebuildSaleItems(tx, {
-      voucherId,
-      targetLocationId,
-      items,
-      oldItemsMap,
-      canSellNegativeStock,
-      companyId: lockedVoucher.companyId,
-      canonicalRevision,
-    });
-
-    await updateVoucherRecord(tx, {
-      voucherId,
-      description,
-      grandTotal: rebuildResult.grandTotal,
-      locationChanged,
-      targetLocationId,
-      oldLocationId,
-      voucherDate,
-      isCreditSale: Boolean(isCreditSale),
-    });
-
-    await rebuildSaleAccountingEntries(tx, {
-      voucherId,
-      oldEntries,
-      grandTotal: rebuildResult.grandTotal,
-      paymentAccountType,
-      paymentAccountId,
-      isSpCompanyEdit,
-      editSpPayableAccountId,
-      editSpDeductionClrAccountId,
-      totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
-      editSpDeductionPerQty,
-      currency: lockedVoucher.currency || "USD",
-      exchangeRate: lockedVoucher.exchangeRate ? String(lockedVoucher.exchangeRate) : null,
-    });
-
-    if (isGoldenCoastEdit && clientSaleId && !isCreditSale) {
-      const oldPaymentEntry = oldEntries.find((entry) => Number(entry.debitAmount ?? 0) > 0);
-      const normalizedPaymentType =
-        paymentAccountType === "bank" || paymentAccountType === "cash"
-          ? paymentAccountType
-          : oldPaymentEntry?.bankAccountId
-            ? "bank"
-            : "cash";
-      const normalizedPaymentId = Number(
-        paymentAccountId || oldPaymentEntry?.bankAccountId || oldPaymentEntry?.ledgerAccountId || 0
-      );
-      if (!Number.isInteger(normalizedPaymentId) || normalizedPaymentId <= 0) {
-        throw new Error("Golden Coast POS edit requires a valid cash or bank payment account");
-      }
-      const payableAmount = Math.max(
-        0,
-        Number((rebuildResult.grandTotal - rebuildResult.totalQtySoldEdit * editSpDeductionPerQty).toFixed(2))
-      );
-      await postGoldenCoastPosAccountingTx({
-        tx,
-        companyId: currentCompanyId,
-        locationId: targetLocationId,
-        clientSaleId,
-        revision: `edit${canonicalRevision}`,
-        saleDate: String(voucherDate || lockedVoucher.voucherDate),
-        amountUsd: rebuildResult.grandTotal,
-        paymentAccountType: normalizedPaymentType,
-        paymentAccountId: normalizedPaymentId,
-        supplierPayableAccountId: editSpPayableAccountId!,
-        payableAmountUsd: payableAmount,
-        actor: { userId, username, reason: `Edit Golden Coast itemized POS sale ${lockedVoucher.voucherNumber}` },
-      });
-    }
-
-    return {
-      existingVoucher: lockedVoucher,
-      targetLocationId,
-      grandTotal: rebuildResult.grandTotal,
-      totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
-      isGoldenCoastEdit,
-    };
-  });
-
+  const transactionResult = await db.transaction((tx) => applyPosSaleUpdateTx(tx, params, spContextResult.context));
   if (transactionResult.error) return err(transactionResult.error);
 
-  const existingVoucher = transactionResult.existingVoucher;
-  const targetLocationId = transactionResult.targetLocationId;
+  const existingVoucher = transactionResult.existingVoucher!;
+  const targetLocationId = transactionResult.targetLocationId!;
 
-  // Fetch updated data to return for print template
   const [updatedVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, voucherId)).limit(1);
-
   const updatedSalesItems = await db
     .select({
       id: salesItems.id,
@@ -279,7 +295,6 @@ export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ stat
     }
   }
 
-  // Recalculate INTERCO vouchers for affected date(s) (non-blocking).
   const oldDate = existingVoucher.voucherDate;
   const newDate = voucherDate || oldDate;
   const datesToRecalc = new Set<string>([oldDate]);

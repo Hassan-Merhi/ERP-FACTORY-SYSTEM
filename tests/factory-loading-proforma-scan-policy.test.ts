@@ -36,6 +36,16 @@ describe("factory loading proforma scan policy", () => {
     ).toBe(false);
   });
 
+  it("allows a bale removed from the same loading order to be reinstated without an overload prompt", () => {
+    expect(
+      shouldEnforceProformaOverload({
+        ignoreProforma: false,
+        allowBypassOverload: false,
+        isReinstatingRemovedBale: true,
+      })
+    ).toBe(false);
+  });
+
   it("sums equivalent proforma rows into one quantity limit", () => {
     expect(sumProformaQuantityLimit([{ quantity: 8 }, { quantity: 12 }, { quantity: "5" }])).toBe(25);
   });

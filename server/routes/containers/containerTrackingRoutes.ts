@@ -9,6 +9,7 @@ import {
   containerTrackingImportRowSchema,
   updateContainerTrackingSchema,
   userCompanyRoles,
+  type InsertContainer,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import {
@@ -70,7 +71,7 @@ export function registerContainerTrackingRoutes(app: Express) {
         blDocs,
       } = parseResult.data;
 
-      const updateData: any = {};
+      const updateData: Partial<InsertContainer> = {};
       if (shopName !== undefined) updateData.shopName = shopName;
       if (eta !== undefined) updateData.eta = eta || null;
       if (etaSource !== undefined) updateData.etaSource = etaSource;
@@ -92,7 +93,10 @@ export function registerContainerTrackingRoutes(app: Express) {
       if (docsSentDate !== undefined) updateData.docsSentDate = docsSentDate || null;
       if (freightStatus !== undefined) updateData.freightStatus = freightStatus || null;
       if (trackingLink !== undefined) updateData.trackingLink = trackingLink || null;
-      if (status !== undefined) updateData.status = status;
+      // `containers.status` is NOT NULL, but the request schema allows an explicit
+      // null; writing it produced a NOT NULL violation rather than a clear result,
+      // so an explicit null leaves the column unchanged.
+      if (status != null) updateData.status = status;
       if (blDocs !== undefined) updateData.blDocs = blDocs || null;
 
       // Fetch the container first to resolve its company, then verify the user
@@ -209,7 +213,7 @@ export function registerContainerTrackingRoutes(app: Express) {
           }
 
           // Normalise any date string to YYYY-MM-DD; return null for invalid values
-          const normDate = (v: any): string | null => {
+          const normDate = (v: unknown): string | null => {
             if (!v) return null;
             if (v instanceof Date) {
               if (isNaN(v.getTime())) return null;
@@ -239,7 +243,7 @@ export function registerContainerTrackingRoutes(app: Express) {
           };
 
           // Sanitise numeric cell values — reject "[object Object]" strings that can come from ExcelJS
-          const normNum = (v: any): string | null => {
+          const normNum = (v: unknown): string | null => {
             if (v === null || v === undefined || v === "") return null;
             const s = String(v).trim();
             if (!s || s === "[object Object]") return null;
@@ -248,7 +252,7 @@ export function registerContainerTrackingRoutes(app: Express) {
           };
 
           // Build update object
-          const updateData: any = {};
+          const updateData: Partial<InsertContainer> = {};
           if (data.shopName && String(data.shopName) !== "[object Object]") updateData.shopName = String(data.shopName);
           const etaDate = normDate(data.eta);
           if (etaDate) updateData.eta = etaDate;
@@ -352,8 +356,8 @@ export function registerContainerTrackingRoutes(app: Express) {
 
   // POST /api/containers/refresh-etas — bulk JSONCargo ETA refresh, Admin/Developer/Owner only.
   app.post("/api/containers/refresh-etas", requireAuth, requireNonPOS, async (req, res) => {
-    const role = (req.user as any)?.role;
-    if (!JSONCARGO_ADMIN_ROLES.includes(role)) {
+    const role = req.user?.role;
+    if (!role || !JSONCARGO_ADMIN_ROLES.includes(role)) {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
     if (!req.session.currentCompanyId) {
@@ -362,7 +366,7 @@ export function registerContainerTrackingRoutes(app: Express) {
 
     try {
       const containerIds = Array.isArray(req.body?.containerIds)
-        ? req.body.containerIds.filter((n: any) => Number.isInteger(n))
+        ? req.body.containerIds.filter((n: unknown): n is number => Number.isInteger(n))
         : undefined;
 
       const summary = await refreshMultipleContainerEtas(containerIds, {

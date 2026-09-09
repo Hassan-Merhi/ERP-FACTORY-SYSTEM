@@ -94,9 +94,13 @@ import { startupMigrations } from "../server/startup-schema";
  * 1354, then stage 027 added the Factory staff-tracking table and two indexes,
  * taking the count to 1357. The same stage is also run unconditionally before
  * the bulk startup migration pass because production may disable that pass.
+ *
+ * Re-pinned again when the guarded stage-026 PO Import parent-company repair
+ * was extended from HMD KINSHASA to also cover MALI. The statement count stays
+ * 1357 and no statement moved; only the existing repair statement changed.
  */
 const EXPECTED_STATEMENT_COUNT = 1357;
-const EXPECTED_CONTENT_HASH = "510756db9828d983df2cfd390de30acc23661e2d985a902c389aa3797dff1d31";
+const EXPECTED_CONTENT_HASH = "11c4ca3a434899cbc60d3691fa126704ebfcd371b78301a53c161a58621518cb";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

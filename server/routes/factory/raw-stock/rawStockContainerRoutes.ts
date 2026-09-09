@@ -5,8 +5,12 @@ import { getClientDate } from "../../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
-import { applyPostOffloadChargeMutation, type AccountingContext } from "../../../services/factory/post-offload-charge";
-import { cascadeContainerCostChange } from "../../../services/factory/rawStockCostCascade";
+import {
+  applyPostOffloadChargeMutation,
+  type AccountingContext,
+  type PostOffloadMutationResult,
+} from "../../../services/factory/post-offload-charge";
+import { cascadeContainerCostChange, type CascadeResult } from "../../../services/factory/rawStockCostCascade";
 import { computeCorrectContainerCost } from "../../../services/factory/raw-stock-recalc";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
 import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
@@ -326,7 +330,7 @@ export function registerRawStockContainerRoutes(app: Express) {
       const oldContainerTotalUsd = parseFloat(container.finalPayableAmountUsd || "0");
 
       let lastResult = null;
-      const allCascadeResults: any[] = [];
+      const allCascadeResults: CascadeResult[] = [];
 
       await db.transaction(async (tx) => {
         for (let i = 0; i < validCharges.length; i++) {
@@ -396,7 +400,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         supplierLockedRateOldExact: r.supplierLockedRateBefore,
         supplierLockedRateNewExact: r.supplierLockedRateAfter,
         rawStockRateWasStale: false,
-        affectedBatches: (cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+        affectedBatches: (cascadeResult?.affectedBatches ?? []).map((b) => ({
           batchId: b.batchId,
           batchCode: b.batchCode,
           status: b.status ?? null,
@@ -528,11 +532,13 @@ export function registerRawStockContainerRoutes(app: Express) {
         }
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "EDIT",
               companyId,
               containerId,
@@ -552,20 +558,19 @@ export function registerRawStockContainerRoutes(app: Express) {
                 supplierId: supplierId ? parseInt(supplierId) : null,
               },
               accountingCtx: acctCtx,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-
         res.json({
           message: "Post-offload charge updated",
           ...mutResult,
           supplierLockedRateOldExact: mutResult.supplierLockedRateBefore,
           supplierLockedRateNewExact: mutResult.supplierLockedRateAfter,
-          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b) => ({
             batchId: b.batchId,
             batchCode: b.batchCode,
             status: b.status ?? null,
@@ -608,11 +613,13 @@ export function registerRawStockContainerRoutes(app: Express) {
 
         const txDate = undoDate || getClientDate(req);
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "UNDO",
               companyId,
               containerId,
@@ -621,14 +628,13 @@ export function registerRawStockContainerRoutes(app: Express) {
               userId,
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
               legacyBaselineRate: legacyBaselineRate !== undefined ? parseFloat(legacyBaselineRate) : undefined,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-
         if (mutResult.alreadyUndone) {
           return res.json({ message: "Charge was already undone", alreadyUndone: true, chargeId });
         }
@@ -638,7 +644,7 @@ export function registerRawStockContainerRoutes(app: Express) {
           ...mutResult,
           supplierLockedRateOldExact: mutResult.supplierLockedRateBefore,
           supplierLockedRateNewExact: mutResult.supplierLockedRateAfter,
-          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b: any) => ({
+          affectedBatches: (mutResult.cascadeResult?.affectedBatches ?? []).map((b) => ({
             batchId: b.batchId,
             batchCode: b.batchCode,
             status: b.status ?? null,
@@ -683,11 +689,13 @@ export function registerRawStockContainerRoutes(app: Express) {
         if (!container) return res.status(404).json({ message: "Container not found" });
 
         const userId = String(req.session.userId || req.user?.id || "system");
-        let mutResult: any;
+        // The transaction returns its callback's value, so the result is a plain
+        // definitely-assigned local rather than the `any` it used to be.
+        let mutResult: PostOffloadMutationResult;
 
         try {
-          await db.transaction(async (tx) => {
-            mutResult = await applyPostOffloadChargeMutation(tx, {
+          mutResult = await db.transaction(async (tx) =>
+            applyPostOffloadChargeMutation(tx, {
               action: "LEGACY_REBUILD",
               companyId,
               containerId,
@@ -696,14 +704,13 @@ export function registerRawStockContainerRoutes(app: Express) {
               userId,
               legacyBaselineRate: parseFloat(legacyBaselineRate),
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
-            });
-          });
+            })
+          );
         } catch (err: unknown) {
           if ((err as { status?: number }).status === 409)
             return res.status(409).json({ message: getErrorMessage(err) });
           throw err;
         }
-
         res.json({
           message: "Legacy charge supplier rate rebuilt successfully",
           ...mutResult,

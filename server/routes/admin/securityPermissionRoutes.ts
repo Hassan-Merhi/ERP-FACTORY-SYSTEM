@@ -12,9 +12,9 @@ import {
   replaceNamedPermissions,
 } from "../../services/security/namedPermissionService";
 
-function activeCompany(req: any): number | null {
-  const value = req.session?.currentCompanyId;
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+function activeCompany(req: Request): number | null {
+  const value = req.session.currentCompanyId;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 async function requirePermissionAdministrator(req: Request, res: Response, next: NextFunction) {

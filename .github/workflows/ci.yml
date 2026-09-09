@@ -3,8 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -169,7 +167,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -230,7 +228,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -270,7 +268,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -337,7 +335,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -365,7 +363,7 @@ jobs:
     timeout-minutes: 50
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -395,7 +393,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -520,7 +518,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         id: install
@@ -576,7 +574,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true

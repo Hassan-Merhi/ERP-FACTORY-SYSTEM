@@ -9,6 +9,7 @@ import { eq, and } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
+import { POS_INTERNAL_TOTAL_SALES_OVERRIDE } from "./posEditInternalSymbols";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 import {
@@ -48,6 +49,7 @@ export async function rebuildSaleItems(
   let grandTotal = toInventoryDecimal(0);
   let totalSupplierCostEdit = toInventoryDecimal(0);
   let totalQtySoldEdit = toInventoryDecimal(0);
+  const issueOrdinalByStockItem = new Map<number, number>();
 
   for (const item of sortedNewItems) {
     const { id, stockItemId, quantity, sellingPrice } = item;
@@ -71,7 +73,13 @@ export async function rebuildSaleItems(
     const costPrice = toInventoryDecimal(oldItem?.costPrice ?? inventoryRecord?.averageRate);
     const effectiveSellingPrice = toInventoryDecimal(sellingPrice);
 
-    const totalSales = multiplyInventoryValues(sellQty, effectiveSellingPrice);
+    // Only trusted in-process callers can preserve an exact historical rounded
+    // line total. JSON requests cannot serialize the symbol marker below, so a
+    // normal POS edit always derives totalSales from quantity × selling price.
+    const totalSales =
+      item[POS_INTERNAL_TOTAL_SALES_OVERRIDE] === true && item.totalSales !== undefined && item.totalSales !== null
+        ? toInventoryDecimal(item.totalSales)
+        : multiplyInventoryValues(sellQty, effectiveSellingPrice);
     const totalCost = multiplyInventoryValues(sellQty, costPrice);
     const profit = subtractInventoryValues(totalSales, totalCost);
 
@@ -101,9 +109,9 @@ export async function rebuildSaleItems(
 
     await adjustInventory(tx, targetLocationId, stockItemId, sellQty.negated().toNumber(), companyId);
 
-    // The edited sale issues its new quantities at the cost the line carries,
-    // which is the original line's cost when the item is unchanged.
     if (canonicalRevision !== undefined && !sellQty.isZero()) {
+      const issueOrdinal = (issueOrdinalByStockItem.get(stockItemId) ?? 0) + 1;
+      issueOrdinalByStockItem.set(stockItemId, issueOrdinal);
       await postStockMovementTx(
         tx,
         {
@@ -117,7 +125,7 @@ export async function rebuildSaleItems(
           source: {
             sourceType: "pos-sale",
             sourceId: String(voucherId),
-            idempotencyKey: `pos-sale:${voucherId}:rev${canonicalRevision}:issue:${stockItemId}`,
+            idempotencyKey: `pos-sale:${voucherId}:rev${canonicalRevision}:issue:${stockItemId}:line:${issueOrdinal}`,
           },
           allowNegativeStock: true,
         },
