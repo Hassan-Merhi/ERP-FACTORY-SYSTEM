@@ -109,7 +109,7 @@ export function registerPosItemReplacementRoutes(app: Express): void {
             AND v.voucher_type = 'Sales'
             AND v.deleted_at IS NULL
             AND si.stock_item_id = $3
-            AND COALESCE(si.quantity, 0) > 0
+            AND COALESCE(si.quantity::numeric, 0) > 0
           ORDER BY v.voucher_date DESC, v.id DESC, si.created_at DESC, si.id DESC
           LIMIT 1`,
         [companyId, locationId, stockItemId]
