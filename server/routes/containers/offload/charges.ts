@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -15,12 +15,13 @@ import { eq, and, or, sql, like, ilike } from "drizzle-orm";
 
 export function registerContainerOffloadChargeRoutes(app: Express) {
   // ── Offload charges summary (duties + transport + office) with account names ──
-  app.get("/api/containers/:id/offload-charges", requireAuth, requireNonPOS, async (req: any, res: import("express").Response) => {
+  app.get("/api/containers/:id/offload-charges", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
       const containerId = parseId(req.params.id);
       if (containerId === null) return res.status(400).json({ message: "Invalid id" });
 
       const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       // Get the offload record along with container + location details
       const [offloadRow] = await db

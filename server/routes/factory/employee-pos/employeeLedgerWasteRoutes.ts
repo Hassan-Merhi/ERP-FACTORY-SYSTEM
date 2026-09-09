@@ -1,6 +1,6 @@
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -22,18 +22,15 @@ import { resultRows } from "../../../lib/queryResult";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export function registerEmployeeLedgerWasteRoutes(app: Express) {
-  app.get(
-    "/api/factory/bale-ledger",
-    requireAuth,
-    async (req: import("express").Request, res: import("express").Response) => {
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.get("/api/factory/bale-ledger", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        // Load all relevant data
-        const [allBalesRaw, allProducts, allCategories, pendingOrderBaleIdsRaw, staleOrderBaleIdsRaw] =
-          await Promise.all([
-            db.execute(sql`
+      // Load all relevant data
+      const [allBalesRaw, allProducts, allCategories, pendingOrderBaleIdsRaw, staleOrderBaleIdsRaw] = await Promise.all(
+        [
+          db.execute(sql`
           SELECT
             fb.id,
             fb.product_id AS "productId",
@@ -55,243 +52,243 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             OR fb.created_at >= NOW() - INTERVAL '90 days'
           )
         `),
-            db
-              .select({
-                id: factoryBaleProducts.id,
-                name: factoryBaleProducts.name,
-                articleCode: factoryBaleProducts.articleCode,
-                categoryId: factoryBaleProducts.categoryId,
-                productionPrice: factoryBaleProducts.productionPrice,
-              })
-              .from(factoryBaleProducts)
-              .where(eq(factoryBaleProducts.companyId, companyId)),
-            db
-              .select({ id: factoryCategories.id, name: factoryCategories.name })
-              .from(factoryCategories)
-              .where(eq(factoryCategories.companyId, companyId)),
-            // Bale IDs linked to orders currently in LOADING / PENDING_VERIFICATION / VERIFIED
-            db.execute(sql`
+          db
+            .select({
+              id: factoryBaleProducts.id,
+              name: factoryBaleProducts.name,
+              articleCode: factoryBaleProducts.articleCode,
+              categoryId: factoryBaleProducts.categoryId,
+              productionPrice: factoryBaleProducts.productionPrice,
+            })
+            .from(factoryBaleProducts)
+            .where(eq(factoryBaleProducts.companyId, companyId)),
+          db
+            .select({ id: factoryCategories.id, name: factoryCategories.name })
+            .from(factoryCategories)
+            .where(eq(factoryCategories.companyId, companyId)),
+          // Bale IDs linked to orders currently in LOADING / PENDING_VERIFICATION / VERIFIED
+          db.execute(sql`
           SELECT DISTINCT cob.bale_id AS "baleId"
           FROM customer_order_bales cob
           INNER JOIN customer_orders co ON co.id = cob.order_id
           WHERE co.company_id = ${companyId}
           AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
         `),
-            // Stale bale IDs: bale DB status was never updated after the order completed.
-            // These are physically gone — exclude from in-stock, matching Location Inventory logic.
-            db.execute(sql`
+          // Stale bale IDs: bale DB status was never updated after the order completed.
+          // These are physically gone — exclude from in-stock, matching Location Inventory logic.
+          db.execute(sql`
           SELECT DISTINCT cob.bale_id AS "baleId"
           FROM customer_order_bales cob
           INNER JOIN customer_orders co ON co.id = cob.order_id
           WHERE co.company_id = ${companyId}
           AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
         `),
-          ]);
+        ]
+      );
 
-        const allBales = Array.isArray(allBalesRaw) ? allBalesRaw : resultRows(allBalesRaw);
-        const pendingOrderBaleIds = new Set<number>(
-          (Array.isArray(pendingOrderBaleIdsRaw) ? pendingOrderBaleIdsRaw : resultRows(pendingOrderBaleIdsRaw)).map(
-            (r) => Number(r.baleId)
-          )
-        );
-        // Bales physically gone but DB status not yet updated to SOLD/DISPATCHED
-        const staleOrderBaleIds = new Set<number>(
-          (Array.isArray(staleOrderBaleIdsRaw) ? staleOrderBaleIdsRaw : resultRows(staleOrderBaleIdsRaw)).map((r) =>
-            Number(r.baleId)
-          )
-        );
+      const allBales = Array.isArray(allBalesRaw) ? allBalesRaw : resultRows(allBalesRaw);
+      const pendingOrderBaleIds = new Set<number>(
+        (Array.isArray(pendingOrderBaleIdsRaw) ? pendingOrderBaleIdsRaw : resultRows(pendingOrderBaleIdsRaw)).map((r) =>
+          Number(r.baleId)
+        )
+      );
+      // Bales physically gone but DB status not yet updated to SOLD/DISPATCHED
+      const staleOrderBaleIds = new Set<number>(
+        (Array.isArray(staleOrderBaleIdsRaw) ? staleOrderBaleIdsRaw : resultRows(staleOrderBaleIdsRaw)).map((r) =>
+          Number(r.baleId)
+        )
+      );
 
-        // Identify waste categories (garbage or wiper)
-        const wasteCategories = new Set<number>(
-          allCategories
-            .filter((c) => {
-              const n = (c.name || "").toLowerCase();
-              return n.includes("garbage") || n.includes("wiper");
-            })
-            .map((c) => c.id)
-        );
+      // Identify waste categories (garbage or wiper)
+      const wasteCategories = new Set<number>(
+        allCategories
+          .filter((c) => {
+            const n = (c.name || "").toLowerCase();
+            return n.includes("garbage") || n.includes("wiper");
+          })
+          .map((c) => c.id)
+      );
 
-        const productMap = new Map(allProducts.map((p) => [p.id, p]));
-        const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
+      const productMap = new Map(allProducts.map((p) => [p.id, p]));
+      const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
 
-        function isWasteProduct(productId: number | null, articleCode?: string | null): boolean {
-          if (articleCode?.startsWith("HMD16")) return true;
-          if (!productId) return false;
-          const p = productMap.get(productId);
-          if (!p) return false;
-          return p.categoryId ? wasteCategories.has(p.categoryId) : false;
-        }
-
-        function getProductLabel(bale: any): {
-          productName: string;
-          articleCode: string;
-          categoryName: string;
-          productId: number | null;
-        } {
-          const p = bale.productId ? productMap.get(bale.productId) : null;
-          const cat = p?.categoryId ? categoryMap.get(p.categoryId) : null;
-          return {
-            productName: p?.name || bale.productName || bale.articleCode || "Unknown",
-            articleCode: p?.articleCode || bale.articleCode || "—",
-            categoryName: cat?.name || "—",
-            productId: bale.productId || null,
-          };
-        }
-
-        // Use production (cost) price per bale from product
-        function getSellingPrice(bale: any): number {
-          const p = bale.productId ? productMap.get(bale.productId) : null;
-          return parseFloat(p?.productionPrice || "0") || 0;
-        }
-
-        // Group bales into buckets
-        type BaleDetail = { id: number; ref: string; weightKg: number; totalCost: number };
-        type BucketRow = {
-          productId: number | null;
-          productName: string;
-          articleCode: string;
-          categoryName: string;
-          baleCount: number;
-          totalWeightKg: number;
-          totalCost: number;
-          baleDetails: BaleDetail[];
-        };
-        const buckets: {
-          currentStock: Map<string, BucketRow>;
-          wasteStock: Map<string, BucketRow>;
-          sold: Map<string, BucketRow>;
-          wasteDispatched: Map<string, BucketRow>;
-          pendingLoading: Map<string, BucketRow>;
-        } = {
-          currentStock: new Map(),
-          wasteStock: new Map(),
-          sold: new Map(),
-          wasteDispatched: new Map(),
-          pendingLoading: new Map(),
-        };
-
-        function addToBucket(
-          bucket: Map<string, BucketRow>,
-          key: string,
-          label: ReturnType<typeof getProductLabel>,
-          bale: any
-        ) {
-          const existing = bucket.get(key);
-          const w = parseFloat(bale.weightKg) || 0;
-          const c = getSellingPrice(bale); // selling price replaces cost
-          const ref: string = bale.referenceNumber || "";
-          const detail: BaleDetail = { id: bale.id, ref, weightKg: w, totalCost: c };
-          if (existing) {
-            existing.baleCount++;
-            existing.totalWeightKg += w;
-            existing.totalCost += c;
-            existing.baleDetails.push(detail);
-          } else {
-            bucket.set(key, { ...label, baleCount: 1, totalWeightKg: w, totalCost: c, baleDetails: [detail] });
-          }
-        }
-
-        for (const bale of allBales) {
-          const label = getProductLabel(bale);
-          const key = `${bale.productId ?? "null"}-${label.productName}`;
-          const waste = isWasteProduct(bale.productId, bale.articleCode);
-
-          if (bale.status === "SOLD") {
-            if (pendingOrderBaleIds.has(Number(bale.id))) {
-              // SOLD but still linked to a PENDING_VERIFICATION or VERIFIED order (not yet shipped/finalized)
-              addToBucket(buckets.pendingLoading, key, label, bale);
-            } else {
-              addToBucket(buckets.sold, key, label, bale);
-            }
-          } else if (bale.status === "FINALIZED") {
-            // FINALIZED means the customer order was completed — bale is sold/shipped.
-            // Never count as in-stock; always goes to the sold bucket.
-            addToBucket(buckets.sold, key, label, bale);
-          } else if (bale.status === "DISPATCHED" && bale.wasteDispatchId) {
-            addToBucket(buckets.wasteDispatched, key, label, bale);
-          } else if (bale.status === "RESERVED_FOR_ORDER") {
-            // Bale is physically reserved/scanned into a loading order
-            addToBucket(buckets.pendingLoading, key, label, bale);
-          } else if (bale.status === "IN_STOCK") {
-            if (pendingOrderBaleIds.has(Number(bale.id))) {
-              // Bale is linked to a LOADING/PENDING_VERIFICATION/VERIFIED order but not yet reserved
-              addToBucket(buckets.pendingLoading, key, label, bale);
-            } else if (staleOrderBaleIds.has(Number(bale.id))) {
-              // Stale: still IN_STOCK in DB but the order was FINALIZED/DISPATCHED/SOLD.
-              // The bale is physically gone — count it as sold, matching Location Inventory.
-              addToBucket(buckets.sold, key, label, bale);
-            } else if (waste) {
-              addToBucket(buckets.wasteStock, key, label, bale);
-            } else {
-              addToBucket(buckets.currentStock, key, label, bale);
-            }
-          }
-        }
-
-        function bucketToArray(m: Map<string, BucketRow>) {
-          return Array.from(m.values())
-            .sort((a, b) => {
-              const catCmp = a.categoryName.localeCompare(b.categoryName);
-              if (catCmp !== 0) return catCmp;
-              return a.productName.localeCompare(b.productName);
-            })
-            .map((r) => {
-              // Strip baleDetails from the summary response — this is the main bandwidth cost.
-              // Full detail is available on demand via /api/factory/bale-ledger/details.
-              const { baleDetails, ...rest } = r;
-              return rest;
-            });
-        }
-
-        function sumBucket(rows: Omit<BucketRow, "baleDetails">[]) {
-          return rows.reduce(
-            (acc, r) => ({
-              baleCount: acc.baleCount + r.baleCount,
-              totalWeightKg: acc.totalWeightKg + r.totalWeightKg,
-              totalCost: acc.totalCost + r.totalCost,
-            }),
-            { baleCount: 0, totalWeightKg: 0, totalCost: 0 }
-          );
-        }
-
-        const currentStock = bucketToArray(buckets.currentStock);
-        const wasteStock = bucketToArray(buckets.wasteStock);
-        const sold = bucketToArray(buckets.sold);
-        const wasteDispatched = bucketToArray(buckets.wasteDispatched);
-        const pendingLoading = bucketToArray(buckets.pendingLoading);
-
-        res.set("Cache-Control", "private, max-age=120");
-        res.json({
-          currentStock,
-          wasteStock,
-          sold,
-          wasteDispatched,
-          pendingLoading,
-          totals: {
-            currentStock: sumBucket(currentStock),
-            wasteStock: sumBucket(wasteStock),
-            sold: sumBucket(sold),
-            wasteDispatched: sumBucket(wasteDispatched),
-            pendingLoading: sumBucket(pendingLoading),
-            grand: sumBucket([...currentStock, ...wasteStock, ...sold, ...wasteDispatched, ...pendingLoading]),
-          },
-        });
-      } catch (error: unknown) {
-        logger.error("Error fetching bale ledger:", { error: error });
-        res.status(500).json({ message: getErrorMessage(error) });
+      function isWasteProduct(productId: number | null, articleCode?: string | null): boolean {
+        if (articleCode?.startsWith("HMD16")) return true;
+        if (!productId) return false;
+        const p = productMap.get(productId);
+        if (!p) return false;
+        return p.categoryId ? wasteCategories.has(p.categoryId) : false;
       }
+
+      function getProductLabel(bale: any): {
+        productName: string;
+        articleCode: string;
+        categoryName: string;
+        productId: number | null;
+      } {
+        const p = bale.productId ? productMap.get(bale.productId) : null;
+        const cat = p?.categoryId ? categoryMap.get(p.categoryId) : null;
+        return {
+          productName: p?.name || bale.productName || bale.articleCode || "Unknown",
+          articleCode: p?.articleCode || bale.articleCode || "—",
+          categoryName: cat?.name || "—",
+          productId: bale.productId || null,
+        };
+      }
+
+      // Use production (cost) price per bale from product
+      function getSellingPrice(bale: any): number {
+        const p = bale.productId ? productMap.get(bale.productId) : null;
+        return parseFloat(p?.productionPrice || "0") || 0;
+      }
+
+      // Group bales into buckets
+      type BaleDetail = { id: number; ref: string; weightKg: number; totalCost: number };
+      type BucketRow = {
+        productId: number | null;
+        productName: string;
+        articleCode: string;
+        categoryName: string;
+        baleCount: number;
+        totalWeightKg: number;
+        totalCost: number;
+        baleDetails: BaleDetail[];
+      };
+      const buckets: {
+        currentStock: Map<string, BucketRow>;
+        wasteStock: Map<string, BucketRow>;
+        sold: Map<string, BucketRow>;
+        wasteDispatched: Map<string, BucketRow>;
+        pendingLoading: Map<string, BucketRow>;
+      } = {
+        currentStock: new Map(),
+        wasteStock: new Map(),
+        sold: new Map(),
+        wasteDispatched: new Map(),
+        pendingLoading: new Map(),
+      };
+
+      function addToBucket(
+        bucket: Map<string, BucketRow>,
+        key: string,
+        label: ReturnType<typeof getProductLabel>,
+        bale: any
+      ) {
+        const existing = bucket.get(key);
+        const w = parseFloat(bale.weightKg) || 0;
+        const c = getSellingPrice(bale); // selling price replaces cost
+        const ref: string = bale.referenceNumber || "";
+        const detail: BaleDetail = { id: bale.id, ref, weightKg: w, totalCost: c };
+        if (existing) {
+          existing.baleCount++;
+          existing.totalWeightKg += w;
+          existing.totalCost += c;
+          existing.baleDetails.push(detail);
+        } else {
+          bucket.set(key, { ...label, baleCount: 1, totalWeightKg: w, totalCost: c, baleDetails: [detail] });
+        }
+      }
+
+      for (const bale of allBales) {
+        const label = getProductLabel(bale);
+        const key = `${bale.productId ?? "null"}-${label.productName}`;
+        const waste = isWasteProduct(bale.productId, bale.articleCode);
+
+        if (bale.status === "SOLD") {
+          if (pendingOrderBaleIds.has(Number(bale.id))) {
+            // SOLD but still linked to a PENDING_VERIFICATION or VERIFIED order (not yet shipped/finalized)
+            addToBucket(buckets.pendingLoading, key, label, bale);
+          } else {
+            addToBucket(buckets.sold, key, label, bale);
+          }
+        } else if (bale.status === "FINALIZED") {
+          // FINALIZED means the customer order was completed — bale is sold/shipped.
+          // Never count as in-stock; always goes to the sold bucket.
+          addToBucket(buckets.sold, key, label, bale);
+        } else if (bale.status === "DISPATCHED" && bale.wasteDispatchId) {
+          addToBucket(buckets.wasteDispatched, key, label, bale);
+        } else if (bale.status === "RESERVED_FOR_ORDER") {
+          // Bale is physically reserved/scanned into a loading order
+          addToBucket(buckets.pendingLoading, key, label, bale);
+        } else if (bale.status === "IN_STOCK") {
+          if (pendingOrderBaleIds.has(Number(bale.id))) {
+            // Bale is linked to a LOADING/PENDING_VERIFICATION/VERIFIED order but not yet reserved
+            addToBucket(buckets.pendingLoading, key, label, bale);
+          } else if (staleOrderBaleIds.has(Number(bale.id))) {
+            // Stale: still IN_STOCK in DB but the order was FINALIZED/DISPATCHED/SOLD.
+            // The bale is physically gone — count it as sold, matching Location Inventory.
+            addToBucket(buckets.sold, key, label, bale);
+          } else if (waste) {
+            addToBucket(buckets.wasteStock, key, label, bale);
+          } else {
+            addToBucket(buckets.currentStock, key, label, bale);
+          }
+        }
+      }
+
+      function bucketToArray(m: Map<string, BucketRow>) {
+        return Array.from(m.values())
+          .sort((a, b) => {
+            const catCmp = a.categoryName.localeCompare(b.categoryName);
+            if (catCmp !== 0) return catCmp;
+            return a.productName.localeCompare(b.productName);
+          })
+          .map((r) => {
+            // Strip baleDetails from the summary response — this is the main bandwidth cost.
+            // Full detail is available on demand via /api/factory/bale-ledger/details.
+            const { baleDetails, ...rest } = r;
+            return rest;
+          });
+      }
+
+      function sumBucket(rows: Omit<BucketRow, "baleDetails">[]) {
+        return rows.reduce(
+          (acc, r) => ({
+            baleCount: acc.baleCount + r.baleCount,
+            totalWeightKg: acc.totalWeightKg + r.totalWeightKg,
+            totalCost: acc.totalCost + r.totalCost,
+          }),
+          { baleCount: 0, totalWeightKg: 0, totalCost: 0 }
+        );
+      }
+
+      const currentStock = bucketToArray(buckets.currentStock);
+      const wasteStock = bucketToArray(buckets.wasteStock);
+      const sold = bucketToArray(buckets.sold);
+      const wasteDispatched = bucketToArray(buckets.wasteDispatched);
+      const pendingLoading = bucketToArray(buckets.pendingLoading);
+
+      res.set("Cache-Control", "private, max-age=120");
+      res.json({
+        currentStock,
+        wasteStock,
+        sold,
+        wasteDispatched,
+        pendingLoading,
+        totals: {
+          currentStock: sumBucket(currentStock),
+          wasteStock: sumBucket(wasteStock),
+          sold: sumBucket(sold),
+          wasteDispatched: sumBucket(wasteDispatched),
+          pendingLoading: sumBucket(pendingLoading),
+          grand: sumBucket([...currentStock, ...wasteStock, ...sold, ...wasteDispatched, ...pendingLoading]),
+        },
+      });
+    } catch (error: unknown) {
+      logger.error("Error fetching bale ledger:", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
   // Lazy-loaded bale-level detail for a single section + product row of the Bale Ledger.
   // Keeps the main /api/factory/bale-ledger response small by not returning baleDetails there.
-  app.get("/api/factory/bale-ledger/details", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/bale-ledger/details", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const section = String(req.query.section || "");
-      const productIdParam = req.query.productId;
+      const productIdParam = req.query.productId === undefined ? undefined : String(req.query.productId);
       const validSections = ["currentStock", "wasteStock", "sold", "wasteDispatched", "pendingLoading"];
       if (!validSections.includes(section)) {
         return res.status(400).json({ message: "Invalid section" });
@@ -414,135 +411,125 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
   // WASTE DISPATCH ROUTES — factory bale waste disposal
   // ============================================================
 
-  app.get(
-    "/api/factory/waste-dispatch/bales",
-    requireAuth,
-    async (req: import("express").Request, res: import("express").Response) => {
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.get("/api/factory/waste-dispatch/bales", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const search = (req.query.search as string) || "";
+      const search = (req.query.search as string) || "";
 
-        const allCategories = await db
-          .select()
-          .from(factoryCategories)
-          .where(eq(factoryCategories.companyId, companyId));
-        const wasteCategories = allCategories.filter((c) => {
-          const name = (c.name || "").toLowerCase();
-          return name.includes("garbage") || name.includes("wiper");
-        });
-        const wasteCategoryIds = new Set(wasteCategories.map((c) => c.id));
+      const allCategories = await db.select().from(factoryCategories).where(eq(factoryCategories.companyId, companyId));
+      const wasteCategories = allCategories.filter((c) => {
+        const name = (c.name || "").toLowerCase();
+        return name.includes("garbage") || name.includes("wiper");
+      });
+      const wasteCategoryIds = new Set(wasteCategories.map((c) => c.id));
 
-        const allProducts = await db
-          .select()
-          .from(factoryBaleProducts)
-          .where(eq(factoryBaleProducts.companyId, companyId));
-        const wasteProductIds = new Set(
-          allProducts
-            .filter((p) => {
-              if (p.categoryId && wasteCategoryIds.has(p.categoryId)) return true;
-              if (p.articleCode?.startsWith("HMD16")) return true;
-              return false;
-            })
-            .map((p) => p.id)
-        );
+      const allProducts = await db
+        .select()
+        .from(factoryBaleProducts)
+        .where(eq(factoryBaleProducts.companyId, companyId));
+      const wasteProductIds = new Set(
+        allProducts
+          .filter((p) => {
+            if (p.categoryId && wasteCategoryIds.has(p.categoryId)) return true;
+            if (p.articleCode?.startsWith("HMD16")) return true;
+            return false;
+          })
+          .map((p) => p.id)
+      );
 
-        if (wasteProductIds.size === 0) {
-          return res.json({ bales: [], categories: wasteCategories });
-        }
+      if (wasteProductIds.size === 0) {
+        return res.json({ bales: [], categories: wasteCategories });
+      }
 
-        const baleRows = await db
-          .select()
-          .from(factoryBales)
-          .where(
-            and(
-              eq(factoryBales.companyId, companyId),
-              eq(factoryBales.status, "IN_STOCK"),
-              inArray(factoryBales.productId, Array.from(wasteProductIds) as number[]),
-              // Exclude bales already sold through a container order
-              // (mirrors the same guard used in location-inventory)
-              sql`NOT EXISTS (
+      const baleRows = await db
+        .select()
+        .from(factoryBales)
+        .where(
+          and(
+            eq(factoryBales.companyId, companyId),
+            eq(factoryBales.status, "IN_STOCK"),
+            inArray(factoryBales.productId, Array.from(wasteProductIds) as number[]),
+            // Exclude bales already sold through a container order
+            // (mirrors the same guard used in location-inventory)
+            sql`NOT EXISTS (
               SELECT 1 FROM customer_order_bales cob
               INNER JOIN customer_orders co ON co.id = cob.order_id
               WHERE cob.bale_id = ${factoryBales.id}
                 AND co.status IN ('FINALIZED','DISPATCHED','SOLD')
                 AND co.company_id = ${companyId}
             )`
-            )
           )
-          .orderBy(desc(factoryBales.id));
+        )
+        .orderBy(desc(factoryBales.id));
 
-        const productMap = new Map(allProducts.map((p) => [p.id, p]));
-        const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
+      const productMap = new Map(allProducts.map((p) => [p.id, p]));
+      const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
 
-        const locationIds = [...new Set(baleRows.map((b) => b.erpLocationId).filter(Boolean))] as number[];
-        const locationRows =
-          locationIds.length > 0
-            ? await db
-                .select({ id: locations.id, name: locations.name })
-                .from(locations)
-                .where(inArray(locations.id, locationIds))
-            : [];
-        const locationMap = new Map(locationRows.map((l) => [l.id, l.name]));
+      const locationIds = [...new Set(baleRows.map((b) => b.erpLocationId).filter(Boolean))] as number[];
+      const locationRows =
+        locationIds.length > 0
+          ? await db
+              .select({ id: locations.id, name: locations.name })
+              .from(locations)
+              .where(inArray(locations.id, locationIds))
+          : [];
+      const locationMap = new Map(locationRows.map((l) => [l.id, l.name]));
 
-        const enriched = baleRows.map((b) => {
-          const product = productMap.get(b.productId as number);
-          const cat = product?.categoryId ? categoryMap.get(product.categoryId) : null;
-          return {
-            id: b.id,
-            referenceNumber: b.referenceNumber,
-            productName: product?.name || product?.articleCode || b.productName || "Unknown",
-            articleCode: b.articleCode || product?.articleCode,
-            categoryName: cat?.name || b.category || "—",
-            weightKg: parseFloat(b.weightKg as string) || 0,
-            costPerKg: parseFloat(b.costPerKg as string) || 0,
-            totalCost: parseFloat(b.totalCost as string) || 0,
-            status: b.status,
-            locationName: b.erpLocationId ? locationMap.get(b.erpLocationId) || "Unknown" : "No Location",
-            locationId: b.erpLocationId,
-            finalizedAt: b.finalizedAt,
-          };
-        });
+      const enriched = baleRows.map((b) => {
+        const product = productMap.get(b.productId as number);
+        const cat = product?.categoryId ? categoryMap.get(product.categoryId) : null;
+        return {
+          id: b.id,
+          referenceNumber: b.referenceNumber,
+          productName: product?.name || product?.articleCode || b.productName || "Unknown",
+          articleCode: b.articleCode || product?.articleCode,
+          categoryName: cat?.name || b.category || "—",
+          weightKg: parseFloat(b.weightKg as string) || 0,
+          costPerKg: parseFloat(b.costPerKg as string) || 0,
+          totalCost: parseFloat(b.totalCost as string) || 0,
+          status: b.status,
+          locationName: b.erpLocationId ? locationMap.get(b.erpLocationId) || "Unknown" : "No Location",
+          locationId: b.erpLocationId,
+          finalizedAt: b.finalizedAt,
+        };
+      });
 
-        const filtered = search
-          ? enriched.filter((b) => {
-              const s = search.toLowerCase();
-              return (
-                b.referenceNumber?.toLowerCase().includes(s) ||
-                b.productName?.toLowerCase().includes(s) ||
-                b.articleCode?.toLowerCase().includes(s) ||
-                b.categoryName?.toLowerCase().includes(s) ||
-                b.locationName?.toLowerCase().includes(s)
-              );
-            })
-          : enriched;
+      const filtered = search
+        ? enriched.filter((b) => {
+            const s = search.toLowerCase();
+            return (
+              b.referenceNumber?.toLowerCase().includes(s) ||
+              b.productName?.toLowerCase().includes(s) ||
+              b.articleCode?.toLowerCase().includes(s) ||
+              b.categoryName?.toLowerCase().includes(s) ||
+              b.locationName?.toLowerCase().includes(s)
+            );
+          })
+        : enriched;
 
-        res.json({ bales: filtered, categories: wasteCategories });
-      } catch (error: unknown) {
-        logger.error("Error fetching waste bales:", { error: error });
-        res.status(500).json({ message: getErrorMessage(error) });
-      }
+      res.json({ bales: filtered, categories: wasteCategories });
+    } catch (error: unknown) {
+      logger.error("Error fetching waste bales:", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
-  app.get(
-    "/api/factory/waste-dispatch/history",
-    requireAuth,
-    async (req: import("express").Request, res: import("express").Response) => {
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.get("/api/factory/waste-dispatch/history", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const dispatches = await db
-          .select()
-          .from(factoryBaleWasteDispatches)
-          .where(eq(factoryBaleWasteDispatches.companyId, companyId))
-          .orderBy(desc(factoryBaleWasteDispatches.id));
+      const dispatches = await db
+        .select()
+        .from(factoryBaleWasteDispatches)
+        .where(eq(factoryBaleWasteDispatches.companyId, companyId))
+        .orderBy(desc(factoryBaleWasteDispatches.id));
 
-        // Fetch all removed bales for this company that have a waste_dispatch_id set.
-        // Using raw SQL to avoid Drizzle array serialization issues with ANY().
-        const linkedBalesRaw = await db.execute(sql`
+      // Fetch all removed bales for this company that have a waste_dispatch_id set.
+      // Using raw SQL to avoid Drizzle array serialization issues with ANY().
+      const linkedBalesRaw = await db.execute(sql`
         SELECT
           id,
           reference_number       AS "referenceNumber",
@@ -555,125 +542,118 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
           AND waste_dispatch_id IS NOT NULL
         ORDER BY waste_dispatch_id, id
       `);
-        const linkedBales = Array.isArray(linkedBalesRaw) ? linkedBalesRaw : resultRows(linkedBalesRaw);
+      const linkedBales = Array.isArray(linkedBalesRaw) ? linkedBalesRaw : resultRows(linkedBalesRaw);
 
-        const balesByDispatch = new Map<number, unknown[]>();
-        for (const bale of linkedBales) {
-          const did = Number(bale.wasteDispatchId);
-          if (!balesByDispatch.has(did)) balesByDispatch.set(did, []);
-          balesByDispatch.get(did)!.push(bale);
-        }
-
-        res.json(
-          dispatches.map((d) => ({
-            ...d,
-            bales: balesByDispatch.get(d.id) || [],
-          }))
-        );
-      } catch (error: unknown) {
-        logger.error("Error fetching waste dispatch history:", { error: error });
-        res.status(500).json({ message: getErrorMessage(error) });
+      const balesByDispatch = new Map<number, unknown[]>();
+      for (const bale of linkedBales) {
+        const did = Number(bale.wasteDispatchId);
+        if (!balesByDispatch.has(did)) balesByDispatch.set(did, []);
+        balesByDispatch.get(did)!.push(bale);
       }
+
+      res.json(
+        dispatches.map((d) => ({
+          ...d,
+          bales: balesByDispatch.get(d.id) || [],
+        }))
+      );
+    } catch (error: unknown) {
+      logger.error("Error fetching waste dispatch history:", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
   // ── DELETE /api/factory/waste-dispatch/:id ─────────────────────────────────
   // Reverses a waste dispatch: restores bales to IN_STOCK, reverses ERP stock, deletes daybook entry.
-  app.delete(
-    "/api/factory/waste-dispatch/:id",
-    requireAuth,
-    async (req: import("express").Request, res: import("express").Response) => {
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.delete("/api/factory/waste-dispatch/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const dispatchId = parseInt(req.params.id);
-        if (isNaN(dispatchId)) return res.status(400).json({ message: "Invalid dispatch id" });
+      const dispatchId = parseInt(req.params.id);
+      if (isNaN(dispatchId)) return res.status(400).json({ message: "Invalid dispatch id" });
 
-        const [dispatch] = await db
-          .select()
-          .from(factoryBaleWasteDispatches)
-          .where(
-            and(eq(factoryBaleWasteDispatches.id, dispatchId), eq(factoryBaleWasteDispatches.companyId, companyId))
-          );
+      const [dispatch] = await db
+        .select()
+        .from(factoryBaleWasteDispatches)
+        .where(and(eq(factoryBaleWasteDispatches.id, dispatchId), eq(factoryBaleWasteDispatches.companyId, companyId)));
 
-        if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
+      if (!dispatch) return res.status(404).json({ message: "Dispatch not found" });
 
-        // Fetch all bales linked to this dispatch
-        const linkedBales = await db.execute(sql`
+      // Fetch all bales linked to this dispatch
+      const linkedBales = await db.execute(sql`
         SELECT id, erp_location_id AS "erpLocationId", product_id AS "productId", article_code AS "articleCode"
         FROM factory_bales
         WHERE company_id = ${companyId} AND waste_dispatch_id = ${dispatchId}
       `);
-        const bales = Array.isArray(linkedBales) ? linkedBales : resultRows(linkedBales);
+      const bales = Array.isArray(linkedBales) ? linkedBales : resultRows(linkedBales);
 
-        await db.transaction(async (tx) => {
-          const now = new Date();
+      await db.transaction(async (tx) => {
+        const now = new Date();
 
-          // 1. Restore each bale to IN_STOCK and clear waste_dispatch_id
-          for (const bale of bales) {
-            await tx.execute(
-              sql`UPDATE factory_bales SET status = 'IN_STOCK', waste_dispatch_id = NULL, updated_at = ${now} WHERE id = ${bale.id}`
-            );
+        // 1. Restore each bale to IN_STOCK and clear waste_dispatch_id
+        for (const bale of bales) {
+          await tx.execute(
+            sql`UPDATE factory_bales SET status = 'IN_STOCK', waste_dispatch_id = NULL, updated_at = ${now} WHERE id = ${bale.id}`
+          );
 
-            // 2. Reverse the ERP stock adjustment (+1 per bale)
-            if (bale.articleCode && bale.erpLocationId) {
-              const [existing] = await tx
-                .select({ id: stockItems.id })
-                .from(stockItems)
-                .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, bale.articleCode)));
-              if (existing) {
-                const adjustment = await adjustInventory(tx, bale.erpLocationId, existing.id, 1, companyId);
-                await postStockMovementTx(
-                  tx,
-                  {
-                    companyId,
-                    stockItemId: existing.id,
-                    kind: "adjustment",
-                    quantity: "1",
-                    unitCost: String(Math.max(adjustment.averageRate || 0, 0)),
-                    toLocationId: bale.erpLocationId,
-                    occurredAt: now.toISOString(),
-                    source: {
-                      sourceType: "factory_waste_dispatch_restore",
-                      sourceId: String(dispatchId),
-                      idempotencyKey: `factory-waste-dispatch:restore:${companyId}:${dispatchId}:${bale.id}`,
-                    },
-                    actor: {
-                      userId: req.session.userId,
-                      username: req.session.username,
-                      reason: `Delete waste dispatch ${dispatch.dispatchNumber}`,
-                    },
+          // 2. Reverse the ERP stock adjustment (+1 per bale)
+          if (bale.articleCode && bale.erpLocationId) {
+            const [existing] = await tx
+              .select({ id: stockItems.id })
+              .from(stockItems)
+              .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, bale.articleCode)));
+            if (existing) {
+              const adjustment = await adjustInventory(tx, bale.erpLocationId, existing.id, 1, companyId);
+              await postStockMovementTx(
+                tx,
+                {
+                  companyId,
+                  stockItemId: existing.id,
+                  kind: "adjustment",
+                  quantity: "1",
+                  unitCost: String(Math.max(adjustment.averageRate || 0, 0)),
+                  toLocationId: bale.erpLocationId,
+                  occurredAt: now.toISOString(),
+                  source: {
+                    sourceType: "factory_waste_dispatch_restore",
+                    sourceId: String(dispatchId),
+                    idempotencyKey: `factory-waste-dispatch:restore:${companyId}:${dispatchId}:${bale.id}`,
                   },
-                  canonicalStockMovementAdapter
-                );
-              }
+                  actor: {
+                    userId: req.session.userId,
+                    username: req.session.username,
+                    reason: `Delete waste dispatch ${dispatch.dispatchNumber}`,
+                  },
+                },
+                canonicalStockMovementAdapter
+              );
             }
           }
+        }
 
-          // 3. Delete the daybook entry for this dispatch
-          await tx
-            .delete(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.referenceTable, "factory_bale_waste_dispatches"),
-                eq(factoryDaybookEntries.referenceId, dispatchId)
-              )
-            );
+        // 3. Delete the daybook entry for this dispatch
+        await tx
+          .delete(factoryDaybookEntries)
+          .where(
+            and(
+              eq(factoryDaybookEntries.referenceTable, "factory_bale_waste_dispatches"),
+              eq(factoryDaybookEntries.referenceId, dispatchId)
+            )
+          );
 
-          // 4. Delete the dispatch record
-          await tx.delete(factoryBaleWasteDispatches).where(eq(factoryBaleWasteDispatches.id, dispatchId));
-        });
+        // 4. Delete the dispatch record
+        await tx.delete(factoryBaleWasteDispatches).where(eq(factoryBaleWasteDispatches.id, dispatchId));
+      });
 
-        res.json({ message: "Waste dispatch deleted and bales restored to stock", restoredBales: bales.length });
-      } catch (error: unknown) {
-        logger.error("[Waste Dispatch DELETE]", { error: getErrorMessage(error) });
-        res.status(500).json({ message: getErrorMessage(error) });
-      }
+      res.json({ message: "Waste dispatch deleted and bales restored to stock", restoredBales: bales.length });
+    } catch (error: unknown) {
+      logger.error("[Waste Dispatch DELETE]", { error: getErrorMessage(error) });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
 
-  app.post("/api/factory/waste-dispatch/submit", requireAuth, async (req: any, res: import("express").Response) => {
+  app.post("/api/factory/waste-dispatch/submit", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -686,7 +666,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         return res.status(400).json({ message: "dispatchDate is required" });
       }
 
-      const userId = req.session.user?.id || null;
+      const userId = req.session.userId ?? null;
 
       const [lastDispatch] = await db
         .select({ dispatchNumber: factoryBaleWasteDispatches.dispatchNumber })

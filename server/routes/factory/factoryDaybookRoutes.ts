@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { buildLegacyValidSourceIds, isRowIntegrityValid } from "../../services/factory/daybookSourceIntegrity";
@@ -15,7 +15,7 @@ import {
 import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
 
 export function registerFactoryDaybookRoutes(app: Express) {
-  app.get("/api/factory/daybook", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/daybook", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -23,7 +23,10 @@ export function registerFactoryDaybookRoutes(app: Express) {
       // startDate/endDate are reassigned by the unbounded-range guard below;
       // the other two are read as sent.
       let { startDate, endDate } = req.query;
-      const { txType, currencyCode } = req.query;
+      // Query values arrive as string | string[] | ParsedQs; every use below wants
+      // a plain string, so normalise once instead of casting at each use.
+      const txType = req.query.txType ? String(req.query.txType) : undefined;
+      const currencyCode = req.query.currencyCode ? String(req.query.currencyCode) : undefined;
 
       // Guard against unbounded "return everything ever" queries: only apply when
       // the caller omits the params entirely (e.g. a raw/older API call) — not when
@@ -78,8 +81,8 @@ export function registerFactoryDaybookRoutes(app: Express) {
       }
       if (startDate) conditions.push(sql`${factoryDaybookEntries.txDate} >= ${startDate}`);
       if (endDate) conditions.push(sql`${factoryDaybookEntries.txDate} <= ${endDate}`);
-      if (txType) conditions.push(eq(factoryDaybookEntries.txType, txType as string));
-      if (currencyCode) conditions.push(eq(factoryDaybookEntries.currencyCode, currencyCode as string));
+      if (txType) conditions.push(eq(factoryDaybookEntries.txType, txType));
+      if (currencyCode) conditions.push(eq(factoryDaybookEntries.currencyCode, currencyCode));
       const daybookRows = await db
         .select()
         .from(factoryDaybookEntries)
@@ -220,10 +223,10 @@ export function registerFactoryDaybookRoutes(app: Express) {
           voucherConds.push(sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) >= ${startDate}`);
         if (endDate) voucherConds.push(sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${endDate}`);
         if (txType && txType in voucherTypesReversed) {
-          voucherConds.push(eq(vouchers.voucherType, voucherTypesReversed[txType as string]));
+          voucherConds.push(eq(vouchers.voucherType, voucherTypesReversed[txType]));
         }
         if (currencyCode && currencyCode !== "ALL") {
-          voucherConds.push(eq(vouchers.currency, currencyCode as string));
+          voucherConds.push(eq(vouchers.currency, currencyCode));
         }
 
         const rawVouchers = await db

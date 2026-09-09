@@ -3,7 +3,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
 import { getExportPriceVisibility } from "../../../helpers/exportVisibility";
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 
@@ -23,7 +23,7 @@ import { parseListPagination, setListPaginationHeaders } from "../../../lib/list
 import { resultRows } from "../../../lib/queryResult";
 
 export function registerOrderCrudRoutes(app: Express) {
-  app.get("/api/factory/customer-orders", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -31,7 +31,7 @@ export function registerOrderCrudRoutes(app: Express) {
       const conditions = [eq(customerOrders.companyId, companyId), isNull(customerOrders.deletedAt)];
       const queryCustomerId = parseOptionalId(req.query.customerId);
       if (queryCustomerId !== null) conditions.push(eq(customerOrders.customerId, queryCustomerId));
-      if (req.query.status) conditions.push(eq(customerOrders.status, req.query.status));
+      if (req.query.status) conditions.push(eq(customerOrders.status, String(req.query.status)));
       const queryProformaId = parseOptionalId(req.query.proformaId);
       if (queryProformaId !== null) conditions.push(eq(customerOrders.proformaIdUsed, queryProformaId));
       if (req.query.showHidden !== "1") conditions.push(eq(customerOrders.isHidden, false));
@@ -115,7 +115,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/customer-orders/:id", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/customer-orders/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -183,10 +183,7 @@ export function registerOrderCrudRoutes(app: Express) {
           .from(customerProformas)
           .where(and(eq(customerProformas.id, orderProformaId), eq(customerProformas.companyId, companyId)));
         const proformaLines = continuationProforma
-          ? await db
-              .select()
-              .from(customerProformaLines)
-              .where(eq(customerProformaLines.proformaId, orderProformaId))
+          ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
           : [];
         const relatedOrders = await db
           .select({ id: customerOrders.id })
@@ -212,10 +209,7 @@ export function registerOrderCrudRoutes(app: Express) {
         for (const bale of relatedBales) {
           if (bale.articleCode) {
             const normalizedArticleCode = String(bale.articleCode).trim().toLowerCase();
-            loadedByArticle.set(
-              normalizedArticleCode,
-              (loadedByArticle.get(normalizedArticleCode) || 0) + 1
-            );
+            loadedByArticle.set(normalizedArticleCode, (loadedByArticle.get(normalizedArticleCode) || 0) + 1);
           }
         }
         proformaRemainingLines = proformaLines.map((line) => ({
@@ -224,7 +218,12 @@ export function registerOrderCrudRoutes(app: Express) {
           productName: line.productName,
           quantity: Math.max(
             0,
-            line.quantity - (loadedByArticle.get(String(line.articleCode || "").trim().toLowerCase()) || 0)
+            line.quantity -
+              (loadedByArticle.get(
+                String(line.articleCode || "")
+                  .trim()
+                  .toLowerCase()
+              ) || 0)
           ),
           pricePerBale: line.pricePerBale,
           pricingMode: line.pricingMode,
@@ -270,7 +269,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/customer-orders/:id/hidden", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.patch("/api/factory/customer-orders/:id/hidden", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -288,7 +287,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/customer-orders/:id/profitability", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/customer-orders/:id/profitability", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -399,7 +398,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/customer-orders", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -454,7 +453,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/customer-orders/:id/link-proforma", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.patch("/api/factory/customer-orders/:id/link-proforma", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -542,7 +541,7 @@ export function registerOrderCrudRoutes(app: Express) {
   // PATCH /api/factory/customer-orders/:id/loading-note — update the free-text
   // note on a loading order (works on any non-cancelled status so floor staff
   // can add or edit notes at any point during the loading lifecycle).
-  app.patch("/api/factory/customer-orders/:id/loading-note", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.patch("/api/factory/customer-orders/:id/loading-note", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -612,7 +611,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/factory/customer-orders/:id", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.delete("/api/factory/customer-orders/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -673,7 +672,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/customer-orders/:id/date", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.patch("/api/factory/customer-orders/:id/date", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -746,7 +745,7 @@ export function registerOrderCrudRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/customer-orders/:id/assign-container", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/customer-orders/:id/assign-container", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -839,7 +838,7 @@ export function registerOrderCrudRoutes(app: Express) {
   // BALE SCAN LOOKUP
   // ───────────────────────────────────────────────
 
-  app.get("/api/factory/bale-lookup", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/bale-lookup", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
