@@ -351,7 +351,7 @@ export const factoryBaleWasteDispatches = pgTable(
     totalBales: integer("total_bales").notNull().default(0),
     totalWeightKg: decimal("total_weight_kg", { precision: 15, scale: 3 }).notNull().default("0"),
     totalCostWrittenOff: decimal("total_cost_written_off", { precision: 15, scale: 2 }).notNull().default("0"),
-    createdBy: integer("created_by"),
+    createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({

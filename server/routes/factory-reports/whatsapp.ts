@@ -11,10 +11,11 @@ import { pool, type Database } from "../../db";
 import { logAudit } from "../_helpers";
 
 export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth: RequestHandler, _db: Database) {
-  // ── Send mix batch image to WhatsApp ─────────────────────────────────────
+  // Shared factory image sender. Mix batches remain the default caller, while
+  // other factory reports can provide their own file name/caption/identifier.
   app.post("/api/factory/send-mix-batch-image-whatsapp", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { imageBase64, date, fileName } = req.body ?? {};
+      const { imageBase64, date, fileName, caption, reportLabel } = req.body ?? {};
       if (!imageBase64) return res.status(400).json({ message: "imageBase64 is required" });
 
       const r = await pool.query(
@@ -60,14 +61,15 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
       const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64Data, "base64");
       const today = date || new Date().toISOString().substring(0, 10);
-      const finalFileName = String(fileName || `MixBatch_${today}.png`);
-      const caption = `Mix Batch Details — ${today}`;
+      const finalFileName = String(fileName || `MixBatch_${today}.png`).slice(0, 180);
+      const finalCaption = String(caption || `Mix Batch Details — ${today}`).trim().slice(0, 500);
+      const auditLabel = String(reportLabel || finalCaption).trim().slice(0, 200);
 
       const { sendWhatsAppFileToChatId, sendWhatsAppFileToChatIdPos, getWaSettingsById } = await import(
         "../../services/whatsappService"
       );
 
-      let result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, caption, "image/png");
+      let result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, finalCaption, "image/png");
       let usedFallback = false;
 
       // A 401 means the primary Green API instance cannot authenticate. If a
@@ -84,7 +86,7 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
             groupChatId,
             buffer,
             finalFileName,
-            caption,
+            finalCaption,
             "image/png"
           );
           if (fallbackResult.success) {
@@ -126,7 +128,7 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
             action: "send_whatsapp",
             tableName: "reports",
             recordId: null,
-            recordIdentifier: `Mix Batch Details — ${today}`,
+            recordIdentifier: auditLabel,
             changes: {
               format: { old: null, new: "image/png" },
               whatsappInstance: { old: null, new: usedFallback ? "pos-fallback" : "main" },

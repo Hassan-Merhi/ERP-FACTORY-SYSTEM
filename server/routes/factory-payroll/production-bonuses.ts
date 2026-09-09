@@ -1,4 +1,4 @@
-import type { Database } from "../../db";
+import type { Database, RawQueryRow } from "../../db";
 import type { DbTransaction } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { sql } from "drizzle-orm";
@@ -16,8 +16,27 @@ import {
   updateProductionBonusRunStatuses,
 } from "../../services/payroll/productionBonusPayrollService";
 
-function rows(result: any): any[] {
-  return Array.isArray(result) ? result : (result?.rows ?? []);
+/**
+ * Raw projections behind the production-bonus decision flow. `bonuses` and
+ * `net_salary` are cast to text in the query, so they arrive as strings.
+ */
+interface PayrollLockRow {
+  id: number;
+  companyId: number;
+  workerId: number;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+}
+
+interface PayrollFinancialRow {
+  bonuses: string | null;
+  netSalary: string | null;
+}
+
+interface BonusAllocationRow {
+  runId: number;
+  workerId: number;
 }
 
 interface DecisionItem {
@@ -55,10 +74,10 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const payrollResult = await db.execute(sql`
+      const payrollResult = await db.execute<RawQueryRow<{ id: number }>>(sql`
         SELECT id FROM factory_payrolls WHERE id = ${id} AND company_id = ${companyId} LIMIT 1
       `);
-      if (!rows(payrollResult)[0]) return res.status(404).json({ message: "Payroll record not found" });
+      if (!payrollResult.rows[0]) return res.status(404).json({ message: "Payroll record not found" });
       res.json(await getProductionBonusDetailsForPayroll(db, id));
     } catch (error: unknown) {
       logger.error("Error loading production bonuses for payroll", { error });
@@ -87,14 +106,14 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
       const decidedBy = req.session?.userId ? String(req.session.userId) : null;
 
       const result = await db.transaction(async (tx: DbTransaction) => {
-        const payrollResult = await tx.execute(sql`
+        const payrollResult = await tx.execute<RawQueryRow<PayrollLockRow>>(sql`
           SELECT id, company_id AS "companyId", worker_id AS "workerId",
                  period_start::text AS "periodStart", period_end::text AS "periodEnd", status
           FROM factory_payrolls
           WHERE id = ${id} AND company_id = ${companyId}
           FOR UPDATE
         `);
-        const payroll = rows(payrollResult)[0];
+        const payroll = payrollResult.rows[0];
         if (!payroll) throw new Error("Payroll record not found");
         if (String(payroll.status) !== "DRAFT") {
           throw new Error("Production bonus decisions can only be changed while payroll is DRAFT");
@@ -104,20 +123,20 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
         // deleted payroll. Re-read financial values after preparation so the
         // decision delta starts from the current authoritative total/net.
         await prepareProductionBonusesForPayroll(tx, id);
-        const financialResult = await tx.execute(sql`
+        const financialResult = await tx.execute<RawQueryRow<PayrollFinancialRow>>(sql`
           SELECT bonuses::text AS bonuses, net_salary::text AS "netSalary"
           FROM factory_payrolls WHERE id = ${id} AND company_id = ${companyId} LIMIT 1
         `);
-        const financial = rows(financialResult)[0];
+        const financial = financialResult.rows[0];
         if (!financial) throw new Error("Payroll record not found");
 
         const oldTotals = (await getProductionBonusTotalsForPayrollIds(tx, [id])).get(id) ?? emptyTotals();
-        const linkedResult = await tx.execute(sql`
+        const linkedResult = await tx.execute<RawQueryRow<BonusAllocationRow>>(sql`
           SELECT run_id AS "runId", worker_id AS "workerId"
           FROM factory_production_bonus_allocations
           WHERE payroll_id = ${id}
         `);
-        const linked = rows(linkedResult).map((row) => ({
+        const linked = linkedResult.rows.map((row) => ({
           runId: Number(row.runId),
           workerId: Number(row.workerId),
         }));
@@ -131,14 +150,14 @@ export function registerFactoryProductionBonusRoutes(app: Express, requireAuth: 
 
         const affectedRunIds: number[] = [];
         for (const item of requested) {
-          const updateResult = await tx.execute(sql`
+          const updateResult = await tx.execute<RawQueryRow<{ run_id: number }>>(sql`
             UPDATE factory_production_bonus_allocations
             SET decision_status = ${decision}, decided_by = ${decidedBy}, decided_at = NOW(),
                 decision_note = ${note}, updated_at = NOW()
             WHERE payroll_id = ${id} AND run_id = ${item.runId} AND worker_id = ${item.workerId}
             RETURNING run_id
           `);
-          if (rows(updateResult)[0]) affectedRunIds.push(item.runId);
+          if (updateResult.rows[0]) affectedRunIds.push(item.runId);
         }
         await updateProductionBonusRunStatuses(tx, affectedRunIds);
 

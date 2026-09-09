@@ -60,6 +60,7 @@ import {
   POImport,
   POS,
   POSImport,
+  POSItemReplacement,
   POSPage,
   PartiesHub,
   Payroll,
@@ -125,6 +126,13 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       )}
       {canAccess("pos") && <Route path="/pos/edit/:id">{(params) => <POS editVoucherId={params.id} />}</Route>}
+      {(user?.currentRole ?? user?.role) !== "POS" && canAccess("pos") ? (
+        <Route path="/pos-item-replacement" component={POSItemReplacement} />
+      ) : (
+        <Route path="/pos-item-replacement">
+          <Redirect to="/tracking" />
+        </Route>
+      )}
 
       {G("/inventory", "stock_items", InventoryHub)}
       {G("/stock", "stock_items", StockHub)}

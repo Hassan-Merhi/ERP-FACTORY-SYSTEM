@@ -1,3 +1,5 @@
+import type { CascadeResult } from "../rawStockCostCascade";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface AccountingContext {
@@ -51,7 +53,7 @@ export interface PostOffloadMutationResult {
   supplierInventoryValueDeltaUsd: string;
   supplierValueBeforeUsd: string | null;
   supplierValueAfterUsd: string | null;
-  cascadeResult: unknown;
+  cascadeResult: CascadeResult | null;
   reversalDaybookEntryId?: number | null;
 }
 

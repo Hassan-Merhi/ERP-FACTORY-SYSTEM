@@ -174,6 +174,7 @@ export default function LocationInventory({ posUser }: { posUser?: any } = {}) {
   const {
     openingInventoryMap,
     showMovement,
+    activeInventoryData,
     activeInventoryLoading,
     inventory,
     stockGroups,
@@ -200,6 +201,12 @@ export default function LocationInventory({ posUser }: { posUser?: any } = {}) {
     itemCategoryFilter,
     selectedGroup,
   });
+
+  // The server is authoritative: unauthorized POS inventory responses null both
+  // cost fields. One capability value is then shared by every inventory view so
+  // group summaries, item rows, totals and cost exports cannot disagree.
+  const canViewInventoryCost =
+    !posUser || activeInventoryData.some((item) => item.averageRate !== null && item.averageRate !== undefined);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -322,6 +329,7 @@ export default function LocationInventory({ posUser }: { posUser?: any } = {}) {
               <StockGroupsView
                 selectedLocationLocal={selectedLocationLocal}
                 posUser={posUser}
+                canViewCost={canViewInventoryCost}
                 canManageWhatsapp={canManageWhatsapp}
                 openRenameDialog={openRenameDialog}
                 openWaGroupDialog={openWaGroupDialog}
@@ -355,6 +363,7 @@ export default function LocationInventory({ posUser }: { posUser?: any } = {}) {
               <StockGroupItemsView
                 selectedGroup={selectedGroup}
                 posUser={posUser}
+                canViewCost={canViewInventoryCost}
                 formatAmount={formatAmount}
                 setArchiveDialogOpen={setArchiveDialogOpen}
                 itemSearchTerm={itemSearchTerm}
@@ -378,7 +387,7 @@ export default function LocationInventory({ posUser }: { posUser?: any } = {}) {
                 totalItems={totalItems}
                 totalQty={totalQty}
                 totalValue={totalValue}
-                posUser={posUser}
+                canViewCost={canViewInventoryCost}
                 formatAmount={formatAmount}
                 itemSearchTerm={itemSearchTerm}
                 setItemSearchTerm={setItemSearchTerm}

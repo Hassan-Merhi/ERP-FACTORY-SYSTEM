@@ -4,13 +4,36 @@ import { pn } from "./spMigrationPhase2Common";
 import { resolveTargetLedgerAccount, resolveTargetLocation } from "./spMigrationCutoverReadiness";
 import { ensurePhase4CutoverSchema } from "./spMigrationPhase4Inventory";
 import { resultRows, firstRow } from "../../lib/queryResult";
+import { asRecord, toFiniteNumber } from "@shared/typeGuards";
 
-function roleSnapshot(row: any) {
+/**
+ * A user_company_roles snapshot, as this migration writes it into the session
+ * and into the target company's role row.
+ *
+ * Raw rows arrive from `tx.execute`, so each field is coerced here rather than
+ * asserted: the snake_case/camelCase fallbacks exist because the same shape is
+ * read back from both a raw query and a Drizzle select.
+ */
+export interface RoleSnapshot {
+  role: string;
+  assignedLocationId: number | null;
+  cashAccountId: number | null;
+  posStation: number | null;
+  canSellNegativeStock: boolean;
+  posViewOnly: boolean;
+  daybookEditDays: number;
+  canAccessCustomers: boolean;
+  canDeleteRecords: boolean;
+}
+
+function roleSnapshot(row: Record<string, unknown>): RoleSnapshot {
   return {
-    role: row.role,
-    assignedLocationId: row.assigned_location_id ? pn(row.assigned_location_id) : (row.assignedLocationId ?? null),
-    cashAccountId: row.cash_account_id ? pn(row.cash_account_id) : (row.cashAccountId ?? null),
-    posStation: row.pos_station ?? row.posStation ?? null,
+    role: String(row.role ?? ""),
+    assignedLocationId: row.assigned_location_id
+      ? pn(row.assigned_location_id)
+      : (toFiniteNumber(row.assignedLocationId) ?? null),
+    cashAccountId: row.cash_account_id ? pn(row.cash_account_id) : (toFiniteNumber(row.cashAccountId) ?? null),
+    posStation: toFiniteNumber(row.pos_station ?? row.posStation) ?? null,
     canSellNegativeStock: Boolean(row.can_sell_negative_stock ?? row.canSellNegativeStock),
     posViewOnly: Boolean(row.pos_view_only ?? row.posViewOnly),
     daybookEditDays: pn(row.daybook_edit_days ?? row.daybookEditDays),
@@ -25,7 +48,7 @@ async function switchUserSessions(
     userId: string;
     fromCompanyId: number;
     toCompanyId: number;
-    role: any;
+    role: RoleSnapshot;
     companyName: string;
   }
 ): Promise<number> {
@@ -89,7 +112,7 @@ async function loadCashMappings(
   }));
 }
 
-async function mapRole(sourceId: number, targetId: number, sourceRole: any) {
+async function mapRole(sourceId: number, targetId: number, sourceRole: Record<string, unknown>): Promise<RoleSnapshot> {
   const location = sourceRole.assigned_location_id
     ? await resolveTargetLocation(sourceId, targetId, pn(sourceRole.assigned_location_id))
     : null;
@@ -100,10 +123,10 @@ async function mapRole(sourceId: number, targetId: number, sourceRole: any) {
     throw new Error(`POS user ${sourceRole.user_id} has no safe target location/cash-account mapping.`);
   }
   return {
-    role: sourceRole.role,
+    role: String(sourceRole.role ?? ""),
     assignedLocationId: location?.targetLocationId ?? null,
     cashAccountId,
-    posStation: sourceRole.pos_station ?? null,
+    posStation: toFiniteNumber(sourceRole.pos_station) ?? null,
     canSellNegativeStock: Boolean(sourceRole.can_sell_negative_stock),
     posViewOnly: Boolean(sourceRole.pos_view_only),
     daybookEditDays: pn(sourceRole.daybook_edit_days),
@@ -112,7 +135,7 @@ async function mapRole(sourceId: number, targetId: number, sourceRole: any) {
   };
 }
 
-async function mapAllLocations(sourceId: number, targetId: number, rows: any[]) {
+async function mapAllLocations(sourceId: number, targetId: number, rows: Record<string, unknown>[]) {
   const mapped = [];
   for (const row of rows) {
     const location = await resolveTargetLocation(sourceId, targetId, pn(row.locationId));
@@ -122,7 +145,7 @@ async function mapAllLocations(sourceId: number, targetId: number, rows: any[]) 
   return mapped;
 }
 
-async function mapAllCashMappings(sourceId: number, targetId: number, rows: any[]) {
+async function mapAllCashMappings(sourceId: number, targetId: number, rows: Record<string, unknown>[]) {
   const mapped = [];
   for (const row of rows) {
     const location = await resolveTargetLocation(sourceId, targetId, pn(row.locationId));
@@ -145,7 +168,7 @@ async function replaceLocations(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   userId: string,
   companyId: number,
-  rows: any[]
+  rows: Record<string, unknown>[]
 ): Promise<void> {
   await tx.execute(sql`DELETE FROM user_locations WHERE user_id = ${userId} AND company_id = ${companyId}`);
   for (const row of rows) {
@@ -160,7 +183,7 @@ async function replaceCashMappings(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   userId: string,
   companyId: number,
-  rows: any[]
+  rows: Record<string, unknown>[]
 ): Promise<void> {
   await tx.execute(
     sql`DELETE FROM user_location_cash_accounts WHERE user_id = ${userId} AND company_id = ${companyId}`
@@ -177,7 +200,7 @@ async function upsertRole(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   userId: string,
   companyId: number,
-  role: any
+  role: RoleSnapshot
 ): Promise<{ id: number; created: boolean }> {
   const existing = await tx.execute(sql`
     SELECT id FROM user_company_roles
@@ -363,13 +386,15 @@ export async function restoreUsersToSourceExact(
 
   for (const change of resultRows(changesResult)) {
     const userId = String(change.user_id);
-    const sourceRole = (change.source_role_snapshot ?? {}) as {
-      role?: string | null;
-      assignedLocationId?: number | null;
-      cashAccountId?: number | null;
-      posStation?: string | null;
-    };
-    const targetRoleBefore = change.target_role_snapshot_before ?? null;
+    // The stored snapshots were written by roleSnapshot(), which also reads its
+    // own output back (it accepts both the snake_case row and the camelCase
+    // snapshot). Parsing them through it restores every field, where the old
+    // cast declared only four of the nine and dropped the five permission flags
+    // from the type - upsertRole received them at runtime regardless, so this is
+    // the same restore with the shape stated honestly.
+    const sourceRole = roleSnapshot(asRecord(change.source_role_snapshot) ?? {});
+    const targetRoleBeforeRecord = asRecord(change.target_role_snapshot_before);
+    const targetRoleBefore = targetRoleBeforeRecord ? roleSnapshot(targetRoleBeforeRecord) : null;
     const sourceLocations = Array.isArray(change.source_locations_snapshot) ? change.source_locations_snapshot : [];
     const sourceCashMappings = Array.isArray(change.source_cash_mappings_snapshot)
       ? change.source_cash_mappings_snapshot

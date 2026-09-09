@@ -40,6 +40,7 @@ interface StockGroupSummary {
 interface StockGroupsViewProps {
   selectedLocationLocal: Location;
   posUser?: any;
+  canViewCost: boolean;
   canManageWhatsapp: boolean;
   openRenameDialog: (loc: Location, e?: { stopPropagation: () => void; }) => void;
   openWaGroupDialog: (loc: Location, e?: { stopPropagation: () => void; }) => void;
@@ -70,6 +71,7 @@ interface StockGroupsViewProps {
 export function StockGroupsView({
   selectedLocationLocal,
   posUser,
+  canViewCost,
   canManageWhatsapp,
   openRenameDialog,
   openWaGroupDialog,
@@ -163,7 +165,7 @@ export function StockGroupsView({
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
               {Math.floor(totalQty).toLocaleString()} BL total
             </span>
-            {!posUser && (
+            {canViewCost && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-medium text-xs">
                 {formatAmount(totalValue)} total value
               </span>
@@ -184,7 +186,7 @@ export function StockGroupsView({
             <DropdownMenuItem onClick={handleExportInventory} data-testid="menu-export-excel">
               <FileSpreadsheet className="h-4 w-4 mr-2" /> Export to Excel
             </DropdownMenuItem>
-            {!posUser && (
+            {canViewCost && (
               <DropdownMenuItem onClick={() => handlePrintWithOption(true)} data-testid="menu-export-pdf-cost">
                 <Printer className="h-4 w-4 mr-2" /> Export to PDF (with cost)
               </DropdownMenuItem>
@@ -301,7 +303,7 @@ export function StockGroupsView({
                 <th className="text-left px-4 py-3 font-medium">Name</th>
                 <th className="text-center px-4 py-3 font-medium">Items</th>
                 <th className="text-right px-4 py-3 font-medium">Total Qty (BL)</th>
-                {!posUser && (
+                {canViewCost && (
                   <>
                     <th className="text-right px-4 py-3 font-medium">Avg Rate</th>
                     <th className="text-right px-4 py-3 font-medium">Total Value</th>
@@ -330,7 +332,7 @@ export function StockGroupsView({
                     {Math.floor(g.totalQuantity).toLocaleString()}
                     <span className="ml-1 text-xs text-muted-foreground font-normal">BL</span>
                   </td>
-                  {!posUser && (
+                  {canViewCost && (
                     <>
                       <td className="px-4 py-3 text-right font-mono text-muted-foreground">
                         {formatAmount(g.averageRate)}
@@ -351,7 +353,7 @@ export function StockGroupsView({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {!posUser && (
+                        {canViewCost && (
                           <DropdownMenuItem
                             onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, true)}
                             data-testid={`menu-export-group-pdf-cost-${g.groupId}`}
@@ -381,7 +383,7 @@ export function StockGroupsView({
                   {Math.floor(filteredStockGroups.reduce((s, g) => s + g.totalQuantity, 0)).toLocaleString()}
                   <span className="ml-1 text-xs font-normal text-muted-foreground">BL</span>
                 </td>
-                {!posUser && (
+                {canViewCost && (
                   <>
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3 text-right font-mono font-bold">

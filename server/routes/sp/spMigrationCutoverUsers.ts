@@ -67,7 +67,11 @@ async function switchUserSessions(params: {
   return resultRows(result).length;
 }
 
-async function mapSourceRole(sourceId: number, targetId: number, sourceRole: Record<string, unknown>): Promise<any> {
+async function mapSourceRole(
+  sourceId: number,
+  targetId: number,
+  sourceRole: Record<string, unknown>
+): Promise<CutoverRoleSnapshot> {
   const location = sourceRole.assigned_location_id
     ? await resolveTargetLocation(sourceId, targetId, pn(sourceRole.assigned_location_id))
     : null;
@@ -80,10 +84,15 @@ async function mapSourceRole(sourceId: number, targetId: number, sourceRole: Rec
   }
 
   return {
-    role: sourceRole.role,
+    // Matches roleSnapshot() above field for field, so a mapped role and a
+    // snapshotted one are the same shape. `pos_station` is an integer column
+    // that this file has always snapshotted as a string; Postgres coerces it
+    // back on insert, and changing that would change the persisted JSON shape
+    // the rollback path reads, so it is left as is.
+    role: sourceRole.role == null ? null : String(sourceRole.role),
     assignedLocationId: location?.targetLocationId ?? null,
     cashAccountId,
-    posStation: sourceRole.pos_station ?? null,
+    posStation: sourceRole.pos_station == null ? null : String(sourceRole.pos_station),
     canSellNegativeStock: Boolean(sourceRole.can_sell_negative_stock),
     posViewOnly: Boolean(sourceRole.pos_view_only),
     daybookEditDays: pn(sourceRole.daybook_edit_days),
@@ -97,7 +106,15 @@ export async function moveUsersToTarget(
   sourceId: number,
   targetId: number,
   targetCompanyName: string
-): Promise<any> {
+): Promise<{
+  usersMoved: number;
+  targetRolesCreated: number;
+  targetRolesReused: number;
+  sessionsSwitched: number;
+  locationsCopied: number;
+  cashMappingsCopied: number;
+  developerRolesSkipped: number;
+}> {
   await ensureCutoverSchema();
   const sourceRolesResult = await db.execute(sql`
     SELECT * FROM user_company_roles
@@ -258,7 +275,7 @@ export async function restoreUsersToSource(
   sourceId: number,
   targetId: number,
   sourceCompanyName: string
-): Promise<any> {
+): Promise<{ sourceRolesRestored: number; targetRolesRemoved: number; sessionsSwitched: number }> {
   await ensureCutoverSchema();
   const changesResult = await db.execute(sql`
     SELECT * FROM sp_migration_cutover_role_changes

@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import "./mobile-browser-compat.css";
+import "./voucher-narration-cleanup.css";
 import { installClientObservability } from "./lib/clientObservability";
 import { ObservabilityErrorBoundary } from "./components/ObservabilityErrorBoundary";
 

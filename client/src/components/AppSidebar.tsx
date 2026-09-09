@@ -27,6 +27,7 @@ import {
   Bot,
   ShieldCheck,
   ArrowRight,
+  Replace,
 } from "lucide-react";
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
@@ -82,6 +83,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.sales,
     items: [
       { title: "POS", url: "/pos", icon: ShoppingCart },
+      { title: "POS Item Replacement", url: "/pos-item-replacement", icon: Replace },
       { title: "Sales Tools", url: "/sales-tools", icon: LayoutGrid },
     ],
   },
@@ -166,9 +168,15 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isAdmin = effectiveRole === "Admin" || effectiveRole === "Developer";
     const isDeveloper = effectiveRole === "Developer";
     const isOwner = effectiveRole === "Owner";
-    const featureKey = item.url === "/stock-in-sales-report" ? "sales_report" : ROUTE_TO_FEATURE[item.url];
+    const featureKey =
+      item.url === "/stock-in-sales-report"
+        ? "sales_report"
+        : item.url === "/pos-item-replacement"
+          ? "pos"
+          : ROUTE_TO_FEATURE[item.url];
 
     if (item.url === "/tracking") return ["Admin", "Developer", "Owner"].includes(effectiveRole);
+    if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
     if (
       item.url === "/factory/raw-stock" &&

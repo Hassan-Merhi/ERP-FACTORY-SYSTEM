@@ -18,7 +18,13 @@ import {
   shouldRequireProformaMembership,
   sumProformaQuantityLimit,
 } from "./proformaScanPolicy";
-import { factoryBales, customerProformaLines, customerOrders, customerOrderBales } from "@shared/schema";
+import {
+  factoryBales,
+  customerProformaLines,
+  customerOrders,
+  customerOrderBales,
+  customerOrderBaleRemovals,
+} from "@shared/schema";
 import { eq, and, or, sql, isNull } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 
@@ -138,6 +144,12 @@ export function registerOrderBaleScanRoutes(app: Express) {
               WHERE cob.order_id = ${orderId}
                 AND cob.bale_id = ${factoryBales.id}
             )`,
+            removedFromThisOrder: sql<boolean>`EXISTS (
+              SELECT 1
+              FROM ${customerOrderBaleRemovals} cobr
+              WHERE cobr.order_id = ${orderId}
+                AND cobr.bale_id = ${factoryBales.id}
+            )`,
           })
           .from(factoryBales)
           .where(
@@ -216,6 +228,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
           allowBypassOverload: req.body.allowBypassOverload === true,
+          isReinstatingRemovedBale: bale.removedFromThisOrder,
         });
 
         let priceUsed = bale.productSellingPrice || "0";
@@ -223,7 +236,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         if (order.proformaIdUsed) {
           // Membership and pricing always come from the proforma line. The
           // potentially expensive active-bale COUNT is only needed while the
-          // overload guard is actually enforced; confirmed/bypass scans use 0.
+          // overload guard is actually enforced; confirmed/bypass/reinstatement scans use 0.
           const currentCountExpression = enforceOverload
             ? sql<number>`(
                 SELECT COUNT(*)::int

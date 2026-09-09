@@ -686,14 +686,14 @@ export function registerFactoryInsuranceRoutes(app: Express) {
             entries: [
               {
                 ledgerAccountId: expenseAccount.id,
-                debitAmount: totalAmount.toFixed(2),
-                creditAmount: "0",
+                debitAmount: "0",
+                creditAmount: totalAmount.toFixed(2),
                 narration,
               },
               ...memberLedgers.map((member) => ({
                 ledgerAccountId: member.ledgerId,
-                debitAmount: "0",
-                creditAmount: member.amount.toFixed(2),
+                debitAmount: member.amount.toFixed(2),
+                creditAmount: "0",
                 narration,
               })),
             ],

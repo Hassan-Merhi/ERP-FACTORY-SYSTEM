@@ -10,6 +10,7 @@ import { registerHistoricalCurrencyGuardRoutes } from "./historicalCurrencyGuard
 import { registerHistoricalCurrencyRepairCenterRoutes } from "./historicalCurrencyRepairCenterRoutes";
 import { registerVoucherEntryCurrencyEditRoutes } from "./voucherEntryCurrencyEditRoutes";
 import { registerOpeningBalanceResolutionRoutes } from "./openingBalanceResolutionRoutes";
+import { registerGoldenCoastSystemAccountPresentation } from "./goldenCoastSystemAccountPresentation";
 
 export function registerLedgerRoutes(app: Express) {
   // This module registers before the legacy bank/account/report/voucher-entry routes.
@@ -17,6 +18,7 @@ export function registerLedgerRoutes(app: Express) {
   // the controlled repair center, explicit legacy resolution, and the dual-currency
   // editor here so existing URLs remain compatible.
   app.use(normalizeAccountOpeningBalance);
+  registerGoldenCoastSystemAccountPresentation(app);
   registerHistoricalCurrencyGuardRoutes(app);
   registerHistoricalCurrencyRepairCenterRoutes(app);
   registerAccountCurrencyRoutes(app);

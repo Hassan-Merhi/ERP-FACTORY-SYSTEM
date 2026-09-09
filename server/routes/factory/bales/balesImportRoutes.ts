@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
@@ -28,7 +28,7 @@ export function registerBalesImportRoutes(app: Express) {
   // Factory Import API Endpoints
   // ───────────────────────────────────────────────
 
-  app.post("/api/factory/import/suppliers", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/import/suppliers", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -90,7 +90,7 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/import/raw-stock", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/import/raw-stock", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -179,7 +179,7 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/import/bales", requireAuth, async (req: any, res: import("express").Response) => {
+  app.post("/api/factory/import/bales", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -199,7 +199,7 @@ export function registerBalesImportRoutes(app: Express) {
           errorCount: 0,
           totalWeightKg: "0",
           importedByUserId: String(req.session?.userId || ""),
-          importedByName: req.session?.userName || req.session?.username || null,
+          importedByName: req.session?.username || null,
         })
         .returning();
 
@@ -292,7 +292,7 @@ export function registerBalesImportRoutes(app: Express) {
   });
 
   // ── Bale Import Batches – list ─────────────────────────────────────────────
-  app.get("/api/factory/bale-import-batches", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/bale-import-batches", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -311,7 +311,7 @@ export function registerBalesImportRoutes(app: Express) {
   });
 
   // ── Bale Import Batches – bales in a batch ────────────────────────────────
-  app.get("/api/factory/bale-import-batches/:id/bales", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/bale-import-batches/:id/bales", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -411,7 +411,7 @@ export function registerBalesImportRoutes(app: Express) {
     return { suppliersProcessed, totalAllocatedKg, unmatchedKg };
   }
 
-  app.post("/api/factory/raw-stock/recalc-opening", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/raw-stock/recalc-opening", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -423,7 +423,7 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/import/opening-raw-stock", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post("/api/factory/import/opening-raw-stock", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -550,7 +550,7 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/import/template/:type", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/factory/import/template/:type", requireAuth, async (req: Request, res: Response) => {
     try {
       const type = req.params.type;
       let csv = "";

@@ -5,6 +5,8 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { asRecord, isNonEmptyString, toPositiveInteger } from "@shared/typeGuards";
 import { getClientDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -36,9 +38,10 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
     try {
       const rawEntryId = Number(req.params.entryId);
       if (isNaN(rawEntryId)) return res.status(400).json({ message: "Invalid entry ID" });
-      const session = req.session as any;
+      const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
-      const userId = session.userId || null;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const userId = session.userId ?? null;
       const { reason, description, amountCurrency, amountUsd, currencyCode, fxRateToUsd, txDate } = req.body;
 
       if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
@@ -46,10 +49,44 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       }
 
       const currentRole = (session.currentRole || session.role || "").toLowerCase();
-      const canEdit = ["admin", "owner", "developer"].includes(currentRole) || session.daybookEditDays > 0;
+      const canEdit = ["admin", "owner", "developer"].includes(currentRole) || (session.daybookEditDays ?? 0) > 0;
       if (!canEdit) return res.status(403).json({ message: "You do not have permission to edit daybook entries" });
 
-      let existing: ({ id: number; companyId: number; createdAt: Date; currencyCode: string; fxRateToUsd: string; description: string; effectiveDate: string | null; createdBy: string | null; referenceId: number | null; amountUsd: string; txDate: string; txType: string; referenceTable: string | null; metaJson: string | null; amountCurrency: string; }) | ({ id: number; companyId: number; txDate: string; txType: string; referenceId: number | null; referenceTable: string | null; description: string; metaJson: string | null; currencyCode: string; amountCurrency: string; fxRateToUsd: string; amountUsd: string; effectiveDate: string | null; createdAt: Date; createdBy: string | null; });
+      let existing:
+        | {
+            id: number;
+            companyId: number;
+            createdAt: Date;
+            currencyCode: string;
+            fxRateToUsd: string;
+            description: string;
+            effectiveDate: string | null;
+            createdBy: string | null;
+            referenceId: number | null;
+            amountUsd: string;
+            txDate: string;
+            txType: string;
+            referenceTable: string | null;
+            metaJson: string | null;
+            amountCurrency: string;
+          }
+        | {
+            id: number;
+            companyId: number;
+            txDate: string;
+            txType: string;
+            referenceId: number | null;
+            referenceTable: string | null;
+            description: string;
+            metaJson: string | null;
+            currencyCode: string;
+            amountCurrency: string;
+            fxRateToUsd: string;
+            amountUsd: string;
+            effectiveDate: string | null;
+            createdAt: Date;
+            createdBy: string | null;
+          };
       let realEntryId: number;
 
       if (rawEntryId < 0) {
@@ -113,7 +150,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
       const beforeJson = JSON.stringify(existing);
 
-      const updates: any = {};
+      const updates: PgUpdateSetSource<typeof factoryDaybookEntries> = {};
       if (description !== undefined) updates.description = description;
       if (amountCurrency !== undefined) updates.amountCurrency = String(amountCurrency);
       if (amountUsd !== undefined) updates.amountUsd = String(amountUsd);
@@ -138,7 +175,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
       // ── Sync description and date back to the source voucher so Accounts statements stay in sync ──
       if (updated.referenceTable === "vouchers" && updated.referenceId) {
-        const voucherUpdates: any = {};
+        const voucherUpdates: PgUpdateSetSource<typeof vouchers> = {};
         if (description !== undefined) voucherUpdates.description = description;
         if (txDate !== undefined) voucherUpdates.voucherDate = txDate;
         if (Object.keys(voucherUpdates).length > 0) {
@@ -178,7 +215,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const userId = session.userId || null;
+      const userId = session.userId ?? null;
 
       const currentRole = (session.currentRole || session.role || "").toLowerCase();
       if (!["admin", "owner", "developer"].includes(currentRole)) {
@@ -211,15 +248,18 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       }
 
       // Parse metaJson to determine exact source
-      let meta: any = {};
+      // metaJson is free-form persisted JSON, so it stays `unknown` until each
+      // field below is coerced; asRecord keeps a non-object payload from
+      // becoming property reads on a string or array.
+      let meta: Record<string, unknown> = {};
       try {
-        meta = JSON.parse(entry.metaJson || "{}");
+        meta = asRecord(JSON.parse(entry.metaJson || "{}")) ?? {};
       } catch {
         // Failure here is non-fatal and the surrounding flow continues deliberately.
       }
 
       // Resolve containerId from metaJson or txType + referenceId fallback
-      let containerId: number | null = meta.containerId ?? null;
+      let containerId: number | null = toPositiveInteger(meta.containerId) ?? null;
       if (!containerId) {
         if (entry.txType === "FREIGHT" || entry.txType === "DUTY" || entry.txType === "OTHER_CHARGE") {
           containerId = entry.referenceId;
@@ -248,7 +288,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       if (!container) return res.status(404).json({ message: "Container not found" });
 
       const beforeJson = JSON.stringify(entry);
-      const sourceType: string = meta.sourceType || entry.txType;
+      const sourceType: string = isNonEmptyString(meta.sourceType) ? meta.sourceType : entry.txType;
 
       await db.transaction(async (tx) => {
         // ── 1. Update the specific source record ────────────────────────────────
@@ -272,12 +312,8 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           if (newFxRate) {
             fx = String(newFxRate); // fresh explicit request input — trust it even if it equals 1
           } else {
-            const fallbackRaw = (container).fxRateToUsdOffload || container.fxRateToUsd;
-            const { fxRate: resolvedFx, looksSet } = resolveStoredFxRate(
-              ccy,
-              fallbackRaw,
-              (container).fxRateConfirmed
-            );
+            const fallbackRaw = container.fxRateToUsdOffload || container.fxRateToUsd;
+            const { fxRate: resolvedFx, looksSet } = resolveStoredFxRate(ccy, fallbackRaw, container.fxRateConfirmed);
             if (!looksSet) throw new UnresolvedExchangeRateError(ccy);
             fx = String(resolvedFx);
           }
@@ -293,7 +329,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
               .where(eq(factoryDaybookEntries.id, entryId));
           }
         } else if (sourceType === "COMMISSION" || entry.txType === "COMMISSION") {
-          const commId = meta.commissionId || entry.referenceId;
+          const commId = toPositiveInteger(meta.commissionId) ?? entry.referenceId;
           if (commId) {
             await tx
               .update(factoryContainerCommissions)
@@ -333,7 +369,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             .set({ otherCharges: String(parsedAmount), updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
         } else if (sourceType === "OFFLOAD_ADDITIONAL" || sourceType === "POST_OFFLOAD_ADDITIONAL") {
-          const chargeId = meta.chargeId;
+          const chargeId = toPositiveInteger(meta.chargeId) ?? null;
           if (!chargeId) throw new Error("Missing chargeId in metaJson — cannot update individual additional charge");
           await tx
             .update(factoryOffloadAdditionalCharges)
@@ -447,8 +483,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
   // DELETE /api/factory/daybook/entry/:id — Hard delete a non-voucher-backed entry (admin/developer only)
   app.delete("/api/factory/daybook/entry/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const session = req.session as any;
+      const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const role = (session.currentRole || session.role || "").toLowerCase();
       if (role !== "admin" && role !== "developer") {
         return res.status(403).json({ message: "Only Admin or Developer can permanently delete entries" });
@@ -479,8 +516,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
   // DELETE /api/factory/daybook/entry/:id/void — Void a voucher-backed daybook entry
   app.delete("/api/factory/daybook/entry/:id/void", requireAuth, async (req: Request, res: Response) => {
     try {
-      const session = req.session as any;
+      const session = req.session;
       const companyId = session.factoryCompanyId || session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const role = (session.currentRole || session.role || "").toLowerCase();
       if (role !== "admin" && role !== "owner" && role !== "developer") {
         return res.status(403).json({ message: "Only Admin or Owner can void vouchers" });

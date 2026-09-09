@@ -99,6 +99,7 @@ export const IntercompanyRequests = lazy(() => import("@/pages/IntercompanyReque
 export const POS = lazy(() => import("@/pages/pos/POS"));
 export const POSPage = lazy(() => import("@/pages/pos/POSPage"));
 export const POSImport = lazy(() => import("@/pages/pos/POSImport"));
+export const POSItemReplacement = lazy(() => import("@/pages/POSItemReplacement"));
 export const POSDaybook = lazy(() => import("@/pages/pos/POSDaybook"));
 export const POSDashboard = lazy(() => import("@/pages/pos/POSDashboard"));
 export const POSCustomers = lazy(() => import("@/pages/pos/POSCustomers"));

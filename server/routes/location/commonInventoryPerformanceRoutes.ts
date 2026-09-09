@@ -73,6 +73,10 @@ export function registerCommonInventoryPerformanceRoutes(app: Express): void {
     if (!req.query.page) return next();
 
     try {
+      // POS inventory access must stay on assigned-location routes. This
+      // company-wide paginated route includes cost and is therefore blocked.
+      if (req.user?.role === "POS") return res.status(403).json({ message: "Forbidden" });
+
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 

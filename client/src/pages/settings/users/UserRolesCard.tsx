@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +18,7 @@ import {
 import { Building2, Plus } from "lucide-react";
 import { RoleSummaryRow } from "./RoleSummaryRow";
 import { InlineRoleEditor } from "./InlineRoleEditor";
+import { PosInventoryCostAccessToggle } from "./PosInventoryCostAccessToggle";
 
 interface UserRolesCardProps {
   userId: string;
@@ -25,6 +27,7 @@ interface UserRolesCardProps {
 
 export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
   const { toast } = useToast();
+  const { selectedCompany } = useCompany();
   const [activeEditorRoleId, setActiveEditorRoleId] = useState<number | "new" | null>(null);
   const [roleToDelete, setRoleToDelete] = useState<any>(null);
 
@@ -161,6 +164,13 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
                 onEdit={() => setActiveEditorRoleId((prev) => (prev === role.id ? null : role.id))}
                 onDelete={() => setRoleToDelete(role)}
               />
+
+              {role.role === "POS" && Number(role.companyId) === Number(selectedCompany?.id) && (
+                <div className="mt-2">
+                  <PosInventoryCostAccessToggle userId={userId} companyId={Number(role.companyId)} />
+                </div>
+              )}
+
               {activeEditorRoleId === role.id && (
                 <div className="mt-2">
                   <InlineRoleEditor
