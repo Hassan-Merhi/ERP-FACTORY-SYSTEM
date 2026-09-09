@@ -53,6 +53,10 @@ interface CandidateResponse {
   capped: boolean;
 }
 
+interface LastSoldPriceResponse {
+  sellingPrice: string | null;
+}
+
 interface ReplacementResult {
   message: string;
   updatedVoucherIds: number[];
@@ -109,6 +113,31 @@ export default function POSItemReplacement() {
     refetchOnWindowFocus: false,
   });
 
+  const {
+    data: replacementLastSoldPriceData,
+    isLoading: replacementLastSoldPriceLoading,
+  } = useQuery<LastSoldPriceResponse>({
+    queryKey:
+      locationId && replacementItem
+        ? ["/api/pos/item-replacements/last-sold-price", locationId, replacementItem.id]
+        : [],
+    queryFn: async () => {
+      if (!locationId || !replacementItem) return { sellingPrice: null };
+      const params = new URLSearchParams({
+        locationId: String(locationId),
+        stockItemId: String(replacementItem.id),
+      });
+      const response = await fetch(`/api/pos/item-replacements/last-sold-price?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!response.ok) return { sellingPrice: null };
+      return response.json();
+    },
+    enabled: Boolean(locationId && replacementItem),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
   const candidateKey = [
     "/api/pos/item-replacements/candidates",
     locationId,
@@ -154,6 +183,7 @@ export default function POSItemReplacement() {
     [activeStockItems, sourceItem?.id]
   );
   const rows = candidateData?.rows ?? [];
+  const replacementLastSoldPrice = replacementLastSoldPriceData?.sellingPrice ?? null;
 
   const selectedReplacements = useMemo(() => {
     if (!replacementItem) return [];
@@ -199,6 +229,7 @@ export default function POSItemReplacement() {
       });
       setReplaceQuantities({});
       queryClient.invalidateQueries({ queryKey: ["/api/pos/item-replacements/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/item-replacements/last-sold-price"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stock-query"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sales-report"] });
@@ -305,6 +336,20 @@ export default function POSItemReplacement() {
                 rowIndex={0}
                 testIdPrefix="button-pos-replacement-target"
               />
+              {replacementItem && (
+                <div className="min-h-5 text-xs text-muted-foreground flex items-center gap-1.5">
+                  {replacementLastSoldPriceLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Last sold at this location:</span>
+                      <span className="font-mono font-medium text-foreground">
+                        {replacementLastSoldPrice === null ? "No prior sale" : displayMoney(replacementLastSoldPrice)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -393,7 +438,8 @@ export default function POSItemReplacement() {
                     <TableHead>Date</TableHead>
                     <TableHead>POS / Voucher</TableHead>
                     <TableHead className="text-right">Sold Qty</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">POS Price</TableHead>
+                    <TableHead className="text-right">New Item Last Sold</TableHead>
                     <TableHead className="w-[150px] text-right">Replace Qty</TableHead>
                     <TableHead className="text-right">Old Item Left</TableHead>
                   </TableRow>
@@ -414,6 +460,17 @@ export default function POSItemReplacement() {
                         </TableCell>
                         <TableCell className="text-right font-mono font-medium">{displayQty(row.quantity)}</TableCell>
                         <TableCell className="text-right font-mono">{displayMoney(row.sellingPrice)}</TableCell>
+                        <TableCell className="text-right">
+                          {!replacementItem ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : replacementLastSoldPriceLoading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin ml-auto" />
+                          ) : replacementLastSoldPrice === null ? (
+                            <span className="text-xs text-muted-foreground">No prior sale</span>
+                          ) : (
+                            <span className="font-mono">{displayMoney(replacementLastSoldPrice)}</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <Input

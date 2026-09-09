@@ -67,6 +67,22 @@ export const posItemReplacementTranslations = {
   posVoucher: { en: "POS / Voucher", ar: "نقطة البيع / السند", fr: "POS / Pièce" },
   soldQty: { en: "Sold Qty", ar: "الكمية المباعة", fr: "Qté vendue" },
   rate: { en: "Rate", ar: "السعر", fr: "Prix" },
+  posPrice: { en: "POS Price", ar: "سعر نقطة البيع", fr: "Prix POS" },
+  newItemLastSold: {
+    en: "New Item Last Sold",
+    ar: "آخر سعر بيع للصنف الجديد",
+    fr: "Dernier prix vendu du nouvel article",
+  },
+  lastSoldAtLocation: {
+    en: "Last sold at this location:",
+    ar: "آخر سعر بيع في هذا الموقع:",
+    fr: "Dernier prix vendu à cet emplacement :",
+  },
+  noPriorSale: {
+    en: "No prior sale",
+    ar: "لا توجد عملية بيع سابقة",
+    fr: "Aucune vente antérieure",
+  },
   replaceQty: { en: "Replace Qty", ar: "كمية الاستبدال", fr: "Qté à remplacer" },
   oldItemLeft: { en: "Old Item Left", ar: "المتبقي من الصنف القديم", fr: "Ancien article restant" },
   posSale: { en: "POS Sale", ar: "بيع نقطة بيع", fr: "Vente POS" },
@@ -121,6 +137,7 @@ const serverMessageTranslations = [
   },
   { en: "No company selected", ar: "لم يتم اختيار شركة", fr: "Aucune société sélectionnée" },
   { en: "Invalid filters", ar: "عوامل التصفية غير صالحة", fr: "Filtres non valides" },
+  { en: "Access denied: Invalid location", ar: "تم رفض الوصول: موقع غير صالح", fr: "Accès refusé : emplacement non valide" },
   { en: "Invalid replacement request", ar: "طلب الاستبدال غير صالح", fr: "Demande de remplacement non valide" },
   {
     en: "At least one replacement is required",

@@ -1,6 +1,7 @@
 import { type Express } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
+import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
@@ -15,6 +16,11 @@ const candidateQuerySchema = z.object({
   stockItemId: z.coerce.number().int().positive(),
   from: z.string().optional(),
   to: z.string().optional(),
+});
+
+const lastSoldPriceQuerySchema = z.object({
+  locationId: z.coerce.number().int().positive(),
+  stockItemId: z.coerce.number().int().positive(),
 });
 
 const replacementSchema = z.object({
@@ -71,6 +77,50 @@ export function registerPosItemReplacementRoutes(app: Express): void {
       logger.error("POS item replacement candidate lookup failed", {
         module: "pos",
         action: "itemReplacementCandidates",
+        companyId: req.session.currentCompanyId,
+        userId: req.session.userId,
+        error,
+      });
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/pos/item-replacements/last-sold-price", requireAuth, async (req, res) => {
+    try {
+      if (!(await ensureErpCorrectionAccess(req, res))) return;
+      const parsed = lastSoldPriceQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid filters" });
+      }
+
+      const companyId = req.session.currentCompanyId!;
+      const { locationId, stockItemId } = parsed.data;
+      const location = await storage.getLocationById(locationId);
+      if (!location || location.companyId !== companyId) {
+        return res.status(403).json({ message: "Access denied: Invalid location" });
+      }
+
+      const result = await pool.query<{ selling_price: string }>(
+        `SELECT si.selling_price
+           FROM sales_items si
+           INNER JOIN vouchers v ON si.voucher_id = v.id
+          WHERE v.company_id = $1
+            AND v.location_id = $2
+            AND v.voucher_type = 'Sales'
+            AND v.deleted_at IS NULL
+            AND si.stock_item_id = $3
+            AND COALESCE(si.quantity::numeric, 0) > 0
+          ORDER BY v.voucher_date DESC, v.id DESC, si.created_at DESC, si.id DESC
+          LIMIT 1`,
+        [companyId, locationId, stockItemId]
+      );
+
+      res.setHeader("Cache-Control", "private, no-cache");
+      return res.json({ sellingPrice: result.rows[0]?.selling_price ?? null });
+    } catch (error: unknown) {
+      logger.error("POS item replacement last-sold-price lookup failed", {
+        module: "pos",
+        action: "itemReplacementLastSoldPrice",
         companyId: req.session.currentCompanyId,
         userId: req.session.userId,
         error,
