@@ -1589,16 +1589,6 @@
         0,
         0
       ],
-      "server/lib/httpTrackingScraper.ts": [
-        8,
-        0,
-        0
-      ],
-      "server/lib/maerskDirectScraper.ts": [
-        10,
-        0,
-        0
-      ],
       "server/lib/parcelsAppScraper.ts": [
         3,
         0,
@@ -1656,16 +1646,6 @@
       ],
       "server/routes/admin/deleted-items/list.ts": [
         1,
-        0,
-        0
-      ],
-      "server/routes/admin/import-export/files.ts": [
-        7,
-        0,
-        0
-      ],
-      "server/routes/admin/import-export/spreadsheets.ts": [
-        8,
         0,
         0
       ],
@@ -2239,11 +2219,6 @@
         0,
         0
       ],
-      "server/routes/import/po-import.ts": [
-        6,
-        0,
-        0
-      ],
       "server/routes/import/silent-transfer.ts": [
         1,
         0,
@@ -2694,11 +2669,6 @@
         0,
         0
       ],
-      "server/services/sp-sales-form/generate.ts": [
-        0,
-        8,
-        0
-      ],
       "server/services/sp/spInventoryIntegrity.ts": [
         1,
         0,
@@ -2717,6 +2687,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1445
+    "typeEscapeCeiling": 1398
   }
 }

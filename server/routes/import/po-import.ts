@@ -23,46 +23,7 @@ import {
 } from "../../services/security/parentCompanyPostingScope";
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { supplierService } from "../suppliers/supplierService";
-
-/**
- * The shape this route requires of the `preview` payload posted back from the
- * import wizard.
- *
- * `preview` arrives on `req.body`, so it is client-supplied and unvalidated;
- * the handlers below previously reached into it through `(p: any)` and
- * `items as any[]`. Declaring what is actually read - and nothing more - means
- * a payload the wizard stops sending is a compile error here rather than an
- * `undefined` that reaches a purchase order total.
- */
-interface PoImportPreviewItem {
-  poNumber: string;
-  barcode: string;
-  itemName: string;
-  quantity: number;
-  rate: number;
-  lineTotal: number;
-  currency?: string;
-  stockItemId?: number | null;
-}
-
-interface PoImportPreviewCharges {
-  freight?: number;
-  surcharge?: number;
-  fumigation?: number;
-  documentCharges?: number;
-  discount?: number;
-  otherCharges?: number;
-}
-
-interface PoImportPreviewContainer {
-  containerNumber: string;
-  items: PoImportPreviewItem[];
-  charges: PoImportPreviewCharges;
-  itemsCount: number;
-  itemsTotal: number;
-  chargesTotal: number;
-  grandTotal: number;
-}
+import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -115,39 +76,13 @@ export function registerPoImportRoutes(app: Express) {
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
       // Validate all items in the preview
-      const containerPreview = (preview as PoImportPreviewContainer[]).find(
-        (p) => p.containerNumber === containerNumber
-      );
+      const containerPreview = findPreviewContainer(preview, containerNumber);
       if (!containerPreview) {
         errors.push("Container data not found in preview");
       } else {
-        const seenBarcodes = new Set<string>();
-
-        for (const item of containerPreview.items) {
-          // Check for duplicate barcodes in the import
-          if (item.barcode && seenBarcodes.has(item.barcode)) {
-            errors.push(`Duplicate barcode in import: ${item.barcode}`);
-          } else if (item.barcode) {
-            seenBarcodes.add(item.barcode);
-          }
-
-          // Try to find stock item by code/alias first, then by name
-          let stockItem = null;
-          if (item.barcode) {
-            stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
-          }
-          if (!stockItem && item.itemName) {
-            stockItem = allStockItems.find((si) => si.name === item.itemName);
-          }
-
-          if (!stockItem) {
-            if (item.barcode) {
-              errors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
-            } else {
-              errors.push(`Item not found by name: ${item.itemName}`);
-            }
-          }
-        }
+        errors.push(
+          ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
+        );
 
         // Validate parent freight account when freight is present and paid by parent
         const containerFreight = containerPreview.charges?.freight || 0;
@@ -225,48 +160,17 @@ export function registerPoImportRoutes(app: Express) {
       // Get all stock items for validation
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
-      // Validate all items in the preview
-      const containerPreview = (preview as PoImportPreviewContainer[]).find(
-        (p) => p.containerNumber === containerNumber
-      );
-      // The validation endpoint reports this as an error and stops; this one
-      // used to walk straight into containerPreview.items and throw a
-      // TypeError mid-import, surfacing as a 500 after partial work. Typing the
-      // payload made the unguarded lookup visible.
+      // Validate all items in the preview. The validation endpoint reports a
+      // missing container as an error and stops; this one used to walk straight
+      // into containerPreview.items and throw a TypeError mid-import, surfacing
+      // as a 500 after partial work. Typing the payload made that visible.
+      const containerPreview = findPreviewContainer(preview, containerNumber);
       if (!containerPreview) {
         return res.status(400).json({ message: "Container data not found in preview" });
       }
-      if (!containerPreview) {
-        validationErrors.push("Container data not found in preview");
-      } else {
-        const seenBarcodes = new Set<string>();
-
-        for (const item of containerPreview.items) {
-          // Check for duplicate barcodes in the import
-          if (item.barcode && seenBarcodes.has(item.barcode)) {
-            validationErrors.push(`Duplicate barcode in import: ${item.barcode}`);
-          } else if (item.barcode) {
-            seenBarcodes.add(item.barcode);
-          }
-
-          // Try to find stock item by code/alias first, then by name
-          let stockItem = null;
-          if (item.barcode) {
-            stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
-          }
-          if (!stockItem && item.itemName) {
-            stockItem = allStockItems.find((si) => si.name === item.itemName);
-          }
-
-          if (!stockItem) {
-            if (item.barcode) {
-              validationErrors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
-            } else {
-              validationErrors.push(`Item not found by name: ${item.itemName}`);
-            }
-          }
-        }
-      }
+      validationErrors.push(
+        ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
+      );
 
       // Reject import if validation fails
       if (validationErrors.length > 0) {
