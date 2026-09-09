@@ -76,10 +76,11 @@ export function registerPoImportRoutes(app: Express) {
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
       // Validate all items in the preview
-      const containerPreview = findPreviewContainer(preview, containerNumber);
-      if (!containerPreview) {
+      const parsedPreview = findPreviewContainer(preview, containerNumber);
+      if (!parsedPreview) {
         errors.push("Container data not found in preview");
       } else {
+        const containerPreview = parsedPreview.container;
         errors.push(
           ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
         );
@@ -164,9 +165,18 @@ export function registerPoImportRoutes(app: Express) {
       // missing container as an error and stops; this one used to walk straight
       // into containerPreview.items and throw a TypeError mid-import, surfacing
       // as a 500 after partial work. Typing the payload made that visible.
-      const containerPreview = findPreviewContainer(preview, containerNumber);
-      if (!containerPreview) {
+      const parsedPreview = findPreviewContainer(preview, containerNumber);
+      if (!parsedPreview) {
         return res.status(400).json({ message: "Container data not found in preview" });
+      }
+      const containerPreview = parsedPreview.container;
+      // This endpoint writes these figures, so a payload that did not carry them
+      // as readable numbers is refused rather than summed into NaN.
+      for (const line of parsedPreview.linesWithUnreadableMoney) {
+        validationErrors.push(`Row ${line}: quantity, rate and line total must all be numbers`);
+      }
+      for (const total of parsedPreview.unreadableTotals) {
+        validationErrors.push(`Container total ${total} is missing or not a number`);
       }
       validationErrors.push(
         ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))

@@ -33,10 +33,16 @@ const container = {
   grandTotal: 120,
 };
 
+/** The parsed container, for the assertions that only care about its content. */
+function parseContainer(preview: unknown, containerNumber: string) {
+  const parsed = findPreviewContainer(preview, containerNumber);
+  return parsed === null ? null : parsed.container;
+}
+
 describe("findPreviewContainer", () => {
   it("returns the entry matching the requested container", () => {
     const other = { ...container, containerNumber: "OTHER0000001" };
-    const found = findPreviewContainer([other, container], "MSKU1234567");
+    const found = parseContainer([other, container], "MSKU1234567");
 
     expect(found?.containerNumber).toBe("MSKU1234567");
     expect(found?.items).toHaveLength(1);
@@ -46,7 +52,7 @@ describe("findPreviewContainer", () => {
   });
 
   it("coerces money fields sent as numeric strings, so totals add rather than concatenate", () => {
-    const found = findPreviewContainer(
+    const found = parseContainer(
       [
         {
           ...container,
@@ -89,35 +95,65 @@ describe("findPreviewContainer", () => {
     expect(findPreviewContainer([{ ...container, items: "nope" }], "MSKU1234567")).toBeNull();
   });
 
-  it("returns null when a line's money fields cannot be read", () => {
+  it("reports, rather than rejects, a line whose money fields cannot be read", () => {
+    // The validate endpoint is called with previews that legitimately carry no
+    // quantities yet, so the payload must still parse; the import endpoint
+    // refuses on this list instead of summing undefined into NaN.
     for (const bad of [{ lineTotal: undefined }, { lineTotal: "abc" }, { quantity: null }, { rate: {} }]) {
-      expect(findPreviewContainer([{ ...container, items: [{ ...item, ...bad }] }], "MSKU1234567")).toBeNull();
+      const parsed = findPreviewContainer([{ ...container, items: [{ ...item, ...bad }] }], "MSKU1234567");
+
+      expect(parsed).not.toBeNull();
+      expect(parsed?.linesWithUnreadableMoney).toEqual([1]);
+      // Never NaN — an unreadable money field reads as 0.
+      expect(Number.isNaN(parsed!.container.items[0].lineTotal)).toBe(false);
+      expect(Number.isNaN(parsed!.container.items[0].quantity)).toBe(false);
+      expect(Number.isNaN(parsed!.container.items[0].rate)).toBe(false);
     }
   });
 
-  it("returns null when a container total cannot be read, rather than writing NaN", () => {
+  it("names only the lines whose money is unreadable", () => {
+    const parsed = findPreviewContainer(
+      [{ ...container, items: [item, { ...item, lineTotal: undefined }, item] }],
+      "MSKU1234567"
+    );
+
+    expect(parsed?.linesWithUnreadableMoney).toEqual([2]);
+  });
+
+  it("reports a container total that cannot be read, rather than writing NaN", () => {
     for (const key of ["itemsTotal", "chargesTotal", "grandTotal"]) {
-      expect(findPreviewContainer([{ ...container, [key]: undefined }], "MSKU1234567")).toBeNull();
-      expect(findPreviewContainer([{ ...container, [key]: "not-a-number" }], "MSKU1234567")).toBeNull();
+      for (const bad of [undefined, "not-a-number"]) {
+        const parsed = findPreviewContainer([{ ...container, [key]: bad }], "MSKU1234567");
+
+        expect(parsed?.unreadableTotals).toEqual([key]);
+        expect(Number.isNaN(parsed!.container[key as "itemsTotal"])).toBe(false);
+      }
     }
+  });
+
+  it("reports nothing unreadable for a complete payload", () => {
+    const parsed = findPreviewContainer([container], "MSKU1234567");
+
+    expect(parsed?.linesWithUnreadableMoney).toEqual([]);
+    expect(parsed?.unreadableTotals).toEqual([]);
   });
 
   it("accepts an entry with no charges block, treating it as no charges", () => {
-    const found = findPreviewContainer([{ ...container, charges: undefined }], "MSKU1234567");
+    const found = parseContainer([{ ...container, charges: undefined }], "MSKU1234567");
 
     expect(found).not.toBeNull();
     expect(found?.charges).toEqual({});
   });
 
   it("keeps absent charges absent rather than defaulting them to zero", () => {
-    const found = findPreviewContainer([{ ...container, charges: { freight: 100 } }], "MSKU1234567");
+    const found = parseContainer([{ ...container, charges: { freight: 100 } }], "MSKU1234567");
 
     expect(found?.charges).toEqual({ freight: 100 });
     expect(found?.charges.surcharge).toBeUndefined();
   });
 
   it("falls back to the line count when itemsCount is missing", () => {
-    const found = findPreviewContainer(
+    const found = parseContainer(
       [{ ...container, items: [item, { ...item, barcode: "BC-2" }], itemsCount: undefined }],
       "MSKU1234567"
     );
@@ -125,11 +161,32 @@ describe("findPreviewContainer", () => {
     expect(found?.itemsCount).toBe(2);
   });
 
-  it("normalises optional line strings and a missing stock item id", () => {
-    const found = findPreviewContainer(
-      [{ ...container, items: [{ quantity: 1, rate: 1, lineTotal: 1 }] }],
+  it("stringifies numeric PO numbers and barcodes rather than dropping them", () => {
+    // The wizard builds this payload from spreadsheet cells, so a numeric PO
+    // number arrives as a number. Dropping it would collapse every line into
+    // one PO group.
+    const found = parseContainer(
+      [
+        {
+          ...container,
+          items: [
+            { ...item, poNumber: 1001, barcode: 8801234 },
+            { ...item, poNumber: 1002, barcode: 8805678 },
+          ],
+        },
+      ],
       "MSKU1234567"
     );
+
+    expect(found?.items.map((line) => line.poNumber)).toEqual(["1001", "1002"]);
+    expect(found?.items.map((line) => line.barcode)).toEqual(["8801234", "8805678"]);
+
+    const groups = new Set(found!.items.map((line) => line.poNumber));
+    expect(groups.size).toBe(2);
+  });
+
+  it("normalises optional line strings and a missing stock item id", () => {
+    const found = parseContainer([{ ...container, items: [{ quantity: 1, rate: 1, lineTotal: 1 }] }], "MSKU1234567");
 
     expect(found?.items[0]).toMatchObject({
       poNumber: "",

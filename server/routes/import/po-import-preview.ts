@@ -43,37 +43,55 @@ export interface PoImportPreviewContainer {
   grandTotal: number;
 }
 
-/** A trimmed string from an unknown field, or `""` when the field is absent or not a string. */
+/**
+ * A trimmed string from an unknown field, or `""` when the field is absent.
+ *
+ * Numbers and booleans are stringified rather than dropped: the import wizard
+ * builds this payload from spreadsheet cells, so a numeric PO number or barcode
+ * arrives as a number. These values were previously used raw — as object keys
+ * when grouping by PO number, and interpolated into messages — so stringifying
+ * matches what they already became at the point of use.
+ */
 function optionalString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  if (typeof value === "boolean") return String(value);
+  return "";
 }
 
 /**
  * One preview line. Money fields go through `toFiniteNumber`, so a quantity or
- * line total the wizard sends as a numeric string becomes a number here rather
- * than string-concatenating into the purchase-order totals downstream. A line
- * whose money fields cannot be read is rejected outright.
+ * line total the wizard sends as a numeric string becomes a number rather than
+ * string-concatenating into the purchase-order totals downstream.
+ *
+ * A money field the payload does not carry reads as 0 here and is reported
+ * through `linesWithUnreadableMoney` rather than rejecting the whole payload:
+ * the validate endpoint exists to report per-line problems, and is called with
+ * previews that legitimately carry no quantities yet. The import endpoint, which
+ * writes these figures, refuses the payload when that list is non-empty.
  */
-function parsePreviewItem(value: unknown): PoImportPreviewItem | null {
+function parsePreviewItem(value: unknown): { item: PoImportPreviewItem; moneyReadable: boolean } | null {
   if (!isRecord(value)) return null;
 
   const quantity = toFiniteNumber(value.quantity);
   const rate = toFiniteNumber(value.rate);
   const lineTotal = toFiniteNumber(value.lineTotal);
-  if (quantity === undefined || rate === undefined || lineTotal === undefined) return null;
 
   const stockItemId = toFiniteNumber(value.stockItemId);
   const currency = optionalString(value.currency);
 
   return {
-    poNumber: optionalString(value.poNumber),
-    barcode: optionalString(value.barcode),
-    itemName: optionalString(value.itemName),
-    quantity,
-    rate,
-    lineTotal,
-    ...(currency ? { currency } : {}),
-    stockItemId: stockItemId === undefined ? null : stockItemId,
+    item: {
+      poNumber: optionalString(value.poNumber),
+      barcode: optionalString(value.barcode),
+      itemName: optionalString(value.itemName),
+      quantity: quantity ?? 0,
+      rate: rate ?? 0,
+      lineTotal: lineTotal ?? 0,
+      ...(currency ? { currency } : {}),
+      stockItemId: stockItemId === undefined ? null : stockItemId,
+    },
+    moneyReadable: quantity !== undefined && rate !== undefined && lineTotal !== undefined,
   };
 }
 
@@ -89,38 +107,60 @@ function parsePreviewCharges(value: unknown): PoImportPreviewCharges {
   return charges;
 }
 
+/** A parsed preview entry, alongside what the payload failed to carry as money. */
+export interface PreviewContainerParse {
+  container: PoImportPreviewContainer;
+  /** 1-based line numbers whose quantity, rate or line total was not a readable number. */
+  linesWithUnreadableMoney: number[];
+  /** Container total names that were not readable numbers. */
+  unreadableTotals: string[];
+}
+
 /**
- * The posted preview entry for one container, or `null` when the payload does
- * not contain a usable entry for it. Callers turn `null` into a 400 rather than
+ * The posted preview entry for one container, or `null` when the payload carries
+ * no usable entry for it. Callers turn `null` into a rejection rather than
  * walking into the entry and throwing.
+ *
+ * Parsing is deliberately lenient about missing money so the validate endpoint
+ * can still report the per-line problems it exists to report; what could not be
+ * read is returned alongside, for the import endpoint to refuse on.
  */
-export function findPreviewContainer(preview: unknown, containerNumber: string): PoImportPreviewContainer | null {
+export function findPreviewContainer(preview: unknown, containerNumber: string): PreviewContainerParse | null {
   if (!Array.isArray(preview)) return null;
 
   const entry = preview.find((candidate) => isRecord(candidate) && candidate.containerNumber === containerNumber);
   if (!isRecord(entry)) return null;
-
   if (!Array.isArray(entry.items)) return null;
+
   const items: PoImportPreviewItem[] = [];
-  for (const raw of entry.items) {
-    const item = parsePreviewItem(raw);
-    if (!item) return null;
-    items.push(item);
+  const linesWithUnreadableMoney: number[] = [];
+  for (const [index, raw] of entry.items.entries()) {
+    const parsed = parsePreviewItem(raw);
+    if (!parsed) return null;
+    items.push(parsed.item);
+    if (!parsed.moneyReadable) linesWithUnreadableMoney.push(index + 1);
   }
 
   const itemsTotal = toFiniteNumber(entry.itemsTotal);
   const chargesTotal = toFiniteNumber(entry.chargesTotal);
   const grandTotal = toFiniteNumber(entry.grandTotal);
-  if (itemsTotal === undefined || chargesTotal === undefined || grandTotal === undefined) return null;
+  const unreadableTotals: string[] = [];
+  if (itemsTotal === undefined) unreadableTotals.push("itemsTotal");
+  if (chargesTotal === undefined) unreadableTotals.push("chargesTotal");
+  if (grandTotal === undefined) unreadableTotals.push("grandTotal");
 
   return {
-    containerNumber,
-    items,
-    charges: parsePreviewCharges(entry.charges),
-    itemsCount: toFiniteNumber(entry.itemsCount) ?? items.length,
-    itemsTotal,
-    chargesTotal,
-    grandTotal,
+    container: {
+      containerNumber,
+      items,
+      charges: parsePreviewCharges(entry.charges),
+      itemsCount: toFiniteNumber(entry.itemsCount) ?? items.length,
+      itemsTotal: itemsTotal ?? 0,
+      chargesTotal: chargesTotal ?? 0,
+      grandTotal: grandTotal ?? 0,
+    },
+    linesWithUnreadableMoney,
+    unreadableTotals,
   };
 }
 

@@ -1684,11 +1684,6 @@
         0,
         0
       ],
-      "server/routes/bankAssetRoutes.ts": [
-        6,
-        0,
-        0
-      ],
       "server/routes/barcodeImageBandwidthMiddleware.ts": [
         1,
         0,
@@ -2687,6 +2682,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1398
+    "typeEscapeCeiling": 1392
   }
 }
