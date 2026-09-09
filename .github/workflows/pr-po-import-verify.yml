@@ -1,0 +1,21 @@
+name: PR PO Import Verify
+
+on:
+  push:
+    branches:
+      - fix/po-import-non-parent-suppliers
+
+permissions:
+  contents: read
+
+jobs:
+  startup-schema:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Startup schema integrity
+        run: npx vitest run tests/startup-schema-integrity.test.ts
