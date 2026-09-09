@@ -1,0 +1,46 @@
+name: PR Company Parent Verify
+
+on:
+  push:
+    branches:
+      - fix/company-parent-configuration
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+  PGSSLMODE: disable
+  NODE_ENV: test
+  SESSION_SECRET: company-parent-pr-verify
+  ENABLE_SCHEDULERS: "false"
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d heliumdb"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - run: node node_modules/drizzle-kit/bin.cjs push --force
+      - run: npx vitest run tests/company-parent-link.test.ts
+      - run: npm run type-check
+      - run: node build.mjs
