@@ -1,0 +1,43 @@
+/*
+ * Wave 2 Factory floor display helpers.
+ *
+ * Width-only breakpoints misclassify landscape phones (812–932 CSS px wide)
+ * as tablet/desktop. Keep the established md+ tablet layout, but switch back to
+ * the touch-first card UI when the primary pointer is coarse and the viewport
+ * is short enough to be a landscape phone.
+ */
+.wave2-mobile-card-view {
+  display: block;
+}
+
+.wave2-desktop-table-view {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .wave2-mobile-card-view {
+    display: none;
+  }
+
+  .wave2-desktop-table-view {
+    display: block;
+  }
+}
+
+@media (pointer: coarse) and (max-height: 500px) {
+  .wave2-mobile-card-view {
+    display: block !important;
+  }
+
+  .wave2-desktop-table-view {
+    display: none !important;
+  }
+
+  .wave2-touch-action {
+    opacity: 1 !important;
+  }
+
+  .wave2-touch-overlay {
+    background-color: rgb(0 0 0 / 0.2) !important;
+  }
+}
