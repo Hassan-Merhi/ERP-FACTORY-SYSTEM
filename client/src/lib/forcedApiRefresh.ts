@@ -35,6 +35,16 @@ export function isManualRefreshWindowActive(now = Date.now()): boolean {
   return now <= manualRefreshUntil;
 }
 
+export function forcedRefreshRequestInit(input: RequestInfo | URL, init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+  headers.set("x-bypass-request-storm-guard", "1");
+  return {
+    ...(init ?? {}),
+    headers,
+    cache: "reload",
+  };
+}
+
 export function installForcedApiRefresh(): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const state = window as unknown as Window & typeof globalThis & { __forcedApiRefreshInstalled?: boolean };
@@ -55,14 +65,7 @@ export function installForcedApiRefresh(): void {
   const guardedFetch = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     if (!isManualRefreshWindowActive() || !isApiGet(input, init)) return guardedFetch(input, init);
-
-    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-    headers.set("x-bypass-request-storm-guard", "1");
-    return guardedFetch(input, {
-      ...(init ?? {}),
-      headers,
-      cache: "reload",
-    });
+    return guardedFetch(input, forcedRefreshRequestInit(input, init));
   };
 }
 
