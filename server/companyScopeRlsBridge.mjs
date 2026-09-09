@@ -176,3 +176,8 @@ if (!globalThis[INSTALL_KEY]) {
 // Historical worker-bonus account repair must run after the RLS helper functions
 // above exist so its dedicated transaction can enter explicit maintenance scope.
 await import("./workerBonusExpenseRepairBridge.mjs");
+
+// Reconcile VERIFIED/PENDING factory charges that were saved before customers
+// received ledger accounts. This is idempotent and runs under its own maintenance
+// transaction so old missing CHARGE-PRE vouchers are repaired on deployment.
+await import("./factoryChargeVoucherRepairBridge.mjs");
