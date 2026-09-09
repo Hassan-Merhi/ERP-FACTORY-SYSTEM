@@ -2304,11 +2304,6 @@
         0,
         0
       ],
-      "server/routes/posImportRoutes.ts": [
-        5,
-        0,
-        0
-      ],
       "server/routes/productionBaleRoutes.ts": [
         1,
         1,
@@ -2682,6 +2677,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1392
+    "typeEscapeCeiling": 1387
   }
 }

@@ -1,6 +1,6 @@
 /** POS Excel-import routes. */
 import type { Express } from "express";
-import { getErrorMessage } from "../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import {
   addInventoryValues,
@@ -10,6 +10,7 @@ import {
   multiplyInventoryValues,
   subtractInventoryValues,
   toInventoryDecimal,
+  type InventoryNumericInput,
 } from "../lib/inventoryMath";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
@@ -25,7 +26,63 @@ import { generateInvoicePdf } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getErpExportVisibility } from "../helpers/exportVisibility";
 import { sendWhatsAppFileByUploadPos, sendWhatsAppFileToChatIdPos } from "../services/whatsappService";
-import { vouchers, voucherEntries, salesItems, companies, inventory, stockItemLocationPrices } from "@shared/schema";
+import {
+  vouchers,
+  voucherEntries,
+  salesItems,
+  companies,
+  inventory,
+  stockItemLocationPrices,
+  type Voucher,
+} from "@shared/schema";
+
+/**
+ * One POS-import line: what the parse endpoint emits, and what the validate and
+ * import endpoints read back off `req.body`.
+ *
+ * These were carried as `any[]`, so a spreadsheet column the parser stopped
+ * recognising reached the sales voucher as `undefined` rather than as a row the
+ * importer skipped.
+ */
+interface PosImportItem {
+  rowNum: number;
+  barcode: string;
+  quantity: number;
+  rate: number;
+  value: number;
+}
+
+/** A POS-import line annotated by the validate endpoint. */
+interface ValidatedPosImportItem extends PosImportItem {
+  error?: string;
+  warning?: string;
+  stockItemId?: number;
+  stockItemName?: string;
+  stockItemUom?: string;
+  costPrice?: number;
+  currentStock?: number;
+  remainingStock?: number;
+}
+
+/**
+ * The first of the given columns the row actually carries. Spreadsheet headers
+ * vary in case and wording, and cells arrive as text or numbers, so the value is
+ * returned as the sheet parser yielded it — the callers below test it for
+ * truthiness, where a numeric 0 and the string "0" differ.
+ */
+function firstPresent(row: Record<string, unknown>, ...columns: string[]): unknown {
+  for (const column of columns) {
+    const value = row[column];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return undefined;
+}
+
+/** The same, narrowed to what the inventory math accepts; anything else reads as absent. */
+function firstNumeric(row: Record<string, unknown>, ...columns: string[]): InventoryNumericInput {
+  const value = firstPresent(row, ...columns);
+  return typeof value === "number" || typeof value === "string" ? value : undefined;
+}
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -37,23 +94,23 @@ export function registerPosImportRoutes(app: Express) {
 
       const workbook = await readExcel(req.file.buffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = sheetToJson(worksheet) as any[];
+      const rows = sheetToJson(worksheet);
       if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
 
-      const items: any[] = [];
+      const items: PosImportItem[] = [];
       let totalValue = toInventoryDecimal(0);
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
-        const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = toInventoryDecimal(row.Quantity || row.quantity || row.Qty || row.qty);
-        const rate = toInventoryDecimal(row.Rate || row.rate || row.Price || row.price);
+        const barcode = firstPresent(row, "Barcode", "barcode", "Code", "code");
+        const quantity = toInventoryDecimal(firstNumeric(row, "Quantity", "quantity", "Qty", "qty"));
+        const rate = toInventoryDecimal(firstNumeric(row, "Rate", "rate", "Price", "price"));
         if (!barcode || !quantity.isPositive() || !rate.isPositive()) continue;
 
         const itemValue = multiplyInventoryValues(quantity, rate);
         totalValue = addInventoryValues(totalValue, itemValue);
         items.push({
           rowNum: index + 2,
-          barcode: barcode.toString().trim(),
+          barcode: String(barcode).trim(),
           quantity: quantity.toNumber(),
           rate: rate.toNumber(),
           value: itemValue.toNumber(),
@@ -77,7 +134,7 @@ export function registerPosImportRoutes(app: Express) {
 
       const errors: string[] = [];
       const warnings: string[] = [];
-      const validatedItems: any[] = [];
+      const validatedItems: ValidatedPosImportItem[] = [];
       const location = await storage.getLocationById(locationId);
       if (!location) {
         errors.push("Selected location not found");
@@ -178,9 +235,10 @@ export function registerPosImportRoutes(app: Express) {
       });
 
       let totalSales = toInventoryDecimal(0);
-      let createdVoucher: any = null;
 
-      await db.transaction(async (tx) => {
+      // Taking the transaction's return value rather than assigning an outer
+      // `let` keeps the voucher's type: TypeScript cannot see that a callback ran.
+      const createdVoucher = await db.transaction(async (tx): Promise<Voucher> => {
         const voucherNumber = `SALES-${Date.now()}`;
         const [voucher] = await tx
           .insert(vouchers)
@@ -199,9 +257,7 @@ export function registerPosImportRoutes(app: Express) {
         for (const item of items) {
           const stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
           if (!stockItem) {
-            const inputError: any = new Error(`Stock item not found for barcode: ${item.barcode}`);
-            inputError.httpStatus = 400;
-            throw inputError;
+            throw new HttpError(400, `Stock item not found for barcode: ${item.barcode}`);
           }
 
           const [inventoryRecord] = await tx
@@ -294,7 +350,7 @@ export function registerPosImportRoutes(app: Express) {
           narration: `Sales Revenue - ${items.length} items`,
         });
         await tx.update(vouchers).set({ totalAmount: totalSalesAmount }).where(eq(vouchers.id, voucher.id));
-        createdVoucher = voucher;
+        return voucher;
       });
 
       res.json({
@@ -304,7 +360,7 @@ export function registerPosImportRoutes(app: Express) {
         totalSales: inventoryMoney(totalSales),
       });
 
-      if (createdVoucher && location.whatsappGroupChatId) {
+      if (location.whatsappGroupChatId) {
         const companyId = req.session.currentCompanyId!;
         const chatId = location.whatsappGroupChatId;
         const locationName = location.name;
@@ -372,7 +428,7 @@ export function registerPosImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
-      if ((error as { httpStatus?: number }).httpStatus === 400) {
+      if (error instanceof HttpError && error.statusCode === 400) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
       logger.error("POS Import error:", { error });
