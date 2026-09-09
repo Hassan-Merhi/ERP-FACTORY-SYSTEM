@@ -70,9 +70,7 @@ function parseWorkerIds(value: unknown): number[] {
     }
   })();
 
-  return parsed
-    .map(Number)
-    .filter((id) => Number.isInteger(id) && id > 0);
+  return parsed.map(Number).filter((id) => Number.isInteger(id) && id > 0);
 }
 
 export function registerFactoryStaffTrackingRoutes(app: Express): void {
@@ -124,61 +122,33 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         .where(eq(factoryWorkers.companyId, companyId))
         .orderBy(factoryWorkers.fullName);
 
-      const emps = await db
-        .select({
-          id: employees.id,
-          firstName: employees.firstName,
-          lastName: employees.lastName,
-          code: employees.code,
-          department: employees.department,
-          joinDate: employees.joinDate,
-          active: employees.active,
-        })
-        .from(employees)
-        .where(
-          and(
-            eq(employees.companyId, companyId),
-            eq(employees.employeeType, "Employee"),
-            sql`${employees.deletedAt} IS NULL`
-          )
-        )
-        .orderBy(employees.firstName, employees.lastName);
-
+      // Production Targets and Attendance intentionally share the exact same
+      // manually-created Production Planner worker groups. Ungrouped workers and
+      // ERP employees must not leak into either tracking surface.
+      const groupResult = await db.execute(sql`
+        SELECT name, worker_ids AS "workerIds"
+        FROM factory_worker_categories
+        WHERE company_id = ${companyId}
+        ORDER BY id
+      `);
+      const groups = resultRows(groupResult) as Array<{ name: string; workerIds: unknown }>;
       const workerGroupNames = new Map<number, string[]>();
-      if (query.page === "production") {
-        const groupResult = await db.execute(sql`
-          SELECT name, worker_ids AS "workerIds"
-          FROM factory_worker_categories
-          WHERE company_id = ${companyId}
-          ORDER BY id
-        `);
-        const groups = resultRows(groupResult) as Array<{ name: string; workerIds: unknown }>;
-        for (const group of groups) {
-          for (const workerId of parseWorkerIds(group.workerIds)) {
-            const names = workerGroupNames.get(workerId) ?? [];
-            if (!names.includes(group.name)) names.push(group.name);
-            workerGroupNames.set(workerId, names);
-          }
+      for (const group of groups) {
+        for (const workerId of parseWorkerIds(group.workerIds)) {
+          const names = workerGroupNames.get(workerId) ?? [];
+          if (!names.includes(group.name)) names.push(group.name);
+          workerGroupNames.set(workerId, names);
         }
       }
 
       const includedWorkers = workers.filter((person) => {
-        const belongsToProductionGroup = workerGroupNames.has(person.id);
+        const belongsToSavedGroup = workerGroupNames.has(person.id);
         const belongsInPeriod =
           savedMap.has(`worker:${person.id}`) || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd));
-        return query.page === "production" ? belongsToProductionGroup && belongsInPeriod : belongsInPeriod;
+        return belongsToSavedGroup && belongsInPeriod;
       });
-      const includedEmployees =
-        query.page === "production"
-          ? []
-          : emps.filter(
-              (person) =>
-                savedMap.has(`employee:${person.id}`) ||
-                (person.active && joinedByPeriodEnd(person.joinDate, query.periodEnd))
-            );
 
       const workerAttendance = new Map<number, string>();
-      const employeeAttendance = new Map<number, string>();
       if (query.periodType === "daily") {
         const workerIds = includedWorkers.map((worker) => worker.id);
         if (workerIds.length > 0) {
@@ -193,19 +163,6 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
               )
             );
           rows.forEach((row) => workerAttendance.set(row.workerId, row.status));
-        }
-
-        const employeeIds = includedEmployees.map((employee) => employee.id);
-        if (employeeIds.length > 0) {
-          const attendanceResult = await db.execute(sql`
-            SELECT employee_id AS "employeeId", status
-            FROM employee_attendance
-            WHERE company_id = ${companyId}
-              AND attendance_date = ${query.periodStart}
-              AND employee_id = ANY(${sqlArray(employeeIds)})
-          `);
-          const rows = resultRows(attendanceResult) as Array<{ employeeId: number; status: string }>;
-          rows.forEach((row) => employeeAttendance.set(Number(row.employeeId), row.status));
         }
       }
 
@@ -244,7 +201,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           : attendanceStatus === "Absent"
             ? "Absent"
             : "Present";
-        const groupName = query.page === "production" ? (workerGroupNames.get(worker.id)?.[0] ?? "") : "";
+        const groupName = workerGroupNames.get(worker.id)?.[0] ?? "";
+
         return {
           personType: "worker" as const,
           personId: worker.id,
@@ -266,39 +224,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         };
       });
 
-      const employeeRows = includedEmployees.map((employee) => {
-        const savedRow = savedMap.get(`employee:${employee.id}`);
-        const attendanceStatus = employeeAttendance.get(employee.id);
-        const defaultStatus: TrackingStatus = isNew(employee.joinDate, query.periodStart, query.periodEnd)
-          ? "New"
-          : attendanceStatus === "Absent"
-            ? "Absent"
-            : "Present";
-        return {
-          personType: "employee" as const,
-          personId: employee.id,
-          name: `${employee.firstName} ${employee.lastName}`.trim(),
-          code: employee.code,
-          groupName: "",
-          category: savedRow?.category ?? employee.department ?? "",
-          targetBales:
-            savedRow?.targetBales === null || savedRow?.targetBales === undefined ? null : Number(savedRow.targetBales),
-          producedBales:
-            savedRow?.producedBales === null || savedRow?.producedBales === undefined
-              ? null
-              : Number(savedRow.producedBales),
-          status: savedRow?.status ?? defaultStatus,
-          notes: savedRow?.notes ?? "",
-          active: employee.active,
-        };
-      });
-
       res.json({
         page: query.page,
         periodType: query.periodType,
         periodStart: query.periodStart,
         periodEnd: query.periodEnd,
-        rows: [...workerRows, ...employeeRows],
+        rows: workerRows,
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
