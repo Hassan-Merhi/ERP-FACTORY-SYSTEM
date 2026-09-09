@@ -5,6 +5,15 @@
  * without starting a WebSocket server or touching the database.
  */
 
+export function normalizeBroadcastCompanyIds(values: readonly unknown[]): number[] {
+  const ids = new Set<number>();
+  for (const value of values) {
+    const companyId = Number(value);
+    if (Number.isSafeInteger(companyId) && companyId > 0) ids.add(companyId);
+  }
+  return [...ids];
+}
+
 /**
  * Whether a socket belonging to one or more authorized company contexts should
  * receive a message scoped to `messageCompanyId`.
