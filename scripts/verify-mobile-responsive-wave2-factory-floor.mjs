@@ -20,6 +20,7 @@ const sources = {
   relabeling: await read("client/src/pages/factory/FactoryBaleRelabeling.tsx"),
   allocation: await read("client/src/pages/factory/FactoryStockAllocationV5.tsx"),
   locationProduct: await read("client/src/pages/factory/FactoryLocationInventoryProductView.tsx"),
+  mobileCompat: await read("client/src/mobile-browser-compat.css"),
 };
 
 function requireTokens(name, source, tokens) {
@@ -111,6 +112,15 @@ requireTokens("Stock Allocation V5", sources.allocation, [
   'data-testid={`button-v5-mobile-expand-${row.articleCode}`}',
 ]);
 
+requireTokens("Landscape phone override", sources.mobileCompat, [
+  "@media (hover: none) and (pointer: coarse) and (max-height: 500px)",
+  '[data-testid="raw-stock-mobile-list"]',
+  '[data-testid="mix-batch-mobile-list"]',
+  '[data-testid="v5-mobile-list"]',
+  "display: block !important",
+  "display: none !important",
+]);
+
 requireTokens("Location Inventory reference implementation", sources.locationProduct, ["renderMobileCard"]);
 
 for (const [name, source] of Object.entries(sources)) {
@@ -141,8 +151,9 @@ console.log(
         "Factory Import",
         "Bale Product Images",
         "Location Inventory regression",
+        "Landscape phone preservation",
       ],
-      desktopBreakpointPreserved: "md+ unless the original page already used lg for split panes",
+      desktopBreakpointPreserved: "md+ except short-height coarse-pointer landscape phones",
       businessLogicChanged: false,
       sqlRequired: false,
     },
