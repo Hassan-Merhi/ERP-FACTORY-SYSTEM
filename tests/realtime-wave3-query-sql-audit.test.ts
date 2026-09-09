@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error - repository audit is intentionally plain ESM so it can also
-// run directly with Node outside Vitest.
+// @ts-ignore - repository audit is intentionally plain ESM so it can also run
+// directly with Node outside Vitest; some TS configs infer .mjs without an error.
 import { auditRealtimeWave3 } from "../scripts/audit-realtime-wave3.mjs";
 
 describe("Realtime Refresh Wave 3 certification", () => {
