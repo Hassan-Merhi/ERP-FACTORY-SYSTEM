@@ -41,6 +41,7 @@ import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import type { ApplyItem, ParsedRow, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
+
 export default function FactoryBaleRelabeling() {
   const { toast } = useToast();
   const { formatDisplayDate } = useDateFormat();
@@ -194,59 +195,63 @@ export default function FactoryBaleRelabeling() {
   const [, navigate] = useLocation();
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0 flex-col" data-testid="factory-bale-relabeling-page">
       {/* Sub-nav tabs */}
-      <div className="border-b px-6 flex items-center gap-1 pt-4 flex-shrink-0">
-        <button
-          className="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-primary text-primary"
-          data-testid="tab-relabeling"
-        >
-          Bale Relabeling
-        </button>
-        <button
-          onClick={() => navigate("/factory/bale-relabeling/wipers-re-entry")}
-          className="px-4 py-2 text-sm font-medium rounded-t-md text-muted-foreground hover-elevate"
-          data-testid="tab-wipers-re-entry"
-        >
-          Wipers Re-Entry by Date
-        </button>
+      <div className="flex-shrink-0 overflow-x-auto border-b px-3 pt-3 overscroll-x-contain sm:px-6 sm:pt-4">
+        <div className="flex min-w-max items-center gap-1">
+          <button
+            className="shrink-0 rounded-t-md border-b-2 border-primary px-4 py-2 text-sm font-medium text-primary"
+            data-testid="tab-relabeling"
+          >
+            Bale Relabeling
+          </button>
+          <button
+            onClick={() => navigate("/factory/bale-relabeling/wipers-re-entry")}
+            className="shrink-0 rounded-t-md px-4 py-2 text-sm font-medium text-muted-foreground hover-elevate"
+            data-testid="tab-wipers-re-entry"
+          >
+            Wipers Re-Entry by Date
+          </button>
+        </div>
       </div>
 
-      <div className="space-y-6 p-6 overflow-y-auto flex-1">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
+      <div className="flex-1 min-w-0 space-y-4 overflow-y-auto p-3 sm:space-y-6 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
             <PageHeader
               title="Bale Relabeling"
               subtitle="Import bales from Excel and generate new reference codes with printable labels"
             />
           </div>
           {step !== "upload" && (
-            <Button variant="outline" onClick={handleReset} data-testid="button-start-over">
+            <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto" data-testid="button-start-over">
               <RefreshCw className="h-4 w-4 mr-2" /> Start Over
             </Button>
           )}
         </div>
 
         {/* Progress indicator */}
-        <div className="flex items-center gap-2 text-sm">
-          {(["upload", "validate", "done"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${step === s ? "bg-primary text-primary-foreground border-primary" : step > s || (step === "done" && s !== "done") ? "bg-muted text-muted-foreground border-muted" : "text-muted-foreground border-muted"}`}
-              >
-                <span>{i + 1}</span>
-                <span>{s === "upload" ? "Upload" : s === "validate" ? "Validate" : "Apply & Print"}</span>
+        <div className="-mx-1 overflow-x-auto px-1 pb-1 overscroll-x-contain" data-testid="relabeling-progress-strip">
+          <div className="flex min-w-max items-center gap-2 text-sm">
+            {(["upload", "validate", "done"] as Step[]).map((s, i) => (
+              <div key={s} className="flex shrink-0 items-center gap-2">
+                <div
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium ${step === s ? "bg-primary text-primary-foreground border-primary" : step > s || (step === "done" && s !== "done") ? "bg-muted text-muted-foreground border-muted" : "text-muted-foreground border-muted"}`}
+                >
+                  <span>{i + 1}</span>
+                  <span>{s === "upload" ? "Upload" : s === "validate" ? "Validate" : "Apply & Print"}</span>
+                </div>
+                {i < 2 && <div className="h-px w-4 bg-muted-foreground/30" />}
               </div>
-              {i < 2 && <div className="h-px w-4 bg-muted-foreground/30" />}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* ── STEP 1: Upload ── */}
         {step === "upload" && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-4 w-4" />
                   Upload Excel File
@@ -255,6 +260,7 @@ export default function FactoryBaleRelabeling() {
                   variant="outline"
                   size="sm"
                   onClick={downloadExcelTemplate}
+                  className="w-full sm:w-auto"
                   data-testid="button-download-template"
                 >
                   <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -263,7 +269,7 @@ export default function FactoryBaleRelabeling() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
+              <p className="break-words text-sm text-muted-foreground">
                 Upload a <code>.xlsx</code>, <code>.xls</code>, or <code>.csv</code> file with a column containing
                 current bale reference codes. Accepted column names: <code>current_reference_code</code>,{" "}
                 <code>reference_code</code>, <code>barcode</code>, <code>ref</code>, etc.
@@ -272,7 +278,7 @@ export default function FactoryBaleRelabeling() {
               {/* Template hint */}
               <div className="flex items-start gap-2 rounded-md bg-muted/50 border p-3 text-sm text-muted-foreground">
                 <FileSpreadsheet className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
-                <span>
+                <span className="min-w-0 break-words">
                   Not sure of the format? Click <strong>Download Template</strong> above to get a pre-formatted Excel
                   file. Fill in your bale reference codes in the <code>current_reference_code</code> column and upload
                   it here.
@@ -280,12 +286,12 @@ export default function FactoryBaleRelabeling() {
               </div>
 
               <div
-                className="border-2 border-dashed rounded-md p-8 text-center cursor-pointer hover-elevate"
+                className="cursor-pointer rounded-md border-2 border-dashed p-5 text-center hover-elevate sm:p-8"
                 onClick={() => fileRef.current?.click()}
                 data-testid="drop-zone-upload"
               >
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm font-medium">{fileName || "Click to select a file"}</p>
+                <p className="break-all text-sm font-medium">{fileName || "Click to select a file"}</p>
                 {fileName && <p className="text-xs text-muted-foreground mt-1">{parsedRows.length} row(s) parsed</p>}
               </div>
               <input
@@ -300,17 +306,17 @@ export default function FactoryBaleRelabeling() {
               {parseError && (
                 <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>{parseError}</span>
+                  <span className="min-w-0 break-words">{parseError}</span>
                 </div>
               )}
 
               {parsedRows.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  <div className="flex items-start gap-2 text-sm text-muted-foreground sm:items-center">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 sm:mt-0" />
                     <span>{parsedRows.length} reference code(s) found in file</span>
                   </div>
-                  <div className="max-h-48 overflow-y-auto border rounded-md">
+                  <div className="max-h-48 overflow-auto rounded-md border">
                     <Table>
                       <TableHeader className="sticky top-0 z-30 bg-background">
                         <TableRow>
@@ -338,6 +344,7 @@ export default function FactoryBaleRelabeling() {
                   <Button
                     onClick={() => validateMutation.mutate(parsedRows)}
                     disabled={validateMutation.isPending}
+                    className="w-full sm:w-auto"
                     data-testid="button-validate"
                   >
                     {validateMutation.isPending ? "Validating..." : "Validate References"}
@@ -352,7 +359,7 @@ export default function FactoryBaleRelabeling() {
         {step === "validate" && (
           <div className="space-y-4">
             {/* Summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-4">
               {[
                 { label: "Total Rows", value: validationResults.length, color: "" },
                 { label: "Valid", value: validRows.length, color: "text-green-600" },
@@ -366,7 +373,9 @@ export default function FactoryBaleRelabeling() {
                 <Card key={label}>
                   <CardContent className="pt-4 pb-3">
                     <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className={`text-lg font-bold truncate ${color}`}>{value}</p>
+                    <p className={`truncate text-lg font-bold ${color}`} title={String(value)}>
+                      {value}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
@@ -378,7 +387,7 @@ export default function FactoryBaleRelabeling() {
                 <CardTitle className="text-base">Validation Results</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-80 overflow-auto">
                   <Table>
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
@@ -441,11 +450,11 @@ export default function FactoryBaleRelabeling() {
               <CardContent className="space-y-4">
                 <div>
                   <Label className="text-sm font-medium mb-2 block">Print Formats (select one or more)</Label>
-                  <div className="flex flex-wrap gap-4">
+                  <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:gap-4">
                     {(["A4", "A5", "STICKER"] as const).map((fmt) => (
                       <label
                         key={fmt}
-                        className="flex items-center gap-2 cursor-pointer select-none"
+                        className="flex cursor-pointer select-none items-center gap-2"
                         data-testid={`checkbox-format-${fmt}`}
                       >
                         <Checkbox checked={printFormats.has(fmt)} onCheckedChange={() => toggleFormat(fmt)} />
@@ -469,7 +478,7 @@ export default function FactoryBaleRelabeling() {
                       onValueChange={(v) => setDesignColor(v as A4DesignColor)}
                       data-testid="select-design-color"
                     >
-                      <SelectTrigger className="max-w-xs">
+                      <SelectTrigger className="w-full sm:max-w-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -489,21 +498,22 @@ export default function FactoryBaleRelabeling() {
             </Card>
 
             {validRows.length === 0 && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4" />
+              <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive sm:items-center">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
                 No valid rows found. Please fix your file and start over.
               </div>
             )}
 
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button
                 onClick={() => applyMutation.mutate()}
                 disabled={validRows.length === 0 || applyMutation.isPending}
+                className="w-full sm:w-auto"
                 data-testid="button-apply"
               >
                 {applyMutation.isPending ? "Applying..." : `Generate New Codes & Apply (${validRows.length} bales)`}
               </Button>
-              <Button variant="outline" onClick={handleReset} data-testid="button-cancel">
+              <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto" data-testid="button-cancel">
                 Cancel
               </Button>
             </div>
@@ -513,13 +523,13 @@ export default function FactoryBaleRelabeling() {
         {/* ── STEP 3: Done ── */}
         {step === "done" && applyResult && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 rounded-md border border-green-600/30 bg-green-600/10 p-4 text-sm text-green-700 dark:text-green-400">
-              <CheckCircle className="h-5 w-5" />
+            <div className="flex items-start gap-2 rounded-md border border-green-600/30 bg-green-600/10 p-4 text-sm text-green-700 dark:text-green-400 sm:items-center">
+              <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 sm:mt-0" />
               <span className="font-medium">{applyResult.items.length} bales successfully relabeled.</span>
             </div>
 
             {/* Summary cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3">
               <Card>
                 <CardContent className="pt-4 pb-3">
                   <p className="text-xs text-muted-foreground">Bales Relabeled</p>
@@ -529,7 +539,7 @@ export default function FactoryBaleRelabeling() {
               <Card>
                 <CardContent className="pt-4 pb-3">
                   <p className="text-xs text-muted-foreground">Format</p>
-                  <p className="text-2xl font-bold">{printFormatLabel}</p>
+                  <p className="break-all text-2xl font-bold">{printFormatLabel}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -541,13 +551,14 @@ export default function FactoryBaleRelabeling() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-2 flex-wrap">
-              <Button onClick={handlePrint} data-testid="button-print-labels">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button onClick={handlePrint} className="w-full sm:w-auto" data-testid="button-print-labels">
                 <Printer className="h-4 w-4 mr-2" /> Print Labels ({printFormatLabel})
               </Button>
               <Button
                 variant="outline"
                 onClick={() => downloadCsv(applyResult.items, `relabeling-${applyResult.sessionId}.csv`)}
+                className="w-full sm:w-auto"
                 data-testid="button-export-csv"
               >
                 <Download className="h-4 w-4 mr-2" /> Export Result CSV
@@ -585,7 +596,7 @@ export default function FactoryBaleRelabeling() {
                           {fmt === "A4" ? "A4 (Full Page)" : fmt === "A5" ? "A5 (Half Page)" : 'Sticker (3"×2")'}
                         </p>
                       )}
-                      <div className="flex gap-4 overflow-x-auto pb-2">
+                      <div className="flex max-w-full gap-4 overflow-x-auto pb-2 overscroll-x-contain">
                         {applyResult.items.slice(0, 4).map((item, i) => (
                           <LabelPreviewCard key={i} item={item} designColor={designColor} printFormat={fmt} />
                         ))}
@@ -609,7 +620,7 @@ export default function FactoryBaleRelabeling() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-80 overflow-auto">
                   <Table>
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
@@ -639,7 +650,7 @@ export default function FactoryBaleRelabeling() {
         )}
 
         {/* ── History panel ── */}
-        <div className="border rounded-md">
+        <div className="overflow-hidden rounded-md border">
           <button
             type="button"
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover-elevate"
@@ -650,40 +661,42 @@ export default function FactoryBaleRelabeling() {
             {showHistory ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showHistory && (
-            <div className="border-t px-4 pb-4 pt-2">
+            <div className="border-t px-3 pb-4 pt-2 sm:px-4">
               {sessions.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">No sessions yet</p>
               ) : (
-                <Table>
-                  <TableHeader className="sticky top-0 z-30 bg-background">
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>File</TableHead>
-                      <TableHead>Format</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Valid</TableHead>
-                      <TableHead>Invalid</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sessions.map((s) => (
-                      <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
-                        <TableCell className="text-sm">{formatDisplayDate(s.createdAt?.split("T")[0] || "")}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground truncate max-w-40">
-                          {s.uploadedFilename || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">
-                            {s.printFormat}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{s.totalRows}</TableCell>
-                        <TableCell className="text-sm text-green-600">{s.validRows}</TableCell>
-                        <TableCell className="text-sm text-destructive">{s.invalidRows}</TableCell>
+                <div className="max-w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-30 bg-background">
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>File</TableHead>
+                        <TableHead>Format</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Valid</TableHead>
+                        <TableHead>Invalid</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {sessions.map((s) => (
+                        <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
+                          <TableCell className="text-sm">{formatDisplayDate(s.createdAt?.split("T")[0] || "")}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground truncate max-w-40">
+                            {s.uploadedFilename || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-xs">
+                              {s.printFormat}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{s.totalRows}</TableCell>
+                          <TableCell className="text-sm text-green-600">{s.validRows}</TableCell>
+                          <TableCell className="text-sm text-destructive">{s.invalidRows}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </div>
           )}
