@@ -7,14 +7,24 @@ import {
 
 describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
-    expect(backendMessagesPhase7Translations).toHaveLength(643);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(643);
+    expect(backendMessagesPhase7Translations).toHaveLength(644);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(644);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
       expect(entry.ar.trim()).not.toBe("");
       expect(entry.fr.trim()).not.toBe("");
     }
+  });
+
+  it("translates the PO-import preview rejection", () => {
+    expect(translatePhase7BackendMessageText("Container data not found in preview", "ar")).toBe(
+      "لم يتم العثور على بيانات الحاوية في المعاينة"
+    );
+    expect(translatePhase7BackendMessageText("Container data not found in preview", "fr")).toBe(
+      "Données du conteneur introuvables dans l\u2019aperçu"
+    );
+    expect(isPhase7BackendMessageText("Container data not found in preview")).toBe(true);
   });
 
   it("translates authentication, import, approval and operations messages", () => {
