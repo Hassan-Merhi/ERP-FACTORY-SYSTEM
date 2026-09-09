@@ -89,7 +89,12 @@ import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhas
 
 function usesDedicatedRealtimeEvents(url: string): boolean {
   const path = url.split("?", 1)[0];
-  return path === "/api/chat" || path.startsWith("/api/chat/");
+  return (
+    path === "/api/chat" ||
+    path.startsWith("/api/chat/") ||
+    path === "/api/user-presence" ||
+    path.startsWith("/api/user-presence/")
+  );
 }
 
 function registerWriteInvalidationSignal(app: Express): void {
