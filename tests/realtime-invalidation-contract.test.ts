@@ -43,6 +43,11 @@ describe("realtime invalidation contract", () => {
     });
   });
 
+  it("keeps stock reference writes separate from transactional stock writes", () => {
+    expect(classifyRealtimeWrite("/api/stock-groups/3", {})).toEqual({ topics: ["reference"] });
+    expect(classifyRealtimeWrite("/api/stock-items/3", {})).toEqual({ topics: ["inventory"] });
+  });
+
   it("classifies location and inventory writes and extracts a location from the path", () => {
     expect(classifyRealtimeWrite("/api/locations/12/inventory/adjust", {})).toEqual({
       topics: ["inventory"],
@@ -59,9 +64,12 @@ describe("realtime invalidation contract", () => {
     expect(classifyRealtimeWrite("/api/accounts/77", {})).toEqual({ topics: ["accounting"] });
   });
 
-  it("classifies payroll before the broader factory family", () => {
+  it("classifies accounting-aware Factory writes before the broader factory family", () => {
     expect(classifyRealtimeWrite("/api/factory/payrolls/8", {})).toEqual({
-      topics: ["factory", "payroll"],
+      topics: ["factory", "payroll", "accounting"],
+    });
+    expect(classifyRealtimeWrite("/api/factory/daybook/88", {})).toEqual({
+      topics: ["factory", "accounting"],
     });
     expect(classifyRealtimeWrite("/api/factory/ground-scan", { locationId: 5 })).toEqual({
       topics: ["factory"],
@@ -81,6 +89,7 @@ describe("realtime invalidation contract", () => {
   it("classifies reference and communication writes", () => {
     expect(classifyRealtimeWrite("/api/suppliers/3", {})).toEqual({ topics: ["reference"] });
     expect(classifyRealtimeWrite("/api/chat/messages", {})).toEqual({ topics: ["communications"] });
+    expect(classifyRealtimeWrite("/api/presence/heartbeat", {})).toEqual({ topics: ["communications"] });
   });
 
   it("leaves unknown writes unclassified so clients use blanket fallback", () => {
