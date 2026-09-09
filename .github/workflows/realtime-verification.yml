@@ -1,0 +1,153 @@
+name: Realtime Verification
+
+on:
+  pull_request:
+    paths:
+      - "client/src/hooks/use-ws-invalidation.ts"
+      - "client/src/lib/queryPolicies.ts"
+      - "client/src/lib/liveQueryRuntimePolicy.ts"
+      - "client/src/lib/forcedApiRefresh.ts"
+      - "client/src/pages/InventoryHub.tsx"
+      - "client/src/pages/LocationInventory.tsx"
+      - "client/src/pages/location-inventory/**"
+      - "server/routes/applicationRoutes.ts"
+      - "server/routes/performance/readMicrocache.ts"
+      - "shared/realtimeInvalidation.ts"
+      - "scripts/prepare-phase7-browser-e2e-fixture.mjs"
+      - "scripts/run-wave6-realtime-browser-e2e.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/realtime-verification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: realtime-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  realtime-browser-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      ERP_E2E_DISPOSABLE_DB: "1"
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      ERP_REALTIME_E2E_BUDGET_MS: "4000"
+      ERP_E2E_USERNAME: wave6_ci_${{ github.run_id }}
+      ERP_E2E_POS_USERNAME: wave6_pos_${{ github.run_id }}
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.19.0"
+          cache: npm
+
+      - name: Generate ephemeral browser credentials
+        shell: bash
+        run: |
+          node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const entries = [
+            ["SESSION_SECRET", crypto.randomBytes(48).toString("hex")],
+            ["ERP_E2E_PASSWORD", crypto.randomBytes(32).toString("hex")],
+            ["ERP_E2E_POS_PASSWORD", crypto.randomBytes(32).toString("hex")],
+          ];
+          fs.appendFileSync(process.env.GITHUB_ENV, entries.map(([key, value]) => `${key}=${value}\n`).join(""));
+          NODE
+
+      - run: npm ci --ignore-scripts
+
+      - name: Install Chrome
+        run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+
+      - name: Verify Wave 6 realtime unit contracts
+        run: |
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts \
+            tests/ui/ws-invalidation-traffic.test.tsx \
+            tests/ui/realtime-wave5-cache-policy.test.ts
+
+      - name: Production build
+        run: |
+          npm run prebuild
+          node --max-old-space-size=4096 node_modules/vite/bin/vite.js build
+          node scripts/build-server.mjs
+          node scripts/verify-server-bundle.mjs
+          node scripts/verify-runtime-dependencies.mjs
+
+      - name: Prepare disposable realtime fixture
+        run: |
+          node node_modules/drizzle-kit/bin.cjs push --force
+          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+
+      - name: Run two-session realtime browser verification
+        run: |
+          mkdir -p artifacts/wave6-realtime-startup
+          npm start > artifacts/wave6-realtime-startup/server.log 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
+              > artifacts/wave6-realtime-startup/health-db.json; then
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat artifacts/wave6-realtime-startup/server.log
+              exit 1
+            fi
+            if [ "$attempt" = "180" ]; then
+              cat artifacts/wave6-realtime-startup/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          node scripts/run-wave6-realtime-browser-e2e.mjs
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat artifacts/wave6-realtime-startup/server.log || true
+
+      - name: Upload realtime verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wave6-realtime-verification-${{ github.sha }}
+          path: |
+            artifacts/wave6-realtime-e2e
+            artifacts/wave6-realtime-startup
+            artifacts/phase7-browser-e2e/fixture.json
+          if-no-files-found: warn
+          retention-days: 14
