@@ -13,9 +13,9 @@ describe("Mobile Wave 2 Factory floor workflows", () => {
     expect(raw).toContain('data-testid="raw-stock-mobile-list"');
     expect(raw).toContain("space-y-3 md:hidden");
     expect(raw).toContain("md:block");
-    expect(raw).toContain('data-testid={`button-adjust-mobile-${row.supplierId}`}');
-    expect(raw).toContain('data-testid={`button-deduct-mobile-${row.supplierId}`}');
-    expect(raw).toContain('data-testid={`button-batch-mobile-${row.supplierId}`}');
+    expect(raw).toContain("data-testid={`button-adjust-mobile-${row.supplierId}`}");
+    expect(raw).toContain("data-testid={`button-deduct-mobile-${row.supplierId}`}");
+    expect(raw).toContain("data-testid={`button-batch-mobile-${row.supplierId}`}");
 
     expect(mixes).toContain('data-testid="mix-batch-mobile-list"');
     expect(mixes).toContain("space-y-3 md:hidden");
@@ -64,7 +64,7 @@ describe("Mobile Wave 2 Factory floor workflows", () => {
     expect(allocationMobile).toContain('data-testid="v5-mobile-list"');
     expect(allocationMobile).toContain("md:hidden");
     expect(allocation).toContain("md:block");
-    expect(allocationMobile).toContain('data-testid={`button-v5-mobile-expand-${row.articleCode}`}');
+    expect(allocationMobile).toContain("data-testid={`button-v5-mobile-expand-${row.articleCode}`}");
 
     expect(tracking).toContain("flex flex-col gap-2 min-[420px]:flex-row");
     expect(tracking).toContain("grid grid-cols-1 gap-x-6 gap-y-2 text-sm min-[420px]:grid-cols-2");

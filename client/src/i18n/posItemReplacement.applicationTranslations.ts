@@ -137,7 +137,11 @@ const serverMessageTranslations = [
   },
   { en: "No company selected", ar: "لم يتم اختيار شركة", fr: "Aucune société sélectionnée" },
   { en: "Invalid filters", ar: "عوامل التصفية غير صالحة", fr: "Filtres non valides" },
-  { en: "Access denied: Invalid location", ar: "تم رفض الوصول: موقع غير صالح", fr: "Accès refusé : emplacement non valide" },
+  {
+    en: "Access denied: Invalid location",
+    ar: "تم رفض الوصول: موقع غير صالح",
+    fr: "Accès refusé : emplacement non valide",
+  },
   { en: "Invalid replacement request", ar: "طلب الاستبدال غير صالح", fr: "Demande de remplacement non valide" },
   {
     en: "At least one replacement is required",
@@ -226,12 +230,12 @@ const serverMessageTranslations = [
   // audit and the rendered string. The trailing plural-suffix capture is English
   // grammar and is deliberately unused by the Arabic and French templates.
   {
-    en: "${displayQty(result.replacedQuantity)} qty replaced across ${result.updatedVoucherIds.length} sale${result.updatedVoucherIds.length === 1 ? \"\" : \"s\"}.",
+    en: '${displayQty(result.replacedQuantity)} qty replaced across ${result.updatedVoucherIds.length} sale${result.updatedVoucherIds.length === 1 ? "" : "s"}.',
     ar: "تم استبدال كمية ${qty} عبر ${sales} عملية بيع.",
     fr: "${qty} remplacé sur ${sales} vente(s).",
   },
   {
-    en: "Updated ${committed.updatedVoucherIds.length} POS sale${committed.updatedVoucherIds.length === 1 ? \"\" : \"s\"}",
+    en: 'Updated ${committed.updatedVoucherIds.length} POS sale${committed.updatedVoucherIds.length === 1 ? "" : "s"}',
     ar: "تم تحديث ${count} عملية بيع في نقاط البيع",
     fr: "${count} vente(s) POS mise(s) à jour",
   },
