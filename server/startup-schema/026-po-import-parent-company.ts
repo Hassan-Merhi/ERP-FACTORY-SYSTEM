@@ -1,11 +1,11 @@
 /**
  * Repair the production company relationships required by PO Import.
  *
- * HMD KINSHASA and MALI are ERP children of HADI L'SHI. Supplier inheritance
- * and the parent-side intercompany supplier posting both depend on that explicit
- * relationship. Keep this repair name-based and guarded so it remains safe if
- * company IDs differ between environments, and never overwrite an existing
- * parent assignment.
+ * HMD KINSHASA and MALI are known ERP children of HADI L'SHI. Supplier
+ * inheritance and the parent-side intercompany supplier posting both depend on
+ * that explicit relationship. Keep this repair name-based and guarded so it
+ * remains safe if company IDs differ between environments, and never overwrite
+ * an existing parent assignment.
  */
 export const poImportParentCompany = [
   `DO $$
