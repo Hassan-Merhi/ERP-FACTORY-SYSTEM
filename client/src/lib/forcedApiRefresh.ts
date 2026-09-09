@@ -1,3 +1,5 @@
+import "./liveQueryRuntimePolicy";
+
 const MANUAL_REFRESH_WINDOW_MS = 500;
 let manualRefreshUntil = 0;
 
