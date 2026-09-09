@@ -5,7 +5,10 @@ import type { IncomingMessage, Server } from "http";
 import type { RequestHandler } from "express";
 import { runWithTraceContext } from "./lib/traceContext";
 import { logger } from "./lib/logger";
-import { shouldDeliverBroadcastToCompanies } from "./lib/broadcastScope";
+import {
+  normalizeBroadcastCompanyIds,
+  shouldDeliverBroadcastToCompanies,
+} from "./lib/broadcastScope";
 
 let wss: WebSocketServer | null = null;
 let resolveSession: SessionResolver | null = null;
@@ -50,15 +53,6 @@ function upgradeResponseStub() {
   };
 }
 
-function resolvedCompanyIds(session: SessionUpgradeRequest["session"]): number[] {
-  const ids = new Set<number>();
-  for (const candidate of [session?.currentCompanyId, session?.factoryCompanyId]) {
-    const companyId = Number(candidate);
-    if (Number.isSafeInteger(companyId) && companyId > 0) ids.add(companyId);
-  }
-  return [...ids];
-}
-
 function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResolver {
   return (request) =>
     new Promise((resolve) => {
@@ -83,7 +77,10 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
             }
 
             const session = (request as SessionUpgradeRequest).session;
-            const companyIds = resolvedCompanyIds(session);
+            const companyIds = normalizeBroadcastCompanyIds([
+              session?.currentCompanyId,
+              session?.factoryCompanyId,
+            ]);
             if (companyIds.length > 0) {
               finish({ status: "resolved", companyIds });
               return;
