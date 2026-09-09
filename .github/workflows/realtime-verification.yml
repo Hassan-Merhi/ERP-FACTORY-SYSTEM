@@ -3,6 +3,7 @@ name: Realtime Verification
 on:
   pull_request:
     paths:
+      - "client/src/contexts/CompanyContext.tsx"
       - "client/src/hooks/use-ws-invalidation.ts"
       - "client/src/lib/queryPolicies.ts"
       - "client/src/lib/liveQueryRuntimePolicy.ts"
