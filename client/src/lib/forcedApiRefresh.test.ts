@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   forcedRefreshRequestInit,
+  forcedRefreshRequestInput,
   isManualRefreshControl,
   isManualRefreshWindowActive,
   markManualRefresh,
@@ -44,7 +45,16 @@ describe("forced API refresh", () => {
     expect(isManualRefreshWindowActive(10_501)).toBe(false);
   });
 
-  it("adds the client and server cache bypass signals without losing existing headers", () => {
+  it("adds the server refresh marker while preserving the original query string", () => {
+    const forced = String(forcedRefreshRequestInput("/api/factory/bale-ledger?section=currentStock"));
+    const url = new URL(forced, window.location.origin);
+
+    expect(url.pathname).toBe("/api/factory/bale-ledger");
+    expect(url.searchParams.get("section")).toBe("currentStock");
+    expect(url.searchParams.get("__refresh")).toBe("1");
+  });
+
+  it("uses browser reload semantics without adding a CORS-triggering custom header", () => {
     const init = forcedRefreshRequestInit("/api/factory/bale-ledger", {
       credentials: "include",
       headers: { "x-company-id": "7" },
@@ -53,7 +63,7 @@ describe("forced API refresh", () => {
 
     expect(init.cache).toBe("reload");
     expect(init.credentials).toBe("include");
-    expect(headers.get("x-bypass-request-storm-guard")).toBe("1");
     expect(headers.get("x-company-id")).toBe("7");
+    expect(headers.has("x-bypass-request-storm-guard")).toBe(false);
   });
 });
