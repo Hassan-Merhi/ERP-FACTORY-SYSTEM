@@ -1,4 +1,7 @@
-import { shouldDeliverBroadcast } from "../server/lib/broadcastScope";
+import {
+  shouldDeliverBroadcast,
+  shouldDeliverBroadcastToCompanies,
+} from "../server/lib/broadcastScope";
 
 /**
  * Every write broadcast used to reach every connected client, so a sale in one
@@ -13,10 +16,17 @@ describe("WebSocket broadcast company scope", () => {
     expect(shouldDeliverBroadcast(7, 9)).toBe(false);
   });
 
+  it("delivers to either authenticated ERP or Factory company context", () => {
+    expect(shouldDeliverBroadcastToCompanies([7, 12], 7)).toBe(true);
+    expect(shouldDeliverBroadcastToCompanies([7, 12], 12)).toBe(true);
+    expect(shouldDeliverBroadcastToCompanies([7, 12], 9)).toBe(false);
+  });
+
   it("delivers unscoped messages to everyone", () => {
     // Chat crosses companies, and server-wide notices must not be filtered.
     expect(shouldDeliverBroadcast(7, null)).toBe(true);
     expect(shouldDeliverBroadcast(7, undefined)).toBe(true);
+    expect(shouldDeliverBroadcastToCompanies(null, null)).toBe(true);
   });
 
   it("fails closed for a socket whose company is not resolved yet", () => {
@@ -25,5 +35,7 @@ describe("WebSocket broadcast company scope", () => {
     // delivered normally.
     expect(shouldDeliverBroadcast(null, 7)).toBe(false);
     expect(shouldDeliverBroadcast(undefined, 7)).toBe(false);
+    expect(shouldDeliverBroadcastToCompanies([], 7)).toBe(false);
+    expect(shouldDeliverBroadcastToCompanies(null, 7)).toBe(false);
   });
 });
