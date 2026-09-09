@@ -1,4 +1,5 @@
 export const QUERY_STALE_TIMES = {
+  live: 15_000,
   liveCount: 45_000,
   access: 5 * 60_000,
   settings: 15 * 60_000,
@@ -6,6 +7,7 @@ export const QUERY_STALE_TIMES = {
 } as const;
 
 export const QUERY_GC_TIMES = {
+  live: 10 * 60_000,
   liveCount: 10 * 60_000,
   access: 30 * 60_000,
   settings: 2 * 60 * 60_000,
@@ -54,6 +56,41 @@ export const STABLE_SETTINGS_API_ENDPOINTS = [
 
 export const ACCESS_API_ENDPOINTS = ["/api/my-erp-pages", "/api/factory/my-access"] as const;
 
+/**
+ * Transactional families whose values can change as part of normal ERP/Factory
+ * operations. These remain event-driven, but when a screen was not mounted at
+ * the moment of a WebSocket event it must not be allowed to reuse a 5-minute-old
+ * snapshot on the next navigation/reconnect.
+ *
+ * Stable exact endpoints above win before family matching, so `/api/locations`
+ * can remain reference data while `/api/locations/7/inventory` is live.
+ */
+export const LIVE_TRANSACTIONAL_API_FAMILIES = [
+  "/api/accounts",
+  "/api/bales",
+  "/api/containers",
+  "/api/credit-notes",
+  "/api/daybook",
+  "/api/fiscal-transfers",
+  "/api/global-transactions",
+  "/api/global/transactions",
+  "/api/import",
+  "/api/inventory",
+  "/api/location-inventory",
+  "/api/locations",
+  "/api/pending-loadings",
+  "/api/pos",
+  "/api/sales",
+  "/api/sp",
+  "/api/stock",
+  "/api/stock-transfer",
+  "/api/stock-transfers",
+  "/api/voucher-entries",
+  "/api/vouchers",
+  "/api/factory",
+  "/api/factory-payroll",
+] as const;
+
 function apiPathname(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const pathname = value.split("?", 1)[0].replace(/\/+$/, "");
@@ -63,6 +100,20 @@ function apiPathname(value: unknown): string | null {
 function matchesEndpoint(value: unknown, endpoints: readonly string[]): boolean {
   const pathname = apiPathname(value);
   return pathname !== null && endpoints.includes(pathname);
+}
+
+function matchesFamily(value: unknown, families: readonly string[]): boolean {
+  const pathname = apiPathname(value);
+  if (pathname === null) return false;
+  return families.some((family) => pathname === family || pathname.startsWith(`${family}/`));
+}
+
+export function isLiveTransactionalQueryKey(queryKey: readonly unknown[]): boolean {
+  const requestUrl = queryKey[0];
+  if (matchesEndpoint(requestUrl, STABLE_REFERENCE_API_ENDPOINTS)) return false;
+  if (matchesEndpoint(requestUrl, STABLE_SETTINGS_API_ENDPOINTS)) return false;
+  if (matchesEndpoint(requestUrl, ACCESS_API_ENDPOINTS)) return false;
+  return matchesFamily(requestUrl, LIVE_TRANSACTIONAL_API_FAMILIES);
 }
 
 export function staleTimeForQueryKey(queryKey: readonly unknown[]): number {
@@ -75,6 +126,9 @@ export function staleTimeForQueryKey(queryKey: readonly unknown[]): number {
   }
   if (matchesEndpoint(requestUrl, ACCESS_API_ENDPOINTS)) {
     return QUERY_STALE_TIMES.access;
+  }
+  if (isLiveTransactionalQueryKey(queryKey)) {
+    return QUERY_STALE_TIMES.live;
   }
   return DEFAULT_QUERY_STALE_TIME;
 }
@@ -111,6 +165,14 @@ export const accessQueryPolicy = {
   refetchOnMount: false,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
+} as const;
+
+export const liveTransactionalQueryPolicy = {
+  staleTime: QUERY_STALE_TIMES.live,
+  gcTime: QUERY_GC_TIMES.live,
+  refetchOnMount: true,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: true,
 } as const;
 
 export function liveCountQueryPolicy(intervalMs = 60_000) {
