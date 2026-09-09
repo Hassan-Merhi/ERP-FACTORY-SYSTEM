@@ -28,6 +28,8 @@ describe("Realtime Refresh Wave 5 cache policy", () => {
       "/api/vouchers/42",
       "/api/stock-transfers?voucherId=91",
       "/api/containers/77",
+      "/api/employees",
+      "/api/employees/44/balance",
       "/api/payroll/runs",
       "/api/payroll/employees-with-balances",
       "/api/payroll/worker-payments-summary",
@@ -44,6 +46,8 @@ describe("Realtime Refresh Wave 5 cache policy", () => {
   it("does not shorten or remount-refetch unrelated and stable configuration data", () => {
     expect(staleTimeForQueryKey(["/api/company-settings"])).toBe(QUERY_STALE_TIMES.settings);
     expect(staleTimeForQueryKey(["/api/factory/workers?active=true"])).toBe(QUERY_STALE_TIMES.referenceData);
+    expect(staleTimeForQueryKey(["/api/payroll/bonus-locations", 7])).toBe(QUERY_STALE_TIMES.referenceData);
+    expect(isLiveTransactionalQueryKey(["/api/payroll/bonus-locations", 7])).toBe(false);
     expect(staleTimeForQueryKey(["/api/new-unclassified-module"])).toBe(DEFAULT_QUERY_STALE_TIME);
     expect(shouldDefaultRefetchLiveQuery(["/api/company-settings"])).toBe(false);
     expect(shouldDefaultRefetchLiveQuery(["/api/stock-items/light", 7])).toBe(false);
