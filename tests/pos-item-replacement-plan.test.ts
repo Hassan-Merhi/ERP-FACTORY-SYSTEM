@@ -109,6 +109,40 @@ describe("POS item replacement sale-line planning", () => {
     });
   });
 
+  it("omits unrelated legacy zero-quantity lines so a selected replacement can still be applied", () => {
+    const original: PosReplacementSourceLine[] = [
+      {
+        id: 351,
+        stockItemId: 80,
+        quantity: "1.000",
+        sellingPrice: "60.000000",
+        totalSales: "60.00",
+      },
+      {
+        id: 352,
+        stockItemId: 81,
+        quantity: "0.000",
+        sellingPrice: "0.000000",
+        totalSales: "0.00",
+      },
+    ];
+
+    const result = buildPosReplacementSaleItems(
+      original,
+      replacementMap({ saleItemId: 351, replacementStockItemId: 82, quantity: 1 })
+    );
+
+    expect(result.items).toEqual([
+      {
+        stockItemId: 82,
+        quantity: "1",
+        sellingPrice: "60.000000",
+        totalSales: "60.00",
+      },
+    ]);
+    expect(result.replacedQuantity).toBe("1");
+  });
+
   it("can split one mistaken line across more than one replacement item", () => {
     const original: PosReplacementSourceLine[] = [
       {
