@@ -22,6 +22,7 @@ const translations: Record<string, Translation> = {
   Worker: { en: "Worker", ar: "عامل", fr: "Ouvrier" },
   Role: { en: "Role", ar: "الدور", fr: "Rôle" },
   Actual: { en: "Actual", ar: "الفعلي", fr: "Réalisé" },
+  Used: { en: "Used", ar: "مستخدم", fr: "Utilisé" },
   "Target Met": { en: "Target Met", ar: "تم تحقيق المستهدف", fr: "Objectif atteint" },
   "No workers in plan. Add workers below or copy from a previous plan.": {
     en: "No workers in plan. Add workers below or copy from a previous plan.",
@@ -34,6 +35,26 @@ const translations: Record<string, Translation> = {
     en: "No previous plan found",
     ar: "لم يتم العثور على خطة سابقة",
     fr: "Aucun plan précédent trouvé",
+  },
+  "End Production is only available for a single daily production date": {
+    en: "End Production is only available for a single daily production date",
+    ar: "إنهاء الإنتاج متاح فقط لتاريخ إنتاج يومي واحد",
+    fr: "La fin de production n’est disponible que pour une seule date de production quotidienne",
+  },
+  "Production has already ended for this day and is locked": {
+    en: "Production has already ended for this day and is locked",
+    ar: "انتهى الإنتاج بالفعل لهذا اليوم وتم قفله",
+    fr: "La production est déjà terminée pour cette journée et est verrouillée",
+  },
+  "Production Targets only supports factory workers": {
+    en: "Production Targets only supports factory workers",
+    ar: "أهداف الإنتاج تدعم عمال المصنع فقط",
+    fr: "Les objectifs de production prennent uniquement en charge les ouvriers de l’usine",
+  },
+  "Worker is not assigned to a saved Production Planner group": {
+    en: "Worker is not assigned to a saved Production Planner group",
+    ar: "العامل غير معيّن إلى مجموعة محفوظة في مخطط الإنتاج",
+    fr: "L’ouvrier n’est affecté à aucun groupe enregistré du planificateur de production",
   },
   "Copied plan from ${data.fromDate}": {
     en: "Copied plan from ${data.fromDate}",
