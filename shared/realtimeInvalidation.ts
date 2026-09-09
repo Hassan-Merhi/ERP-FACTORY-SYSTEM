@@ -3,10 +3,12 @@ export const REALTIME_INVALIDATION_TOPICS = [
   "pos",
   "accounting",
   "factory",
+  "scans",
   "payroll",
   "containers",
   "reference",
   "communications",
+  "presence",
 ] as const;
 
 export type RealtimeInvalidationTopic = (typeof REALTIME_INVALIDATION_TOPICS)[number];
@@ -139,10 +141,14 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     topics = ["factory", "accounting"];
   } else if (startsWithAny(path, ["/api/factory/payroll", "/api/factory-payroll"])) {
     topics = ["factory", "payroll", "accounting"];
+  } else if (startsWithAny(path, ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"])) {
+    topics = ["scans"];
   } else if (path.startsWith("/api/factory")) {
     topics = ["factory"];
   } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp"])) {
     topics = ["containers", "inventory", "accounting"];
+  } else if (path === "/api/user-presence" || path.startsWith("/api/user-presence/")) {
+    topics = ["presence"];
   } else if (
     startsWithAny(path, [
       "/api/notifications",
