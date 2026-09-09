@@ -8,6 +8,10 @@ interface LiveQueryState {
   isInvalidated?: boolean;
 }
 
+export function shouldDefaultRefetchLiveQuery(queryKey: QueryKey): boolean {
+  return isLiveTransactionalQueryKey(queryKey);
+}
+
 /**
  * React Query is intentionally configured to avoid broad remount/focus traffic.
  * Live transactional screens are the exception: if they were inactive while a
@@ -33,6 +37,22 @@ export function installLiveQueryRuntimePolicy(): void {
   if (installed) return;
   installed = true;
 
+  // Wire the policy into TanStack Query itself. This fixes the common path for
+  // every live family while preserving the repository-wide no-focus-refetch rule.
+  const defaults = queryClient.getDefaultOptions();
+  queryClient.setDefaultOptions({
+    ...defaults,
+    queries: {
+      ...defaults.queries,
+      refetchOnMount: (query) => shouldDefaultRefetchLiveQuery(query.queryKey),
+      refetchOnReconnect: (query) => shouldDefaultRefetchLiveQuery(query.queryKey),
+    },
+  });
+
+  // A few older heavy pages explicitly override refetchOnMount=false and carry
+  // local 10-minute staleTime values. The observer hook is a narrow compatibility
+  // bridge: once their live snapshot is older than the central 15-second policy,
+  // fetch it on the next mount despite that legacy local override.
   queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== "observerAdded") return;
     const query = event.query;
