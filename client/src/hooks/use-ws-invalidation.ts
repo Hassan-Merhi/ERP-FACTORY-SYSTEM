@@ -76,6 +76,8 @@ const RECONNECT_MAX_DELAY_MS = 30_000;
 const OFFLINE_PROBE_DELAY_MS = 30_000;
 const RECONNECT_JITTER_RATIO = 0.2;
 
+type RealtimeConnectionStatus = "connecting" | "ready" | "disconnected";
+
 interface PendingInvalidation {
   blanket: boolean;
   topics: Set<RealtimeInvalidationTopic>;
@@ -107,6 +109,23 @@ let hadSuccessfulConnection = false;
 let firstConnectionDelayed = false;
 let missedWhileHidden = false;
 let reconnectAttempt = 0;
+
+function setRealtimeConnectionStatus(status: RealtimeConnectionStatus): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.realtimeStatus = status;
+  if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
+    window.dispatchEvent(new CustomEvent("erp:realtime-status", { detail: { status } }));
+  }
+}
+
+export function isRealtimeReadyMessage(payload: unknown): boolean {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    (payload as { type?: unknown }).type === "realtime:ready"
+  );
+}
 
 function isStableQueryKey(key: string): boolean {
   return STABLE_QUERY_PREFIXES.some((prefix) => key.startsWith(prefix));
@@ -270,11 +289,13 @@ function connectSharedSocket(allowOfflineProbe = false): void {
   if (!managerRunning || subscribers.size === 0 || sharedSocket) return;
   if (!browserIsOnline() && !allowOfflineProbe) {
     if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+    setRealtimeConnectionStatus("disconnected");
     scheduleReconnect();
     return;
   }
   reconnectTimer = null;
 
+  setRealtimeConnectionStatus("connecting");
   const socket = new WebSocket(websocketTarget());
   sharedSocket = socket;
 
@@ -291,6 +312,10 @@ function connectSharedSocket(allowOfflineProbe = false): void {
     if (sharedSocket !== socket || !managerRunning) return;
     try {
       const payload = JSON.parse(event.data as string) as unknown;
+      if (isRealtimeReadyMessage(payload)) {
+        setRealtimeConnectionStatus("ready");
+        return;
+      }
       const invalidation = parseRealtimeInvalidationMessage(payload);
       if (invalidation) handleInvalidate(invalidation);
       const chatEvent = parseRealtimeChatEvent(payload);
@@ -305,6 +330,7 @@ function connectSharedSocket(allowOfflineProbe = false): void {
     // restarted. Only the currently registered socket may schedule a reconnect.
     if (sharedSocket !== socket) return;
     sharedSocket = null;
+    setRealtimeConnectionStatus("disconnected");
     scheduleReconnect();
   };
 
@@ -347,6 +373,7 @@ function handleOffline(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+  setRealtimeConnectionStatus("disconnected");
   scheduleReconnect();
 }
 
@@ -379,6 +406,7 @@ function stopManager(): void {
   firstConnectionDelayed = false;
   missedWhileHidden = false;
   resetPendingInvalidation();
+  setRealtimeConnectionStatus("disconnected");
 
   const socket = sharedSocket;
   sharedSocket = null;
