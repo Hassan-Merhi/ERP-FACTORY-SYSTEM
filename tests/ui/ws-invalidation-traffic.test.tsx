@@ -6,11 +6,11 @@ import {
   resetWsInvalidationManagerForTests,
   useWsInvalidation,
 } from "@/hooks/use-ws-invalidation";
+import type { RealtimeInvalidationMessage } from "@shared/realtimeInvalidation";
 
 /**
- * Every write in the system broadcasts, and every broadcast makes each
- * receiving client refetch what it has on screen. These tests keep that traffic
- * bounded during write bursts, hidden tabs, duplicate mounts, and network loss.
+ * Realtime writes should refresh only dependent active queries, while bursts,
+ * hidden tabs, duplicate mounts, and network loss stay bounded.
  */
 describe("WebSocket invalidation traffic", () => {
   let sockets: FakeSocket[];
@@ -28,8 +28,8 @@ describe("WebSocket invalidation traffic", () => {
       sockets.push(this);
     }
 
-    receiveInvalidate() {
-      this.onmessage?.({ data: JSON.stringify({ type: "invalidate" }) });
+    receiveInvalidate(message: RealtimeInvalidationMessage = { type: "invalidate" }) {
+      this.onmessage?.({ data: JSON.stringify(message) });
     }
   }
 
@@ -71,22 +71,97 @@ describe("WebSocket invalidation traffic", () => {
     vi.restoreAllMocks();
   });
 
+  it("refreshes a normal write after the short realtime debounce", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
+    vi.advanceTimersByTime(399);
+    expect(invalidate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
   it("coalesces a burst of writes into one refresh", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
     for (let i = 0; i < 10; i += 1) {
-      sockets[0].receiveInvalidate();
-      vi.advanceTimersByTime(200);
+      sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
+      vi.advanceTimersByTime(100);
     }
     expect(invalidate).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(399);
     expect(invalidate).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(2_000);
+    vi.advanceTimersByTime(1);
     expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes only queries that depend on the targeted topic", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["accounting"] });
+    vi.advanceTimersByTime(400);
+
+    const predicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(predicate(queryWithKey("/api/accounts/1/balance"))).toBe(true);
+    expect(predicate(queryWithKey("/api/vouchers?page=1"))).toBe(true);
+    expect(predicate(queryWithKey("/api/stock-items?page=1"))).toBe(false);
+    expect(predicate(queryWithKey("/api/factory/ground-scan-items"))).toBe(false);
+  });
+
+  it("coalesces multiple topics in the same write burst", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["accounting"] });
+    vi.advanceTimersByTime(200);
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["factory"] });
+    vi.advanceTimersByTime(400);
+
+    const predicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(predicate(queryWithKey("/api/accounts/1/balance"))).toBe(true);
+    expect(predicate(queryWithKey("/api/factory/customer-orders"))).toBe(true);
+    expect(predicate(queryWithKey("/api/stock-items?page=1"))).toBe(false);
+  });
+
+  it("keeps explicitly different inventory locations warm", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({
+      type: "invalidate",
+      topics: ["inventory"],
+      locationIds: [3],
+    });
+    vi.advanceTimersByTime(400);
+
+    const predicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(predicate(queryWithKey("/api/locations/3/inventory"))).toBe(true);
+    expect(predicate(queryWithKey("/api/locations/4/inventory"))).toBe(false);
+    expect(predicate(queryWithKey("/api/inventory/summary?locationId=3"))).toBe(true);
+    expect(predicate(queryWithKey("/api/inventory/summary?locationId=4"))).toBe(false);
+    expect(predicate(queryWithKey("/api/stock-items?page=1"))).toBe(true);
+  });
+
+  it("uses blanket fallback for legacy or unknown invalidation messages", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate();
+    vi.advanceTimersByTime(400);
+
+    const predicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(predicate(queryWithKey("/api/accounts/1/balance"))).toBe(true);
+    expect(predicate(queryWithKey("/api/stock-items?page=1"))).toBe(true);
   });
 
   it("does not refetch a tab nobody is looking at", () => {
@@ -95,21 +170,20 @@ describe("WebSocket invalidation traffic", () => {
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
     setVisibility("hidden");
-    sockets[0].receiveInvalidate();
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
     vi.advanceTimersByTime(30_000);
 
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("refreshes once on the way back, so the tab is never stale", () => {
+  it("refreshes immediately on the way back, so the tab is never stale", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
     setVisibility("hidden");
-    sockets[0].receiveInvalidate();
-    sockets[0].receiveInvalidate();
-    sockets[0].receiveInvalidate();
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["accounting"] });
     expect(invalidate).not.toHaveBeenCalled();
 
     setVisibility("visible");
@@ -121,26 +195,24 @@ describe("WebSocket invalidation traffic", () => {
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
-    sockets[0].receiveInvalidate();
-    vi.advanceTimersByTime(3_000);
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
+    vi.advanceTimersByTime(400);
 
     expect(invalidate).toHaveBeenCalledWith(expect.anything(), { cancelRefetch: false });
   });
 
-  it("keeps heavy stock allocation out of blanket websocket refetches", () => {
+  it("keeps heavy analytical queries out of automatic websocket refetches", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
 
     sockets[0].receiveInvalidate();
-    vi.advanceTimersByTime(3_000);
+    vi.advanceTimersByTime(400);
 
-    const options = invalidate.mock.calls[0]?.[0];
-    expect(options?.predicate).toBeTypeOf("function");
-    const predicate = options!.predicate!;
-
+    const predicate = invalidate.mock.calls[0]?.[0].predicate!;
     expect(predicate(queryWithKey("/api/factory/v5/stock-allocation"))).toBe(false);
     expect(predicate(queryWithKey("/api/factory/v5/stock-allocation?pagination=1&page=2&limit=50"))).toBe(false);
+    expect(predicate(queryWithKey("/api/stats/net-profit?month=2026-09"))).toBe(false);
     expect(predicate(queryWithKey("/api/factory/customer-orders?status=LOADING"))).toBe(true);
   });
 
@@ -155,8 +227,8 @@ describe("WebSocket invalidation traffic", () => {
     first.unmount();
     expect(sockets[0].close).not.toHaveBeenCalled();
 
-    sockets[0].receiveInvalidate();
-    vi.advanceTimersByTime(3_000);
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"] });
+    vi.advanceTimersByTime(400);
     expect(invalidate).toHaveBeenCalledTimes(1);
 
     second.unmount();
@@ -241,7 +313,7 @@ describe("WebSocket invalidation traffic", () => {
     expect(sockets).toHaveLength(2);
   });
 
-  it("catches up after a delayed initial probe when navigator begins offline", () => {
+  it("catches up immediately after a delayed initial probe when navigator begins offline", () => {
     online = false;
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
@@ -255,9 +327,20 @@ describe("WebSocket invalidation traffic", () => {
     expect(invalidate).not.toHaveBeenCalled();
 
     sockets[0].onopen?.();
-    vi.advanceTimersByTime(2_999);
-    expect(invalidate).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses immediate blanket catch-up after a real reconnect", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].onopen?.();
+    sockets[0].onclose?.();
+    vi.advanceTimersByTime(1_500);
+    expect(sockets).toHaveLength(2);
+
+    sockets[1].onopen?.();
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 
