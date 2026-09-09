@@ -1,4 +1,5 @@
 import {
+  normalizeBroadcastCompanyIds,
   shouldDeliverBroadcast,
   shouldDeliverBroadcastToCompanies,
 } from "../server/lib/broadcastScope";
@@ -8,6 +9,10 @@ import {
  * company made clients in every other company refetch everything on screen.
  */
 describe("WebSocket broadcast company scope", () => {
+  it("normalizes ERP and Factory company ids and removes invalid/duplicate values", () => {
+    expect(normalizeBroadcastCompanyIds([7, "12", 7, 0, -1, 2.5, undefined, "bad"])).toEqual([7, 12]);
+  });
+
   it("delivers a company's writes to that company", () => {
     expect(shouldDeliverBroadcast(7, 7)).toBe(true);
   });
