@@ -111,6 +111,9 @@ describe("WebSocket invalidation traffic", () => {
     const predicate = invalidate.mock.calls[0]?.[0].predicate!;
     expect(predicate(queryWithKey("/api/accounts/1/balance"))).toBe(true);
     expect(predicate(queryWithKey("/api/vouchers?page=1"))).toBe(true);
+    expect(predicate(queryWithKey("/api/global/transactions?page=1"))).toBe(true);
+    expect(predicate(queryWithKey("/api/credit-notes/42"))).toBe(true);
+    expect(predicate(queryWithKey("/api/factory/daybook?date=2026-09-09"))).toBe(true);
     expect(predicate(queryWithKey("/api/stock-items?page=1"))).toBe(false);
     expect(predicate(queryWithKey("/api/factory/ground-scan-items"))).toBe(false);
   });
@@ -144,6 +147,7 @@ describe("WebSocket invalidation traffic", () => {
     vi.advanceTimersByTime(400);
 
     const predicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(predicate(queryWithKey("/api/locations"))).toBe(true);
     expect(predicate(queryWithKey("/api/locations/3/inventory"))).toBe(true);
     expect(predicate(queryWithKey("/api/locations/4/inventory"))).toBe(false);
     expect(predicate(queryWithKey("/api/inventory/summary?locationId=3"))).toBe(true);
