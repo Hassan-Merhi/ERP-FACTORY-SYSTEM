@@ -78,6 +78,7 @@ export const LIVE_TRANSACTIONAL_API_FAMILIES = [
   "/api/inventory",
   "/api/location-inventory",
   "/api/locations",
+  "/api/payroll",
   "/api/pending-loadings",
   "/api/pos",
   "/api/sales",
