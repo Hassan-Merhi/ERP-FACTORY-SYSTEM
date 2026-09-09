@@ -52,14 +52,12 @@ jobs:
           path.write_text(text)
           PY
 
-          cat > tests/pos-item-replacement-translation-runtime.test.ts <<'EOF'
+          cat > client/src/i18n/posItemReplacement.applicationTranslations.test.ts <<'EOF'
           import { describe, expect, it } from "vitest";
 
           describe("POS item replacement translation runtime safety", () => {
             it("imports without evaluating page/server-only runtime variables", async () => {
-              const translations = await import(
-                "../client/src/i18n/posItemReplacement.applicationTranslations"
-              );
+              const translations = await import("./posItemReplacement.applicationTranslations");
 
               expect(translations.translatePosItemReplacementLiteral("Updated 1 POS sale", "fr")).toBe(
                 "1 vente POS mise à jour"
@@ -76,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
       - name: Run translation regression test
-        run: npx vitest run tests/pos-item-replacement-translation-runtime.test.ts
+        run: npx vitest run --config vitest.config.frontend.ts client/src/i18n/posItemReplacement.applicationTranslations.test.ts
       - name: Verify exact Render production build
         run: node build.mjs
       - name: Verify built client assets
@@ -122,7 +120,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add client/src/i18n/posItemReplacement.applicationTranslations.ts tests/pos-item-replacement-translation-runtime.test.ts
+          git add client/src/i18n/posItemReplacement.applicationTranslations.ts client/src/i18n/posItemReplacement.applicationTranslations.test.ts
           if git diff --cached --quiet; then
             echo 'No runtime fix changes to commit.'
             exit 0
