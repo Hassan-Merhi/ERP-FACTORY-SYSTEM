@@ -85,7 +85,10 @@ export function buildPosReplacementSaleItems(
     const remainingQty = originalQty.minus(replaceQty);
 
     const segments: Array<Omit<PosReplacementEditedLine, "totalSales">> = [];
-    if (remainingQty.isPositive()) {
+    // Decimal.js treats +0 as having a positive sign, so isPositive() can admit
+    // a zero remainder after a full replacement (for example 1 - 1). Compare
+    // numerically instead so the old line is omitted whenever nothing remains.
+    if (remainingQty.gt(0)) {
       segments.push({
         id: originalItem.id,
         stockItemId: originalItem.stockItemId,
