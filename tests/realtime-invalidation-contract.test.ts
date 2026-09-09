@@ -8,12 +8,12 @@ describe("realtime invalidation contract", () => {
     expect(
       parseRealtimeInvalidationMessage({
         type: "invalidate",
-        topics: ["inventory", "inventory", "not-a-topic"],
+        topics: ["inventory", "inventory", "scans", "presence", "not-a-topic"],
         locationIds: [4, "5", 0, -1, "bad", 4],
       })
     ).toEqual({
       type: "invalidate",
-      topics: ["inventory"],
+      topics: ["inventory", "scans", "presence"],
       locationIds: [4, 5],
     });
   });
@@ -77,6 +77,14 @@ describe("realtime invalidation contract", () => {
     });
   });
 
+  it("isolates high-frequency Factory scan writes from the broad Factory topic", () => {
+    expect(classifyRealtimeWrite("/api/factory/daily-bale-scans", {})).toEqual({ topics: ["scans"] });
+    expect(classifyRealtimeWrite("/api/factory/ground-scan-items", { locationId: "5" })).toEqual({
+      topics: ["scans"],
+      locationIds: [5],
+    });
+  });
+
   it("classifies container/import/SP writes as their cross-domain dependencies", () => {
     expect(classifyRealtimeWrite("/api/containers/123", {})).toEqual({
       topics: ["containers", "inventory", "accounting"],
@@ -86,10 +94,16 @@ describe("realtime invalidation contract", () => {
     });
   });
 
+  it("keeps presence separate from general communications", () => {
+    expect(classifyRealtimeWrite("/api/user-presence", { type: "route_change" })).toEqual({ topics: ["presence"] });
+    expect(classifyRealtimeWrite("/api/user-presence/leave", {})).toEqual({ topics: ["presence"] });
+    expect(classifyRealtimeWrite("/api/chat/messages", {})).toEqual({ topics: ["communications"] });
+    expect(classifyRealtimeWrite("/api/presence/heartbeat", {})).toEqual({ topics: ["communications"] });
+  });
+
   it("classifies reference and communication writes", () => {
     expect(classifyRealtimeWrite("/api/suppliers/3", {})).toEqual({ topics: ["reference"] });
     expect(classifyRealtimeWrite("/api/chat/messages", {})).toEqual({ topics: ["communications"] });
-    expect(classifyRealtimeWrite("/api/presence/heartbeat", {})).toEqual({ topics: ["communications"] });
   });
 
   it("leaves unknown writes unclassified so clients use blanket fallback", () => {
