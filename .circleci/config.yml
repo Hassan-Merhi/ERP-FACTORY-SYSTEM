@@ -125,14 +125,32 @@ jobs:
 workflows:
   full-erp-verification:
     jobs:
-      - github-ci-gate
+      - github-ci-gate:
+          filters:
+            branches:
+              only: main
       - static-build:
           requires: [github-ci-gate]
+          filters:
+            branches:
+              only: main
       - postgres-regression:
           requires: [github-ci-gate]
+          filters:
+            branches:
+              only: main
       - backend-core-regression:
           requires: [github-ci-gate]
+          filters:
+            branches:
+              only: main
       - frontend-regression:
           requires: [github-ci-gate]
+          filters:
+            branches:
+              only: main
       - security-readiness:
           requires: [github-ci-gate]
+          filters:
+            branches:
+              only: main
