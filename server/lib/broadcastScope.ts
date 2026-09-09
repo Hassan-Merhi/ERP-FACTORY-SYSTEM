@@ -6,20 +6,27 @@
  */
 
 /**
- * Whether a socket belonging to `socketCompanyId` should receive a message
- * scoped to `messageCompanyId`.
+ * Whether a socket belonging to one or more authorized company contexts should
+ * receive a message scoped to `messageCompanyId`.
  *
  * Unscoped messages reach everyone: chat crosses companies and server-wide
- * notices must not be filtered. Tenant-scoped messages fail closed: a socket
- * whose company has not resolved yet does not receive another tenant's signal.
- * Once its authenticated session resolves, later invalidations are delivered to
- * the exact matching company as normal.
+ * notices must not be filtered. Tenant-scoped messages fail closed until at
+ * least one authenticated company context resolves.
  */
+export function shouldDeliverBroadcastToCompanies(
+  socketCompanyIds: readonly number[] | null | undefined,
+  messageCompanyId: number | null | undefined
+): boolean {
+  if (messageCompanyId === undefined || messageCompanyId === null) return true;
+  if (!socketCompanyIds?.length) return false;
+  return socketCompanyIds.includes(messageCompanyId);
+}
+
+/** Backward-compatible single-company policy used by existing callers/tests. */
 export function shouldDeliverBroadcast(
   socketCompanyId: number | null | undefined,
   messageCompanyId: number | null | undefined
 ): boolean {
-  if (messageCompanyId === undefined || messageCompanyId === null) return true;
-  if (socketCompanyId === undefined || socketCompanyId === null) return false;
-  return socketCompanyId === messageCompanyId;
+  const socketCompanyIds = socketCompanyId === undefined || socketCompanyId === null ? null : [socketCompanyId];
+  return shouldDeliverBroadcastToCompanies(socketCompanyIds, messageCompanyId);
 }
