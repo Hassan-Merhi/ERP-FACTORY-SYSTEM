@@ -56,15 +56,37 @@
     visibility: visible !important;
   }
 
-  .erp-mobile-touch-target {
+  .erp-mobile-touch-target,
+  [data-erp-route] button,
+  [data-erp-route] input,
+  [data-erp-route] select {
     min-height: 44px !important;
+  }
+
+  .erp-mobile-touch-target {
     min-width: 44px;
+  }
+
+  [data-erp-route] input,
+  [data-erp-route] textarea,
+  [data-erp-route] select {
+    font-size: 16px !important;
   }
 
   .erp-mobile-card-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem;
+  }
+
+  /* These operational rows expose real edit/delete actions only on hover on desktop. */
+  [data-erp-route="/accounts"] button[class*="opacity-0"],
+  [data-erp-route="/parties"] button[class*="opacity-0"],
+  [data-erp-route="/parties"] div[class*="opacity-0"],
+  [data-erp-route="/settings"] button[class*="opacity-0"],
+  [data-erp-route="/settings"] div[class*="invisible"] {
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 }
 
@@ -87,14 +109,35 @@
     visibility: visible !important;
   }
 
-  .erp-mobile-touch-target {
+  .erp-mobile-touch-target,
+  [data-erp-route] button,
+  [data-erp-route] input,
+  [data-erp-route] select {
     min-height: 44px !important;
+  }
+
+  .erp-mobile-touch-target {
     min-width: 44px;
+  }
+
+  [data-erp-route] input,
+  [data-erp-route] textarea,
+  [data-erp-route] select {
+    font-size: 16px !important;
   }
 
   .erp-mobile-card-grid {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 0.75rem;
+  }
+
+  [data-erp-route="/accounts"] button[class*="opacity-0"],
+  [data-erp-route="/parties"] button[class*="opacity-0"],
+  [data-erp-route="/parties"] div[class*="opacity-0"],
+  [data-erp-route="/settings"] button[class*="opacity-0"],
+  [data-erp-route="/settings"] div[class*="invisible"] {
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 }
