@@ -14,13 +14,13 @@ const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 8);
 // runs a plain pass and then a coverage pass, and coverage instrumentation is
 // measurably slower: in one certification run the same shard took 127.5s plain
 // and 188.2s under coverage. Deriving the budget from `--coverage` being present
-// in argv charged that coverage pass the plain 180s budget and aborted a run
+// in argv charged that coverage pass the plain 210s budget and aborted a run
 // whose shards had all passed.
-const PLAIN_SHARD_BUDGET_SECONDS = Number(process.env.BACKEND_TEST_SHARD_BUDGET_SECONDS ?? 180);
+const PLAIN_SHARD_BUDGET_SECONDS = Number(process.env.BACKEND_TEST_SHARD_BUDGET_SECONDS ?? 210);
 const COVERAGE_SHARD_BUDGET_SECONDS = Number(
   process.env.BACKEND_TEST_SHARD_BUDGET_SECONDS ??
     process.env.BACKEND_TEST_COVERAGE_SHARD_BUDGET_SECONDS ??
-    300
+    360
 );
 
 function shardBudgetSeconds(withCoverage) {

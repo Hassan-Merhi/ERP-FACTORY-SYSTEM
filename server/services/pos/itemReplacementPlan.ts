@@ -55,8 +55,17 @@ export function buildPosReplacementSaleItems(
   let replacedQuantity = toInventoryDecimal(0);
 
   for (const originalItem of originalItems) {
+    const originalQty = toInventoryDecimal(originalItem.quantity);
     const lineReplacements = replacementsBySaleItem.get(originalItem.id) || [];
     if (!lineReplacements.length) {
+      // Some historical POS vouchers contain zero-quantity sales_items. The
+      // normal POS edit flow rejects quantity 0, so replaying one unchanged
+      // makes an otherwise valid item correction fail. Zero-quantity rows have
+      // no inventory effect and are safe to omit while rebuilding the voucher.
+      if (originalQty.isZero()) {
+        continue;
+      }
+
       editedItems.push(
         markTrustedTotal({
           id: originalItem.id,
@@ -69,7 +78,6 @@ export function buildPosReplacementSaleItems(
       continue;
     }
 
-    const originalQty = toInventoryDecimal(originalItem.quantity);
     const replaceQty = lineReplacements.reduce(
       (sum, row) => sum.plus(toInventoryDecimal(row.quantity)),
       toInventoryDecimal(0)
