@@ -229,7 +229,7 @@
     "basic-ftp@<=6.0.0": "6.0.0",
     "uuid@<=11.1.1": "11.1.1",
     "tmp@<0.2.7": "0.2.7",
-    "dompurify": "3.4.14",
+    "dompurify": "3.4.15",
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.28.2"
     }
