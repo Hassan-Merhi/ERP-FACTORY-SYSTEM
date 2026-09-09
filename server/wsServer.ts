@@ -105,6 +105,11 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
     });
 }
 
+function sendRealtimeReady(ws: WebSocket): void {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "realtime:ready" }));
+}
+
 export function setupWS(server: Server, sessionMiddleware?: RequestHandler): void {
   wss = new WebSocketServer({ server, path: "/ws" });
   resolveSession = sessionMiddleware ? sessionCompanyResolver(sessionMiddleware) : null;
@@ -123,6 +128,11 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
           if (result.status === "resolved") {
             socketCompanies.set(ws, result.companyIds);
             socketUsers.set(ws, result.userId);
+            // The browser's native onopen only proves the transport handshake.
+            // Signal readiness after authenticated company/user scoping resolves,
+            // so clients and E2E verification know broadcasts can no longer be
+            // skipped because this socket is still unscoped.
+            sendRealtimeReady(ws);
             return;
           }
           if (result.status === "unresolved" && ws.readyState !== WebSocket.CLOSED) {
@@ -134,6 +144,10 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
           logger.warn("[WS] Closing socket after unexpected session-resolution failure.", { error });
           if (ws.readyState !== WebSocket.CLOSED) ws.close(1013, "Session context unavailable");
         });
+    } else {
+      // Non-session deployments have no scope resolution step. The transport is
+      // immediately ready for their intentionally unscoped broadcasts.
+      sendRealtimeReady(ws);
     }
 
     runWithTraceContext(
