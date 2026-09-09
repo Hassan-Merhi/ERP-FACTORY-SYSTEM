@@ -10,6 +10,7 @@ const checks = [
   ["Phase 8 POS", "node", ["scripts/verify-mobile-responsive-phase8-pos.mjs"]],
   ["Phase 9 dashboards and reports", "node", ["scripts/verify-mobile-responsive-phase9-reports.mjs"]],
   ["Phase 10 performance and offline", "node", ["scripts/verify-mobile-responsive-phase10-performance.mjs"]],
+  ["Wave 3 ERP operations", "node", ["scripts/verify-mobile-responsive-wave3-erp-operations.mjs"]],
   ["Cross-module UX consistency", "npm", ["run", "audit:ux-consistency"]],
   ["Mobile routing", "npm", ["run", "verify:mobile-web-routing"]],
   ["Bandwidth contracts", "npm", ["run", "verify:bandwidth"]],
