@@ -11,7 +11,15 @@ import { logger } from "../lib/logger";
 import { eq, and, desc, lt, gt, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { broadcast } from "../wsServer";
 import { companies, userActivityLog, userPresence, updatePresenceSchema } from "@shared/schema";
+
+function broadcastPresenceChange(): void {
+  // Active-user monitoring crosses ERP company context for authorized viewers,
+  // so this intentionally has no company filter. The dedicated `presence`
+  // topic wakes only active presence/watch queries.
+  broadcast({ type: "invalidate", topics: ["presence"] });
+}
 
 export function registerUserPresenceRoutes(app: Express) {
   // User Presence tracking endpoints
@@ -47,7 +55,8 @@ export function registerUserPresenceRoutes(app: Express) {
   });
 
   // PATCH: Update user presence (heartbeat / route change)
-  // Returns 204 immediately; the presence write remains best-effort.
+  // Returns 204 immediately; the presence write remains best-effort. Heartbeats
+  // are intentionally silent; route changes publish one targeted realtime event.
   app.patch("/api/user-presence", requireAuth, async (req, res) => {
     const parseResult = updatePresenceSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -112,6 +121,7 @@ export function registerUserPresenceRoutes(app: Express) {
         });
 
       if (type === "route_change") {
+        broadcastPresenceChange();
         await db.insert(userActivityLog).values({
           userId,
           username,
@@ -190,6 +200,7 @@ export function registerUserPresenceRoutes(app: Express) {
     if (sessionId) {
       db.delete(userPresence)
         .where(eq(userPresence.sessionId, sessionId))
+        .then(() => broadcastPresenceChange())
         .catch((err: unknown) => logger.error("[Presence] Delete error:", { error: getErrorMessage(err) }));
     }
   });
@@ -202,6 +213,7 @@ export function registerUserPresenceRoutes(app: Express) {
     if (sessionId) {
       db.delete(userPresence)
         .where(eq(userPresence.sessionId, sessionId))
+        .then(() => broadcastPresenceChange())
         .catch((err: unknown) => logger.error("[Presence] Leave delete error:", { error: getErrorMessage(err) }));
     }
   });
