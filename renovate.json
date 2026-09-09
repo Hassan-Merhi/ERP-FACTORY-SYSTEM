@@ -8,26 +8,47 @@
     "helpers:pinGitHubActionDigests",
     "security:minimumReleaseAgeNpm"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "timezone": "Africa/Lubumbashi",
   "prConcurrentLimit": 5,
   "branchConcurrentLimit": 8,
   "automerge": false,
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["dependencies", "security"],
+    "labels": [
+      "dependencies",
+      "security"
+    ],
     "automerge": false
   },
   "packageRules": [
     {
       "description": "Require explicit dashboard approval for every major upgrade",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Hold TypeScript below 7 until typescript-eslint supports it (typescript-eslint#10940); TS 7 removes the JS compiler API that scripts/audit-type-escapes.mjs uses and makes typescript-eslint throw on load, which takes lint and the type-escape ratchet down repo-wide.",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7",
       "dependencyDashboardApproval": true,
       "automerge": false
     },
     {
       "description": "Require explicit approval for database, authentication, document-generation, and spreadsheet runtime dependencies",
-      "matchDatasources": ["npm"],
+      "matchDatasources": [
+        "npm"
+      ],
       "matchPackageNames": [
         "drizzle-orm",
         "drizzle-kit",
@@ -54,25 +75,40 @@
     },
     {
       "description": "Group non-major development-tool updates to reduce PR noise",
-      "matchDatasources": ["npm"],
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "minimumReleaseAge": "7 days",
       "groupName": "development dependencies",
       "automerge": false
     },
     {
       "description": "Group production patch updates while keeping them review-gated",
-      "matchDatasources": ["npm"],
-      "matchDepTypes": ["dependencies"],
-      "matchUpdateTypes": ["patch"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "minimumReleaseAge": "7 days",
       "groupName": "production dependency patches",
       "automerge": false
     },
     {
       "description": "Keep GitHub Actions digest updates isolated and review-gated",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "GitHub Actions digests",
       "automerge": false
     }
