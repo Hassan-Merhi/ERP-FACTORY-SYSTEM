@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { isRealtimeReadyMessage } from "@/hooks/use-ws-invalidation";
 import { QUERY_STALE_TIMES } from "@/lib/queryPolicies";
 import { needsLegacyReconnectFallback } from "@/lib/liveQueryRuntimePolicy";
 
 describe("Realtime Refresh Wave 6 final hardening", () => {
+  it("recognizes only the scoped realtime-ready handshake", () => {
+    expect(isRealtimeReadyMessage({ type: "realtime:ready" })).toBe(true);
+    expect(isRealtimeReadyMessage({ type: "invalidate", topics: ["inventory"] })).toBe(false);
+    expect(isRealtimeReadyMessage(null)).toBe(false);
+  });
+
   it("lets TanStack own reconnects for normal live queries", () => {
     expect(
       needsLegacyReconnectFallback(["/api/inventory", 7], {
