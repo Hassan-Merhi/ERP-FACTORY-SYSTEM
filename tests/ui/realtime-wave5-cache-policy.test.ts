@@ -5,7 +5,10 @@ import {
   QUERY_STALE_TIMES,
   staleTimeForQueryKey,
 } from "@/lib/queryPolicies";
-import { shouldRefreshLiveQueryOnObserverAdd } from "@/lib/liveQueryRuntimePolicy";
+import {
+  shouldDefaultRefetchLiveQuery,
+  shouldRefreshLiveQueryOnObserverAdd,
+} from "@/lib/liveQueryRuntimePolicy";
 
 describe("Realtime Refresh Wave 5 cache policy", () => {
   it("keeps exact reference endpoints long-lived while their transactional descendants are live", () => {
@@ -25,19 +28,25 @@ describe("Realtime Refresh Wave 5 cache policy", () => {
       "/api/vouchers/42",
       "/api/stock-transfers?voucherId=91",
       "/api/containers/77",
+      "/api/payroll/runs",
+      "/api/payroll/employees-with-balances",
+      "/api/payroll/worker-payments-summary",
       "/api/factory/daily-bale-scans?date=2026-09-09",
       "/api/factory/payrolls/preview",
       "/api/factory/customer-orders/55",
     ]) {
       expect(isLiveTransactionalQueryKey([key]), key).toBe(true);
       expect(staleTimeForQueryKey([key]), key).toBe(QUERY_STALE_TIMES.live);
+      expect(shouldDefaultRefetchLiveQuery([key]), key).toBe(true);
     }
   });
 
-  it("does not shorten unrelated or stable configuration data", () => {
+  it("does not shorten or remount-refetch unrelated and stable configuration data", () => {
     expect(staleTimeForQueryKey(["/api/company-settings"])).toBe(QUERY_STALE_TIMES.settings);
     expect(staleTimeForQueryKey(["/api/factory/workers?active=true"])).toBe(QUERY_STALE_TIMES.referenceData);
     expect(staleTimeForQueryKey(["/api/new-unclassified-module"])).toBe(DEFAULT_QUERY_STALE_TIME);
+    expect(shouldDefaultRefetchLiveQuery(["/api/company-settings"])).toBe(false);
+    expect(shouldDefaultRefetchLiveQuery(["/api/stock-items/light", 7])).toBe(false);
   });
 
   it("refreshes an old live snapshot on remount even if a page declared a longer local staleTime", () => {
