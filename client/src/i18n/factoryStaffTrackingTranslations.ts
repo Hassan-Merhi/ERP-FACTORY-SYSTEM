@@ -55,6 +55,7 @@ const factoryStaffTrackingTranslations = {
     fr: "Rechercher par nom, code ou groupe...",
   },
   person: { en: "Person", ar: "الشخص", fr: "Personne" },
+  code: { en: "Code", ar: "الرمز", fr: "Code" },
   category: { en: "Category", ar: "الفئة", fr: "Catégorie" },
   target: { en: "Target", ar: "الهدف", fr: "Objectif" },
   produced: { en: "Produced", ar: "المنتج", fr: "Produit" },
