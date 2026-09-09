@@ -13,6 +13,7 @@ on:
       - "server/routes/applicationRoutes.ts"
       - "server/routes/performance/readMicrocache.ts"
       - "server/routes/performance/realtimeReadFreshness.test.ts"
+      - "server/wsServer.ts"
       - "shared/realtimeInvalidation.ts"
       - "tests/ui/ws-invalidation-traffic.test.tsx"
       - "tests/ui/realtime-wave5-cache-policy.test.ts"
