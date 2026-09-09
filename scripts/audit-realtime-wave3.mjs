@@ -4,10 +4,6 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function read(relativePath) {
-  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
-}
-
 const phase5Targets = [
   {
     path: "client/src/components/erpworkerdetail/useERPWorkerDetailModel.tsx",
@@ -57,7 +53,7 @@ export function auditRealtimeWave3(root = repoRoot) {
 
   for (const target of phase5Targets) {
     const source = readAtRoot(target.path);
-    if (/staleTime\s*:\s*0(?:\D|$)/.test(source)) {
+    if (/staleTime\s*:\s*0(?![\d_])/.test(source)) {
       errors.push(`${target.path}: staleTime: 0 reintroduced`);
     }
     for (const required of target.requiredFreshness) {
@@ -73,7 +69,7 @@ export function auditRealtimeWave3(root = repoRoot) {
     /db\.execute<RawQueryRow<LedgerBalanceRow>>\(sql`/,
     /db\.execute<RawQueryRow<PartyBalanceRow>>\(sql`/,
     /SUM\(CAST\(ve\.debit_amount\s+AS numeric\)\) AS total_debit/,
-    /SUM\(CAST\(ve\.credit_amount AS numeric\)\) AS total_credit/,
+    /SUM\(CAST\(ve\.credit_amount\s+AS numeric\)\) AS total_credit/,
     /la\.company_id\s+=\s+\$\{companyId\}/,
     /v\.company_id\s+=\s+\$\{companyId\}/,
     /v\.optional\s+=\s+false/,
