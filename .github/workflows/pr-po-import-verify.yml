@@ -16,7 +16,7 @@ env:
   ENABLE_SCHEDULERS: "false"
 
 jobs:
-  startup-schema:
+  po-import-regression:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -45,5 +45,5 @@ jobs:
         run: npm ci --no-audit --bin-links=true
       - name: Prepare test database schema
         run: node node_modules/drizzle-kit/bin.cjs push --force
-      - name: Startup schema integrity
-        run: npx vitest run tests/startup-schema-integrity.test.ts
+      - name: PO Import regression tests
+        run: npx vitest run tests/startup-schema-integrity.test.ts tests/po-import-parent-accounting.test.ts
