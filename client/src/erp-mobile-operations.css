@@ -94,7 +94,7 @@
   }
 }
 
-/* Landscape phones can cross Tailwind's md width while still being phone-class touch devices. */
+/* Landscape phones can cross Tailwind's sm/md widths while still being phone-class touch devices. */
 @media (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .erp-phone-only {
     display: block !important;
@@ -170,6 +170,21 @@
   [data-erp-route="/orphaned-records"] [class~="hidden"][class~="md:block"],
   [data-erp-route="/deleted-items"] [class~="hidden"][class~="md:block"] {
     display: none !important;
+  }
+
+  /* Opening/closing stock use sm columns; keep compact phone columns in landscape. */
+  [data-erp-route="/opening-stock"] [class*="sm:grid-cols-7"],
+  [data-erp-route="/closing-stock-summary"] [class*="sm:grid-cols-4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  [data-erp-route="/opening-stock"] [class~="hidden"][class~="sm:block"],
+  [data-erp-route="/closing-stock-summary"] [class~="hidden"][class~="sm:block"] {
+    display: none !important;
+  }
+
+  [data-erp-route="/closing-stock-summary"] [class~="sm:hidden"] {
+    display: block !important;
   }
 
   /* Literal desktop viewport caps are replaced by the shared visual viewport on phone-class devices. */
