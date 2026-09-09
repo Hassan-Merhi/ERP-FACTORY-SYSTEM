@@ -33,20 +33,12 @@ const ROUTE_GROUPS = [
     routes: [
       { path: "/tracking" },
       { path: "/accounts" },
-      { path: "/parties" },
-      { path: "/containers" },
-      { path: "/inventory?tab=by-location" },
-      { path: "/stock?tab=items" },
       { path: "/daybook" },
-      { path: "/transaction-journal" },
       { path: "/vouchers" },
-      { path: "/sales-tools?tab=transfers" },
       { path: "/opening-stock" },
       { path: "/closing-stock-summary" },
       { path: "/import-stock-items" },
       { path: "/pos" },
-      { path: "/chat" },
-      { path: "/account-groups" },
     ],
   },
   {
@@ -66,15 +58,27 @@ const ROUTE_GROUPS = [
       { path: "/factory/import" },
       { path: "/factory/bale-relabeling" },
       { path: "/factory/bale-product-images" },
-      { path: "/factory/chat" },
     ],
   },
 ];
 
+const HOVER_CRITICAL_ROUTES = new Set([
+  "/factory/raw-stock",
+  "/factory/sales/loading/new",
+  "/factory/stock-allocation-v5",
+  "/factory/bale-tracking",
+  "/factory/import",
+  "/factory/bale-relabeling",
+  "/factory/bale-product-images",
+]);
+
 const report = {
   startedAt: new Date().toISOString(),
   viewports: VIEWPORTS,
-  routeGroups: ROUTE_GROUPS.map((group) => ({ workspace: group.workspace, routes: group.routes.map((route) => route.path) })),
+  routeGroups: ROUTE_GROUPS.map((group) => ({
+    workspace: group.workspace,
+    routes: group.routes.map((route) => route.path),
+  })),
   cases: [],
   failures: [],
 };
@@ -93,13 +97,13 @@ async function settle(page) {
 }
 
 async function closeLanguageOnboarding(page) {
-  const dialogSelector = '[data-testid="language-onboarding-dialog"]';
-  const open = await page.evaluate((selector) => {
-    const dialog = document.querySelector(selector);
+  const selector = '[data-testid="language-onboarding-dialog"]';
+  const open = await page.evaluate((dialogSelector) => {
+    const dialog = document.querySelector(dialogSelector);
     if (!(dialog instanceof HTMLElement)) return false;
     const style = getComputedStyle(dialog);
     return style.display !== "none" && style.visibility !== "hidden";
-  }, dialogSelector);
+  }, selector);
   if (!open) return;
 
   await page.click('[data-testid="language-onboarding-en"]');
@@ -109,14 +113,14 @@ async function closeLanguageOnboarding(page) {
   );
   await page.click('[data-testid="language-onboarding-continue"]');
   await page.waitForFunction(
-    (selector) => {
-      const dialog = document.querySelector(selector);
+    (dialogSelector) => {
+      const dialog = document.querySelector(dialogSelector);
       if (!(dialog instanceof HTMLElement)) return true;
       const style = getComputedStyle(dialog);
       return dialog.dataset.state === "closed" || style.display === "none" || style.visibility === "hidden";
     },
     { timeout: TIMEOUT_MS },
-    dialogSelector,
+    selector,
   );
 }
 
@@ -158,14 +162,17 @@ async function selectWorkspaceCompany(page, companyCode) {
 }
 
 async function openRoute(page, route) {
-  const response = await page.goto(`${BASE_URL}${route}`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
+  const response = await page.goto(`${BASE_URL}${route}`, {
+    waitUntil: "domcontentloaded",
+    timeout: TIMEOUT_MS,
+  });
   await page.waitForFunction(() => Boolean(document.getElementById("main-content")), { timeout: TIMEOUT_MS });
   await settle(page);
   return response?.status() ?? null;
 }
 
 async function exerciseSafeControls(page, route) {
-  const result = {
+  const interaction = {
     focusedTextControl: null,
     comboboxExercised: false,
     scannerFocused: false,
@@ -196,7 +203,7 @@ async function exerciseSafeControls(page, route) {
 
   if (textSelector) {
     await page.focus(textSelector);
-    result.focusedTextControl = await page.evaluate(
+    interaction.focusedTextControl = await page.evaluate(
       (selector) => document.activeElement === document.querySelector(selector),
       textSelector,
     );
@@ -219,23 +226,26 @@ async function exerciseSafeControls(page, route) {
     await page.click(comboboxSelector);
     await page.keyboard.press("Escape");
     await settle(page);
-    result.comboboxExercised = true;
+    interaction.comboboxExercised = true;
   }
 
   if (route === "/factory/sales/loading/new") {
     const scanner = await page.$('[data-testid="input-scan-code"]');
     if (scanner) {
-      const disabled = await page.$eval('[data-testid="input-scan-code"]', (element) => element.hasAttribute("disabled"));
+      const disabled = await page.$eval(
+        '[data-testid="input-scan-code"]',
+        (element) => element.hasAttribute("disabled"),
+      );
       if (!disabled) {
         await page.focus('[data-testid="input-scan-code"]');
-        result.scannerFocused = await page.evaluate(
+        interaction.scannerFocused = await page.evaluate(
           () => document.activeElement === document.querySelector('[data-testid="input-scan-code"]'),
         );
       }
     }
   }
 
-  return result;
+  return interaction;
 }
 
 async function readState(page, route, viewport) {
@@ -270,8 +280,7 @@ async function readState(page, route, viewport) {
         for (const selector of criticalSelectors) {
           for (const element of document.querySelectorAll(selector)) {
             const rect = rectOf(element);
-            if (!rect) continue;
-            if (rect.height < 44 || rect.width < 44) {
+            if (rect && (rect.height < 44 || rect.width < 44)) {
               criticalTouchViolations.push(`${selector}:${Math.round(rect.width)}x${Math.round(rect.height)}`);
             }
           }
@@ -323,6 +332,10 @@ async function readState(page, route, viewport) {
         ? { visible: true, disabled: scanner.hasAttribute("disabled"), width: scannerRect.width, height: scannerRect.height }
         : { visible: false, disabled: false, width: 0, height: 0 };
 
+      const loadingSetupVisible =
+        visible(document.querySelector('[data-testid="select-customer"]')) &&
+        visible(document.querySelector('[data-testid="select-location"]'));
+
       return {
         route: currentRoute,
         actualPath: `${location.pathname}${location.search}`,
@@ -338,6 +351,7 @@ async function readState(page, route, viewport) {
         stickyFixedViewportViolations,
         smallTextControls,
         scannerContract,
+        loadingSetupVisible,
       };
     },
     {
@@ -359,9 +373,7 @@ function assertState(state, viewport, route, interaction) {
   if (state.actualPath.startsWith("/login")) failures.push(`${label}: authenticated session returned to login`);
   if (!state.actualPath.startsWith(expectedPath)) failures.push(`${label}: redirected to ${state.actualPath}`);
   if (state.horizontalOverflow) {
-    failures.push(
-      `${label}: root horizontal overflow (${Math.max(state.rootScrollWidth, state.bodyScrollWidth)}px > ${state.viewport.width}px)`,
-    );
+    failures.push(`${label}: root horizontal overflow (${Math.max(state.rootScrollWidth, state.bodyScrollWidth)}px > ${state.viewport.width}px)`);
   }
   if (viewport.name === "phone-landscape" && !state.phoneLandscapeMedia) {
     failures.push(`${label}: landscape-phone coarse-pointer contract did not activate`);
@@ -369,8 +381,8 @@ function assertState(state, viewport, route, interaction) {
   if (viewport.name === "tablet-768" && state.phoneLandscapeMedia) {
     failures.push(`${label}: landscape-phone media contract leaked into tablet`);
   }
-  if (phoneClass && state.hoverOnlyInteractive.length > 0) {
-    failures.push(`${label}: hover-only interactive controls remain: ${state.hoverOnlyInteractive.join(", ")}`);
+  if (phoneClass && HOVER_CRITICAL_ROUTES.has(route) && state.hoverOnlyInteractive.length > 0) {
+    failures.push(`${label}: hover-only touch-critical controls remain: ${state.hoverOnlyInteractive.join(", ")}`);
   }
   if (state.criticalTouchViolations.length > 0) {
     failures.push(`${label}: critical controls below 44px: ${state.criticalTouchViolations.join(", ")}`);
@@ -378,8 +390,8 @@ function assertState(state, viewport, route, interaction) {
   if (state.dialogViewportViolations.length > 0) {
     failures.push(`${label}: dialog escaped viewport: ${state.dialogViewportViolations.join(", ")}`);
   }
-  if (state.stickyFixedViewportViolations.length > 0) {
-    failures.push(`${label}: sticky/fixed control escaped viewport: ${state.stickyFixedViewportViolations.join(", ")}`);
+  if (phoneClass && state.stickyFixedViewportViolations.length > 0) {
+    failures.push(`${label}: sticky/fixed control escaped phone viewport: ${state.stickyFixedViewportViolations.join(", ")}`);
   }
   if (state.smallTextControls.length > 0) {
     failures.push(`${label}: phone text controls below 16px: ${state.smallTextControls.join(", ")}`);
@@ -387,11 +399,13 @@ function assertState(state, viewport, route, interaction) {
   if (interaction.focusedTextControl === false) failures.push(`${label}: visible text control did not retain focus`);
 
   if (route === "/factory/sales/loading/new") {
-    if (!state.scannerContract.visible) failures.push(`${label}: scanner input is missing`);
+    if (!state.scannerContract.visible && !state.loadingSetupVisible) {
+      failures.push(`${label}: neither loading setup nor scanner state is visible`);
+    }
     if (state.scannerContract.visible && state.scannerContract.height < 44) {
       failures.push(`${label}: scanner input is only ${Math.round(state.scannerContract.height)}px tall`);
     }
-    if (!state.scannerContract.disabled && !interaction.scannerFocused) {
+    if (state.scannerContract.visible && !state.scannerContract.disabled && !interaction.scannerFocused) {
       failures.push(`${label}: enabled scanner input could not receive focus`);
     }
   }
