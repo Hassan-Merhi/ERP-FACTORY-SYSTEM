@@ -50,6 +50,10 @@ function safeName(value) {
   return value.replace(/^\//, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
 }
 
+function isPhoneClassViewport(viewport) {
+  return viewport.width < 768 || (viewport.hasTouch && viewport.height <= 500);
+}
+
 async function settle(page) {
   await new Promise((resolve) => setTimeout(resolve, 700));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -148,6 +152,7 @@ async function readState(page, route, viewport) {
         horizontalOverflow: Math.max(root.scrollWidth, body?.scrollWidth || 0) > viewportWidth + 2,
         mainVisible: visible(document.getElementById("main-content")),
         anchorVisible: anchorSelector ? visible(document.querySelector(anchorSelector)) : true,
+        phoneLandscapeMedia: matchMedia("(hover: none) and (pointer: coarse) and (max-height: 500px)").matches,
         rawMobileVisible: false,
         rawDesktopVisible: false,
         imageDeleteMobileContract: false,
@@ -174,6 +179,7 @@ async function readState(page, route, viewport) {
 function assertState(state, viewport, route) {
   const failures = [];
   const label = `${viewport.name} ${route.path}`;
+  const phoneClass = isPhoneClassViewport(viewport);
   if (!state.mainVisible) failures.push(`${label}: main content is not visible`);
   if (!state.anchorVisible) failures.push(`${label}: route anchor is not visible`);
   if (state.actualPath.startsWith("/login")) failures.push(`${label}: returned to login`);
@@ -184,10 +190,18 @@ function assertState(state, viewport, route) {
     );
   }
 
+  if (viewport.name === "phone-landscape" && !state.phoneLandscapeMedia) {
+    failures.push(`${label}: coarse landscape-phone media query did not activate`);
+  }
+  if (viewport.name === "tablet-768" && state.phoneLandscapeMedia) {
+    failures.push(`${label}: landscape-phone media query leaked into tablet layout`);
+  }
+
   if (route.path === "/factory/raw-stock" || route.path === "/factory/raw-materials") {
-    if (viewport.width < 768 && !state.rawMobileVisible) failures.push(`${label}: mobile Raw Stock list is not visible`);
-    if (viewport.width >= 768 && state.rawMobileVisible) failures.push(`${label}: mobile Raw Stock list leaked into md+ layout`);
-    if (viewport.width >= 768 && !state.rawDesktopVisible) failures.push(`${label}: desktop Raw Stock table is not visible`);
+    if (phoneClass && !state.rawMobileVisible) failures.push(`${label}: mobile Raw Stock list is not visible`);
+    if (phoneClass && state.rawDesktopVisible) failures.push(`${label}: desktop Raw Stock table leaked into phone layout`);
+    if (!phoneClass && state.rawMobileVisible) failures.push(`${label}: mobile Raw Stock list leaked into tablet/desktop layout`);
+    if (!phoneClass && !state.rawDesktopVisible) failures.push(`${label}: desktop Raw Stock table is not visible`);
   }
 
   return failures;
