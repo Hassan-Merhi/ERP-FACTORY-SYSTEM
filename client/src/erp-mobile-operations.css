@@ -81,12 +81,14 @@
   }
 
   /* These operational rows expose real edit/delete actions only on hover on desktop. */
-  [data-erp-route="/accounts"] button[class*="opacity-0"],
-  [data-erp-route="/parties"] button[class*="opacity-0"],
-  [data-erp-route="/parties"] div[class*="opacity-0"],
-  [data-erp-route="/containers"] button[class*="opacity-0"],
-  [data-erp-route="/settings"] button[class*="opacity-0"],
-  [data-erp-route="/settings"] div[class*="invisible"] {
+  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
     opacity: 1 !important;
     visibility: visible !important;
   }
@@ -135,12 +137,14 @@
     gap: 0.75rem;
   }
 
-  [data-erp-route="/accounts"] button[class*="opacity-0"],
-  [data-erp-route="/parties"] button[class*="opacity-0"],
-  [data-erp-route="/parties"] div[class*="opacity-0"],
-  [data-erp-route="/containers"] button[class*="opacity-0"],
-  [data-erp-route="/settings"] button[class*="opacity-0"],
-  [data-erp-route="/settings"] div[class*="invisible"] {
+  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
     opacity: 1 !important;
     visibility: visible !important;
   }
