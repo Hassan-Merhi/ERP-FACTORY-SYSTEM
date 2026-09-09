@@ -190,6 +190,11 @@ const serverMessageTranslations = [
     fr: "La quantité de remplacement de l’article de vente ${saleItemId} dépasse la quantité vendue ${originalQty}",
   },
   {
+    en: "Replacement quantity for sale item ${saleItemId} exceeds the sold quantity ${originalQty.toString()}",
+    ar: "كمية الاستبدال لصنف البيع ${saleItemId} تتجاوز الكمية المباعة ${originalQty.toString()}",
+    fr: "La quantité de remplacement de l’article de vente ${saleItemId} dépasse la quantité vendue ${originalQty.toString()}",
+  },
+  {
     en: "Voucher ${voucherId} is missing its location",
     ar: "السند ${voucherId} لا يحتوي على موقع",
     fr: "La pièce ${voucherId} n’a pas d’emplacement",

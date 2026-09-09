@@ -17,6 +17,7 @@ on:
       - "docs/archive/mobile-responsive-phase-status.md"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.mobile.json"
       - ".github/workflows/mobile-responsive.yml"
   workflow_dispatch:
 
@@ -64,10 +65,38 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Install Chrome for rendered smoke
         run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
-      - name: TypeScript
-        run: npm run check
-      - name: Lint
-        run: npm run lint
+      - name: Mobile/client TypeScript
+        run: node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit --project tsconfig.mobile.json
+      - name: Mobile/client lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          lint_ts_dir="$RUNNER_TEMP/typescript-eslint-ts6"
+          app_ts_backup="$RUNNER_TEMP/typescript-app-ts7"
+
+          # typescript-eslint 8.x supports the TypeScript compiler API through <6.1.
+          # Keep the app's TS 7 install for typechecking/builds, but give ESLint a
+          # temporary TS 6.0.3 API, then restore TS 7 before the remaining gates.
+          npm install \
+            --prefix "$lint_ts_dir" \
+            --ignore-scripts \
+            --no-save \
+            --package-lock=false \
+            typescript@6.0.3
+
+          mv node_modules/typescript "$app_ts_backup"
+          restore_app_typescript() {
+            rm -rf node_modules/typescript
+            mv "$app_ts_backup" node_modules/typescript
+          }
+          trap restore_app_typescript EXIT
+          ln -s "$lint_ts_dir/node_modules/typescript" node_modules/typescript
+
+          node node_modules/eslint/bin/eslint.js \
+            "client/src/**/*.{ts,tsx}" \
+            scripts/verify-mobile-responsive-wave2-browser.mjs \
+            scripts/verify-mobile-responsive-wave4-browser.mjs \
+            scripts/verify-mobile-responsive-wave4-regression.mjs
       - name: Production build
         run: npm run build
       - name: Cross-module UX consistency audit
@@ -105,6 +134,7 @@ jobs:
 
           node scripts/run-phase9-language-browser-smoke.mjs
           node scripts/verify-mobile-responsive-wave2-browser.mjs
+          node scripts/verify-mobile-responsive-wave4-browser.mjs
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
       - name: Focused responsive tests
