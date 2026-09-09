@@ -19,7 +19,7 @@ const STABLE_QUERY_PREFIXES = [
 
 const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]> = {
   inventory: [
-    "/api/locations/",
+    "/api/locations",
     "/api/inventory",
     "/api/stock",
     "/api/bales",
@@ -34,6 +34,8 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
     "/api/factory/daybook",
     "/api/fiscal-transfers",
     "/api/global-transactions",
+    "/api/global/transactions",
+    "/api/credit-notes",
     "/api/stats",
     "/api/reports/net-position",
     "/api/reports/net-profit",
