@@ -7,29 +7,33 @@ import { runWithTraceContext } from "./lib/traceContext";
 import { logger } from "./lib/logger";
 import {
   normalizeBroadcastCompanyIds,
+  normalizeBroadcastUserId,
   shouldDeliverBroadcastToCompanies,
+  shouldDeliverBroadcastToUser,
 } from "./lib/broadcastScope";
 
 let wss: WebSocketServer | null = null;
 let resolveSession: SessionResolver | null = null;
 
 type SessionResolution =
-  | { status: "resolved"; companyIds: number[] }
+  | { status: "resolved"; companyIds: number[]; userId: string | null }
   | { status: "missing" }
   | { status: "unresolved" };
 
 /** Runs the app's session middleware over a bare upgrade request. */
 type SessionResolver = (request: IncomingMessage) => Promise<SessionResolution>;
 type SessionUpgradeRequest = IncomingMessage & {
-  session?: { currentCompanyId?: unknown; factoryCompanyId?: unknown };
+  session?: { userId?: unknown; currentCompanyId?: unknown; factoryCompanyId?: unknown };
 };
 
 /**
  * Every client used to receive every broadcast, so a sale in one company woke
  * clients in every other company. Sockets now carry both authenticated ERP and
- * Factory company contexts, and a write only reaches a matching tenant context.
+ * Factory company contexts, plus the authenticated user for direct events such
+ * as chat.
  */
 const socketCompanies = new WeakMap<WebSocket, readonly number[] | null>();
+const socketUsers = new WeakMap<WebSocket, string | null>();
 
 /**
  * express-session decorates the response to write its cookie. An upgrade has no
@@ -81,8 +85,9 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
               session?.currentCompanyId,
               session?.factoryCompanyId,
             ]);
-            if (companyIds.length > 0) {
-              finish({ status: "resolved", companyIds });
+            const userId = normalizeBroadcastUserId(session?.userId);
+            if (companyIds.length > 0 || userId) {
+              finish({ status: "resolved", companyIds, userId });
               return;
             }
             finish({ status: "missing" });
@@ -94,8 +99,8 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
       }
 
       // A hung session store must not leave a live socket permanently unable to
-      // receive tenant-scoped invalidations. Mark it unresolved so setupWS can
-      // close it and let the client reconnect with a fresh lookup.
+      // receive scoped events. Mark it unresolved so setupWS can close it and
+      // let the client reconnect with a fresh lookup.
       setTimeout(() => finish({ status: "unresolved" }), 5_000).unref?.();
     });
 }
@@ -107,25 +112,27 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
   wss.on("connection", (ws, request) => {
     const connectionId = `websocket-${randomUUID()}`;
 
-    // Tenant-scoped broadcasts fail closed until company context resolves. If
-    // the session store itself errors or times out, close the socket so the
-    // client reconnects instead of remaining permanently stale with null scope.
+    // Scoped broadcasts fail closed until session context resolves. If the
+    // session store itself errors or times out, close the socket so the client
+    // reconnects instead of remaining permanently stale with null scope.
     socketCompanies.set(ws, null);
+    socketUsers.set(ws, null);
     if (resolveSession) {
       void resolveSession(request)
         .then((result) => {
           if (result.status === "resolved") {
             socketCompanies.set(ws, result.companyIds);
+            socketUsers.set(ws, result.userId);
             return;
           }
           if (result.status === "unresolved" && ws.readyState !== WebSocket.CLOSED) {
-            logger.warn("[WS] Closing socket after unresolved session company; client should reconnect.");
-            ws.close(1013, "Session company unavailable");
+            logger.warn("[WS] Closing socket after unresolved session context; client should reconnect.");
+            ws.close(1013, "Session context unavailable");
           }
         })
         .catch((error) => {
           logger.warn("[WS] Closing socket after unexpected session-resolution failure.", { error });
-          if (ws.readyState !== WebSocket.CLOSED) ws.close(1013, "Session company unavailable");
+          if (ws.readyState !== WebSocket.CLOSED) ws.close(1013, "Session context unavailable");
         });
     }
 
@@ -160,6 +167,7 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
         ws.on("close", () => {
           clearInterval(pingInterval);
           socketCompanies.delete(ws);
+          socketUsers.delete(ws);
         });
       }
     );
@@ -170,13 +178,20 @@ export interface BroadcastOptions {
   /**
    * The company the change belongs to. Sockets in other ERP/Factory company
    * contexts are skipped; unresolved sockets fail closed. Omit companyId to
-   * reach every client for intentionally server-wide messages.
+   * avoid company filtering for intentionally cross-company messages.
    */
   companyId?: number | null;
+  /**
+   * Optional authenticated recipients. When present, only sockets owned by one
+   * of these users receive the message. This can be combined with companyId.
+   */
+  userIds?: readonly string[];
 }
 
-function shouldDeliver(client: WebSocket, companyId: number | null | undefined): boolean {
-  return shouldDeliverBroadcastToCompanies(socketCompanies.get(client), companyId);
+function shouldDeliver(client: WebSocket, options: BroadcastOptions): boolean {
+  if (!shouldDeliverBroadcastToCompanies(socketCompanies.get(client), options.companyId)) return false;
+  if (!shouldDeliverBroadcastToUser(socketUsers.get(client), options.userIds)) return false;
+  return true;
 }
 
 export function broadcast(message: object, options: BroadcastOptions = {}): void {
@@ -194,7 +209,7 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
       let skipped = 0;
       wss?.clients.forEach((client) => {
         if (client.readyState !== WebSocket.OPEN) return;
-        if (!shouldDeliver(client, options.companyId)) {
+        if (!shouldDeliver(client, options)) {
           skipped += 1;
           return;
         }
@@ -209,7 +224,7 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
 // ── Broadcast volume ────────────────────────────────────────────────────────
 // Every write broadcasts, and every broadcast makes receiving clients refresh
 // the dependent active queries. Counting delivered vs skipped messages shows
-// whether tenant scoping is keeping unrelated clients asleep.
+// whether company/user scoping is keeping unrelated clients asleep.
 const BROADCAST_REPORT_INTERVAL_MS = 5 * 60_000;
 let broadcastCount = 0;
 let deliveredCount = 0;
@@ -227,7 +242,7 @@ function recordBroadcast(delivered: number, skipped: number): void {
   logger.info("[WS] Broadcast volume", {
     broadcasts: broadcastCount,
     messagesDelivered: deliveredCount,
-    messagesSkippedByCompanyScope: skippedCount,
+    messagesSkippedByScope: skippedCount,
     windowMinutes: Math.round(elapsed / 60_000),
   });
 
