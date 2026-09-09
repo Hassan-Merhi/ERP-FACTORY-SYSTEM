@@ -62,6 +62,10 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
     setExpandedCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
   };
 
+  const openHistory = (row: RawStockRow) => {
+    if (row.supplierId) setHistoryDialog({ supplierId: row.supplierId, supplierName: row.supplierName });
+  };
+
   return (
     <>
       <div className="space-y-2">
@@ -86,7 +90,151 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
             </Button>
           )}
         </div>
-        <div className="overflow-hidden rounded-md border bg-card shadow-sm">
+
+        <div className="space-y-3 md:hidden" data-testid="raw-stock-mobile-list">
+          {categories.length === 0 ? (
+            <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+              {zeroBalanceCount > 0 ? "All sources currently have a zero free balance." : "No raw stock available"}
+            </div>
+          ) : (
+            categories.map((cat) => {
+              const rows = groupedStock[cat];
+              const isExpanded = expandedCategories[cat];
+              const catFree = rows.reduce((sum, row) => sum + parseFloat(row.freeKg || "0"), 0);
+              const catValue = rows.reduce((sum, row) => sum + parseFloat(row.valueRemainingUsd), 0);
+
+              return (
+                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 bg-muted/30 px-3 py-2.5 text-left"
+                    onClick={() => toggleCategory(cat)}
+                    data-testid={`button-mobile-raw-stock-category-${cat}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        )}
+                        <FlaskRound className="h-4 w-4 shrink-0 text-primary/70" />
+                        <span className="truncate text-sm font-semibold">{cat}</span>
+                        <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
+                          {rows.length}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right text-[11px] text-muted-foreground">
+                      <div className="font-mono font-semibold text-foreground">{formatNumber(catFree)} kg</div>
+                      <div className="font-mono">${formatNumber(catValue)}</div>
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="divide-y">
+                      {rows.map((row, idx) => (
+                        <div
+                          key={`mobile-${cat}-${idx}`}
+                          className="space-y-3 p-3"
+                          data-testid={`card-raw-stock-mobile-${row.supplierId}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                className="max-w-full truncate text-left text-sm font-semibold text-foreground hover:text-primary hover:underline"
+                                onClick={() => openHistory(row)}
+                                data-testid={`link-mobile-supplier-name-${row.supplierId}`}
+                              >
+                                {row.supplierName}
+                              </button>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                <span>Last offload: {new Date(row.lastOffloaded).toLocaleDateString()}</span>
+                                {row.sourceType === "OPENING_BALANCE" && (
+                                  <span className="inline-flex items-center rounded border border-blue-100 bg-blue-50 px-1.5 font-medium text-blue-600 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                    OB
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Available</div>
+                              <div className="font-mono text-base font-bold text-foreground">
+                                {formatNumber(parseFloat(row.freeKg || "0"))} kg
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="rounded-lg bg-muted/40 p-2">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Received</div>
+                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.receivedKg))} kg</div>
+                            </div>
+                            <div className="rounded-lg bg-muted/40 p-2">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.usedKg))} kg</div>
+                            </div>
+                            <div className="rounded-lg bg-muted/40 p-2">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Value</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                ${formatNumber(parseFloat(row.valueRemainingUsd))}
+                              </div>
+                            </div>
+                            <div className="rounded-lg bg-muted/40 p-2">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                ${parseFloat(row.costPerKgUsd || "0").toFixed(6)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="min-w-0 gap-1 px-2 text-xs text-primary"
+                              onClick={() => onAdjust(row)}
+                              data-testid={`button-adjust-mobile-${row.supplierId}`}
+                            >
+                              <Plus className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">Adjust</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="min-w-0 gap-1 px-2 text-xs text-destructive"
+                              onClick={() => onDeduct(row)}
+                              data-testid={`button-deduct-mobile-${row.supplierId}`}
+                            >
+                              <MinusCircle className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">Deduct</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="min-w-0 gap-1 px-2 text-xs text-emerald-600"
+                              onClick={() => onAddToBatch(row)}
+                              data-testid={`button-batch-mobile-${row.supplierId}`}
+                            >
+                              <Layers className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">Batch</span>
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-md border bg-card shadow-sm md:block">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="hover:bg-transparent">
@@ -168,8 +316,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                                   className="font-medium text-sm text-foreground hover:text-primary hover:underline text-left w-fit cursor-pointer"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (row.supplierId)
-                                      setHistoryDialog({ supplierId: row.supplierId, supplierName: row.supplierName });
+                                    openHistory(row);
                                   }}
                                   data-testid={`link-supplier-name-${row.supplierId}`}
                                 >
