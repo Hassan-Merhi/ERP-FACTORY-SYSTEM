@@ -110,7 +110,7 @@ for (const route of [
 
 // Reports/opening/closing already have responsive page contracts; Wave 3 protects them rather than redesigning formulas.
 expectTokens("client/src/pages/OpeningStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-7", "hidden sm:block"]);
-expectTokens("client/src/pages/ClosingStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-7"]);
+expectTokens("client/src/pages/ClosingStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-4", "sm:hidden"]);
 expectTokens("client/src/pages/Vouchers.tsx", ["VoucherMobileTabs", "VoucherDesktopNav"]);
 
 if (failures.length) {
