@@ -44,6 +44,7 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
     "/api/dashboard-payable-accounts",
   ],
   factory: ["/api/factory/"],
+  scans: ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"],
   payroll: ["/api/factory/payroll", "/api/factory-payroll"],
   containers: ["/api/containers", "/api/import", "/api/sp/", "/api/supplier-proforma"],
   reference: [
@@ -64,6 +65,7 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
     "/api/chat",
     "/api/user-notes",
   ],
+  presence: ["/api/user-presence"],
 };
 
 // Normal writes should feel live. A short trailing debounce still folds an import,
