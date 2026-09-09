@@ -1,0 +1,100 @@
+/*
+ * ERP Wave 3 mobile-operation utilities.
+ *
+ * The ERP shell keeps tablet/desktop layouts intact at 768px and above, while
+ * short-height coarse-pointer landscape phones (for example 844x390) continue
+ * to receive the phone interaction model. Components opt into these helpers so
+ * we do not globally rewrite legacy desktop layouts.
+ */
+
+.erp-phone-only {
+  display: none;
+}
+
+.erp-desktop-data-only {
+  display: block;
+}
+
+.erp-mobile-scroll-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.erp-mobile-scroll-tabs > * {
+  min-width: max-content;
+}
+
+.erp-mobile-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.erp-mobile-touch-visible {
+  transition: opacity 150ms ease;
+}
+
+@media (max-width: 767px) {
+  .erp-phone-only {
+    display: block;
+  }
+
+  .erp-desktop-data-only {
+    display: none !important;
+  }
+
+  .erp-mobile-full-width {
+    width: 100% !important;
+  }
+
+  .erp-mobile-touch-visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .erp-mobile-touch-target {
+    min-height: 44px !important;
+    min-width: 44px;
+  }
+
+  .erp-mobile-card-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+/* Landscape phones can cross Tailwind's md width while still being phone-class touch devices. */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .erp-phone-only {
+    display: block !important;
+  }
+
+  .erp-desktop-data-only {
+    display: none !important;
+  }
+
+  .erp-mobile-full-width {
+    width: 100% !important;
+  }
+
+  .erp-mobile-touch-visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .erp-mobile-touch-target {
+    min-height: 44px !important;
+    min-width: 44px;
+  }
+
+  .erp-mobile-card-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.75rem;
+  }
+}
