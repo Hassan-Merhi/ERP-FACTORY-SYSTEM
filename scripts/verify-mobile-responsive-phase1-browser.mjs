@@ -138,6 +138,7 @@ async function readState(page, route) {
   return page.evaluate((currentRoute) => {
     const root = document.documentElement;
     const body = document.body;
+    const mainContent = document.getElementById("main-content");
     const viewportWidth = window.innerWidth;
     const visibleRect = (element) => {
       if (!(element instanceof HTMLElement)) return null;
@@ -147,6 +148,14 @@ async function readState(page, route) {
       return { width: rect.width, height: rect.height, x: rect.x, y: rect.y };
     };
 
+    const touchActionProbe = document.createElement("button");
+    touchActionProbe.type = "button";
+    touchActionProbe.className = "opacity-0 group-hover:opacity-100";
+    touchActionProbe.setAttribute("aria-hidden", "true");
+    mainContent?.appendChild(touchActionProbe);
+    const touchActionOpacity = window.getComputedStyle(touchActionProbe).opacity;
+    touchActionProbe.remove();
+
     const state = {
       route: currentRoute,
       actualPath: `${window.location.pathname}${window.location.search}`,
@@ -154,22 +163,27 @@ async function readState(page, route) {
       rootScrollWidth: root.scrollWidth,
       bodyScrollWidth: body?.scrollWidth || 0,
       horizontalOverflow: Math.max(root.scrollWidth, body?.scrollWidth || 0) > viewportWidth + 2,
-      main: visibleRect(document.getElementById("main-content")),
+      main: visibleRect(mainContent),
       anchorVisible: false,
       paneWidth: null,
       flexDirection: null,
+      touchActionOpacity,
     };
 
     if (currentRoute.endsWith("/agents") || currentRoute === "/agents") {
       const anchor = document.querySelector('[data-testid="button-add-agent"]');
       const pane = anchor?.closest(".w-72");
+      const layout = pane?.parentElement;
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
+      state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
     } else if (currentRoute === "/account-groups") {
       const anchor = document.querySelector('[data-testid="button-create-group"]');
       const pane = anchor?.closest(".w-72");
+      const layout = pane?.parentElement;
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
+      state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
     } else if (currentRoute.endsWith("/chat") || currentRoute === "/chat") {
       const chat = document.querySelector('[data-testid="chat-page"]');
       const pane = chat?.querySelector(":scope > .w-64");
@@ -185,6 +199,8 @@ async function readState(page, route) {
 function assertState(state, viewport, route) {
   const failures = [];
   const label = `${viewport.name} ${route}`;
+  const shouldStack = viewport.width <= 767;
+
   if (!state.main) failures.push(`${label}: main content is not visible`);
   if (state.actualPath.startsWith("/login")) failures.push(`${label}: authenticated session returned to login`);
   if (!state.actualPath.startsWith(route)) failures.push(`${label}: redirected to ${state.actualPath}`);
@@ -195,15 +211,20 @@ function assertState(state, viewport, route) {
   if (state.paneWidth !== null && state.paneWidth > state.viewportWidth + 2) {
     failures.push(`${label}: legacy navigation pane is ${Math.round(state.paneWidth)}px wide for ${state.viewportWidth}px viewport`);
   }
-  if (route.endsWith("/chat") || route === "/chat") {
-    const shouldStack = viewport.width <= 767;
-    if (shouldStack && state.flexDirection !== "column") {
-      failures.push(`${label}: chat is ${state.flexDirection || "unknown"} instead of stacked column layout`);
-    }
-    if (!shouldStack && state.flexDirection === "column") {
-      failures.push(`${label}: tablet/desktop chat unexpectedly uses the phone column layout`);
-    }
+  if (shouldStack && state.flexDirection !== "column") {
+    failures.push(`${label}: critical layout is ${state.flexDirection || "unknown"} instead of the phone column layout`);
   }
+  if (!shouldStack && state.flexDirection === "column") {
+    failures.push(`${label}: tablet/desktop layout unexpectedly uses the phone column layout`);
+  }
+
+  const expectedTouchOpacity = viewport.hasTouch ? "1" : "0";
+  if (state.touchActionOpacity !== expectedTouchOpacity) {
+    failures.push(
+      `${label}: hover-hidden touch action opacity is ${state.touchActionOpacity}, expected ${expectedTouchOpacity}`,
+    );
+  }
+
   return failures;
 }
 
