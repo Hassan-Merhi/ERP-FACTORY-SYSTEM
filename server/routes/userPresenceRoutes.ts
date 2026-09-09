@@ -121,7 +121,6 @@ export function registerUserPresenceRoutes(app: Express) {
         });
 
       if (type === "route_change") {
-        broadcastPresenceChange();
         await db.insert(userActivityLog).values({
           userId,
           username,
@@ -129,6 +128,7 @@ export function registerUserPresenceRoutes(app: Express) {
           companyName,
           route,
         });
+        broadcastPresenceChange();
 
         db.execute(
           sql`DELETE FROM user_activity_log WHERE user_id = ${userId}
