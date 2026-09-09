@@ -377,6 +377,31 @@ function handleOffline(): void {
   scheduleReconnect();
 }
 
+/**
+ * The server captures company/user scope when a WebSocket connects. Company
+ * switching no longer reloads the browser, so a successful session switch must
+ * replace the existing socket immediately or it would keep listening to the old
+ * company. Pending old-company invalidations are discarded and the replacement
+ * connection performs one catch-up refresh.
+ */
+export function refreshRealtimeSessionScope(): void {
+  if (!managerRunning || subscribers.size === 0) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (debounceTimer) clearTimeout(debounceTimer);
+  reconnectTimer = null;
+  debounceTimer = null;
+  reconnectAttempt = 0;
+  firstConnectionDelayed = true;
+  missedWhileHidden = false;
+  resetPendingInvalidation();
+
+  const socket = sharedSocket;
+  sharedSocket = null;
+  setRealtimeConnectionStatus("connecting");
+  socket?.close(1000, "Session scope changed");
+  connectSharedSocket();
+}
+
 function startManager(): void {
   if (managerRunning) return;
   managerRunning = true;
