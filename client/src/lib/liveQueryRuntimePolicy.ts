@@ -8,8 +8,24 @@ interface LiveQueryState {
   isInvalidated?: boolean;
 }
 
+interface LiveQueryOptions {
+  refetchOnReconnect?: unknown;
+  staleTime?: unknown;
+}
+
 export function shouldDefaultRefetchLiveQuery(queryKey: QueryKey): boolean {
   return isLiveTransactionalQueryKey(queryKey);
+}
+
+/**
+ * Only legacy live queries that override the central reconnect/freshness policy
+ * need the extra browser-online compatibility path. Normal live queries already
+ * use TanStack Query's refetchOnReconnect hook and must not be woken twice.
+ */
+export function needsLegacyReconnectFallback(queryKey: QueryKey, options: LiveQueryOptions): boolean {
+  if (!isLiveTransactionalQueryKey(queryKey)) return false;
+  if (options.refetchOnReconnect === false) return true;
+  return typeof options.staleTime === "number" && options.staleTime > QUERY_STALE_TIMES.live;
 }
 
 /**
@@ -69,10 +85,17 @@ export function installLiveQueryRuntimePolicy(): void {
 
   if (typeof window !== "undefined") {
     window.addEventListener("online", () => {
-      void queryClient.invalidateQueries({
-        predicate: (query) => isLiveTransactionalQueryKey(query.queryKey),
-        refetchType: "active",
-      });
+      // TanStack handles normal live queries through refetchOnReconnect. Defer the
+      // compatibility pass one tick so any standard reconnect fetch starts first,
+      // then only recover active legacy queries that are still centrally stale.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({
+          predicate: (query) =>
+            needsLegacyReconnectFallback(query.queryKey, query.options) &&
+            shouldRefreshLiveQueryOnObserverAdd(query.queryKey, query.state),
+          refetchType: "active",
+        });
+      }, 0);
     });
   }
 }
