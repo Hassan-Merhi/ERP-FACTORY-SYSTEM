@@ -190,6 +190,11 @@ const serverMessageTranslations = [
     fr: "La quantité de remplacement de l’article de vente ${saleItemId} dépasse la quantité vendue ${originalQty}",
   },
   {
+    en: "Replacement quantity for sale item ${saleItemId} exceeds the sold quantity ${originalQty.toString()}",
+    ar: "كمية الاستبدال لصنف البيع ${saleItemId} تتجاوز الكمية المباعة ${originalQty.toString()}",
+    fr: "La quantité de remplacement de l’article de vente ${saleItemId} dépasse la quantité vendue ${originalQty.toString()}",
+  },
+  {
     en: "Voucher ${voucherId} is missing its location",
     ar: "السند ${voucherId} لا يحتوي على موقع",
     fr: "La pièce ${voucherId} n’a pas d’emplacement",
@@ -213,6 +218,16 @@ const serverMessageTranslations = [
     en: "Updated ${count} POS sales",
     ar: "تم تحديث ${count} عمليات بيع في نقاط البيع",
     fr: "${count} ventes POS mises à jour",
+  },
+  {
+    en: `Updated ${committed.updatedVoucherIds.length} POS sale${committed.updatedVoucherIds.length === 1 ? "" : "s"}`,
+    ar: `تم تحديث ${committed.updatedVoucherIds.length} عملية بيع في نقاط البيع`,
+    fr: `${committed.updatedVoucherIds.length} vente(s) POS mise(s) à jour`,
+  },
+  {
+    en: `${displayQty(result.replacedQuantity)} qty replaced across ${result.updatedVoucherIds.length} sale${result.updatedVoucherIds.length === 1 ? "" : "s"}.`,
+    ar: `تم استبدال كمية ${displayQty(result.replacedQuantity)} عبر ${result.updatedVoucherIds.length} عملية بيع.`,
+    fr: `${displayQty(result.replacedQuantity)} remplacé sur ${result.updatedVoucherIds.length} vente(s).`,
   },
 ] as const satisfies readonly Translation[];
 
