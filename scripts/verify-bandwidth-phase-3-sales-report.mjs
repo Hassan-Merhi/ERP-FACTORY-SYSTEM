@@ -65,12 +65,12 @@ assert.match(client, /fetchSalesReportRows/, "explicit raw-row fetch helper is r
 assert.match(
   bandwidthPlugin,
   /\/api\/sales-report\/summary/,
-  "main Sales Report screen must be transformed to the compact summary endpoint"
+  "main Sales Report transform must target the compact summary endpoint"
 );
 assert.match(
   bandwidthPlugin,
   /\/api\/dashboard\/sales-report-all\/summary/,
-  "multi-company Sales Report screen must use the compact summary endpoint"
+  "multi-company Sales Report transform must use the compact summary endpoint"
 );
 assert.match(
   bandwidthPlugin,
@@ -80,15 +80,31 @@ assert.match(
 assert.match(bandwidthPlugin, /debouncedSearchTerm/, "search must be debounced before server requests");
 assert.match(
   bandwidthPlugin,
-  /\/api\/dashboard\/sales-report-comparison\?\\\$\{queryString\}/,
-  "comparison filters must be encoded into the transformed first-element request URL"
+  /SALES_DETAIL_SUFFIX = "\/client\/src\/pages\/salesreportdetail\/useSalesReportDetailModel\.ts"/,
+  "detail transform must follow the current refactored detail model"
 );
 assert.match(
   bandwidthPlugin,
-  /stockGroupName/,
-  "all-company drill-down must preserve stock-group scope by name"
+  /\/api\/dashboard\/sales-report-comparison\?\\\$\{queryString\}/,
+  "comparison filters must be encoded into the compact comparison URL"
+);
+assert.match(bandwidthPlugin, /stockGroupName/, "all-company drill-down must preserve stock-group scope by name");
+assert.match(
+  bandwidthPlugin,
+  /isError: isErrorSingle/,
+  "compact main report must preserve current error and retry state"
 );
 
+assert.match(
+  invalidationPlugin,
+  /transformSalesReportBandwidthSource/,
+  "the always-on Sales Report hardening plugin must activate the compact transform"
+);
+assert.match(
+  invalidationPlugin,
+  /normalizedId\.endsWith\(SALES_REPORT_SUFFIX\)/,
+  "main Sales Report must be compact without an environment flag"
+);
 assert.match(
   invalidationPlugin,
   /key\.startsWith\("\/api\/sales-report"\)/,
@@ -101,27 +117,31 @@ assert.match(
 );
 assert.match(invalidationPlugin, /expectedCount/, "legacy mutation transforms must fail loudly on source drift");
 
-assert.match(viteConfig, /salesReportBandwidthPlugin\(\)/, "Vite must install the Sales Report bandwidth transform");
 assert.match(
   viteConfig,
   /salesReportInvalidationPlugin\(\)/,
-  "Vite must install Sales Report cache invalidation hardening"
+  "Vite must install the always-on Sales Report hardening plugin"
 );
 
 assert.match(
   salesReport,
   /const singleCompanyQueryKey = queryString \? `\/api\/sales-report\?\$\{queryString\}` : "\/api\/sales-report";/,
-  "legacy Sales Report source marker must remain available for the fail-loud transform"
+  "current Sales Report source marker must remain available for the fail-loud transform"
+);
+assert.match(
+  salesReport,
+  /const handleExportExcel = \(\) => exportSalesReportExcel\(salesData\);/,
+  "current export source marker must remain available for on-demand raw-row transformation"
 );
 assert.match(
   salesDetail,
   /const stockGroupId = params\.get\("stockGroupId"\)/,
-  "Sales Report detail source marker must remain available"
+  "refactored Sales Report detail source marker must remain available"
 );
 assert.match(
   salesComparison,
   /queryKey: \["\/api\/dashboard\/sales-report-all", queryString\]/,
-  "comparison source marker must remain available for transform"
+  "comparison source marker must remain available for compact transform"
 );
 assert.match(
   queryClient,
@@ -140,13 +160,14 @@ console.log(
         "server-side all-company summary aggregation",
         "server-side product/company comparison aggregation",
         "company access boundaries",
-        "main-list compact endpoint adoption",
+        "production-default compact main-list activation",
         "server-side filter adoption and search debounce",
         "raw rows isolated to drill-down/export",
         "comparison query URL filter correctness",
-        "all-company stock-group drill-down scope",
+        "refactored all-company stock-group drill-down scope",
+        "error/retry state preservation",
         "mutation cache invalidation",
-        "fail-loud Vite transform markers",
+        "fail-loud current-source transform markers",
       ],
     },
     null,
