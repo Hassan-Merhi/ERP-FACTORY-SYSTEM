@@ -1,6 +1,6 @@
 import type { DailySummary, SalesReportItem } from "@/pages/salesreportlegacy/types";
 import { queryClient } from "./queryClient";
-import { forcedRefreshRequestInit } from "./forcedApiRefresh";
+import { forcedRefreshRequestInit, forcedRefreshRequestInput } from "./forcedApiRefresh";
 
 export interface SalesReportSummaryTotals {
   itemCount: number;
@@ -46,7 +46,10 @@ export async function fetchSalesReportSummary(url: string): Promise<SalesReportS
 export async function fetchSalesReportRows(url: string): Promise<SalesReportItem[]> {
   // Export is an explicit user request for the current raw ledger. Do not let a
   // two-minute report cache make the spreadsheet older than the summary on screen.
-  const response = await fetch(url, forcedRefreshRequestInit(url, { credentials: "include" }));
+  const response = await fetch(
+    forcedRefreshRequestInput(url),
+    forcedRefreshRequestInit(url, { credentials: "include" })
+  );
   if (!response.ok) throw new Error(`Sales report export failed: ${response.status}`);
   const data = await response.json();
   if (!Array.isArray(data)) throw new Error("Invalid sales report export response");
