@@ -3,6 +3,7 @@ import { ClipboardCheck, HardHat, Shield, Target, Users } from "lucide-react";
 import FactoryWorkersHub from "@/pages/factory/FactoryWorkersHub";
 import FactoryEmployeesHub from "@/pages/factory/FactoryEmployeesHub";
 import FactoryInsurance from "@/pages/factory/FactoryInsurance";
+import FactoryProductionTargets from "@/pages/factory/FactoryProductionTargets";
 import { FactoryStaffTracking } from "@/pages/factory/FactoryStaffTracking";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -94,7 +95,7 @@ export default function FactoryPayrollHub() {
         )}
         {activeSection === "production-targets" && (
           <div className="p-4">
-            <FactoryStaffTracking mode="production" />
+            <FactoryProductionTargets />
           </div>
         )}
         {activeSection === "attendance-register" && (
