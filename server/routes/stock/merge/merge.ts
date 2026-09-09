@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import {
@@ -28,7 +28,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 
 export function registerStockItemMergeRoutes(app: Express) {
-  app.get("/api/stock-items/:id/merge-preview", requireAuth, requireNonPOS, async (req: import("express").Request, res: import("express").Response) => {
+  app.get("/api/stock-items/:id/merge-preview", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -167,11 +167,13 @@ export function registerStockItemMergeRoutes(app: Express) {
     }
   });
 
-  app.post("/api/stock-items/:id/merge", requireAuth, requireNonPOS, async (req: any, res: import("express").Response) => {
+  app.post("/api/stock-items/:id/merge", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const userId: number = req.user?.id ?? req.session.userId;
+      // `users.id` is a varchar UUID and `session.userId` is a string; the old
+      // `: number` annotation was untrue and only survived because `req` was `any`.
+      const userId = req.user?.id ?? req.session.userId ?? "";
 
       const keptId = parseInt(req.params.id);
       const duplicateId = parseInt(req.body.duplicateId);
@@ -222,6 +224,10 @@ export function registerStockItemMergeRoutes(app: Express) {
         };
       }
 
+      // Captured from inside the transaction callback. The previous version
+      // stashed it on `req` as an undeclared property, which only compiled
+      // because `req` was `any`.
+      let mergeSnapshotAfter: Record<string, unknown> = {};
       await db.transaction(async (tx) => {
         const keptMap = new Map(keptInvBefore.map((r) => [r.locationId, r]));
 
@@ -329,7 +335,7 @@ export function registerStockItemMergeRoutes(app: Express) {
             totalValue: r.totalValue,
           };
         }
-        req._mergeSnapshotAfter = snapshotAfter;
+        mergeSnapshotAfter = snapshotAfter;
       });
 
       try {
@@ -342,7 +348,7 @@ export function registerStockItemMergeRoutes(app: Express) {
           mergedItemCode: duplicateItem.code.slice(0, 50),
           mergedItemName: duplicateItem.name,
           snapshotBefore,
-          snapshotAfter: req._mergeSnapshotAfter ?? {},
+          snapshotAfter: mergeSnapshotAfter,
           mergedByUserId: String(userId),
           notes: notes ?? null,
         });

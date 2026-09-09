@@ -564,7 +564,10 @@ export const containerFreightPayments = pgTable(
     amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
     method: varchar("method", { length: 50 }),
     reference: text("reference"),
-    createdBy: integer("created_by"),
+    // users.id is a varchar, and startup migration 002 converts this column to
+    // character varying. Declaring it as integer made `drizzle-kit push` fail
+    // against any database where that migration had already run.
+    createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -585,7 +588,7 @@ export const insertContainerFreightPaymentSchema = createInsertSchema(containerF
     amount: z.string().min(1, "Amount is required"),
     method: z.string().optional().nullable(),
     reference: z.string().optional().nullable(),
-    createdBy: z.number().optional().nullable(),
+    createdBy: z.string().optional().nullable(),
   });
 
 export type InsertContainerFreightPayment = z.infer<typeof insertContainerFreightPaymentSchema>;

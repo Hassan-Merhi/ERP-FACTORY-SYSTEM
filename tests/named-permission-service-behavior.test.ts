@@ -132,6 +132,73 @@ describe("named permission service behavior", () => {
     expect(switched.securityPermissionsCompanyId).toBe(4);
   });
 
+  // The narrowing added when postgresErrorCode/isSecuritySchemaError moved from
+  // `any` to `unknown` introduced branches the suite did not reach: a rejection
+  // that is not an object at all, and one that carries its driver code on
+  // `cause` rather than directly. Both decide whether a failure is reported as
+  // SecuritySchemaUnavailableError (a 503) or propagated as-is, so they matter.
+  it("classifies schema failures by driver code whether it is direct, nested on cause, or absent", async () => {
+    const nestedCause = Object.assign(new Error("wrapped"), { cause: { code: "42703" } });
+    await expect(loadNamedPermissions(selectDb(Promise.reject(nestedCause)), "u1", 4)).rejects.toBeInstanceOf(
+      SecuritySchemaUnavailableError
+    );
+
+    // A non-object rejection has no code to read: it must propagate untouched
+    // rather than be misreported as a missing-schema condition.
+    await expect(loadNamedPermissions(selectDb(Promise.reject("boom")), "u1", 4)).rejects.toBe("boom");
+
+    const unrelatedCause = Object.assign(new Error("wrapped"), { cause: { code: "23505" } });
+    await expect(loadNamedPermissions(selectDb(Promise.reject(unrelatedCause)), "u1", 4)).rejects.toBe(unrelatedCause);
+  });
+
+  // Likewise, `typeof companyId !== "number"` is a new guard: the pre-existing
+  // invalid-session case has no userId, so it short-circuits before the company
+  // check is ever evaluated.
+  it("refuses to hydrate when the company id is absent or not a usable positive integer", async () => {
+    for (const currentCompanyId of [undefined, 0, -3, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const session: any = {
+        userId: "u1",
+        currentCompanyId,
+        securityPermissions: ["files.download"],
+        securityPermissionsCompanyId: 9,
+      };
+      await expect(hydrateSessionNamedPermissions(selectDb([]), session)).resolves.toEqual([]);
+      expect(session).toMatchObject({ securityPermissions: [], securityPermissionsCompanyId: null });
+    }
+  });
+
+  it("loads from the database when the session carries no cached permission array", async () => {
+    const fresh: any = { userId: "u1", currentCompanyId: 7 };
+    await expect(
+      hydrateSessionNamedPermissions(selectDb([{ permission: "inventory.cost.view" }]), fresh)
+    ).resolves.toEqual(["inventory.cost.view"]);
+    expect(fresh).toMatchObject({
+      securityPermissions: ["inventory.cost.view"],
+      securityPermissionsCompanyId: 7,
+    });
+
+    // A non-array cache is treated the same as none: it must not be trusted.
+    const poisoned: any = { userId: "u1", currentCompanyId: 7, securityPermissions: "files.download" };
+    await expect(
+      hydrateSessionNamedPermissions(selectDb([{ permission: "files.download" }]), poisoned)
+    ).resolves.toEqual(["files.download"]);
+  });
+
+  it("drops non-string permission entries rather than rejecting the list", () => {
+    // Documenting actual behaviour, which is not what the name of the function
+    // suggests: a non-string entry is mapped to "" and filtered out, so the
+    // list is accepted with that entry silently discarded. It fails closed -
+    // the caller ends up with fewer permissions, never more - so it is recorded
+    // here rather than changed inside a typing wave.
+    expect(normalizePermissionList(["files.download", 42])).toEqual(["files.download"]);
+    expect(normalizePermissionList([null])).toEqual([]);
+
+    // A value that is a string but not a known permission is still rejected.
+    expect(() => normalizePermissionList(["files.download", "not.a.permission"])).toThrow("Invalid permissions");
+    expect(() => normalizePermissionList("nope")).toThrow("Invalid permissions");
+    expect(normalizePermissionList(["  files.download  "])).toEqual(["files.download"]);
+  });
+
   it("invalidates only sessions belonging to the affected user and company", async () => {
     const pool = { query: vi.fn(async () => undefined) };
     await invalidateUserCompanySessions(pool, "u9", 12);

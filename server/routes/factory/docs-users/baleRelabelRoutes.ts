@@ -156,11 +156,14 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
         }
 
         // 3. Update factory_bales referenceNumber
-        const recodeMap: { oldRef: string; newRef: string; bale: any }[] = refCodes.map((oldRef, i) => ({
-          oldRef,
-          newRef: newRefs[i],
-          bale: baleMap.get(oldRef),
-        }));
+        type RecodeBale = NonNullable<ReturnType<typeof baleMap.get>>;
+        const recodeMap: { oldRef: string; newRef: string; bale: RecodeBale }[] = refCodes.map((oldRef, i) => {
+          const bale = baleMap.get(oldRef);
+          // Unreachable: the notFound guard above throws when any refCode is
+          // absent from baleMap. An internal code, not user-facing copy.
+          if (!bale) throw new Error("bale_recode_row_missing");
+          return { oldRef, newRef: newRefs[i], bale };
+        });
 
         for (const { oldRef, newRef } of recodeMap) {
           await tx

@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { spContainers, spOffloadCharges, spStockMovements, voucherEntries, vouchers } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
-import { db } from "../../db";
+import { db, type RawQueryRow } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { adjustSpInventoryAtomic, respondToSpInventoryIntegrityError } from "../../services/sp/spInventoryIntegrity";
@@ -16,12 +16,49 @@ import {
 import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp/spReleasePolicy";
 import { requireSpCompany } from "./spHelpers";
 
-function rows(result: any): any[] {
-  return result?.rows ?? result ?? [];
+/**
+ * Raw rows read by the Supplier Partner offload lifecycle.
+ *
+ * These queries use `SELECT *`, so each interface names only the columns this
+ * module actually reads. `numeric` columns arrive as decimal strings and are
+ * declared as such rather than assumed to be numbers.
+ */
+interface SpOffloadRow {
+  id: number;
+  container_id: number;
+  created_at: Date;
+  voucher_id_stock: number | null;
+  voucher_id_reversal: number | null;
 }
 
-function first(result: any): any | null {
-  return rows(result)[0] ?? null;
+interface SpContainerRow {
+  id: number;
+  status: string;
+  notes: string | null;
+}
+
+interface VoucherTotalRow {
+  id: number;
+  total_amount: string | null;
+}
+
+interface SpPrepaidChargeRow {
+  id: number;
+  amount_used_usd: string | null;
+}
+
+interface VoucherIdRow {
+  id: number;
+  company_id: number;
+}
+
+/** The integrity projection; every column is a COUNT, cast to int in the query. */
+interface SpLifecycleIntegrityRow {
+  unbalanced_voucher_count: number;
+  stock_cost_mismatch_count: number;
+  prepaid_mismatch_count: number;
+  reversal_voucher_mismatch_count: number;
+  container_state_mismatch_count: number;
 }
 
 function lifecycleDate(value: unknown): string {
@@ -66,15 +103,15 @@ async function createExactVoucherReversal(
     description: string;
   }
 ): Promise<number> {
-  const originalVoucher = first(
-    await tx.execute(sql`
+  const [originalVoucher] = (
+    await tx.execute<RawQueryRow<VoucherTotalRow>>(sql`
     SELECT * FROM vouchers
     WHERE id = ${input.originalVoucherId}
       AND company_id = ${input.companyId}
       AND deleted_at IS NULL
     FOR UPDATE
   `)
-  );
+  ).rows;
   if (!originalVoucher) {
     throw new SpLifecycleError(
       `Voucher #${input.originalVoucherId} is unavailable; no reversal was posted.`,
@@ -138,33 +175,33 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
       const reversalDate = lifecycleDate(req.body?.reversalDate);
 
       const result = await db.transaction(async (tx) => {
-        const offload = first(
-          await tx.execute(sql`
+        const [offload] = (
+          await tx.execute<RawQueryRow<SpOffloadRow>>(sql`
             SELECT * FROM sp_offloads
             WHERE id = ${offloadId} AND company_id = ${companyId}
             FOR UPDATE
           `)
-        );
+        ).rows;
         if (!offload) {
           throw new SpLifecycleError("Supplier Partner offload not found.", "SP_LIFECYCLE_CONFLICT", 404);
         }
 
-        const duplicate = first(
-          await tx.execute(sql`
+        const [duplicate] = (
+          await tx.execute<RawQueryRow<{ id: number }>>(sql`
             SELECT id FROM sp_offload_reversals WHERE offload_id = ${offloadId} FOR UPDATE
           `)
-        );
+        ).rows;
         if (duplicate) {
           throw new SpLifecycleError("This offload has already been reversed.", "SP_LIFECYCLE_ALREADY_DONE", 409);
         }
 
-        const container = first(
-          await tx.execute(sql`
+        const [container] = (
+          await tx.execute<RawQueryRow<SpContainerRow>>(sql`
             SELECT * FROM sp_containers
             WHERE id = ${offload.container_id} AND company_id = ${companyId}
             FOR UPDATE
           `)
-        );
+        ).rows;
         if (!container || container.status !== "offloaded") {
           throw new SpLifecycleError(
             "Only the currently offloaded container can be reversed.",
@@ -173,8 +210,8 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
           );
         }
 
-        const laterOffload = first(
-          await tx.execute(sql`
+        const [laterOffload] = (
+          await tx.execute<RawQueryRow<{ id: number }>>(sql`
             SELECT id FROM sp_offloads
             WHERE company_id = ${companyId}
               AND container_id = ${offload.container_id}
@@ -184,7 +221,7 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
               )
             LIMIT 1
           `)
-        );
+        ).rows;
         if (laterOffload) {
           throw new SpLifecycleError(
             "A newer active offload exists for this container; reverse the newest offload first.",
@@ -224,13 +261,13 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
 
         for (const charge of charges) {
           if (charge.chargeType !== "prepaid_used" || !charge.prepaidChargeId) continue;
-          const prepaid = first(
-            await tx.execute(sql`
+          const [prepaid] = (
+            await tx.execute<RawQueryRow<SpPrepaidChargeRow>>(sql`
               SELECT * FROM sp_prepaid_charges
               WHERE id = ${charge.prepaidChargeId} AND company_id = ${companyId}
               FOR UPDATE
             `)
-          );
+          ).rows;
           if (!prepaid || Number(prepaid.amount_used_usd ?? 0) + 0.0001 < Number(charge.amountUsd ?? 0)) {
             throw new SpLifecycleError(
               `Prepaid charge #${charge.prepaidChargeId} cannot be restored exactly.`,
@@ -250,8 +287,8 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
           Number(offload.voucher_id_stock),
         ].filter((id) => Number.isInteger(id) && id > 0);
 
-        const parentVouchers = rows(
-          await tx.execute(sql`
+        const parentVouchers = (
+          await tx.execute<RawQueryRow<VoucherIdRow>>(sql`
             SELECT id, company_id
             FROM vouchers
             WHERE source_module = 'SP'
@@ -261,7 +298,7 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
             ORDER BY id
             FOR UPDATE
           `)
-        );
+        ).rows;
 
         const reversalVoucherIds: number[] = [];
         for (const originalVoucherId of originalVoucherIds) {
@@ -323,8 +360,8 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
           charges,
           parentVoucherIds: parentVouchers.map((voucher) => Number(voucher.id)),
         };
-        const reversalRow = first(
-          await tx.execute(sql`
+        const [reversalRow] = (
+          await tx.execute<RawQueryRow<Record<string, unknown>>>(sql`
             INSERT INTO sp_offload_reversals (
               company_id, container_id, offload_id, reversal_date, reason, reversed_by,
               voucher_ids_original, voucher_ids_reversal, snapshot
@@ -337,7 +374,7 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
             )
             RETURNING *
           `)
-        );
+        ).rows;
 
         return {
           reversal: reversalRow,
@@ -363,8 +400,8 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
 
-      const report = first(
-        await db.execute(sql`
+      const [report] = (
+        await db.execute<RawQueryRow<SpLifecycleIntegrityRow>>(sql`
           WITH voucher_balance AS (
             SELECT v.id,
                    COALESCE(SUM(ve.debit_amount::numeric), 0) AS debit,
@@ -409,7 +446,7 @@ export function registerSpOffloadLifecycleRoutes(app: Express): void {
                 )
             ) AS container_state_mismatch_count
         `)
-      );
+      ).rows;
 
       const mismatches =
         Number(report?.unbalanced_voucher_count ?? 0) +

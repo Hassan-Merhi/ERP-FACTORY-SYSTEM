@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
-import { db } from "../../db";
+import { db, type RawQueryRow } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { sqlArray } from "../../lib/sqlArray";
@@ -31,8 +31,33 @@ interface PositionSnapshot {
   saved: boolean;
 }
 
-function rows(result: any): any[] {
-  return Array.isArray(result) ? result : (result?.rows ?? []);
+/**
+ * Raw projections behind the production-position planner. The aliases are
+ * quoted in SQL so the columns arrive camelCased; `bonus_per_extra_bale` is
+ * cast to text in the saved-snapshot query, and `member_snapshot` is a jsonb
+ * column parsed by parseMembers.
+ */
+interface PositionSnapshotRow {
+  positionId: number;
+  positionName: string;
+  targetBales: number | string | null;
+  bonusPerExtraBale: number | string | null;
+  bonusEnabled: boolean | null;
+  members: unknown;
+}
+
+interface PositionActualRow {
+  positionId: number;
+  actualBales: number | string | null;
+}
+
+interface PlanRow {
+  id: number;
+}
+
+interface PositionNameRow {
+  id: number;
+  name: string;
 }
 
 function companyIdFor(req: import("express").Request): number | null {
@@ -98,7 +123,7 @@ async function loadEffectivePositionSnapshots(companyId: number, date: string): 
     ORDER BY p.name
   `);
 
-  return rows(result).map((row) => ({
+  return result.rows.map((row) => ({
     positionId: Number(row.positionId),
     positionName: String(row.positionName),
     targetBales: Number(row.targetBales ?? 0),
@@ -110,7 +135,7 @@ async function loadEffectivePositionSnapshots(companyId: number, date: string): 
 }
 
 async function loadSavedPositionSnapshots(planId: number, companyId: number): Promise<PositionSnapshot[]> {
-  const result = await db.execute(sql`
+  const result = await db.execute<RawQueryRow<PositionSnapshotRow>>(sql`
     SELECT
       position_id AS "positionId",
       position_name_snapshot AS "positionName",
@@ -122,7 +147,7 @@ async function loadSavedPositionSnapshots(planId: number, companyId: number): Pr
     WHERE plan_id = ${planId} AND company_id = ${companyId}
     ORDER BY position_name_snapshot
   `);
-  return rows(result).map((row) => ({
+  return result.rows.map((row) => ({
     positionId: Number(row.positionId),
     positionName: String(row.positionName),
     targetBales: Number(row.targetBales ?? 0),
@@ -137,7 +162,7 @@ async function loadActuals(
   companyId: number,
   date: string
 ): Promise<{ actuals: Map<number, number>; unattributedBales: number }> {
-  const actualResult = await db.execute(sql`
+  const actualResult = await db.execute<RawQueryRow<PositionActualRow>>(sql`
     SELECT a.production_position_id AS "positionId", COUNT(*)::integer AS "actualBales"
     FROM factory_bale_production_attributions a
     JOIN factory_bales b
@@ -151,9 +176,9 @@ async function loadActuals(
     GROUP BY a.production_position_id
   `);
   const actuals = new Map<number, number>();
-  for (const row of rows(actualResult)) actuals.set(Number(row.positionId), Number(row.actualBales ?? 0));
+  for (const row of actualResult.rows) actuals.set(Number(row.positionId), Number(row.actualBales ?? 0));
 
-  const unattributedResult = await db.execute(sql`
+  const unattributedResult = await db.execute<RawQueryRow<{ count: number }>>(sql`
     SELECT COUNT(*)::integer AS count
     FROM factory_bale_production_attributions a
     JOIN factory_bales b
@@ -166,7 +191,7 @@ async function loadActuals(
       AND b.deleted_at IS NULL
       AND b.status = ANY(${sqlArray([...ELIGIBLE_BALE_STATUSES])})
   `);
-  const unattributedBales = Number(rows(unattributedResult)[0]?.count ?? 0);
+  const unattributedBales = Number(unattributedResult.rows[0]?.count ?? 0);
   return { actuals, unattributedBales };
 }
 
@@ -178,13 +203,13 @@ function mergeSnapshots(saved: PositionSnapshot[], effective: PositionSnapshot[]
 }
 
 async function buildPlannerResponse(companyId: number, date: string) {
-  const planResult = await db.execute(sql`
+  const planResult = await db.execute<RawQueryRow<PlanRow>>(sql`
     SELECT id, plan_date, notes
     FROM factory_production_plans
     WHERE company_id = ${companyId} AND plan_date = ${date}::date
     LIMIT 1
   `);
-  const planRow = rows(planResult)[0] ?? null;
+  const planRow = planResult.rows[0] ?? null;
   const planId = planRow ? Number(planRow.id) : null;
 
   const [effective, saved, actualData] = await Promise.all([
@@ -293,12 +318,12 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
 
       const requestedIds = entries.map((entry) => entry.positionId);
       if (requestedIds.length > 0) {
-        const existingResult = await db.execute(sql`
+        const existingResult = await db.execute<RawQueryRow<PositionNameRow>>(sql`
           SELECT id, name
           FROM factory_production_positions
           WHERE company_id = ${companyId} AND id = ANY(${sqlArray(requestedIds)})
         `);
-        if (rows(existingResult).length !== requestedIds.length) {
+        if (existingResult.rows.length !== requestedIds.length) {
           return res
             .status(400)
             .json({ message: "One or more production positions belong to another company or do not exist" });
@@ -312,12 +337,12 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
           ON CONFLICT (company_id, plan_date)
           DO UPDATE SET notes = EXCLUDED.notes
         `);
-        const planResult = await tx.execute(sql`
+        const planResult = await tx.execute<RawQueryRow<PlanRow>>(sql`
           SELECT id FROM factory_production_plans
           WHERE company_id = ${companyId} AND plan_date = ${date}::date
           LIMIT 1
         `);
-        const planId = Number(rows(planResult)[0]?.id);
+        const planId = Number(planResult.rows[0]?.id);
         if (!planId) throw new Error("Could not resolve production plan");
 
         await tx.execute(sql`DELETE FROM factory_production_position_plan_entries WHERE plan_id = ${planId}`);
@@ -325,12 +350,12 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
         for (const entry of entries) {
           let snapshot = effectiveById.get(entry.positionId) ?? null;
           if (!snapshot) {
-            const positionResult = await tx.execute(sql`
+            const positionResult = await tx.execute<RawQueryRow<PositionNameRow>>(sql`
               SELECT id, name FROM factory_production_positions
               WHERE company_id = ${companyId} AND id = ${entry.positionId}
               LIMIT 1
             `);
-            const position = rows(positionResult)[0];
+            const position = positionResult.rows[0];
             if (!position) throw new Error("Production position not found");
             snapshot = {
               positionId: Number(position.id),
@@ -374,7 +399,7 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!DATE_RE.test(date)) return res.status(400).json({ message: "Date must be YYYY-MM-DD" });
 
-        const previousResult = await db.execute(sql`
+        const previousResult = await db.execute<RawQueryRow<PlanRow>>(sql`
         SELECT p.id, p.plan_date, p.notes
         FROM factory_production_plans p
         WHERE p.company_id = ${companyId}
@@ -385,7 +410,7 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
         ORDER BY p.plan_date DESC
         LIMIT 1
       `);
-        const previous = rows(previousResult)[0];
+        const previous = previousResult.rows[0];
         if (!previous) return res.json({ fromDate: null, notes: "", entries: [] });
 
         const previousEntries = await loadSavedPositionSnapshots(Number(previous.id), companyId);

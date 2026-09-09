@@ -44,7 +44,6 @@ async function enforcePosInventoryCostBoundary(req: Request, res: Response, next
     canViewCost = permissions.includes(POS_INVENTORY_COST_PERMISSION);
   } catch {
     // Sensitive values fail closed if the permission store cannot be read.
-    canViewCost = false;
   }
 
   if (canViewCost) return next();
