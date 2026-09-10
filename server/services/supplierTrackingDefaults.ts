@@ -103,6 +103,14 @@ export async function listSupplierTrackingDefaults(companyId: number) {
     db.select({ name: containers.agent }).from(containers).where(eq(containers.companyId, companyId)),
   ]);
 
+  const activeLocationIds = new Set(locationRows.map((location) => location.id));
+  const suppliers = supplierRows.map((row) => ({
+    ...row,
+    // A soft-deleted/deactivated location is not a usable default. Expose it as
+    // unassigned so the UI can repair the mapping instead of posting a stale id.
+    locationId: row.locationId && activeLocationIds.has(row.locationId) ? row.locationId : null,
+  }));
+
   const agentOptions = Array.from(
     new Set(
       [...mappedAgents, ...usedAgents]
@@ -111,7 +119,7 @@ export async function listSupplierTrackingDefaults(companyId: number) {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  return { suppliers: supplierRows, locations: locationRows, agentOptions };
+  return { suppliers, locations: locationRows, agentOptions };
 }
 
 export async function saveSupplierTrackingDefault(
@@ -169,7 +177,12 @@ export async function backfillSupplierTrackingDefaults(companyId: number) {
     )
     .leftJoin(
       locations,
-      and(eq(locations.id, supplierTrackingDefaults.locationId), eq(locations.companyId, containers.companyId))
+      and(
+        eq(locations.id, supplierTrackingDefaults.locationId),
+        eq(locations.companyId, containers.companyId),
+        eq(locations.active, true),
+        isNull(locations.deletedAt)
+      )
     )
     .where(eq(containers.companyId, companyId));
 
