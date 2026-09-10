@@ -89,14 +89,37 @@ async function closeLanguageOnboarding(page) {
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
-  await page.waitForSelector('[data-testid="input-username"]', { visible: true, timeout: TIMEOUT_MS });
-  await page.type('[data-testid="input-username"]', USERNAME);
-  await page.type('[data-testid="input-password"]', PASSWORD);
-  await page.click('[data-testid="button-login"]');
+
+  // Every viewport uses a fresh Page in the same Browser, so authenticated cookies
+  // are intentionally shared. Accept either the login form or an already-authenticated
+  // redirect instead of waiting forever for a form that will never be rendered.
   await page.waitForFunction(
-    () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
+    () => {
+      const username = document.querySelector('[data-testid="input-username"]');
+      const authenticated = window.location.pathname !== "/login" && Boolean(document.getElementById("main-content"));
+      return Boolean(username) || authenticated;
+    },
     { timeout: TIMEOUT_MS }
   );
+
+  const needsLogin = await page.evaluate(() => {
+    const input = document.querySelector('[data-testid="input-username"]');
+    if (!(input instanceof HTMLElement)) return false;
+    const style = getComputedStyle(input);
+    const rect = input.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  });
+
+  if (needsLogin) {
+    await page.type('[data-testid="input-username"]', USERNAME);
+    await page.type('[data-testid="input-password"]', PASSWORD);
+    await page.click('[data-testid="button-login"]');
+    await page.waitForFunction(
+      () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
+      { timeout: TIMEOUT_MS }
+    );
+  }
+
   await settle(page);
   await closeLanguageOnboarding(page);
 }
@@ -217,26 +240,37 @@ try {
     page.setDefaultNavigationTimeout(TIMEOUT_MS);
     await page.setViewport(viewport);
     const pageErrors = [];
+    let stage = "initialize";
+    let currentRoute = null;
     page.on("pageerror", (error) => pageErrors.push(error.message));
 
     try {
       await page.evaluateOnNewDocument(() => localStorage.setItem("erp.application-language", "en"));
+      stage = "authenticate";
       await login(page);
+      stage = "select factory company";
       await selectFactoryCompany(page);
 
       for (const route of ROUTES) {
+        currentRoute = route.path;
+        stage = `open ${route.path}`;
         const status = await openRoute(page, route);
+        stage = `inspect ${route.path}`;
         const state = await readState(page, route, viewport);
         const failures = assertState(state, viewport, route);
         const directory = path.join(OUTPUT_DIR, viewport.name);
         await fs.mkdir(directory, { recursive: true });
         const screenshot = path.join(directory, `${safeName(route.path)}.png`);
+        stage = `screenshot ${route.path}`;
         await page.screenshot({ path: screenshot, fullPage: true });
         report.cases.push({ viewport: viewport.name, route: route.path, status, state, screenshot, failures });
         report.failures.push(...failures);
       }
     } catch (error) {
-      report.failures.push(`${viewport.name}: ${error instanceof Error ? error.message : String(error)}`);
+      const routeLabel = currentRoute ? ` ${currentRoute}` : "";
+      report.failures.push(
+        `${viewport.name}${routeLabel} [${stage}]: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       report.failures.push(...pageErrors.map((error) => `${viewport.name}: pageerror: ${error}`));
       await page.close();
