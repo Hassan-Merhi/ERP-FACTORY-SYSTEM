@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { eq } from "drizzle-orm";
 import { db } from "../server/db";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
@@ -53,6 +54,35 @@ afterAll(async () => {
 });
 
 describe("company parent relationship", () => {
+  it("requires an explicit parent or standalone decision for a new operating company", async () => {
+    const rejected = await agent.post("/api/companies").send({
+      code: "CPARENT00",
+      name: `${TEST_PREFIX}_MissingParentDecision`,
+      companyType: "erp",
+      active: true,
+      baseCurrency: "USD",
+    });
+
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.message).toBe(
+      "Choose a parent company or explicitly select Standalone / No Parent before creating this company."
+    );
+  });
+
+  it("allows an explicit standalone choice", async () => {
+    const created = await agent.post("/api/companies").send({
+      code: "CPARENT04",
+      name: `${TEST_PREFIX}_Standalone`,
+      companyType: "erp",
+      active: true,
+      baseCurrency: "USD",
+      parentCompanyId: null,
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.parentCompanyId).toBeNull();
+  });
+
   it("accepts an active parent when creating and preserves it on update", async () => {
     const created = await agent.post("/api/companies").send({
       code: "CPARENT03",
@@ -102,5 +132,23 @@ describe("company parent relationship", () => {
 
     expect(rejected.status).toBe(400);
     expect(rejected.body.message).toBe(message);
+  });
+
+  it("rejects a parent assignment that would create a cycle", async () => {
+    await db
+      .update(schema.companies)
+      .set({ parentCompanyId: childCompanyId })
+      .where(eq(schema.companies.id, activeParentId));
+
+    try {
+      const rejected = await agent.patch(`/api/companies/${childCompanyId}`).send({
+        parentCompanyId: activeParentId,
+      });
+
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.message).toBe("The selected parent company would create a circular company relationship.");
+    } finally {
+      await db.update(schema.companies).set({ parentCompanyId: null }).where(eq(schema.companies.id, activeParentId));
+    }
   });
 });

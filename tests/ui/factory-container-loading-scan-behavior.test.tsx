@@ -222,7 +222,7 @@ describe("factory container loading scan behavior", () => {
   it("passes the explicit proforma bypass flag when Ignore Proforma is enabled", async () => {
     render(<FactoryContainerLoadingScan />);
     fireEvent.click(await screen.findByTestId("button-ignore-proforma"));
-    expect(screen.getByTestId("button-ignore-proforma")).toHaveTextContent("Ignore Proforma: ON");
+    expect(screen.getByTestId("button-ignore-proforma")).toHaveTextContent("Ignore: ON");
     expect(screen.getByTestId("button-ignore-proforma")).toHaveAttribute("aria-pressed", "true");
     const input = screen.getByTestId("input-scan-code");
     fireEvent.change(input, { target: { value: "EXTRA-1" } });

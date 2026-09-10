@@ -50,7 +50,13 @@ const reviewedSpMounts: string[] = [];
 // DELETE /api/vouchers/:id so a Golden Coast POS cash settlement deletes its cascade before
 // the generic handler's edit-lock rejects it. The shadow is the mechanism, not an oversight -
 // the specific route calls next() for anything that is not a linked GC cash-settlement delete.
-const MAX_SHADOWED_REGISTRATIONS = 161;
+// registerChargeLedgerPrerequisite adds two more of the same reviewed kind: a POST and a
+// PATCH on /api/factory/customer-orders/:id/charges are mounted ahead of the legacy
+// handlers so a VERIFIED/PENDING charge cannot be saved before its customer owns a ledger
+// account. ensureCustomerLedgerForChargeWrite calls next() on every path, so the earlier
+// registration is a prerequisite the request passes through, not a terminal handler that
+// makes the real one dead code.
+const MAX_SHADOWED_REGISTRATIONS = 163;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

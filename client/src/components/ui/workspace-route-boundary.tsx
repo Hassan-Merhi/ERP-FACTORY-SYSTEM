@@ -33,11 +33,21 @@ interface WorkspaceConsistencyBoundaryProps {
   children: ReactNode;
   className?: string;
   fill?: boolean;
+  routeKey?: string;
 }
 
-export function WorkspaceConsistencyBoundary({ children, className, fill = false }: WorkspaceConsistencyBoundaryProps) {
+export function WorkspaceConsistencyBoundary({
+  children,
+  className,
+  fill = false,
+  routeKey,
+}: WorkspaceConsistencyBoundaryProps) {
   return (
-    <div data-ux-consistency-boundary="true" className={cn(workspaceConsistencyClasses, fill && "h-full", className)}>
+    <div
+      data-ux-consistency-boundary="true"
+      data-workspace-route={routeKey}
+      className={cn(workspaceConsistencyClasses, fill && "h-full", className)}
+    >
       {children}
     </div>
   );
@@ -68,7 +78,7 @@ export function WorkspaceRouteBoundary({
           />
         }
       >
-        <WorkspaceConsistencyBoundary className={className} fill={fill}>
+        <WorkspaceConsistencyBoundary className={className} fill={fill} routeKey={resetKey}>
           {children}
         </WorkspaceConsistencyBoundary>
       </Suspense>

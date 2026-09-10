@@ -10,23 +10,15 @@
     "client/src/pages/factory/WasteDispatchOptimized.tsx": 987,
     "client/src/pages/vouchers/StockTransferForm.tsx": 2388
   },
-  "routeManifestAdditions": [
-    "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
-  ],
-  "routeManifestMountAdditions": [
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [requireAuth]",
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [requireNonPOS]",
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [<anonymous>]",
-    "USE / [<anonymous>]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [requireAuth]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [checkPOSLocation]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [enforcePosInventoryCostBoundary]"
-  ],
+  "routeManifestAdditions": [],
+  "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
-      "tests/net-position-equity-visibility.test.ts"
+      "tests/net-position-equity-visibility.test.ts",
+      "tests/ui/mobile-responsive-wave2-factory-floor.test.ts"
     ],
-    "maxAdditionalTextAssertions": 6
+    "maxAdditionalTextAssertions": 41,
+    "rationale": "tests/ui/mobile-responsive-wave2-factory-floor.test.ts asserts on Tailwind responsive breakpoint classes (md:hidden / md:block) and on data-testid template literals. jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is not observable behaviourally; the source text is the only place that contract exists. maxAdditionalTextAssertions covers that file plus the assertions added with the POS item replacement and mobile responsive waves, measured exactly at 41 over the reviewed baseline of 2061 so any further growth still fails."
   }
 }

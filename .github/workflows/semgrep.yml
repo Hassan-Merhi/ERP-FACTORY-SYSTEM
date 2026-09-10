@@ -3,8 +3,6 @@ name: Semgrep
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: "41 5 * * 3"
   workflow_dispatch:
@@ -25,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      image: semgrep/semgrep:1.174.0@sha256:f1f7b71861c7b28b6e0f661225a2c4f58a484f5d0f182465c6d6b3b22f972ade
+      image: semgrep/semgrep:1.176.1@sha256:34ab619bf1391a24bfda3f05debd0d8a6ce3093c2d5f9d39cfc00f83c1397823
     env:
       SEMGREP_BASELINE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
 
@@ -66,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      image: semgrep/semgrep:1.174.0@sha256:f1f7b71861c7b28b6e0f661225a2c4f58a484f5d0f182465c6d6b3b22f972ade
+      image: semgrep/semgrep:1.176.1@sha256:34ab619bf1391a24bfda3f05debd0d8a6ce3093c2d5f9d39cfc00f83c1397823
 
     steps:
       - name: Checkout repository

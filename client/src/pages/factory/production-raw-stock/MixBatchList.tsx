@@ -65,42 +65,49 @@ export function MixBatchList({
   );
 
   const fmtKg = (n: number) => formatNumber(n, 3);
+  const sumTotal = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0), 0);
+  const sumUsed = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.usedKg) || 0), 0);
+  const sumRemaining = mixBatches.reduce((sum, batch) => sum + (parseFloat(batch.remainingKg) || 0), 0);
+  const weightedCost = mixBatches.reduce(
+    (sum, batch) => sum + (parseFloat(batch.totalWeightKg) || 0) * (parseFloat(batch.costPerKg) || 0),
+    0
+  );
+  const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 pb-4 flex-wrap">
-        <div className="space-y-1">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Layers className="h-4.5 w-4.5 text-amber-500" />
+    <Card className="min-w-0 shadow-sm" data-testid="mix-batch-list">
+      <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Layers className="h-4.5 w-4.5 shrink-0 text-amber-500" />
             Recent Mix Batches
           </CardTitle>
           <p className="text-xs text-muted-foreground">Historical list of blends and their cost origins</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg border border-border/50">
-            <input
-              type="date"
-              value={mixBatchDate}
-              onChange={(e) => setMixBatchDate(e.target.value)}
-              className="bg-transparent border-none text-sm font-medium focus:ring-0 px-2 py-1 outline-none"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSendWhatsApp}
-              disabled={isSendingWhatsApp || mixBatchesByDate.length === 0}
-              data-testid="button-send-mix-batch-whatsapp"
-              className="h-8 gap-2"
-            >
-              {isSendingWhatsApp ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <MessageCircle className="h-3.5 w-3.5" />
-              )}
-              Send WhatsApp
-            </Button>
-          </div>
+        <div className="grid w-full grid-cols-1 gap-2 rounded-lg border border-border/50 bg-muted/50 p-2 min-[420px]:grid-cols-[minmax(0,1fr)_auto] sm:w-auto sm:p-1">
+          <input
+            type="date"
+            value={mixBatchDate}
+            onChange={(e) => setMixBatchDate(e.target.value)}
+            className="min-h-11 min-w-0 w-full rounded-md border border-input bg-background px-2 py-1 text-base font-medium outline-none focus:ring-1 focus:ring-ring sm:min-h-0 sm:w-auto sm:border-none sm:bg-transparent sm:text-sm sm:focus:ring-0"
+            data-testid="input-mix-batch-date"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSendWhatsApp}
+            disabled={isSendingWhatsApp || mixBatchesByDate.length === 0}
+            data-testid="button-send-mix-batch-whatsapp"
+            className="h-11 w-full gap-2 sm:h-8 sm:w-auto"
+          >
+            {isSendingWhatsApp ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <MessageCircle className="h-3.5 w-3.5" />
+            )}
+            Send WhatsApp
+          </Button>
         </div>
 
         {/* Hidden printable card — screenshotted by html2canvas */}
@@ -246,7 +253,8 @@ export function MixBatchList({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+
+      <CardContent className="min-w-0">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12 w-full" />
@@ -254,126 +262,220 @@ export function MixBatchList({
             <Skeleton className="h-12 w-full" />
           </div>
         ) : mixBatches.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-40">Batch Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="min-w-32 whitespace-nowrap">Date</TableHead>
-                  <TableHead className="min-w-32 text-right whitespace-nowrap">Total (kg)</TableHead>
-                  <TableHead className="min-w-36 text-right whitespace-nowrap">Blended Cost</TableHead>
-                  <TableHead className="min-w-20"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleMixBatches.map((batch) => {
-                  const total = parseFloat(batch.totalWeightKg) || 0;
-                  return (
-                    <TableRow key={batch.id} data-testid={`row-mix-batch-${batch.id}`}>
-                      <TableCell
-                        className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
-                        onClick={() => onViewDetail(batch)}
-                        data-testid={`link-mix-batch-detail-${batch.id}`}
-                      >
-                        {batch.batchCode}
-                      </TableCell>
-                      <TableCell className="text-sm cursor-pointer hover:underline" onClick={() => onViewDetail(batch)}>
-                        {batch.name || <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">{formatNumber(total)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => onEdit(batch)}
-                            data-testid={`button-edit-mix-batch-${batch.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => onDelete(batch.id)}
-                            data-testid={`button-delete-mix-batch-${batch.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              {mixBatches.length > BATCH_PREVIEW_COUNT && (
-                <tbody>
-                  <tr>
-                    <td colSpan={6} className="py-2 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowAllMixBatches(!showAllMixBatches)}
-                        data-testid="button-toggle-show-all-batches"
-                        className="text-xs text-muted-foreground"
-                      >
-                        {showAllMixBatches
-                          ? `Show less`
-                          : `Show all ${mixBatches.length} batches (${mixBatches.length - BATCH_PREVIEW_COUNT} hidden)`}
-                      </Button>
-                    </td>
-                  </tr>
-                </tbody>
-              )}
-              {(() => {
-                const sumTotal = mixBatches.reduce((s, b) => s + (parseFloat(b.totalWeightKg) || 0), 0);
-                const sumUsed = mixBatches.reduce((s, b) => s + (parseFloat(b.usedKg) || 0), 0);
-                const sumRemaining = mixBatches.reduce((s, b) => s + (parseFloat(b.remainingKg) || 0), 0);
-                const weightedCost = mixBatches.reduce(
-                  (s, b) => s + (parseFloat(b.totalWeightKg) || 0) * (parseFloat(b.costPerKg) || 0),
-                  0
-                );
-                const blendedCost = sumTotal > 0 ? weightedCost / sumTotal : 0;
+          <>
+            <div className="space-y-3 md:hidden" data-testid="mix-batch-mobile-list">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total Weight</div>
+                  <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-total">
+                    {fmtKg(sumTotal)} kg
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Blended Cost</div>
+                  <div className="mt-0.5 font-mono text-sm font-bold" data-testid="text-mix-mobile-summary-cost">
+                    ${blendedCost.toFixed(4)}/kg
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumUsed)} kg</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                  <div className="mt-0.5 font-mono text-xs font-medium">{fmtKg(sumRemaining)} kg</div>
+                </div>
+              </div>
+
+              {visibleMixBatches.map((batch) => {
+                const total = parseFloat(batch.totalWeightKg) || 0;
+                const used = parseFloat(batch.usedKg) || 0;
+                const remaining = parseFloat(batch.remainingKg) || 0;
+                const cost = parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0") || 0;
                 return (
-                  <tfoot className="border-t-2 border-border bg-muted/40">
-                    <TableRow className="hover:bg-transparent">
-                      {/* cols 1-3: label + used/remaining subtitle */}
-                      <TableCell colSpan={3} className="px-4 py-3 text-sm font-semibold text-foreground">
-                        Combined Total
-                        <div className="text-xs text-muted-foreground font-normal mt-0.5">
-                          {mixBatches.length} batch{mixBatches.length !== 1 ? "es" : ""}
-                          {" · "}Used: {fmtKg(sumUsed)}
-                          {" · "}Remaining: {fmtKg(sumRemaining)}
+                  <div
+                    key={`mobile-${batch.id}`}
+                    className="rounded-xl border bg-card p-3 shadow-sm"
+                    data-testid={`card-mix-batch-mobile-${batch.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        className="min-w-0 text-left"
+                        onClick={() => onViewDetail(batch)}
+                        data-testid={`link-mix-batch-mobile-${batch.id}`}
+                      >
+                        <div className="break-all font-mono text-sm font-semibold text-primary">{batch.batchCode}</div>
+                        <div className="mt-0.5 break-words text-xs text-muted-foreground">
+                          {batch.name || "Unnamed batch"}
                         </div>
-                      </TableCell>
-                      {/* col 4: Total (kg) */}
-                      <TableCell
-                        className="px-4 py-3 text-right font-mono font-semibold text-sm"
-                        data-testid="text-mix-summary-total"
-                      >
-                        {fmtKg(sumTotal)}
-                      </TableCell>
-                      {/* col 5: Blended Cost */}
-                      <TableCell
-                        className="px-4 py-3 text-right font-mono font-semibold text-sm"
-                        data-testid="text-mix-summary-cost"
-                      >
-                        ${blendedCost.toFixed(4)}/kg
-                      </TableCell>
-                      {/* col 6: actions (empty) */}
-                      <TableCell />
-                    </TableRow>
-                  </tfoot>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
+                        </div>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onEdit(batch)}
+                          aria-label={`Edit ${batch.batchCode}`}
+                          data-testid={`button-edit-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onDelete(batch.id)}
+                          aria-label={`Delete ${batch.batchCode}`}
+                          data-testid={`button-delete-mix-batch-mobile-${batch.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
+                        <div className="mt-0.5 font-mono font-semibold">{formatNumber(total)} kg</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost / kg</div>
+                        <div className="mt-0.5 font-mono font-semibold">${cost.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
+                        <div className="mt-0.5 font-mono font-medium">{fmtKg(used)} kg</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 p-2">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+                        <div className="mt-0.5 font-mono font-medium">{fmtKg(remaining)} kg</div>
+                      </div>
+                    </div>
+                  </div>
                 );
-              })()}
-            </Table>
-          </div>
+              })}
+
+              {mixBatches.length > BATCH_PREVIEW_COUNT && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAllMixBatches(!showAllMixBatches)}
+                  data-testid="button-toggle-show-all-batches-mobile"
+                  className="w-full text-xs"
+                >
+                  {showAllMixBatches
+                    ? "Show less"
+                    : `Show all ${mixBatches.length} batches (${mixBatches.length - BATCH_PREVIEW_COUNT} hidden)`}
+                </Button>
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-40">Batch Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="min-w-32 whitespace-nowrap">Date</TableHead>
+                    <TableHead className="min-w-32 text-right whitespace-nowrap">Total (kg)</TableHead>
+                    <TableHead className="min-w-36 text-right whitespace-nowrap">Blended Cost</TableHead>
+                    <TableHead className="min-w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleMixBatches.map((batch) => {
+                    const total = parseFloat(batch.totalWeightKg) || 0;
+                    return (
+                      <TableRow key={batch.id} data-testid={`row-mix-batch-${batch.id}`}>
+                        <TableCell
+                          className="font-mono font-medium text-sm cursor-pointer hover:underline text-primary"
+                          onClick={() => onViewDetail(batch)}
+                          data-testid={`link-mix-batch-detail-${batch.id}`}
+                        >
+                          {batch.batchCode}
+                        </TableCell>
+                        <TableCell className="text-sm cursor-pointer hover:underline" onClick={() => onViewDetail(batch)}>
+                          {batch.name || <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {batch.batchDate ? formatDisplayDate(batch.batchDate) : formatDisplayDate(batch.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">{formatNumber(total)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          ${parseFloat(batch.displayCostPerKg ?? batch.costPerKg ?? "0").toFixed(4)}/kg
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onEdit(batch)}
+                              data-testid={`button-edit-mix-batch-${batch.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onDelete(batch.id)}
+                              data-testid={`button-delete-mix-batch-${batch.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                {mixBatches.length > BATCH_PREVIEW_COUNT && (
+                  <tbody>
+                    <tr>
+                      <td colSpan={6} className="py-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowAllMixBatches(!showAllMixBatches)}
+                          data-testid="button-toggle-show-all-batches"
+                          className="text-xs text-muted-foreground"
+                        >
+                          {showAllMixBatches
+                            ? "Show less"
+                            : `Show all ${mixBatches.length} batches (${mixBatches.length - BATCH_PREVIEW_COUNT} hidden)`}
+                        </Button>
+                      </td>
+                    </tr>
+                  </tbody>
+                )}
+                <tfoot className="border-t-2 border-border bg-muted/40">
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={3} className="px-4 py-3 text-sm font-semibold text-foreground">
+                      Combined Total
+                      <div className="text-xs text-muted-foreground font-normal mt-0.5">
+                        {mixBatches.length} batch{mixBatches.length !== 1 ? "es" : ""}
+                        {" · "}Used: {fmtKg(sumUsed)}
+                        {" · "}Remaining: {fmtKg(sumRemaining)}
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      className="px-4 py-3 text-right font-mono font-semibold text-sm"
+                      data-testid="text-mix-summary-total"
+                    >
+                      {fmtKg(sumTotal)}
+                    </TableCell>
+                    <TableCell
+                      className="px-4 py-3 text-right font-mono font-semibold text-sm"
+                      data-testid="text-mix-summary-cost"
+                    >
+                      ${blendedCost.toFixed(4)}/kg
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </tfoot>
+              </Table>
+            </div>
+          </>
         ) : (
           <div className="text-center py-10">
             <Layers className="mx-auto h-10 w-10 text-muted-foreground" />

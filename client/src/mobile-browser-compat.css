@@ -131,6 +131,16 @@ body {
     min-height: var(--mobile-control-min-height);
   }
 
+  /*
+   * Hover-only actions are inaccessible on touch screens. Keep the existing
+   * desktop hover treatment, but make hover-hidden affordances permanently
+   * visible when the primary pointer is coarse. Avoid :has() here so this
+   * remains compatible with the documented Firefox 110+ baseline.
+   */
+  #main-content [class*="opacity-0"][class*="group-hover:opacity-100"] {
+    opacity: 1 !important;
+  }
+
   #main-content {
     scroll-padding-bottom: max(1rem, var(--safe-area-bottom));
   }
@@ -178,6 +188,103 @@ body {
   }
 }
 
+@media (max-width: 767px) {
+  /*
+   * Phase 1 critical legacy master/detail layouts.
+   *
+   * Stable route markers come from WorkspaceRouteBoundary, so these rules do
+   * not depend on :has() and work across the documented browser baseline.
+   * Tablet/desktop layout remains untouched because these overrides stop at md.
+   */
+  [data-workspace-route^="/agents"] > .flex.h-full,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full,
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex,
+  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
+  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
+    flex-direction: column !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  [data-workspace-route^="/agents"] > .flex.h-full,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full {
+    height: auto !important;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  [data-workspace-route^="/agents"] > .flex.h-full > .w-72,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .w-72 {
+    width: 100% !important;
+    max-height: min(42dvh, 22rem);
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 {
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  [data-workspace-route^="/agents"] > .flex.h-full > .flex-1 > .p-6,
+  [data-workspace-route^="/factory/agents"] > .flex.h-full > .flex-1 > .p-6 {
+    padding: 0.75rem !important;
+  }
+
+  [data-workspace-route^="/account-groups"] > .min-h-screen {
+    min-height: 100%;
+  }
+
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .border-b {
+    padding-inline: 0.75rem !important;
+  }
+
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex {
+    height: auto !important;
+    min-height: 0;
+  }
+
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .w-72 {
+    width: 100% !important;
+    max-height: min(44dvh, 24rem);
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
+  }
+
+  [data-workspace-route^="/account-groups"] > .min-h-screen > .flex > .flex-1 {
+    width: 100%;
+    min-width: 0;
+    padding: 0.75rem !important;
+    overflow: visible;
+  }
+
+  [data-workspace-route^="/chat"] > [data-testid="chat-page"],
+  [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
+    height: calc(var(--app-viewport-height) - 7rem) !important;
+    max-height: calc(var(--app-viewport-height) - 7rem);
+    min-height: 0;
+    overflow: hidden;
+    gap: 0.75rem;
+  }
+
+  [data-testid="chat-page"] > .w-64 {
+    width: 100% !important;
+    max-height: min(36dvh, 20rem);
+    flex: none;
+  }
+
+  [data-testid="chat-page"] > .flex-1 {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
 @media (max-width: 639px) {
   [role="dialog"] {
     max-width: calc(100vw - 1rem) !important;
@@ -212,6 +319,27 @@ body {
 @media (max-height: 500px) and (orientation: landscape) {
   [role="dialog"] {
     max-height: calc(var(--app-viewport-height) - 0.5rem) !important;
+  }
+}
+
+/*
+ * Wave 2 Factory floor cards use Tailwind's md breakpoint for their ordinary
+ * portrait-phone/tablet split. A touch phone in landscape can be wider than
+ * 768px while still needing the compact card interaction model. Limit this
+ * override to short-height coarse-pointer devices so 768x1024 tablets and
+ * desktop layouts retain their existing md+ presentation.
+ */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-testid="raw-stock-mobile-list"],
+  [data-testid="mix-batch-mobile-list"],
+  [data-testid="v5-mobile-list"] {
+    display: block !important;
+  }
+
+  [data-testid="raw-stock-mobile-list"] + div,
+  [data-testid="mix-batch-mobile-list"] + div,
+  [data-testid="v5-mobile-list"] + div {
+    display: none !important;
   }
 }
 
