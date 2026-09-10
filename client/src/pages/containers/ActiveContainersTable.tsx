@@ -85,73 +85,77 @@ export function ActiveContainersTable({
         return (
           <div
             key={container.id}
-            className="bg-card border rounded-xl p-4 flex items-center gap-4 hover-elevate"
+            className="bg-card border rounded-xl p-4 flex flex-col gap-3 hover-elevate sm:flex-row sm:items-center sm:gap-4"
             data-testid={`row-container-${container.id}`}
           >
-            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                {editingNumberId === container.id ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      className="h-7 w-36 font-mono text-xs px-2"
-                      value={editingNumberValue}
-                      onChange={(e) => onEditNumberChange(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") onEditNumberSave(container.id, editingNumberValue);
-                        if (e.key === "Escape") onEditNumberCancel();
-                      }}
-                      autoFocus
-                      data-testid={`input-container-number-${container.id}`}
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onEditNumberSave(container.id, editingNumberValue)}
-                      disabled={isEditNumberPending}
-                      data-testid={`button-save-number-${container.id}`}
-                    >
-                      <Check className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={onEditNumberCancel}
-                      data-testid={`button-cancel-number-${container.id}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 group">
-                    <span className="font-mono font-semibold text-sm">{container.containerNumber}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditNumberStart(container.id, container.containerNumber);
-                      }}
-                      data-testid={`button-edit-number-${container.id}`}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-                <Badge
-                  className={statusColors[container.status] || "border-transparent"}
-                  data-testid={`badge-status-${container.id}`}
-                >
-                  {container.status}
-                </Badge>
+            <div className="flex w-full min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Package className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{getSupplierName(container.supplierId)}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {editingNumberId === container.id ? (
+                    <div className="flex max-w-full flex-wrap items-center gap-1">
+                      <Input
+                        className="h-9 w-full min-w-0 font-mono text-xs px-2 sm:w-36"
+                        value={editingNumberValue}
+                        onChange={(e) => onEditNumberChange(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") onEditNumberSave(container.id, editingNumberValue);
+                          if (e.key === "Escape") onEditNumberCancel();
+                        }}
+                        autoFocus
+                        data-testid={`input-container-number-${container.id}`}
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onEditNumberSave(container.id, editingNumberValue)}
+                        disabled={isEditNumberPending}
+                        data-testid={`button-save-number-${container.id}`}
+                        className="erp-mobile-touch-target"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={onEditNumberCancel}
+                        data-testid={`button-cancel-number-${container.id}`}
+                        className="erp-mobile-touch-target"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-1 group">
+                      <span className="truncate font-mono font-semibold text-sm">{container.containerNumber}</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="erp-mobile-touch-visible erp-mobile-touch-target opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditNumberStart(container.id, container.containerNumber);
+                        }}
+                        data-testid={`button-edit-number-${container.id}`}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                  <Badge
+                    className={statusColors[container.status] || "border-transparent"}
+                    data-testid={`badge-status-${container.id}`}
+                  >
+                    {container.status}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 break-words">{getSupplierName(container.supplierId)}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-4 flex-shrink-0">
-              <div className="text-right hidden sm:block">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-shrink-0 sm:justify-end sm:gap-4">
+              <div className="text-left sm:text-right">
                 <p className="text-xs text-muted-foreground">Import date</p>
                 <p className="text-sm font-mono">{formatDisplayDate(container.importDate)}</p>
                 {container.status === "OFFLOADED" && container.offloadDate && (
@@ -165,16 +169,17 @@ export function ActiveContainersTable({
               </div>
               {!hideContainerCosts && (
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground hidden sm:block">Total</p>
+                  <p className="text-xs text-muted-foreground">Total</p>
                   <p className="text-sm font-mono font-semibold">
                     {formatAmount(parseFloat(container.grandTotal || "0"))}
                   </p>
                 </div>
               )}
-              <Link href={`/containers/${container.id}`}>
+              <Link href={`/containers/${container.id}`} className="w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
+                  className="w-full sm:w-auto"
                   onClick={(e) => e.stopPropagation()}
                   data-testid={`button-view-${container.id}`}
                 >

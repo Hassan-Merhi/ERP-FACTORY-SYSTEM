@@ -49,19 +49,19 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
       <CardContent>
         <div className="flex flex-wrap items-end gap-4">
           {/* Period */}
-          <div className="space-y-2">
+          <div className="w-full space-y-2 sm:w-auto">
             <Label>Period</Label>
             <PeriodFilter value={model.periodFilter} onChange={model.applyPeriodFilter} data-testid="period-filter" />
           </div>
 
           {/* Company multi-select */}
-          <div className="min-w-0 space-y-2">
+          <div className="w-full min-w-0 space-y-2 sm:w-auto">
             <Label>Companies</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-9 w-[138px] min-w-0 justify-between gap-1.5 px-2.5"
+                  className="h-9 w-full min-w-0 justify-between gap-1.5 px-2.5 sm:w-[138px]"
                   data-testid="button-company-filter"
                 >
                   <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -99,10 +99,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           </div>
 
           {/* Voucher type */}
-          <div className="space-y-2">
+          <div className="w-full space-y-2 sm:w-auto">
             <Label htmlFor="voucher-type-tj">Voucher Type</Label>
             <Select value={model.voucherType} onValueChange={model.applyVoucherType}>
-              <SelectTrigger id="voucher-type-tj" className="w-[150px]" data-testid="select-voucher-type">
+              <SelectTrigger id="voucher-type-tj" className="w-full sm:w-[150px]" data-testid="select-voucher-type">
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
@@ -117,10 +117,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           </div>
 
           {/* Currency */}
-          <div className="space-y-2">
+          <div className="w-full space-y-2 sm:w-auto">
             <Label htmlFor="currency-tj">Currency</Label>
             <Select value={model.currency} onValueChange={model.applyCurrency}>
-              <SelectTrigger id="currency-tj" className="w-[110px]" data-testid="select-currency">
+              <SelectTrigger id="currency-tj" className="w-full sm:w-[110px]" data-testid="select-currency">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -132,10 +132,10 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           </div>
 
           {/* Status */}
-          <div className="space-y-2">
+          <div className="w-full space-y-2 sm:w-auto">
             <Label htmlFor="status-tj">Status</Label>
             <Select value={model.optionalFilter} onValueChange={model.applyOptionalFilter}>
-              <SelectTrigger id="status-tj" className="w-[130px]" data-testid="select-optional">
+              <SelectTrigger id="status-tj" className="w-full sm:w-[130px]" data-testid="select-optional">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -147,12 +147,12 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           </div>
 
           {/* Factory toggle */}
-          <div className="space-y-2">
+          <div className="w-full space-y-2 sm:w-auto">
             <Label>Factory</Label>
             <div>
               <Button
                 variant={model.includeFactory ? "default" : "outline"}
-                className="gap-2"
+                className="w-full gap-2 sm:w-auto"
                 onClick={model.toggleIncludeFactory}
                 data-testid="button-toggle-factory"
               >
@@ -165,9 +165,9 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
           {/* Search */}
           <div className="space-y-2 flex-1 min-w-0 w-full md:min-w-[200px] md:w-auto">
             <Label htmlFor="search-tj">Search</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="search-tj"
                   value={model.searchInput}
@@ -178,7 +178,7 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
                   data-testid="input-search"
                 />
               </div>
-              <Button variant="default" className="shrink-0" onClick={model.handleSearch} data-testid="button-search">
+              <Button variant="default" className="w-full shrink-0 sm:w-auto" onClick={model.handleSearch} data-testid="button-search">
                 Search
               </Button>
               {model.search && (

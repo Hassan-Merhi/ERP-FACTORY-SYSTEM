@@ -37,7 +37,7 @@ export function ContainerFilters({
   return (
     /* Inline filter row */
     <div className="flex flex-wrap gap-2 items-center">
-      <div className="relative flex-1 min-w-[200px]">
+      <div className="relative w-full min-w-0 sm:flex-1 sm:min-w-[200px]">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search by container number..."
@@ -47,13 +47,14 @@ export function ContainerFilters({
           data-testid="input-search-container"
         />
       </div>
-      <div className="flex gap-1 flex-wrap">
+      <div className="flex w-full gap-1 overflow-x-auto pb-1 sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0">
         {(["ALL", "OTW", "OFFLOADED"] as const).map((s) => (
           <Button
             key={s}
             size="sm"
             variant={statusFilter === s ? "default" : "outline"}
             onClick={() => onStatusChange(s)}
+            className="shrink-0"
             data-testid={`button-status-${s.toLowerCase()}`}
           >
             {s === "ALL" ? "All" : s === "OTW" ? "OTW" : "Offloaded"}
@@ -63,17 +64,24 @@ export function ContainerFilters({
       {suppliers.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1" data-testid="select-supplier-filter">
-              <Filter className="h-3.5 w-3.5" />
-              {supplierFilter.length === 0
-                ? "All Suppliers"
-                : supplierFilter.length === 1
-                  ? getSupplierName(Number(supplierFilter[0]))
-                  : `${supplierFilter.length} Suppliers`}
-              <ChevronDown className="h-3.5 w-3.5" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 max-w-full sm:max-w-xs"
+              data-testid="select-supplier-filter"
+            >
+              <Filter className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {supplierFilter.length === 0
+                  ? "All Suppliers"
+                  : supplierFilter.length === 1
+                    ? getSupplierName(Number(supplierFilter[0]))
+                    : `${supplierFilter.length} Suppliers`}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
+          <DropdownMenuContent align="start" className="w-[min(20rem,calc(100vw-1rem))]">
             {suppliers.map((supplier) => {
               const val = supplier.id.toString();
               const checked = supplierFilter.includes(val);
