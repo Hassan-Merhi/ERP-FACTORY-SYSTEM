@@ -1,0 +1,161 @@
+name: Phase 4 Proforma Reconciliation
+
+on:
+  push:
+    branches:
+      - fix/proforma-capacity-phase4-reconciliation-20260910
+    paths:
+      - scripts/phase4-apply-proforma-reconciliation.mjs
+      - scripts/phase4-preflight-fixes.mjs
+      - scripts/phase4-postpatch-fixes.mjs
+      - .github/workflows/phase4-proforma-reconciliation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase4-proforma-reconciliation
+  cancel-in-progress: true
+
+jobs:
+  verify-and-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: phase4-capacity-test-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+
+    steps:
+      - name: Checkout Phase 4 branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/proforma-capacity-phase4-reconciliation-20260910
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up canonical Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply Phase 4 reconciliation
+        run: |
+          node scripts/phase4-preflight-fixes.mjs
+          node scripts/phase4-apply-proforma-reconciliation.mjs
+          node scripts/phase4-postpatch-fixes.mjs
+
+      - name: Format changed source
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/lib/proformaCapacity.ts \
+            client/src/lib/proformaCapacity.test.ts \
+            client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts \
+            client/src/pages/factory/factorycontainerloadingscan/LoadingSetupCard.tsx \
+            client/src/pages/factory/factorycontainerloadingscan/ProformaProgressPanel.tsx \
+            client/src/pages/factory/factorycontainerloadingscan/FinalizeLoadingDialog.tsx \
+            client/src/pages/containerloadingscan/useContainerLoadingScanModel.ts \
+            client/src/pages/containerloadingscan/LoadingControlsPanel.tsx \
+            client/src/pages/containerloadingscan/LoadingScanDialogs.tsx \
+            server/routes/factory/_stockReservationHelper.ts \
+            server/routes/factory/customer-proformas/proformas.ts \
+            server/routes/factory/factoryStockAllocationV2Routes.ts \
+            tests/proforma-capacity-phase4-reconciliation.test.ts \
+            tests/setup.ts
+          git diff --check
+
+      - name: Prepare disposable PostgreSQL schema
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+
+      - name: Regenerate intentional route manifest
+        run: UPDATE_ROUTE_MANIFEST=1 node node_modules/vitest/vitest.mjs run tests/route-manifest.test.ts
+
+      - name: Run focused Phase 1 through Phase 4 regressions
+        run: |
+          node node_modules/vitest/vitest.mjs run \
+            tests/proforma-capacity.test.ts \
+            tests/proforma-capacity-enforcement.test.ts \
+            tests/proforma-capacity-write-guards.test.ts \
+            tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/factory-loading-proforma-quantity-alignment.test.ts \
+            tests/factory-loading-bale-rescan.test.ts \
+            tests/customer-loading-routes-behavior.test.ts \
+            tests/proforma-capacity-phase4-reconciliation.test.ts
+          node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts client/src/lib/proformaCapacity.test.ts
+
+      - name: Typecheck lint and production build
+        run: |
+          npm run check
+          node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js \
+            client/src/lib/proformaCapacity.ts \
+            client/src/lib/proformaCapacity.test.ts \
+            client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts \
+            client/src/pages/factory/factorycontainerloadingscan/LoadingSetupCard.tsx \
+            client/src/pages/factory/factorycontainerloadingscan/ProformaProgressPanel.tsx \
+            client/src/pages/factory/factorycontainerloadingscan/FinalizeLoadingDialog.tsx \
+            client/src/pages/containerloadingscan/useContainerLoadingScanModel.ts \
+            client/src/pages/containerloadingscan/LoadingControlsPanel.tsx \
+            client/src/pages/containerloadingscan/LoadingScanDialogs.tsx \
+            server/routes/factory/_stockReservationHelper.ts \
+            server/routes/factory/customer-proformas/proformas.ts \
+            server/routes/factory/factoryStockAllocationV2Routes.ts \
+            tests/proforma-capacity-phase4-reconciliation.test.ts \
+            tests/setup.ts \
+            --max-warnings 0
+          npm run build
+
+      - name: Remove temporary Phase 4 harness
+        run: |
+          git rm -f \
+            scripts/phase4-apply-proforma-reconciliation.mjs \
+            scripts/phase4-preflight-fixes.mjs \
+            scripts/phase4-postpatch-fixes.mjs \
+            .github/workflows/phase4-proforma-reconciliation.yml
+
+      - name: Run repository safety audits
+        run: |
+          npm run audit:source-text-assertions
+          npm run audit:god-files
+          npm run audit:type-escapes
+          npm run audit:company-scope
+          npm run audit:scripts
+          git diff --check
+
+      - name: Commit verified Phase 4 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: reconcile proforma capacity reservations and loading progress"
+          git push origin HEAD:fix/proforma-capacity-phase4-reconciliation-20260910
