@@ -39,7 +39,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
         type="date"
         value={value}
         autoFocus
-        data-testid={`input-eta-inline-\${container.id}`}
+        data-testid={`input-eta-inline-${container.id}`}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -63,7 +63,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
         setEditing(true);
       }}
       title="Click to set or edit ETA"
-      data-testid={`text-eta-\${container.id}`}
+      data-testid={`text-eta-${container.id}`}
       className="cursor-text underline decoration-dashed underline-offset-2 decoration-muted-foreground/40"
     >
       {container.eta ? (
@@ -272,6 +272,14 @@ export function InlineTransporterCell({ id, value }: { id: number; value: string
   );
 }
 
+function getLocalDateYmd() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function InlineBoolCell({ id, field, value }: { id: number; field: string; value: boolean | null | undefined }) {
   const mutation = useInlinePatch(id);
   return (
@@ -279,9 +287,18 @@ export function InlineBoolCell({ id, field, value }: { id: number; field: string
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        mutation.mutate({ [field]: !value });
+        const nextValue = !value;
+        const patch: Record<string, unknown> = { [field]: nextValue };
+
+        // On the tracking table, the Docs checkmark records when the docs were sent.
+        // Use the user's local calendar date so the saved day matches the day they clicked it.
+        if (field === "docReceived") {
+          patch.docsSentDate = nextValue ? getLocalDateYmd() : null;
+        }
+
+        mutation.mutate(patch);
       }}
-      title="Click to toggle"
+      title={field === "docReceived" ? "Toggle docs and set Docs Sent date automatically" : "Click to toggle"}
       className="flex items-center justify-center"
     >
       {value ? (
