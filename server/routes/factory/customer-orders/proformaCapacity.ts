@@ -231,7 +231,9 @@ export function buildProformaCapacitySnapshot(
  * every non-cancelled, non-deleted order tied to this proforma consumes its
  * capacity, regardless of whether it is LOADING, VERIFIED, or FINALIZED.
  * Distinct physical bale IDs are counted so an accidental duplicate join row
- * cannot consume the same capacity twice inside one order.
+ * cannot consume the same capacity twice inside one order. Article-code
+ * recovery follows the scanner: persisted order-bale code, then physical-bale
+ * code, then the canonical product code.
  */
 export async function getProformaCapacitySnapshot(
   executor: ProformaCapacityExecutor,
@@ -266,20 +268,38 @@ export async function getProformaCapacitySnapshot(
   const contributionRows = resultRows<ContributionRow>(
     await executor.execute(sql`
       SELECT
-        LOWER(TRIM(COALESCE(NULLIF(cob.article_code, ''), fb.article_code, ''))) AS "normalizedArticleCode",
+        LOWER(TRIM(COALESCE(
+          NULLIF(cob.article_code, ''),
+          NULLIF(fb.article_code, ''),
+          fbp.article_code,
+          ''
+        ))) AS "normalizedArticleCode",
         co.id AS "orderId",
         co.status AS "orderStatus",
         COUNT(DISTINCT cob.bale_id)::int AS "loadedQty"
       FROM customer_order_bales cob
       INNER JOIN customer_orders co ON co.id = cob.order_id
       LEFT JOIN factory_bales fb ON fb.id = cob.bale_id
+      LEFT JOIN factory_bale_products fbp
+        ON fbp.id = fb.product_id
+       AND fbp.company_id = co.company_id
       WHERE co.company_id = ${options.companyId}
         AND co.proforma_id_used = ${options.proformaId}
         AND co.status <> 'CANCELLED'
         AND co.deleted_at IS NULL
-        AND LOWER(TRIM(COALESCE(NULLIF(cob.article_code, ''), fb.article_code, ''))) <> ''
+        AND LOWER(TRIM(COALESCE(
+          NULLIF(cob.article_code, ''),
+          NULLIF(fb.article_code, ''),
+          fbp.article_code,
+          ''
+        ))) <> ''
       GROUP BY
-        LOWER(TRIM(COALESCE(NULLIF(cob.article_code, ''), fb.article_code, ''))),
+        LOWER(TRIM(COALESCE(
+          NULLIF(cob.article_code, ''),
+          NULLIF(fb.article_code, ''),
+          fbp.article_code,
+          ''
+        ))),
         co.id,
         co.status
     `)
