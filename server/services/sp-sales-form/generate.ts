@@ -1,3 +1,4 @@
+import { cellFormula, cellResultText, cellText } from "../../lib/excelCellValue";
 import { toArrayBuffer } from "../../lib/bufferCompatibility";
 import ExcelJS from "exceljs";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -279,12 +280,7 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
     const nameCell = row.getCell(E_NAME_COL).value;
     const codeCell = row.getCell(E_CODE_COL).value;
 
-    const rawName =
-      typeof nameCell === "string"
-        ? nameCell.trim()
-        : typeof (nameCell as any)?.result === "string"
-          ? (nameCell as any).result.trim()
-          : "";
+    const rawName = cellText(nameCell);
     if (!rawName || rawName.startsWith("Total ")) continue;
 
     const systemCode = typeof codeCell === "string" && codeCell.trim() ? codeCell.trim() : rawName;
@@ -306,12 +302,7 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
   for (let r = 2; r <= costingLastRow; r++) {
     const row = costingWs.getRow(r);
     const nameRaw = row.getCell(C_NAME_COL).value;
-    const displayName =
-      typeof nameRaw === "string"
-        ? nameRaw.trim()
-        : typeof (nameRaw as any)?.result === "string"
-          ? (nameRaw as any).result.trim()
-          : "";
+    const displayName = cellText(nameRaw);
 
     // For rows with no readable name (formula-name with null result), still
     // guard the avgCostCell to prevent #DIV/0! from an untouched =H/E formula.
@@ -434,12 +425,7 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
     for (let r = S_DATA_START; r <= salesWsLast; r++) {
       const row = salesWs.getRow(r);
       const nameRaw = row.getCell(S_NAME_COL).value;
-      const displayName =
-        typeof nameRaw === "string"
-          ? nameRaw.trim()
-          : typeof (nameRaw as any)?.result === "string"
-            ? (nameRaw as any).result.trim()
-            : "";
+      const displayName = cellText(nameRaw);
 
       // Completely skip blank/unnamed rows.
       if (!displayName) continue;
@@ -720,8 +706,7 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
     let bmFormulaChecked = false;
     for (let r = E_DATA_START; r <= Math.min(E_DATA_START + 5, E_DATA_END); r++) {
       const bmCell = entryWs.getRow(r).getCell(bmColIdx);
-      const v = bmCell.value as any;
-      const fmla: string = v?.formula ?? v?.sharedFormula ?? "";
+      const fmla = cellFormula(bmCell.value);
       if (fmla) {
         if (!fmla.includes("Sales!")) {
           mismatches.push(
@@ -765,9 +750,10 @@ export async function generateSpSalesFormExcel(params: SpSalesFormParams): Promi
     for (const ws of wbCheck.worksheets) {
       ws.eachRow({ includeEmpty: false }, (row) => {
         row.eachCell({ includeEmpty: false }, (cell) => {
-          const v = cell.value as any;
-          const result = v?.result ?? (typeof v === "string" ? v : null);
-          if (typeof result === "string" && EXCEL_ERRORS.some((e) => result.includes(e))) {
+          // Text results only: an error cached as `{ error: "#DIV/0!" }` is not
+          // text and is missed here — see `cellResultText`.
+          const result = cellResultText(cell.value);
+          if (result !== null && EXCEL_ERRORS.some((e) => result.includes(e))) {
             (errorsBySheet[ws.name] ??= []).push(`${ws.name}!${cell.address}: ${result}`);
           }
         });
