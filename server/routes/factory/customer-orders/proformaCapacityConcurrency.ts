@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
-import type { ProformaCapacityExecutor } from "./proformaCapacity";
+import {
+  getProformaCapacitySnapshot,
+  type ProformaCapacityExecutor,
+  type ProformaCapacityOptions,
+  type ProformaCapacitySnapshot,
+} from "./proformaCapacity";
 
 const INT32_MIN = -2147483648;
 const INT32_MAX = 2147483647;
@@ -37,4 +42,16 @@ export async function acquireProformaCapacityTransactionLock(
   await executor.execute(
     sql`SELECT pg_advisory_xact_lock(${options.companyId}::integer, ${options.proformaId}::integer)`
   );
+}
+
+/**
+ * Acquire the transaction lock and then read the authoritative snapshot while
+ * no competing protected writer for this proforma can change capacity.
+ */
+export async function getLockedProformaCapacitySnapshot(
+  executor: ProformaCapacityExecutor,
+  options: ProformaCapacityOptions
+): Promise<ProformaCapacitySnapshot | null> {
+  await acquireProformaCapacityTransactionLock(executor, options);
+  return getProformaCapacitySnapshot(executor, options);
 }
