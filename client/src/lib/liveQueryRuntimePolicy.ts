@@ -22,10 +22,12 @@ export function shouldDefaultRefetchLiveQuery(queryKey: QueryKey): boolean {
  * need the extra browser-online compatibility path. Normal live queries already
  * use TanStack Query's refetchOnReconnect hook and must not be woken twice.
  */
-export function needsLegacyReconnectFallback(queryKey: QueryKey, options: LiveQueryOptions): boolean {
+export function needsLegacyReconnectFallback(queryKey: QueryKey, options: unknown): boolean {
   if (!isLiveTransactionalQueryKey(queryKey)) return false;
-  if (options.refetchOnReconnect === false) return true;
-  return typeof options.staleTime === "number" && options.staleTime > QUERY_STALE_TIMES.live;
+  const liveOptions: LiveQueryOptions =
+    typeof options === "object" && options !== null ? (options as LiveQueryOptions) : {};
+  if (liveOptions.refetchOnReconnect === false) return true;
+  return typeof liveOptions.staleTime === "number" && liveOptions.staleTime > QUERY_STALE_TIMES.live;
 }
 
 /**
