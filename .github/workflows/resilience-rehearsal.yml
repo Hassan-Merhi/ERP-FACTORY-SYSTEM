@@ -68,6 +68,7 @@ jobs:
         run: |
           npm run verify:observability
           npm run verify:final-production-readiness
+          node scripts/verify-phase11-operational-monitoring.mjs
           node scripts/verify-phase11-12-observability-disaster-recovery.mjs
 
       - name: Prepare source database schema

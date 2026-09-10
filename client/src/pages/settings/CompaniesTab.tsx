@@ -48,7 +48,7 @@ export function CompaniesTab() {
       active: true,
       baseCurrency: "USD",
       displayCurrency: "none",
-      parentCompanyId: null,
+      parentCompanyId: undefined,
     },
   });
 
@@ -75,7 +75,7 @@ export function CompaniesTab() {
         active: true,
         baseCurrency: "USD",
         displayCurrency: "none",
-        parentCompanyId: null,
+        parentCompanyId: undefined,
       });
     },
     onError: (error: ClientErrorLike) => {
@@ -113,6 +113,13 @@ export function CompaniesTab() {
   }
 
   function handleSubmitCompany(data: CompanyFormValues) {
+    if (data.companyType !== "properties" && data.parentCompanyId === undefined) {
+      companyForm.setError("parentCompanyId", {
+        type: "manual",
+        message: "Choose a parent company or explicitly select Standalone / No Parent.",
+      });
+      return;
+    }
     createCompanyMutation.mutate(data);
   }
 
@@ -120,7 +127,7 @@ export function CompaniesTab() {
   const selectedParentCompanyId = companyForm.watch("parentCompanyId");
   const editingCompanyId = Number(editingCompany?.id ?? 0);
   const activeParentCompanies = companies.filter(
-    (company) => company.active && Number(company.id) !== editingCompanyId
+    (company) => company.active && company.companyType !== "properties" && Number(company.id) !== editingCompanyId
   );
   const selectedParentCompany = companies.find((company) => Number(company.id) === Number(selectedParentCompanyId));
   const parentCompanyOptions =
@@ -155,7 +162,7 @@ export function CompaniesTab() {
                 active: true,
                 baseCurrency: "USD",
                 displayCurrency: "none",
-                parentCompanyId: null,
+                parentCompanyId: undefined,
               });
             }
           }}
@@ -171,7 +178,7 @@ export function CompaniesTab() {
                   active: true,
                   baseCurrency: "USD",
                   displayCurrency: "none",
-                  parentCompanyId: null,
+                  parentCompanyId: undefined,
                 });
               }}
               data-testid="button-add-company"
@@ -218,7 +225,13 @@ export function CompaniesTab() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || "erp"}>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          if (value === "properties") companyForm.setValue("parentCompanyId", undefined);
+                        }}
+                        value={field.value || "erp"}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-company-type">
                             <SelectValue placeholder="Select type" />
@@ -298,24 +311,29 @@ export function CompaniesTab() {
                     </FormItem>
                   )}
                 />
-                {(editingCompany || selectedCompanyType === "supplier_partner") && (
+                {selectedCompanyType !== "properties" && (
                   <FormField
                     control={companyForm.control}
                     name="parentCompanyId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Parent Company</FormLabel>
+                        <FormLabel>Parent Company / Standalone *</FormLabel>
                         <Select
-                          value={field.value == null ? "none" : String(field.value)}
-                          onValueChange={(value) => field.onChange(value === "none" ? null : Number(value))}
+                          value={
+                            field.value === undefined ? undefined : field.value === null ? "none" : String(field.value)
+                          }
+                          onValueChange={(value) => {
+                            field.onChange(value === "none" ? null : Number(value));
+                            companyForm.clearErrors("parentCompanyId");
+                          }}
                         >
                           <FormControl>
                             <SelectTrigger data-testid="select-parent-company">
-                              <SelectValue placeholder="No parent company" />
+                              <SelectValue placeholder="Choose parent or standalone" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="none">No parent company</SelectItem>
+                            <SelectItem value="none">Standalone / No Parent</SelectItem>
                             {parentCompanyOptions.map((company) => (
                               <SelectItem key={company.id} value={String(company.id)} disabled={!company.active}>
                                 {company.name} ({company.code}){!company.active ? " — inactive" : ""}
@@ -324,7 +342,9 @@ export function CompaniesTab() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          For Golden Coast Supplier Partners, choose the active HADI parent company.
+                          Child companies inherit parent suppliers for PO Import and use this relationship for
+                          parent-side intercompany accounting. Choose Standalone only when the company truly has no
+                          accounting parent.
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -412,6 +432,9 @@ export function CompaniesTab() {
                 const isFactory = company.companyType === "factory" || company.companyType === "factory_v2";
                 const isProperties = company.companyType === "properties";
                 const isSupplierPartner = company.companyType === "supplier_partner";
+                const parentCompany = companies.find(
+                  (candidate) => Number(candidate.id) === Number(company.parentCompanyId)
+                );
                 const typeLabel = isFactory
                   ? "Factory"
                   : isProperties
@@ -472,12 +495,20 @@ export function CompaniesTab() {
                         </div>
                       </div>
 
-                      <p className="text-xs text-muted-foreground">
-                        {company.baseCurrency || "USD"}
-                        {company.displayCurrency && company.displayCurrency !== "none"
-                          ? ` · ${company.displayCurrency}`
-                          : ""}
-                      </p>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>
+                          {company.baseCurrency || "USD"}
+                          {company.displayCurrency && company.displayCurrency !== "none"
+                            ? ` · ${company.displayCurrency}`
+                            : ""}
+                        </p>
+                        {!isProperties && (
+                          <p data-testid={`text-company-parent-${company.id}`}>
+                            Parent:{" "}
+                            {parentCompany ? `${parentCompany.name} (${parentCompany.code})` : "Standalone / No Parent"}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="border-t px-4 py-2 flex justify-end gap-1">

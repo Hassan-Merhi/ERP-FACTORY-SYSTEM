@@ -13,7 +13,7 @@ const FACTORY_STAFF_TRACKING_TABLE_SQL = `
     produced_bales numeric(12, 2),
     status varchar(20) NOT NULL DEFAULT 'Present',
     notes text,
-    created_by integer,
+    created_by varchar(255),
     created_at timestamp NOT NULL DEFAULT now(),
     updated_at timestamp NOT NULL DEFAULT now(),
     CONSTRAINT factory_staff_tracking_page_check CHECK (page_type IN ('production', 'attendance')),
@@ -30,6 +30,10 @@ const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
   ALTER TABLE factory_staff_tracking_entries
     ADD COLUMN IF NOT EXISTS group_name varchar(200);
 
+  ALTER TABLE factory_staff_tracking_entries
+    ALTER COLUMN created_by TYPE varchar(255)
+    USING created_by::text;
+
   CREATE TABLE IF NOT EXISTS factory_staff_tracking_period_closures (
     id serial PRIMARY KEY,
     company_id integer NOT NULL,
@@ -37,14 +41,18 @@ const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
     period_type varchar(20) NOT NULL,
     period_start date NOT NULL,
     period_end date NOT NULL,
-    ended_by integer,
+    ended_by varchar(255),
     ended_at timestamp NOT NULL DEFAULT now(),
     CONSTRAINT factory_staff_tracking_closure_page_check CHECK (page_type IN ('production', 'attendance')),
     CONSTRAINT factory_staff_tracking_closure_period_check CHECK (period_type IN ('daily', 'weekly', 'monthly')),
     CONSTRAINT factory_staff_tracking_closure_period_order_check CHECK (period_end >= period_start),
     CONSTRAINT factory_staff_tracking_closure_unique UNIQUE
       (company_id, page_type, period_type, period_start, period_end)
-  )
+  );
+
+  ALTER TABLE factory_staff_tracking_period_closures
+    ALTER COLUMN ended_by TYPE varchar(255)
+    USING ended_by::text;
 `;
 
 export const factoryStaffTrackingSchema = [

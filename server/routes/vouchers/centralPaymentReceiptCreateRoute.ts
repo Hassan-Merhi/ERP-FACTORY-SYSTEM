@@ -7,11 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
-import {
-  PostingValidationError,
-  postBalancedVoucherTx,
-  type CentralPostingResult,
-} from "../../services/accounting/centralPostingEngine";
+import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { buildFactoryDaybookPosting } from "../../services/accounting/daybookConvergence";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
@@ -19,10 +15,9 @@ import { buildPaymentReceiptPostingRequest } from "../../services/accounting/pay
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
+import type { FactoryDaybookVoucherLike } from "../../services/accounting/daybookConvergence";
 
 const postingDependencies = createDatabasePostingDependencies();
-type PersistedPostingResult = CentralPostingResult<any, any>;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -108,7 +103,9 @@ async function resolvePaymentReceiptTargetTx(input: {
 async function writeFactoryDaybookCompatibilityTx(input: {
   tx: DbTransaction;
   companyId: number;
-  voucher: any;
+  // The persisted row goes straight to buildFactoryDaybookPosting, so this is
+  // the contract that function already declares.
+  voucher: FactoryDaybookVoucherLike;
 }): Promise<void> {
   const [settings] = await input.tx
     .select({ id: factorySettings.id })
@@ -164,7 +161,7 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
           resolvePaymentReceiptTargetTx({ tx, companyId, accountType, accountId }),
       });
 
-      const posted = (await postBalancedVoucherTx(tx, built.request, postingDependencies)) as PersistedPostingResult;
+      const posted = await postBalancedVoucherTx(tx, built.request, postingDependencies);
 
       if (!posted.replayed) {
         await applyEmployeeBalanceDeltasTx({

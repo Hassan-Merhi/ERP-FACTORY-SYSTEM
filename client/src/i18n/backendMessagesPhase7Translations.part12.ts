@@ -102,4 +102,27 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "تعذر على واتساب المصادقة مع أي مثيل Green API مُكوّن. حدّث معرّف مثيل واتساب ورمز API في الإعدادات، ثم حاول مرة أخرى.",
     fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres, puis réessayez.",
   },
+  {
+    en: "Container data not found in preview",
+    ar: "لم يتم العثور على بيانات الحاوية في المعاينة",
+    fr: "Données du conteneur introuvables dans l’aperçu",
+  },
+  {
+    en: "Linked proforma is unavailable. Scan again to bypass.",
+    ar: "الفاتورة المبدئية المرتبطة غير متوفرة. امسح مرة أخرى للتجاوز.",
+    fr: "La proforma liée est indisponible. Scannez à nouveau pour contourner.",
+  },
+  {
+    // The same message as the ${currentCount}/${proformaLine.quantity} entry in
+    // phase3RemainingTranslations.part17; the capacity refactor renamed the
+    // placeholders, and the audit matches the source text exactly.
+    en: "Quantity exceeded (${decision.consumedQty}/${decision.requestedQty}). Scan again to bypass.",
+    ar: "الكمية التي تم تجاوزها{{0}}/{{1}}الشاشة مرة أخرى",
+    fr: "Quantité dépassée ({{0}}/{{1}}). Scannez encore pour contourner.",
+  },
+  {
+    en: "Existing loaded bales exceed or do not match the selected proforma capacity",
+    ar: "البالات المحمّلة الحالية تتجاوز سعة الفاتورة المبدئية المحددة أو لا تطابقها",
+    fr: "Les balles déjà chargées dépassent la capacité de la proforma sélectionnée ou n’y correspondent pas",
+  },
 ];

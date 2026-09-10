@@ -1,5 +1,5 @@
 {
-  "description": "Reviewed CI ratchet deltas for intentional functionality added before the architecture snapshots were refreshed. Every allowance is exact so unrelated growth or routes still fail. The route-manifest additions were folded into config/route-manifest.json on 2026-08-05 and again when the earlier Golden Coast phases reached main, so those lists only contain exact reviewed deltas since that snapshot: the three Phase 7 sales-cash-transfer middleware mounts introduced by the Phase 16 HADI transfer guard, the second DELETE /api/vouchers/:id registration that #1206 mounts ahead of the generic voucher delete so Golden Coast POS cash settlements cascade correctly, the root middleware mount that #1274 adds via registerGoldenCoastSystemAccountPresentation to filter the Golden Coast owner-withdrawal clearing account out of GET account listings, and the three stock-item history mounts that #1279 adds so enforcePosInventoryCostBoundary redacts inventory cost for POS users without the inventory.cost.view permission. config/source-text-assertion-baseline.json was regenerated once audit-source-text-assertions learned to see relative-URL source reads, so every test previously carried here as a reviewed delta now lives in that baseline, which is the canonical list. The source-text allowance covers assertions that landed on main after that baseline was taken, each on a test the baseline already records, led by the #1193 entry in server/routes/sp/spGoldenCoastPhase11MonthlyCloseRoutes.test.ts pinning the shared-charge Decimal expression. The three #1196 assertions in tests/supplier-partner-net-position-inclusion.test.ts that this file used to carry were removed by #1200, so the ceiling drops with them.",
+  "description": "Reviewed CI ratchet deltas for intentional functionality added before the architecture snapshots were refreshed. Every allowance is exact so unrelated growth or routes still fail. The route-manifest additions were folded into config/route-manifest.json on 2026-08-05 and again when the earlier Golden Coast phases reached main, so those lists only contain exact reviewed deltas since that snapshot: the three Phase 7 sales-cash-transfer middleware mounts introduced by the Phase 16 HADI transfer guard, the second DELETE /api/vouchers/:id registration that #1206 mounts ahead of the generic voucher delete so Golden Coast POS cash settlements cascade correctly, the root middleware mount that #1274 adds via registerGoldenCoastSystemAccountPresentation to filter the Golden Coast owner-withdrawal clearing account out of GET account listings, the three stock-item history mounts that #1279 adds so enforcePosInventoryCostBoundary redacts inventory cost for POS users without the inventory.cost.view permission, and the two reviewed Group Net Position GET routes added by #1331. config/source-text-assertion-baseline.json was regenerated once audit-source-text-assertions learned to see relative-URL source reads, so every test previously carried here as a reviewed delta now lives in that baseline, which is the canonical list. The source-text allowance covers assertions that landed on main after that baseline was taken, each on a test the baseline already records, led by the #1193 entry in server/routes/sp/spGoldenCoastPhase11MonthlyCloseRoutes.test.ts pinning the shared-charge Decimal expression. The three #1196 assertions in tests/supplier-partner-net-position-inclusion.test.ts that this file used to carry were removed by #1200, so the ceiling drops with them.",
   "godFileLineCaps": {
     "server/routes/sp/spGoldenCoastPhase6PosSaleRoutes.ts": 909,
     "server/services/factory/postOffloadPhase6Safety.ts": 927,
@@ -11,22 +11,17 @@
     "client/src/pages/vouchers/StockTransferForm.tsx": 2388
   },
   "routeManifestAdditions": [
-    "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]"
+    "GET /api/stats/group-net-position [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
+    "GET /api/stats/group-net-position-excel [requireAuth > requireNonPOS > <anonymous> > <anonymous>]"
   ],
-  "routeManifestMountAdditions": [
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [requireAuth]",
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [requireNonPOS]",
-    "USE /api/sp/golden-coast/phase7/sales-cash-transfer [<anonymous>]",
-    "USE / [<anonymous>]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [requireAuth]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [checkPOSLocation]",
-    "USE /api/locations/:locationId/stock-items/:stockItemId [enforcePosInventoryCostBoundary]"
-  ],
+  "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
-      "tests/net-position-equity-visibility.test.ts"
+      "tests/net-position-equity-visibility.test.ts",
+      "tests/ui/mobile-responsive-wave2-factory-floor.test.ts"
     ],
-    "maxAdditionalTextAssertions": 6
+    "maxAdditionalTextAssertions": 41,
+    "rationale": "tests/ui/mobile-responsive-wave2-factory-floor.test.ts asserts on Tailwind responsive breakpoint classes (md:hidden / md:block) and on data-testid template literals. jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is not observable behaviourally; the source text is the only place that contract exists. maxAdditionalTextAssertions covers that file plus the assertions added with the POS item replacement and mobile responsive waves, measured exactly at 41 over the reviewed baseline of 2061 so any further growth still fails."
   }
 }
