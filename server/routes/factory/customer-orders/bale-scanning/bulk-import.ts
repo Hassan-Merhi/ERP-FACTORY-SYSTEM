@@ -11,7 +11,9 @@ import { parseId } from "../../../../lib/parseId";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
-import { shouldEnforceProformaOverload, sumProformaQuantityLimit } from "./proformaScanPolicy";
+import { normalizeLoadingArticleCode } from "./proformaScanPolicy";
+import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
   factoryBaleProducts,
   factoryBales,
@@ -19,7 +21,7 @@ import {
   customerOrders,
   customerOrderBales,
 } from "@shared/schema";
-import { eq, and, or, sql, inArray, isNull, ne } from "drizzle-orm";
+import { eq, and, or, sql, inArray } from "drizzle-orm";
 import { resultRows, firstRow } from "../../../../lib/queryResult";
 
 export function registerOrderBaleBulkImportRoutes(app: Express) {
@@ -121,36 +123,16 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             if (!bale) return { kind: "notFound" as const };
             if (alreadyAddedBaleIds.has(bale.id)) return { kind: "skipDuplicate" as const };
 
-            if (
-              order.proformaIdUsed &&
-              bale.articleCode &&
-              shouldEnforceProformaOverload({ ignoreProforma, allowBypassOverload: false })
-            ) {
-              const matchingProformaLines = await tx
-                .select({ quantity: customerProformaLines.quantity })
-                .from(customerProformaLines)
-                .where(
-                  and(
-                    eq(customerProformaLines.proformaId, order.proformaIdUsed),
-                    sql`LOWER(TRIM(${customerProformaLines.articleCode})) = LOWER(TRIM(${bale.articleCode}))`
-                  )
-                );
-              if (matchingProformaLines.length > 0) {
-                const proformaQuantityLimit = sumProformaQuantityLimit(matchingProformaLines);
-                const [loadedCount] = await tx
-                  .select({ count: sql<number>`COUNT(*)::int` })
-                  .from(customerOrderBales)
-                  .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
-                  .where(
-                    and(
-                      eq(customerOrders.companyId, companyId),
-                      eq(customerOrders.proformaIdUsed, order.proformaIdUsed),
-                      ne(customerOrders.status, "CANCELLED"),
-                      isNull(customerOrders.deletedAt),
-                      sql`LOWER(TRIM(COALESCE(${customerOrderBales.articleCode}, ''))) = LOWER(TRIM(${bale.articleCode}))`
-                    )
-                  );
-                if ((loadedCount?.count || 0) >= proformaQuantityLimit) return { kind: "notFound" as const };
+            const baleProductForCapacity = bale.productId ? allProducts.find((p) => p.id === bale.productId) : null;
+            const effectiveArticleCode = String(bale.articleCode || baleProductForCapacity?.articleCode || "").trim();
+            if (order.proformaIdUsed && !ignoreProforma) {
+              const capacity = await getProformaCapacitySnapshot(tx, {
+                companyId,
+                proformaId: order.proformaIdUsed,
+                currentOrderId: orderId,
+              });
+              if (!capacity || !evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1).allowed) {
+                return { kind: "notFound" as const };
               }
             }
 
@@ -175,7 +157,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 .where(
                   and(
                     eq(customerProformaLines.proformaId, order.proformaIdUsed),
-                    eq(customerProformaLines.articleCode, bale.articleCode || "")
+                    sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${normalizeLoadingArticleCode(effectiveArticleCode)}`
                   )
                 );
               if (pl) {
@@ -202,8 +184,8 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
               baleReference: bale.referenceNumber,
               locationId: bale.erpLocationId ?? parsedLocationId,
               weight: bale.weightKg,
-              articleCode: bale.articleCode,
-              baleName: baleProductForName1?.name || bale.productName || bale.articleCode || bale.baleCode,
+              articleCode: effectiveArticleCode || bale.articleCode,
+              baleName: baleProductForName1?.name || bale.productName || effectiveArticleCode || bale.baleCode,
               priceUsed,
               scannedBy: scannerName,
             });
@@ -309,6 +291,17 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             (b) => !alreadyAddedBaleIds.has(b.id) && !v5BlockedBaleIds.has(b.id)
           );
 
+          const capacity =
+            order.proformaIdUsed && !ignoreProforma
+              ? await getProformaCapacitySnapshot(tx, {
+                  companyId,
+                  proformaId: order.proformaIdUsed,
+                  currentOrderId: orderId,
+                })
+              : null;
+          if (order.proformaIdUsed && !ignoreProforma && !capacity) return [];
+          const pendingByArticle = new Map<string, number>();
+
           const addedIds: number[] = [];
           for (const bale of candidateBales) {
             if (addedIds.length >= qty) break;
@@ -332,37 +325,14 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
               if (firstRow(v5DupCheck)) continue;
             }
 
-            if (
-              order.proformaIdUsed &&
-              bale.articleCode &&
-              shouldEnforceProformaOverload({ ignoreProforma, allowBypassOverload: false })
-            ) {
-              const matchingProformaLines = await tx
-                .select({ quantity: customerProformaLines.quantity })
-                .from(customerProformaLines)
-                .where(
-                  and(
-                    eq(customerProformaLines.proformaId, order.proformaIdUsed),
-                    sql`LOWER(TRIM(${customerProformaLines.articleCode})) = LOWER(TRIM(${bale.articleCode}))`
-                  )
-                );
-              if (matchingProformaLines.length > 0) {
-                const proformaQuantityLimit = sumProformaQuantityLimit(matchingProformaLines);
-                const [loadedCount] = await tx
-                  .select({ count: sql<number>`COUNT(*)::int` })
-                  .from(customerOrderBales)
-                  .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
-                  .where(
-                    and(
-                      eq(customerOrders.companyId, companyId),
-                      eq(customerOrders.proformaIdUsed, order.proformaIdUsed),
-                      ne(customerOrders.status, "CANCELLED"),
-                      isNull(customerOrders.deletedAt),
-                      sql`LOWER(TRIM(COALESCE(${customerOrderBales.articleCode}, ''))) = LOWER(TRIM(${bale.articleCode}))`
-                    )
-                  );
-                if ((loadedCount?.count || 0) >= proformaQuantityLimit) continue;
-              }
+            const baleProductForCapacity = bale.productId ? allProducts.find((p) => p.id === bale.productId) : null;
+            const effectiveArticleCode = String(bale.articleCode || baleProductForCapacity?.articleCode || "").trim();
+            if (capacity) {
+              const normalized = normalizeLoadingArticleCode(effectiveArticleCode);
+              const proposedForThisArticle = (pendingByArticle.get(normalized) || 0) + 1;
+              const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, proposedForThisArticle);
+              if (!decision.allowed) continue;
+              pendingByArticle.set(normalized, proposedForThisArticle);
             }
 
             // Determine price
@@ -374,7 +344,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 .where(
                   and(
                     eq(customerProformaLines.proformaId, order.proformaIdUsed),
-                    eq(customerProformaLines.articleCode, bale.articleCode || "")
+                    sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${normalizeLoadingArticleCode(effectiveArticleCode)}`
                   )
                 );
               if (pl) {
@@ -401,8 +371,8 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
               baleReference: bale.referenceNumber,
               locationId: parsedLocationId,
               weight: bale.weightKg,
-              articleCode: bale.articleCode,
-              baleName: baleProductForName2?.name || bale.productName || bale.articleCode || bale.baleCode,
+              articleCode: effectiveArticleCode || bale.articleCode,
+              baleName: baleProductForName2?.name || bale.productName || effectiveArticleCode || bale.baleCode,
               priceUsed,
               scannedBy: scannerName,
             });

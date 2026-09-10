@@ -14,6 +14,8 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { writeDaybookEntry } from "../../_helpers";
 import { syncProformaReservations } from "../../_stockReservationHelper";
+import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { evaluateProformaLoadingAvailability } from "../proformaCapacityEnforcement";
 import {
   factoryBales,
   customerOrders,
@@ -35,12 +37,29 @@ export function registerOrderLoadingRoutes(app: Express) {
       if (!customerId) return res.status(400).json({ message: "Customer is required" });
       if (!locationId) return res.status(400).json({ message: "Location is required" });
 
+      const parsedCustomerId = parseInt(customerId);
+      const parsedProformaId = proformaIdUsed ? parseInt(proformaIdUsed) : null;
+      if (parsedProformaId) {
+        const capacity = await getProformaCapacitySnapshot(db, { companyId, proformaId: parsedProformaId });
+        if (!capacity) return res.status(404).json({ message: "Proforma not found" });
+        const availability = evaluateProformaLoadingAvailability(capacity, parsedCustomerId);
+        if (!availability.allowed) {
+          const message =
+            availability.reason === "customer_mismatch"
+              ? "Customer does not match the selected proforma"
+              : availability.reason === "fully_consumed"
+                ? "Proforma has no remaining loading capacity"
+                : "Proforma is inactive";
+          return res.status(400).json({ message, capacity: availability });
+        }
+      }
+
       const [order] = await db
         .insert(customerOrders)
         .values({
           companyId,
-          customerId: parseInt(customerId),
-          proformaIdUsed: proformaIdUsed ? parseInt(proformaIdUsed) : null,
+          customerId: parsedCustomerId,
+          proformaIdUsed: parsedProformaId,
           locationId: parseInt(locationId),
           orderDate: orderDate || getClientDate(req),
           status: "LOADING",
