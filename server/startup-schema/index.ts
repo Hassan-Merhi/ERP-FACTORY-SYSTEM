@@ -38,6 +38,7 @@ import { stockItemSchemaCatchup } from "./024-stock-item-schema-catchup";
 import { insuranceMonthlyAmounts } from "./025-insurance-monthly-amounts";
 import { poImportParentCompany } from "./026-po-import-parent-company";
 import { factoryStaffTrackingSchema } from "./027-factory-staff-tracking";
+import { supplierTrackingDefaultsSchema } from "./028-supplier-tracking-defaults";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -73,6 +74,7 @@ export const startupMigrations: string[] = [
   ...insuranceMonthlyAmounts,
   ...poImportParentCompany,
   ...factoryStaffTrackingSchema,
+  ...supplierTrackingDefaultsSchema,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it
