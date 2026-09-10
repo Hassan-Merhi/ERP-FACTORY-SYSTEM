@@ -1,11 +1,12 @@
-name: Phase 3 Proforma Capacity Concurrency
+name: Phase 3 Finalize Concurrency Wiring
 
 on:
   push:
     branches:
-      - fix/proforma-capacity-phase3-concurrency-20260910
+      - fix/proforma-capacity-phase3-finalize-20260910
     paths:
       - scripts/phase3-wire-capacity-locks.mjs
+      - scripts/phase3-finalize-creation-locks.mjs
       - .github/workflows/phase3-capacity-concurrency.yml
   workflow_dispatch:
 
@@ -13,13 +14,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: phase3-proforma-capacity-concurrency
+  group: phase3-finalize-proforma-capacity
   cancel-in-progress: false
 
 jobs:
   verify-and-commit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
     services:
       postgres:
         image: postgres:18
@@ -45,11 +46,12 @@ jobs:
       PGPASSWORD: postgres
       PGSSLMODE: disable
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+
     steps:
-      - name: Checkout Phase 3 branch
+      - name: Checkout Phase 3 completion branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: fix/proforma-capacity-phase3-concurrency-20260910
+          ref: fix/proforma-capacity-phase3-finalize-20260910
           fetch-depth: 0
           persist-credentials: true
 
@@ -62,59 +64,86 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Apply scanner/import concurrency wiring
-        run: node scripts/phase3-wire-capacity-locks.mjs
+      - name: Apply all remaining Phase 3 route wiring
+        run: |
+          node scripts/phase3-wire-capacity-locks.mjs
+          node scripts/phase3-finalize-creation-locks.mjs
 
-      - name: Format Phase 3 files
+      - name: Format Phase 3 production and regression files
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
-            server/routes/factory/customer-orders/proformaCapacityConcurrency.ts \
-            server/routes/factory/customer-proformas/createLoadingAtomic.ts \
-            server/routes/factory/customer-proformas/create-loading.ts \
             server/routes/factory/customer-orders/bale-scanning/scan.ts \
             server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
-            tests/proforma-capacity-concurrency.test.ts
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/customer-orders/finalize-loading/cancel.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/dispatch-batches/invoicing.ts \
+            server/routes/factory/stock-allocation-v5/cancelled-containers.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            server/routes/factory/customer-orders/proformaCapacityConcurrency.ts \
+            server/routes/factory/customer-orders/linkProformaAtomic.ts \
+            server/routes/factory/customer-orders/bale-scanning/exchange.ts \
+            server/routes/factory/customer-orders/verify-recover/recover.ts \
+            server/routes/factory/customer-orders/verify-recover/recoverBalesAtomic.ts \
+            server/routes/factory/customer-proformas/createLoadingAtomic.ts \
+            server/routes/factory/customer-proformas/create-loading.ts \
+            server/routes/factory/stock-allocation-v5/restoreCancelledContainerAtomic.ts \
+            tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts
+          git diff --check
 
       - name: Prepare disposable PostgreSQL schema
         run: node node_modules/drizzle-kit/bin.cjs push --force
 
-      - name: Focused Phase 1-3 regression tests
+      - name: Focused Phase 1-3 regression suite
         run: |
           node node_modules/vitest/vitest.mjs run \
             tests/proforma-capacity.test.ts \
             tests/proforma-capacity-enforcement.test.ts \
             tests/proforma-capacity-write-guards.test.ts \
             tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts \
             tests/factory-loading-proforma-quantity-alignment.test.ts \
-            tests/factory-loading-bale-rescan.test.ts
+            tests/factory-loading-bale-rescan.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
 
-      - name: Typecheck and lint
+      - name: Typecheck, lint, and build
         run: |
           npm run check
           npm run lint
+          npm run build
 
-      - name: Repository structural gates
+      - name: Repository safety and translation audits
         run: |
           npm run audit:source-text-assertions
           npm run audit:god-files
           npm run audit:company-scope
+          npm run audit:scripts
 
-      - name: Commit verified scanner/import wiring
+      - name: Remove temporary Phase 3 implementation harness
+        run: |
+          git rm -f \
+            scripts/phase3-wire-capacity-locks.mjs \
+            scripts/phase3-finalize-creation-locks.mjs \
+            .github/workflows/phase3-capacity-concurrency.yml
+
+      - name: Verify final diff and commit production wiring
         shell: bash
         run: |
           set -euo pipefail
           git add \
-            server/routes/factory/customer-orders/proformaCapacityConcurrency.ts \
-            server/routes/factory/customer-proformas/createLoadingAtomic.ts \
-            server/routes/factory/customer-proformas/create-loading.ts \
             server/routes/factory/customer-orders/bale-scanning/scan.ts \
             server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
-            tests/proforma-capacity-concurrency.test.ts
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit"
-            exit 0
-          fi
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/customer-orders/finalize-loading/cancel.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/dispatch-batches/invoicing.ts \
+            server/routes/factory/stock-allocation-v5/cancelled-containers.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts
+          git diff --cached --check
+          git status --short
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "feat: serialize proforma scan and import capacity"
-          git push origin HEAD:fix/proforma-capacity-phase3-concurrency-20260910
+          git commit -m "fix: land complete Phase 3 proforma concurrency wiring"
+          git push origin HEAD:fix/proforma-capacity-phase3-finalize-20260910
