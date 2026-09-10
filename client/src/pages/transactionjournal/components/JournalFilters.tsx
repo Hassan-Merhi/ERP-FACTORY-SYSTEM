@@ -178,7 +178,12 @@ export function JournalFilters({ model }: { model: TransactionJournalModel }) {
                   data-testid="input-search"
                 />
               </div>
-              <Button variant="default" className="w-full shrink-0 sm:w-auto" onClick={model.handleSearch} data-testid="button-search">
+              <Button
+                variant="default"
+                className="w-full shrink-0 sm:w-auto"
+                onClick={model.handleSearch}
+                data-testid="button-search"
+              >
                 Search
               </Button>
               {model.search && (

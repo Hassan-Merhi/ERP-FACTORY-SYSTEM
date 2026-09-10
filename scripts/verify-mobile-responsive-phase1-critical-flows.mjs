@@ -32,7 +32,10 @@ for (const token of [
   if (!browserCompat.includes(token)) failures.push(`Critical mobile compatibility contract missing: ${token}`);
 }
 
-if (browserCompat.includes(":has(")) {
+// The rule is about selectors, so the comments explaining why :has() is avoided
+// must not themselves trip it — a whole-file substring check counts the prose as
+// a violation and fails on a stylesheet that is actually compliant.
+if (browserCompat.replace(/\/\*[\s\S]*?\*\//g, "").includes(":has(")) {
   failures.push("Critical mobile CSS must not use :has(); Firefox 110-120 is inside the supported baseline");
 }
 
