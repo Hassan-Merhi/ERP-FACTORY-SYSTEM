@@ -45,6 +45,14 @@
       "automerge": false
     },
     {
+      "description": "Hold @types/express-serve-static-core below 5.1. From 5.1.0 ParamsDictionary is `string | string[]` so that wildcard routes (`/*name`) type correctly. This app declares no wildcard parameters — only the unread `/{*splat}` SPA fallbacks — but its routes register middleware alongside the handler, and that overload falls back to ParamsDictionary instead of inferring from the path literal. The result is 500+ type errors on `req.params.<name>` across the server with no runtime meaning. The package.json override pins the resolved version; this rule keeps Renovate from undoing it.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@types/express-serve-static-core"],
+      "allowedVersions": "<5.1",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
       "description": "Hold the Android build tooling at the Capacitor 8 template baseline that scripts/audit-platform-modernization.mjs enforces. @capacitor/android 8.x pins com.android.tools.build:gradle:8.13.0 in its own module, so bumping AGP, Gradle or the google-services plugin past that baseline puts the app build ahead of the Capacitor version it has to link against. Raise these together with a Capacitor major, not on their own.",
       "matchManagers": [
         "gradle",
