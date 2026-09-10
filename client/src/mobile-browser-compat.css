@@ -135,8 +135,7 @@ body {
    * Hover-only actions are inaccessible on touch screens. Keep the existing
    * desktop hover treatment, but make hover-hidden affordances permanently
    * visible when the primary pointer is coarse. Avoid relational parent
-   * selectors here so this remains compatible with the documented Firefox
-   * 110+ baseline.
+   * selectors here so this remains compatible with the documented Firefox 110+ baseline.
    */
   #main-content [class*="opacity-0"][class*="group-hover:opacity-100"] {
     opacity: 1 !important;
