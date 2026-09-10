@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   TrendingUp,
   Wrench,
+  MapPin,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
@@ -32,6 +33,7 @@ import { PosSetupHub } from "./settings/PosSetupHub";
 import { FileStorageAndExport } from "./settings/FileStorageAndExport";
 import { ExportCenter } from "./settings/ExportCenter";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
+import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -93,6 +95,13 @@ export default function Settings() {
       ],
     },
     {
+      label: "Tracking",
+      items:
+        appMode !== "factory"
+          ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
+          : [],
+    },
+    {
       label: "Tools",
       items: [
         { key: "data-tools", label: "Data Tools", icon: Database, devOnly: true },
@@ -116,6 +125,7 @@ export default function Settings() {
   ];
 
   const allowedItems = (items: any[]) => items.filter((item) => !item.devOnly || currentUser?.role === "Developer");
+  const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   return (
     <div className="flex flex-col sm:flex-row sm:h-full">
@@ -170,6 +180,9 @@ export default function Settings() {
         )}
         {activeSection === "sessions-hub" && currentUser?.role === "Developer" && (
           <SessionsHub isAdmin={true} isDev={true} />
+        )}
+        {activeSection === "supplier-tracking-defaults" && appMode !== "factory" && (
+          <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
         )}
         {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
         {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
