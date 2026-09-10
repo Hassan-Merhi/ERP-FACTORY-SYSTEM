@@ -86,6 +86,7 @@ jobs:
             server/routes/factory/_stockReservationHelper.ts \
             server/routes/factory/customer-proformas/proformas.ts \
             server/routes/factory/factoryStockAllocationV2Routes.ts \
+            server/services/factoryBilingualSurfaceResolver.ts \
             tests/proforma-capacity-phase4-reconciliation.test.ts \
             tests/setup.ts
           git diff --check
@@ -126,6 +127,7 @@ jobs:
             server/routes/factory/_stockReservationHelper.ts \
             server/routes/factory/customer-proformas/proformas.ts \
             server/routes/factory/factoryStockAllocationV2Routes.ts \
+            server/services/factoryBilingualSurfaceResolver.ts \
             tests/proforma-capacity-phase4-reconciliation.test.ts \
             tests/setup.ts \
             --max-warnings 0
