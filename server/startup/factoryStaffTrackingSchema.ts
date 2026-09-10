@@ -1,3 +1,5 @@
+import { supplierTrackingDefaultsSchema } from "../startup-schema/028-supplier-tracking-defaults";
+
 const FACTORY_STAFF_TRACKING_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS factory_staff_tracking_entries (
     id serial PRIMARY KEY,
@@ -77,4 +79,12 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // production-day locking schema on every boot. Production calls this ensure
   // path unconditionally even when the bulk startup migration pass is disabled.
   await database.query(FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL);
+
+  // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
+  // defaults are required by ordinary ERP requests, so ensure their idempotent
+  // table/index/function/trigger stage here as part of the same unconditional
+  // startup path instead of requiring a manual SQL deploy.
+  for (const statement of supplierTrackingDefaultsSchema) {
+    await database.query(statement);
+  }
 }
