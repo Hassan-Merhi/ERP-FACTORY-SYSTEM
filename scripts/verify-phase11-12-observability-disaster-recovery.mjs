@@ -79,11 +79,6 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "npm run verify:observability",
   'DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb',
   "RESTORE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/heliumdb_restore",
-  '"migrations/**"',
-  '"server/runtimeObservability.mjs"',
-  '"server/lib/observabilityBootstrap.ts"',
-  '"server/lib/schedulerObservability.ts"',
-  '"client/src/lib/clientObservability.ts"',
   "source-critical-counts.tsv",
   "restore-critical-counts.tsv",
   "diff -u",
@@ -91,6 +86,23 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "Upload resilience evidence",
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 ]);
+
+// The rehearsal used to name every observability and disaster-recovery file in a
+// `pull_request` paths filter. "Run checks only on main" (#1320) removed that
+// trigger, so those path markers no longer exist anywhere. The guarantee they
+// encoded — a change to those files always rehearses — is now carried by running
+// on every push to main with no paths filter, which is strictly broader coverage.
+// Assert that trigger instead, so the guarantee stays enforced rather than dropped.
+if (!/^on:\n\s*push:\n\s*branches:\s*\[\s*main\s*\]/m.test(resilienceWorkflow)) {
+  failures.push(
+    ".github/workflows/resilience-rehearsal.yml must run on every push to main so observability and disaster-recovery changes always rehearse."
+  );
+}
+if (/^\s*paths(?:-ignore)?:/m.test(resilienceWorkflow)) {
+  failures.push(
+    ".github/workflows/resilience-rehearsal.yml must not narrow its triggers with a paths filter; every main commit must rehearse."
+  );
+}
 
 if (resilienceWorkflow.includes("secrets.")) {
   failures.push("Resilience rehearsal must not reference repository or environment secrets; it must stay on disposable localhost PostgreSQL.");

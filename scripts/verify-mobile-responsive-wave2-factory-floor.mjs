@@ -19,6 +19,11 @@ const sources = {
   imports: await read("client/src/pages/factory/FactoryImport.tsx"),
   relabeling: await read("client/src/pages/factory/FactoryBaleRelabeling.tsx"),
   allocation: await read("client/src/pages/factory/FactoryStockAllocationV5.tsx"),
+  // The phone card list lives in its own component since the page was split under
+  // the 900-line god-file cap; the desktop table stayed on the page.
+  allocationMobile: await read(
+    "client/src/pages/factory/factorystockallocationv5/components/FactoryStockAllocationV5MobileList.tsx"
+  ),
   locationProduct: await read("client/src/pages/factory/FactoryLocationInventoryProductView.tsx"),
   mobileCompat: await read("client/src/mobile-browser-compat.css"),
 };
@@ -106,9 +111,12 @@ requireTokens("Bale Relabeling", sources.relabeling, [
 
 requireTokens("Stock Allocation V5", sources.allocation, [
   'data-testid="factory-stock-allocation-v5-page"',
+  "hidden max-h-[calc(100vh-160px)] overflow-auto md:block",
+]);
+
+requireTokens("Stock Allocation V5 mobile list", sources.allocationMobile, [
   'data-testid="v5-mobile-list"',
   "space-y-3 overflow-y-auto p-3 md:hidden",
-  "hidden max-h-[calc(100vh-160px)] overflow-auto md:block",
   'data-testid={`button-v5-mobile-expand-${row.articleCode}`}',
 ]);
 
