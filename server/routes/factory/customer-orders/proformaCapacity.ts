@@ -1,4 +1,5 @@
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import type { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
 import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy";
 
@@ -6,9 +7,7 @@ import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy"
  * Database surface required by the capacity engine. Both the main Drizzle DB
  * and a Drizzle transaction satisfy this contract.
  */
-export interface ProformaCapacityExecutor {
-  execute(query: SQL): Promise<unknown>;
-}
+export type ProformaCapacityExecutor = Pick<typeof db, "execute">;
 
 export interface ProformaCapacityOptions {
   companyId: number;
