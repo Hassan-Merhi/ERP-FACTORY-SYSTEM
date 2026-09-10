@@ -77,6 +77,33 @@ describe("POS item replacement sale-line planning", () => {
     expect(result.replacedQuantity).toBe("5");
   });
 
+  it("never emits a zero-quantity old line when replacing the full 1 of 1 sold quantity", () => {
+    const original: PosReplacementSourceLine[] = [
+      {
+        id: 211,
+        stockItemId: 7061,
+        quantity: "1.000",
+        sellingPrice: "70.000000",
+        totalSales: "70.00",
+      },
+    ];
+
+    const result = buildPosReplacementSaleItems(
+      original,
+      replacementMap({ saleItemId: 211, replacementStockItemId: 7062, quantity: 1 })
+    );
+
+    expect(result.items).toEqual([
+      {
+        stockItemId: 7062,
+        quantity: "1",
+        sellingPrice: "70.000000",
+        totalSales: "70.00",
+      },
+    ]);
+    expect(result.items.every((item) => Number(item.quantity) > 0)).toBe(true);
+  });
+
   it("leaves unrelated POS lines unchanged and preserves their ids and rounded totals", () => {
     const original: PosReplacementSourceLine[] = [
       {

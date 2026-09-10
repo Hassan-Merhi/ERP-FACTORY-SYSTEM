@@ -1,33 +1,6 @@
 name: Resilience Rehearsal
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/resilience-rehearsal.yml"
-      - ".github/workflows/exact-main-certification.yml"
-      - "client/src/lib/clientObservability.ts"
-      - "docs/operations/database-backup-rollback-recovery.md"
-      - "docs/operations/external-alerting-checklist.md"
-      - "drizzle.config.ts"
-      - "migrations/**"
-      - "package.json"
-      - "package-lock.json"
-      - "scripts/verify-database-backup.mjs"
-      - "scripts/verify-final-production-readiness.mjs"
-      - "scripts/verify-migration-registry.mjs"
-      - "scripts/verify-phase11-12-observability-disaster-recovery.mjs"
-      - "scripts/verify-phase11-operational-monitoring.mjs"
-      - "scripts/verify-program1-observability-foundation.mjs"
-      - "server/lib/observabilityBootstrap.ts"
-      - "server/lib/operationalAlerts.ts"
-      - "server/lib/operationalAlertRuntime.ts"
-      - "server/lib/schedulerObservability.ts"
-      - "server/routes/admin/operationalMonitoringRoutes.ts"
-      - "server/runtimeObservability.mjs"
-      - "server/services/operations/operationalHealthService.ts"
-      - "server/services/scheduler/**"
-      - "shared/schema/**"
-      - "tests/scheduler-tick-guard.test.ts"
   push:
     branches: [main]
   schedule:
@@ -47,7 +20,7 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -80,7 +53,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
           cache: npm
 
       - name: Normalize package registry URLs
@@ -95,6 +68,7 @@ jobs:
         run: |
           npm run verify:observability
           npm run verify:final-production-readiness
+          node scripts/verify-phase11-operational-monitoring.mjs
           node scripts/verify-phase11-12-observability-disaster-recovery.mjs
 
       - name: Prepare source database schema

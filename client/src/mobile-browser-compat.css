@@ -206,7 +206,6 @@ body {
     min-width: 0;
   }
 
-  /* Agents: list first, statement second, both usable without horizontal pan. */
   [data-workspace-route^="/agents"] > .flex.h-full,
   [data-workspace-route^="/factory/agents"] > .flex.h-full {
     height: auto !important;
@@ -235,7 +234,6 @@ body {
     padding: 0.75rem !important;
   }
 
-  /* Account Groups: replace the fixed 18rem split with a stacked phone flow. */
   [data-workspace-route^="/account-groups"] > .min-h-screen {
     min-height: 100%;
   }
@@ -264,11 +262,6 @@ body {
     overflow: visible;
   }
 
-  /*
-   * Chat: keep a definite phone-height flex container. The conversation list
-   * and message history then scroll locally instead of growing the workspace
-   * and forcing incoming-message scrollIntoView calls to move the whole page.
-   */
   [data-workspace-route^="/chat"] > [data-testid="chat-page"],
   [data-workspace-route^="/factory/chat"] > [data-testid="chat-page"] {
     height: calc(var(--app-viewport-height) - 7rem) !important;
@@ -326,6 +319,27 @@ body {
 @media (max-height: 500px) and (orientation: landscape) {
   [role="dialog"] {
     max-height: calc(var(--app-viewport-height) - 0.5rem) !important;
+  }
+}
+
+/*
+ * Wave 2 Factory floor cards use Tailwind's md breakpoint for their ordinary
+ * portrait-phone/tablet split. A touch phone in landscape can be wider than
+ * 768px while still needing the compact card interaction model. Limit this
+ * override to short-height coarse-pointer devices so 768x1024 tablets and
+ * desktop layouts retain their existing md+ presentation.
+ */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-testid="raw-stock-mobile-list"],
+  [data-testid="mix-batch-mobile-list"],
+  [data-testid="v5-mobile-list"] {
+    display: block !important;
+  }
+
+  [data-testid="raw-stock-mobile-list"] + div,
+  [data-testid="mix-batch-mobile-list"] + div,
+  [data-testid="v5-mobile-list"] + div {
+    display: none !important;
   }
 }
 

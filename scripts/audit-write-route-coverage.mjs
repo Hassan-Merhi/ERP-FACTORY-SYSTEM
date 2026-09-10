@@ -179,7 +179,9 @@ export function auditWriteRouteCoverage(options = {}) {
   const REGISTRATION_PATTERN = /\.(?:get|post|put|patch|delete)\(\s*"([^"]+)"/g;
   for (const [file, source] of sources) {
     for (const match of source.matchAll(REGISTRATION_PATTERN)) {
-      if (!registrationOwners.has(match[1])) registrationOwners.set(match[1], file);
+      const existing = registrationOwners.get(match[1]);
+      if (!existing) registrationOwners.set(match[1], [file]);
+      else if (!existing.includes(file)) existing.push(file);
     }
   }
 
@@ -191,17 +193,31 @@ export function auditWriteRouteCoverage(options = {}) {
     if (seen.has(`${method} ${routePath}`)) continue;
     seen.add(`${method} ${routePath}`);
 
-    let owner = registrationOwners.get(routePath) ?? null;
-    if (!owner) {
+    let owners = registrationOwners.get(routePath) ?? null;
+    if (!owners) {
       for (const [file, source] of sources) {
         if (source.includes(`"${routePath}"`)) {
-          owner = file;
+          owners = [file];
           break;
         }
       }
     }
 
-    const sensitiveTable = owner ? writesSensitiveTable(sources.get(owner)) : null;
+    // A path can be registered by more than one file: a prerequisite that calls
+    // next() is mounted ahead of the handler that actually writes. Taking only the
+    // first registration let such a pass-through decide the classification, and a
+    // route posting vouchers silently dropped out of the sensitive set. Classify
+    // across every registering file and report the one that writes.
+    let owner = owners?.[0] ?? null;
+    let sensitiveTable = null;
+    for (const file of owners ?? []) {
+      const table = writesSensitiveTable(sources.get(file));
+      if (table) {
+        owner = file;
+        sensitiveTable = table;
+        break;
+      }
+    }
     const namedElsewhere = otherTestText.includes(routePath);
     const guardSweepReferenced = sweepText.includes(routePath);
     const referencedBeforeAuthenticatedSweep = namedElsewhere || guardSweepReferenced;

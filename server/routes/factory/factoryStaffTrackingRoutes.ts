@@ -527,7 +527,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         }
       });
 
-      res.json({ success: true, saved: records.length, finalized });
+      res.json({ success: true, saved: records.length, finalized: finalize });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

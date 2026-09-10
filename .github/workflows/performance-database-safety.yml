@@ -1,15 +1,6 @@
 name: Performance & Database Safety
 
 on:
-  pull_request:
-    paths:
-      - "server/**"
-      - "scripts/**"
-      - "render.yaml"
-      - "docs/program-6d-query-classifications.json"
-      - "docs/program-6d-phase10-current-review.json"
-      - "docs/archive/program-6d-database-query-optimization.md"
-      - ".github/workflows/performance-database-safety.yml"
   push:
     branches:
       - main
@@ -49,7 +40,7 @@ jobs:
       - name: Set up Node.js 24.19.0
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24.19.0"
+          node-version: "24.21.0"
 
       - name: Materialize reviewed Phase 10 evidence
         run: |
