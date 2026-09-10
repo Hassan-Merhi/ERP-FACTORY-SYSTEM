@@ -55,10 +55,14 @@ async function assertNoParentCycle(companyId: number, parentCompanyId: number): 
 
   for (let depth = 0; cursor !== null && depth < 100; depth += 1) {
     if (cursor === companyId) {
-      throw new CompanyParentValidationError("The selected parent company would create a circular company relationship.");
+      throw new CompanyParentValidationError(
+        "The selected parent company would create a circular company relationship."
+      );
     }
     if (visited.has(cursor)) {
-      throw new CompanyParentValidationError("The selected parent company belongs to an existing circular company chain.");
+      throw new CompanyParentValidationError(
+        "The selected parent company belongs to an existing circular company chain."
+      );
     }
     visited.add(cursor);
 
