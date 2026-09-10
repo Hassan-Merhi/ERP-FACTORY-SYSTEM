@@ -37,6 +37,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [pos-flow.md](pos-flow.md) | Point of sale, including offline |
 | [financial-close-and-migrations.md](financial-close-and-migrations.md) | Period locks and production migrations |
 | [golden-coast-phase16-audit.md](golden-coast-phase16-audit.md) | Golden Coast payable/equity separation invariants and the unmerged phase branches |
+| [group-net-position.md](group-net-position.md) | Combined What We Have, What We Owe and Net Position across active ERP companies |
 | [multi-currency-phase8-account-api.md](multi-currency-phase8-account-api.md) | Account statement currency contract and safety boundaries |
 
 ## Operating it
