@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import {
+  parseRealtimeInvalidationMessage,
+  type RealtimeInvalidationMessage,
+  type RealtimeInvalidationTopic,
+} from "@shared/realtimeInvalidation";
+import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
 
-// Heavy analytical queries that are intentionally excluded from blanket WS invalidation.
+// Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
 // around every time any write happens anywhere in the system.
 const STABLE_QUERY_PREFIXES = [
@@ -12,75 +18,252 @@ const STABLE_QUERY_PREFIXES = [
   "/api/factory/v5/stock-allocation", // ~543 KB response; refresh explicitly after allocation-affecting mutations/manual refresh
 ];
 
-// A burst of writes — an import, a POS rush, a bulk edit — used to produce a
-// round of refetching every 800ms. Nobody reads numbers that fast, and each
-// round costs one request per query on screen.
-const INVALIDATE_DEBOUNCE_MS = 3_000;
+const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]> = {
+  inventory: [
+    "/api/locations",
+    "/api/inventory",
+    "/api/stock",
+    "/api/bales",
+    "/api/location-inventory",
+  ],
+  pos: ["/api/pos", "/api/sales", "/api/dashboard", "/api/pending-loadings"],
+  accounting: [
+    "/api/accounts",
+    "/api/voucher",
+    "/api/ledger",
+    "/api/daybook",
+    "/api/factory/daybook",
+    "/api/fiscal-transfers",
+    "/api/global-transactions",
+    "/api/global/transactions",
+    "/api/credit-notes",
+    "/api/stats",
+    "/api/reports/net-position",
+    "/api/reports/net-profit",
+    "/api/balance-sheet",
+    "/api/dashboard-payable-accounts",
+  ],
+  factory: ["/api/factory/"],
+  scans: ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"],
+  payroll: ["/api/factory/payroll", "/api/factory-payroll"],
+  containers: ["/api/containers", "/api/import", "/api/sp/", "/api/supplier-proforma"],
+  reference: [
+    "/api/suppliers",
+    "/api/customers",
+    "/api/employees",
+    "/api/locations",
+    "/api/stock-groups",
+    "/api/stock-categories",
+    "/api/stock-grades",
+    "/api/company-settings",
+    "/api/user/preferences",
+  ],
+  communications: [
+    "/api/notifications",
+    "/api/intercompany-notifications",
+    "/api/business-alerts",
+    "/api/chat",
+    "/api/user-notes",
+  ],
+  presence: ["/api/user-presence"],
+};
+
+// Normal writes should feel live. A short trailing debounce still folds an import,
+// POS rush, or bulk edit into one refresh round instead of one round per write.
+const INVALIDATE_DEBOUNCE_MS = 400;
 const RECONNECT_BASE_DELAY_MS = 1_500;
 const RECONNECT_MAX_DELAY_MS = 30_000;
 const OFFLINE_PROBE_DELAY_MS = 30_000;
 const RECONNECT_JITTER_RATIO = 0.2;
+
+type RealtimeConnectionStatus = "connecting" | "ready" | "disconnected";
+
+interface PendingInvalidation {
+  blanket: boolean;
+  topics: Set<RealtimeInvalidationTopic>;
+  locationIds: Set<number>;
+  hasUnscopedLocation: boolean;
+}
+
+function createPendingInvalidation(): PendingInvalidation {
+  return {
+    blanket: false,
+    topics: new Set<RealtimeInvalidationTopic>(),
+    locationIds: new Set<number>(),
+    hasUnscopedLocation: false,
+  };
+}
 
 // Multiple React surfaces may mount this hook in the same browser tab. Keep a
 // single module-level socket and reference-count subscribers by QueryClient so
 // child-first effect ordering cannot steal ownership from the app shell. The
 // socket lives until the last subscriber unmounts.
 const subscribers = new Map<QueryClient, number>();
+const chatEventSubscribers = new Set<(event: RealtimeChatEvent) => void>();
 let sharedSocket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingInvalidation = createPendingInvalidation();
 let managerRunning = false;
 let hadSuccessfulConnection = false;
 let firstConnectionDelayed = false;
 let missedWhileHidden = false;
 let reconnectAttempt = 0;
 
-function shouldInvalidateQuery(query: { queryKey: readonly unknown[] }): boolean {
-  const key = query.queryKey[0];
-  if (typeof key !== "string") return true;
-  return !STABLE_QUERY_PREFIXES.some((prefix) => key.startsWith(prefix));
+function setRealtimeConnectionStatus(status: RealtimeConnectionStatus): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.realtimeStatus = status;
+  if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
+    window.dispatchEvent(new CustomEvent("erp:realtime-status", { detail: { status } }));
+  }
 }
 
-function runInvalidation(): void {
+export function isRealtimeReadyMessage(payload: unknown): boolean {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    (payload as { type?: unknown }).type === "realtime:ready"
+  );
+}
+
+function isStableQueryKey(key: string): boolean {
+  return STABLE_QUERY_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function explicitLocationIdFromKey(key: string): number | null {
+  const pathMatch = key.match(/^\/api\/locations\/(\d+)(?:\/|$|\?)/);
+  if (pathMatch) return Number(pathMatch[1]);
+
+  const queryMatch = key.match(/[?&](?:locationId|location_id)=(\d+)(?:&|$)/);
+  return queryMatch ? Number(queryMatch[1]) : null;
+}
+
+function queryMatchesPendingInvalidation(
+  query: { queryKey: readonly unknown[] },
+  invalidation: PendingInvalidation
+): boolean {
+  const key = query.queryKey[0];
+  if (typeof key !== "string") return true;
+  if (isStableQueryKey(key)) return false;
+  if (invalidation.blanket) return true;
+
+  const matchesTopic = [...invalidation.topics].some((topic) =>
+    TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix))
+  );
+  if (!matchesTopic) return false;
+
+  if (!invalidation.hasUnscopedLocation && invalidation.locationIds.size > 0) {
+    const queryLocationId = explicitLocationIdFromKey(key);
+    if (queryLocationId !== null && !invalidation.locationIds.has(queryLocationId)) return false;
+  }
+
+  return true;
+}
+
+function resetPendingInvalidation(): void {
+  pendingInvalidation = createPendingInvalidation();
+}
+
+function mergePendingInvalidation(message: RealtimeInvalidationMessage): void {
+  if (!message.topics?.length) {
+    pendingInvalidation.blanket = true;
+    return;
+  }
+
+  for (const topic of message.topics) pendingInvalidation.topics.add(topic);
+
+  if (!message.locationIds?.length) {
+    pendingInvalidation.hasUnscopedLocation = true;
+    return;
+  }
+  for (const locationId of message.locationIds) pendingInvalidation.locationIds.add(locationId);
+}
+
+function invalidateActiveQueries(invalidation: PendingInvalidation): void {
   if (!managerRunning) return;
   for (const queryClient of subscribers.keys()) {
     void queryClient.invalidateQueries(
       {
         refetchType: "active",
-        predicate: shouldInvalidateQuery,
+        predicate: (query) => queryMatchesPendingInvalidation(query, invalidation),
       },
-      // Do not abort requests that are already on their way. This fires
-      // whenever anyone anywhere writes anything, so with the default
-      // (cancelRefetch: true) every in-flight request on screen is
-      // aborted and restarted several times a minute — the work is
-      // thrown away, the request count doubles, and the aborts surface
-      // as load failures. A request issued moments ago is fresh enough;
-      // let it land and refetch the rest.
+      // A realtime signal can arrive while a request is already on its way.
+      // Let that request land instead of aborting and duplicating the work.
       { cancelRefetch: false }
     );
   }
 }
 
-function handleInvalidate(): void {
-  // Nobody is reading a hidden tab, and people leave several open. Refetching
-  // there spends a request per query on screen for a screen nobody is looking
-  // at. Remember that something changed and refresh on the way back instead.
+function invalidateChatMetadata(): void {
+  if (!managerRunning) return;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    missedWhileHidden = true;
+    return;
+  }
+
+  for (const queryClient of subscribers.keys()) {
+    void queryClient.invalidateQueries(
+      {
+        refetchType: "active",
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === "/api/chat/users" || key === "/api/chat/unread-count";
+        },
+      },
+      { cancelRefetch: false }
+    );
+  }
+}
+
+function flushPendingInvalidation(): void {
+  if (!pendingInvalidation.blanket && pendingInvalidation.topics.size === 0) return;
+  const invalidation = pendingInvalidation;
+  resetPendingInvalidation();
+  invalidateActiveQueries(invalidation);
+}
+
+function runCatchUpInvalidation(): void {
   if (typeof document !== "undefined" && document.visibilityState === "hidden") {
     missedWhileHidden = true;
     return;
   }
 
   if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = null;
+  resetPendingInvalidation();
+
+  const blanket = createPendingInvalidation();
+  blanket.blanket = true;
+  invalidateActiveQueries(blanket);
+}
+
+function handleInvalidate(message: RealtimeInvalidationMessage): void {
+  // Nobody is reading a hidden tab, and people leave several open. Refetching
+  // there spends a request per query on screen for a screen nobody is looking
+  // at. Remember that something changed and refresh once on the way back.
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    missedWhileHidden = true;
+    return;
+  }
+
+  mergePendingInvalidation(message);
+  if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    runInvalidation();
+    flushPendingInvalidation();
   }, INVALIDATE_DEBOUNCE_MS);
+}
+
+function dispatchChatEvent(event: RealtimeChatEvent): void {
+  if (event.type !== "typing:update") invalidateChatMetadata();
+  for (const subscriber of chatEventSubscribers) subscriber(event);
 }
 
 function handleVisibilityChange(): void {
   if (document.visibilityState !== "visible" || !missedWhileHidden) return;
   missedWhileHidden = false;
-  runInvalidation();
+  runCatchUpInvalidation();
 }
 
 function websocketTarget(): string {
@@ -106,11 +289,13 @@ function connectSharedSocket(allowOfflineProbe = false): void {
   if (!managerRunning || subscribers.size === 0 || sharedSocket) return;
   if (!browserIsOnline() && !allowOfflineProbe) {
     if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+    setRealtimeConnectionStatus("disconnected");
     scheduleReconnect();
     return;
   }
   reconnectTimer = null;
 
+  setRealtimeConnectionStatus("connecting");
   const socket = new WebSocket(websocketTarget());
   sharedSocket = socket;
 
@@ -119,15 +304,22 @@ function connectSharedSocket(allowOfflineProbe = false): void {
     const shouldCatchUp = hadSuccessfulConnection || firstConnectionDelayed;
     reconnectAttempt = 0;
     firstConnectionDelayed = false;
-    if (shouldCatchUp) handleInvalidate();
+    if (shouldCatchUp) runCatchUpInvalidation();
     hadSuccessfulConnection = true;
   };
 
   socket.onmessage = (event) => {
     if (sharedSocket !== socket || !managerRunning) return;
     try {
-      const msg = JSON.parse(event.data as string);
-      if (msg.type === "invalidate") handleInvalidate();
+      const payload = JSON.parse(event.data as string) as unknown;
+      if (isRealtimeReadyMessage(payload)) {
+        setRealtimeConnectionStatus("ready");
+        return;
+      }
+      const invalidation = parseRealtimeInvalidationMessage(payload);
+      if (invalidation) handleInvalidate(invalidation);
+      const chatEvent = parseRealtimeChatEvent(payload);
+      if (chatEvent) dispatchChatEvent(chatEvent);
     } catch {
       // Malformed or absent payload — ignore rather than surface a parse error.
     }
@@ -138,6 +330,7 @@ function connectSharedSocket(allowOfflineProbe = false): void {
     // restarted. Only the currently registered socket may schedule a reconnect.
     if (sharedSocket !== socket) return;
     sharedSocket = null;
+    setRealtimeConnectionStatus("disconnected");
     scheduleReconnect();
   };
 
@@ -180,7 +373,33 @@ function handleOffline(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   if (!hadSuccessfulConnection) firstConnectionDelayed = true;
+  setRealtimeConnectionStatus("disconnected");
   scheduleReconnect();
+}
+
+/**
+ * The server captures company/user scope when a WebSocket connects. Company
+ * switching no longer reloads the browser, so a successful session switch must
+ * replace the existing socket immediately or it would keep listening to the old
+ * company. Pending old-company invalidations are discarded and the replacement
+ * connection performs one catch-up refresh.
+ */
+export function refreshRealtimeSessionScope(): void {
+  if (!managerRunning || subscribers.size === 0) return;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (debounceTimer) clearTimeout(debounceTimer);
+  reconnectTimer = null;
+  debounceTimer = null;
+  reconnectAttempt = 0;
+  firstConnectionDelayed = true;
+  missedWhileHidden = false;
+  resetPendingInvalidation();
+
+  const socket = sharedSocket;
+  sharedSocket = null;
+  setRealtimeConnectionStatus("connecting");
+  socket?.close(1000, "Session scope changed");
+  connectSharedSocket();
 }
 
 function startManager(): void {
@@ -190,6 +409,7 @@ function startManager(): void {
   firstConnectionDelayed = false;
   missedWhileHidden = false;
   reconnectAttempt = 0;
+  resetPendingInvalidation();
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("online", handleOnline);
   window.addEventListener("offline", handleOffline);
@@ -210,6 +430,8 @@ function stopManager(): void {
   hadSuccessfulConnection = false;
   firstConnectionDelayed = false;
   missedWhileHidden = false;
+  resetPendingInvalidation();
+  setRealtimeConnectionStatus("disconnected");
 
   const socket = sharedSocket;
   sharedSocket = null;
@@ -232,8 +454,14 @@ function subscribe(queryClient: QueryClient): () => void {
   };
 }
 
+export function subscribeRealtimeChatEvents(handler: (event: RealtimeChatEvent) => void): () => void {
+  chatEventSubscribers.add(handler);
+  return () => chatEventSubscribers.delete(handler);
+}
+
 export function resetWsInvalidationManagerForTests(): void {
   subscribers.clear();
+  chatEventSubscribers.clear();
   stopManager();
 }
 

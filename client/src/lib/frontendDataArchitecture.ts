@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { QUERY_GC_TIMES, QUERY_STALE_TIMES } from "./queryPolicies";
 
 export type QueryParamValue = string | number | boolean | null | undefined;
 export type QueryParams = Record<string, QueryParamValue | readonly QueryParamValue[]>;
@@ -12,7 +13,7 @@ export function canonicalSetValues<T extends QueryParamValue>(values: readonly T
     unique.set(`${typeof value}:${String(value)}`, value);
   }
   return [...unique.values()].sort((left, right) =>
-    String(left).localeCompare(String(right), undefined, { numeric: true }),
+    String(left).localeCompare(String(right), undefined, { numeric: true })
   );
 }
 
@@ -84,7 +85,7 @@ export function queryMatchesApiFamily(queryKey: QueryKey, family: string): boole
 export function queryMatchesCompanyApiFamily(
   queryKey: QueryKey,
   family: string,
-  companyId: CompanyIdentity,
+  companyId: CompanyIdentity
 ): boolean {
   return (
     queryMatchesApiFamily(queryKey, family) &&
@@ -95,7 +96,7 @@ export function queryMatchesCompanyApiFamily(
 export function invalidateApiFamily(
   client: QueryClient,
   family: string,
-  options: { refetchType?: "active" | "inactive" | "all" | "none" } = {},
+  options: { refetchType?: "active" | "inactive" | "all" | "none" } = {}
 ): Promise<void> {
   return client.invalidateQueries({
     predicate: (query) => queryMatchesApiFamily(query.queryKey, family),
@@ -107,7 +108,7 @@ export function invalidateCompanyApiFamily(
   client: QueryClient,
   family: string,
   companyId: CompanyIdentity,
-  options: { refetchType?: "active" | "inactive" | "all" | "none" } = {},
+  options: { refetchType?: "active" | "inactive" | "all" | "none" } = {}
 ): Promise<void> {
   return client.invalidateQueries({
     predicate: (query) => queryMatchesCompanyApiFamily(query.queryKey, family, companyId),
@@ -162,7 +163,7 @@ export interface NormalizedPage<T> {
 /** Normalize page metadata while remaining compatible with legacy array responses. */
 export function unwrapPage<T>(
   payload: T[] | PaginatedPayload<T> | null | undefined,
-  fallback: { page?: number; pageSize?: number } = {},
+  fallback: { page?: number; pageSize?: number } = {}
 ): NormalizedPage<T> {
   const data = unwrapList(payload);
   const page = !Array.isArray(payload) && payload?.page ? payload.page : fallback.page ?? 1;
@@ -186,8 +187,8 @@ export function unwrapPage<T>(
 
 export const frontendQueryPolicies = {
   reference: {
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: QUERY_STALE_TIMES.referenceData,
+    gcTime: QUERY_GC_TIMES.referenceData,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
@@ -200,8 +201,8 @@ export const frontendQueryPolicies = {
     refetchOnReconnect: false,
   },
   live: {
-    staleTime: 0,
-    gcTime: 5 * 60 * 1000,
+    staleTime: QUERY_STALE_TIMES.live,
+    gcTime: QUERY_GC_TIMES.live,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchOnReconnect: true,
