@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import { currencySymbol } from "../daybookUtils";
+import type { ContainerImportDetail, DaybookEntry, DisplayDate, Navigate, SupplierBalance } from "./types";
 
 export function ContainerImportView({
   entry,
@@ -19,12 +20,12 @@ export function ContainerImportView({
   formatDisplayDate,
   onNavigate,
 }: {
-  entry: any;
-  containerDetail: any;
-  supplierBalance: any;
-  onClose: any;
-  formatDisplayDate: any;
-  onNavigate: any;
+  entry: DaybookEntry;
+  containerDetail: ContainerImportDetail | null | undefined;
+  supplierBalance: SupplierBalance | null | undefined;
+  onClose: () => void;
+  formatDisplayDate: DisplayDate;
+  onNavigate: Navigate;
 }) {
   const c = containerDetail;
   const csym = c ? currencySymbol(c.currencyCode || "USD") : "$";

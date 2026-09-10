@@ -9,6 +9,7 @@ import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/di
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
+import type { BadgeVariant, DaybookEntry, DisplayDate, LoadingBale, LoadingLine, LoadingOrder, Navigate } from "./types";
 
 export function LoadingCreatedView({
   entry,
@@ -19,18 +20,18 @@ export function LoadingCreatedView({
   badgeClass,
   onNavigate,
 }: {
-  entry: any;
-  onClose: any;
-  formatDisplayDate: any;
-  loadingOrder: any;
-  badgeVariant: any;
-  badgeClass: any;
-  onNavigate: any;
+  entry: DaybookEntry;
+  onClose: () => void;
+  formatDisplayDate: DisplayDate;
+  loadingOrder: LoadingOrder | null | undefined;
+  badgeVariant: BadgeVariant;
+  badgeClass: string;
+  onNavigate: Navigate;
 }) {
   const lo = loadingOrder;
-  const lines: any[] = lo?.lines ?? [];
-  const balesList: any[] = lo?.bales ?? [];
-  const n = (v: string) => parseFloat(v || "0");
+  const lines: LoadingLine[] = lo?.lines ?? [];
+  const balesList: LoadingBale[] = lo?.bales ?? [];
+  const n = (v: string | number | undefined) => parseFloat(String(v || "0"));
 
   const expectedBalesTotal = lines.reduce((s: number, l) => s + (parseInt(l.quantity || "0") || 0), 0);
   const scannedBales = balesList.length;

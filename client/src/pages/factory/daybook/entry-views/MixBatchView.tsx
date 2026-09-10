@@ -9,6 +9,7 @@ import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/di
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
+import type { DaybookEntry, DisplayDate, MixBatchDetail, MixBatchSource, Navigate } from "./types";
 
 export function MixBatchView({
   entry,
@@ -18,18 +19,18 @@ export function MixBatchView({
   mixBatchSources,
   onNavigate,
 }: {
-  entry: any;
-  mixBatchDetail: any;
-  onClose: any;
-  formatDisplayDate: any;
-  mixBatchSources: any;
-  onNavigate: any;
+  entry: DaybookEntry;
+  mixBatchDetail: MixBatchDetail | null | undefined;
+  onClose: () => void;
+  formatDisplayDate: DisplayDate;
+  mixBatchSources: MixBatchSource[];
+  onNavigate: Navigate;
 }) {
   const mb = mixBatchDetail;
   const totalKg = mb ? parseFloat(mb.totalWeightKg || "0") : 0;
   const totalCost = mb ? parseFloat(mb.totalCost || "0") : 0;
   const costPerKg = mb ? parseFloat(mb.costPerKg || "0") : 0;
-  const sourcesTotalKg = mixBatchSources.reduce((s: number, src: any) => s + parseFloat(src.weightKg || "0"), 0);
+  const sourcesTotalKg = mixBatchSources.reduce((s: number, src) => s + parseFloat(String(src.weightKg || "0")), 0);
 
   return (
     <>
@@ -122,7 +123,7 @@ export function MixBatchView({
                   </tr>
                 </thead>
                 <tbody>
-                  {mixBatchSources.map((src: any, i: number) => {
+                  {mixBatchSources.map((src, i: number) => {
                     const srcKg = parseFloat(src.weightKg || "0");
                     const srcCpk = parseFloat(src.costPerKg || "0");
                     const srcTotal = parseFloat(src.totalCost || "0");
@@ -167,7 +168,7 @@ export function MixBatchView({
                       <td className="px-3 py-2 text-right font-mono font-medium">
                         $
                         {formatNumber(
-                          mixBatchSources.reduce((s: number, src: any) => s + parseFloat(src.totalCost || "0"), 0)
+                          mixBatchSources.reduce((s: number, src) => s + parseFloat(String(src.totalCost || "0")), 0)
                         )}
                       </td>
                     </tr>
