@@ -21,10 +21,13 @@ import {
   shouldUseCentralPaymentReceiptDeletion,
 } from "../../services/accounting/paymentReceiptDeletionPolicy";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
+import type { DatabaseOrTransaction } from "../../db";
 
 class LegacyPaymentReceiptDeleteRequired extends Error {}
 
-async function countSalesItems(connection: any, voucherId: number): Promise<number> {
+// Called with both the pool handle and a transaction handle, which share the
+// select surface this probe uses.
+async function countSalesItems(connection: DatabaseOrTransaction, voucherId: number): Promise<number> {
   const rows = await connection
     .select({ id: salesItems.id })
     .from(salesItems)

@@ -124,7 +124,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               paymentType: isCredit ? "CREDIT" : "CASH",
               depositAmount: isCredit ? depositAmt.toFixed(2) : "0",
               status: "COMPLETED",
-              createdBy: userId,
+              createdBy: userId === null ? null : String(userId),
               expensesJson: expenseRows.length > 0 ? JSON.stringify(expenseRows) : null,
             })
             .returning();

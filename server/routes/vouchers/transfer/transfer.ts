@@ -18,6 +18,10 @@ import { eq } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+
+/** The columns a voucher edit may set, checked against the vouchers table. */
+type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -275,7 +279,7 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
 
           // Update the main voucher
           const parsedSourceLocationId = parseInt(sourceLocationId);
-          const voucherUpdates: any = {
+          const voucherUpdates: VoucherUpdate = {
             totalAmount: totalAmount.toFixed(2),
             locationId: parsedSourceLocationId, // Use source location as the primary location for the voucher
           };

@@ -23,7 +23,11 @@ import {
   customers,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { resultRows } from "../../../lib/queryResult";
+import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
+import {
+  allocateRemainingProformaLines,
+  evaluateProformaLoadingAvailability,
+} from "../customer-orders/proformaCapacityEnforcement";
 
 export function registerFactoryCustomerProformaLoadingRoutes(app: Express) {
   // Create a pending loading from a proforma — auto-adds matching bales from stock
@@ -55,57 +59,19 @@ export function registerFactoryCustomerProformaLoadingRoutes(app: Express) {
       if (lines.length === 0)
         return res.status(400).json({ message: "Proforma has no lines — add article codes first" });
 
-      // ── Phase 4: compute how many bales are already in active/completed loadings for this proforma ──
-      // alreadyLoaded = bales in any non-cancelled order tied to this proforma
-      // (LOADING, PENDING_VERIFICATION, VERIFIED, FINALIZED) — FINALIZED bales are no longer IN_STOCK
-      // so they won't be grabbed, but counting them ensures we don't exceed the proforma's total qty.
-      const alreadyLoadedRaw = await db.execute(
-        sql`SELECT fb.article_code as "articleCode", COUNT(*)::int as loaded
-            FROM customer_order_bales cob
-            JOIN factory_bales fb ON fb.id = cob.bale_id
-            JOIN customer_orders co ON co.id = cob.order_id
-            WHERE co.company_id = ${companyId}
-              AND co.proforma_id_used = ${proformaId}
-              AND co.deleted_at IS NULL
-              AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED')
-            GROUP BY fb.article_code`
-      );
-      logger.info(`[create-loading] proformaId=${proformaId} companyId=${companyId}`);
-      const alreadyLoadedMap = new Map<string, number>(
-        (resultRows(alreadyLoadedRaw) || ((alreadyLoadedRaw as unknown))).map((r: any) => [
-          r.articleCode,
-          Number(r.loaded),
-        ])
-      );
-
-      // ── Validate: check if there is any remaining reservation capacity ──
-      const articleIssues: string[] = [];
-      for (const line of lines) {
-        if (!line.articleCode) continue;
-        const lineQty = Number(line.quantity) || 0;
-        const alreadyLoaded = alreadyLoadedMap.get(line.articleCode) || 0;
-        const remaining = Math.max(0, lineQty - alreadyLoaded);
-        logger.info(
-          `[create-loading] line articleCode=${line.articleCode} lineId=${line.id} qty=${lineQty} alreadyLoaded=${alreadyLoaded} remaining=${remaining}`
-        );
-        if (remaining === 0) {
-          articleIssues.push(`${line.articleCode}: proforma quantity (${lineQty}) already fully loaded`);
-        }
-      }
-      // If ALL lines are exhausted, block creation
-      const linesWithCapacity = lines.filter((l) => {
-        if (!l.articleCode) return false;
-        const lineQty = Number(l.quantity) || 0;
-        const alreadyLoaded = alreadyLoadedMap.get(l.articleCode) || 0;
-        return Math.max(0, lineQty - alreadyLoaded) > 0;
-      });
-      if (linesWithCapacity.length === 0) {
+      const capacity = await getProformaCapacitySnapshot(db, { companyId, proformaId });
+      if (!capacity) return res.status(404).json({ message: "Proforma not found" });
+      const availability = evaluateProformaLoadingAvailability(capacity, proforma.customerId);
+      if (!availability.allowed) {
         return res.status(400).json({
           message:
-            "All proforma lines are already fully loaded into active loading orders. No remaining reservation capacity.",
-          details: articleIssues,
+            availability.reason === "fully_consumed"
+              ? "All proforma lines are already fully loaded. No remaining loading capacity."
+              : "Proforma is not available for loading.",
+          capacity: availability,
         });
       }
+      const remainingAllocations = allocateRemainingProformaLines(lines, capacity);
 
       // Pre-fetch product names for all article codes in this proforma
       const proformaArticleCodes = [...new Set(lines.map((l) => l.articleCode).filter(Boolean))];
@@ -142,15 +108,9 @@ export function registerFactoryCustomerProformaLoadingRoutes(app: Express) {
       let totalBalesAdded = 0;
       const insufficientStock: string[] = [];
 
-      for (const line of lines) {
-        if (!line.articleCode) continue;
-        const lineQty = Number(line.quantity) || 0;
-        if (lineQty <= 0) continue;
-
-        // ── Phase 4 core: only take up to remainingToLoad, not the full proforma qty ──
-        const alreadyLoaded = alreadyLoadedMap.get(line.articleCode) || 0;
-        const remainingToLoad = Math.max(0, lineQty - alreadyLoaded);
-        if (remainingToLoad === 0) continue; // fully loaded — skip silently
+      for (const allocation of remainingAllocations) {
+        const { line, remainingQty: remainingToLoad } = allocation;
+        if (!line.articleCode || remainingToLoad <= 0) continue;
 
         // Find available IN_STOCK bales at this location for this article code
         const available = await db
@@ -161,7 +121,19 @@ export function registerFactoryCustomerProformaLoadingRoutes(app: Express) {
               eq(factoryBales.companyId, companyId),
               eq(factoryBales.status, "IN_STOCK"),
               eq(factoryBales.erpLocationId, parseInt(locationId)),
-              eq(factoryBales.articleCode, line.articleCode)
+              sql`LOWER(TRIM(COALESCE(
+                NULLIF(${factoryBales.articleCode}, ''),
+                (SELECT fbp.article_code FROM factory_bale_products fbp WHERE fbp.id = ${factoryBales.productId} AND fbp.company_id = ${companyId} LIMIT 1),
+                ''
+              ))) = ${allocation.normalizedArticleCode}`,
+              sql`NOT EXISTS (
+                SELECT 1
+                FROM customer_order_bales existing_cob
+                JOIN customer_orders existing_co ON existing_co.id = existing_cob.order_id
+                WHERE existing_cob.bale_id = ${factoryBales.id}
+                  AND existing_co.status <> 'CANCELLED'
+                  AND existing_co.deleted_at IS NULL
+              )`
             )
           )
           .orderBy(factoryBales.id)

@@ -23,6 +23,7 @@ import {
 } from "../../services/security/parentCompanyPostingScope";
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { supplierService } from "../suppliers/supplierService";
+import { collectPreviewItemErrors, findPreviewContainer, type PoImportPreviewItem } from "./po-import-preview";
 
 export function registerPoImportRoutes(app: Express) {
   app.post("/api/po-import/validate", requireAuth, async (req, res) => {
@@ -75,37 +76,14 @@ export function registerPoImportRoutes(app: Express) {
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
       // Validate all items in the preview
-      const containerPreview = preview.find((p: any) => p.containerNumber === containerNumber);
-      if (!containerPreview) {
+      const parsedPreview = findPreviewContainer(preview, containerNumber);
+      if (!parsedPreview) {
         errors.push("Container data not found in preview");
       } else {
-        const seenBarcodes = new Set<string>();
-
-        for (const item of containerPreview.items) {
-          // Check for duplicate barcodes in the import
-          if (item.barcode && seenBarcodes.has(item.barcode)) {
-            errors.push(`Duplicate barcode in import: ${item.barcode}`);
-          } else if (item.barcode) {
-            seenBarcodes.add(item.barcode);
-          }
-
-          // Try to find stock item by code/alias first, then by name
-          let stockItem = null;
-          if (item.barcode) {
-            stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
-          }
-          if (!stockItem && item.itemName) {
-            stockItem = allStockItems.find((si) => si.name === item.itemName);
-          }
-
-          if (!stockItem) {
-            if (item.barcode) {
-              errors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
-            } else {
-              errors.push(`Item not found by name: ${item.itemName}`);
-            }
-          }
-        }
+        const containerPreview = parsedPreview.container;
+        errors.push(
+          ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
+        );
 
         // Validate parent freight account when freight is present and paid by parent
         const containerFreight = containerPreview.charges?.freight || 0;
@@ -183,39 +161,32 @@ export function registerPoImportRoutes(app: Express) {
       // Get all stock items for validation
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
-      // Validate all items in the preview
-      const containerPreview = preview.find((p: any) => p.containerNumber === containerNumber);
-      if (!containerPreview) {
-        validationErrors.push("Container data not found in preview");
-      } else {
-        const seenBarcodes = new Set<string>();
-
-        for (const item of containerPreview.items) {
-          // Check for duplicate barcodes in the import
-          if (item.barcode && seenBarcodes.has(item.barcode)) {
-            validationErrors.push(`Duplicate barcode in import: ${item.barcode}`);
-          } else if (item.barcode) {
-            seenBarcodes.add(item.barcode);
-          }
-
-          // Try to find stock item by code/alias first, then by name
-          let stockItem = null;
-          if (item.barcode) {
-            stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
-          }
-          if (!stockItem && item.itemName) {
-            stockItem = allStockItems.find((si) => si.name === item.itemName);
-          }
-
-          if (!stockItem) {
-            if (item.barcode) {
-              validationErrors.push(`Item not found: code ${item.barcode} (${item.itemName})`);
-            } else {
-              validationErrors.push(`Item not found by name: ${item.itemName}`);
-            }
-          }
-        }
+      // Validate all items in the preview. The validation endpoint reports a
+      // missing container as an error and stops; this one used to walk straight
+      // into containerPreview.items and throw a TypeError mid-import, surfacing
+      // as a 500 after partial work. Typing the payload made that visible.
+      const parsedPreview = findPreviewContainer(preview, containerNumber);
+      if (!parsedPreview) {
+        return res.status(400).json({ message: "Container data not found in preview" });
       }
+      const containerPreview = parsedPreview.container;
+      // This endpoint writes these figures, so a payload that did not carry them
+      // as readable numbers is refused rather than summed into NaN.
+      for (const line of parsedPreview.linesWithUnreadableMoney) {
+        validationErrors.push(`Row ${line}: quantity, rate and line total must all be numbers`);
+      }
+      for (const total of parsedPreview.unreadableTotals) {
+        validationErrors.push(`Container total ${total} is missing or not a number`);
+      }
+      // A charge stated as something unreadable is still summed into the
+      // chargesTotal and grandTotal the payload carries, so accepting it would
+      // write a container whose totals do not match its own charge records.
+      for (const charge of parsedPreview.unreadableCharges) {
+        validationErrors.push(`Container charge ${charge} is not a number`);
+      }
+      validationErrors.push(
+        ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
+      );
 
       // Reject import if validation fails
       if (validationErrors.length > 0) {
@@ -281,7 +252,7 @@ export function registerPoImportRoutes(app: Express) {
       }
 
       // Group items by PO
-      const poGroups = containerPreview.items.reduce((acc: any, item: any) => {
+      const poGroups = containerPreview.items.reduce<Record<string, PoImportPreviewItem[]>>((acc, item) => {
         if (!acc[item.poNumber]) {
           acc[item.poNumber] = [];
         }
@@ -359,9 +330,10 @@ export function registerPoImportRoutes(app: Express) {
         containerOtherCharges > 0;
 
       // Calculate total items value across all POs for pro-rating charges
-      const totalAllItemsValue = Object.values(poGroups).reduce((sum: number, items) => {
-        return sum + (items as any[]).reduce((s, item) => s + item.lineTotal, 0);
-      }, 0);
+      const totalAllItemsValue = Object.values(poGroups).reduce(
+        (sum, items) => sum + items.reduce((s, item) => s + item.lineTotal, 0),
+        0
+      );
 
       // Track allocated charges for remainder reconciliation
       let allocatedFreight = 0,
@@ -376,7 +348,7 @@ export function registerPoImportRoutes(app: Express) {
       for (let poIndex = 0; poIndex < poEntries.length; poIndex++) {
         const [poNumber, items] = poEntries[poIndex];
         const isLastPO = poIndex === poEntries.length - 1;
-        const poItems = items as any[];
+        const poItems = items;
         const poItemsTotal = poItems.reduce((sum, item) => sum + item.lineTotal, 0);
 
         // Pro-rate charges based on this PO's items proportion of total
@@ -791,7 +763,7 @@ export function registerPoImportRoutes(app: Express) {
             containerId: container.id,
             supplierId,
             voucherId: voucher.id,
-            currency: poItems[0].currency,
+            currency: poItems[0]?.currency,
             itemsTotal: poItemsTotal.toString(),
             freight: poFreight.toString(),
             surcharge: poSurcharge.toString(),
@@ -852,8 +824,9 @@ export function registerPoImportRoutes(app: Express) {
       ];
 
       for (const charge of chargeTypesForContainer) {
-        if (charge.amount > 0) {
-          const actualAmount = charge.isNegative ? -charge.amount : charge.amount;
+        const chargeAmount = charge.amount ?? 0;
+        if (chargeAmount > 0) {
+          const actualAmount = charge.isNegative ? -chargeAmount : chargeAmount;
 
           // Create container charge record (for display only - charges are in PO voucher)
           await storage.createContainerCharge({
