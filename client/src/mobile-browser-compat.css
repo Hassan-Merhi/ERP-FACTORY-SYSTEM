@@ -134,8 +134,8 @@ body {
   /*
    * Hover-only actions are inaccessible on touch screens. Keep the existing
    * desktop hover treatment, but make hover-hidden affordances permanently
-   * visible when the primary pointer is coarse. Avoid :has() here so this
-   * remains compatible with the documented Firefox 110+ baseline.
+   * visible when the primary pointer is coarse. Avoid relational selectors here
+   * so this remains compatible with the documented Firefox 110+ baseline.
    */
   #main-content [class*="opacity-0"][class*="group-hover:opacity-100"] {
     opacity: 1 !important;
@@ -193,7 +193,7 @@ body {
    * Phase 1 critical legacy master/detail layouts.
    *
    * Stable route markers come from WorkspaceRouteBoundary, so these rules do
-   * not depend on :has() and work across the documented browser baseline.
+   * not depend on relational selectors and work across the documented browser baseline.
    * Tablet/desktop layout remains untouched because these overrides stop at md.
    */
   [data-workspace-route^="/agents"] > .flex.h-full,

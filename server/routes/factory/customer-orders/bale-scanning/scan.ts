@@ -16,8 +16,9 @@ import {
   normalizeLoadingArticleCode,
   shouldEnforceProformaOverload,
   shouldRequireProformaMembership,
-  sumProformaQuantityLimit,
 } from "./proformaScanPolicy";
+import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
   factoryBales,
   customerProformaLines,
@@ -25,7 +26,7 @@ import {
   customerOrderBales,
   customerOrderBaleRemovals,
 } from "@shared/schema";
-import { eq, and, or, sql, isNull } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 
 export function registerOrderBaleScanRoutes(app: Express) {
@@ -234,29 +235,11 @@ export function registerOrderBaleScanRoutes(app: Express) {
         let priceUsed = bale.productSellingPrice || "0";
 
         if (order.proformaIdUsed) {
-          // Membership and pricing always come from the proforma line. The
-          // potentially expensive active-bale COUNT is only needed while the
-          // overload guard is actually enforced; confirmed/bypass/reinstatement scans use 0.
-          const currentCountExpression = enforceOverload
-            ? sql<number>`(
-                SELECT COUNT(*)::int
-                FROM customer_order_bales cob
-                JOIN customer_orders ON customer_orders.id = cob.order_id
-                WHERE customer_orders.company_id = ${companyId}
-                  AND customer_orders.proforma_id_used = ${order.proformaIdUsed}
-                  AND customer_orders.status != 'CANCELLED'
-                  AND ${isNull(customerOrders.deletedAt)}
-                  AND LOWER(TRIM(COALESCE(cob.article_code, ''))) = ${normalizedEffectiveArticleCode}
-              )`
-            : sql<number>`0`;
-
           const matchingProformaLines = await tx
             .select({
-              quantity: customerProformaLines.quantity,
               pricingMode: customerProformaLines.pricingMode,
               pricePerKg: customerProformaLines.pricePerKg,
               pricePerBale: customerProformaLines.pricePerBale,
-              currentCount: currentCountExpression,
             })
             .from(customerProformaLines)
             .where(
@@ -265,21 +248,40 @@ export function registerOrderBaleScanRoutes(app: Express) {
                 sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${normalizedEffectiveArticleCode}`
               )
             );
-          const matchedProformaLine = matchingProformaLines[0] || null;
-          const proformaQuantityLimit = sumProformaQuantityLimit(matchingProformaLines);
-          const proformaLine = matchedProformaLine ? { ...matchedProformaLine, quantity: proformaQuantityLimit } : null;
-          if (proformaLine) {
-            const pricingMode = proformaLine.pricingMode ?? "per_bale";
-            const perKgVal = proformaLine.pricePerKg;
+          const pricingLine = matchingProformaLines[0] || null;
+          if (pricingLine) {
+            const pricingMode = pricingLine.pricingMode ?? "per_bale";
+            const perKgVal = pricingLine.pricePerKg;
             if (pricingMode === "per_kg" && perKgVal) {
               const weightKg = parseFloat(String(bale.weightKg || "0"));
               const pkgRate = parseFloat(String(perKgVal));
               priceUsed = !isNaN(weightKg) && !isNaN(pkgRate) ? (weightKg * pkgRate).toFixed(2) : "0";
             } else {
-              priceUsed = proformaLine.pricePerBale || "0";
+              priceUsed = pricingLine.pricePerBale || "0";
             }
-            const currentCount = Number(proformaLine.currentCount || 0);
-            if (enforceOverload && currentCount >= proformaQuantityLimit) {
+          }
+
+          if (!ignoreProforma) {
+            const capacity = await getProformaCapacitySnapshot(tx, {
+              companyId,
+              proformaId: order.proformaIdUsed,
+              currentOrderId: orderId,
+            });
+            if (!capacity) {
+              return {
+                ok: false,
+                httpStatus: 400,
+                body: {
+                  confirmationRequired: true,
+                  confirmationType: "not_in_proforma",
+                  notInProforma: true,
+                  message: "Linked proforma is unavailable. Scan again to bypass.",
+                },
+              };
+            }
+
+            const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1);
+            if (decision.reason === "quantity_exceeded" && enforceOverload) {
               return {
                 ok: false,
                 httpStatus: 400,
@@ -287,26 +289,27 @@ export function registerOrderBaleScanRoutes(app: Express) {
                   confirmationRequired: true,
                   confirmationType: "overload",
                   overloaded: true,
-                  message: `Quantity exceeded (${currentCount}/${proformaLine.quantity}). Scan again to bypass.`,
+                  capacity: decision,
+                  message: `Quantity exceeded (${decision.consumedQty}/${decision.requestedQty}). Scan again to bypass.`,
                 },
               };
             }
-          } else if (
-            shouldRequireProformaMembership({
-              ignoreProforma,
-              hasProformaLine: false,
-            })
-          ) {
-            return {
-              ok: false,
-              httpStatus: 400,
-              body: {
-                confirmationRequired: true,
-                confirmationType: "not_in_proforma",
-                notInProforma: true,
-                message: "Item loaded not requested. Please scan again to bypass.",
-              },
-            };
+            if (
+              decision.reason === "not_in_proforma" &&
+              shouldRequireProformaMembership({ ignoreProforma, hasProformaLine: false })
+            ) {
+              return {
+                ok: false,
+                httpStatus: 400,
+                body: {
+                  confirmationRequired: true,
+                  confirmationType: "not_in_proforma",
+                  notInProforma: true,
+                  capacity: decision,
+                  message: "Item loaded not requested. Please scan again to bypass.",
+                },
+              };
+            }
           }
         }
 

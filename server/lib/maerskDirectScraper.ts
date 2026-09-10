@@ -21,9 +21,10 @@
  * Never throws — always returns a typed result.
  */
 
-import type { HTTPResponse } from "puppeteer";
+import type { Browser, HTTPResponse, Page } from "puppeteer";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "./logger";
+import { firstDefined, jsonArray, jsonPath, jsonString } from "./externalJson";
 import { execSync } from "child_process";
 import { createRequire } from "module";
 import type { CarrierTrackResult, TrackingEvent } from "./trackingProviders/types";
@@ -69,10 +70,10 @@ export function isMaerskDirectScraperAvailable(): boolean {
 // One Chrome process is kept alive and reused across all scrape calls.
 // Replaced automatically if it crashes.
 
-let _sharedBrowser: any = null;
+let _sharedBrowser: Browser | null = null;
 let _stealthRegistered = false;
 
-async function getSharedBrowser() {
+async function getSharedBrowser(): Promise<Browser> {
   // If we already have a live browser, verify it's still responsive
   if (_sharedBrowser) {
     try {
@@ -93,7 +94,10 @@ async function getSharedBrowser() {
 
   const chromePath = getChromiumPath();
   logger.info("[MaerskDirect] Launching shared Chrome instance…");
-  _sharedBrowser = await puppeteerExtra.launch({
+  // puppeteer-extra is loaded through createRequire, so its launch() is untyped;
+  // the handle is named as a Browser here, once, instead of leaving the module
+  // level binding `any` for every later use.
+  const launched: Browser = await puppeteerExtra.launch({
     headless: true,
     ...(chromePath ? { executablePath: chromePath } : {}),
     args: [
@@ -123,14 +127,16 @@ async function getSharedBrowser() {
     ],
   });
 
+  _sharedBrowser = launched;
+
   // Auto-clear on crash so the next call relaunches cleanly
-  _sharedBrowser.on("disconnected", () => {
+  launched.on("disconnected", () => {
     logger.warn("[MaerskDirect] Shared browser disconnected (crash or killed)");
     _sharedBrowser = null;
   });
 
   logger.info("[MaerskDirect] Shared Chrome instance ready");
-  return _sharedBrowser;
+  return launched;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -204,17 +210,37 @@ export function deepScanForEta(obj: unknown, depth = 0): { path: string; value: 
 function parseEvents(rawEvents: unknown[]): TrackingEvent[] {
   if (!Array.isArray(rawEvents)) return [];
   return rawEvents
-    .map((e: any): TrackingEvent => ({
-      date: parseDate(e.eventDateTime ?? e.eventDate ?? e.timestamp ?? e.date ?? null),
-      status: e.transportEventTypeCode ?? e.activityName ?? e.eventCode ?? e.activity ?? e.status ?? null,
-      location:
-        e.location?.portName ??
-        e.location?.locationName ??
-        e.location?.city ??
-        e.portName ??
-        e.locationName ??
-        (typeof e.location === "string" ? e.location : null),
-      description: e.description ?? e.eventDescription ?? e.activityName ?? null,
+    .map((e: unknown): TrackingEvent => ({
+      date: parseDate(
+        firstDefined(
+          jsonPath(e, "eventDateTime"),
+          jsonPath(e, "eventDate"),
+          jsonPath(e, "timestamp"),
+          jsonPath(e, "date")
+        ) ?? null
+      ),
+      status: jsonString(
+        firstDefined(
+          jsonPath(e, "transportEventTypeCode"),
+          jsonPath(e, "activityName"),
+          jsonPath(e, "eventCode"),
+          jsonPath(e, "activity"),
+          jsonPath(e, "status")
+        )
+      ),
+      location: jsonString(
+        firstDefined(
+          jsonPath(e, "location", "portName"),
+          jsonPath(e, "location", "locationName"),
+          jsonPath(e, "location", "city"),
+          jsonPath(e, "portName"),
+          jsonPath(e, "locationName"),
+          jsonPath(e, "location")
+        )
+      ),
+      description: jsonString(
+        firstDefined(jsonPath(e, "description"), jsonPath(e, "eventDescription"), jsonPath(e, "activityName"))
+      ),
     }))
     .filter((e) => e.date !== null || e.status !== null)
     .sort((a, b) => {
@@ -235,14 +261,18 @@ const normContainer = (v: unknown): string =>
  * found — never blindly trusts index 0, since a response can carry several
  * containers (e.g. a bill-of-lading lookup) and [0] may be a different box.
  */
-function pickContainer(list: any[], wantContainer?: string) {
+function pickContainer(list: unknown[], wantContainer?: string) {
   if (!Array.isArray(list) || list.length === 0) return null;
   const wanted = wantContainer ? normContainer(wantContainer) : "";
   if (wanted) {
     const match = list.find((c) =>
-      [c?.container_num, c?.containerNum, c?.containerNumber, c?.containerNo, c?.number].some(
-        (n) => normContainer(n) === wanted
-      )
+      [
+        jsonPath(c, "container_num"),
+        jsonPath(c, "containerNum"),
+        jsonPath(c, "containerNumber"),
+        jsonPath(c, "containerNo"),
+        jsonPath(c, "number"),
+      ].some((n) => normContainer(n) === wanted)
     );
     if (match) return match;
   }
@@ -260,27 +290,33 @@ export function extractFromJson(
   synergy: boolean;
 } {
   if (!data || typeof data !== "object") return { events: [], eta: null, latestStatus: null, synergy: false };
-  const d = data as Record<string, any>;
+  const d: unknown = data;
 
   // ── Maersk "synergy" tracking API format ─────────────────────────────────
-  const synergyContainers: any[] = d.containers ?? [];
+  const synergyContainers = jsonArray(jsonPath(d, "containers"));
   if (synergyContainers.length > 0) {
+    // Non-null here: pickContainer only returns null for an empty list, and the
+    // guard above establishes this one is not empty.
     const c = pickContainer(synergyContainers, wantContainer);
-    const locations: any[] = c.locations ?? [];
+    const locations = jsonArray(jsonPath(c, "locations"));
 
     if (locations.length > 0) {
       const allEvents: TrackingEvent[] = [];
       for (const loc of locations) {
-        const locLabel = [loc.terminal, loc.city, loc.country].filter(Boolean).join(", ");
-        for (const ev of loc.events ?? []) {
-          const d = parseDate(ev.event_time ?? null);
+        const locLabel = [jsonPath(loc, "terminal"), jsonPath(loc, "city"), jsonPath(loc, "country")]
+          .filter(Boolean)
+          .join(", ");
+        for (const ev of jsonArray(jsonPath(loc, "events"))) {
+          const eventDate = parseDate(jsonPath(ev, "event_time") ?? null);
+          const activity = jsonString(jsonPath(ev, "activity"));
+          const vesselName = jsonString(jsonPath(ev, "vessel_name"));
           allEvents.push({
-            date: d,
-            status: ev.activity ?? null,
+            date: eventDate,
+            status: activity,
             location: locLabel,
-            description: ev.vessel_name
-              ? `${ev.activity ?? ""} via ${ev.vessel_name} ${ev.voyage_num ?? ""}`.trim()
-              : (ev.activity ?? null),
+            description: vesselName
+              ? `${activity ?? ""} via ${vesselName} ${jsonString(jsonPath(ev, "voyage_num")) ?? ""}`.trim()
+              : activity,
           });
         }
       }
@@ -292,35 +328,41 @@ export function extractFromJson(
         return b.date.getTime() - a.date.getTime();
       });
 
-      let etaRaw: string | null = c.eta_final_delivery ?? c.eta ?? d.eta_final_delivery ?? null;
+      let etaRaw: string | null = jsonString(
+        firstDefined(jsonPath(c, "eta_final_delivery"), jsonPath(c, "eta"), jsonPath(d, "eta_final_delivery"))
+      );
       if (!etaRaw) {
         // Only look at the LAST location (final destination) for arrival/discharge
         // expected events. Do NOT fall back to earlier transit ports — those
         // expected events are departures, not the destination ETA.
         const lastLoc = locations[locations.length - 1];
-        const lastLocEvents: any[] = lastLoc?.events ?? [];
+        const lastLocEvents = jsonArray(jsonPath(lastLoc, "events"));
+        const eventTime = (ev: unknown) => jsonString(jsonPath(ev, "event_time"));
+        const isExpected = (ev: unknown) => jsonPath(ev, "event_time_type") === "EXPECTED";
 
         // Priority 1: expected Arrived / Discharged event at the last location
         const arrivalEv = lastLocEvents.find(
           (ev) =>
-            ev.event_time_type === "EXPECTED" &&
-            ev.event_time &&
-            /arrived|discharged|discharge|arrival|delivered|delivery/i.test(ev.activity ?? "")
+            isExpected(ev) &&
+            eventTime(ev) &&
+            /arrived|discharged|discharge|arrival|delivered|delivery/i.test(jsonString(jsonPath(ev, "activity")) ?? "")
         );
-        if (arrivalEv?.event_time) {
-          etaRaw = arrivalEv.event_time;
+        if (arrivalEv && eventTime(arrivalEv)) {
+          etaRaw = eventTime(arrivalEv);
         } else {
           // Priority 2: latest (by event_time) expected event at the last location
           const expectedAtDest = lastLocEvents
-            .filter((ev) => ev.event_time_type === "EXPECTED" && ev.event_time)
-            .sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime());
+            .filter((ev) => isExpected(ev) && eventTime(ev))
+            .sort((a, b) => new Date(eventTime(b) ?? "").getTime() - new Date(eventTime(a) ?? "").getTime());
           if (expectedAtDest.length > 0) {
             // Pick the earliest future expected event as the true ETA
             const futureExpected = expectedAtDest
               .slice()
               .reverse()
-              .find((ev) => new Date(ev.event_time).getTime() > Date.now());
-            etaRaw = futureExpected?.event_time ?? expectedAtDest[expectedAtDest.length - 1]?.event_time ?? null;
+              .find((ev) => new Date(eventTime(ev) ?? "").getTime() > Date.now());
+            etaRaw =
+              (futureExpected ? eventTime(futureExpected) : null) ??
+              eventTime(expectedAtDest[expectedAtDest.length - 1]);
           }
         }
       }
@@ -329,15 +371,16 @@ export function extractFromJson(
 
       let latestActualStatus: string | null = null;
       for (let i = locations.length - 1; i >= 0; i--) {
-        for (const ev of (locations[i].events ?? []).slice().reverse()) {
-          if (ev.event_time_type === "ACTUAL" && ev.activity) {
-            latestActualStatus = ev.activity;
+        for (const ev of jsonArray(jsonPath(locations[i], "events")).slice().reverse()) {
+          const activity = jsonString(jsonPath(ev, "activity"));
+          if (jsonPath(ev, "event_time_type") === "ACTUAL" && activity) {
+            latestActualStatus = activity;
             break;
           }
         }
         if (latestActualStatus) break;
       }
-      const statusFromField: string | null = c.status ?? null;
+      const statusFromField: string | null = jsonString(jsonPath(c, "status"));
       const latestStatus = latestActualStatus ?? statusFromField;
 
       return { events: allEvents, eta, latestStatus, synergy: true };
@@ -345,51 +388,74 @@ export function extractFromJson(
   }
 
   // ── Generic Maersk API format ─────────────────────────────────────────────
-  const containers: any[] = d.shipment?.containers ?? d.data?.containers ?? d.trackingData?.containers ?? [];
+  const containers = jsonArray(
+    firstDefined(
+      jsonPath(d, "shipment", "containers"),
+      jsonPath(d, "data", "containers"),
+      jsonPath(d, "trackingData", "containers")
+    )
+  );
 
   let rawEvents: unknown[] = [];
   let etaRaw: unknown = null;
 
   if (containers.length > 0) {
     const c = pickContainer(containers, wantContainer);
-    rawEvents = c.containerEvents ?? c.events ?? c.milestones ?? c.movements ?? [];
+    rawEvents = jsonArray(
+      firstDefined(
+        jsonPath(c, "containerEvents"),
+        jsonPath(c, "events"),
+        jsonPath(c, "milestones"),
+        jsonPath(c, "movements")
+      )
+    );
 
     // portCalls: destination is the last entry or the one flagged isDestination.
     // NEVER use portCalls[0] — that is the origin.
-    const cPortCalls: any[] = Array.isArray(c.portCalls) ? c.portCalls : [];
+    const cPortCalls = jsonArray(jsonPath(c, "portCalls"));
     const cDestCall =
-      cPortCalls.find((p) => p.isDestination === true || p.isDestination === "true") ??
-      (cPortCalls.length > 0 ? cPortCalls[cPortCalls.length - 1] : null);
+      cPortCalls.find(
+        (portCall) => jsonPath(portCall, "isDestination") === true || jsonPath(portCall, "isDestination") === "true"
+      ) ?? (cPortCalls.length > 0 ? cPortCalls[cPortCalls.length - 1] : null);
 
-    etaRaw =
-      cDestCall?.eta ??
-      cDestCall?.estimatedArrival ??
-      c.eta ??
-      c.estimatedTimeOfArrival ??
-      c.estimatedArrival ??
-      c.plannedArrivalDate ??
-      null;
+    etaRaw = firstDefined(
+      jsonPath(cDestCall, "eta"),
+      jsonPath(cDestCall, "estimatedArrival"),
+      jsonPath(c, "eta"),
+      jsonPath(c, "estimatedTimeOfArrival"),
+      jsonPath(c, "estimatedArrival"),
+      jsonPath(c, "plannedArrivalDate")
+    );
   }
   if (!rawEvents.length) {
-    rawEvents = d.events ?? d.milestones ?? d.containerEvents ?? d.movements ?? d.data?.events ?? [];
+    rawEvents = jsonArray(
+      firstDefined(
+        jsonPath(d, "events"),
+        jsonPath(d, "milestones"),
+        jsonPath(d, "containerEvents"),
+        jsonPath(d, "movements"),
+        jsonPath(d, "data", "events")
+      )
+    );
   }
   if (!etaRaw) {
     // Top-level portCalls (some API shapes put them here)
-    const dPortCalls = Array.isArray(d.portCalls) ? d.portCalls : [];
+    const dPortCalls = jsonArray(jsonPath(d, "portCalls"));
     const dDestCall =
-      dPortCalls.find((p) => p.isDestination === true || p.isDestination === "true") ??
-      (dPortCalls.length > 0 ? dPortCalls[dPortCalls.length - 1] : null);
+      dPortCalls.find(
+        (portCall) => jsonPath(portCall, "isDestination") === true || jsonPath(portCall, "isDestination") === "true"
+      ) ?? (dPortCalls.length > 0 ? dPortCalls[dPortCalls.length - 1] : null);
 
-    etaRaw =
-      dDestCall?.eta ??
-      dDestCall?.estimatedArrival ??
-      d.eta ??
-      d.estimatedTimeOfArrival ??
-      d.estimatedArrival ??
-      d.plannedArrivalDate ??
-      d.portOfDischarge?.eta ??
-      d.portOfDischarge?.estimatedArrival ??
-      null;
+    etaRaw = firstDefined(
+      jsonPath(dDestCall, "eta"),
+      jsonPath(dDestCall, "estimatedArrival"),
+      jsonPath(d, "eta"),
+      jsonPath(d, "estimatedTimeOfArrival"),
+      jsonPath(d, "estimatedArrival"),
+      jsonPath(d, "plannedArrivalDate"),
+      jsonPath(d, "portOfDischarge", "eta"),
+      jsonPath(d, "portOfDischarge", "estimatedArrival")
+    );
   }
 
   const events = parseEvents(Array.isArray(rawEvents) ? rawEvents : []);
@@ -437,7 +503,7 @@ export async function scrapeMaerskDirect(containerNumber: string): Promise<Carri
   }
   logger.info(`[MaerskDirect] ${containerNumber}: Puppeteer slot acquired`);
 
-  let page: any = null;
+  let page: Page | null = null;
   const hardStop = setTimeout(() => {
     logger.warn(`[MaerskDirect] ${containerNumber}: hard timeout — closing page`);
     try {

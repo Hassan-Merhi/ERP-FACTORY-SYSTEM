@@ -18,9 +18,12 @@ import {
   customers,
   insertCustomerOrderSchema,
 } from "@shared/schema";
-import { eq, and, or, desc, sql, inArray, isNull, gte, lte, ne } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray, isNull, gte, lte } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { resultRows } from "../../../lib/queryResult";
+import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
+import { guardExistingOrderProformaLink, guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 
 export function registerOrderCrudRoutes(app: Express) {
   app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
@@ -185,46 +188,20 @@ export function registerOrderCrudRoutes(app: Express) {
         const proformaLines = continuationProforma
           ? await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, orderProformaId))
           : [];
-        const relatedOrders = await db
-          .select({ id: customerOrders.id })
-          .from(customerOrders)
-          .where(
-            and(
-              eq(customerOrders.companyId, companyId),
-              eq(customerOrders.proformaIdUsed, orderProformaId),
-              ne(customerOrders.status, "CANCELLED"),
-              isNull(customerOrders.deletedAt),
-              ne(customerOrders.id, id)
-            )
-          );
-        const relatedOrderIds = relatedOrders.map((related) => related.id);
-        const relatedBales =
-          relatedOrderIds.length > 0
-            ? await db
-                .select({ articleCode: customerOrderBales.articleCode })
-                .from(customerOrderBales)
-                .where(inArray(customerOrderBales.orderId, relatedOrderIds))
-            : [];
-        const loadedByArticle = new Map<string, number>();
-        for (const bale of relatedBales) {
-          if (bale.articleCode) {
-            const normalizedArticleCode = String(bale.articleCode).trim().toLowerCase();
-            loadedByArticle.set(normalizedArticleCode, (loadedByArticle.get(normalizedArticleCode) || 0) + 1);
-          }
-        }
-        proformaRemainingLines = proformaLines.map((line) => ({
+        const capacity = continuationProforma
+          ? await getProformaCapacitySnapshot(db, {
+              companyId,
+              proformaId: orderProformaId,
+              currentOrderId: id,
+            })
+          : null;
+        const remainingAllocations = capacity ? allocateRemainingProformaLines(proformaLines, capacity) : [];
+
+        proformaRemainingLines = remainingAllocations.map(({ line, remainingQty }) => ({
           id: line.id,
           articleCode: line.articleCode,
           productName: line.productName,
-          quantity: Math.max(
-            0,
-            line.quantity -
-              (loadedByArticle.get(
-                String(line.articleCode || "")
-                  .trim()
-                  .toLowerCase()
-              ) || 0)
-          ),
+          quantity: remainingQty,
           pricePerBale: line.pricePerBale,
           pricingMode: line.pricingMode,
           pricePerKg: line.pricePerKg,
@@ -404,6 +381,14 @@ export function registerOrderCrudRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const parsed = insertCustomerOrderSchema.parse({ ...req.body, companyId, status: "DRAFT" });
+      if (parsed.proformaIdUsed) {
+        const guard = await guardProformaOrderCreation(db, {
+          companyId,
+          proformaId: parsed.proformaIdUsed,
+          customerId: parsed.customerId,
+        });
+        if (!guard.allowed) return res.status(guard.status).json(guard.body);
+      }
       const [order] = await db.insert(customerOrders).values(parsed).returning();
       await logAudit({
         userId: req.session.userId!,
@@ -495,7 +480,7 @@ export function registerOrderCrudRoutes(app: Express) {
         .select()
         .from(customerProformas)
         .where(and(eq(customerProformas.id, proformaIdInt!), eq(customerProformas.companyId, companyId)));
-      if (!proforma) return res.status(404).json({ message: "Proforma not found" });
+      if (!proforma || proforma.deletedAt) return res.status(404).json({ message: "Proforma not found" });
 
       // Proforma must be active
       if (!proforma.isActive) return res.status(400).json({ message: "Proforma is not active" });
@@ -505,6 +490,16 @@ export function registerOrderCrudRoutes(app: Express) {
         return res.status(400).json({
           message: `Customer mismatch: order belongs to customer #${order.customerId} but proforma belongs to customer #${proforma.customerId}. Cannot link.`,
         });
+
+      if (order.proformaIdUsed !== proformaIdInt) {
+        const guard = await guardExistingOrderProformaLink(db, {
+          companyId,
+          proformaId: proformaIdInt!,
+          orderId,
+          customerId: order.customerId,
+        });
+        if (!guard.allowed) return res.status(guard.status).json(guard.body);
+      }
 
       // Fetch proforma lines for expected-lines backfill
       const proformaLines = await db

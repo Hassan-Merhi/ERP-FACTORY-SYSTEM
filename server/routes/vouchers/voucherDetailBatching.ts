@@ -3,13 +3,19 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import * as schema from "@shared/schema";
 
-const uniqueIds = (values: Array<number | null | undefined>) =>
-  [...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))];
+const uniqueIds = (values: Array<number | null | undefined>) => [
+  ...new Set(values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)),
+];
 
 async function loadStockItemMap(ids: number[]) {
   if (ids.length === 0) return new Map<number, { code: string; name: string; uom: string }>();
   const rows = await db
-    .select({ id: schema.stockItems.id, code: schema.stockItems.code, name: schema.stockItems.name, uom: schema.stockItems.uom })
+    .select({
+      id: schema.stockItems.id,
+      code: schema.stockItems.code,
+      name: schema.stockItems.name,
+      uom: schema.stockItems.uom,
+    })
     .from(schema.stockItems)
     .where(inArray(schema.stockItems.id, ids));
   return new Map(rows.map((row) => [row.id, row]));
@@ -44,13 +50,16 @@ async function loadSalesData(voucherId: number, locationId: number | null | unde
     loadStockItemMap(itemIds),
     locationId && itemIds.length > 0
       ? db
-          .select({ stockItemId: schema.stockItemLocationPrices.stockItemId, sellingPrice: schema.stockItemLocationPrices.sellingPrice })
+          .select({
+            stockItemId: schema.stockItemLocationPrices.stockItemId,
+            sellingPrice: schema.stockItemLocationPrices.sellingPrice,
+          })
           .from(schema.stockItemLocationPrices)
           .where(
             and(
               inArray(schema.stockItemLocationPrices.stockItemId, itemIds),
-              eq(schema.stockItemLocationPrices.locationId, locationId),
-            ),
+              eq(schema.stockItemLocationPrices.locationId, locationId)
+            )
           )
       : Promise.resolve([]),
   ]);
@@ -58,9 +67,10 @@ async function loadSalesData(voucherId: number, locationId: number | null | unde
 
   return items.map((item) => {
     const stockItem = stockItemMap.get(item.stockItemId);
-    const configuredPrice = item.configuredPrice && item.configuredPrice !== "0"
-      ? item.configuredPrice
-      : priceMap.get(item.stockItemId) ?? "0";
+    const configuredPrice =
+      item.configuredPrice && item.configuredPrice !== "0"
+        ? item.configuredPrice
+        : (priceMap.get(item.stockItemId) ?? "0");
     const quantity = Number.parseFloat(item.quantity || "0") || 0;
     const configuredPriceNumber = Number.parseFloat(configuredPrice || "0") || 0;
     const actualPrice = Number.parseFloat(item.sellingPrice || "0") || 0;
@@ -80,14 +90,35 @@ async function loadSalesData(voucherId: number, locationId: number | null | unde
   });
 }
 
-async function loadAdjustmentData(voucher: { id: number; description: string | null; createdAt: Date; companyId: number; locationId: number | null; optional: boolean; exchangeRate: string | null; currency: string; effectiveDate: string | null; deletedAt: Date | null; locationName: string | null; voucherNumber: string; voucherType: string; voucherDate: string; totalAmount: string; shiftId: number | null; sourceModule: string | null; isCreditSale: boolean | null; clientSaleId: string | null; }) {
+async function loadAdjustmentData(voucher: {
+  id: number;
+  description: string | null;
+  createdAt: Date;
+  companyId: number;
+  locationId: number | null;
+  optional: boolean;
+  exchangeRate: string | null;
+  currency: string;
+  effectiveDate: string | null;
+  deletedAt: Date | null;
+  locationName: string | null;
+  voucherNumber: string;
+  voucherType: string;
+  voucherDate: string;
+  totalAmount: string;
+  shiftId: number | null;
+  sourceModule: string | null;
+  isCreditSale: boolean | null;
+  clientSaleId: string | null;
+}) {
   const [adjustment] = await db
     .select()
     .from(schema.stockAdjustmentVouchers)
     .where(eq(schema.stockAdjustmentVouchers.voucherId, voucher.id))
     .limit(1);
   if (!adjustment) {
-    const adjustmentType = voucher.voucherType === "Consumption" ? "consumption" : voucher.voucherType === "Mixed" ? "mixed" : "production";
+    const adjustmentType =
+      voucher.voucherType === "Consumption" ? "consumption" : voucher.voucherType === "Mixed" ? "mixed" : "production";
     return {
       id: 0,
       voucherId: voucher.id,
@@ -123,7 +154,27 @@ async function loadAdjustmentData(voucher: { id: number; description: string | n
   };
 }
 
-async function loadTransferData(voucher: { id: number; description: string | null; createdAt: Date; companyId: number; locationId: number | null; optional: boolean; exchangeRate: string | null; currency: string; effectiveDate: string | null; deletedAt: Date | null; locationName: string | null; voucherNumber: string; voucherType: string; voucherDate: string; totalAmount: string; shiftId: number | null; sourceModule: string | null; isCreditSale: boolean | null; clientSaleId: string | null; }) {
+async function loadTransferData(voucher: {
+  id: number;
+  description: string | null;
+  createdAt: Date;
+  companyId: number;
+  locationId: number | null;
+  optional: boolean;
+  exchangeRate: string | null;
+  currency: string;
+  effectiveDate: string | null;
+  deletedAt: Date | null;
+  locationName: string | null;
+  voucherNumber: string;
+  voucherType: string;
+  voucherDate: string;
+  totalAmount: string;
+  shiftId: number | null;
+  sourceModule: string | null;
+  isCreditSale: boolean | null;
+  clientSaleId: string | null;
+}) {
   const [transfer] = await db
     .select()
     .from(schema.stockTransferVouchers)
@@ -153,15 +204,14 @@ async function loadTransferData(voucher: { id: number; description: string | nul
     transfer.destinationLocationId,
     ...items.map((item) => item.sourceLocationId),
   ]);
-  const [stockItemMap, locationMap] = await Promise.all([
-    loadStockItemMap(stockItemIds),
-    loadLocationMap(locationIds),
-  ]);
+  const [stockItemMap, locationMap] = await Promise.all([loadStockItemMap(stockItemIds), loadLocationMap(locationIds)]);
   const transferSourceName = transfer.sourceLocationId ? locationMap.get(transfer.sourceLocationId) || "" : "";
   return {
     ...transfer,
     sourceLocationName: transferSourceName,
-    destinationLocationName: transfer.destinationLocationId ? locationMap.get(transfer.destinationLocationId) || "" : "",
+    destinationLocationName: transfer.destinationLocationId
+      ? locationMap.get(transfer.destinationLocationId) || ""
+      : "",
     items: items.map((item) => {
       const stockItem = stockItemMap.get(item.stockItemId);
       const sourceLocationName = item.sourceLocationId
@@ -178,12 +228,40 @@ async function loadTransferData(voucher: { id: number; description: string | nul
   };
 }
 
-export async function loadVoucherRelatedData(voucher: { id: number; description: string | null; createdAt: Date; companyId: number; locationId: number | null; optional: boolean; exchangeRate: string | null; currency: string; effectiveDate: string | null; deletedAt: Date | null; locationName: string | null; voucherNumber: string; voucherType: string; voucherDate: string; totalAmount: string; shiftId: number | null; sourceModule: string | null; isCreditSale: boolean | null; clientSaleId: string | null; }) {
-  const result = {
-    purchaseOrder: null as any,
-    salesItems: null as any,
-    adjustmentData: null as any,
-    transferData: null as any,
+export async function loadVoucherRelatedData(voucher: {
+  id: number;
+  description: string | null;
+  createdAt: Date;
+  companyId: number;
+  locationId: number | null;
+  optional: boolean;
+  exchangeRate: string | null;
+  currency: string;
+  effectiveDate: string | null;
+  deletedAt: Date | null;
+  locationName: string | null;
+  voucherNumber: string;
+  voucherType: string;
+  voucherDate: string;
+  totalAmount: string;
+  shiftId: number | null;
+  sourceModule: string | null;
+  isCreditSale: boolean | null;
+  clientSaleId: string | null;
+}) {
+  // Exactly one of these is populated, chosen by voucherType. Deriving each
+  // field from its loader keeps the shape accurate without restating it, and
+  // without the `null as any` seeds that erased all four.
+  const result: {
+    purchaseOrder: Awaited<ReturnType<typeof loadPurchaseData>> | null;
+    salesItems: Awaited<ReturnType<typeof loadSalesData>> | null;
+    adjustmentData: Awaited<ReturnType<typeof loadAdjustmentData>> | null;
+    transferData: Awaited<ReturnType<typeof loadTransferData>> | null;
+  } = {
+    purchaseOrder: null,
+    salesItems: null,
+    adjustmentData: null,
+    transferData: null,
   };
 
   if (voucher.voucherType === "Purchase") {

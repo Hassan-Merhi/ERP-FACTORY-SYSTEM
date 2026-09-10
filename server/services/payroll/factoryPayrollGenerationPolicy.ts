@@ -1,3 +1,22 @@
+/**
+ * One attendance record, reduced to the only field the pay calculators read.
+ *
+ * `factory_attendance.status` is a free `varchar(20)`, not an enum, so a stored
+ * value is genuinely just a string — the recognized values are listed in
+ * `ATTENDANCE_STATUSES` for comparison, but a row is not typed as that union
+ * because the database can hold anything. Rows reaching these helpers through a
+ * LEFT JOIN can also carry no status at all, which the callers already treat as
+ * "Absent".
+ */
+export interface AttendanceStatusRow {
+  status?: string | null;
+}
+
+/** The attendance statuses the payroll calculators recognize. */
+export const ATTENDANCE_STATUSES = ["Present", "Late", "Leave", "Half Day", "Absent"] as const;
+
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
 export interface FactoryPayrollCalculationInput {
   salaryType: string | null;
   baseSalary: number;

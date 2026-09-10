@@ -313,7 +313,10 @@ export const pressingBatches = pgTable(
     productId: integer("product_id"),
     expectedCount: integer("expected_count").notNull(),
     status: text("status").notNull().default("PENDING"),
-    createdBy: integer("created_by"),
+    // users.id is a varchar, and startup migration 002 converts this column to
+    // character varying. Declaring it as integer made `drizzle-kit push` fail
+    // against any database where that migration had already run.
+    createdBy: varchar("created_by"),
     finalizedAt: timestamp("finalized_at"),
     finalizedLocationId: integer("finalized_location_id").references(() => locations.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),

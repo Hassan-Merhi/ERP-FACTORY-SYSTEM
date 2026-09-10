@@ -17,6 +17,53 @@ import {
 import { eq, and, or, desc, sql, isNull } from "drizzle-orm";
 import { readExcel, sheetToJson } from "../excelHelper";
 
+/**
+ * The container-import spreadsheet, as this route reads it.
+ *
+ * `sheetToJson` yields one record per row keyed by header name, with each cell
+ * left as the workbook held it — text, a number, or a boolean. The parsing below
+ * previously carried these rows as `any[]`, so a renamed column or a cell of an
+ * unexpected type reached the purchase-order preview as `undefined` rather than
+ * as a row error the importer could report.
+ */
+type ImportSheetRow = Record<string, unknown>;
+
+/** One item line parsed out of the sheet, before container grouping. */
+interface ParsedItemRow {
+  rowNum: number;
+  poNumber: string;
+  containerNumber: string;
+  supplierCode: string;
+  barcode: string | null;
+  stockItemId: number | null;
+  itemName: string;
+  quantity: number;
+  rate: number;
+  lineTotal: number;
+  currency: string;
+  freight: number;
+  surcharge: number;
+  fumigation: number;
+  discount: number;
+  documentCharges: number;
+}
+
+/** One charge line parsed out of the sheet, when charges arrive as their own rows. */
+interface ParsedChargeRow {
+  rowNum: number;
+  chargeType: string;
+  amount: number;
+  containerNumber: string;
+}
+
+/** Item lines grouped by container, and by PO number within each container. */
+interface ContainerGroup {
+  containerNumber: string;
+  supplierCode: string;
+  items: ParsedItemRow[];
+  pos: Map<string, ParsedItemRow[]>;
+}
+
 export function registerBankAssetRoutes(app: Express) {
   app.get("/api/bank-accounts", requireAuth, async (req, res) => {
     try {
@@ -557,16 +604,19 @@ export function registerBankAssetRoutes(app: Express) {
       }
 
       // Parse and structure the data
-      const rows = (rawData);
+      const rows = rawData;
       const errors: string[] = [];
-      const itemRows: any[] = [];
-      const chargeRows: any[] = [];
+      const itemRows: ParsedItemRow[] = [];
+      const chargeRows: ParsedChargeRow[] = [];
 
       // Get all stock items for barcode/name lookup
       const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId!);
 
-      // Helper function to find column value with flexible naming
-      const getColumnValue = (row: any, ...possibleNames: string[]): string | undefined => {
+      // Helper function to find column value with flexible naming. The value is
+      // returned as the sheet parser yielded it — a cell may be text, a number or
+      // a boolean — because several call sites below test it for truthiness, where
+      // a numeric 0 and the string "0" behave differently.
+      const getColumnValue = (row: ImportSheetRow, ...possibleNames: string[]): unknown => {
         for (const name of possibleNames) {
           if (row[name] !== undefined && row[name] !== null && row[name] !== "") {
             return row[name];
@@ -574,6 +624,16 @@ export function registerBankAssetRoutes(app: Express) {
         }
         return undefined;
       };
+
+      /** A column as text, or "" when absent. */
+      const columnText = (row: ImportSheetRow, ...possibleNames: string[]): string => {
+        const value = getColumnValue(row, ...possibleNames);
+        return value === undefined ? "" : String(value);
+      };
+
+      /** A column as a number, matching the previous `parseFloat(value || "0")`. */
+      const columnNumber = (row: ImportSheetRow, ...possibleNames: string[]): number =>
+        parseFloat(String(getColumnValue(row, ...possibleNames) || "0"));
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -585,18 +645,18 @@ export function registerBankAssetRoutes(app: Express) {
         if (chargeType && chargeAmount) {
           chargeRows.push({
             rowNum,
-            chargeType,
-            amount: parseFloat(chargeAmount),
-            containerNumber: getColumnValue(row, "Container_Number", "Container Number") || "",
+            chargeType: String(chargeType),
+            amount: parseFloat(String(chargeAmount)),
+            containerNumber: columnText(row, "Container_Number", "Container Number"),
           });
         } else if (
           getColumnValue(row, "Item_Barcode", "Item Barcode") ||
           getColumnValue(row, "Item_Name", "Item Name")
         ) {
           let stockItem = null;
-          const itemBarcode = getColumnValue(row, "Item_Barcode", "Item Barcode");
-          const itemNameValue = getColumnValue(row, "Item_Name", "Item Name");
-          let itemName = itemNameValue || "";
+          const itemBarcode = columnText(row, "Item_Barcode", "Item Barcode");
+          const itemNameValue = columnText(row, "Item_Name", "Item Name");
+          let itemName = itemNameValue;
 
           // Try to find stock item by code/alias or name (for preview purposes only - validation happens in validate step)
           if (itemBarcode) {
@@ -608,8 +668,8 @@ export function registerBankAssetRoutes(app: Express) {
             stockItem = allStockItems.find((item) => item.name === itemNameValue);
           }
 
-          const quantity = parseFloat(getColumnValue(row, "Quantity") || "0");
-          const rate = parseFloat(getColumnValue(row, "Rate") || "0");
+          const quantity = columnNumber(row, "Quantity");
+          const rate = columnNumber(row, "Rate");
 
           if (quantity === 0 || isNaN(quantity)) {
             errors.push(`Row ${rowNum}: Quantity must be a non-zero number (negative quantities are allowed)`);
@@ -623,21 +683,21 @@ export function registerBankAssetRoutes(app: Express) {
 
           itemRows.push({
             rowNum,
-            poNumber: getColumnValue(row, "PO_Number", "PO Number") || "",
-            containerNumber: getColumnValue(row, "Container_Number", "Container Number") || "",
-            supplierCode: getColumnValue(row, "Supplier_Code", "Supplier Code") || "",
+            poNumber: columnText(row, "PO_Number", "PO Number"),
+            containerNumber: columnText(row, "Container_Number", "Container Number"),
+            supplierCode: columnText(row, "Supplier_Code", "Supplier Code"),
             barcode: itemBarcode || null,
             stockItemId: stockItem?.id || null,
             itemName: itemName,
             quantity: quantity,
             rate: rate,
             lineTotal: quantity * rate,
-            currency: getColumnValue(row, "Currency") || "USD",
-            freight: parseFloat(getColumnValue(row, "Freight") || "0"),
-            surcharge: parseFloat(getColumnValue(row, "Surcharge") || "0"),
-            fumigation: parseFloat(getColumnValue(row, "Fumigation") || "0"),
-            discount: parseFloat(getColumnValue(row, "Discount") || "0"),
-            documentCharges: parseFloat(getColumnValue(row, "Document_Charges", "Document Charges") || "0"),
+            currency: columnText(row, "Currency") || "USD",
+            freight: columnNumber(row, "Freight"),
+            surcharge: columnNumber(row, "Surcharge"),
+            fumigation: columnNumber(row, "Fumigation"),
+            discount: columnNumber(row, "Discount"),
+            documentCharges: columnNumber(row, "Document_Charges", "Document Charges"),
           });
         }
       }
@@ -652,33 +712,30 @@ export function registerBankAssetRoutes(app: Express) {
       }
 
       // Group by container
-      const containerGroups = itemRows.reduce(
-        (acc, row) => {
-          if (!acc[row.containerNumber]) {
-            acc[row.containerNumber] = {
-              containerNumber: row.containerNumber,
-              supplierCode: row.supplierCode,
-              items: [],
-              pos: new Map(),
-            };
-          }
+      const containerGroups = itemRows.reduce<Record<string, ContainerGroup>>((acc, row) => {
+        if (!acc[row.containerNumber]) {
+          acc[row.containerNumber] = {
+            containerNumber: row.containerNumber,
+            supplierCode: row.supplierCode,
+            items: [],
+            pos: new Map(),
+          };
+        }
 
-          const container = acc[row.containerNumber];
-          container.items.push(row);
+        const container = acc[row.containerNumber];
+        container.items.push(row);
 
-          if (!container.pos.has(row.poNumber)) {
-            container.pos.set(row.poNumber, []);
-          }
-          container.pos.get(row.poNumber)!.push(row);
+        if (!container.pos.has(row.poNumber)) {
+          container.pos.set(row.poNumber, []);
+        }
+        container.pos.get(row.poNumber)!.push(row);
 
-          return acc;
-        },
-        ({})
-      );
+        return acc;
+      }, {});
 
       // Calculate container totals
-      const preview = Object.values(containerGroups).map((container: any) => {
-        const itemsTotal = container.items.reduce((sum: number, item: any) => sum + item.lineTotal, 0);
+      const preview = Object.values(containerGroups).map((container) => {
+        const itemsTotal = container.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
         // Get charges from rows or aggregate from columns
         const charges = {
@@ -702,7 +759,7 @@ export function registerBankAssetRoutes(app: Express) {
           });
         } else {
           // Aggregate from item row columns
-          container.items.forEach((item: any) => {
+          container.items.forEach((item) => {
             charges.freight += item.freight;
             charges.surcharge += item.surcharge;
             charges.fumigation += item.fumigation;

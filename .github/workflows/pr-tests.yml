@@ -1,0 +1,109 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+  PGSSLMODE: disable
+  NODE_ENV: test
+  SESSION_SECRET: ci-session-secret
+  CSRF_ENFORCE: "0"
+  ENABLE_SCHEDULERS: "false"
+  NODE_OPTIONS: --max-old-space-size=4096
+  PORT: "5000"
+
+jobs:
+  backend-tests:
+    name: Backend / Database Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Build for startup migration verification
+        run: npm run build
+      - name: Prepare test database schema
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+      - name: Run application startup migrations
+        run: |
+          set -euo pipefail
+          node dist/index.js > "$RUNNER_TEMP/startup-migrations-pr.txt" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true' EXIT
+          for _attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > "$RUNNER_TEMP/health-db-pr.json"; then
+              cat "$RUNNER_TEMP/health-db-pr.json"
+              exit 0
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Application exited before startup migrations became ready."
+              cat "$RUNNER_TEMP/startup-migrations-pr.txt"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Timed out waiting for application startup migrations."
+          cat "$RUNNER_TEMP/startup-migrations-pr.txt"
+          exit 1
+      - name: Backend tests and coverage thresholds
+        run: npm run test:backend:coverage -- --maxWorkers=2
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Frontend tests and coverage thresholds
+        run: npm run test:frontend:coverage
