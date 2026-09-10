@@ -59,7 +59,11 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
 
   useEffect(() => {
     if (!data) return;
-    setDrafts(Object.fromEntries(data.suppliers.map((row) => [row.supplierId, toDraft(row)])));
+    setDrafts((current) =>
+      Object.fromEntries(
+        data.suppliers.map((row) => [row.supplierId, current[row.supplierId] ?? toDraft(row)])
+      )
+    );
   }, [data]);
 
   const filteredSuppliers = useMemo(() => {
