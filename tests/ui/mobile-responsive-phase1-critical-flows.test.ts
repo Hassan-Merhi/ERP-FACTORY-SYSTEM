@@ -28,7 +28,12 @@ describe("Mobile repair Phase 1 critical flows", () => {
   it("uses Firefox-baseline-safe selectors for the critical phone layouts", () => {
     const compat = source("client/src/mobile-browser-compat.css");
 
-    expect(compat).not.toContain(":has(");
+    // The rule is about selectors, so the comments explaining why :has() is
+    // avoided must not themselves trip it — a whole-file substring check counts
+    // the prose as a violation and fails on a file that is actually compliant.
+    const withoutComments = compat.replace(/\/\*[\s\S]*?\*\//g, "");
+
+    expect(withoutComments).not.toContain(":has(");
     expect(compat).toContain("documented Firefox 110+ baseline");
   });
 
@@ -64,13 +69,13 @@ describe("Mobile repair Phase 1 critical flows", () => {
     const compat = source("client/src/mobile-browser-compat.css");
     const rawStock = source("client/src/pages/factory/production-raw-stock/RawStockTable.tsx");
 
-    expect(compat).toContain('@media (max-width: 767px), (pointer: coarse)');
+    expect(compat).toContain("@media (max-width: 767px), (pointer: coarse)");
     expect(compat).toContain('[class*="opacity-0"][class*="group-hover:opacity-100"]');
     expect(compat).toContain("opacity: 1 !important");
 
     expect(rawStock).toContain("opacity-0 group-hover:opacity-100");
-    expect(rawStock).toContain('data-testid={`button-adjust-${row.supplierId}`}');
-    expect(rawStock).toContain('data-testid={`button-deduct-${row.supplierId}`}');
-    expect(rawStock).toContain('data-testid={`button-batch-${row.supplierId}`}');
+    expect(rawStock).toContain("data-testid={`button-adjust-${row.supplierId}`}");
+    expect(rawStock).toContain("data-testid={`button-deduct-${row.supplierId}`}");
+    expect(rawStock).toContain("data-testid={`button-batch-${row.supplierId}`}");
   });
 });

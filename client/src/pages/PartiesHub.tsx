@@ -23,7 +23,11 @@ export default function PartiesHub() {
 
   return (
     <div className="flex min-w-0 flex-col h-full">
-      <Tabs value={activeTab} onValueChange={(value) => setTab(value as (typeof TAB_KEYS)[number])} className="flex min-w-0 flex-col h-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setTab(value as (typeof TAB_KEYS)[number])}
+        className="flex min-w-0 flex-col h-full"
+      >
         <div className="border-b bg-background px-3 sm:px-4 pt-3">
           <div className="erp-mobile-scroll-tabs pb-1">
             <TabsList className="h-9 w-max min-w-full sm:min-w-0 sm:w-fit">

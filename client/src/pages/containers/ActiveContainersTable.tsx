@@ -151,7 +151,9 @@ export function ActiveContainersTable({
                     {container.status}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 break-words">{getSupplierName(container.supplierId)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                  {getSupplierName(container.supplierId)}
+                </p>
               </div>
             </div>
             <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-shrink-0 sm:justify-end sm:gap-4">

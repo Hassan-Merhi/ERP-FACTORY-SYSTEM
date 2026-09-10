@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Without this, a PR's checks only run if someone dispatches them by hand, and
+  # three changes reached main unverified because nobody did. `push` fires only
+  # on main, so a pull request runs this workflow once, not twice.
   pull_request:
     branches: [main]
   workflow_dispatch:
