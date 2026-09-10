@@ -1,20 +1,20 @@
 import type { Express } from "express";
 import { storage } from "../storage";
 import { round2 } from "../netPositionHelper";
-import { getHistoricalCurrencyReadiness, type HistoricalCurrencyReadiness } from "../services/accounting/historicalCurrencyReadiness";
-import { registerEmployeeNetPositionRoutes } from "../routes/factory/employee-pos/employeeNetPositionRoutes";
-import { loadNetProfitData } from "../routes/stats/netProfitDataLoad";
-import { projectGoldenCoastResidualEquity } from "../routes/stats/goldenCoastResidualEquityProjection";
 import {
-  calculateNetPositionAsOf,
-  type NetPositionLineItem,
-  type NetPositionSnapshot,
-} from "./calculateNetPositionAsOf";
+  getHistoricalCurrencyReadiness,
+  type HistoricalCurrencyReadiness,
+} from "../services/accounting/historicalCurrencyReadiness";
+import { registerGoldenCoastResidualEquityProjection } from "../routes/stats/goldenCoastResidualEquityProjection";
+import { registerStatsMultiCurrencyRoutes } from "../routes/stats/statsMultiCurrencyRoutes";
+import { registerStatsNetProfitRoutes } from "../routes/stats/statsNetProfitRoutes";
+import type { NetPositionLineItem, NetPositionSnapshot } from "./calculateNetPositionAsOf";
 
 type CompanyRecord = Awaited<ReturnType<typeof storage.getAllCompanies>>[number];
-type FactoryRouteHandler = (req: any, res: any) => unknown | Promise<unknown>;
+type NetProfitHandler = (req: any, res: any, next?: (error?: unknown) => unknown) => unknown | Promise<unknown>;
 
-const FACTORY_COMPANY_TYPES = new Set(["factory", "factory_v2"]);
+const EXCLUDED_COMPANY_TYPES = new Set(["properties", "factory", "factory_v2"]);
+const EXCLUDED_COMPANY_TYPE_LIST = ["properties", "factory", "factory_v2"];
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -62,7 +62,7 @@ export interface GroupNetPositionSnapshot {
 }
 
 export function isGroupNetPositionCompany(company: Pick<CompanyRecord, "active" | "companyType">): boolean {
-  return company.active !== false && company.companyType !== "properties";
+  return company.active !== false && !EXCLUDED_COMPANY_TYPES.has(company.companyType || "");
 }
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
@@ -82,33 +82,89 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item
   return results;
 }
 
-let factoryNetPositionHandler: FactoryRouteHandler | null = null;
+type CapturedNetProfitPipeline = {
+  middleware: NetProfitHandler[];
+  routeHandler: NetProfitHandler;
+};
 
-function getFactoryNetPositionHandler(): FactoryRouteHandler {
-  if (factoryNetPositionHandler) return factoryNetPositionHandler;
+let capturedNetProfitPipeline: CapturedNetProfitPipeline | null = null;
+
+/**
+ * Group Net Position must use the exact ERP Net Position presentation that users
+ * see on the normal Net Position page. That page is backed by /api/stats/net-profit
+ * and is post-processed by the current cash/bank translation middleware plus the
+ * Golden Coast Supplier Partner projection. Capturing those registered handlers
+ * here avoids maintaining a second, drifting balance-sheet implementation.
+ */
+function getNetProfitPipeline(): CapturedNetProfitPipeline {
+  if (capturedNetProfitPipeline) return capturedNetProfitPipeline;
+
+  const middleware: NetProfitHandler[] = [];
+  let routeHandler: NetProfitHandler | null = null;
 
   const captureApp = {
-    get(path: string, ...handlers: FactoryRouteHandler[]) {
-      if (path === "/api/factory/net-position") {
-        factoryNetPositionHandler = handlers[handlers.length - 1] ?? null;
+    use(pathOrHandler: string | NetProfitHandler, ...handlers: NetProfitHandler[]) {
+      if (typeof pathOrHandler === "function") {
+        middleware.push(pathOrHandler, ...handlers);
+      } else if (pathOrHandler === "/api/stats/net-profit") {
+        middleware.push(...handlers);
       }
       return captureApp;
     },
-    post() { return captureApp; },
-    put() { return captureApp; },
-    patch() { return captureApp; },
-    delete() { return captureApp; },
-    use() { return captureApp; },
+    get(path: string, ...handlers: NetProfitHandler[]) {
+      if (path === "/api/stats/net-profit") {
+        routeHandler = handlers[handlers.length - 1] ?? null;
+      }
+      return captureApp;
+    },
+    post() {
+      return captureApp;
+    },
+    put() {
+      return captureApp;
+    },
+    patch() {
+      return captureApp;
+    },
+    delete() {
+      return captureApp;
+    },
   } as unknown as Express;
 
-  registerEmployeeNetPositionRoutes(captureApp);
-  if (!factoryNetPositionHandler) {
-    throw new Error("Factory Net Position handler is unavailable");
-  }
-  return factoryNetPositionHandler;
+  // Keep the same order as server/routes/statsRoutes.ts. The response wrappers
+  // intentionally unwind in reverse order.
+  registerGoldenCoastResidualEquityProjection(captureApp);
+  registerStatsMultiCurrencyRoutes(captureApp);
+  registerStatsNetProfitRoutes(captureApp);
+
+  if (!routeHandler) throw new Error("ERP Net Position handler is unavailable");
+  capturedNetProfitPipeline = { middleware, routeHandler };
+  return capturedNetProfitPipeline;
 }
 
-function toFactoryLineItem(account: any, side: "forUs" | "onUs"): NetPositionLineItem {
+async function runNetProfitPipeline(req: any, res: any): Promise<void> {
+  const { middleware, routeHandler } = getNetProfitPipeline();
+  const handlers = [...middleware, routeHandler];
+
+  const dispatch = async (index: number): Promise<void> => {
+    const handler = handlers[index];
+    if (!handler) return;
+
+    let nextPromise: Promise<void> | null = null;
+    const next = (error?: unknown) => {
+      if (error) return Promise.reject(error);
+      nextPromise = dispatch(index + 1);
+      return nextPromise;
+    };
+
+    await handler(req, res, next);
+    if (nextPromise) await nextPromise;
+  };
+
+  await dispatch(0);
+}
+
+function toLineItem(account: any, side: "forUs" | "onUs"): NetPositionLineItem {
   return {
     label: String(account?.name ?? account?.label ?? "Unnamed"),
     value: round2(Number(account?.value ?? 0) || 0),
@@ -117,14 +173,19 @@ function toFactoryLineItem(account: any, side: "forUs" | "onUs"): NetPositionLin
   };
 }
 
-async function calculateFactoryNetPositionAsOf(companyId: number, asOfDate: string): Promise<NetPositionSnapshot> {
-  const handler = getFactoryNetPositionHandler();
+async function calculateErpNetPosition(
+  companyId: number,
+  asOfDate: string,
+  useCurrentSnapshot: boolean,
+): Promise<NetPositionSnapshot> {
   let responseBody: any = null;
   let statusCode = 200;
 
   const req = {
-    session: { factoryCompanyId: companyId, currentCompanyId: companyId },
-    query: { asOf: asOfDate },
+    method: "GET",
+    path: "/api/stats/net-profit",
+    session: { currentCompanyId: companyId },
+    query: useCurrentSnapshot ? {} : { toDate: asOfDate },
   };
   const res = {
     status(code: number) {
@@ -137,9 +198,9 @@ async function calculateFactoryNetPositionAsOf(companyId: number, asOfDate: stri
     },
   };
 
-  await handler(req, res);
+  await runNetProfitPipeline(req, res);
   if (statusCode >= 400 || !responseBody) {
-    throw new Error(responseBody?.message || `Factory Net Position failed with status ${statusCode}`);
+    throw new Error(responseBody?.message || `ERP Net Position failed with status ${statusCode}`);
   }
 
   const forUsTotal = round2(Number(responseBody.forUsTotal ?? responseBody.forUs?.total ?? 0) || 0);
@@ -155,88 +216,9 @@ async function calculateFactoryNetPositionAsOf(companyId: number, asOfDate: stri
     netPositionLabel: String(
       responseBody.netPositionLabel ?? (netPosition >= 0 ? "We have more than we owe" : "We owe more than we have"),
     ),
-    forUsLines: forUsAccounts.map((account: any) => toFactoryLineItem(account, "forUs")),
-    onUsLines: onUsAccounts.map((account: any) => toFactoryLineItem(account, "onUs")),
+    forUsLines: forUsAccounts.map((account: any) => toLineItem(account, "forUs")),
+    onUsLines: onUsAccounts.map((account: any) => toLineItem(account, "onUs")),
   };
-}
-
-function lineAccountsForProjection(lines: NetPositionLineItem[], companyAccounts: any[]) {
-  const idsByName = new Map<string, number | null>();
-  for (const account of companyAccounts) {
-    const name = String(account?.name ?? "");
-    if (!name) continue;
-    if (idsByName.has(name)) idsByName.set(name, null);
-    else idsByName.set(name, Number(account.id));
-  }
-
-  return lines.map((line) => {
-    const id = idsByName.get(line.label);
-    return {
-      ...(typeof id === "number" && Number.isInteger(id) && id > 0 ? { id } : {}),
-      name: line.label,
-      value: line.value,
-      category: line.category,
-    };
-  });
-}
-
-async function calculateSupplierPartnerNetPositionAsOf(
-  companyId: number,
-  asOfDate: string,
-): Promise<NetPositionSnapshot> {
-  const [snapshot, reportData] = await Promise.all([
-    calculateNetPositionAsOf(companyId, asOfDate),
-    loadNetProfitData(companyId, asOfDate),
-  ]);
-
-  const body = {
-    forUs: {
-      total: snapshot.forUsTotal,
-      accounts: lineAccountsForProjection(snapshot.forUsLines, reportData.companyAccounts),
-    },
-    onUs: {
-      total: snapshot.onUsTotal,
-      accounts: lineAccountsForProjection(snapshot.onUsLines, reportData.companyAccounts),
-    },
-    forUsTotal: snapshot.forUsTotal,
-    onUsTotal: snapshot.onUsTotal,
-    netPosition: snapshot.netPosition,
-    netPositionLabel: snapshot.netPositionLabel,
-  };
-
-  const projected = projectGoldenCoastResidualEquity({
-    body,
-    companyAccounts: reportData.companyAccounts,
-    accountBalances: reportData.accountBalances,
-  }) as any;
-
-  const forUsTotal = round2(Number(projected.forUs?.total ?? projected.forUsTotal ?? snapshot.forUsTotal) || 0);
-  const onUsTotal = round2(Number(projected.onUs?.total ?? projected.onUsTotal ?? snapshot.onUsTotal) || 0);
-  const netPosition = round2(Number(projected.netPosition ?? forUsTotal - onUsTotal) || 0);
-  const forUsAccounts = Array.isArray(projected.forUs?.accounts) ? projected.forUs.accounts : [];
-  const onUsAccounts = Array.isArray(projected.onUs?.accounts) ? projected.onUs.accounts : [];
-
-  return {
-    forUsTotal,
-    onUsTotal,
-    netPosition,
-    netPositionLabel: String(projected.netPositionLabel ?? (netPosition >= 0 ? "Net Assets" : "Net Liabilities")),
-    forUsLines: forUsAccounts.map((account: any) => toFactoryLineItem(account, "forUs")),
-    onUsLines: onUsAccounts.map((account: any) => toFactoryLineItem(account, "onUs")),
-  };
-}
-
-async function calculateAuthoritativeNetPositionAsOf(
-  company: CompanyRecord,
-  asOfDate: string,
-): Promise<NetPositionSnapshot> {
-  if (FACTORY_COMPANY_TYPES.has(company.companyType || "")) {
-    return calculateFactoryNetPositionAsOf(company.id, asOfDate);
-  }
-  if (company.companyType === "supplier_partner") {
-    return calculateSupplierPartnerNetPositionAsOf(company.id, asOfDate);
-  }
-  return calculateNetPositionAsOf(company.id, asOfDate);
 }
 
 async function assertHistoricalCurrencyReady(companies: CompanyRecord[], asOfDate: string): Promise<void> {
@@ -251,6 +233,7 @@ async function assertHistoricalCurrencyReady(companies: CompanyRecord[], asOfDat
 export async function calculateGroupNetPosition(
   asOfDate: string,
   allowedCompanyIds?: ReadonlySet<number>,
+  useCurrentSnapshot = false,
 ): Promise<GroupNetPositionSnapshot> {
   const companies = (await storage.getAllCompanies())
     .filter(isGroupNetPositionCompany)
@@ -260,7 +243,7 @@ export async function calculateGroupNetPosition(
   await assertHistoricalCurrencyReady(companies, asOfDate);
 
   const companyPositions = await mapWithConcurrency(companies, 3, async (company) => {
-    const snapshot = await calculateAuthoritativeNetPositionAsOf(company, asOfDate);
+    const snapshot = await calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot);
     const sideNetPosition = round2(snapshot.forUsTotal - snapshot.onUsTotal);
     const netAdjustment = round2(snapshot.netPosition - sideNetPosition);
 
@@ -289,7 +272,7 @@ export async function calculateGroupNetPosition(
   return {
     asOfDate,
     companyCount: companyPositions.length,
-    excludedCompanyTypes: ["properties"],
+    excludedCompanyTypes: [...EXCLUDED_COMPANY_TYPE_LIST],
     companies: companyPositions,
     totals: {
       forUsTotal,
@@ -302,7 +285,7 @@ export async function calculateGroupNetPosition(
       mode: "already-excluded",
       additionalElimination: 0,
       note:
-        "Normal Intercompany ledger accounts are already excluded by the shared Net Position classifier, so no second group-level elimination is applied.",
+        "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
     },
   };
 }
