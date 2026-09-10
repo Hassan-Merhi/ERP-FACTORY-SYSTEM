@@ -102,6 +102,67 @@ describe("ERP Daybook pagination route", () => {
     );
   });
 
+  it("returns deterministic keyset chunks without deep OFFSET paging", async () => {
+    process.env.CONTINUOUS_CURSOR_SECRET = "daybook-wave-two-secret-1234";
+    harness.poolQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          total: 3,
+          items: [
+            { _type: "voucher", data: { id: 10, voucherType: "Sales" } },
+            { _type: "voucher", data: { id: 11, voucherType: "Sales" } },
+          ],
+          has_more: true,
+          last_cursor: { sortDate: "2026-08-11", typeRank: 2, sortId: 11 },
+        },
+      ],
+    });
+    const firstReq = {
+      session: { currentCompanyId: 4, currentRole: "Admin" },
+      user: { id: "user-7" },
+      query: {
+        startDate: "2026-08-01",
+        endDate: "2026-08-11",
+        continuous: "1",
+        limit: "2",
+        sortOrder: "asc",
+      },
+    };
+    const firstRes = { status: vi.fn(), json: vi.fn(), setHeader: vi.fn() };
+    firstRes.status.mockReturnValue(firstRes);
+
+    await harness.handlers.get("/api/daybook")!(firstReq, firstRes);
+
+    const firstPayload = firstRes.json.mock.calls[0][0];
+    expect(firstPayload).toMatchObject({ total: 3, limit: 2, hasMore: true });
+    expect(firstPayload.nextCursor).toEqual(expect.any(String));
+    const firstSql = String(harness.poolQuery.mock.calls[0][0]);
+    expect(firstSql).toContain("chunk_rows AS");
+    expect(firstSql).toContain("ORDER BY sort_date ASC, type_rank ASC, sort_id ASC");
+
+    harness.poolQuery.mockResolvedValueOnce({
+      rows: [{ total: 3, items: [{ _type: "offload", data: { id: 90 } }], has_more: false, last_cursor: null }],
+    });
+    const secondReq = {
+      ...firstReq,
+      query: { ...firstReq.query, cursor: firstPayload.nextCursor },
+    };
+    const secondRes = { status: vi.fn(), json: vi.fn(), setHeader: vi.fn() };
+    secondRes.status.mockReturnValue(secondRes);
+
+    await harness.handlers.get("/api/daybook")!(secondReq, secondRes);
+
+    const [secondSql, secondValues] = harness.poolQuery.mock.calls[1];
+    expect(secondSql).toContain("sort_date >");
+    expect(secondSql).toContain("type_rank >");
+    expect(secondSql).toContain("sort_id >");
+    expect(secondValues).toEqual(expect.arrayContaining(["2026-08-11", 2, 11]));
+    expect(secondRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ total: 3, hasMore: false, nextCursor: null })
+    );
+    delete process.env.CONTINUOUS_CURSOR_SECRET;
+  });
+
   it("rejects an unscoped request before issuing SQL", async () => {
     const req = { session: {}, query: {} };
     const res = { status: vi.fn(), json: vi.fn() };
