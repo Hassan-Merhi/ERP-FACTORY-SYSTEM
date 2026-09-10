@@ -60,7 +60,7 @@ export interface ProformaCapacitySnapshot {
   articles: ProformaCapacityArticle[];
 }
 
-interface ProformaRow {
+interface ProformaRow extends Record<string, unknown> {
   id: number;
   customerId: number;
   name: string | null;
@@ -68,12 +68,12 @@ interface ProformaRow {
   status: string | null;
 }
 
-interface ProformaLineRow {
+interface ProformaLineRow extends Record<string, unknown> {
   articleCode: string | null;
   quantity: unknown;
 }
 
-interface ContributionRow {
+interface ContributionRow extends Record<string, unknown> {
   normalizedArticleCode: string | null;
   orderId: number;
   orderStatus: string | null;
