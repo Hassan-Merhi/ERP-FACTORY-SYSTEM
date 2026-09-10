@@ -1,10 +1,11 @@
 /**
  * Supplier -> Shop/Location + Agent defaults for ERP container tracking.
  *
- * Defaults are snapshots: a new container (or a placeholder whose supplier is
- * assigned later) receives blank Shop Name / Agent values from this mapping.
- * Existing non-blank tracking values are never overwritten. Historical rows can
- * be populated explicitly from Settings via the backfill endpoint.
+ * New containers receive blank Shop Name / Agent values from the selected
+ * supplier's company-scoped mapping. If a container's supplier changes later,
+ * values inherited from the previous supplier follow the new mapping while a
+ * genuinely manual non-default value is preserved. Historical blank rows can be
+ * populated explicitly from Settings via the backfill endpoint.
  */
 export const supplierTrackingDefaultsSchema: string[] = [
   `CREATE TABLE IF NOT EXISTS supplier_tracking_defaults (
@@ -24,18 +25,12 @@ export const supplierTrackingDefaultsSchema: string[] = [
   `CREATE OR REPLACE FUNCTION apply_supplier_tracking_defaults_to_container()
     RETURNS trigger AS $$
     DECLARE
-      should_apply boolean := false;
       default_shop text;
       default_agent varchar(100);
+      old_default_shop text;
+      old_default_agent varchar(100);
     BEGIN
       IF TG_OP = 'INSERT' THEN
-        should_apply := true;
-      ELSIF NEW.company_id IS DISTINCT FROM OLD.company_id
-         OR NEW.supplier_id IS DISTINCT FROM OLD.supplier_id THEN
-        should_apply := true;
-      END IF;
-
-      IF should_apply THEN
         SELECT l.name, d.agent_name
           INTO default_shop, default_agent
           FROM supplier_tracking_defaults d
@@ -57,6 +52,50 @@ export const supplierTrackingDefaultsSchema: string[] = [
         IF COALESCE(BTRIM(NEW.agent), '') = ''
            AND COALESCE(BTRIM(default_agent), '') <> '' THEN
           NEW.agent := BTRIM(default_agent);
+        END IF;
+
+      ELSIF NEW.company_id IS DISTINCT FROM OLD.company_id
+         OR NEW.supplier_id IS DISTINCT FROM OLD.supplier_id THEN
+        SELECT l.name, d.agent_name
+          INTO old_default_shop, old_default_agent
+          FROM supplier_tracking_defaults d
+          LEFT JOIN locations l
+            ON l.id = d.location_id
+           AND l.company_id = d.company_id
+           AND l.active = true
+           AND l.deleted_at IS NULL
+         WHERE d.company_id = OLD.company_id
+           AND d.supplier_id = OLD.supplier_id
+           AND d.active = true
+         LIMIT 1;
+
+        SELECT l.name, d.agent_name
+          INTO default_shop, default_agent
+          FROM supplier_tracking_defaults d
+          LEFT JOIN locations l
+            ON l.id = d.location_id
+           AND l.company_id = d.company_id
+           AND l.active = true
+           AND l.deleted_at IS NULL
+         WHERE d.company_id = NEW.company_id
+           AND d.supplier_id = NEW.supplier_id
+           AND d.active = true
+         LIMIT 1;
+
+        IF COALESCE(BTRIM(NEW.shop_name), '') = ''
+           OR (
+             COALESCE(BTRIM(old_default_shop), '') <> ''
+             AND BTRIM(NEW.shop_name) = BTRIM(old_default_shop)
+           ) THEN
+          NEW.shop_name := NULLIF(BTRIM(default_shop), '');
+        END IF;
+
+        IF COALESCE(BTRIM(NEW.agent), '') = ''
+           OR (
+             COALESCE(BTRIM(old_default_agent), '') <> ''
+             AND BTRIM(NEW.agent) = BTRIM(old_default_agent)
+           ) THEN
+          NEW.agent := NULLIF(BTRIM(default_agent), '');
         END IF;
       END IF;
 
