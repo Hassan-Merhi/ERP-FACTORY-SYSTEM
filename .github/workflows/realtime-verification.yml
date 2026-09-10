@@ -101,6 +101,9 @@ jobs:
             tests/ui/realtime-wave5-cache-policy.test.ts \
             tests/ui/realtime-wave6-hardening.test.ts
 
+      - name: Prepare disposable database schema
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+
       - name: Verify Wave 6 server freshness contract
         run: node node_modules/vitest/vitest.mjs run server/routes/performance/realtimeReadFreshness.test.ts
 
@@ -113,9 +116,7 @@ jobs:
           node scripts/verify-runtime-dependencies.mjs
 
       - name: Prepare disposable realtime fixture
-        run: |
-          node node_modules/drizzle-kit/bin.cjs push --force
-          node scripts/prepare-phase7-browser-e2e-fixture.mjs
+        run: node scripts/prepare-phase7-browser-e2e-fixture.mjs
 
       - name: Run two-session realtime browser verification
         run: |

@@ -11,7 +11,24 @@ import { registerStatsNetProfitRoutes } from "../routes/stats/statsNetProfitRout
 import type { NetPositionLineItem, NetPositionSnapshot } from "./calculateNetPositionAsOf";
 
 type CompanyRecord = Awaited<ReturnType<typeof storage.getAllCompanies>>[number];
-type NetProfitHandler = (req: any, res: any, next?: (error?: unknown) => unknown) => unknown | Promise<unknown>;
+
+interface NetProfitRequest {
+  method: string;
+  path: string;
+  session: { currentCompanyId: number };
+  query: Record<string, string>;
+}
+
+interface NetProfitResponse {
+  status(code: number): NetProfitResponse;
+  json(body: unknown): NetProfitResponse;
+}
+
+type NetProfitHandler = (
+  req: NetProfitRequest,
+  res: NetProfitResponse,
+  next?: (error?: unknown) => unknown
+) => unknown | Promise<unknown>;
 
 const EXCLUDED_COMPANY_TYPES = new Set(["properties", "factory", "factory_v2"]);
 const EXCLUDED_COMPANY_TYPE_LIST = ["properties", "factory", "factory_v2"];
@@ -20,7 +37,7 @@ export class GroupHistoricalCurrencyError extends Error {
   constructor(
     public readonly companyId: number,
     public readonly companyName: string,
-    public readonly readiness: HistoricalCurrencyReadiness,
+    public readonly readiness: HistoricalCurrencyReadiness
   ) {
     super(`Historical currency data is unresolved for ${companyName}`);
     this.name = "GroupHistoricalCurrencyError";
@@ -142,7 +159,7 @@ function getNetProfitPipeline(): CapturedNetProfitPipeline {
   return capturedNetProfitPipeline;
 }
 
-async function runNetProfitPipeline(req: any, res: any): Promise<void> {
+async function runNetProfitPipeline(req: NetProfitRequest, res: NetProfitResponse): Promise<void> {
   const { middleware, routeHandler } = getNetProfitPipeline();
   const handlers = [...middleware, routeHandler];
 
@@ -164,11 +181,16 @@ async function runNetProfitPipeline(req: any, res: any): Promise<void> {
   await dispatch(0);
 }
 
-function toLineItem(account: any, side: "forUs" | "onUs"): NetPositionLineItem {
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function toLineItem(account: unknown, side: "forUs" | "onUs"): NetPositionLineItem {
+  const row = asRecord(account);
   return {
-    label: String(account?.name ?? account?.label ?? "Unnamed"),
-    value: round2(Number(account?.value ?? 0) || 0),
-    category: String(account?.category ?? "Other"),
+    label: String(row.name ?? row.label ?? "Unnamed"),
+    value: round2(Number(row.value ?? 0) || 0),
+    category: String(row.category ?? "Other"),
     side,
   };
 }
@@ -176,48 +198,51 @@ function toLineItem(account: any, side: "forUs" | "onUs"): NetPositionLineItem {
 async function calculateErpNetPosition(
   companyId: number,
   asOfDate: string,
-  useCurrentSnapshot: boolean,
+  useCurrentSnapshot: boolean
 ): Promise<NetPositionSnapshot> {
-  let responseBody: any = null;
+  let responseBody: unknown = null;
   let statusCode = 200;
 
-  const req = {
+  const req: NetProfitRequest = {
     method: "GET",
     path: "/api/stats/net-profit",
     session: { currentCompanyId: companyId },
     query: useCurrentSnapshot ? {} : { toDate: asOfDate },
   };
-  const res = {
+  const response: NetProfitResponse = {
     status(code: number) {
       statusCode = code;
-      return res;
+      return response;
     },
     json(body: unknown) {
       responseBody = body;
-      return res;
+      return response;
     },
   };
 
-  await runNetProfitPipeline(req, res);
-  if (statusCode >= 400 || !responseBody) {
-    throw new Error(responseBody?.message || `ERP Net Position failed with status ${statusCode}`);
+  await runNetProfitPipeline(req, response);
+  const body = asRecord(responseBody);
+  if (statusCode >= 400 || Object.keys(body).length === 0) {
+    throw new Error(String(body.message ?? `ERP Net Position failed with status ${statusCode}`));
   }
 
-  const forUsTotal = round2(Number(responseBody.forUsTotal ?? responseBody.forUs?.total ?? 0) || 0);
-  const onUsTotal = round2(Number(responseBody.onUsTotal ?? responseBody.onUs?.total ?? 0) || 0);
-  const netPosition = round2(Number(responseBody.netPosition ?? forUsTotal - onUsTotal) || 0);
-  const forUsAccounts = Array.isArray(responseBody.forUs?.accounts) ? responseBody.forUs.accounts : [];
-  const onUsAccounts = Array.isArray(responseBody.onUs?.accounts) ? responseBody.onUs.accounts : [];
+  const forUs = asRecord(body.forUs);
+  const onUs = asRecord(body.onUs);
+  const forUsTotal = round2(Number(body.forUsTotal ?? forUs.total ?? 0) || 0);
+  const onUsTotal = round2(Number(body.onUsTotal ?? onUs.total ?? 0) || 0);
+  const netPosition = round2(Number(body.netPosition ?? forUsTotal - onUsTotal) || 0);
+  const forUsAccounts = Array.isArray(forUs.accounts) ? forUs.accounts : [];
+  const onUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
 
   return {
     forUsTotal,
     onUsTotal,
     netPosition,
     netPositionLabel: String(
-      responseBody.netPositionLabel ?? (netPosition >= 0 ? "We have more than we owe" : "We owe more than we have"),
+      body.netPositionLabel ?? (netPosition >= 0 ? "We have more than we owe" : "We owe more than we have")
     ),
-    forUsLines: forUsAccounts.map((account: any) => toLineItem(account, "forUs")),
-    onUsLines: onUsAccounts.map((account: any) => toLineItem(account, "onUs")),
+    forUsLines: forUsAccounts.map((account) => toLineItem(account, "forUs")),
+    onUsLines: onUsAccounts.map((account) => toLineItem(account, "onUs")),
   };
 }
 
@@ -233,7 +258,7 @@ async function assertHistoricalCurrencyReady(companies: CompanyRecord[], asOfDat
 export async function calculateGroupNetPosition(
   asOfDate: string,
   allowedCompanyIds?: ReadonlySet<number>,
-  useCurrentSnapshot = false,
+  useCurrentSnapshot = false
 ): Promise<GroupNetPositionSnapshot> {
   const companies = (await storage.getAllCompanies())
     .filter(isGroupNetPositionCompany)
@@ -284,8 +309,7 @@ export async function calculateGroupNetPosition(
     intercompany: {
       mode: "already-excluded",
       additionalElimination: 0,
-      note:
-        "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
+      note: "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
     },
   };
 }

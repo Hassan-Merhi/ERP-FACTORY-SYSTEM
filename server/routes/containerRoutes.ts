@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { registerContainerListPaginationRoutes } from "./containers/containerListPaginationRoutes";
 import { registerContainerCrudRoutes } from "./containers/containerCrudRoutes";
 import { registerContainerTrackingRoutes } from "./containers/containerTrackingRoutes";
+import { registerSupplierTrackingDefaultRoutes } from "./containers/supplierTrackingDefaultRoutes";
 import { registerContainerAccountingRoutes } from "./containers/accounting";
 import { registerContainerFreightRoutes } from "./containers/containerFreightRoutes";
 import { registerContainerOffloadLifecycleGuard } from "./containers/containerOffloadLifecycleGuard";
@@ -11,10 +12,9 @@ import { registerContainerDocumentsRoutes } from "./containers/containerDocument
 import { registerContainerCostingRoutes } from "./containers/containerCostingRoutes";
 
 export function registerContainerRoutes(app: Express) {
-  // Tracking routes registered first: they include literal-path routes like
-  // /api/containers/eta-tracking-summary and /api/containers/refresh-etas that
-  // must be matched before containerCrudRoutes' /api/containers/:id, since Express
-  // resolves routes strictly in registration order (not by specificity).
+  // Settings/default routes and tracking literal routes must be registered before
+  // containerCrudRoutes' /api/containers/:id compatibility reader.
+  registerSupplierTrackingDefaultRoutes(app);
   registerContainerTrackingRoutes(app);
   // Explicit pagination requests are handled in SQL; legacy callers continue to
   // fall through to the compatibility readers below.
