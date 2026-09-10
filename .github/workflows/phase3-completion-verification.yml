@@ -1,4 +1,5 @@
 name: Phase 3 Completion Verification
+# Re-run after including the current main live-query type fix.
 
 on:
   push:
