@@ -21,10 +21,15 @@
   "routeManifestReplacements": [],
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
+      "tests/company-deletion-contract.test.ts",
       "tests/net-position-equity-visibility.test.ts",
-      "tests/ui/mobile-responsive-wave2-factory-floor.test.ts"
+      "tests/proforma-capacity-concurrency-wiring.test.ts",
+      "tests/realtime-wave2-live-page-policy.test.ts",
+      "tests/ui/mobile-responsive-phase1-critical-flows.test.ts",
+      "tests/ui/mobile-responsive-wave2-factory-floor.test.ts",
+      "tests/ui/mobile-responsive-wave3-erp-operations.test.ts"
     ],
-    "maxAdditionalTextAssertions": 41,
-    "rationale": "tests/ui/mobile-responsive-wave2-factory-floor.test.ts asserts on Tailwind responsive breakpoint classes (md:hidden / md:block) and on data-testid template literals. jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is not observable behaviourally; the source text is the only place that contract exists. maxAdditionalTextAssertions covers that file plus the assertions added with the POS item replacement and mobile responsive waves, measured exactly at 41 over the reviewed baseline of 2061 so any further growth still fails."
+    "maxAdditionalTextAssertions": 150,
+    "rationale": "Each entry asserts a contract that has no behavioural surface. The mobile-responsive files (phase1-critical-flows, wave2-factory-floor, wave3-erp-operations) assert on Tailwind breakpoint classes and data-testid template literals: jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is only expressible as source text. realtime-wave2-live-page-policy asserts the ABSENCE of polling and of a second WebSocket in live pages — an absence no request can demonstrate. proforma-capacity-concurrency-wiring asserts that every proforma-linked creation path takes the capacity lock before it writes, and that the lock is taken first; ordering inside a transaction is not observable from outside it. company-deletion-contract asserts that storage.ts composes the dependency-aware deletion service rather than a second implementation, which is a wiring fact, not a result. maxAdditionalTextAssertions is measured exactly at 150 over the reviewed baseline of 2061, so any further growth still fails."
   }
 }
