@@ -11,6 +11,7 @@ import * as suppliers from "./storage/suppliers";
 import * as employees from "./storage/employees";
 import * as pos from "./storage/pos";
 import * as factory from "./storage/factory";
+import * as companyDeletion from "./storage/company-deletion";
 
 export const storage = {
   ...auth,
@@ -22,4 +23,7 @@ export const storage = {
   ...employees,
   ...pos,
   ...factory,
+  // Keep this last so the dependency-aware implementation replaces the legacy
+  // hand-maintained deleteCompany export without changing existing callers.
+  ...companyDeletion,
 };
