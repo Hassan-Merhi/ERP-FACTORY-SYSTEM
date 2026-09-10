@@ -10,6 +10,10 @@ import {
   resolveAuthorizedCompanyId,
   sendCompanyAccessError,
 } from "../../security/companyAccessBoundary";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../../services/security/databaseScopeRuntimeContext";
 import { storage } from "../../storage";
 import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -242,7 +246,24 @@ export function registerCompanyAccessRoutes(app: Express) {
   app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
-      await storage.deleteCompany(companyId);
+      if (Number(req.session.currentCompanyId) === companyId) {
+        return res.status(409).json({
+          message: "Switch to a different company before deleting the company that is currently active.",
+          code: "ACTIVE_COMPANY_DELETE_FORBIDDEN",
+        });
+      }
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+      // Company Management is intentionally cross-company for Admin/Developer.
+      // The request's normal DB scope is still pinned to the active company, so
+      // run this one operation under the already-authorized target scope. This is
+      // required for forced RLS tables such as vouchers, customers and inventory.
+      const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
+      await runWithDatabaseScopeRuntimeContext(
+        createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
+        () => storage.deleteCompany(companyId)
+      );
+
       res.json({ message: "Company deleted successfully" });
     } catch (error: unknown) {
       if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
