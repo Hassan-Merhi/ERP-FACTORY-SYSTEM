@@ -98,9 +98,18 @@ import { startupMigrations } from "../server/startup-schema";
  * Re-pinned again when the guarded stage-026 PO Import parent-company repair
  * was extended from HMD KINSHASA to also cover MALI. The statement count stays
  * 1357 and no statement moved; only the existing repair statement changed.
+ *
+ * Re-pinned again for stage 028, supplier tracking defaults: the
+ * supplier_tracking_defaults table, its unique and company indexes, the
+ * apply_supplier_tracking_defaults_to_container() function, and the drop and
+ * create of the containers trigger that calls it. Six statements, appended
+ * after stage 027, take the count from 1357 to 1363; the first 1357 entries are
+ * byte-identical, so nothing moved. The hash also absorbs the MALI edit above,
+ * which changed a statement's content without changing the count and so was
+ * left unpinned at the time.
  */
-const EXPECTED_STATEMENT_COUNT = 1357;
-const EXPECTED_CONTENT_HASH = "11c4ca3a434899cbc60d3691fa126704ebfcd371b78301a53c161a58621518cb";
+const EXPECTED_STATEMENT_COUNT = 1363;
+const EXPECTED_CONTENT_HASH = "f57dfca37fee29698356689db921af48c2be0ac6f14ec5f26e31f12996e10ecf";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

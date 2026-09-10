@@ -24,6 +24,7 @@ import { resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardExistingOrderProformaLink, guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
+import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 
 export function registerOrderCrudRoutes(app: Express) {
   app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
@@ -381,15 +382,28 @@ export function registerOrderCrudRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const parsed = insertCustomerOrderSchema.parse({ ...req.body, companyId, status: "DRAFT" });
-      if (parsed.proformaIdUsed) {
-        const guard = await guardProformaOrderCreation(db, {
-          companyId,
-          proformaId: parsed.proformaIdUsed,
-          customerId: parsed.customerId,
-        });
-        if (!guard.allowed) return res.status(guard.status).json(guard.body);
-      }
-      const [order] = await db.insert(customerOrders).values(parsed).returning();
+
+      // Guard and insert in one locked transaction. Guarding outside it let two
+      // orders for the same proforma each read the last remaining slot.
+      const creation = await db.transaction(async (tx) => {
+        if (parsed.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: parsed.proformaIdUsed,
+          });
+          const guard = await guardProformaOrderCreation(tx, {
+            companyId,
+            proformaId: parsed.proformaIdUsed,
+            customerId: parsed.customerId,
+          });
+          if (!guard.allowed) return { ok: false, rejection: guard } as const;
+        }
+        const [created] = await tx.insert(customerOrders).values(parsed).returning();
+        return { ok: true, order: created } as const;
+      });
+
+      if (!creation.ok) return res.status(creation.rejection.status).json(creation.rejection.body);
+      const order = creation.order;
       await logAudit({
         userId: req.session.userId!,
         username: req.session.username || req.session.userId!,

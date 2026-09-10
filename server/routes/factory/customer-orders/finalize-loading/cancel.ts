@@ -12,6 +12,7 @@ import { getClientDate } from "../../../../lib/dateUtils";
 import { db, type DbTransaction } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { writeDaybookEntry, recalculateOrderTotals } from "../../_helpers";
+import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { logAudit } from "../../../helpers/auditHelpers";
 import { factoryBales, customerOrders, customerOrderBales, customers, factoryDaybookEntries } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
@@ -88,6 +89,17 @@ export function registerOrderCancelRoutes(app: Express) {
       const cancelledBy = req.session?.username || "user";
 
       const updated = await db.transaction(async (tx) => {
+        // Same ordering as every other capacity-changing writer: proforma lock
+        // first, then order/bale row locks. Cancelling releases this order's
+        // bales back to the proforma, so a scan or import racing this cancel
+        // must wait and re-read capacity rather than measure it mid-release.
+        if (order.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+          });
+        }
+
         const orderBales = await tx
           .select({ baleId: customerOrderBales.baleId })
           .from(customerOrderBales)

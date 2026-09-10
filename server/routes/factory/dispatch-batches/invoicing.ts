@@ -20,6 +20,7 @@ import {
 } from "@shared/schema";
 
 import { getCompanyId } from "./_helpers";
+import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
 
 export function registerDispatchInvoiceRoutes(app: Express) {
@@ -181,6 +182,25 @@ export function registerDispatchInvoiceRoutes(app: Express) {
       const { invoiceDate } = req.body;
 
       const result = await db.transaction(async (tx) => {
+        // Invoicing consumes this batch's proforma capacity, so it serializes
+        // against scanners and imports on the same proforma. Take the proforma
+        // lock before the batch row lock, the ordering every protected path
+        // follows, using an unlocked read for the id. The authoritative id from
+        // the locked row is re-locked below in case it changed in between;
+        // pg_advisory_xact_lock is re-entrant, so locking the same one twice is
+        // free.
+        const preBatchRows = await tx.execute(sql`
+          SELECT proforma_id FROM customer_dispatch_batches
+          WHERE id = ${batchId} AND company_id = ${companyId}
+        `);
+        const preBatchProformaId = resultRows(preBatchRows)[0]?.proforma_id;
+        if (preBatchProformaId) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: Number(preBatchProformaId),
+          });
+        }
+
         // 1. Lock and validate batch
         const batchRows = await tx.execute(sql`
           SELECT * FROM customer_dispatch_batches
@@ -190,6 +210,13 @@ export function registerDispatchInvoiceRoutes(app: Express) {
         if (!batch) throw new Error("Dispatch batch not found");
         if (batch.status === "INVOICED") throw new Error("Batch already invoiced");
         if (batch.status === "CANCELLED") throw new Error("Batch is cancelled");
+
+        if (batch.proforma_id && Number(batch.proforma_id) !== Number(preBatchProformaId)) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: Number(batch.proforma_id),
+          });
+        }
 
         // 2. Check proforma status
         let proforma = null;

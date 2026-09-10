@@ -1,6 +1,7 @@
 name: AI Repair Intake
 
-on:
+# This intake never checks out or executes code from the triggering run; it only reads run metadata and files an issue.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [CI, CodeQL, Semgrep, Security]
     types: [completed]
@@ -20,10 +21,8 @@ on:
         default: main
         type: string
 
-permissions:
-  actions: read
-  contents: read
-  issues: write
+# Issue writes are granted per job rather than to the whole workflow.
+permissions: {}
 
 concurrency:
   group: ai-repair-intake-${{ github.event_name }}-${{ github.event.workflow_run.name || github.run_id }}
@@ -40,6 +39,10 @@ jobs:
        github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: write
     env:
       GH_TOKEN: ${{ github.token }}
       # This job does not check the repository out, so gh has no git remote to
@@ -143,6 +146,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}

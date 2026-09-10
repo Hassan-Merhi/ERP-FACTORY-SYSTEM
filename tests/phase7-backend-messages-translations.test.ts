@@ -7,8 +7,10 @@ import {
 
 describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
-    expect(backendMessagesPhase7Translations).toHaveLength(644);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(644);
+    // 644 frozen Phase 7 phrases plus the three bale-scanning and proforma-capacity
+    // messages part12 gained with the scan-again-to-bypass flow.
+    expect(backendMessagesPhase7Translations).toHaveLength(647);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(647);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");

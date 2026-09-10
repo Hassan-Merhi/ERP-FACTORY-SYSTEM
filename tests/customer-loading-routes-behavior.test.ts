@@ -131,34 +131,27 @@ function buildRoutes() {
   registerOrderLoadingRoutes(app);
   return routes;
 }
-
 function req(overrides: Record<string, unknown> = {}) {
-  return {
-    params: {},
-    query: {},
-    body: {},
-    session: { factoryCompanyId: 4, currentCompanyId: 4, userId: 1 },
-    headers: {},
-    ...overrides,
-  } as any;
+  return { session: { factoryCompanyId: 4, currentCompanyId: 99 }, query: { customerId: "12" }, ...overrides } as any;
 }
-
 function resHarness() {
-  const response: any = { statusCode: 200, body: undefined };
-  response.status = vi.fn((code: number) => {
-    response.statusCode = code;
-    return response;
-  });
-  response.json = vi.fn((body: unknown) => {
-    response.body = body;
-    return response;
-  });
-  return response;
+  const res: any = {
+    statusCode: 200,
+    body: undefined,
+    status: vi.fn((code: number) => {
+      res.statusCode = code;
+      return res;
+    }),
+    json: vi.fn((body: unknown) => {
+      res.body = body;
+      return res;
+    }),
+  };
+  return res;
 }
-
-const routes = buildRoutes();
 
 describe("customer loading intelligence route", () => {
+  const routes = buildRoutes();
   beforeEach(() => {
     vi.clearAllMocks();
     harness.executeResults.splice(0);
@@ -167,21 +160,26 @@ describe("customer loading intelligence route", () => {
   });
 
   it("requires a selected company and a positive customer id", async () => {
-    const handler = routes.get("GET /api/factory/customer-loading/intelligence")!;
-    const missingCompany = resHarness();
-    await handler(req({ session: {}, query: { customerId: "12" } }), missingCompany);
-    expect(missingCompany.statusCode).toBe(400);
+    const noCompany = resHarness();
+    await routes.get("GET /api/factory/customer-loading/products")!(req({ session: {} }), noCompany);
+    expect(noCompany.statusCode).toBe(400);
+    expect(noCompany.body).toEqual({ message: "No company selected" });
 
     const invalidCustomer = resHarness();
-    await handler(req({ query: { customerId: "x" } }), invalidCustomer);
+    await routes.get("GET /api/factory/customer-loading/products")!(
+      req({ query: { customerId: "abc" } }),
+      invalidCustomer
+    );
     expect(invalidCustomer.statusCode).toBe(400);
+    expect(invalidCustomer.body).toEqual({ message: "Valid customerId is required" });
   });
 
   it("does not expose a customer outside the active company", async () => {
     harness.selectResults.push([]);
     const res = resHarness();
-    await routes.get("GET /api/factory/customer-loading/intelligence")!(req({ query: { customerId: "12" } }), res);
+    await routes.get("GET /api/factory/customer-loading/products")!(req(), res);
     expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ message: "Customer not found" });
     expect(harness.db.execute).not.toHaveBeenCalled();
   });
 
@@ -190,26 +188,65 @@ describe("customer loading intelligence route", () => {
     harness.executeResults.push({
       rows: [
         {
-          customerId: 12,
-          productId: 8,
-          articleCode: "HMD8",
-          productName: "Asian Wear",
-          loadedBales: 7,
-          loadedKg: "280.000",
-          lastLoadedAt: "2026-08-17T08:55:00Z",
+          id: 1,
+          code: "P1",
+          articleCode: "HMD11001",
+          name: "Shirts",
+          nameAr: null,
+          categoryId: 3,
+          categoryName: "Summer",
+          categoryNameAr: null,
+          weightPerBaleKg: "40.00",
+          sellingPrice: "80.00",
+          productionPrice: "50.00",
+          active: true,
+          totalBalesLoaded: 7,
+          totalKgLoaded: "280.000",
+          loadingCount: 2,
+          lastLoadedAt: "2026-08-17T10:00:00.000Z",
+        },
+        {
+          id: 2,
+          code: "P2",
+          articleCode: "HMD11002",
+          name: "Shorts",
+          nameAr: null,
+          categoryId: 3,
+          categoryName: "Summer",
+          categoryNameAr: null,
+          weightPerBaleKg: "25.00",
+          sellingPrice: "60.00",
+          productionPrice: "40.00",
+          active: true,
+          totalBalesLoaded: 0,
+          totalKgLoaded: "0",
+          loadingCount: 0,
+          lastLoadedAt: null,
         },
       ],
     });
     const res = resHarness();
-    await routes.get("GET /api/factory/customer-loading/intelligence")!(req({ query: { customerId: "12" } }), res);
+    await routes.get("GET /api/factory/customer-loading/products")!(req(), res);
     expect(res.statusCode).toBe(200);
-    expect(res.body.products[0]).toEqual(
-      expect.objectContaining({ productId: 8, articleCode: "HMD8", loadedBales: 7, loadedKg: 280 })
-    );
+    expect(res.body.summary).toEqual({
+      totalProducts: 2,
+      loadedProducts: 1,
+      neverLoadedProducts: 1,
+      productCoveragePct: 50,
+      totalBalesLoaded: 7,
+      totalKgLoaded: 280,
+    });
+    expect(res.body.products).toEqual([
+      expect.objectContaining({ id: 1, loadingStatus: "LOADED", totalBalesLoaded: 7, totalKgLoaded: 280 }),
+      expect.objectContaining({ id: 2, loadingStatus: "NEVER_LOADED", totalBalesLoaded: 0, totalKgLoaded: 0 }),
+    ]);
     const sqlCall = harness.db.execute.mock.calls[0]?.[0] as any;
-    const queryText = sqlCall.strings.join(" ");
-    expect(queryText).toContain("co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED')");
-    expect(queryText).toContain("co.deleted_at IS NULL");
+    const sqlText = sqlCall.strings.join(" ");
+    expect(sqlText).toContain("FROM customer_order_bales cob");
+    expect(sqlText).toContain("co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED')");
+    expect(sqlText).toContain("co.deleted_at IS NULL");
+    expect(sqlText).toContain("DISTINCT ON (cob.bale_id)");
+    expect(sqlCall.values).toContain(4);
     expect(sqlCall.values).toContain(12);
   });
 
@@ -311,13 +348,11 @@ describe("customer loading intelligence route", () => {
         relatedBales?: any[];
       } = {}
     ) => {
-      const selectedOrder = overrides.order ?? order;
-      // Phase 3 finalization reads the order once before the transaction to
-      // determine the advisory-lock key, then re-reads it FOR UPDATE after
-      // acquiring that lock. Both reads must observe the same mutable state.
       harness.selectResults.push(
-        [selectedOrder],
-        [selectedOrder],
+        // Finalization reads the proforma link first, unlocked, so it can take
+        // the proforma capacity lock before locking the order row.
+        [{ proformaIdUsed: (overrides.order ?? order).proformaIdUsed }],
+        [overrides.order ?? order],
         overrides.bales ?? [bale],
         [overrides.proforma ?? proforma],
         overrides.lines ?? [line],
@@ -327,7 +362,7 @@ describe("customer loading intelligence route", () => {
       );
       harness.mutationResults.push(
         [{ id: 2, companyId: 4, customerId: 12, name: "August Proforma - 2 Remaining - Carried Over" }],
-        [{ ...selectedOrder, status: "VERIFIED" }]
+        [{ ...order, status: "VERIFIED" }]
       );
     };
 
@@ -460,6 +495,8 @@ describe("customer loading intelligence route", () => {
         response
       );
       expect(response.statusCode).toBe(400);
+      expect(harness.db.update).not.toHaveBeenCalled();
+      expect(harness.db.insert).not.toHaveBeenCalled();
       expect(response.body).toEqual({ message: "daybook write failed" });
     });
   });

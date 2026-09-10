@@ -150,8 +150,8 @@ export async function repairMissingVerifiedChargeVouchers() {
                   description = $2,
                   total_amount = $3,
                   source_module = 'FACTORY'
-            WHERE id = $4`,
-          [row.order_date, description, String(amount), voucherId]
+            WHERE id = $4 AND company_id = $5`,
+          [row.order_date, description, String(amount), voucherId, row.company_id]
         );
         await client.query(`DELETE FROM voucher_entries WHERE voucher_id = $1`, [voucherId]);
         await client.query(

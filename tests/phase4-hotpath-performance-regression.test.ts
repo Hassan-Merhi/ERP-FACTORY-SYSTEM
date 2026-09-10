@@ -36,9 +36,11 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).not.toContain("const [alreadyAdded]");
     expect(source).toContain("reservedInThisOrder");
     expect(source).toContain("const activeOrderCheck");
-    expect(source).toContain("const currentCountExpression = enforceOverload");
-    expect(source).toContain("currentCount: currentCountExpression");
-    expect(source).toContain(": sql<number>`0`;");
-    expect(source).toContain("isNull(customerOrders.deletedAt)");
+    // The conditional per-scan overload count this used to pin moved into
+    // getProformaCapacitySnapshot, which answers it with one aggregate query.
+    // Bounded now means the scan calls that snapshot once, and only when the
+    // order is actually linked to a proforma.
+    expect(source.match(/getProformaCapacitySnapshot\(tx/g)).toHaveLength(1);
+    expect(source).toContain("if (order.proformaIdUsed) {");
   });
 });

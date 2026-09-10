@@ -13,6 +13,7 @@ import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
 import { normalizeLoadingArticleCode } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
   factoryBaleProducts,
@@ -93,6 +94,26 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
           // referencing the same physical bale will block at the lock; only
           // one will see status='IN_STOCK', the other will skip.
           const refResult = await db.transaction(async (tx) => {
+            // Proforma lock first, then the order row, then the bale row —
+            // the ordering every capacity-changing writer follows, so an import
+            // racing a scan or a finalization waits rather than measuring
+            // capacity mid-write.
+            if (order.proformaIdUsed) {
+              await acquireProformaCapacityTransactionLock(tx, {
+                companyId,
+                proformaId: order.proformaIdUsed,
+              });
+            }
+
+            const [currentOrder] = await tx
+              .select({ status: customerOrders.status })
+              .from(customerOrders)
+              .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+              .for("update");
+            if (!currentOrder || !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
+              return { kind: "notFound" as const };
+            }
+
             // Try referenceNumber first, then fall back to baleCode
             let [bale] = await tx
               .select()
@@ -267,6 +288,26 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
         // for the same article will block at the lock and re-evaluate, so
         // they cannot grab the same physical bales.
         const articleResult = await db.transaction(async (tx) => {
+          // Proforma lock first, then the order row, then the bale row —
+          // the ordering every capacity-changing writer follows, so an import
+          // racing a scan or a finalization waits rather than measuring
+          // capacity mid-write.
+          if (order.proformaIdUsed) {
+            await acquireProformaCapacityTransactionLock(tx, {
+              companyId,
+              proformaId: order.proformaIdUsed,
+            });
+          }
+
+          const [currentOrder] = await tx
+            .select({ status: customerOrders.status })
+            .from(customerOrders)
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+            .for("update");
+          if (!currentOrder || !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
+            return [] as number[];
+          }
+
           // Find available bales, oldest first
           const availableBales = await tx
             .select()
