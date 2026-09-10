@@ -94,7 +94,9 @@ describe("WebSocket invalidation traffic", () => {
     }
     expect(invalidate).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(399);
+    // The final event was emitted at t=900ms and the loop finishes at t=1000ms,
+    // so exactly 300ms remain on the 400ms trailing debounce.
+    vi.advanceTimersByTime(299);
     expect(invalidate).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(invalidate).toHaveBeenCalledTimes(1);
@@ -335,6 +337,7 @@ describe("WebSocket invalidation traffic", () => {
   });
 
   it("uses immediate blanket catch-up after a real reconnect", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
     renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
