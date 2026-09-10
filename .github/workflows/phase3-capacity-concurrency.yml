@@ -65,7 +65,26 @@ jobs:
         run: npm ci --no-audit --bin-links=true
 
       - name: Apply all remaining Phase 3 route wiring
+        shell: bash
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/phase3-wire-capacity-locks.mjs")
+          source = path.read_text()
+          old_marker = "'        const addedIds = articleResult;'"
+          if old_marker not in source:
+              raise SystemExit("legacy bulk-import marker was not found")
+          source = source.replace(old_marker, "'        if (articleResult.length < qty) {'", 1)
+          old_tail = "        const addedIds = articleResult.addedIds;'"
+          if old_tail not in source:
+              raise SystemExit("legacy bulk-import replacement tail was not found")
+          source = source.replace(
+              old_tail,
+              "        const addedIds = articleResult.addedIds;\\n        if (addedIds.length < qty) {'",
+              1,
+          )
+          path.write_text(source)
+          PY
           node scripts/phase3-wire-capacity-locks.mjs
           node scripts/phase3-finalize-creation-locks.mjs
 
