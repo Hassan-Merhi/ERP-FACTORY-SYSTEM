@@ -39,7 +39,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
         type="date"
         value={value}
         autoFocus
-        data-testid={`input-eta-inline-${container.id}`}
+        data-testid={`input-eta-inline-\${container.id}`}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -63,7 +63,7 @@ export function EtaCell({ container }: { container: EnrichedContainerRow }) {
         setEditing(true);
       }}
       title="Click to set or edit ETA"
-      data-testid={`text-eta-${container.id}`}
+      data-testid={`text-eta-\${container.id}`}
       className="cursor-text underline decoration-dashed underline-offset-2 decoration-muted-foreground/40"
     >
       {container.eta ? (
