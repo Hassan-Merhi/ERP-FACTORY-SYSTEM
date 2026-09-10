@@ -14,6 +14,10 @@ import { logAudit, syncEmployeeBalancesFromEntries, buildVoucherChangesForUpdate
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { applyVoucherOptionalInventoryChange } from "./optionalInventoryEvidence";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+
+/** The columns a voucher edit may set, checked against the vouchers table. */
+type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
 export function registerVoucherUpdateRoutes(app: Express) {
   app.patch("/api/vouchers/:id", requireAuth, async (req, res) => {
@@ -38,7 +42,7 @@ export function registerVoucherUpdateRoutes(app: Express) {
         if (existingVoucher.voucherType !== "Stock Transfer") {
           return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
         }
-        const updates: Partial<any> = {};
+        const updates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) updates.voucherDate = req.body.voucherDate;
         if (Object.keys(updates).length > 0) {
           await db.update(vouchers).set(updates).where(eq(vouchers.id, id));
@@ -66,7 +70,7 @@ export function registerVoucherUpdateRoutes(app: Express) {
       const wasOptional = existingVoucher.optional;
 
       await db.transaction(async (tx) => {
-        const voucherUpdates: Partial<any> = {};
+        const voucherUpdates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) voucherUpdates.voucherDate = req.body.voucherDate;
         if (req.body.description !== undefined) voucherUpdates.description = req.body.description;
         if (req.body.optional !== undefined) voucherUpdates.optional = req.body.optional;

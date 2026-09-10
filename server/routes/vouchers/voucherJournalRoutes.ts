@@ -23,6 +23,7 @@ import {
   factoryDaybookEntries as fde,
 } from "@shared/schema";
 import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
+import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -247,22 +248,9 @@ export function registerVoucherJournalRoutes(app: Express) {
           const narration = entry.narration || null;
 
           // Determine account field
-          const accountField: any = {};
-          if (entry.accountType === "ledger") {
-            accountField.ledgerAccountId = entry.accountId;
-          } else if (entry.accountType === "bank") {
-            accountField.bankAccountId = entry.accountId;
-          } else if (entry.accountType === "supplier") {
-            accountField.supplierId = entry.accountId;
-          } else if (entry.accountType === "factorySupplier") {
-            accountField.factorySupplierId = entry.accountId;
-          } else if (entry.accountType === "employee") {
-            accountField.employeeId = entry.accountId;
-          } else if (entry.accountType === "fixedAsset") {
-            accountField.fixedAssetId = entry.accountId;
-          } else if (entry.accountType === "customer") {
-            accountField.customerId = entry.accountId;
-          }
+          const accountField = isVoucherAccountType(entry.accountType)
+            ? voucherEntryAccountLink(entry.accountType, entry.accountId)
+            : {};
 
           const norm = normalizeVoucherEntryAmounts({
             transactionCurrency: vCurrency,
@@ -524,22 +512,9 @@ export function registerVoucherJournalRoutes(app: Express) {
           const narration = entry.narration || null;
 
           // Determine account field
-          const accountField: any = {};
-          if (entry.accountType === "ledger") {
-            accountField.ledgerAccountId = entry.accountId;
-          } else if (entry.accountType === "bank") {
-            accountField.bankAccountId = entry.accountId;
-          } else if (entry.accountType === "supplier") {
-            accountField.supplierId = entry.accountId;
-          } else if (entry.accountType === "factorySupplier") {
-            accountField.factorySupplierId = entry.accountId;
-          } else if (entry.accountType === "employee") {
-            accountField.employeeId = entry.accountId;
-          } else if (entry.accountType === "fixedAsset") {
-            accountField.fixedAssetId = entry.accountId;
-          } else if (entry.accountType === "customer") {
-            accountField.customerId = entry.accountId;
-          }
+          const accountField = isVoucherAccountType(entry.accountType)
+            ? voucherEntryAccountLink(entry.accountType, entry.accountId)
+            : {};
 
           const norm = normalizeVoucherEntryAmounts({
             transactionCurrency: vCurrencyPatch,
