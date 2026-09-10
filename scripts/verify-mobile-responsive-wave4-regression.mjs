@@ -94,7 +94,11 @@ for (const contract of [
   requireText(browser, contract, "Wave 4 interaction contract");
 }
 
-requireText(workflow, "node scripts/verify-mobile-responsive-wave4-browser.mjs", "Mobile Responsiveness workflow");
+requireText(
+  workflow,
+  "run_smoke scripts/verify-mobile-responsive-wave4-browser.mjs",
+  "Mobile Responsiveness workflow",
+);
 requireText(phase11, "scripts/verify-mobile-responsive-wave4-regression.mjs", "Phase 11 responsive matrix");
 
 const erpLiteralRouteCount = (erpRoutes.match(/(?:<Route\s+path=|G\()\s*["']\//g) || []).length;
