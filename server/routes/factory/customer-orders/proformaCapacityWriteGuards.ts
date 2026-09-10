@@ -5,10 +5,7 @@ import {
   type ProformaCapacityExecutor,
   type ProformaCapacitySnapshot,
 } from "./proformaCapacity";
-import {
-  evaluateProformaLoadingAvailability,
-  validateProformaCapacityAdditions,
-} from "./proformaCapacityEnforcement";
+import { evaluateProformaLoadingAvailability, validateProformaCapacityAdditions } from "./proformaCapacityEnforcement";
 
 export type ProformaWriteGuardResult =
   | { allowed: true }
@@ -29,10 +26,7 @@ interface ProformaOrderGuardOptions {
   currentOrderId?: number | null;
 }
 
-function unavailableResult(
-  snapshot: ProformaCapacitySnapshot,
-  customerId: number
-): ProformaWriteGuardResult | null {
+function unavailableResult(snapshot: ProformaCapacitySnapshot, customerId: number): ProformaWriteGuardResult | null {
   const capacity = evaluateProformaLoadingAvailability(snapshot, customerId);
   if (capacity.allowed) return null;
 
