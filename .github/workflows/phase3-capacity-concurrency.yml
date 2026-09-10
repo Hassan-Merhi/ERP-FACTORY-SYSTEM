@@ -71,10 +71,12 @@ jobs:
           from pathlib import Path
           path = Path("scripts/phase3-wire-capacity-locks.mjs")
           source = path.read_text()
+
           old_marker = "'        const addedIds = articleResult;'"
           if old_marker not in source:
               raise SystemExit("legacy bulk-import marker was not found")
           source = source.replace(old_marker, "'        if (articleResult.length < qty) {'", 1)
+
           old_tail = "        const addedIds = articleResult.addedIds;'"
           if old_tail not in source:
               raise SystemExit("legacy bulk-import replacement tail was not found")
@@ -83,6 +85,19 @@ jobs:
               "        const addedIds = articleResult.addedIds;\\n        if (addedIds.length < qty) {'",
               1,
           )
+
+          old_cancel_import = "'import { resultRows } from \\\"../../../../lib/queryResult\\\";'"
+          new_cancel_import = "'import { eq, and, sql, inArray } from \\\"drizzle-orm\\\";'"
+          if old_cancel_import not in source:
+              raise SystemExit("legacy cancel import marker was not found")
+          source = source.replace(old_cancel_import, new_cancel_import, 1)
+
+          old_cancel_replacement = "'import { resultRows } from \\\"../../../../lib/queryResult\\\";\\nimport { acquireProformaCapacityTransactionLock } from \\\"../proformaCapacityConcurrency\\\";\\nimport { restoreCancelledContainerAtomically } from \\\"../../stock-allocation-v5/restoreCancelledContainerAtomic\\\";'"
+          new_cancel_replacement = "'import { eq, and, sql, inArray } from \\\"drizzle-orm\\\";\\nimport { acquireProformaCapacityTransactionLock } from \\\"../proformaCapacityConcurrency\\\";\\nimport { restoreCancelledContainerAtomically } from \\\"../../stock-allocation-v5/restoreCancelledContainerAtomic\\\";'"
+          if old_cancel_replacement not in source:
+              raise SystemExit("legacy cancel import replacement was not found")
+          source = source.replace(old_cancel_replacement, new_cancel_replacement, 1)
+
           path.write_text(source)
           PY
           node scripts/phase3-wire-capacity-locks.mjs
