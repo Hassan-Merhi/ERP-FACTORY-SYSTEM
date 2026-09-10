@@ -6,22 +6,21 @@ on:
       - feat/tracking-supplier-location-agent-defaults
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
     runs-on: ubuntu-24.04
     steps:
-      - name: Download repository source
+      - name: Check out branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | \
-            tar --extract --gzip --strip-components=1
+          git init
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout -B "${GITHUB_REF_NAME}" FETCH_HEAD
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -43,16 +42,29 @@ jobs:
             server/storage/company-deletion.ts \
             tests/supplier-tracking-defaults.test.ts
 
-      - name: Upload formatted files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: formatted-pr-1357
-          path: |
-            client/src/pages/factory/FactoryProductionTargets.tsx
-            client/src/pages/settings/SupplierTrackingDefaultsTab.tsx
-            server/helpers/generateGroupNetPositionExcel.ts
-            server/helpers/groupNetPosition.ts
-            server/services/supplierTrackingDefaults.ts
-            server/storage/company-deletion.ts
+      - name: Commit formatted files
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            client/src/pages/settings/SupplierTrackingDefaultsTab.tsx \
+            server/helpers/generateGroupNetPositionExcel.ts \
+            server/helpers/groupNetPosition.ts \
+            server/services/supplierTrackingDefaults.ts \
+            server/storage/company-deletion.ts \
+            tests/supplier-tracking-defaults.test.ts; then
+            echo "Files are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            client/src/pages/settings/SupplierTrackingDefaultsTab.tsx \
+            server/helpers/generateGroupNetPositionExcel.ts \
+            server/helpers/groupNetPosition.ts \
+            server/services/supplierTrackingDefaults.ts \
+            server/storage/company-deletion.ts \
             tests/supplier-tracking-defaults.test.ts
-          retention-days: 1
+          git commit -m "style: apply prettier formatting"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
