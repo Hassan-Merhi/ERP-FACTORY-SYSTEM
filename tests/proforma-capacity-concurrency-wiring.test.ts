@@ -33,6 +33,20 @@ describe("Phase 3 proforma capacity mutation lock coverage", () => {
     expect(source).toContain('.for("update")');
   });
 
+  it("all proforma-linked empty order/container creation paths lock before checking capacity and inserting", () => {
+    const directLoading = read("server/routes/factory/customer-orders/finalize-loading/loading.ts");
+    expectBefore(directLoading, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(directLoading, "guardProformaOrderCreation(tx", ".insert(customerOrders)");
+
+    const genericOrder = read("server/routes/factory/customer-orders/orderCrudRoutes.ts");
+    expectBefore(genericOrder, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(genericOrder, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");
+
+    const v5Containers = read("server/routes/factory/stock-allocation-v5/proforma-create.ts");
+    expectBefore(v5Containers, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(v5Containers, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");
+  });
+
   it("proforma linking, recovery, exchange, and cancelled restore use the shared lock", () => {
     for (const path of [
       "server/routes/factory/customer-orders/linkProformaAtomic.ts",
