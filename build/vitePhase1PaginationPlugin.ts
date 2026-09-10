@@ -2,8 +2,6 @@ import type { Plugin } from "vite";
 
 const MAIN_SUFFIX = "/client/src/main.tsx";
 const DAYBOOK_SUFFIX = "/client/src/pages/Daybook.tsx";
-const ACCOUNT_STATEMENT_SUFFIX =
-  "/client/src/pages/accounts/AccountStatementView.tsx";
 
 function replaceExactly(
   source: string,
@@ -115,68 +113,6 @@ function transformDaybook(source: string): string {
   return code;
 }
 
-function transformAccountStatement(source: string): string {
-  let code = source;
-  code = replaceExactly(
-    code,
-    `import { useMemo, useState } from "react";`,
-    `import { useMemo, useState, useSyncExternalStore } from "react";\nimport { getAccountStatementPaginationSnapshot, subscribeAccountStatementPagination } from "@/lib/accountStatementPaginationClient";`,
-    "statement metadata imports",
-  );
-  code = replaceExactly(
-    code,
-    `  const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");`,
-    `  const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");\n  const statementMeta = useSyncExternalStore(\n    subscribeAccountStatementPagination,\n    getAccountStatementPaginationSnapshot,\n    getAccountStatementPaginationSnapshot\n  );\n  const rawOpeningBalance = parseFloat(String(selectedAccount?.openingBalance ?? 0)) || 0;\n  const openingBalanceSide = (selectedAccount as any)?.openingBalanceSide || "Dr";\n  const signedOpeningBalance = openingBalanceSide === "Cr" ? -rawOpeningBalance : rawOpeningBalance;\n  const displayClosingBalance =\n    statementMeta?.closingNetBalance != null\n      ? signedOpeningBalance + statementMeta.closingNetBalance\n      : closingBalance;`,
-    "statement metadata subscription",
-  );
-  code = replaceExactly(
-    code,
-    `  const totalDebit = useMemo(\n    () => vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0),\n    [vouchersWithBalance]\n  );\n  const totalCredit = useMemo(\n    () => vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0),\n    [vouchersWithBalance]\n  );`,
-    `  const totalDebit = useMemo(\n    () =>\n      statementMeta?.periodDebitTotal ??\n      vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0),\n    [statementMeta?.periodDebitTotal, vouchersWithBalance]\n  );\n  const totalCredit = useMemo(\n    () =>\n      statementMeta?.periodCreditTotal ??\n      vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0),\n    [statementMeta?.periodCreditTotal, vouchersWithBalance]\n  );`,
-    "full-period statement totals",
-  );
-  code = replaceAllChecked(
-    code,
-    "Math.abs(closingBalance)",
-    "Math.abs(displayClosingBalance)",
-    2,
-    "closing amounts",
-  );
-  code = replaceAllChecked(
-    code,
-    `closingBalance >= 0`,
-    `displayClosingBalance >= 0`,
-    1,
-    "closing side",
-  );
-  code = replaceAllChecked(
-    code,
-    `balSide(closingBalance)`,
-    `balSide(displayClosingBalance)`,
-    1,
-    "closing label",
-  );
-  code = replaceExactly(
-    code,
-    `<p className="text-base font-semibold leading-none tabular-nums">{vouchersWithBalance.length}</p>`,
-    `<p className="text-base font-semibold leading-none tabular-nums">\n                {statementMeta?.total ?? vouchersWithBalance.length}\n              </p>`,
-    "full-period transaction count",
-  );
-  code = replaceExactly(
-    code,
-    `      {/* Table */}`,
-    `      {statementMeta && statementMeta.totalPages > 0 && (\n        <p\n          className="text-center text-xs text-muted-foreground"\n          data-testid="account-statement-page-summary"\n        >\n          Showing page {statementMeta.page} of {Math.max(statementMeta.totalPages, 1)} · up to {statementMeta.limit} transactions per page\n        </p>\n      )}\n\n      {/* Table */}`,
-    "statement page summary",
-  );
-  code = replaceExactly(
-    code,
-    `            closingBalance={closingBalance}`,
-    `            closingBalance={displayClosingBalance}`,
-    "statement table closing balance",
-  );
-  return code;
-}
-
 export function phase1PaginationPlugin(): Plugin {
   return {
     name: "erp-phase1-pagination",
@@ -188,9 +124,6 @@ export function phase1PaginationPlugin(): Plugin {
       }
       if (normalizedId.endsWith(DAYBOOK_SUFFIX)) {
         return { code: transformDaybook(source), map: null };
-      }
-      if (normalizedId.endsWith(ACCOUNT_STATEMENT_SUFFIX)) {
-        return { code: transformAccountStatement(source), map: null };
       }
       return null;
     },
