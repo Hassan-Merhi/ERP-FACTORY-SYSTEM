@@ -1,14 +1,11 @@
-import { type Express } from "express";
+import { type Express, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
-import {
-  applyPosItemReplacements,
-  listPosItemReplacementCandidates,
-} from "../../services/pos/itemReplacementService";
+import { applyPosItemReplacements, listPosItemReplacementCandidates } from "../../services/pos/itemReplacementService";
 import { classifyGoldenCoastPosConfigurationError } from "../../services/pos/goldenCoastPosConfigurationError";
 
 const candidateQuerySchema = z.object({
@@ -34,7 +31,7 @@ const bulkReplacementSchema = z.object({
   replacements: z.array(replacementSchema).min(1).max(500),
 });
 
-async function ensureErpCorrectionAccess(req: any, res: any): Promise<boolean> {
+async function ensureErpCorrectionAccess(req: Request, res: Response): Promise<boolean> {
   const role = req.session?.currentRole ?? req.user?.role;
   if (role === "POS") {
     res.status(403).json({ message: "POS item replacement is available from ERP only" });

@@ -21,7 +21,7 @@ PostgreSQL) that also ships as native mobile apps via Capacitor.
 
 ## Prerequisites
 
-- Node.js **24.19.0** (see `.node-version`)
+- Node.js **24.21.0** (see `.node-version`)
 - A PostgreSQL database
 
 ## Getting started

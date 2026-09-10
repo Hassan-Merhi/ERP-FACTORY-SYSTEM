@@ -52,6 +52,9 @@ describe("CI ownership", () => {
     expect(circle).toContain("static-build:");
     expect(circle).toContain("postgres-regression:");
     expect(circle).toContain("security-readiness:");
-    expect(circle).not.toMatch(/branches:\s*\n\s*only:\s*main/);
+    // "Run CircleCI compatibility checks only on main" (7547ee9) made these jobs
+    // main-only on purpose, alongside the same move for GitHub Actions. Assert the
+    // filters are present rather than absent, so the policy stays deliberate.
+    expect(circle).toMatch(/branches:\s*\n\s*only:\s*main/);
   });
 });

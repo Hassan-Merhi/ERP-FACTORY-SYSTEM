@@ -5,10 +5,7 @@ import { toInventoryDecimal } from "../../lib/inventoryMath";
 import { applyPosSaleUpdateTx } from "./edit/updateSaleService";
 import { fetchSpEditAccountingContext } from "./edit/posEditSaleHelpers";
 import { logAudit } from "../../routes/helpers/auditHelpers";
-import {
-  buildPosReplacementSaleItems,
-  type PosItemReplacementInput,
-} from "./itemReplacementPlan";
+import { buildPosReplacementSaleItems, type PosItemReplacementInput } from "./itemReplacementPlan";
 
 export type { PosItemReplacementInput } from "./itemReplacementPlan";
 
@@ -74,10 +71,17 @@ export async function listPosItemReplacementCandidates(params: {
     .limit(500);
 }
 
+/**
+ * The JSON payload handed back to the route, which only forwards it to
+ * `res.json()`. Nothing reads fields off it here, so it stays `unknown`
+ * rather than claiming a shape the several return sites do not share.
+ */
+type PosItemReplacementResponseBody = unknown;
+
 export async function applyPosItemReplacements(
   actor: PosItemReplacementActor,
   replacements: PosItemReplacementInput[]
-): Promise<{ status: number; body: any }> {
+): Promise<{ status: number; body: PosItemReplacementResponseBody }> {
   if (!replacements.length) {
     return { status: 400, body: { message: "At least one replacement is required" } };
   }
@@ -129,7 +133,9 @@ export async function applyPosItemReplacements(
       for (const saleItemId of saleItemIds) {
         const row = saleRowById.get(saleItemId);
         if (!row) {
-          throw new PosReplacementAbort(409, { message: `Sale item ${saleItemId} changed while the correction was loading` });
+          throw new PosReplacementAbort(409, {
+            message: `Sale item ${saleItemId} changed while the correction was loading`,
+          });
         }
         if (row.voucherDeletedAt || row.voucherType !== "Sales") {
           throw new PosReplacementAbort(400, {
