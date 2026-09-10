@@ -1,0 +1,163 @@
+name: Phase 3 Completion Verification
+
+on:
+  push:
+    branches:
+      - fix/proforma-capacity-phase3-finalize-20260910
+    paths:
+      - scripts/phase3-wire-capacity-locks.mjs
+      - scripts/phase3-finalize-creation-locks.mjs
+      - scripts/phase3-preflight-patch.mjs
+      - .github/workflows/phase3-completion-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase3-completion-verification
+  cancel-in-progress: true
+
+jobs:
+  verify-and-commit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: phase3-capacity-test-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+
+    steps:
+      - name: Checkout Phase 3 completion branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/proforma-capacity-phase3-finalize-20260910
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up canonical Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply deterministic Phase 3 production wiring
+        run: |
+          node scripts/phase3-preflight-patch.mjs
+          node scripts/phase3-wire-capacity-locks.mjs
+          node scripts/phase3-finalize-creation-locks.mjs
+
+      - name: Format and verify Phase 3 files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/customer-orders/finalize-loading/cancel.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/dispatch-batches/invoicing.ts \
+            server/routes/factory/stock-allocation-v5/cancelled-containers.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            server/routes/factory/customer-orders/proformaCapacityConcurrency.ts \
+            server/routes/factory/customer-orders/linkProformaAtomic.ts \
+            server/routes/factory/customer-orders/bale-scanning/exchange.ts \
+            server/routes/factory/customer-orders/verify-recover/recover.ts \
+            server/routes/factory/customer-orders/verify-recover/recoverBalesAtomic.ts \
+            server/routes/factory/customer-proformas/createLoadingAtomic.ts \
+            server/routes/factory/customer-proformas/create-loading.ts \
+            server/routes/factory/stock-allocation-v5/restoreCancelledContainerAtomic.ts \
+            tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
+          git diff --check
+
+      - name: Prepare disposable PostgreSQL schema
+        run: node node_modules/drizzle-kit/bin.cjs push --force
+
+      - name: Run focused Phase 1 through Phase 3 regression suite
+        run: |
+          node node_modules/vitest/vitest.mjs run \
+            tests/proforma-capacity.test.ts \
+            tests/proforma-capacity-enforcement.test.ts \
+            tests/proforma-capacity-write-guards.test.ts \
+            tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/factory-loading-proforma-quantity-alignment.test.ts \
+            tests/factory-loading-bale-rescan.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
+
+      - name: Typecheck lint and build
+        run: |
+          npm run check
+          npm run lint
+          npm run build
+
+      - name: Run repository safety audits
+        run: |
+          npm run audit:source-text-assertions
+          npm run audit:god-files
+          npm run audit:company-scope
+          npm run audit:scripts
+
+      - name: Remove temporary Phase 3 harness
+        run: |
+          git rm -f \
+            scripts/phase3-wire-capacity-locks.mjs \
+            scripts/phase3-finalize-creation-locks.mjs \
+            scripts/phase3-preflight-patch.mjs \
+            .github/workflows/phase3-completion-verification.yml
+
+      - name: Commit verified production wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/customer-orders/finalize-loading/cancel.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/dispatch-batches/invoicing.ts \
+            server/routes/factory/stock-allocation-v5/cancelled-containers.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            server/routes/factory/customer-orders/proformaCapacityConcurrency.ts \
+            server/routes/factory/customer-orders/linkProformaAtomic.ts \
+            server/routes/factory/customer-orders/bale-scanning/exchange.ts \
+            server/routes/factory/customer-orders/verify-recover/recover.ts \
+            server/routes/factory/customer-orders/verify-recover/recoverBalesAtomic.ts \
+            server/routes/factory/customer-proformas/createLoadingAtomic.ts \
+            server/routes/factory/customer-proformas/create-loading.ts \
+            server/routes/factory/stock-allocation-v5/restoreCancelledContainerAtomic.ts \
+            tests/proforma-capacity-concurrency.test.ts \
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
+          git diff --cached --check
+          git status --short
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: land complete Phase 3 proforma concurrency wiring"
+          git push origin HEAD:fix/proforma-capacity-phase3-finalize-20260910
