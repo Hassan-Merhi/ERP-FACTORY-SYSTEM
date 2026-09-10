@@ -420,7 +420,6 @@ export async function deleteCompany(id: number): Promise<void> {
 
   const legacyParentCompanyId = await getParentCompanyId();
   const client = await pool.connect();
-  let committed = false;
 
   try {
     await client.query("BEGIN");
@@ -466,7 +465,6 @@ export async function deleteCompany(id: number): Promise<void> {
     }
 
     await client.query("COMMIT");
-    committed = true;
   } catch (error: unknown) {
     try {
       await client.query("ROLLBACK");
@@ -478,7 +476,7 @@ export async function deleteCompany(id: number): Promise<void> {
     client.release();
   }
 
-  if (committed && legacyParentCompanyId === id) {
+  if (legacyParentCompanyId === id) {
     // The transaction above already cleared the persisted setting. Calling the
     // existing setter also invalidates its five-minute in-memory cache.
     try {
