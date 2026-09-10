@@ -4,9 +4,20 @@ import path from "node:path";
 const root = process.cwd();
 const applicationRoutesPath = path.join(root, "server/routes/applicationRoutes.ts");
 const lazyRegistrarPath = path.join(root, "server/routes/lazyRouteRegistrar.ts");
+const aiLazyRoutesPath = path.join(root, "server/routes/applicationAiLazyRoutes.ts");
 
 const applicationRoutes = fs.readFileSync(applicationRoutesPath, "utf8");
 const lazyRegistrar = fs.readFileSync(lazyRegistrarPath, "utf8");
+const aiLazyRoutes = fs.readFileSync(aiLazyRoutesPath, "utf8");
+
+// Route composition is split across applicationRoutes.ts and the extracted
+// per-domain composition modules it delegates to. The lazy-route invariants
+// hold over that composition as a whole, not over a single file.
+const compositionSources = [
+  { label: "server/routes/applicationRoutes.ts", source: applicationRoutes },
+  { label: "server/routes/applicationAiLazyRoutes.ts", source: aiLazyRoutes },
+];
+const composition = compositionSources.map((entry) => entry.source).join("\n");
 
 const targets = [
   {
@@ -97,6 +108,14 @@ assert(
   "applicationRoutes.ts must use the shared lazy route registrar"
 );
 assert(
+  aiLazyRoutes.includes('import { registerLazyRouteModule } from "./lazyRouteRegistrar";'),
+  "applicationAiLazyRoutes.ts must use the shared lazy route registrar"
+);
+assert(
+  applicationRoutes.includes("await registerApplicationAiLazyRoutes(app);"),
+  "applicationRoutes.ts must await the extracted AI lazy-route composition"
+);
+assert(
   lazyRegistrar.includes('process.env.NODE_ENV !== "production"'),
   "lazy route registration must remain eager outside production so tests/dev preserve the current route stack"
 );
@@ -119,21 +138,28 @@ for (const target of targets) {
     `^import\\s+[^\\n]*\\b${escapeRegExp(target.registrar)}\\b[^\\n]*from\\s+["']${escapeRegExp(target.modulePath)}["'];?`,
     "m"
   );
-  assert(!staticImport.test(applicationRoutes), `${target.modulePath} must not be a static startup import`);
+  for (const entry of compositionSources) {
+    assert(
+      !staticImport.test(entry.source),
+      `${target.modulePath} must not be a static startup import (${entry.label})`
+    );
+  }
   assert(
-    applicationRoutes.includes(`import("${target.modulePath}")`),
+    composition.includes(`import("${target.modulePath}")`),
     `${target.modulePath} must be loaded through dynamic import()`
   );
 
   const prefixesSource = `prefixes: [${target.prefixes.map((prefix) => `"${prefix}"`).join(", ")}]`;
   assert(
-    applicationRoutes.includes(prefixesSource),
+    composition.includes(prefixesSource),
     `${target.modulePath} must keep the reviewed lazy prefixes ${target.prefixes.join(", ")}`
   );
-  assert(
-    !applicationRoutes.includes(`${target.registrar}(app);`),
-    `${target.registrar} must not be eagerly invoked from applicationRoutes.ts`
-  );
+  for (const entry of compositionSources) {
+    assert(
+      !entry.source.includes(`${target.registrar}(app);`),
+      `${target.registrar} must not be eagerly invoked from ${entry.label}`
+    );
+  }
 
   const declaredRoutes = collectDeclaredRoutes(target.source);
   assert(declaredRoutes.length > 0, `${target.source} must expose at least one statically discoverable route`);

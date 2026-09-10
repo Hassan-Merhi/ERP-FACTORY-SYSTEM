@@ -11,6 +11,9 @@ on:
         required: true
         default: '1.0.0'
 
+permissions:
+  contents: read
+
 jobs:
   build-msix:
     runs-on: windows-latest
@@ -30,11 +33,15 @@ jobs:
       - name: Determine version
         id: version
         shell: bash
+        env:
+          # Dispatch input is attacker-controllable text; keep it out of the
+          # generated shell script body.
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
             VERSION="${GITHUB_REF#refs/tags/desktop-v}"
           else
-            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${INPUT_VERSION}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
@@ -46,7 +53,9 @@ jobs:
       - name: Set version in package.json
         working-directory: desktop
         shell: bash
-        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: npm version "${APP_VERSION}" --no-git-tag-version --allow-same-version
 
       - name: Generate app icons
         working-directory: desktop

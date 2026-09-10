@@ -1,6 +1,9 @@
 name: Ensure Latest Main Release Verification
 
-on:
+# This watchdog never checks out or runs repository code. It only reads run
+# metadata and redispatches Release Verification for the current main SHA it
+# resolves itself, so the triggering run cannot influence what executes.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ["Release Verification"]
     types: [completed]

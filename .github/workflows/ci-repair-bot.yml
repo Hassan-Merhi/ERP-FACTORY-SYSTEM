@@ -576,7 +576,9 @@ jobs:
       contents: read
       pull-requests: read
       statuses: read
-    uses: ./.github/workflows/ci-repair-sweep.yml
+    # actionlint rejects the `$/...` self-repository form zizmor suggests, so the
+    # relative reusable-workflow path stays and the stylistic finding is suppressed.
+    uses: ./.github/workflows/ci-repair-sweep.yml # zizmor: ignore[self-repository]
     with:
       reason: continuing after a repair run
       ignore_run_id: ${{ github.run_id }}

@@ -14,6 +14,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Every job only reads the repository: checkout, `gh api` compare/commit reads,
+# and artifact uploads. Nothing here writes back to GitHub.
+permissions:
+  contents: read
+
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
   PGSSLMODE: disable

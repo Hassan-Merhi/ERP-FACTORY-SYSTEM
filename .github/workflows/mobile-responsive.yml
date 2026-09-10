@@ -67,7 +67,9 @@ jobs:
         run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
       - name: Mobile/client TypeScript
         run: node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit --project tsconfig.mobile.json
-      - name: Mobile/client lint
+      # eslint needs the TypeScript 6 parser while the app itself is on TypeScript 7,
+      # so this exact pinned version is installed into a scratch prefix on purpose.
+      - name: Mobile/client lint # zizmor: ignore[adhoc-packages]
         shell: bash
         run: |
           set -euo pipefail

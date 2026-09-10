@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: i18n-audit-${{ github.ref }}
   # Main is the automatic verification branch.

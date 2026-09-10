@@ -44,6 +44,7 @@ artifacts/ux-regression-startup/
 
 # ESLint machine report written by scripts/run-lint.mjs (regenerated on demand)
 artifacts/lint/
+artifacts/i18n-audit/
 .artifacts/
 
 # CI repair scratch directory: keep the directory addressable so the repair
@@ -57,3 +58,4 @@ uploads/
 # Test coverage output
 coverage/
 actionlint
+tmp/
