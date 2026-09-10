@@ -22,8 +22,8 @@ function replaceRange(path, startMarker, endMarker, replacement) {
 }
 
 // Manual scanner: every write into a proforma-linked order takes the proforma
-// lock, including an explicit bypass. A bypass is allowed to exceed capacity,
-// but it still changes the shared count and must not race a normal scan.
+// lock, including an explicit bypass. Re-lock/revalidate the order inside the
+// transaction so a cancellation/finalization/relink cannot leave a stale scan.
 {
   const path = "server/routes/factory/customer-orders/bale-scanning/scan.ts";
   replaceOnce(
@@ -39,14 +39,13 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   replaceOnce(
     path,
     '      const result: PickResult = await db.transaction(async (tx) => {\n        const [bale] = await tx',
-    '      const result: PickResult = await db.transaction(async (tx) => {\n        if (order.proformaIdUsed) {\n          await acquireProformaCapacityTransactionLock(tx, {\n            companyId,\n            proformaId: order.proformaIdUsed,\n          });\n        }\n\n        const [bale] = await tx'
+    `      const result: PickResult = await db.transaction(async (tx) => {\n        if (order.proformaIdUsed) {\n          await acquireProformaCapacityTransactionLock(tx, {\n            companyId,\n            proformaId: order.proformaIdUsed,\n          });\n        }\n\n        const [currentOrder] = await tx\n          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })\n          .from(customerOrders)\n          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))\n          .for("update");\n        if (\n          !currentOrder ||\n          !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status) ||\n          (currentOrder.proformaIdUsed && currentOrder.status === "PENDING_VERIFICATION") ||\n          currentOrder.proformaIdUsed !== order.proformaIdUsed\n        ) {\n          return {\n            ok: false,\n            httpStatus: 409,\n            body: { message: "Loading changed while the scan was starting. Please scan again." },\n          };\n        }\n\n        const [bale] = await tx`
   );
   replaceOnce(path, '        const ignoreProforma = req.body.allowBypassProforma === true;\n', '');
 }
 
 // Bulk import: both reference mode and article mode use the same lock before
-// selecting physical bale rows. Ignore-Proforma imports still mutate a linked
-// proforma's cumulative count, so they serialize too.
+// selecting physical bale rows and revalidate the order after the lock.
 {
   const path = "server/routes/factory/customer-orders/bale-scanning/bulk-import.ts";
   replaceOnce(
@@ -58,19 +57,30 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   replaceOnce(
     path,
     '          const refResult = await db.transaction(async (tx) => {\n            // Try referenceNumber first, then fall back to baleCode',
-    '          const refResult = await db.transaction(async (tx) => {\n            if (order.proformaIdUsed) {\n              await acquireProformaCapacityTransactionLock(tx, {\n                companyId,\n                proformaId: order.proformaIdUsed,\n              });\n            }\n\n            // Try referenceNumber first, then fall back to baleCode'
+    `          const refResult = await db.transaction(async (tx) => {\n            if (order.proformaIdUsed) {\n              await acquireProformaCapacityTransactionLock(tx, {\n                companyId,\n                proformaId: order.proformaIdUsed,\n              });\n            }\n            const [currentOrder] = await tx\n              .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })\n              .from(customerOrders)\n              .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))\n              .for("update");\n            if (\n              !currentOrder ||\n              !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status) ||\n              (currentOrder.proformaIdUsed && currentOrder.status === "PENDING_VERIFICATION") ||\n              currentOrder.proformaIdUsed !== order.proformaIdUsed\n            ) {\n              return { kind: "orderChanged" as const };\n            }\n\n            // Try referenceNumber first, then fall back to baleCode`
+  );
+
+  replaceOnce(
+    path,
+    '          if (refResult.kind === "notFound") {\n            notFoundRefs.push(refNum);\n            continue;\n          }',
+    '          if (refResult.kind === "orderChanged") {\n            return res.status(409).json({ message: "Loading changed while the import was starting. Please retry." });\n          }\n          if (refResult.kind === "notFound") {\n            notFoundRefs.push(refNum);\n            continue;\n          }'
   );
 
   replaceOnce(
     path,
     '        const articleResult = await db.transaction(async (tx) => {\n          // Find available bales, oldest first',
-    '        const articleResult = await db.transaction(async (tx) => {\n          if (order.proformaIdUsed) {\n            await acquireProformaCapacityTransactionLock(tx, {\n              companyId,\n              proformaId: order.proformaIdUsed,\n            });\n          }\n\n          // Find available bales, oldest first'
+    `        const articleResult = await db.transaction(async (tx) => {\n          if (order.proformaIdUsed) {\n            await acquireProformaCapacityTransactionLock(tx, {\n              companyId,\n              proformaId: order.proformaIdUsed,\n            });\n          }\n          const [currentOrder] = await tx\n            .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })\n            .from(customerOrders)\n            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))\n            .for("update");\n          if (\n            !currentOrder ||\n            !["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status) ||\n            (currentOrder.proformaIdUsed && currentOrder.status === "PENDING_VERIFICATION") ||\n            currentOrder.proformaIdUsed !== order.proformaIdUsed\n          ) {\n            return { orderChanged: true, addedIds: [] as number[] };\n          }\n\n          // Find available bales, oldest first`
   );
+  replaceOnce(
+    path,
+    '        const addedIds = articleResult;',
+    '        if (articleResult.orderChanged) {\n          return res.status(409).json({ message: "Loading changed while the import was starting. Please retry." });\n        }\n        const addedIds = articleResult.addedIds;'
+  );
+  replaceOnce(path, '          return addedIds;\n        });', '          return { orderChanged: false, addedIds };\n        });');
 }
 
-// Existing loading -> proforma association is now one transaction. This also
-// fixes the old validation failure path that deleted expected lines before it
-// knew whether the new proforma was valid.
+// Existing loading -> proforma association is one transaction. Validation no
+// longer deletes expected lines before it knows the new proforma is valid.
 {
   const path = "server/routes/factory/customer-orders/orderCrudRoutes.ts";
   replaceOnce(
@@ -86,9 +96,8 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   );
 }
 
-// Dispatch invoicing creates a FINALIZED customer_order + customer_order_bales
-// in one shot. Serialize it with scanner/import writers and validate the whole
-// pending dispatch quantity against the authoritative snapshot before insert.
+// Dispatch invoicing creates FINALIZED order-bale rows in one shot. Serialize
+// with regular scanner/import writers and validate the pending dispatch quantity.
 {
   const path = "server/routes/factory/dispatch-batches/invoicing.ts";
   replaceOnce(
@@ -104,7 +113,48 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   replaceOnce(
     path,
     '        const orderDate = invoiceDate || batch.batch_date || getClientDate(req as Request);\n\n        // 7. Create customerOrders row (FINALIZED immediately)',
-    '        const orderDate = invoiceDate || batch.batch_date || getClientDate(req as Request);\n\n        if (batch.proforma_id) {\n          const capacity = await getProformaCapacitySnapshot(tx, {\n            companyId,\n            proformaId: Number(batch.proforma_id),\n          });\n          if (!capacity) throw new Error("Linked proforma not found");\n          const validation = validateProformaCapacityAdditions(\n            capacity,\n            lines.map((line) => ({ articleCode: line.articleCode, quantity: line.qty }))\n          );\n          if (!validation.allowed) {\n            const issue = validation.issues[0];\n            throw new Error(\n              issue?.reason === "not_in_proforma"\n                ? \`Dispatch article \${issue.articleCode || "UNKNOWN"} is not requested on the linked proforma\`\n                : \`Dispatch quantity exceeds linked proforma capacity for \${issue?.articleCode || "UNKNOWN"} (consumed \${issue?.consumedQty ?? 0}, adding \${issue?.requestedAdditionalQty ?? 0}, requested \${issue?.requestedQty ?? 0})\`\n            );\n          }\n        }\n\n        // 7. Create customerOrders row (FINALIZED immediately)'
+    '        const orderDate = invoiceDate || batch.batch_date || getClientDate(req as Request);\n\n        if (batch.proforma_id) {\n          const capacity = await getProformaCapacitySnapshot(tx, {\n            companyId,\n            proformaId: Number(batch.proforma_id),\n          });\n          if (!capacity) throw new Error("Linked proforma not found");\n          const validation = validateProformaCapacityAdditions(\n            capacity,\n            lines.map((line) => ({ articleCode: line.articleCode, quantity: line.qty }))\n          );\n          if (!validation.allowed) {\n            const issue = validation.issues[0];\n            throw new Error(\n              issue?.reason === "not_in_proforma"\n                ? `Dispatch article ${issue.articleCode || "UNKNOWN"} is not requested on the linked proforma`\n                : `Dispatch quantity exceeds linked proforma capacity for ${issue?.articleCode || "UNKNOWN"} (consumed ${issue?.consumedQty ?? 0}, adding ${issue?.requestedAdditionalQty ?? 0}, requested ${issue?.requestedQty ?? 0})`\n            );\n          }\n        }\n\n        // 7. Create customerOrders row (FINALIZED immediately)'
+  );
+}
+
+// Cancellation and finalization take the same proforma lock before the order
+// row. Scanner/import revalidation then guarantees a stale request cannot write
+// after the loading has been cancelled, finalized, or carried over.
+{
+  const path = "server/routes/factory/customer-orders/finalize-loading/cancel.ts";
+  replaceOnce(
+    path,
+    'import { resultRows } from "../../../../lib/queryResult";',
+    'import { resultRows } from "../../../../lib/queryResult";\nimport { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";\nimport { restoreCancelledContainerAtomically } from "../../stock-allocation-v5/restoreCancelledContainerAtomic";'
+  );
+  replaceOnce(
+    path,
+    '      const updated = await db.transaction(async (tx) => {\n        const orderBales = await tx',
+    `      const updated = await db.transaction(async (tx) => {\n        if (order.proformaIdUsed) {\n          await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId: order.proformaIdUsed });\n        }\n        const [currentOrder] = await tx\n          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })\n          .from(customerOrders)\n          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))\n          .for("update");\n        if (\n          !currentOrder ||\n          currentOrder.status !== order.status ||\n          currentOrder.proformaIdUsed !== order.proformaIdUsed\n        ) {\n          throw new Error(ORDER_CANCEL_CONFLICT);\n        }\n\n        const orderBales = await tx`
+  );
+  replaceOnce(
+    path,
+    '      const orderBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));\n      if (!order.proformaIdUsed) {',
+    `      if (order.proformaIdUsed) {\n        await restoreCancelledContainerAtomically({ companyId, orderId });\n        const [restoredV5] = await db\n          .select()\n          .from(customerOrders)\n          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));\n        return res.json(restoredV5);\n      }\n\n      const orderBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));\n      if (!order.proformaIdUsed) {`
+  );
+}
+
+{
+  const path = "server/routes/factory/customer-orders/finalize-loading/loading.ts";
+  replaceOnce(
+    path,
+    'import { getProformaCapacitySnapshot } from "../proformaCapacity";',
+    'import { getProformaCapacitySnapshot } from "../proformaCapacity";\nimport { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";'
+  );
+  replaceOnce(
+    path,
+    '      const createCarryoverProforma =\n        req.body?.createCarryoverProforma === true || req.body?.createContinuation === true;\n\n      const finalized = await db.transaction(async (tx) => {\n        const [order] = await tx',
+    `      const createCarryoverProforma =\n        req.body?.createCarryoverProforma === true || req.body?.createContinuation === true;\n\n      const [beforeFinalize] = await db\n        .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })\n        .from(customerOrders)\n        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))\n        .limit(1);\n      if (!beforeFinalize) return res.status(404).json({ message: "Order not found" });\n\n      const finalized = await db.transaction(async (tx) => {\n        if (beforeFinalize.proformaIdUsed) {\n          await acquireProformaCapacityTransactionLock(tx, {\n            companyId,\n            proformaId: beforeFinalize.proformaIdUsed,\n          });\n        }\n        const [order] = await tx`
+  );
+  replaceOnce(
+    path,
+    '        if (!order) throw new Error("Order not found");\n        if (order.status !== "LOADING") throw new Error("Only LOADING orders can be finalized for loading");',
+    '        if (!order) throw new Error("Order not found");\n        if (order.status !== "LOADING") throw new Error("Only LOADING orders can be finalized for loading");\n        if (\n          order.status !== beforeFinalize.status ||\n          order.proformaIdUsed !== beforeFinalize.proformaIdUsed\n        ) {\n          throw new Error("Loading changed while finalization was starting. Please retry.");\n        }'
   );
 }
 
