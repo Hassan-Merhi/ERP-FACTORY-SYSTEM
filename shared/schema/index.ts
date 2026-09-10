@@ -5,6 +5,7 @@ export * from "./security";
 export * from "./inventory";
 export * from "./erp";
 export * from "./containers";
+export * from "./supplierTrackingDefaults";
 export * from "./factory";
 export {
   baleRecodeItems,
