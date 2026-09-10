@@ -79,6 +79,8 @@ export default function Settings() {
     },
   });
 
+  const showSupplierTrackingDefaults = appMode === "erp" && selectedCompany?.companyType !== "supplier_partner";
+
   const sidebarGroups = [
     {
       label: "General",
@@ -96,10 +98,9 @@ export default function Settings() {
     },
     {
       label: "Tracking",
-      items:
-        appMode !== "factory"
-          ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
-          : [],
+      items: showSupplierTrackingDefaults
+        ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
+        : [],
     },
     {
       label: "Tools",
@@ -181,7 +182,7 @@ export default function Settings() {
         {activeSection === "sessions-hub" && currentUser?.role === "Developer" && (
           <SessionsHub isAdmin={true} isDev={true} />
         )}
-        {activeSection === "supplier-tracking-defaults" && appMode !== "factory" && (
+        {activeSection === "supplier-tracking-defaults" && showSupplierTrackingDefaults && (
           <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
         )}
         {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
