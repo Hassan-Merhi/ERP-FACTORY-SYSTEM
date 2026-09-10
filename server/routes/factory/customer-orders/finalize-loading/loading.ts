@@ -14,8 +14,8 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { writeDaybookEntry } from "../../_helpers";
 import { syncProformaReservations } from "../../_stockReservationHelper";
-import { getProformaCapacitySnapshot } from "../proformaCapacity";
-import { evaluateProformaLoadingAvailability } from "../proformaCapacityEnforcement";
+import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
+import { guardProformaOrderCreation } from "../proformaCapacityWriteGuards";
 import {
   factoryBales,
   customerOrders,
@@ -39,34 +39,41 @@ export function registerOrderLoadingRoutes(app: Express) {
 
       const parsedCustomerId = parseInt(customerId);
       const parsedProformaId = proformaIdUsed ? parseInt(proformaIdUsed) : null;
-      if (parsedProformaId) {
-        const capacity = await getProformaCapacitySnapshot(db, { companyId, proformaId: parsedProformaId });
-        if (!capacity) return res.status(404).json({ message: "Proforma not found" });
-        const availability = evaluateProformaLoadingAvailability(capacity, parsedCustomerId);
-        if (!availability.allowed) {
-          const message =
-            availability.reason === "customer_mismatch"
-              ? "Customer does not match the selected proforma"
-              : availability.reason === "fully_consumed"
-                ? "Proforma has no remaining loading capacity"
-                : "Proforma is inactive";
-          return res.status(400).json({ message, capacity: availability });
-        }
-      }
 
-      const [order] = await db
-        .insert(customerOrders)
-        .values({
-          companyId,
-          customerId: parsedCustomerId,
-          proformaIdUsed: parsedProformaId,
-          locationId: parseInt(locationId),
-          orderDate: orderDate || getClientDate(req),
-          status: "LOADING",
-          loadingStartedAt: new Date(),
-          containerNotes: containerNotes || null,
-        })
-        .returning();
+      // Capacity is checked and the order is inserted inside one locked
+      // transaction. Checking outside it let two loadings for the same proforma
+      // each read the last remaining slot and both take it.
+      const creation = await db.transaction(async (tx) => {
+        if (parsedProformaId) {
+          await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId: parsedProformaId });
+          const guard = await guardProformaOrderCreation(tx, {
+            companyId,
+            proformaId: parsedProformaId,
+            customerId: parsedCustomerId,
+          });
+          if (!guard.allowed) return { ok: false, rejection: guard } as const;
+        }
+
+        const [created] = await tx
+          .insert(customerOrders)
+          .values({
+            companyId,
+            customerId: parsedCustomerId,
+            proformaIdUsed: parsedProformaId,
+            locationId: parseInt(locationId),
+            orderDate: orderDate || getClientDate(req),
+            status: "LOADING",
+            loadingStartedAt: new Date(),
+            containerNotes: containerNotes || null,
+          })
+          .returning();
+        return { ok: true, order: created } as const;
+      });
+
+      if (!creation.ok) {
+        return res.status(creation.rejection.status).json(creation.rejection.body);
+      }
+      const order = creation.order;
 
       const [loadingCustomer] = await db
         .select({ legalName: customers.legalName })
@@ -112,6 +119,22 @@ export function registerOrderLoadingRoutes(app: Express) {
         req.body?.createCarryoverProforma === true || req.body?.createContinuation === true;
 
       const finalized = await db.transaction(async (tx) => {
+        // Finalization consumes the proforma and may split a carried-over one,
+        // so it serializes against scanners and imports on the same proforma.
+        // Read the link with an unlocked select first so the proforma lock is
+        // taken before the order row lock, the ordering every protected path
+        // follows; the locked read below is still the authoritative one.
+        const [orderProformaLink] = await tx
+          .select({ proformaIdUsed: customerOrders.proformaIdUsed })
+          .from(customerOrders)
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+        if (orderProformaLink?.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: orderProformaLink.proformaIdUsed,
+          });
+        }
+
         const [order] = await tx
           .select()
           .from(customerOrders)
@@ -119,6 +142,13 @@ export function registerOrderLoadingRoutes(app: Express) {
           .for("update");
         if (!order) throw new Error("Order not found");
         if (order.status !== "LOADING") throw new Error("Only LOADING orders can be finalized for loading");
+
+        if (order.proformaIdUsed && order.proformaIdUsed !== orderProformaLink?.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+          });
+        }
 
         const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         if (bales.length === 0) throw new Error("Order has no bales scanned");

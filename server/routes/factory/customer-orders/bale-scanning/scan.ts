@@ -18,6 +18,7 @@ import {
   shouldRequireProformaMembership,
 } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
   factoryBales,
@@ -108,6 +109,43 @@ export function registerOrderBaleScanRoutes(app: Express) {
         | { ok: false; httpStatus: number; body: any };
 
       const result: PickResult = await db.transaction(async (tx) => {
+        // Proforma lock first, then the order row, then the bale row. Every
+        // capacity-changing writer takes these in the same order, so a scan
+        // racing an import, an exchange or a finalization on this proforma
+        // waits here instead of measuring capacity mid-write, and no two paths
+        // can take the same resources in reverse and deadlock.
+        if (order.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+          });
+        }
+
+        // Re-read the order under the lock: the checks above ran before it was
+        // held, so a finalization or cancellation could have landed in between.
+        const [currentOrder] = await tx
+          .select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })
+          .from(customerOrders)
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+          .for("update");
+        if (!currentOrder) {
+          return { ok: false, httpStatus: 404, body: { message: "Order not found" } };
+        }
+        if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(currentOrder.status)) {
+          return {
+            ok: false,
+            httpStatus: 400,
+            body: { message: "Can only add bales to DRAFT, LOADING, or PENDING_VERIFICATION orders" },
+          };
+        }
+        if (currentOrder.proformaIdUsed && currentOrder.status === "PENDING_VERIFICATION") {
+          return {
+            ok: false,
+            httpStatus: 400,
+            body: { message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" },
+          };
+        }
+
         const [bale] = await tx
           .select({
             id: factoryBales.id,

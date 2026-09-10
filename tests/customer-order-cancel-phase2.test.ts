@@ -131,7 +131,9 @@ describe("customer order cancellation phase 2", () => {
 
     expect(response.status).toBe(200);
     expect(harness.transaction).toHaveBeenCalledTimes(1);
-    expect(harness.txExecute).toHaveBeenCalledTimes(1);
+    // Two executes: the proforma capacity advisory lock this cancellation takes
+    // before touching the order, then the V5 bale-history archive insert.
+    expect(harness.txExecute).toHaveBeenCalledTimes(2);
     expect(harness.txUpdate).toHaveBeenCalledTimes(2);
     expect(harness.txDelete).toHaveBeenCalledTimes(2);
     expect(harness.recalculateOrderTotals).toHaveBeenCalledTimes(1);

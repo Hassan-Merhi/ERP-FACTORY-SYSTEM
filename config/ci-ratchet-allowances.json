@@ -22,6 +22,7 @@
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
       "tests/company-deletion-contract.test.ts",
+      "tests/factory-loading-soft-delete-overload-regression.test.ts",
       "tests/net-position-equity-visibility.test.ts",
       "tests/proforma-capacity-concurrency-wiring.test.ts",
       "tests/realtime-wave2-live-page-policy.test.ts",
@@ -29,7 +30,7 @@
       "tests/ui/mobile-responsive-wave2-factory-floor.test.ts",
       "tests/ui/mobile-responsive-wave3-erp-operations.test.ts"
     ],
-    "maxAdditionalTextAssertions": 150,
-    "rationale": "Each entry asserts a contract that has no behavioural surface. The mobile-responsive files (phase1-critical-flows, wave2-factory-floor, wave3-erp-operations) assert on Tailwind breakpoint classes and data-testid template literals: jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is only expressible as source text. realtime-wave2-live-page-policy asserts the ABSENCE of polling and of a second WebSocket in live pages — an absence no request can demonstrate. proforma-capacity-concurrency-wiring asserts that every proforma-linked creation path takes the capacity lock before it writes, and that the lock is taken first; ordering inside a transaction is not observable from outside it. company-deletion-contract asserts that storage.ts composes the dependency-aware deletion service rather than a second implementation, which is a wiring fact, not a result. maxAdditionalTextAssertions is measured exactly at 150 over the reviewed baseline of 2061, so any further growth still fails."
+    "maxAdditionalTextAssertions": 154,
+    "rationale": "Each entry asserts a contract that has no behavioural surface. The mobile-responsive files (phase1-critical-flows, wave2-factory-floor, wave3-erp-operations) assert on Tailwind breakpoint classes and data-testid template literals: jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is only expressible as source text. realtime-wave2-live-page-policy asserts the ABSENCE of polling and of a second WebSocket in live pages — an absence no request can demonstrate. proforma-capacity-concurrency-wiring asserts that every proforma-linked creation path takes the capacity lock before it writes, and that the lock is taken first; ordering inside a transaction is not observable from outside it. company-deletion-contract asserts that storage.ts composes the dependency-aware deletion service rather than a second implementation, which is a wiring fact, not a result. factory-loading-soft-delete-overload-regression asserts that soft-deleted proformas and orders are excluded from the shared capacity snapshot and that both scan and bulk-import source their counts from it; the exclusion is a SQL predicate, so there is no request that can distinguish it from a count that happens to be equal. maxAdditionalTextAssertions is measured exactly at 154 over the reviewed baseline of 2061, so any further growth still fails."
   }
 }

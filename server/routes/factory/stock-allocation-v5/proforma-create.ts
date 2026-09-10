@@ -13,8 +13,8 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { customerProformas, customerProformaLines, customerOrders, customerOrderExpectedLines } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
-import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
-import { evaluateProformaLoadingAvailability } from "../customer-orders/proformaCapacityEnforcement";
+import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
+import { guardProformaOrderCreation } from "../customer-orders/proformaCapacityWriteGuards";
 
 export function registerV5ProformaCreateRoutes(app: Express) {
   // ── POST /api/factory/v5/proforma-with-loading ──────────────────────────
@@ -151,19 +151,6 @@ export function registerV5ProformaCreateRoutes(app: Express) {
       if (!proforma) return res.status(404).json({ message: "Proforma not found" });
       if (!proforma.isActive) return res.status(400).json({ message: "Proforma is not active" });
 
-      const capacity = await getProformaCapacitySnapshot(db, { companyId, proformaId });
-      if (!capacity) return res.status(404).json({ message: "Proforma not found" });
-      const availability = evaluateProformaLoadingAvailability(capacity, proforma.customerId);
-      if (!availability.allowed) {
-        return res.status(400).json({
-          message:
-            availability.reason === "fully_consumed"
-              ? "Proforma has no remaining loading capacity"
-              : "Proforma is not available for new loading containers",
-          capacity: availability,
-        });
-      }
-
       // Reject names that already exist in customer_orders for this proforma (any status,
       // including CANCELLED — prefer strict rejection to avoid confusion)
       const existingOrdersRaw = await db.execute(
@@ -186,6 +173,17 @@ export function registerV5ProformaCreateRoutes(app: Express) {
         .where(eq(customerProformaLines.proformaId, proformaId));
 
       const result = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+        // Capacity is re-checked under the proforma lock inside the same
+        // transaction that inserts the containers. Checking it outside let two
+        // add-containers calls on one proforma each see the last free slot.
+        await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId });
+        const guard = await guardProformaOrderCreation(tx, {
+          companyId,
+          proformaId,
+          customerId: proforma.customerId,
+        });
+        if (!guard.allowed) return { ok: false, rejection: guard } as const;
+
         const today = getClientDate(req);
         const orderValues = containerNames.map((containerName: string) => ({
           companyId,
@@ -224,8 +222,10 @@ export function registerV5ProformaCreateRoutes(app: Express) {
           await tx.insert(customerOrderExpectedLines).values(expectedLineValues);
         }
 
-        return { orders: createdOrders, expectedLinesCreated: expectedLineValues.length };
+        return { ok: true, orders: createdOrders, expectedLinesCreated: expectedLineValues.length } as const;
       });
+
+      if (!result.ok) return res.status(result.rejection.status).json(result.rejection.body);
 
       res.json({
         added: containerNames.length,

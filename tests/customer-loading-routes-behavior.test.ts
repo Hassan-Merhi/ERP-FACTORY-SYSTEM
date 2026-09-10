@@ -349,6 +349,9 @@ describe("customer loading intelligence route", () => {
       } = {}
     ) => {
       harness.selectResults.push(
+        // Finalization reads the proforma link first, unlocked, so it can take
+        // the proforma capacity lock before locking the order row.
+        [{ proformaIdUsed: (overrides.order ?? order).proformaIdUsed }],
         [overrides.order ?? order],
         overrides.bales ?? [bale],
         [overrides.proforma ?? proforma],
