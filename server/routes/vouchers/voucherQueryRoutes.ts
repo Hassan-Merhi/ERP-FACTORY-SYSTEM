@@ -10,6 +10,35 @@ import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { isParentCompanyContext } from "../helpers/supplierBalanceHelpers";
 import { buildVoucherPage, filterAndSortVouchers, parseVoucherListQuery } from "./voucherListPaging";
 import { loadVoucherRelatedData } from "./voucherDetailBatching";
+
+/**
+ * One line of the supplier statement.
+ *
+ * The synthetic "opening" row carries no voucher, so the voucher-derived fields
+ * are nullable on this shape even though the underlying columns are NOT NULL.
+ */
+interface SupplierStatementTransaction {
+  type: "voucher" | "opening";
+  date: string | null;
+  companyId: number | null;
+  companyName: string;
+  docNumber: string;
+  voucherId: number | null;
+  description: string;
+  voucherType: string;
+  debit: number;
+  credit: number;
+}
+
+/**
+ * A statement line with its running balance. Container fields are filled in
+ * afterwards for rows whose narration mentions an ISO 6346 container number.
+ */
+interface SupplierStatementRow extends SupplierStatementTransaction {
+  balance: number;
+  containerNumber?: string;
+  containerId?: number | null;
+}
 import {
   assertActiveCompanyAccess,
   getAccessibleCompanyIds,
@@ -126,7 +155,7 @@ export function registerVoucherQueryRoutes(app: Express) {
       const companyMap = new Map(companyRows.filter(Boolean).map((company) => [company!.id, company!] as const));
 
       // Combine all transactions with company information
-      const transactions: any[] = [];
+      const transactions: SupplierStatementTransaction[] = [];
 
       // Add voucher entries (which already include PO-generated vouchers)
       // No need to add POs separately as they're already represented by voucher entries
@@ -166,7 +195,7 @@ export function registerVoucherQueryRoutes(app: Express) {
       const openingBalance = isParentContext ? globalOpeningBalance : 0;
 
       // Add opening balance as first row if it exists
-      const result: any[] = [];
+      const result: SupplierStatementRow[] = [];
       if (openingBalance !== 0) {
         result.push({
           type: "opening",

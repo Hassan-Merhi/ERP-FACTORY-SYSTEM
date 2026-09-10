@@ -127,8 +127,7 @@ export function CompaniesTab() {
   const selectedParentCompanyId = companyForm.watch("parentCompanyId");
   const editingCompanyId = Number(editingCompany?.id ?? 0);
   const activeParentCompanies = companies.filter(
-    (company) =>
-      company.active && company.companyType !== "properties" && Number(company.id) !== editingCompanyId
+    (company) => company.active && company.companyType !== "properties" && Number(company.id) !== editingCompanyId
   );
   const selectedParentCompany = companies.find((company) => Number(company.id) === Number(selectedParentCompanyId));
   const parentCompanyOptions =
@@ -343,8 +342,9 @@ export function CompaniesTab() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Child companies inherit parent suppliers for PO Import and use this relationship for parent-side
-                          intercompany accounting. Choose Standalone only when the company truly has no accounting parent.
+                          Child companies inherit parent suppliers for PO Import and use this relationship for
+                          parent-side intercompany accounting. Choose Standalone only when the company truly has no
+                          accounting parent.
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -504,7 +504,8 @@ export function CompaniesTab() {
                         </p>
                         {!isProperties && (
                           <p data-testid={`text-company-parent-${company.id}`}>
-                            Parent: {parentCompany ? `${parentCompany.name} (${parentCompany.code})` : "Standalone / No Parent"}
+                            Parent:{" "}
+                            {parentCompany ? `${parentCompany.name} (${parentCompany.code})` : "Standalone / No Parent"}
                           </p>
                         )}
                       </div>

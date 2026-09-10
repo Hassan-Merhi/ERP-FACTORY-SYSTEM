@@ -24,10 +24,12 @@ import { transformGoldenCoastOwnerWithdrawalJournal } from "../../services/accou
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
+import type { PostedVoucher, PostedVoucherEntry } from "../../services/accounting/accountingTypes";
 
 const postingDependencies = createDatabasePostingDependencies();
 
-type PersistedPostingResult = CentralPostingResult<any, any>;
+/** What postBalancedVoucherTx returns: the persisted voucher and its entry rows. */
+type PersistedPostingResult = CentralPostingResult<PostedVoucher, PostedVoucherEntry>;
 
 async function syncJournalToOrderCharge(
   companyId: number,
@@ -250,8 +252,8 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       });
     }
 
-    const result = (await db.transaction(async (tx) => {
-      const posted = (await postBalancedVoucherTx(tx, built.request, postingDependencies)) as PersistedPostingResult;
+    const result = await db.transaction(async (tx) => {
+      const posted = await postBalancedVoucherTx(tx, built.request, postingDependencies);
 
       if (!posted.replayed) {
         await applyEmployeeBalanceDeltasTx({
@@ -262,7 +264,7 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       }
 
       return posted;
-    })) as PersistedPostingResult;
+    });
 
     let whatsapp: {
       prompt: boolean;

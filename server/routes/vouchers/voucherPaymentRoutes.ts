@@ -19,6 +19,7 @@ import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 
 import { factorySettings as fSettings, factoryDaybookEntries as fde } from "@shared/schema";
 import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
+import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -535,40 +536,14 @@ export function registerVoucherPaymentRoutes(app: Express) {
           const narration = notes || null;
 
           // Determine account field for entry account
-          const entryAccountField: any = {};
-          if (entry.accountType === "ledger") {
-            entryAccountField.ledgerAccountId = entry.accountId;
-          } else if (entry.accountType === "bank") {
-            entryAccountField.bankAccountId = entry.accountId;
-          } else if (entry.accountType === "supplier") {
-            entryAccountField.supplierId = entry.accountId;
-          } else if (entry.accountType === "factorySupplier") {
-            entryAccountField.factorySupplierId = entry.accountId;
-          } else if (entry.accountType === "employee") {
-            entryAccountField.employeeId = entry.accountId;
-          } else if (entry.accountType === "fixedAsset") {
-            entryAccountField.fixedAssetId = entry.accountId;
-          } else if (entry.accountType === "customer") {
-            entryAccountField.customerId = entry.accountId;
-          }
+          const entryAccountField = isVoucherAccountType(entry.accountType)
+            ? voucherEntryAccountLink(entry.accountType, entry.accountId)
+            : {};
 
           // Determine account field for payment account
-          const paymentAccountField: any = {};
-          if (paymentAccountType === "ledger") {
-            paymentAccountField.ledgerAccountId = paymentAccountId;
-          } else if (paymentAccountType === "bank") {
-            paymentAccountField.bankAccountId = paymentAccountId;
-          } else if (paymentAccountType === "supplier") {
-            paymentAccountField.supplierId = paymentAccountId;
-          } else if (paymentAccountType === "factorySupplier") {
-            paymentAccountField.factorySupplierId = paymentAccountId;
-          } else if (paymentAccountType === "employee") {
-            paymentAccountField.employeeId = paymentAccountId;
-          } else if (paymentAccountType === "fixedAsset") {
-            paymentAccountField.fixedAssetId = paymentAccountId;
-          } else if (paymentAccountType === "customer") {
-            paymentAccountField.customerId = paymentAccountId;
-          }
+          const paymentAccountField = isVoucherAccountType(paymentAccountType)
+            ? voucherEntryAccountLink(paymentAccountType, paymentAccountId)
+            : {};
 
           const isLiabilityPaymentAccount =
             paymentAccountType === "supplier" ||
