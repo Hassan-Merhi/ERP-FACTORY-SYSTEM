@@ -75,9 +75,6 @@ jobs:
           lint_ts_dir="$RUNNER_TEMP/typescript-eslint-ts6"
           app_ts_backup="$RUNNER_TEMP/typescript-app-ts7"
 
-          # typescript-eslint 8.x supports the TypeScript compiler API through <6.1.
-          # Keep the app's TS 7 install for typechecking/builds, but give ESLint a
-          # temporary TS 6.0.3 API, then restore TS 7 before the remaining gates.
           npm install \
             --prefix "$lint_ts_dir" \
             --ignore-scripts \
@@ -95,6 +92,8 @@ jobs:
 
           node node_modules/eslint/bin/eslint.js \
             "client/src/**/*.{ts,tsx}" \
+            scripts/verify-mobile-responsive-phase1-browser.mjs \
+            scripts/verify-mobile-responsive-phase1-critical-flows.mjs \
             scripts/verify-mobile-responsive-wave2-browser.mjs \
             scripts/verify-mobile-responsive-wave4-browser.mjs \
             scripts/verify-mobile-responsive-wave4-regression.mjs
@@ -134,6 +133,7 @@ jobs:
           done
 
           node scripts/run-phase9-language-browser-smoke-batched.mjs
+          node scripts/verify-mobile-responsive-phase1-browser.mjs
           node scripts/verify-mobile-responsive-wave2-browser.mjs
           node scripts/verify-mobile-responsive-wave4-browser.mjs
       - name: Full responsive contract matrix
