@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: any[]) => unknown>(),
+  handlers: new Map<string, (...args: unknown[]) => unknown>(),
   poolQuery: vi.fn(),
 }));
 
@@ -51,7 +51,7 @@ describe("account transaction continuous chunks", () => {
     process.env.NODE_ENV = "test";
     process.env.CONTINUOUS_CURSOR_SECRET = "account-wave-two-secret-1234";
     registerAccountTransactionPaginationRoutes({
-      get: (path: string, ...callbacks: Array<(...args: any[]) => unknown>) => {
+      get: (path: string, ...callbacks: Array<(...args: unknown[]) => unknown>) => {
         harness.handlers.set(path, callbacks.at(-1)!);
       },
     } as never);
