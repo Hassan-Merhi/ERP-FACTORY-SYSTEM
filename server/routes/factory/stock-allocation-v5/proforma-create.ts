@@ -13,6 +13,8 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { customerProformas, customerProformaLines, customerOrders, customerOrderExpectedLines } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
+import { evaluateProformaLoadingAvailability } from "../customer-orders/proformaCapacityEnforcement";
 
 export function registerV5ProformaCreateRoutes(app: Express) {
   // ── POST /api/factory/v5/proforma-with-loading ──────────────────────────
@@ -148,6 +150,19 @@ export function registerV5ProformaCreateRoutes(app: Express) {
         .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
       if (!proforma) return res.status(404).json({ message: "Proforma not found" });
       if (!proforma.isActive) return res.status(400).json({ message: "Proforma is not active" });
+
+      const capacity = await getProformaCapacitySnapshot(db, { companyId, proformaId });
+      if (!capacity) return res.status(404).json({ message: "Proforma not found" });
+      const availability = evaluateProformaLoadingAvailability(capacity, proforma.customerId);
+      if (!availability.allowed) {
+        return res.status(400).json({
+          message:
+            availability.reason === "fully_consumed"
+              ? "Proforma has no remaining loading capacity"
+              : "Proforma is not available for new loading containers",
+          capacity: availability,
+        });
+      }
 
       // Reject names that already exist in customer_orders for this proforma (any status,
       // including CANCELLED — prefer strict rejection to avoid confusion)

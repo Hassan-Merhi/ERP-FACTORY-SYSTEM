@@ -36,7 +36,10 @@ export const factoryPosSales = pgTable(
     paymentType: text("payment_type").notNull().default("CASH"),
     depositAmount: decimal("deposit_amount", { precision: 20, scale: 2 }).default("0"),
     status: text("status").notNull().default("COMPLETED"),
-    createdBy: integer("created_by"),
+    // users.id is a varchar, and startup migration 002 converts this column to
+    // character varying. Declaring it as integer made `drizzle-kit push` fail
+    // against any database where that migration had already run.
+    createdBy: varchar("created_by"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     expensesJson: text("expenses_json"),
   },
@@ -61,7 +64,9 @@ export const insertFactoryPosSaleSchema = createInsertSchema(factoryPosSales)
     depositAmount: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     status: z.string().optional(),
-    createdBy: z.number().optional().nullable(),
+    // Matches the varchar column above: users.id is a varchar, so a creator id
+    // is a string. This override said z.number() while the column was integer.
+    createdBy: z.string().optional().nullable(),
   });
 export type InsertFactoryPosSale = z.infer<typeof insertFactoryPosSaleSchema>;
 export type FactoryPosSale = typeof factoryPosSales.$inferSelect;

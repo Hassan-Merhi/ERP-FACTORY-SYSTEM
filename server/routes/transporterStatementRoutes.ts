@@ -1,13 +1,44 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { db } from "../db";
+import { db, type RawQueryRow } from "../db";
 import { requireAuth, requireNonPOS } from "../auth";
 import { ledgerAccounts, containers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { parseId } from "../lib/parseId";
 import { getActiveRecipients, sendWhatsAppTextToChatId, sendWhatsAppFileToChatId } from "../services/whatsappService";
+import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+
+/**
+ * Voucher-entry rows behind the transporter statement.
+ *
+ * These are raw projections, so the columns keep their database names and the
+ * `numeric` amounts arrive as decimal strings. Nullability follows the schema:
+ * `voucher_date`, `voucher_number` and `voucher_type` are NOT NULL, while the
+ * narration, description and the LEFT JOINed due date are not.
+ */
+interface TransporterSummaryRow {
+  id: number;
+  debit_amount: string | null;
+  credit_amount: string | null;
+  voucher_date: string;
+}
+
+interface TransporterStatementRow extends TransporterSummaryRow {
+  voucher_id: number;
+  narration: string | null;
+  voucher_description: string | null;
+  voucher_number: string;
+  voucher_type: string;
+  manual_due_date: string | null;
+}
+
+/** Allocated payment total per credit entry; `SUM(numeric)` returns a string. */
+interface AllocationTotalRow {
+  credit_entry_id: number | string | null;
+  paid_amount: string | null;
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -166,7 +197,7 @@ export function registerTransporterStatementRoutes(app: Express) {
       if (!account) return res.status(404).json({ message: "Account not found" });
 
       // Fetch all entries (unbounded) for running balance
-      const rawEntries = await db.execute(sql`
+      const rawEntries = await db.execute<RawQueryRow<TransporterSummaryRow>>(sql`
         SELECT ve.id, ve.debit_amount, ve.credit_amount, v.voucher_date
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
@@ -178,18 +209,20 @@ export function registerTransporterStatementRoutes(app: Express) {
       `);
 
       // Fetch paid amounts from allocations
-      const allocRows = await db.execute(sql`
+      const allocRows = await db.execute<RawQueryRow<AllocationTotalRow>>(sql`
         SELECT credit_entry_id, SUM(allocated_amount) AS paid_amount
         FROM transporter_payment_allocations
         WHERE company_id = ${companyId}
         GROUP BY credit_entry_id
       `);
       const paidMap = new Map<number, number>();
-      for (const a of allocRows.rows as any[]) {
-        paidMap.set(Number(a.credit_entry_id), parseFloat(a.paid_amount || "0"));
+      for (const a of allocRows.rows) {
+        const creditEntryId = toPositiveInteger(a.credit_entry_id);
+        if (creditEntryId === undefined) continue;
+        paidMap.set(creditEntryId, toFiniteNumber(a.paid_amount) ?? 0);
       }
 
-      const allRows = rawEntries.rows as any[];
+      const allRows = rawEntries.rows;
       let totalCharged = 0;
       let totalPaid = 0;
       let runningBalance = 0;
@@ -393,7 +426,7 @@ export function registerTransporterStatementRoutes(app: Express) {
         (settingsRows.rows?.[0] as { payment_terms_days: number })?.payment_terms_days ?? 0;
 
       // Fetch all voucher entries for this account (all time for running balance)
-      const rawEntries = await db.execute(sql`
+      const rawEntries = await db.execute<RawQueryRow<TransporterStatementRow>>(sql`
         SELECT
           ve.id,
           ve.voucher_id,
@@ -438,7 +471,7 @@ export function registerTransporterStatementRoutes(app: Express) {
       const obSide = account.openingBalanceSide;
       let runningBalance = obSide === "Dr" ? -ob : ob;
 
-      const allRows = rawEntries.rows as any[];
+      const allRows = rawEntries.rows;
 
       // ── FIFO allocation computed on-the-fly ──────────────────────────────────
       // In this transporter ledger:
@@ -446,21 +479,19 @@ export function registerTransporterStatementRoutes(app: Express) {
       //   DEBIT  entries = payments you've made
       // We iterate payments in date order and apply them oldest-charge-first.
       // This gives us paidMap: creditEntryId → how much of that charge is covered.
-      const fifoCharges = allRows
-        .filter((r) => parseFloat(r.credit_amount || "0") > 0)
-        .map((r) => ({
-          id: r.id as number,
-          total: parseFloat(r.credit_amount),
-          remaining: parseFloat(r.credit_amount),
-        }));
+      // debit_amount/credit_amount are nullable numeric columns, so each is
+      // parsed once and the row is kept only when that parse yielded a positive
+      // amount — the previous filter-then-reparse could not tell the compiler
+      // the second parse was safe.
+      const fifoRows = (column: "credit_amount" | "debit_amount") =>
+        allRows.flatMap((r) => {
+          const amount = toFiniteNumber(r[column]);
+          if (amount === undefined || amount <= 0) return [];
+          return [{ id: r.id, total: amount, remaining: amount }];
+        });
 
-      const fifoPayments = allRows
-        .filter((r) => parseFloat(r.debit_amount || "0") > 0)
-        .map((r) => ({
-          id: r.id as number,
-          total: parseFloat(r.debit_amount),
-          remaining: parseFloat(r.debit_amount),
-        }));
+      const fifoCharges = fifoRows("credit_amount");
+      const fifoPayments = fifoRows("debit_amount");
 
       // Account for pre-system opening balance.
       // If the account has a Cr opening balance, the transporter is owed that amount

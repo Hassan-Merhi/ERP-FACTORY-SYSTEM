@@ -102,4 +102,9 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "تعذر على واتساب المصادقة مع أي مثيل Green API مُكوّن. حدّث معرّف مثيل واتساب ورمز API في الإعدادات، ثم حاول مرة أخرى.",
     fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres, puis réessayez.",
   },
+  {
+    en: "Container data not found in preview",
+    ar: "لم يتم العثور على بيانات الحاوية في المعاينة",
+    fr: "Données du conteneur introuvables dans l’aperçu",
+  },
 ];
