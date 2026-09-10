@@ -76,3 +76,4 @@ function replaceRange(path, startMarker, endMarker, replacement) {
 }
 
 console.log("Phase 3 remaining creation locks wired.");
+// Phase 3 final verification trigger after updating regression harness expectations.
