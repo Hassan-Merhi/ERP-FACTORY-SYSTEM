@@ -217,13 +217,9 @@ function buildDeletionConditions(
     if (!metadata) continue;
 
     if (metadata.notNull) {
-      addCondition(
-        conditions,
-        queue,
+      addCondition(conditions, queue, foreignKey.childTable, `${quoteIdent(childColumn)} = $1`, [
         foreignKey.childTable,
-        `${quoteIdent(childColumn)} = $1`,
-        [foreignKey.childTable]
-      );
+      ]);
     } else {
       rememberNullableReference(foreignKey.childTable, childColumn);
     }
@@ -249,12 +245,7 @@ function buildDeletionConditions(
       if (item.path.includes(foreignKey.childTable)) continue;
 
       const condition = foreignKeyMatchCondition(foreignKey, item.condition);
-      if (
-        addCondition(conditions, queue, foreignKey.childTable, condition, [
-          ...item.path,
-          foreignKey.childTable,
-        ])
-      ) {
+      if (addCondition(conditions, queue, foreignKey.childTable, condition, [...item.path, foreignKey.childTable])) {
         derivedCount += 1;
         if (derivedCount > MAX_DERIVED_CONDITIONS) {
           throw new Error("Company deletion dependency graph is too complex to resolve safely.");
@@ -311,10 +302,9 @@ async function detachOrRejectExternalRestrictiveReferences(
 
     if (nullableChildColumns.length > 0) {
       const assignments = nullableChildColumns.map((column) => `${quoteIdent(column)} = NULL`).join(", ");
-      await client.query(
-        `UPDATE ${quoteIdent(foreignKey.childTable)} SET ${assignments} WHERE ${outsideDeleteScope}`,
-        [companyId]
-      );
+      await client.query(`UPDATE ${quoteIdent(foreignKey.childTable)} SET ${assignments} WHERE ${outsideDeleteScope}`, [
+        companyId,
+      ]);
       continue;
     }
 

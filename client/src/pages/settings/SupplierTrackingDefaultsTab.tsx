@@ -60,9 +60,7 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
   useEffect(() => {
     if (!data) return;
     setDrafts((current) =>
-      Object.fromEntries(
-        data.suppliers.map((row) => [row.supplierId, current[row.supplierId] ?? toDraft(row)])
-      )
+      Object.fromEntries(data.suppliers.map((row) => [row.supplierId, current[row.supplierId] ?? toDraft(row)]))
     );
   }, [data]);
 
@@ -85,7 +83,10 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/tracking-defaults/suppliers"] });
-      toast({ title: "Tracking default saved", description: "New containers will use this supplier mapping automatically." });
+      toast({
+        title: "Tracking default saved",
+        description: "New containers will use this supplier mapping automatically.",
+      });
     },
     onError: (error: ClientErrorLike) => {
       toast({ title: "Could not save tracking default", description: error.message, variant: "destructive" });
@@ -125,8 +126,9 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
           <h1 className="text-xl font-semibold">Supplier Tracking Defaults</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Link each supplier to its normal shop/location and clearing agent. When a new container is created, blank Shop Name
-          and Agent fields are filled automatically. Values entered manually or supplied by an import are preserved.
+          Link each supplier to its normal shop/location and clearing agent. When a new container is created, blank Shop
+          Name and Agent fields are filled automatically. Values entered manually or supplied by an import are
+          preserved.
         </p>
       </div>
 
@@ -135,7 +137,9 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Supplier mappings</CardTitle>
-              <CardDescription>Mappings are company-specific and do not rewrite existing container history.</CardDescription>
+              <CardDescription>
+                Mappings are company-specific and do not rewrite existing container history.
+              </CardDescription>
             </div>
             <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -255,7 +259,8 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
             <div>
               <CardTitle className="text-base">Existing containers</CardTitle>
               <CardDescription>
-                Fill only empty Shop Name and Agent fields using the mappings above. Existing non-empty values are never changed.
+                Fill only empty Shop Name and Agent fields using the mappings above. Existing non-empty values are never
+                changed.
               </CardDescription>
             </div>
           </div>
@@ -274,7 +279,9 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
             )}
             Fill blank fields on existing containers
           </Button>
-          {!canManage && <p className="mt-2 text-xs text-muted-foreground">Admin, Owner, or Developer access is required.</p>}
+          {!canManage && (
+            <p className="mt-2 text-xs text-muted-foreground">Admin, Owner, or Developer access is required.</p>
+          )}
         </CardContent>
       </Card>
     </div>

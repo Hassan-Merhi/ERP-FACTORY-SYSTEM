@@ -92,9 +92,7 @@ export async function listSupplierTrackingDefaults(companyId: number) {
     db
       .select({ id: locations.id, code: locations.code, name: locations.name })
       .from(locations)
-      .where(
-        and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt))
-      )
+      .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
       .orderBy(asc(locations.name)),
     db
       .select({ name: agentDeclarantMappings.agentName })
@@ -113,9 +111,7 @@ export async function listSupplierTrackingDefaults(companyId: number) {
 
   const agentOptions = Array.from(
     new Set(
-      [...mappedAgents, ...usedAgents]
-        .map((row) => row.name?.trim())
-        .filter((name): name is string => Boolean(name))
+      [...mappedAgents, ...usedAgents].map((row) => row.name?.trim()).filter((name): name is string => Boolean(name))
     )
   ).sort((a, b) => a.localeCompare(b));
 
@@ -137,10 +133,7 @@ export async function saveSupplierTrackingDefault(
     await db
       .delete(supplierTrackingDefaults)
       .where(
-        and(
-          eq(supplierTrackingDefaults.companyId, companyId),
-          eq(supplierTrackingDefaults.supplierId, supplierId)
-        )
+        and(eq(supplierTrackingDefaults.companyId, companyId), eq(supplierTrackingDefaults.supplierId, supplierId))
       );
     return null;
   }

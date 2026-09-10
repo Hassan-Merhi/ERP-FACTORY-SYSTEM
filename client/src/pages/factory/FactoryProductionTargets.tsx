@@ -404,7 +404,11 @@ export default function FactoryProductionTargets() {
             disabled={finalized || rows.length === 0 || isFetching || busy}
             data-testid="button-save-production"
           >
-            {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
             {saveMutation.isPending ? tr("saving") : tr("save")}
           </Button>
 
@@ -456,7 +460,12 @@ export default function FactoryProductionTargets() {
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tr("searchPlaceholder")} className="pl-9" />
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={tr("searchPlaceholder")}
+          className="pl-9"
+        />
       </div>
 
       <div className="overflow-x-auto rounded-xl border">
@@ -502,7 +511,9 @@ export default function FactoryProductionTargets() {
                     return (
                       <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
                         <TableCell>
-                          <div className="font-medium" dir="auto">{row.name}</div>
+                          <div className="font-medium" dir="auto">
+                            {row.name}
+                          </div>
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{tr("worker")}</span>
                             {row.code && <span>· {row.code}</span>}
@@ -536,7 +547,9 @@ export default function FactoryProductionTargets() {
                             }
                           />
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">{row.producedBales ?? 0}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {row.producedBales ?? 0}
+                        </TableCell>
                         <TableCell
                           className={`text-right font-semibold tabular-nums ${differenceClass(row.targetBales, row.producedBales)}`}
                         >

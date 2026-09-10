@@ -4,10 +4,7 @@ import { isBlankTrackingValue, resolveTrackingDefaults } from "../server/service
 describe("supplier tracking defaults", () => {
   it("fills blank shop and agent values from the supplier mapping", () => {
     expect(
-      resolveTrackingDefaults(
-        { shopName: null, agent: "" },
-        { locationName: "Hadi #1", agentName: "NAHLI" }
-      )
+      resolveTrackingDefaults({ shopName: null, agent: "" }, { locationName: "Hadi #1", agentName: "NAHLI" })
     ).toEqual({ shopName: "Hadi #1", agent: "NAHLI" });
   });
 

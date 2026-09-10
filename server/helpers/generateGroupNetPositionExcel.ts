@@ -36,7 +36,12 @@ function styleAmount(cell: ExcelJS.Cell, value: number, emphasize = false) {
 }
 
 function safeSheetName(raw: string, used: Set<string>): string {
-  const base = raw.replace(/[\\/?*[\]:]/g, " ").replace(/\s+/g, " ").trim().slice(0, 28) || "Company";
+  const base =
+    raw
+      .replace(/[\\/?*[\]:]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 28) || "Company";
   let candidate = base;
   let suffix = 2;
   while (used.has(candidate)) {

@@ -309,8 +309,7 @@ export async function calculateGroupNetPosition(
     intercompany: {
       mode: "already-excluded",
       additionalElimination: 0,
-      note:
-        "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
+      note: "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
     },
   };
 }
