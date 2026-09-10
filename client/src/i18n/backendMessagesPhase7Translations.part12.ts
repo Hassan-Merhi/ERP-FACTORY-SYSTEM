@@ -107,4 +107,19 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "لم يتم العثور على بيانات الحاوية في المعاينة",
     fr: "Données du conteneur introuvables dans l’aperçu",
   },
+  {
+    en: "Linked proforma is unavailable. Scan again to bypass.",
+    ar: "البروفرما المرتبطة غير متاحة. امسح مرة أخرى للتجاوز.",
+    fr: "Le proforma lié est indisponible. Scannez à nouveau pour contourner.",
+  },
+  {
+    en: "Quantity exceeded (${decision.consumedQty}/${decision.requestedQty}). Scan again to bypass.",
+    ar: "تم تجاوز الكمية ({0}/{1}). امسح مرة أخرى للتجاوز.",
+    fr: "Quantité dépassée ({0}/{1}). Scannez à nouveau pour contourner.",
+  },
+  {
+    en: "Existing loaded bales exceed or do not match the selected proforma capacity",
+    ar: "البالات المحمّلة الحالية تتجاوز سعة البروفرما المحددة أو لا تطابقها",
+    fr: "Les balles déjà chargées dépassent la capacité du proforma sélectionné ou ne correspondent pas à celle-ci",
+  },
 ];
