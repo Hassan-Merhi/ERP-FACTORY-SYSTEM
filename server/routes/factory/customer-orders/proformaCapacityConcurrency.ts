@@ -45,6 +45,23 @@ export async function acquireProformaCapacityTransactionLock(
 }
 
 /**
+ * Lock several proformas in ascending id order. Relinking an order moves its
+ * bale consumption from one proforma to another, so both namespaces must be
+ * protected. Sorting prevents two opposing relinks from taking the same pair
+ * of locks in reverse order and deadlocking.
+ */
+export async function acquireProformaCapacityTransactionLocks(
+  executor: ProformaCapacityExecutor,
+  companyId: number,
+  proformaIds: Array<number | null | undefined>
+): Promise<void> {
+  const ids = [...new Set(proformaIds.filter((value): value is number => value != null))].sort((a, b) => a - b);
+  for (const proformaId of ids) {
+    await acquireProformaCapacityTransactionLock(executor, { companyId, proformaId });
+  }
+}
+
+/**
  * Acquire the transaction lock and then read the authoritative snapshot while
  * no competing protected writer for this proforma can change capacity.
  */
