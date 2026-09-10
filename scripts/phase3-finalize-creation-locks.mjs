@@ -54,8 +54,8 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   const path = "server/routes/factory/stock-allocation-v5/proforma-create.ts";
   replaceOnce(
     path,
-    'import { evaluateProformaLoadingAvailability } from "../customer-orders/proformaCapacityEnforcement";',
-    'import { evaluateProformaLoadingAvailability } from "../customer-orders/proformaCapacityEnforcement";\nimport { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";\nimport { guardProformaOrderCreation } from "../customer-orders/proformaCapacityWriteGuards";'
+    'import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";\nimport { evaluateProformaLoadingAvailability } from "../customer-orders/proformaCapacityEnforcement";',
+    'import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";\nimport { guardProformaOrderCreation } from "../customer-orders/proformaCapacityWriteGuards";'
   );
   replaceRange(
     path,
