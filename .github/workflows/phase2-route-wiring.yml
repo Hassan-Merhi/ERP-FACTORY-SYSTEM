@@ -49,7 +49,6 @@ jobs:
           i = 0
           while i < len(lines):
               if "if (source.indexOf(oldText, first + oldText.length) >= 0)" in lines[i]:
-                  output.extend([])
                   i += 3
                   removed = True
                   continue
@@ -60,6 +59,15 @@ jobs:
           path.write_text("".join(output))
           PY
           node scripts/phase2-apply-capacity-enforcement.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("server/routes/factory/customer-orders/orderCrudRoutes.ts")
+          source = path.read_text()
+          bad = "        }))\n        }));"
+          if bad not in source:
+              raise SystemExit("continuation close marker not found")
+          path.write_text(source.replace(bad, "        }));", 1))
+          PY
 
       - name: Format touched TypeScript
         run: |
