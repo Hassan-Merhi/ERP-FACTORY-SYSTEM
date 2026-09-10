@@ -1,13 +1,32 @@
 import Decimal from "decimal.js";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { logger } from "./lib/logger";
+import { firstRow, resultRows } from "./lib/queryResult";
 
+/**
+ * The only surface these helpers need from their connection. Typing it
+ * structurally rather than as the concrete Drizzle database keeps both real
+ * callers working — `db` and a transaction `tx` alike — without naming a
+ * generic that would drag the whole schema in. `select`/`insert`/`update`/
+ * `delete` were dropped because this module only ever calls `execute`.
+ */
 type TxOrDb = {
-  select: Function;
-  insert: Function;
-  update: Function;
-  delete: Function;
-  execute: Function;
+  execute: (query: SQL) => Promise<unknown>;
+};
+
+/** Row shape for the `inventory` lock/read in the costing path. */
+type InventoryRow = {
+  id: number;
+  quantity: string | number | null;
+  average_rate: string | number | null;
+  total_value: string | number | null;
+};
+
+/** Row shape for the `inventory_negative_layers` FIFO settlement read. */
+type NegativeLayerRow = {
+  id: number;
+  qty: string | number | null;
+  provisional_rate: string | number | null;
 };
 
 export interface AdjustInventoryResult {
@@ -121,7 +140,7 @@ async function settleNegativeLayers(
     ORDER BY id ASC
     FOR UPDATE
   `);
-  const rows = result.rows ?? result;
+  const rows = resultRows<NegativeLayerRow>(result);
 
   let remaining = incomingQty;
   let settled = ZERO;
@@ -186,7 +205,7 @@ export async function adjustInventory(
     WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}
     FOR UPDATE
   `);
-  const existing = lockResult.rows?.[0] ?? lockResult[0];
+  const existing = firstRow<InventoryRow>(lockResult);
   const delta = toDecimal(deltaQty);
 
   if (existing) {
@@ -366,7 +385,7 @@ export async function reverseInventoryByExactValue(
     WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}
     FOR UPDATE
   `);
-  const existing = lockResult.rows?.[0] ?? lockResult[0];
+  const existing = firstRow<InventoryRow>(lockResult);
   if (!existing) return;
 
   const currentQty = toDecimal(existing.quantity);
