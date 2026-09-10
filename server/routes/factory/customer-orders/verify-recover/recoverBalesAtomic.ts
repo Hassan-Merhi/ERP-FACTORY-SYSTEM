@@ -1,14 +1,13 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { db } from "../../../../db";
+import { db, type DbTransaction } from "../../../../db";
 import {
   customerOrderBales,
   customerOrders,
   customerProformaLines,
-  factoryBaleProducts,
   factoryBales,
 } from "@shared/schema";
 import { recalculateOrderTotals } from "../../_helpers";
-import { firstRow, resultRows } from "../../../../lib/queryResult";
+import { firstRow } from "../../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import {
@@ -55,11 +54,7 @@ function assertOrderUnchanged(
   return locked;
 }
 
-async function activeBaleLinkExists(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-  baleId: number,
-  orderId: number
-): Promise<boolean> {
+async function activeBaleLinkExists(tx: DbTransaction, baleId: number, orderId: number): Promise<boolean> {
   return !!firstRow(
     await tx.execute(sql`
       SELECT cob.order_id
@@ -205,11 +200,10 @@ export async function recoverBalesByReferencesAtomically(input: {
         scannedBy: input.scannerName,
       });
 
-      const targetStatus = ["VERIFIED", "FINALIZED"].includes(order.status) ? "SOLD" : "SOLD";
-      if (bale.status !== targetStatus) {
+      if (bale.status !== "SOLD") {
         await tx
           .update(factoryBales)
-          .set({ status: targetStatus, updatedAt: new Date() })
+          .set({ status: "SOLD", updatedAt: new Date() })
           .where(eq(factoryBales.id, bale.id));
       }
       linked++;
