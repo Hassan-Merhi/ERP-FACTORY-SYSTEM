@@ -299,7 +299,9 @@ async function detachOrRejectExternalRestrictiveReferences(
 
     const referenceMatch = foreignKeyMatchCondition(foreignKey, parentWhere);
     const childWhere = tableWhere(conditions, foreignKey.childTable);
-    const outsideDeleteScope = childWhere ? `(${referenceMatch}) AND NOT (${childWhere})` : referenceMatch;
+    const outsideDeleteScope = childWhere
+      ? `(${referenceMatch}) AND NOT COALESCE((${childWhere}), FALSE)`
+      : referenceMatch;
     const childColumns = columnsByTable.get(foreignKey.childTable);
     if (!childColumns) continue;
 
