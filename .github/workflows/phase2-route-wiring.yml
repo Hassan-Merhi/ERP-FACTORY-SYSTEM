@@ -86,6 +86,8 @@ jobs:
           node scripts/phase2-apply-capacity-enforcement.mjs
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path("server/routes/factory/customer-orders/orderCrudRoutes.ts")
           source = path.read_text()
           bad = "        }))\n        }));"
@@ -97,6 +99,56 @@ jobs:
               'import { eq, and, or, desc, sql, inArray, isNull, gte, lte } from "drizzle-orm";',
               1,
           )
+          source = source.replace(
+              '''import {
+            allocateRemainingProformaLines,
+            evaluateProformaLoadingAvailability,
+            validateProformaCapacityAdditions,
+          } from "./proformaCapacityEnforcement";''',
+              '''import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
+          import {
+            guardExistingOrderProformaLink,
+            guardProformaOrderCreation,
+          } from "./proformaCapacityWriteGuards";''',
+              1,
+          )
+
+          create_pattern = re.compile(
+              r'''      if \(parsed\.proformaIdUsed\) \{.*?      \}\n      const \[order\] = await db\.insert\(customerOrders\)\.values\(parsed\)\.returning\(\);''',
+              re.S,
+          )
+          create_replacement = '''      if (parsed.proformaIdUsed) {
+            const guard = await guardProformaOrderCreation(db, {
+              companyId,
+              proformaId: parsed.proformaIdUsed,
+              customerId: parsed.customerId,
+            });
+            if (!guard.allowed) return res.status(guard.status).json(guard.body);
+          }
+          const [order] = await db.insert(customerOrders).values(parsed).returning();'''
+          source, create_count = create_pattern.subn(create_replacement, source, count=1)
+          if create_count != 1:
+              raise SystemExit(f"generic create guard replacement count: {create_count}")
+
+          link_pattern = re.compile(
+              r'''      if \(order\.proformaIdUsed !== proformaIdInt\) \{.*?      \}\n\n      // Fetch proforma lines for expected-lines backfill''',
+              re.S,
+          )
+          link_replacement = '''      if (order.proformaIdUsed !== proformaIdInt) {
+            const guard = await guardExistingOrderProformaLink(db, {
+              companyId,
+              proformaId: proformaIdInt!,
+              orderId,
+              customerId: order.customerId,
+            });
+            if (!guard.allowed) return res.status(guard.status).json(guard.body);
+          }
+
+          // Fetch proforma lines for expected-lines backfill'''
+          source, link_count = link_pattern.subn(link_replacement, source, count=1)
+          if link_count != 1:
+              raise SystemExit(f"link guard replacement count: {link_count}")
+
           path.write_text(source)
           PY
 
@@ -104,6 +156,7 @@ jobs:
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
             server/routes/factory/customer-orders/proformaCapacityEnforcement.ts \
+            server/routes/factory/customer-orders/proformaCapacityWriteGuards.ts \
             server/routes/factory/customer-orders/bale-scanning/scan.ts \
             server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
             server/routes/factory/customer-proformas/create-loading.ts \
@@ -111,6 +164,7 @@ jobs:
             server/routes/factory/customer-orders/orderCrudRoutes.ts \
             server/routes/factory/stock-allocation-v5/proforma-create.ts \
             tests/proforma-capacity-enforcement.test.ts \
+            tests/proforma-capacity-write-guards.test.ts \
             tests/factory-loading-proforma-quantity-alignment.test.ts
 
       - name: Prepare focused test database
@@ -121,6 +175,7 @@ jobs:
           node node_modules/vitest/vitest.mjs run \
             tests/proforma-capacity.test.ts \
             tests/proforma-capacity-enforcement.test.ts \
+            tests/proforma-capacity-write-guards.test.ts \
             tests/factory-loading-proforma-quantity-alignment.test.ts \
             tests/factory-loading-bale-rescan.test.ts
 
@@ -142,6 +197,7 @@ jobs:
           git rm scripts/phase2-apply-capacity-enforcement.mjs .github/workflows/phase2-route-wiring.yml
           git add \
             server/routes/factory/customer-orders/proformaCapacityEnforcement.ts \
+            server/routes/factory/customer-orders/proformaCapacityWriteGuards.ts \
             server/routes/factory/customer-orders/bale-scanning/scan.ts \
             server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
             server/routes/factory/customer-proformas/create-loading.ts \
@@ -149,6 +205,7 @@ jobs:
             server/routes/factory/customer-orders/orderCrudRoutes.ts \
             server/routes/factory/stock-allocation-v5/proforma-create.ts \
             tests/proforma-capacity-enforcement.test.ts \
+            tests/proforma-capacity-write-guards.test.ts \
             tests/factory-loading-proforma-quantity-alignment.test.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
