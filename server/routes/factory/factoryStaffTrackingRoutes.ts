@@ -246,11 +246,17 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const workerGroupNames = await loadWorkerGroupNames(companyId);
       const includedWorkers = workers.filter((person) => {
         const savedForPeriod = savedMap.has(`worker:${person.id}`);
-        if (query.page === "production" && finalized) return savedForPeriod;
-        return (
-          workerGroupNames.has(person.id) &&
-          (savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd)))
-        );
+        if (query.page === "production") {
+          if (finalized) return savedForPeriod;
+          return (
+            workerGroupNames.has(person.id) &&
+            (savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd)))
+          );
+        }
+
+        // Attendance must include every factory worker, regardless of Production Planner group membership.
+        // The separate ERP employees table is intentionally not included here.
+        return savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd));
       });
 
       const workerAttendance = new Map<number, string>();
@@ -292,7 +298,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           : attendanceStatus === "Absent"
             ? "Absent"
             : "Present";
-        const currentGroupName = workerGroupNames.get(worker.id)?.[0] ?? "";
+        const currentGroupName =
+          query.page === "attendance" ? "All Workers" : (workerGroupNames.get(worker.id)?.[0] ?? "");
         const groupName = finalized ? (savedRow?.groupName ?? currentGroupName) : currentGroupName;
 
         return {
@@ -411,7 +418,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         if (page === "production" && personType !== "worker") {
           return res.status(400).json({ message: "Production Targets only supports factory workers" });
         }
-        if (personType === "worker" && !workerGroupNames.has(personId)) {
+        if (page === "production" && personType === "worker" && !workerGroupNames.has(personId)) {
           return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
         }
 
@@ -449,7 +456,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         normalizedRecords.push({
           personType,
           personId,
-          groupName: personType === "worker" ? (workerGroupNames.get(personId)?.[0] ?? null) : null,
+          groupName:
+            personType === "worker"
+              ? page === "attendance"
+                ? "All Workers"
+                : (workerGroupNames.get(personId)?.[0] ?? null)
+              : null,
           category,
           notes,
           targetBales,

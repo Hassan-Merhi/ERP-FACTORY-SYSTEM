@@ -9,10 +9,12 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {} from "@shared/schema";
 import { sql } from "drizzle-orm";
-import { recalculateOrderTotals } from "../_helpers";
 import { resultRows } from "../../../lib/queryResult";
+import {
+  restoreCancelledContainerAtomically,
+  RestoreCancelledContainerError,
+} from "./restoreCancelledContainerAtomic";
 
 export function registerV5CancelledContainerRoutes(app: Express) {
   // ── GET /api/factory/v5/recently-cancelled-containers ────────────────────
@@ -65,86 +67,22 @@ export function registerV5CancelledContainerRoutes(app: Express) {
     }
   });
 
-  // ── POST /api/factory/v5/containers/:id/restore ──────────────────────────
-  // Restores a cancelled V5 container back to its previous status.
-  // If it had loadingStartedAt set → restore to LOADING.
-  // If it had no loadingStartedAt → restore to DRAFT.
-  // Note: bale links that were deleted during cancellation are NOT restored
-  // (bales are back in stock and can be re-scanned).
+  // Restores status + archived bale links as one proforma-serialized transaction.
   app.post("/api/factory/v5/containers/:id/restore", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const orderId = parseInt(req.params.id);
-      if (!orderId || isNaN(orderId)) return res.status(400).json({ message: "Invalid id" });
+      const orderId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: "Invalid id" });
 
-      const [order] = await db
-        .execute(
-          sql`SELECT id, status, proforma_id_used, loading_started_at
-            FROM customer_orders
-            WHERE id = ${orderId} AND company_id = ${companyId}`
-        )
-        .then((r: any) =>
-          (r.rows ?? (r as unknown[])).map((row: any) => ({
-            id: Number(row.id),
-            status: row.status,
-            proformaIdUsed: row.proforma_id_used,
-            loadingStartedAt: row.loading_started_at,
-          }))
-        );
-
-      if (!order) return res.status(404).json({ message: "Container not found" });
-      if (order.status !== "CANCELLED")
-        return res.status(400).json({ message: "Only CANCELLED containers can be restored" });
-      if (!order.proformaIdUsed)
-        return res.status(400).json({ message: "Only V5 containers (linked to a proforma) can be restored here" });
-
-      const restoreStatus = order.loadingStartedAt ? "LOADING" : "DRAFT";
-
-      await db.execute(
-        sql`UPDATE customer_orders
-            SET status = ${restoreStatus}, updated_at = NOW()
-            WHERE id = ${orderId} AND company_id = ${companyId}`
-      );
-
-      // Remove the ORDER_CANCELLED daybook entry so financials are clean
-      await db.execute(
-        sql`DELETE FROM factory_daybook_entries
-            WHERE company_id = ${companyId}
-              AND tx_type = 'ORDER_CANCELLED'
-              AND reference_id = ${orderId}`
-      );
-
-      // Restore the exact bale links that were archived when the order was cancelled.
-      // If history rows exist (i.e. the order was cancelled after this feature landed),
-      // copy them back into customer_order_bales so the scanner sees the original references.
-      // For older orders cancelled before this feature, history is empty and the totals
-      // are simply reset to 0 — those orders need Auto-Recover or manual recovery.
-      const historyResult = await db.execute(
-        sql`SELECT COUNT(*)::int AS cnt FROM customer_order_bales_history WHERE order_id = ${orderId}`
-      );
-      const historyCount = Number(resultRows(historyResult)[0]?.cnt ?? 0);
-
-      if (historyCount > 0) {
-        await db.execute(
-          sql`INSERT INTO customer_order_bales
-                (order_id, bale_id, bale_reference, location_id, weight,
-                 article_code, bale_name, price_used, scanned_by)
-              SELECT order_id, bale_id, bale_reference, location_id, weight,
-                     article_code, bale_name, price_used, scanned_by
-              FROM customer_order_bales_history
-              WHERE order_id = ${orderId}`
-        );
-        await db.execute(sql`DELETE FROM customer_order_bales_history WHERE order_id = ${orderId}`);
-      }
-
-      // Rebuild order_lines and sync total_qty_bales from the live bale count.
-      await recalculateOrderTotals(db, orderId);
-
-      res.json({ id: orderId, restoredTo: restoreStatus, balasRestored: historyCount });
+      const result = await restoreCancelledContainerAtomically({ companyId, orderId });
+      res.json(result);
     } catch (err: unknown) {
       logger.error("[V5] restore-container error:", { error: err });
+      if (err instanceof RestoreCancelledContainerError) {
+        return res.status(err.status).json({ message: err.message, ...(err.details ?? {}) });
+      }
       res.status(500).json({ message: getErrorMessage(err) });
     }
   });

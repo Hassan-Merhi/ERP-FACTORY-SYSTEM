@@ -37,7 +37,10 @@ function normalizeCurrency(value: unknown): string {
 function formatMap(values: Map<string, Decimal>): Record<string, string> {
   return Object.fromEntries(
     [...values.entries()]
-      .filter(([, value]) => !value.isZero())
+      // USD is the historical base bucket, not a native/foreign-currency balance.
+      // Keeping it out of this map prevents every normal USD company from
+      // rendering the multi-currency dashboard summary.
+      .filter(([currency, value]) => currency !== "USD" && !value.isZero())
       .map(([currency, value]) => [currency, value.toDecimalPlaces(6).toFixed(6)])
   );
 }

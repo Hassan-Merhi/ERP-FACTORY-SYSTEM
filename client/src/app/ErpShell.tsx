@@ -73,7 +73,11 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   loadingTitle="Loading workspace"
                   loadingDescription="Preparing the latest ERP information."
                 >
-                  <div data-erp-route={routePath} className="w-full min-w-0 max-w-full">
+                  <div
+                    data-workspace-route={routePath}
+                    data-erp-route={routePath}
+                    className="w-full min-w-0 max-w-full"
+                  >
                     <Router user={user} />
                   </div>
                 </WorkspaceRouteBoundary>

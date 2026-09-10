@@ -11,6 +11,9 @@ import { parseId } from "../../../../lib/parseId";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
+import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
+import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
   factoryBaleProducts,
   factoryBales,
@@ -21,7 +24,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { resultRows } from "../../../../lib/queryResult";
+import { firstRow, resultRows } from "../../../../lib/queryResult";
 
 export function registerOrderBaleExchangeRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/exchange — swap one bale for another on a FINALIZED order
@@ -48,11 +51,23 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
           throw new Error("Bale exchange is only allowed on FINALIZED or VERIFIED orders");
         }
 
-        // Find the customerOrderBales row to replace
+        // All capacity-changing writers use the same ordering: proforma lock
+        // first, then order/bale row locks. A concurrent scan/import for this
+        // proforma must therefore wait and re-read capacity after this swap.
+        if (order.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+          });
+        }
+
+        // Find and lock the customerOrderBales row to replace so two exchange
+        // requests cannot both replace the same source row.
         const [oldOrderBale] = await tx
           .select()
           .from(customerOrderBales)
-          .where(and(eq(customerOrderBales.id, orderBaleId), eq(customerOrderBales.orderId, orderId)));
+          .where(and(eq(customerOrderBales.id, orderBaleId), eq(customerOrderBales.orderId, orderId)))
+          .for("update");
         if (!oldOrderBale) throw new Error("Bale not found in this order");
 
         // Find the new bale in stock — FOR UPDATE prevents a concurrent
@@ -71,6 +86,23 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
           .for("update");
         if (!newBale) throw new Error(`Bale "${newRef}" not found in stock or not available`);
 
+        // V5 loadings keep bales IN_STOCK while loading. Status alone therefore
+        // cannot prove this replacement bale is unused.
+        const activeLink = firstRow(
+          await tx.execute(sql`
+            SELECT cob.order_id
+            FROM customer_order_bales cob
+            JOIN customer_orders co ON co.id = cob.order_id
+            WHERE cob.bale_id = ${newBale.id}
+              AND co.status <> 'CANCELLED'
+              AND co.deleted_at IS NULL
+            LIMIT 1
+          `)
+        );
+        if (activeLink) {
+          throw new Error(`Bale "${newRef}" is already linked to another active loading/order`);
+        }
+
         // Resolve product name for new bale
         let newBaleName = newBale.productName || newBale.articleCode || newBale.baleCode || "";
         if (newBale.productId) {
@@ -80,15 +112,32 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
             .where(eq(factoryBaleProducts.id, newBale.productId));
           if (prod?.name) newBaleName = prod.name;
         }
+        const effectiveArticleCode = String(newBale.articleCode || oldOrderBale.articleCode || "").trim();
 
-        // Return old bale to stock
+        // Remove the old capacity contribution first. If the new article is not
+        // allowed, throwing below rolls this deletion and the status change back.
         await tx
           .update(factoryBales)
           .set({ status: "IN_STOCK", updatedAt: new Date() })
           .where(eq(factoryBales.id, oldOrderBale.baleId));
-
-        // Remove old order bale row
         await tx.delete(customerOrderBales).where(eq(customerOrderBales.id, orderBaleId));
+
+        if (order.proformaIdUsed) {
+          const capacity = await getProformaCapacitySnapshot(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+            currentOrderId: orderId,
+          });
+          if (!capacity) throw new Error("Linked proforma is unavailable");
+          const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1);
+          if (!decision.allowed) {
+            throw new Error(
+              decision.reason === "not_in_proforma"
+                ? `Replacement article ${effectiveArticleCode || "UNKNOWN"} is not requested on the linked proforma`
+                : `Replacement article ${effectiveArticleCode || "UNKNOWN"} exceeds proforma quantity (${decision.consumedQty}/${decision.requestedQty})`
+            );
+          }
+        }
 
         // Insert new order bale row (preserve price from the row being replaced)
         await tx.insert(customerOrderBales).values({
@@ -97,7 +146,7 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
           baleReference: newBale.referenceNumber || newRef,
           locationId: oldOrderBale.locationId,
           weight: newBale.weightKg,
-          articleCode: newBale.articleCode || oldOrderBale.articleCode,
+          articleCode: effectiveArticleCode || oldOrderBale.articleCode,
           baleName: newBaleName || oldOrderBale.baleName,
           priceUsed: oldOrderBale.priceUsed,
         });
@@ -120,7 +169,7 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
         .where(eq(customerOrderCharges.orderId, orderId));
       res.json({ ...updatedOrder, bales: updatedBales, lines: updatedLines, charges: updatedCharges });
     } catch (error: unknown) {
-      logger.error("Exchange bale error:", { error: error });
+      logger.error("Exchange bale error:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
