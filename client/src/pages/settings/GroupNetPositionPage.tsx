@@ -235,10 +235,10 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Group Net Position</h2>
-              <Badge variant="secondary">Properties excluded</Badge>
+              <Badge variant="secondary">ERP only</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Combined What We Have, What We Owe, and Net Position across all active non-Properties companies.
+              Combined What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.
             </p>
           </div>
         </div>
