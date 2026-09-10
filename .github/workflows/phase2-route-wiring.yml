@@ -194,7 +194,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm scripts/phase2-apply-capacity-enforcement.mjs .github/workflows/phase2-route-wiring.yml
+          git rm -f scripts/phase2-apply-capacity-enforcement.mjs .github/workflows/phase2-route-wiring.yml
           git add \
             server/routes/factory/customer-orders/proformaCapacityEnforcement.ts \
             server/routes/factory/customer-orders/proformaCapacityWriteGuards.ts \
