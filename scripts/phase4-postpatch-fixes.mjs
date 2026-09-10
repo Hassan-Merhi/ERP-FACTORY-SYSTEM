@@ -11,8 +11,14 @@ const phase4Test = "tests/proforma-capacity-phase4-reconciliation.test.ts";
 replaceOne(
   phase4Test,
   'import { pool } from "../server/db";',
-  'import { db, pool } from "../server/db";',
+  'import { db, pool } from "../server/db";\nimport { ensureCanonicalStockMovementJournal } from "../server/services/inventory/ensureCanonicalStockMovementJournal";',
   "phase4 test db import"
+);
+replaceOne(
+  phase4Test,
+  "beforeAll(async () => {\n  ctx = await seedTestData(PREFIX);",
+  "beforeAll(async () => {\n  // cleanupTestData removes canonical journal rows; drizzle push does not create\n  // these runtime-managed tables, so make the shared fixture teardown available.\n  await ensureCanonicalStockMovementJournal(pool);\n  ctx = await seedTestData(PREFIX);",
+  "phase4 canonical test journal setup"
 );
 replaceOne(
   phase4Test,
@@ -31,4 +37,15 @@ replaceOne(
   "expect(row.freeToPromise).toBe(row.inStock - 1);",
   "expect(row.freeToPromise).toBe(Math.max(0, row.inStock - 1));",
   "phase4 free-to-promise floor"
+);
+
+// The bilingual response resolver adds normalizedArticleCode when a record does
+// not already provide one. Capacity snapshots already provide a semantic,
+// lower-case normalized key, so preserve it instead of overwriting it with the
+// display/canonical article code.
+replaceOne(
+  "server/services/factoryBilingualSurfaceResolver.ts",
+  "  if (articleCode) record.normalizedArticleCode = articleCode;",
+  "  if (articleCode && !clean(record.normalizedArticleCode)) record.normalizedArticleCode = articleCode;",
+  "preserve semantic normalized article code"
 );
