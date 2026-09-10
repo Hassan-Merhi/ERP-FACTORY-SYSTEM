@@ -86,14 +86,14 @@ jobs:
               1,
           )
 
-          old_cancel_import = "'import { resultRows } from \\\"../../../../lib/queryResult\\\";'"
-          new_cancel_import = "'import { eq, and, sql, inArray } from \\\"drizzle-orm\\\";'"
+          old_cancel_import = """'import { resultRows } from "../../../../lib/queryResult";'"""
+          new_cancel_import = """'import { eq, and, sql, inArray } from "drizzle-orm";'"""
           if old_cancel_import not in source:
               raise SystemExit("legacy cancel import marker was not found")
           source = source.replace(old_cancel_import, new_cancel_import, 1)
 
-          old_cancel_replacement = "'import { resultRows } from \\\"../../../../lib/queryResult\\\";\\nimport { acquireProformaCapacityTransactionLock } from \\\"../proformaCapacityConcurrency\\\";\\nimport { restoreCancelledContainerAtomically } from \\\"../../stock-allocation-v5/restoreCancelledContainerAtomic\\\";'"
-          new_cancel_replacement = "'import { eq, and, sql, inArray } from \\\"drizzle-orm\\\";\\nimport { acquireProformaCapacityTransactionLock } from \\\"../proformaCapacityConcurrency\\\";\\nimport { restoreCancelledContainerAtomically } from \\\"../../stock-allocation-v5/restoreCancelledContainerAtomic\\\";'"
+          old_cancel_replacement = r"""'import { resultRows } from "../../../../lib/queryResult";\nimport { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";\nimport { restoreCancelledContainerAtomically } from "../../stock-allocation-v5/restoreCancelledContainerAtomic";'"""
+          new_cancel_replacement = r"""'import { eq, and, sql, inArray } from "drizzle-orm";\nimport { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";\nimport { restoreCancelledContainerAtomically } from "../../stock-allocation-v5/restoreCancelledContainerAtomic";'"""
           if old_cancel_replacement not in source:
               raise SystemExit("legacy cancel import replacement was not found")
           source = source.replace(old_cancel_replacement, new_cancel_replacement, 1)
