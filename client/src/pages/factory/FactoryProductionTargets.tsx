@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
@@ -122,6 +122,27 @@ function statusTranslationKey(status: TrackingStatus): FactoryStaffTrackingTrans
   return "present";
 }
 
+function groupProductionRows(sourceRows: ProductionRow[]): ProductionGroup[] {
+  const groups = new Map<string, ProductionGroup>();
+
+  for (const row of sourceRows) {
+    const label = row.groupName?.trim() || row.category.trim();
+    const key = label.toLocaleLowerCase();
+    const existing = groups.get(key);
+    if (existing) existing.rows.push(row);
+    else groups.set(key, { label, rows: [row] });
+  }
+
+  return [...groups.values()]
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }))
+    .map((group) => ({
+      ...group,
+      rows: [...group.rows].sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true })
+      ),
+    }));
+}
+
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
     <Card className="shadow-none">
@@ -185,6 +206,12 @@ async function fetchProduction(periodType: PeriodType, start: string, end: strin
   return response.json();
 }
 
+function waitForReportPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
@@ -193,6 +220,7 @@ export default function FactoryProductionTargets() {
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
+  const productionReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
   const { data, isLoading, isFetching, refetch } = useQuery<ProductionResponse>({
@@ -278,6 +306,36 @@ export default function FactoryProductionTargets() {
     },
   });
 
+  const sendProductionWhatsappImage = async (endedDate: string) => {
+    // Re-read the just-finalized day so the image uses the exact frozen production counts,
+    // not a potentially stale browser snapshot from a few seconds before End Production.
+    const finalizedSnapshot = await fetchProduction("daily", endedDate, endedDate);
+    setRows(finalizedSnapshot.rows);
+    await waitForReportPaint();
+
+    if (!productionReportRef.current) throw new Error(tr("productionWhatsappImageFailed"));
+
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(productionReportRef.current, {
+      backgroundColor: "#111315",
+      scale: 2,
+      logging: false,
+    });
+    const title = `${tr("productionTargets")} — ${endedDate}`;
+    const response = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
+      imageBase64: canvas.toDataURL("image/png"),
+      date: endedDate,
+      fileName: `Production_${endedDate}.png`,
+      caption: title,
+      reportLabel: title,
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.message || tr("productionWhatsappImageFailed"));
+    }
+  };
+
   const endProductionMutation = useMutation({
     mutationFn: async () => {
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
@@ -295,9 +353,23 @@ export default function FactoryProductionTargets() {
       return response.json();
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking"] });
+      const endedDate = referenceDate;
       toast({ title: tr("productionEnded") });
-      setReferenceDate((current) => addIsoDays(current, 1));
+
+      try {
+        await sendProductionWhatsappImage(endedDate);
+        toast({ title: tr("productionWhatsappImageSent") });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : tr("productionWhatsappImageFailed");
+        toast({
+          title: tr("productionWhatsappImageFailed"),
+          description: message,
+          variant: "destructive",
+        });
+      } finally {
+        await queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking"] });
+        setReferenceDate(addIsoDays(endedDate, 1));
+      }
     },
     onError: (error: Error) => {
       toast({ title: tr("endProductionFailed"), description: error.message, variant: "destructive" });
@@ -306,33 +378,19 @@ export default function FactoryProductionTargets() {
 
   const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
     const needle = search.trim().toLowerCase();
-    const groups = new Map<string, ProductionGroup>();
-
-    for (const row of rows) {
-      const matches =
+    const visibleRows = rows.filter((row) => {
+      return (
         !needle ||
         row.name.toLowerCase().includes(needle) ||
         row.category.toLowerCase().includes(needle) ||
         (row.groupName || "").toLowerCase().includes(needle) ||
-        (row.code || "").toLowerCase().includes(needle);
-      if (!matches) continue;
-
-      const label = row.groupName?.trim() || row.category.trim();
-      const key = label.toLocaleLowerCase();
-      const existing = groups.get(key);
-      if (existing) existing.rows.push(row);
-      else groups.set(key, { label, rows: [row] });
-    }
-
-    return [...groups.values()]
-      .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }))
-      .map((group) => ({
-        ...group,
-        rows: [...group.rows].sort((left, right) =>
-          left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true })
-        ),
-      }));
+        (row.code || "").toLowerCase().includes(needle)
+      );
+    });
+    return groupProductionRows(visibleRows);
   }, [rows, search]);
+
+  const productionReportGroups = useMemo(() => groupProductionRows(rows), [rows]);
 
   const totals = useMemo(() => {
     const target = rows.reduce((sum, row) => sum + (row.targetBales ?? 0), 0);
@@ -582,6 +640,98 @@ export default function FactoryProductionTargets() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div
+        ref={productionReportRef}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          left: "-12000px",
+          top: 0,
+          width: "1280px",
+          background: "#111315",
+          color: "#f4f4f5",
+          padding: "30px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
+          <div>
+            <div style={{ fontSize: "28px", fontWeight: 700 }}>{tr("productionTargets")}</div>
+            <div style={{ marginTop: "6px", color: "#a1a1aa", fontSize: "16px" }}>{referenceDate}</div>
+          </div>
+          <div style={{ color: "#a1a1aa", fontSize: "15px" }}>{rows.length} {tr("people")}</div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "20px" }}>
+          {[
+            [tr("totalTarget"), totals.target],
+            [tr("balesProduced"), totals.produced],
+            [tr("difference"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
+            [tr("people"), rows.length],
+          ].map(([label, value]) => (
+            <div key={String(label)} style={{ border: "1px solid #34383e", borderRadius: "10px", padding: "14px 16px", background: "#181a1e" }}>
+              <div style={{ color: "#a1a1aa", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+              <div style={{ marginTop: "5px", fontSize: "25px", fontWeight: 800 }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "15px" }}>
+          <thead>
+            <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
+              <th style={{ width: "115px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("code")}</th>
+              <th style={{ width: "245px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("worker")}</th>
+              <th style={{ width: "180px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>Group</th>
+              <th style={{ width: "190px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("category")}</th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("target")}</th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("produced")}</th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("difference")}</th>
+              <th style={{ width: "130px", padding: "13px 10px", textAlign: "center", border: "1px solid #3f444b" }}>{tr("status")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {productionReportGroups.map((group) => (
+              <Fragment key={`report-${group.label.toLocaleLowerCase() || "blank"}`}>
+                <tr style={{ background: "#202328" }}>
+                  <td colSpan={8} style={{ padding: "11px 12px", border: "1px solid #3f444b", fontWeight: 700 }}>
+                    {group.label || "—"} <span style={{ marginLeft: "8px", color: "#a1a1aa", fontWeight: 400 }}>({group.rows.length})</span>
+                  </td>
+                </tr>
+                {group.rows.map((row, index) => {
+                  const statusColor =
+                    row.status === FACTORY_TRACKING_STATUSES.absent
+                      ? "#f87171"
+                      : row.status === FACTORY_TRACKING_STATUSES.new
+                        ? "#fbbf24"
+                        : "#34d399";
+                  return (
+                    <tr key={`production-report-${row.personId}`} style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}>
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.code || "—"}</td>
+                      <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>{row.name}</td>
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.groupName || "—"}</td>
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.category || "—"}</td>
+                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{row.targetBales ?? "—"}</td>
+                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{row.producedBales ?? 0}</td>
+                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{differenceText(row.targetBales, row.producedBales)}</td>
+                      <td style={{ padding: "12px 10px", textAlign: "center", border: "1px solid #34383e", color: statusColor, fontWeight: 700 }}>
+                        {tr(statusTranslationKey(row.status))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            ))}
+            <tr style={{ background: "#292c31" }}>
+              <td colSpan={4} style={{ padding: "16px 12px", border: "1px solid #3f444b", fontWeight: 800, fontSize: "17px" }}>{tr("dailyTotal")}</td>
+              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.target}</td>
+              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.produced}</td>
+              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.difference > 0 ? `+${totals.difference}` : totals.difference}</td>
+              <td style={{ padding: "14px 10px", textAlign: "center", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{rows.length}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );

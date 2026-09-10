@@ -86,6 +86,7 @@ import { registerPermissionBoundaryRoutes } from "./core/permissionBoundaryRoute
 import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfigRoutes";
 import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
+import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 
 function usesDedicatedRealtimeEvents(url: string): boolean {
   const path = url.split("?", 1)[0];
@@ -207,18 +208,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerUserNotesRoutes(app);
   registerSpRoutes(app);
   registerSpMigrationRoutes(app);
-  await registerLazyRouteModule(app, {
-    prefixes: ["/api/ai-import"],
-    load: async () => (await import("./ai-import")).registerAiImportRoutes,
-  });
-  await registerLazyRouteModule(app, {
-    prefixes: ["/api/ai-validation"],
-    load: async () => (await import("./aiValidationRoutes")).registerAiValidationRoutes,
-  });
-  await registerLazyRouteModule(app, {
-    prefixes: ["/api/ai-agent"],
-    load: async () => (await import("./aiAgentRoutes")).registerAiAgentRoutes,
-  });
+  await registerApplicationAiLazyRoutes(app);
   registerApprovalRoutes(app);
   registerBusinessAlertRoutes(app);
   registerIntercompanyNotificationRoutes(app);

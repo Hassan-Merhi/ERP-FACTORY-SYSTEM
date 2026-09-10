@@ -14,6 +14,12 @@ function expectBefore(source: string, first: string, second: string) {
   expect(secondIndex).toBeGreaterThan(firstIndex);
 }
 
+function routeSlice(source: string, marker: string): string {
+  const start = source.indexOf(marker);
+  expect(start).toBeGreaterThanOrEqual(0);
+  return source.slice(start);
+}
+
 describe("Phase 3 proforma capacity mutation lock coverage", () => {
   it("manual scans lock proforma capacity before order and bale row locks", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
@@ -31,6 +37,29 @@ describe("Phase 3 proforma capacity mutation lock coverage", () => {
     const source = read("server/routes/factory/customer-proformas/createLoadingAtomic.ts");
     expectBefore(source, "db.transaction(async (tx)", "acquireProformaCapacityTransactionLock(tx");
     expect(source).toContain('.for("update")');
+  });
+
+  it("all proforma-linked empty order/container creation paths lock before checking capacity and inserting", () => {
+    const directLoading = routeSlice(
+      read("server/routes/factory/customer-orders/finalize-loading/loading.ts"),
+      'app.post("/api/factory/customer-orders-loading"'
+    );
+    expectBefore(directLoading, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(directLoading, "guardProformaOrderCreation(tx", ".insert(customerOrders)");
+
+    const genericOrder = routeSlice(
+      read("server/routes/factory/customer-orders/orderCrudRoutes.ts"),
+      'app.post("/api/factory/customer-orders"'
+    );
+    expectBefore(genericOrder, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(genericOrder, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");
+
+    const v5Containers = routeSlice(
+      read("server/routes/factory/stock-allocation-v5/proforma-create.ts"),
+      'app.post("/api/factory/v5/proforma/:proformaId/add-containers"'
+    );
+    expectBefore(v5Containers, "acquireProformaCapacityTransactionLock(tx", "guardProformaOrderCreation(tx");
+    expectBefore(v5Containers, "guardProformaOrderCreation(tx", "tx.insert(customerOrders)");
   });
 
   it("proforma linking, recovery, exchange, and cancelled restore use the shared lock", () => {
