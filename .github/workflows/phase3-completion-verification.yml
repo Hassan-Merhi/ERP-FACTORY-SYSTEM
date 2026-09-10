@@ -70,6 +70,19 @@ jobs:
           node scripts/phase3-preflight-patch.mjs
           node scripts/phase3-wire-capacity-locks.mjs
           node scripts/phase3-finalize-creation-locks.mjs
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const path = "server/routes/factory/customer-orders/bale-scanning/bulk-import.ts";
+          let source = readFileSync(path, "utf8");
+          const oldText = "          if (order.proformaIdUsed && !ignoreProforma && !capacity) return [];";
+          const newText =
+            "          if (order.proformaIdUsed && !ignoreProforma && !capacity) {\n" +
+            "            return { orderChanged: false, addedIds: [] as number[] };\n" +
+            "          }";
+          if (!source.includes(oldText)) throw new Error("Phase 3 bulk-import unavailable-capacity return anchor missing");
+          source = source.replace(oldText, newText);
+          writeFileSync(path, source);
+          NODE
 
       - name: Format and verify Phase 3 files
         run: |
