@@ -11,14 +11,14 @@ const phase4Test = "tests/proforma-capacity-phase4-reconciliation.test.ts";
 replaceOne(
   phase4Test,
   'import { pool } from "../server/db";',
-  'import { db, pool } from "../server/db";\nimport { ensureCanonicalStockMovementJournal } from "../server/services/inventory/ensureCanonicalStockMovementJournal";',
+  'import { db, pool } from "../server/db";\nimport { ensureCanonicalStockMovementJournal } from "../server/services/inventory/ensureCanonicalStockMovementJournal";\nimport { ensureFinancialOperationRequests } from "../server/services/accounting/ensureFinancialOperationRequests";',
   "phase4 test db import"
 );
 replaceOne(
   phase4Test,
   "beforeAll(async () => {\n  ctx = await seedTestData(PREFIX);",
-  "beforeAll(async () => {\n  // cleanupTestData removes canonical journal rows; drizzle push does not create\n  // these runtime-managed tables, so make the shared fixture teardown available.\n  await ensureCanonicalStockMovementJournal(pool);\n  ctx = await seedTestData(PREFIX);",
-  "phase4 canonical test journal setup"
+  "beforeAll(async () => {\n  // cleanupTestData removes rows from runtime-managed tables that drizzle push\n  // does not create, so make those shared fixture teardown dependencies available.\n  await ensureCanonicalStockMovementJournal(pool);\n  await ensureFinancialOperationRequests(pool);\n  ctx = await seedTestData(PREFIX);",
+  "phase4 runtime test tables setup"
 );
 replaceOne(
   phase4Test,
