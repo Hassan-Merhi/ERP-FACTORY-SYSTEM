@@ -93,8 +93,8 @@ jobs:
       - name: Prepare disposable PostgreSQL schema
         run: node node_modules/drizzle-kit/bin.cjs push --force
 
-      - name: Regenerate intentional route manifest
-        run: UPDATE_ROUTE_MANIFEST=1 node node_modules/vitest/vitest.mjs run tests/route-manifest.test.ts
+      - name: Verify reviewed Phase 4 route delta
+        run: node node_modules/vitest/vitest.mjs run tests/route-manifest.test.ts
 
       - name: Run focused Phase 1 through Phase 4 regressions
         run: |
