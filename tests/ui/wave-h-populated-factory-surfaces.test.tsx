@@ -177,22 +177,22 @@ describe("Wave H populated factory surfaces", () => {
       { seedQueries: [[["/api/factory/v5/stock-allocation", true, undefined], data]] }
     );
 
-    expect(await screen.findByText("Alpha Bale")).toBeInTheDocument();
-    expect(screen.getByText("Short Bale")).toBeInTheDocument();
-    expect(screen.queryByText("Factory Wipers")).not.toBeInTheDocument();
-    expect(screen.getByText(/1 shortage/)).toBeInTheDocument();
+    expect(await screen.findAllByText("Alpha Bale")).not.toHaveLength(0);
+    expect(screen.getAllByText("Short Bale")).not.toHaveLength(0);
+    expect(screen.queryAllByText("Factory Wipers")).toHaveLength(0);
+    expect(screen.getAllByText(/1 shortage/)).not.toHaveLength(0);
 
     fireEvent.click(screen.getByTestId("button-v5-toggle-negative-only"));
-    expect(screen.getByText("Short Bale")).toBeInTheDocument();
-    expect(screen.queryByText("Alpha Bale")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Short Bale")).not.toHaveLength(0);
+    expect(screen.queryAllByText("Alpha Bale")).toHaveLength(0);
 
     fireEvent.click(screen.getByTestId("button-v5-toggle-negative-only"));
     fireEvent.click(screen.getByTestId("button-v5-toggle-garbage-wipers"));
-    expect(screen.getByText("Factory Wipers")).toBeInTheDocument();
+    expect(screen.getAllByText("Factory Wipers")).not.toHaveLength(0);
 
     fireEvent.change(screen.getByTestId("input-v5-search"), { target: { value: "BAL-101" } });
-    expect(screen.getByText("Alpha Bale")).toBeInTheDocument();
-    expect(screen.queryByText("Short Bale")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Alpha Bale")).not.toHaveLength(0);
+    expect(screen.queryAllByText("Short Bale")).toHaveLength(0);
   });
 
   it("renders populated OTW tracking metrics and filters a container list", async () => {

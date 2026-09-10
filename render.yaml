@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: 24.19.0
+        value: 24.21.0
       # Starter is a 512 MB service. Keep the JS heap below the container
       # ceiling so native buffers, compression, sockets, and exports retain
       # headroom instead of letting Render be the first OOM protection layer.

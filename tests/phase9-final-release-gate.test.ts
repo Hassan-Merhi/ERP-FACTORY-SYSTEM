@@ -80,7 +80,7 @@ describe("Phase 9 final verification and release contract", () => {
       expect(workflow).toContain(token);
     }
 
-    expect(workflow).toContain("postgres:16");
+    expect(workflow).toContain("postgres:18");
     expect(workflow).toContain("scripts/run-phase9-language-browser-smoke.mjs");
     expect(workflow).toContain("scripts/verify-phase9-final-i18n-baseline.mjs");
     expect(workflow).toContain("Record and enforce final release result");

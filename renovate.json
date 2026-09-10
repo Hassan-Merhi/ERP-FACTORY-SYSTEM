@@ -8,26 +8,62 @@
     "helpers:pinGitHubActionDigests",
     "security:minimumReleaseAgeNpm"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "timezone": "Africa/Lubumbashi",
   "prConcurrentLimit": 5,
   "branchConcurrentLimit": 8,
   "automerge": false,
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["dependencies", "security"],
+    "labels": [
+      "dependencies",
+      "security"
+    ],
     "automerge": false
   },
   "packageRules": [
     {
       "description": "Require explicit dashboard approval for every major upgrade",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Hold TypeScript below 6.1 until typescript-eslint supports a newer compiler API (typescript-eslint#10940). typescript-eslint 8.x reads the TypeScript compiler API and supports it through <6.1; TypeScript 7 removes that API entirely, which takes both npm run lint and scripts/audit-type-escapes.mjs down repo-wide.",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<6.1",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Hold the Android build tooling at the Capacitor 8 template baseline that scripts/audit-platform-modernization.mjs enforces. @capacitor/android 8.x pins com.android.tools.build:gradle:8.13.0 in its own module, so bumping AGP, Gradle or the google-services plugin past that baseline puts the app build ahead of the Capacitor version it has to link against. Raise these together with a Capacitor major, not on their own.",
+      "matchManagers": [
+        "gradle",
+        "gradle-wrapper"
+      ],
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "com.google.gms:google-services",
+        "androidx.appcompat:appcompat",
+        "gradle"
+      ],
       "dependencyDashboardApproval": true,
       "automerge": false
     },
     {
       "description": "Require explicit approval for database, authentication, document-generation, and spreadsheet runtime dependencies",
-      "matchDatasources": ["npm"],
+      "matchDatasources": [
+        "npm"
+      ],
       "matchPackageNames": [
         "drizzle-orm",
         "drizzle-kit",
@@ -54,25 +90,40 @@
     },
     {
       "description": "Group non-major development-tool updates to reduce PR noise",
-      "matchDatasources": ["npm"],
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "minimumReleaseAge": "7 days",
       "groupName": "development dependencies",
       "automerge": false
     },
     {
       "description": "Group production patch updates while keeping them review-gated",
-      "matchDatasources": ["npm"],
-      "matchDepTypes": ["dependencies"],
-      "matchUpdateTypes": ["patch"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "minimumReleaseAge": "7 days",
       "groupName": "production dependency patches",
       "automerge": false
     },
     {
       "description": "Keep GitHub Actions digest updates isolated and review-gated",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "GitHub Actions digests",
       "automerge": false
     }

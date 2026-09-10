@@ -43,6 +43,35 @@ class CompanyParentValidationError extends Error {
   }
 }
 
+function companyTypeRequiresParentDecision(rawCompanyType: unknown): boolean {
+  const companyType =
+    typeof rawCompanyType === "string" && rawCompanyType.trim().length > 0 ? rawCompanyType.trim() : "erp";
+  return companyType !== "properties";
+}
+
+async function assertNoParentCycle(companyId: number, parentCompanyId: number): Promise<void> {
+  let cursor: number | null = parentCompanyId;
+  const visited = new Set<number>();
+
+  for (let depth = 0; cursor !== null && depth < 100; depth += 1) {
+    if (cursor === companyId) {
+      throw new CompanyParentValidationError("The selected parent company would create a circular company relationship.");
+    }
+    if (visited.has(cursor)) {
+      throw new CompanyParentValidationError("The selected parent company belongs to an existing circular company chain.");
+    }
+    visited.add(cursor);
+
+    const current = await storage.getCompanyById(cursor);
+    if (!current?.parentCompanyId) return;
+    cursor = Number(current.parentCompanyId);
+  }
+
+  if (cursor !== null) {
+    throw new CompanyParentValidationError("The selected parent company relationship is too deep to validate safely.");
+  }
+}
+
 async function normalizeParentCompanyId(rawValue: unknown, companyId?: number): Promise<number | null | undefined> {
   if (rawValue === undefined) return undefined;
   if (rawValue === null || rawValue === "" || rawValue === "none") return null;
@@ -68,17 +97,36 @@ async function normalizeParentCompanyId(rawValue: unknown, companyId?: number): 
   if (!parentCompany.active) {
     throw new CompanyParentValidationError("The selected parent company is inactive.");
   }
+  if (parentCompany.companyType === "properties") {
+    throw new CompanyParentValidationError("A Properties company cannot be used as an accounting parent company.");
+  }
+
+  if (companyId !== undefined) {
+    await assertNoParentCycle(companyId, parentCompanyId);
+  }
 
   return parentCompanyId;
 }
 
-async function prepareCompanyPayload(body: unknown, companyId?: number): Promise<Record<string, unknown>> {
+async function prepareCompanyPayload(
+  body: unknown,
+  companyId?: number,
+  requireParentDecision = false
+): Promise<Record<string, unknown>> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new CompanyParentValidationError("Company data must be an object.");
   }
 
   const payload = { ...(body as Record<string, unknown>) };
-  if (Object.prototype.hasOwnProperty.call(payload, "parentCompanyId")) {
+  const hasParentDecision = Object.prototype.hasOwnProperty.call(payload, "parentCompanyId");
+
+  if (requireParentDecision && companyTypeRequiresParentDecision(payload.companyType) && !hasParentDecision) {
+    throw new CompanyParentValidationError(
+      "Choose a parent company or explicitly select Standalone / No Parent before creating this company."
+    );
+  }
+
+  if (hasParentDecision) {
     payload.parentCompanyId = await normalizeParentCompanyId(payload.parentCompanyId, companyId);
   }
   return payload;
@@ -157,7 +205,7 @@ export function registerCompanyAccessRoutes(app: Express) {
 
   app.post("/api/companies", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
-      const payload = await prepareCompanyPayload(req.body);
+      const payload = await prepareCompanyPayload(req.body, undefined, true);
       res.status(201).json(await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0]));
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });
