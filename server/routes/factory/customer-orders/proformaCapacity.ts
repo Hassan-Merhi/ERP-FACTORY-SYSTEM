@@ -267,12 +267,12 @@ export async function getProformaCapacitySnapshot(
   const contributionRows = resultRows<ContributionRow>(
     await executor.execute(sql`
       SELECT
-        LOWER(TRIM(COALESCE(
-          NULLIF(cob.article_code, ''),
-          NULLIF(fb.article_code, ''),
-          fbp.article_code,
+        LOWER(COALESCE(
+          NULLIF(TRIM(cob.article_code), ''),
+          NULLIF(TRIM(fb.article_code), ''),
+          NULLIF(TRIM(fbp.article_code), ''),
           ''
-        ))) AS "normalizedArticleCode",
+        )) AS "normalizedArticleCode",
         co.id AS "orderId",
         co.status AS "orderStatus",
         COUNT(DISTINCT cob.bale_id)::int AS "loadedQty"
@@ -286,19 +286,19 @@ export async function getProformaCapacitySnapshot(
         AND co.proforma_id_used = ${options.proformaId}
         AND co.status <> 'CANCELLED'
         AND co.deleted_at IS NULL
-        AND LOWER(TRIM(COALESCE(
-          NULLIF(cob.article_code, ''),
-          NULLIF(fb.article_code, ''),
-          fbp.article_code,
+        AND COALESCE(
+          NULLIF(TRIM(cob.article_code), ''),
+          NULLIF(TRIM(fb.article_code), ''),
+          NULLIF(TRIM(fbp.article_code), ''),
           ''
-        ))) <> ''
+        ) <> ''
       GROUP BY
-        LOWER(TRIM(COALESCE(
-          NULLIF(cob.article_code, ''),
-          NULLIF(fb.article_code, ''),
-          fbp.article_code,
+        LOWER(COALESCE(
+          NULLIF(TRIM(cob.article_code), ''),
+          NULLIF(TRIM(fb.article_code), ''),
+          NULLIF(TRIM(fbp.article_code), ''),
           ''
-        ))),
+        )),
         co.id,
         co.status
     `)
