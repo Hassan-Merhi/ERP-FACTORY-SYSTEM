@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 describe("factory loading proforma quantity alignment", () => {
-  it("manual scanning uses the summed proforma target for enforcement and warning display", () => {
+  it("manual scanning delegates membership and overload decisions to the authoritative capacity engine", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
-    expect(source).toContain("sumProformaQuantityLimit(matchingProformaLines)");
-    expect(source).toContain("currentCount >= proformaQuantityLimit");
-    expect(source).toContain("quantity: proformaQuantityLimit");
-    expect(source).toContain("${currentCount}/${proformaLine.quantity}");
+    expect(source).toContain("getProformaCapacitySnapshot(tx");
+    expect(source).toContain("evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1)");
+    expect(source).toContain("decision.consumedQty");
+    expect(source).toContain("decision.requestedQty");
   });
 
   it("factory loading requests sibling-aware remaining quantities", () => {
@@ -17,9 +17,9 @@ describe("factory loading proforma quantity alignment", () => {
     expect(source).toContain("continuationFromOrderId || String(orderId)");
   });
 
-  it("remaining quantities normalize article codes", () => {
+  it("continuation remaining quantities delegate to the authoritative capacity engine", () => {
     const source = read("server/routes/factory/customer-orders/orderCrudRoutes.ts");
-    expect(source).toContain("normalizedArticleCode");
-    expect(source).toContain("trim().toLowerCase()");
+    expect(source).toContain("getProformaCapacitySnapshot(db");
+    expect(source).toContain("allocateRemainingProformaLines(proformaLines, capacity)");
   });
 });
