@@ -140,7 +140,7 @@ describe("authoritative proforma capacity engine", () => {
     expect(articleB.totalConsumedQty).toBe(0);
   });
 
-  it("pins the database policy to non-cancelled, non-deleted orders and distinct physical bales", () => {
+  it("pins database policy filters, deduping, and the scanner-compatible article fallback", () => {
     const source = readFileSync(
       new URL("../server/routes/factory/customer-orders/proformaCapacity.ts", import.meta.url),
       "utf8"
@@ -148,6 +148,9 @@ describe("authoritative proforma capacity engine", () => {
     expect(source).toContain("co.status <> 'CANCELLED'");
     expect(source).toContain("co.deleted_at IS NULL");
     expect(source).toContain("COUNT(DISTINCT cob.bale_id)::int");
-    expect(source).toContain("LOWER(TRIM(COALESCE(NULLIF(cob.article_code, ''), fb.article_code, '')))");
+    expect(source).toContain("LEFT JOIN factory_bale_products fbp");
+    expect(source).toContain("NULLIF(cob.article_code, '')");
+    expect(source).toContain("NULLIF(fb.article_code, '')");
+    expect(source).toContain("fbp.article_code");
   });
 });
