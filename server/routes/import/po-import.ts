@@ -178,6 +178,12 @@ export function registerPoImportRoutes(app: Express) {
       for (const total of parsedPreview.unreadableTotals) {
         validationErrors.push(`Container total ${total} is missing or not a number`);
       }
+      // A charge stated as something unreadable is still summed into the
+      // chargesTotal and grandTotal the payload carries, so accepting it would
+      // write a container whose totals do not match its own charge records.
+      for (const charge of parsedPreview.unreadableCharges) {
+        validationErrors.push(`Container charge ${charge} is not a number`);
+      }
       validationErrors.push(
         ...(await collectPreviewItemErrors(containerPreview.items, req.session.currentCompanyId!, allStockItems))
       );

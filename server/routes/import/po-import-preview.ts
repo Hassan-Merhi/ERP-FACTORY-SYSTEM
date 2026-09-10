@@ -95,16 +95,32 @@ function parsePreviewItem(value: unknown): { item: PoImportPreviewItem; moneyRea
   };
 }
 
-/** The charge block, defaulting each absent charge to absent rather than zero. */
-function parsePreviewCharges(value: unknown): PoImportPreviewCharges {
-  if (!isRecord(value)) return {};
+/**
+ * The charge block, defaulting each absent charge to absent rather than zero,
+ * alongside the names of any charge that was present but not a readable number.
+ *
+ * An absent charge and an unreadable one both leave the key unset, but they are
+ * not the same: the container's chargesTotal and grandTotal are carried
+ * separately, so a charge the payload meant to include but stated as, say,
+ * "abc" would be summed into those totals while its own record was written as
+ * zero. The names are returned so the import endpoint can refuse, the same way
+ * it refuses unreadable line money and container totals.
+ */
+function parsePreviewCharges(value: unknown): {
+  charges: PoImportPreviewCharges;
+  unreadable: string[];
+} {
+  if (!isRecord(value)) return { charges: {}, unreadable: [] };
   const charges: PoImportPreviewCharges = {};
+  const unreadable: string[] = [];
   const keys = ["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const;
   for (const key of keys) {
-    const amount = toFiniteNumber(value[key]);
+    const raw = value[key];
+    const amount = toFiniteNumber(raw);
     if (amount !== undefined) charges[key] = amount;
+    else if (raw !== undefined && raw !== null && raw !== "") unreadable.push(key);
   }
-  return charges;
+  return { charges, unreadable };
 }
 
 /** A parsed preview entry, alongside what the payload failed to carry as money. */
@@ -114,6 +130,8 @@ export interface PreviewContainerParse {
   linesWithUnreadableMoney: number[];
   /** Container total names that were not readable numbers. */
   unreadableTotals: string[];
+  /** Charge names the payload carried as something other than a readable number. */
+  unreadableCharges: string[];
 }
 
 /**
@@ -141,6 +159,8 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
     if (!parsed.moneyReadable) linesWithUnreadableMoney.push(index + 1);
   }
 
+  const { charges, unreadable: unreadableCharges } = parsePreviewCharges(entry.charges);
+
   const itemsTotal = toFiniteNumber(entry.itemsTotal);
   const chargesTotal = toFiniteNumber(entry.chargesTotal);
   const grandTotal = toFiniteNumber(entry.grandTotal);
@@ -153,7 +173,7 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
     container: {
       containerNumber,
       items,
-      charges: parsePreviewCharges(entry.charges),
+      charges,
       itemsCount: toFiniteNumber(entry.itemsCount) ?? items.length,
       itemsTotal: itemsTotal ?? 0,
       chargesTotal: chargesTotal ?? 0,
@@ -161,6 +181,7 @@ export function findPreviewContainer(preview: unknown, containerNumber: string):
     },
     linesWithUnreadableMoney,
     unreadableTotals,
+    unreadableCharges,
   };
 }
 

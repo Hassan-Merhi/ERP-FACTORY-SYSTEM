@@ -136,6 +136,36 @@ describe("findPreviewContainer", () => {
 
     expect(parsed?.linesWithUnreadableMoney).toEqual([]);
     expect(parsed?.unreadableTotals).toEqual([]);
+    expect(parsed?.unreadableCharges).toEqual([]);
+  });
+
+  it("reports a charge that cannot be read, so it is not silently written as zero", () => {
+    // chargesTotal and grandTotal are carried separately from the charges, so an
+    // unreadable freight would otherwise be summed into both while its own
+    // record was written as zero, leaving the container inconsistent with itself.
+    const parsed = findPreviewContainer([{ ...container, charges: { freight: "abc", discount: 5 } }], "MSKU1234567");
+
+    expect(parsed?.unreadableCharges).toEqual(["freight"]);
+    expect(parsed?.container.charges).toEqual({ discount: 5 });
+  });
+
+  it("does not report an absent charge as unreadable", () => {
+    const parsed = findPreviewContainer(
+      [{ ...container, charges: { freight: 100, surcharge: undefined, fumigation: null, discount: "" } }],
+      "MSKU1234567"
+    );
+
+    expect(parsed?.unreadableCharges).toEqual([]);
+    expect(parsed?.container.charges).toEqual({ freight: 100 });
+  });
+
+  it("names every unreadable charge, not just the first", () => {
+    const parsed = findPreviewContainer(
+      [{ ...container, charges: { freight: "abc", fumigation: {}, discount: 5 } }],
+      "MSKU1234567"
+    );
+
+    expect(parsed?.unreadableCharges).toEqual(["freight", "fumigation"]);
   });
 
   it("accepts an entry with no charges block, treating it as no charges", () => {
