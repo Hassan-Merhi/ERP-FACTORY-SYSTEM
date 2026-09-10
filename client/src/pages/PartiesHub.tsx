@@ -22,21 +22,23 @@ export default function PartiesHub() {
   });
 
   return (
-    <div className="flex flex-col h-full">
-      <Tabs value={activeTab} onValueChange={(value) => setTab(value as (typeof TAB_KEYS)[number])} className="flex flex-col h-full">
-        <div className="border-b bg-background px-4 pt-3">
-          <TabsList className="h-9">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.key} value={t.key} className="flex items-center gap-1.5 text-sm">
-                <t.icon className="h-3.5 w-3.5" />
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+    <div className="flex min-w-0 flex-col h-full">
+      <Tabs value={activeTab} onValueChange={(value) => setTab(value as (typeof TAB_KEYS)[number])} className="flex min-w-0 flex-col h-full">
+        <div className="border-b bg-background px-3 sm:px-4 pt-3">
+          <div className="erp-mobile-scroll-tabs pb-1">
+            <TabsList className="h-9 w-max min-w-full sm:min-w-0 sm:w-fit">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.key} value={t.key} className="flex shrink-0 items-center gap-1.5 text-sm">
+                  <t.icon className="h-3.5 w-3.5" />
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         </div>
 
         {TABS.map((t) => (
-          <TabsContent key={t.key} value={t.key} className="flex-1 overflow-auto m-0 p-0">
+          <TabsContent key={t.key} value={t.key} className="flex-1 min-w-0 overflow-auto m-0 p-0">
             <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading…</div>}>
               {t.key === "suppliers" && <Suppliers />}
               {t.key === "customers" && <Customers />}

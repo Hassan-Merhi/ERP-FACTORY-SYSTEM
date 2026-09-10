@@ -18,6 +18,7 @@ import { installErpNavigationHistory } from "@/lib/erp-navigation-history";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
+import "@/erp-mobile-operations.css";
 
 interface ErpShellProps {
   user: ShellUser;
@@ -39,6 +40,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
   const hasAdminSearch = canUseAdminSearch(user);
   const erpContainerRef = useRef<HTMLDivElement>(null);
+  const routePath = currentLocation.split("?")[0] || "/";
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(erpContainerRef);
 
@@ -71,7 +73,9 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   loadingTitle="Loading workspace"
                   loadingDescription="Preparing the latest ERP information."
                 >
-                  <Router user={user} />
+                  <div data-erp-route={routePath} className="w-full min-w-0 max-w-full">
+                    <Router user={user} />
+                  </div>
                 </WorkspaceRouteBoundary>
               </main>
             </div>
