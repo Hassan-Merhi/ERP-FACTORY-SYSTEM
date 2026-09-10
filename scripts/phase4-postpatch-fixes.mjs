@@ -7,15 +7,28 @@ function replaceOne(path, before, after, label) {
   fs.writeFileSync(path, source.replace(before, after));
 }
 
+const phase4Test = "tests/proforma-capacity-phase4-reconciliation.test.ts";
 replaceOne(
-  "tests/proforma-capacity-phase4-reconciliation.test.ts",
+  phase4Test,
   'import { pool } from "../server/db";',
   'import { db, pool } from "../server/db";',
   "phase4 test db import"
 );
 replaceOne(
-  "tests/proforma-capacity-phase4-reconciliation.test.ts",
+  phase4Test,
   "await syncProformaReservations(ctx.db, ctx.companyId, proformaId);",
   "await syncProformaReservations(db, ctx.companyId, proformaId);",
   "phase4 test db usage"
+);
+replaceOne(
+  phase4Test,
+  'const verifiedId = orders.find((row) => row.status === "VERIFIED")!.id;\n  currentOrderId = orders.find((row) => row.status === "LOADING")!.id;\n  const cancelledId = orders.find((row) => row.status === "CANCELLED")!.id;',
+  'const verifiedId = orders.rows.find((row) => row.status === "VERIFIED")!.id;\n  currentOrderId = orders.rows.find((row) => row.status === "LOADING")!.id;\n  const cancelledId = orders.rows.find((row) => row.status === "CANCELLED")!.id;',
+  "phase4 query result rows"
+);
+replaceOne(
+  phase4Test,
+  "expect(row.freeToPromise).toBe(row.inStock - 1);",
+  "expect(row.freeToPromise).toBe(Math.max(0, row.inStock - 1));",
+  "phase4 free-to-promise floor"
 );
