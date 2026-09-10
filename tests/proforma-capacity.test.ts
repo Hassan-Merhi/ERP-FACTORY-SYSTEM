@@ -1,8 +1,9 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildProformaCapacitySnapshot,
   findProformaCapacityArticle,
+  getProformaCapacitySnapshot,
+  type ProformaCapacityExecutor,
 } from "../server/routes/factory/customer-orders/proformaCapacity";
 
 const baseProforma = {
@@ -140,17 +141,39 @@ describe("authoritative proforma capacity engine", () => {
     expect(articleB.totalConsumedQty).toBe(0);
   });
 
-  it("pins database policy filters, deduping, and the scanner-compatible article fallback", () => {
-    const source = readFileSync(
-      new URL("../server/routes/factory/customer-orders/proformaCapacity.ts", import.meta.url),
-      "utf8"
+  it("reads proforma metadata, lines, and grouped loading contributions through one backend contract", async () => {
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [baseProforma] })
+      .mockResolvedValueOnce({ rows: [{ articleCode: "A", quantity: 5 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { normalizedArticleCode: "a", orderId: 154, orderStatus: "VERIFIED", loadedQty: 2 },
+          { normalizedArticleCode: "a", orderId: 170, orderStatus: "LOADING", loadedQty: 1 },
+        ],
+      });
+    const executor = { execute } as unknown as ProformaCapacityExecutor;
+
+    const snapshot = await getProformaCapacitySnapshot(executor, options);
+
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(snapshot).not.toBeNull();
+    expect(findProformaCapacityArticle(snapshot!, "A")).toEqual(
+      expect.objectContaining({
+        requestedQty: 5,
+        currentOrderLoadedQty: 1,
+        siblingLoadedQty: 2,
+        remainingQty: 2,
+        contributingOrderIds: [154, 170],
+      })
     );
-    expect(source).toContain("co.status <> 'CANCELLED'");
-    expect(source).toContain("co.deleted_at IS NULL");
-    expect(source).toContain("COUNT(DISTINCT cob.bale_id)::int");
-    expect(source).toContain("LEFT JOIN factory_bale_products fbp");
-    expect(source).toContain("NULLIF(cob.article_code, '')");
-    expect(source).toContain("NULLIF(fb.article_code, '')");
-    expect(source).toContain("fbp.article_code");
+  });
+
+  it("returns null without reading lines or loading contributions when the proforma is unavailable", async () => {
+    const execute = vi.fn().mockResolvedValueOnce({ rows: [] });
+    const executor = { execute } as unknown as ProformaCapacityExecutor;
+
+    await expect(getProformaCapacitySnapshot(executor, options)).resolves.toBeNull();
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 });
