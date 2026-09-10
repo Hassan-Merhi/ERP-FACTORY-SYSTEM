@@ -64,6 +64,41 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --bin-links=true
 
+      - name: Refresh route behavior fixture for finalization preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show origin/main:tests/customer-loading-routes-behavior.test.ts > tests/customer-loading-routes-behavior.test.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("tests/customer-loading-routes-behavior.test.ts")
+          source = path.read_text()
+          old_setup = '''    ) => {
+                harness.selectResults.push(
+                  [overrides.order ?? order],'''
+          if old_setup not in source:
+              old_setup = '''    ) => {
+              harness.selectResults.push(
+                [overrides.order ?? order],'''
+          if old_setup not in source:
+              old_setup = '''    ) => {
+      harness.selectResults.push(
+        [overrides.order ?? order],'''
+          if old_setup not in source:
+              raise SystemExit("current loading finalization setup marker not found")
+          indent = old_setup.split("harness.selectResults.push", 1)[0].splitlines()[-1]
+          replacement = old_setup.replace(
+              "harness.selectResults.push(\n" + old_setup.split("harness.selectResults.push(\n", 1)[1].split("[overrides.order ?? order],", 1)[0] + "[overrides.order ?? order],",
+              "const selectedOrder = overrides.order ?? order;\n" + indent + "harness.selectResults.push(\n" + old_setup.split("harness.selectResults.push(\n", 1)[1].split("[overrides.order ?? order],", 1)[0] + "[selectedOrder],\n" + old_setup.split("harness.selectResults.push(\n", 1)[1].split("[overrides.order ?? order],", 1)[0] + "[selectedOrder],",
+              1,
+          )
+          source = source.replace(old_setup, replacement, 1)
+          if '[{ ...order, status: "VERIFIED" }]' not in source:
+              raise SystemExit("finalization mutation result marker not found")
+          source = source.replace('[{ ...order, status: "VERIFIED" }]', '[{ ...selectedOrder, status: "VERIFIED" }]', 1)
+          path.write_text(source)
+          PY
+
       - name: Apply all remaining Phase 3 route wiring
         shell: bash
         run: |
@@ -123,7 +158,8 @@ jobs:
             server/routes/factory/customer-proformas/create-loading.ts \
             server/routes/factory/stock-allocation-v5/restoreCancelledContainerAtomic.ts \
             tests/proforma-capacity-concurrency.test.ts \
-            tests/proforma-capacity-concurrency-wiring.test.ts
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
           git diff --check
 
       - name: Prepare disposable PostgreSQL schema
@@ -174,7 +210,8 @@ jobs:
             server/routes/factory/dispatch-batches/invoicing.ts \
             server/routes/factory/stock-allocation-v5/cancelled-containers.ts \
             server/routes/factory/stock-allocation-v5/proforma-create.ts \
-            tests/proforma-capacity-concurrency-wiring.test.ts
+            tests/proforma-capacity-concurrency-wiring.test.ts \
+            tests/customer-loading-routes-behavior.test.ts
           git diff --cached --check
           git status --short
           git config user.name "github-actions[bot]"
