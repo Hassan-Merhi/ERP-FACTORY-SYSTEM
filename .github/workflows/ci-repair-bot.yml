@@ -154,106 +154,46 @@ jobs:
               --jq '.[] | @base64'
           )
 
-  enable-automerge:
-    name: Keep trusted PRs on auto-merge
+  disable-trusted-automerge:
+    name: Keep trusted PR merges manual
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     steps:
-      - name: Enable protected auto-merge for trusted PRs
+      - name: Disable auto-merge for trusted PRs
         shell: bash
         env:
-          CI_REPAIR_BOT_TOKEN: ${{ secrets.CI_REPAIR_BOT_TOKEN }}
-          WORKFLOW_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # GitHub records auto-merge against whoever enables it and performs
-          # the merge push as that identity. Pushes made with GITHUB_TOKEN do
-          # not start workflow runs, so a merge enabled with it lands a commit
-          # on main that never gets a CI run. `ci/circleci: github-ci-gate`
-          # then polls for that run 60 times at 120s and fails closed, which
-          # leaves a required status red on every merged commit regardless of
-          # what the code does.
-          #
-          # Prefer the bot PAT, whose pushes do trigger workflows. Fall back to
-          # the workflow token when the secret is absent so this job keeps
-          # behaving exactly as before rather than failing.
-          #
-          # A present-but-unusable PAT must not be adopted silently: GH_TOKEN
-          # takes precedence over every other gh credential, so an expired or
-          # under-scoped secret would make each `gh pr merge` fail into its
-          # `|| true` and the job would report success having neither enabled
-          # auto-merge nor, for a ci-repair-blocked pull request, disabled it.
-          # Prove the token can read this repository's pull requests first.
-          #
-          # An unusable PAT is reported loudly but must not fail the job. This
-          # workflow runs every 15 minutes against `ref=main`, so a hard exit
-          # here publishes a failed check run on main's head commit and keeps
-          # publishing one until somebody rotates the secret — main goes red
-          # for a credential problem that has nothing to do with the code.
-          #
-          # The fallback runs the job's safety half only. GITHUB_TOKEN can
-          # still take a ci-repair-blocked pull request off auto-merge, which
-          # is what the hard exit was failing to do. It must NOT enable new
-          # auto-merges: a merge enabled with GITHUB_TOKEN lands a main commit
-          # that starts no workflow run, and `.circleci/config.yml` polls
-          # actions/runs?head_sha=<that commit> for a run named CI sixty times
-          # and then fails closed. Enabling auto-merge here would therefore
-          # trade one red scheduled run for five red required statuses on
-          # every commit it merged — worse than the failure being fixed.
-          allow_new_automerge=true
-          if [[ -n "${CI_REPAIR_BOT_TOKEN:-}" ]]; then
-            if GH_TOKEN="$CI_REPAIR_BOT_TOKEN" \
-              gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=1" >/dev/null 2>&1; then
-              export GH_TOKEN="$CI_REPAIR_BOT_TOKEN"
-            else
-              export GH_TOKEN="$WORKFLOW_TOKEN"
-              allow_new_automerge=false
-              echo "::warning title=CI_REPAIR_BOT_TOKEN is unusable::The secret is set but cannot read pull requests on $GITHUB_REPOSITORY. It is probably expired or missing repo/pull-request scope. Discarding it and running upkeep with GITHUB_TOKEN: ci-repair-blocked pull requests are still taken off auto-merge, but no new auto-merge is enabled until the secret is rotated, because merges it lands would receive no CI run on main."
-            fi
-          else
-            export GH_TOKEN="$WORKFLOW_TOKEN"
-            echo "::warning title=Auto-merge will not trigger CI::CI_REPAIR_BOT_TOKEN is unset, so merges use GITHUB_TOKEN and main will receive no CI run."
-          fi
 
-          # Read the list through a command substitution rather than a process
-          # substitution: `done < <(gh api ...)` hides a listing failure from
-          # `set -e`, leaving an empty loop and a green job.
           pr_list="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&base=main&per_page=100" --jq '.[] | @base64')"
-
-          merge_failures=0
+          disable_failures=0
           while IFS= read -r encoded_pr; do
             [[ -n "$encoded_pr" ]] || continue
             pr_json="$(printf '%s' "$encoded_pr" | base64 --decode)"
             pr_number="$(jq -r '.number' <<<"$pr_json")"
-            draft="$(jq -r '.draft' <<<"$pr_json")"
             head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$pr_json")"
             author_login="$(jq -r '.user.login' <<<"$pr_json")"
             author_association="$(jq -r '.author_association // ""' <<<"$pr_json")"
-            blocked="$(jq -r '[.labels[].name] | any(. == "ci-repair-blocked")' <<<"$pr_json")"
-            if [[ "$blocked" == true ]]; then
-              gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --disable-auto >/dev/null 2>&1 ||
-                merge_failures=$((merge_failures + 1))
-              continue
-            fi
-            [[ "$draft" == false && "$head_repo" == "$GITHUB_REPOSITORY" ]] || continue
+            auto_merge_enabled="$(jq -r '.auto_merge != null' <<<"$pr_json")"
+
+            [[ "$head_repo" == "$GITHUB_REPOSITORY" ]] || continue
             [[ "$author_login" != 'dependabot[bot]' && "$author_login" != 'renovate[bot]' ]] || continue
             case "$author_association" in
               OWNER|MEMBER|COLLABORATOR) ;;
               *) continue ;;
             esac
-            [[ "$allow_new_automerge" == true ]] || continue
-            gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --auto --squash >/dev/null 2>&1 ||
-              merge_failures=$((merge_failures + 1))
+            [[ "$auto_merge_enabled" == true ]] || continue
+
+            gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --disable-auto >/dev/null 2>&1 ||
+              disable_failures=$((disable_failures + 1))
           done <<<"$pr_list"
 
-          # A single failure is ordinary — a pull request can simply not be
-          # auto-mergeable yet — so this warns rather than failing. It exists so
-          # a systemic problem leaves a trace instead of nothing at all.
-          if (( merge_failures > 0 )); then
-            echo "::warning title=Auto-merge upkeep incomplete::${merge_failures} auto-merge call(s) failed. Individual failures are expected for pull requests that cannot carry auto-merge; a persistent count points at token scope."
+          if (( disable_failures > 0 )); then
+            echo "::warning title=Auto-merge cleanup incomplete::${disable_failures} trusted PR(s) could not be taken off auto-merge."
           fi
 
   sync-main:
