@@ -54,6 +54,14 @@ test = replaceRequired(
   `[{ ...selectedOrder, status: "VERIFIED" }]`,
   "loading finalization mutation fixture"
 );
+// Normalize this obsolete local helper to the exact temporary-workflow anchor;
+// the workflow removes it before linting and before the verified commit.
+test = replaceRequired(
+  test,
+  `    const finalize = (body: Record<string, unknown> = {}) =>\n      routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(\n        req({ body, params: { id: "10" } }),\n        resHarness()\n      ) as Promise<void>;\n`,
+  `    const finalize = (body: Record<string, unknown> = {}) =>\n    routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(\n      req({ body, params: { id: "10" } }),\n      resHarness()\n    ) as Promise<void>;\n`,
+  "unused finalize helper normalization"
+);
 writeFileSync(testPath, test);
 
 console.log("Phase 3 completion preflight applied.");
