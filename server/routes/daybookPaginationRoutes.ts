@@ -2,12 +2,24 @@ import type { Express, Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db, pool } from "../db";
+import {
+  ContinuousCursorError,
+  continuousCursorScope,
+  decodeContinuousCursor,
+  encodeContinuousCursor,
+} from "../lib/continuousCursor";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { userLocations } from "@shared/schema";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+type DaybookCursor = {
+  sortDate: string;
+  typeRank: number;
+  sortId: number;
+};
 
 function parsePositiveInt(value: unknown, fallback: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -28,8 +40,23 @@ function parsePagination(req: Request): {
   return { page, limit, offset: (page - 1) * limit };
 }
 
+function wantsContinuousChunk(req: Request): boolean {
+  return req.query.continuous === "1" || typeof req.query.cursor === "string";
+}
+
 function normalizeDate(value: unknown): string | undefined {
   return typeof value === "string" && ISO_DATE.test(value) ? value : undefined;
+}
+
+function isDaybookCursor(value: unknown): value is DaybookCursor {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as Partial<DaybookCursor>;
+  return (
+    typeof cursor.sortDate === "string" &&
+    ISO_DATE.test(cursor.sortDate) &&
+    Number.isInteger(cursor.typeRank) &&
+    Number.isInteger(cursor.sortId)
+  );
 }
 
 export function registerDaybookPaginationRoutes(app: Express): void {
@@ -95,25 +122,23 @@ export function registerDaybookPaginationRoutes(app: Express): void {
       }
 
       const isPos = req.session.currentRole === "POS";
+      let locationIds: number[] = [];
       if (isPos && req.user?.id) {
         const assignedLocations = await db
           .select({ locationId: userLocations.locationId })
           .from(userLocations)
           .where(and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, companyId)));
-        const locationIds = assignedLocations.map((row) => row.locationId);
+        locationIds = assignedLocations.map((row) => row.locationId);
         if (locationIds.length > 0) {
           voucherConditions.push(`(v.location_id IS NULL OR v.location_id = ANY(${bind(locationIds)}::int[]))`);
         }
       }
 
       const hideStockTransferAmountsParam = bind(isPos);
-      const { page, limit, offset } = parsePagination(req);
-      const limitParam = bind(limit);
-      const offsetParam = bind(offset);
       const direction = req.query.sortOrder === "asc" ? "ASC" : "DESC";
 
-      const query = `
-        WITH voucher_rows AS (
+      const baseCtes = `
+        voucher_rows AS (
           SELECT
             'voucher'::text AS row_type,
             COALESCE(v.effective_date, v.voucher_date)::date AS sort_date,
@@ -209,7 +234,107 @@ export function registerDaybookPaginationRoutes(app: Express): void {
           SELECT * FROM voucher_rows
           UNION ALL
           SELECT * FROM offload_rows
-        ),
+        )`;
+
+      if (wantsContinuousChunk(req)) {
+        const limit = Math.min(MAX_PAGE_SIZE, parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE));
+        const scope = continuousCursorScope("erp-daybook", {
+          companyId,
+          startDate,
+          endDate,
+          voucherType,
+          statusFilter,
+          search,
+          minAmount: Number.isFinite(minAmount) ? minAmount : null,
+          maxAmount: Number.isFinite(maxAmount) ? maxAmount : null,
+          isPos,
+          locationIds: [...locationIds].sort((a, b) => a - b),
+          direction,
+        });
+
+        let cursor: DaybookCursor | null = null;
+        if (typeof req.query.cursor === "string" && req.query.cursor.trim()) {
+          const decoded = decodeContinuousCursor<unknown>(scope, req.query.cursor.trim());
+          if (!isDaybookCursor(decoded)) throw new ContinuousCursorError();
+          cursor = decoded;
+        }
+
+        let cursorCondition = "TRUE";
+        if (cursor) {
+          const dateParam = bind(cursor.sortDate);
+          const rankParam = bind(cursor.typeRank);
+          const idParam = bind(cursor.sortId);
+          cursorCondition =
+            direction === "ASC"
+              ? `(sort_date > ${dateParam}::date OR (sort_date = ${dateParam}::date AND (type_rank > ${rankParam} OR (type_rank = ${rankParam} AND sort_id > ${idParam}))))`
+              : `(sort_date < ${dateParam}::date OR (sort_date = ${dateParam}::date AND (type_rank > ${rankParam} OR (type_rank = ${rankParam} AND sort_id < ${idParam}))))`;
+        }
+        const chunkLimitParam = bind(limit + 1);
+        const reverseDirection = direction === "ASC" ? "DESC" : "ASC";
+        const query = `
+          WITH ${baseCtes},
+          chunk_rows AS (
+            SELECT *
+            FROM combined
+            WHERE ${cursorCondition}
+            ORDER BY sort_date ${direction}, type_rank ASC, sort_id ${direction}
+            LIMIT ${chunkLimitParam}
+          ),
+          visible_rows AS (
+            SELECT *
+            FROM chunk_rows
+            ORDER BY sort_date ${direction}, type_rank ASC, sort_id ${direction}
+            LIMIT ${limit}
+          )
+          SELECT
+            (SELECT COUNT(*)::int FROM combined) AS total,
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  jsonb_build_object('_type', row_type, 'data', payload)
+                  ORDER BY sort_date ${direction}, type_rank ASC, sort_id ${direction}
+                )
+                FROM visible_rows
+              ),
+              '[]'::jsonb
+            ) AS items,
+            EXISTS(SELECT 1 FROM chunk_rows OFFSET ${limit}) AS has_more,
+            (
+              SELECT jsonb_build_object(
+                'sortDate', sort_date::text,
+                'typeRank', type_rank,
+                'sortId', sort_id
+              )
+              FROM visible_rows
+              ORDER BY sort_date ${reverseDirection}, type_rank DESC, sort_id ${reverseDirection}
+              LIMIT 1
+            ) AS last_cursor
+        `;
+        const result = await pool.query(query, values);
+        const row = result.rows[0] ?? {};
+        const total = Number(row.total || 0);
+        const items = Array.isArray(row.items) ? row.items : [];
+        const hasMore = row.has_more === true;
+        const lastCursor = row.last_cursor;
+        const nextCursor = hasMore && isDaybookCursor(lastCursor) ? encodeContinuousCursor(scope, lastCursor) : null;
+
+        res.setHeader("X-Total-Count", String(total));
+        res.setHeader("Access-Control-Expose-Headers", "X-Total-Count");
+        return res.json({
+          items,
+          total,
+          limit,
+          hasMore,
+          nextCursor,
+          asOf: new Date().toISOString(),
+        });
+      }
+
+      const { page, limit, offset } = parsePagination(req);
+      const limitParam = bind(limit);
+      const offsetParam = bind(offset);
+      const query = `
+        WITH ${baseCtes},
         page_rows AS (
           SELECT *
           FROM combined
@@ -249,6 +374,9 @@ export function registerDaybookPaginationRoutes(app: Express): void {
         hasPreviousPage: page > 1 && totalPages > 0,
       });
     } catch (error: unknown) {
+      if (error instanceof ContinuousCursorError) {
+        return res.status(400).json({ message: error.message, code: error.code });
+      }
       return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
