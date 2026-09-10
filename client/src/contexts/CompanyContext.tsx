@@ -9,6 +9,7 @@ import {
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
+import { refreshRealtimeSessionScope } from "@/hooks/use-ws-invalidation";
 import { fetchSessionCompany, userCompaniesQueryOptions } from "@/contracts/sessionQueryContracts";
 import type { CompanyType, UserCompanyAssignment } from "@/contracts/sessionContracts";
 
@@ -190,6 +191,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         resetAuthenticatedUser: !isInitialActivation,
       });
       commitCompanySelection(company, { prefetch: true, serverSynced: true });
+      // The WebSocket's company/user scope is captured when it connects. Since
+      // company switching is now SPA-native (no page reload), replace the socket
+      // after the server session changes so realtime events follow this company.
+      refreshRealtimeSessionScope();
 
       if (isInitialActivation) {
         void queryClient.invalidateQueries({

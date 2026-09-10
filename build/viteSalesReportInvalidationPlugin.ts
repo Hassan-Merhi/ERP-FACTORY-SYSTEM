@@ -1,4 +1,10 @@
 import type { Plugin } from "vite";
+import {
+  SALES_COMPARISON_SUFFIX,
+  SALES_DETAIL_SUFFIX,
+  SALES_REPORT_SUFFIX,
+  transformSalesReportBandwidthSource,
+} from "./viteSalesReportBandwidthPlugin";
 
 const ORPHANED_RECORDS_SUFFIX = "/client/src/pages/OrphanedRecords.tsx";
 const DATA_TOOLS_SUFFIX = "/client/src/pages/settings/datatoolstab/useDataToolsModel.ts";
@@ -31,12 +37,33 @@ function replaceExpected(
   return source.split(before).join(after);
 }
 
+function compactTransformAlreadyApplied(source: string, normalizedId: string): boolean {
+  if (normalizedId.endsWith(SALES_REPORT_SUFFIX)) return source.includes("fetchSalesReportSummary");
+  if (normalizedId.endsWith(SALES_DETAIL_SUFFIX)) return source.includes('params.get("stockGroupName")');
+  if (normalizedId.endsWith(SALES_COMPARISON_SUFFIX)) return source.includes("/api/dashboard/sales-report-comparison");
+  return false;
+}
+
 export function salesReportInvalidationPlugin(): Plugin {
   return {
     name: "erp-sales-report-invalidation",
     enforce: "pre",
     transform(source, id) {
       const normalizedId = id.replaceAll("\\", "/").split("?")[0];
+
+      // Wave 4 makes the already-proven compact Sales Report implementation the
+      // normal path. The older dedicated plugin may still be enabled explicitly
+      // during rollout testing; avoid applying the fail-loud transform twice.
+      if (
+        normalizedId.endsWith(SALES_REPORT_SUFFIX) ||
+        normalizedId.endsWith(SALES_DETAIL_SUFFIX) ||
+        normalizedId.endsWith(SALES_COMPARISON_SUFFIX)
+      ) {
+        if (compactTransformAlreadyApplied(source, normalizedId)) return null;
+        const compactCode = transformSalesReportBandwidthSource(source, id);
+        return compactCode === null ? null : { code: compactCode, map: null };
+      }
+
       if (normalizedId.endsWith(ORPHANED_RECORDS_SUFFIX)) {
         return {
           code: replaceExpected(

@@ -55,7 +55,6 @@ export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/payroll/bonus-locations", 300_000],
   ["/api/stock-groups", 300_000],
   ["/api/suppliers", 300_000],
-  ["/api/employees", 300_000],
   ["/api/worker-groups/with-members", 300_000],
   ["/api/employee-groups", 300_000],
   ["/api/user/companies", 300_000],
