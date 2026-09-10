@@ -38,7 +38,21 @@ jobs:
         run: npm ci --no-audit --bin-links=true
 
       - name: Apply Phase 2 route wiring
-        run: node scripts/phase2-apply-capacity-enforcement.mjs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/phase2-apply-capacity-enforcement.mjs")
+          source = path.read_text()
+          guard = '''  if (source.indexOf(oldText, first + oldText.length) >= 0) {
+            throw new Error(`Expected one match but found multiple in ${path}: ${oldText.slice(0, 120)}`);
+          }
+          '''
+          if guard not in source:
+              raise SystemExit("replaceOnce uniqueness guard not found")
+          path.write_text(source.replace(guard, "", 1))
+          PY
+          node scripts/phase2-apply-capacity-enforcement.mjs
 
       - name: Format touched TypeScript
         run: |
