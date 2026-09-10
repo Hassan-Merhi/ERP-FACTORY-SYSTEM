@@ -6,6 +6,7 @@ import {
   Loader2,
   Trash2,
   PieChart,
+  Layers3,
   ScanSearch,
   Info,
   ShieldCheck,
@@ -23,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CleanEmptyAccountsDialog } from "./CleanEmptyAccountsDialog";
 import { ResetCompanyDataDialog } from "./SystemMaintenanceDialogs";
+import { GroupNetPositionPage } from "./GroupNetPositionPage";
 import { useLocation } from "wouter";
 
 interface SystemToolsTabProps {
@@ -110,6 +112,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
 
   const [isResetDataDialogOpen, setIsResetDataDialogOpen] = useState(false);
   const [emptyAccountsOpen, setEmptyAccountsOpen] = useState(false);
+  const [groupNetPositionOpen, setGroupNetPositionOpen] = useState(false);
 
   const { data: parentCompanyData } = useQuery<{ parentCompanyId: number | null }>({
     queryKey: ["/api/system/parent-company"],
@@ -132,6 +135,10 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
     : isProperties
       ? "/properties/net-position-details"
       : "/net-position-details";
+
+  if (groupNetPositionOpen && !isProperties) {
+    return <GroupNetPositionPage onBack={() => setGroupNetPositionOpen(false)} />;
+  }
 
   const cards: ToolCard[] = [
     {
@@ -168,6 +175,21 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
       onAction: () => navigate(netPositionPath),
       testId: "card-net-position",
     },
+    ...(!isProperties
+      ? [
+          {
+            category: "Financials",
+            categoryColor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+            icon: <Layers3 className="h-6 w-6 text-blue-500" />,
+            iconBg: "bg-blue-500/10",
+            title: "Group Net Position",
+            description: "Combine What We Have, What We Owe, and Net Position across every active company except Properties.",
+            actionLabel: "View Group",
+            onAction: () => setGroupNetPositionOpen(true),
+            testId: "card-group-net-position",
+          } satisfies ToolCard,
+        ]
+      : []),
   ];
   const visibleCards = cards.filter((card) => isDev || !card.devOnly);
 
@@ -229,7 +251,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
           title="Recovery, diagnostics & insights"
           description="Open a focused tool only when you need to inspect or change system data."
         />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
           {visibleCards.map((card) => (
             <SystemToolCard key={card.testId} card={card} />
           ))}
