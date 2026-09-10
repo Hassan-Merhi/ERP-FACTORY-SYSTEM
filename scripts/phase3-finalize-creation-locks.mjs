@@ -21,6 +21,16 @@ function replaceRange(path, startMarker, endMarker, replacement) {
   writeFileSync(path, source.slice(0, start) + replacement + source.slice(end));
 }
 
+// The original #1354 generator targeted an intermediate Phase 2 variable that
+// no longer exists on current main. The workflow adjusts that generator to
+// enter through the current articleResult branch; finish the two downstream
+// references here so the result remains strongly typed and behavior-equivalent.
+{
+  const path = "server/routes/factory/customer-orders/bale-scanning/bulk-import.ts";
+  replaceOnce(path, "foundQty: articleResult.length", "foundQty: addedIds.length");
+  replaceOnce(path, "for (const id of articleResult)", "for (const id of addedIds)");
+}
+
 {
   const path = "server/routes/factory/customer-orders/finalize-loading/loading.ts";
   replaceOnce(
