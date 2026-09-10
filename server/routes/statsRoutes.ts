@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { registerStatsNetProfitRoutes } from "./stats/statsNetProfitRoutes";
 import { registerStatsNetPositionRoutes } from "./stats/statsNetPositionRoutes";
+import { registerGroupNetPositionRoutes } from "./stats/groupNetPositionRoutes";
 import { registerStatsDataRoutes } from "./stats/statsDataRoutes";
 import { registerStatsSalesRoutes } from "./stats/statsSalesRoutes";
 import { registerStatsReportsRoutes } from "./stats/statsReportsRoutes";
@@ -19,6 +20,7 @@ export function registerStatsRoutes(app: Express) {
   registerStatsMultiCurrencyRoutes(app);
   registerStatsNetProfitRoutes(app);
   registerStatsNetPositionRoutes(app);
+  registerGroupNetPositionRoutes(app);
   registerStatsDataRoutes(app);
   registerStatsSalesRoutes(app);
   registerStockInSalesReportRoutes(app);
