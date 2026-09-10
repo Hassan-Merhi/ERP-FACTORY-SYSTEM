@@ -61,6 +61,30 @@ describe("authoritative proforma capacity engine", () => {
     );
   });
 
+  it("shows zero capacity before the current loading scans its first bale when siblings already fulfilled the line", () => {
+    const snapshot = buildProformaCapacitySnapshot(
+      options,
+      baseProforma,
+      [{ articleCode: "HMD11001", quantity: 1 }],
+      [{ normalizedArticleCode: "hmd11001", orderId: 154, orderStatus: "LOADING", loadedQty: 1 }]
+    );
+
+    expect(findProformaCapacityArticle(snapshot, "HMD11001")).toEqual(
+      expect.objectContaining({
+        requestedQty: 1,
+        currentOrderLoadedQty: 0,
+        siblingLoadedQty: 1,
+        totalConsumedQty: 1,
+        remainingQty: 0,
+        excessQty: 0,
+        isFulfilled: true,
+        isOverloaded: false,
+        contributingOrderIds: [154],
+        siblingOrderIds: [154],
+      })
+    );
+  });
+
   it("preserves historical overages instead of hiding them behind a zero remaining value", () => {
     const snapshot = buildProformaCapacitySnapshot(
       options,
