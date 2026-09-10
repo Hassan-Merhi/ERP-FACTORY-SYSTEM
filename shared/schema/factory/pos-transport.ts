@@ -64,7 +64,9 @@ export const insertFactoryPosSaleSchema = createInsertSchema(factoryPosSales)
     depositAmount: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     status: z.string().optional(),
-    createdBy: z.number().optional().nullable(),
+    // Matches the varchar column above: users.id is a varchar, so a creator id
+    // is a string. This override said z.number() while the column was integer.
+    createdBy: z.string().optional().nullable(),
   });
 export type InsertFactoryPosSale = z.infer<typeof insertFactoryPosSaleSchema>;
 export type FactoryPosSale = typeof factoryPosSales.$inferSelect;
