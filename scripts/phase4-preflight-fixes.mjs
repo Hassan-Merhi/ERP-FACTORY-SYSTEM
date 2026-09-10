@@ -20,6 +20,12 @@ replaceOne(
   "factory progress authoritative remaining"
 );
 replaceOne(
+  "client/src/pages/containerloadingscan/LoadingControlsPanel.tsx",
+  `                  >\n                    {line.loaded}\n                  </span>`,
+  `                  >{line.loaded}</span>`,
+  "erp progress loaded wrapper"
+);
+replaceOne(
   "tests/setup.ts",
   '  "custload",\n]);',
   '  "custload",\n  "phase4cap",\n]);',
