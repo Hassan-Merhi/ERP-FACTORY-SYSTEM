@@ -14,7 +14,7 @@ import { requireAuth } from "../../../auth";
 
 import { writeDaybookEntry } from "../_helpers";
 import { factoryBaleProducts, factoryPressingBatches, factoryBales, factoryBaleSequences } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { registerFactoryMixBatchRoutes } from "../mix-batches";
 import { registerFactoryBaleExportRoutes } from "../bale-exports";
 import { registerFactoryFxRatesRoutes } from "../factoryFxRatesRoutes";
@@ -183,16 +183,29 @@ export function registerBalesPressingRoutes(app: Express) {
         const bales = [];
         let baleIndex = 0;
 
+        // One batched lookup for every product in the request, then a map. The
+        // previous implementation ran a `SELECT` per item inside the loop — an
+        // N+1 pattern where an N-product press cost N round-trips before any
+        // bale was written. Fetching everything up front also validates the
+        // whole request before any insert, so a bad product still rolls the
+        // batch (and the counter) back exactly as it did before.
+        const productIds = items.map((item) => item.productId);
+        const productRows = await tx
+          .select()
+          .from(factoryBaleProducts)
+          .where(and(inArray(factoryBaleProducts.id, productIds), eq(factoryBaleProducts.companyId, companyId)));
+        const productById = new Map(productRows.map((product) => [product.id, product] as const));
+
+        for (const item of items) {
+          if (!productById.has(item.productId)) {
+            throw new Error(`Product ID ${item.productId} not found`);
+          }
+        }
+
         for (const [itemIndex, item] of items.entries()) {
           const qty = quantities[itemIndex];
           const weight = item.weightPerBale;
-
-          const [product] = await tx
-            .select()
-            .from(factoryBaleProducts)
-            .where(and(eq(factoryBaleProducts.id, item.productId), eq(factoryBaleProducts.companyId, companyId)));
-
-          if (!product) throw new Error(`Product ID ${item.productId} not found`);
+          const product = productById.get(item.productId)!;
 
           for (let i = 0; i < qty; i++) {
             const refNum = `REF${String(nextNumber + baleIndex).padStart(6, "0")}`;
@@ -347,20 +360,38 @@ export function registerBalesPressingRoutes(app: Express) {
         .where(eq(factoryPressingBatches.companyId, companyId))
         .orderBy(desc(factoryPressingBatches.createdAt));
 
-      const enriched = await Promise.all(
-        batches.map(async (batch) => {
-          const balesForBatch = await db
-            .select()
-            .from(factoryBales)
-            .where(eq(factoryBales.pressingBatchId, batch.id))
-            .orderBy(factoryBales.referenceNumber);
+      // One query for every batch's bales, grouped in memory. The previous
+      // implementation issued a `SELECT` per pressing batch inside Promise.all,
+      // an N+1 pattern: a company with many open batches paid one round-trip
+      // per batch on every list load.
+      const batchIds = batches.map((batch) => batch.id);
+      const balesForBatches =
+        batchIds.length > 0
+          ? await db
+              .select()
+              .from(factoryBales)
+              .where(inArray(factoryBales.pressingBatchId, batchIds))
+              .orderBy(factoryBales.referenceNumber)
+          : [];
 
-          const pendingCount = balesForBatch.filter((b) => b.status === "PENDING_PRESSING").length;
-          const finalizedCount = balesForBatch.filter((b) => b.status === "IN_STOCK").length;
+      const balesByBatchId = new Map<number, typeof balesForBatches>();
+      for (const bale of balesForBatches) {
+        if (bale.pressingBatchId == null) continue;
+        const existing = balesByBatchId.get(bale.pressingBatchId);
+        if (existing) {
+          existing.push(bale);
+        } else {
+          balesByBatchId.set(bale.pressingBatchId, [bale]);
+        }
+      }
 
-          return { ...batch, pendingCount, finalizedCount, bales: balesForBatch };
-        })
-      );
+      const enriched = batches.map((batch) => {
+        const balesForBatch = balesByBatchId.get(batch.id) ?? [];
+        const pendingCount = balesForBatch.filter((b) => b.status === "PENDING_PRESSING").length;
+        const finalizedCount = balesForBatch.filter((b) => b.status === "IN_STOCK").length;
+
+        return { ...batch, pendingCount, finalizedCount, bales: balesForBatch };
+      });
 
       res.json(enriched);
     } catch (error: unknown) {
