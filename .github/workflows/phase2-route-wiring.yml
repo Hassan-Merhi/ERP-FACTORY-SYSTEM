@@ -1,0 +1,93 @@
+name: Phase 2 Capacity Wiring
+
+on:
+  push:
+    branches:
+      - fix/proforma-capacity-phase2-enforcement-20260910
+    paths:
+      - scripts/phase2-apply-capacity-enforcement.mjs
+      - .github/workflows/phase2-route-wiring.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase2-capacity-wiring
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Phase 2 branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: fix/proforma-capacity-phase2-enforcement-20260910
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up canonical Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply Phase 2 route wiring
+        run: node scripts/phase2-apply-capacity-enforcement.mjs
+
+      - name: Format touched TypeScript
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/factory/customer-orders/proformaCapacityEnforcement.ts \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-proformas/create-loading.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            tests/proforma-capacity-enforcement.test.ts \
+            tests/factory-loading-proforma-quantity-alignment.test.ts
+
+      - name: Focused Phase 1 and Phase 2 regression tests
+        run: |
+          node node_modules/vitest/vitest.mjs run \
+            tests/proforma-capacity.test.ts \
+            tests/proforma-capacity-enforcement.test.ts \
+            tests/factory-loading-proforma-quantity-alignment.test.ts \
+            tests/factory-loading-bale-rescan.test.ts
+
+      - name: Typecheck and lint
+        run: |
+          npm run check
+          npm run lint
+
+      - name: Repository structural gates
+        run: |
+          npm run audit:source-text-assertions
+          npm run audit:god-files
+          npm run audit:company-scope
+
+      - name: Commit verified Phase 2 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm scripts/phase2-apply-capacity-enforcement.mjs .github/workflows/phase2-route-wiring.yml
+          git add \
+            server/routes/factory/customer-orders/proformaCapacityEnforcement.ts \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-proformas/create-loading.ts \
+            server/routes/factory/customer-orders/finalize-loading/loading.ts \
+            server/routes/factory/customer-orders/orderCrudRoutes.ts \
+            server/routes/factory/stock-allocation-v5/proforma-create.ts \
+            tests/proforma-capacity-enforcement.test.ts \
+            tests/factory-loading-proforma-quantity-alignment.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: wire Phase 2 proforma capacity enforcement"
+          git push origin HEAD:fix/proforma-capacity-phase2-enforcement-20260910
