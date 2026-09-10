@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Phase 2.3 (API / service boundary typing) rebuilt the baseline at its earned value: the route, POS, report-shard, raw-SQL, migration and injected db/tx/pool boundaries now carry named contracts, and the ceiling falls from 2208 to 1775.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Phase 2.3 (API / service boundary typing) rebuilt the baseline at its earned value: the route, POS, report-shard, raw-SQL, migration and injected db/tx/pool boundaries now carry named contracts, and the ceiling falls from 2208 to 1775. A later drawdown pass rebased every entry at its measured value instead of leaving the headroom that earlier removals had earned: 22 files that had reached zero escapes lost their frozen entries and 4 more were lowered, so the entry count moves from 531 to 509 and the ceiling from 1387 to 1341 — the 46 escapes of accumulated slack can no longer refill silently.",
   "scan": {
     "roots": [
       "server",
@@ -1774,11 +1774,6 @@
         0,
         0
       ],
-      "server/routes/factory-payroll/_helpers.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/factory-payroll/update.ts": [
         1,
         0,
@@ -1889,18 +1884,8 @@
         0,
         0
       ],
-      "server/routes/factory/customer-orders/verify-recover/recover.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/factory/customer-orders/verify-recover/verification-summary.ts": [
         4,
-        0,
-        0
-      ],
-      "server/routes/factory/customer-proformas/create-loading.ts": [
-        1,
         0,
         0
       ],
@@ -1954,17 +1939,7 @@
         0,
         0
       ],
-      "server/routes/factory/employee-pos/employee-crud/bulk-payroll.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/factory/employee-pos/employee-crud/crud.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/factory/employee-pos/employee-crud/payroll-preview.ts": [
         1,
         0,
         0
@@ -1976,11 +1951,6 @@
       ],
       "server/routes/factory/employee-pos/employeeAttendanceRoutes.ts": [
         2,
-        0,
-        0
-      ],
-      "server/routes/factory/employee-pos/employeeLedgerWasteRoutes.ts": [
-        5,
         0,
         0
       ],
@@ -2129,11 +2099,6 @@
         0,
         0
       ],
-      "server/routes/factory/stock-allocation-v5/cancelled-containers.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/factory/stock-allocation-v5/location-summary.ts": [
         4,
         0,
@@ -2229,11 +2194,6 @@
         0,
         0
       ],
-      "server/routes/ledger/initialize-balances.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/location/locationWhatsappScheduleRoutes.ts": [
         3,
         0,
@@ -2259,22 +2219,7 @@
         0,
         0
       ],
-      "server/routes/payroll/advance-accounting/_helpers.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/payroll/advanceManagementRoutes.ts": [
-        1,
-        0,
-        0
-      ],
       "server/routes/payroll/core/_helpers.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/payroll/worker-statement/_helpers.ts": [
         1,
         0,
         0
@@ -2290,11 +2235,6 @@
         0
       ],
       "server/routes/payroll/worker-stats-advances/advanceAdminRoutes.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/payroll/worker-stats-advances/helpers.ts": [
         1,
         0,
         0
@@ -2479,27 +2419,7 @@
         0,
         0
       ],
-      "server/routes/transporterStatementRoutes.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralGenericVoucherCreateRoute.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralJournalCreateRoute.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/vouchers/centralPaymentReceiptCreateRoute.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/routes/vouchers/centralPaymentReceiptDeleteRoute.ts": [
         1,
         0,
         0
@@ -2509,42 +2429,12 @@
         0,
         0
       ],
-      "server/routes/vouchers/sales-update/update.ts": [
-        2,
-        0,
-        0
-      ],
       "server/routes/vouchers/transfer/transfer.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/transfer/with-entries.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherDetailBatching.ts": [
-        0,
-        4,
-        0
-      ],
-      "server/routes/vouchers/voucherJournalRoutes.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherPaymentRoutes.ts": [
-        2,
+        1,
         0,
         0
       ],
       "server/routes/vouchers/voucherPurchaseUpdateRoutes.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/routes/vouchers/voucherQueryRoutes.ts": [
         2,
         0,
         0
@@ -2677,6 +2567,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1387
+    "typeEscapeCeiling": 1341
   }
 }
