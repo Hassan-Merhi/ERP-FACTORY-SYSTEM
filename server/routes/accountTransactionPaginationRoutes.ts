@@ -2,6 +2,12 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db, pool } from "../db";
+import {
+  ContinuousCursorError,
+  continuousCursorScope,
+  decodeContinuousCursor,
+  encodeContinuousCursor,
+} from "../lib/continuousCursor";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { getClientDate } from "../lib/dateUtils";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
@@ -28,6 +34,32 @@ interface Pagination {
   offset: number;
 }
 
+interface ContinuousWindow {
+  limit: number;
+  token?: string;
+}
+
+type VoucherEntryCursor = {
+  sortDate: string;
+  sortId: number;
+  sortEntryId?: number;
+  net: number;
+};
+
+type CustomerCursor = {
+  sortDate: string;
+  sortId: number;
+  net: number;
+};
+
+type FactoryCustomerCursor = {
+  sortDate: string;
+  voucherNumber: string;
+  sourceRank: number;
+  sourceId: number;
+  net: number;
+};
+
 interface StatementPage {
   transactions: unknown[];
   currencySummary: ReturnType<typeof summarizeAccountStatementCurrency>;
@@ -45,10 +77,19 @@ interface StatementPage {
   asOfDate: string;
   startDate: string | null;
   endDate: string;
+  continuous?: boolean;
+  chunkOpeningNet?: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+
+function wantsContinuous(req: Request): boolean {
+  return req.query.continuous === "1" || typeof req.query.cursor === "string";
 }
 
 function wantsPagination(req: Request): boolean {
   return (
+    wantsContinuous(req) ||
     req.query.pagination === "1" ||
     req.query.page !== undefined ||
     req.query.limit !== undefined ||
@@ -70,6 +111,15 @@ function parsePagination(req: Request): Pagination {
   }
   const page = parsePositiveInt(req.query.page, 1);
   return { page, limit, offset: (page - 1) * limit };
+}
+
+function parseContinuousWindow(req: Request): ContinuousWindow | undefined {
+  if (!wantsContinuous(req)) return undefined;
+  const token = typeof req.query.cursor === "string" && req.query.cursor.trim() ? req.query.cursor.trim() : undefined;
+  return {
+    limit: Math.min(MAX_PAGE_SIZE, parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE)),
+    token,
+  };
 }
 
 function dateContext(req: Request): DateContext {
@@ -122,6 +172,94 @@ function buildPageResponse(
     startDate: dates.rawStart ?? null,
     endDate: dates.effectiveEndDate,
   };
+}
+
+function buildContinuousResponse(options: {
+  rows: unknown[];
+  summary: any;
+  prePeriodNet: number;
+  previousChunkNet: number;
+  limit: number;
+  dates: DateContext;
+  hadCursor: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
+}): StatementPage {
+  const { rows, summary, prePeriodNet, previousChunkNet, limit, dates, hadCursor, hasMore, nextCursor } = options;
+  const total = Number(summary?.total || 0);
+  const periodDebitTotal = Number.parseFloat(summary?.debitTotal || "0") || 0;
+  const periodCreditTotal = Number.parseFloat(summary?.creditTotal || "0") || 0;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+  const chunkOpeningNet = prePeriodNet + previousChunkNet;
+  return {
+    transactions: rows,
+    currencySummary: summarizeAccountStatementCurrency(rows),
+    preNetBalance: chunkOpeningNet,
+    periodPreNetBalance: prePeriodNet,
+    periodDebitTotal,
+    periodCreditTotal,
+    closingNetBalance: prePeriodNet + periodDebitTotal - periodCreditTotal,
+    total,
+    page: 1,
+    limit,
+    totalPages,
+    hasNextPage: hasMore,
+    hasPreviousPage: hadCursor,
+    asOfDate: dates.asOfDate,
+    startDate: dates.rawStart ?? null,
+    endDate: dates.effectiveEndDate,
+    continuous: true,
+    chunkOpeningNet,
+    hasMore,
+    nextCursor,
+  };
+}
+
+function finiteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function cursorDate(value: unknown): string | null {
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString().slice(0, 10);
+  const text = String(value ?? "").slice(0, 10);
+  return ISO_DATE.test(text) ? text : null;
+}
+
+function isVoucherEntryCursor(value: unknown, kind: AccountKind): value is VoucherEntryCursor {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as Partial<VoucherEntryCursor>;
+  return (
+    typeof cursor.sortDate === "string" &&
+    ISO_DATE.test(cursor.sortDate) &&
+    Number.isInteger(cursor.sortId) &&
+    Number.isFinite(cursor.net) &&
+    (kind === "ledger" || Number.isInteger(cursor.sortEntryId))
+  );
+}
+
+function isCustomerCursor(value: unknown): value is CustomerCursor {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as Partial<CustomerCursor>;
+  return (
+    typeof cursor.sortDate === "string" &&
+    ISO_DATE.test(cursor.sortDate) &&
+    Number.isInteger(cursor.sortId) &&
+    Number.isFinite(cursor.net)
+  );
+}
+
+function isFactoryCustomerCursor(value: unknown): value is FactoryCustomerCursor {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as Partial<FactoryCustomerCursor>;
+  return (
+    typeof cursor.sortDate === "string" &&
+    ISO_DATE.test(cursor.sortDate) &&
+    typeof cursor.voucherNumber === "string" &&
+    Number.isInteger(cursor.sourceRank) &&
+    Number.isInteger(cursor.sourceId) &&
+    Number.isFinite(cursor.net)
+  );
 }
 
 function genericFilteredCte(
@@ -224,28 +362,139 @@ function genericFilteredCte(
   };
 }
 
+async function loadVoucherPrePeriodNet(options: {
+  accountId: number;
+  companyId?: number;
+  column: string;
+  dates: DateContext;
+}): Promise<number> {
+  const { accountId, companyId, column, dates } = options;
+  if (!dates.rawStart) return 0;
+  const preValues: unknown[] = [accountId];
+  let companyCondition = "";
+  if (companyId) {
+    preValues.push(companyId);
+    companyCondition = `AND v.company_id = $${preValues.length}`;
+  }
+  preValues.push(dates.rawStart);
+  const preResult = await pool.query(
+    `SELECT COALESCE(
+       SUM(ve.debit_amount::numeric - ve.credit_amount::numeric),
+       0
+     )::text AS net
+     FROM voucher_entries ve
+     JOIN vouchers v ON v.id = ve.voucher_id
+     WHERE ve.${column} = $1
+       AND v.optional = false
+       AND v.deleted_at IS NULL
+       ${companyCondition}
+       AND COALESCE(v.effective_date::date, v.voucher_date::date) < $${preValues.length}::date`,
+    preValues
+  );
+  return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+}
+
 async function runVoucherEntryStatement(options: {
   kind: AccountKind;
   accountId: number;
   companyId?: number;
   pagination: Pagination;
   dates: DateContext;
+  continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
-  const { kind, accountId, companyId, pagination, dates } = options;
+  const { kind, accountId, companyId, pagination, dates, continuous } = options;
   const { cte, values, order, column } = genericFilteredCte(kind, accountId, companyId, dates);
   const baseCount = values.length;
-  const pageValues = [...values, pagination.limit, pagination.offset];
-  const pageQuery = `WITH ${cte}
-    SELECT *
-    FROM filtered
-    ORDER BY ${order}
-    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
   const summaryQuery = `WITH ${cte}
     SELECT
       COUNT(*)::int AS total,
       COALESCE(SUM("debitAmount"::numeric), 0)::text AS "debitTotal",
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
+  const prePeriodNet = await loadVoucherPrePeriodNet({ accountId, companyId, column, dates });
+
+  if (continuous) {
+    const scope = continuousCursorScope("account-statement", {
+      kind,
+      accountId,
+      companyId: companyId ?? null,
+      startDate: dates.rawStart ?? null,
+      endDate: dates.effectiveEndDate,
+    });
+    let cursor: VoucherEntryCursor | null = null;
+    if (continuous.token) {
+      const decoded = decodeContinuousCursor<unknown>(scope, continuous.token);
+      if (!isVoucherEntryCursor(decoded, kind)) throw new ContinuousCursorError();
+      cursor = decoded;
+    }
+
+    const chunkValues = [...values];
+    const bind = (value: unknown): string => {
+      chunkValues.push(value);
+      return `$${chunkValues.length}`;
+    };
+    let cursorCondition = "TRUE";
+    if (cursor) {
+      const dateParam = bind(cursor.sortDate);
+      const idParam = bind(cursor.sortId);
+      cursorCondition = `(sort_date > ${dateParam}::date OR (sort_date = ${dateParam}::date AND sort_id > ${idParam}))`;
+      if (kind !== "ledger") {
+        const entryParam = bind(cursor.sortEntryId);
+        cursorCondition = `(sort_date > ${dateParam}::date OR (sort_date = ${dateParam}::date AND (sort_id > ${idParam} OR (sort_id = ${idParam} AND sort_entry_id > ${entryParam}))))`;
+      }
+    }
+    const limitParam = bind(continuous.limit + 1);
+    const chunkQuery = `WITH ${cte}
+      SELECT * FROM filtered
+      WHERE ${cursorCondition}
+      ORDER BY ${order}
+      LIMIT ${limitParam}`;
+    const [chunkResult, summaryResult] = await Promise.all([
+      pool.query(chunkQuery, chunkValues),
+      pool.query(summaryQuery, values),
+    ]);
+    const hasMore = chunkResult.rows.length > continuous.limit;
+    const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
+    const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, sort_entry_id: _entry, ...row }) => row);
+    const previousChunkNet = cursor?.net ?? 0;
+    const chunkNet = rows.reduce((sum, row: any) => {
+      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
+    }, 0);
+    const last = visibleRaw.at(-1);
+    let nextCursor: string | null = null;
+    if (hasMore && last) {
+      const sortDate = cursorDate(last.sort_date);
+      const sortId = finiteNumber(last.sort_id);
+      const sortEntryId = finiteNumber(last.sort_entry_id);
+      if (!sortDate || sortId === null || (kind !== "ledger" && sortEntryId === null)) {
+        throw new Error("Unable to build account statement cursor from the last chunk row");
+      }
+      nextCursor = encodeContinuousCursor(scope, {
+        sortDate,
+        sortId,
+        ...(kind === "ledger" ? {} : { sortEntryId }),
+        net: previousChunkNet + chunkNet,
+      } satisfies VoucherEntryCursor);
+    }
+    return buildContinuousResponse({
+      rows,
+      summary: summaryResult.rows[0],
+      prePeriodNet,
+      previousChunkNet,
+      limit: continuous.limit,
+      dates,
+      hadCursor: !!cursor,
+      hasMore,
+      nextCursor,
+    });
+  }
+
+  const pageValues = [...values, pagination.limit, pagination.offset];
+  const pageQuery = `WITH ${cte}
+    SELECT *
+    FROM filtered
+    ORDER BY ${order}
+    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
   const precedingQuery =
     pagination.offset === 0
       ? null
@@ -257,32 +506,6 @@ async function runVoucherEntryStatement(options: {
          FROM (
            SELECT * FROM filtered ORDER BY ${order} LIMIT $${baseCount + 1}
          ) previous`;
-
-  let prePeriodNet = 0;
-  if (dates.rawStart) {
-    const preValues: unknown[] = [accountId];
-    let companyCondition = "";
-    if (companyId) {
-      preValues.push(companyId);
-      companyCondition = `AND v.company_id = $${preValues.length}`;
-    }
-    preValues.push(dates.rawStart);
-    const preResult = await pool.query(
-      `SELECT COALESCE(
-         SUM(ve.debit_amount::numeric - ve.credit_amount::numeric),
-         0
-       )::text AS net
-       FROM voucher_entries ve
-       JOIN vouchers v ON v.id = ve.voucher_id
-       WHERE ve.${column} = $1
-         AND v.optional = false
-         AND v.deleted_at IS NULL
-         ${companyCondition}
-         AND COALESCE(v.effective_date::date, v.voucher_date::date) < $${preValues.length}::date`,
-      preValues
-    );
-    prePeriodNet = Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
-  }
 
   const [pageResult, summaryResult, precedingResult] = await Promise.all([
     pool.query(pageQuery, pageValues),
@@ -307,8 +530,9 @@ async function runCustomerBalanceStatement(options: {
   companyId: number;
   pagination: Pagination;
   dates: DateContext;
+  continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
-  const { customerId, companyId, pagination, dates } = options;
+  const { customerId, companyId, pagination, dates, continuous } = options;
   const values: unknown[] = [customerId, companyId];
   const conditions = ["cb.customer_id = $1", "cb.company_id = $2"];
   if (dates.rawStart) {
@@ -340,29 +564,12 @@ async function runCustomerBalanceStatement(options: {
     WHERE ${conditions.join(" AND ")}
   )`;
   const baseCount = values.length;
-  const pageQuery = `WITH ${cte}
-    SELECT * FROM filtered
-    ORDER BY sort_date ASC, sort_id ASC
-    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
   const summaryQuery = `WITH ${cte}
     SELECT
       COUNT(*)::int AS total,
       COALESCE(SUM("debitAmount"::numeric), 0)::text AS "debitTotal",
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
-  const precedingQuery =
-    pagination.offset === 0
-      ? null
-      : `WITH ${cte}
-         SELECT COALESCE(
-           SUM(previous."debitAmount"::numeric - previous."creditAmount"::numeric),
-           0
-         )::text AS net
-         FROM (
-           SELECT * FROM filtered
-           ORDER BY sort_date ASC, sort_id ASC
-           LIMIT $${baseCount + 1}
-         ) previous`;
 
   let prePeriodNet = 0;
   if (dates.rawStart) {
@@ -379,6 +586,90 @@ async function runCustomerBalanceStatement(options: {
     );
     prePeriodNet = Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
   }
+
+  if (continuous) {
+    const scope = continuousCursorScope("customer-statement", {
+      customerId,
+      companyId,
+      startDate: dates.rawStart ?? null,
+      endDate: dates.effectiveEndDate,
+    });
+    let cursor: CustomerCursor | null = null;
+    if (continuous.token) {
+      const decoded = decodeContinuousCursor<unknown>(scope, continuous.token);
+      if (!isCustomerCursor(decoded)) throw new ContinuousCursorError();
+      cursor = decoded;
+    }
+    const chunkValues = [...values];
+    const bind = (value: unknown): string => {
+      chunkValues.push(value);
+      return `$${chunkValues.length}`;
+    };
+    let cursorCondition = "TRUE";
+    if (cursor) {
+      const dateParam = bind(cursor.sortDate);
+      const idParam = bind(cursor.sortId);
+      cursorCondition = `(sort_date > ${dateParam}::date OR (sort_date = ${dateParam}::date AND sort_id > ${idParam}))`;
+    }
+    const limitParam = bind(continuous.limit + 1);
+    const chunkQuery = `WITH ${cte}
+      SELECT * FROM filtered
+      WHERE ${cursorCondition}
+      ORDER BY sort_date ASC, sort_id ASC
+      LIMIT ${limitParam}`;
+    const [chunkResult, summaryResult] = await Promise.all([
+      pool.query(chunkQuery, chunkValues),
+      pool.query(summaryQuery, values),
+    ]);
+    const hasMore = chunkResult.rows.length > continuous.limit;
+    const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
+    const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
+    const previousChunkNet = cursor?.net ?? 0;
+    const chunkNet = rows.reduce((sum, row: any) => {
+      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
+    }, 0);
+    const last = visibleRaw.at(-1);
+    let nextCursor: string | null = null;
+    if (hasMore && last) {
+      const sortDate = cursorDate(last.sort_date);
+      const sortId = finiteNumber(last.sort_id);
+      if (!sortDate || sortId === null) throw new Error("Unable to build customer statement cursor");
+      nextCursor = encodeContinuousCursor(scope, {
+        sortDate,
+        sortId,
+        net: previousChunkNet + chunkNet,
+      } satisfies CustomerCursor);
+    }
+    return buildContinuousResponse({
+      rows,
+      summary: summaryResult.rows[0],
+      prePeriodNet,
+      previousChunkNet,
+      limit: continuous.limit,
+      dates,
+      hadCursor: !!cursor,
+      hasMore,
+      nextCursor,
+    });
+  }
+
+  const pageQuery = `WITH ${cte}
+    SELECT * FROM filtered
+    ORDER BY sort_date ASC, sort_id ASC
+    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
+  const precedingQuery =
+    pagination.offset === 0
+      ? null
+      : `WITH ${cte}
+         SELECT COALESCE(
+           SUM(previous."debitAmount"::numeric - previous."creditAmount"::numeric),
+           0
+         )::text AS net
+         FROM (
+           SELECT * FROM filtered
+           ORDER BY sort_date ASC, sort_id ASC
+           LIMIT $${baseCount + 1}
+         ) previous`;
 
   const [pageResult, summaryResult, precedingResult] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
@@ -473,8 +764,9 @@ async function runFactoryCustomerLedgerStatement(options: {
   companyId: number;
   pagination: Pagination;
   dates: DateContext;
+  continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
-  const { customerId, ledgerAccountId, companyId, pagination, dates } = options;
+  const { customerId, ledgerAccountId, companyId, pagination, dates, continuous } = options;
   const values: unknown[] = [companyId, customerId, ledgerAccountId, dates.effectiveEndDate];
   const filteredConditions = ["voucher_date <= $4::date"];
   if (dates.rawStart) {
@@ -490,27 +782,12 @@ async function runFactoryCustomerLedgerStatement(options: {
     )`;
   const baseCount = values.length;
   const order = `voucher_date ASC, "voucherNumber" ASC, source_rank ASC, source_id ASC`;
-  const pageQuery = `WITH ${cte}
-    SELECT * FROM filtered
-    ORDER BY ${order}
-    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
   const summaryQuery = `WITH ${cte}
     SELECT
       COUNT(*)::int AS total,
       COALESCE(SUM("debitAmount"::numeric), 0)::text AS "debitTotal",
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
-  const precedingQuery =
-    pagination.offset === 0
-      ? null
-      : `WITH ${cte}
-         SELECT COALESCE(
-           SUM(previous."debitAmount"::numeric - previous."creditAmount"::numeric),
-           0
-         )::text AS net
-         FROM (
-           SELECT * FROM filtered ORDER BY ${order} LIMIT $${baseCount + 1}
-         ) previous`;
 
   let prePeriodNet = 0;
   if (dates.rawStart) {
@@ -526,6 +803,106 @@ async function runFactoryCustomerLedgerStatement(options: {
     );
     prePeriodNet = Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
   }
+
+  if (continuous) {
+    const scope = continuousCursorScope("factory-customer-statement", {
+      customerId,
+      ledgerAccountId,
+      companyId,
+      startDate: dates.rawStart ?? null,
+      endDate: dates.effectiveEndDate,
+    });
+    let cursor: FactoryCustomerCursor | null = null;
+    if (continuous.token) {
+      const decoded = decodeContinuousCursor<unknown>(scope, continuous.token);
+      if (!isFactoryCustomerCursor(decoded)) throw new ContinuousCursorError();
+      cursor = decoded;
+    }
+    const chunkValues = [...values];
+    const bind = (value: unknown): string => {
+      chunkValues.push(value);
+      return `$${chunkValues.length}`;
+    };
+    let cursorCondition = "TRUE";
+    if (cursor) {
+      const dateParam = bind(cursor.sortDate);
+      const voucherParam = bind(cursor.voucherNumber);
+      const rankParam = bind(cursor.sourceRank);
+      const sourceParam = bind(cursor.sourceId);
+      cursorCondition = `(
+        voucher_date > ${dateParam}::date OR
+        (voucher_date = ${dateParam}::date AND (
+          "voucherNumber" > ${voucherParam} OR
+          ("voucherNumber" = ${voucherParam} AND (
+            source_rank > ${rankParam} OR
+            (source_rank = ${rankParam} AND source_id > ${sourceParam})
+          ))
+        ))
+      )`;
+    }
+    const limitParam = bind(continuous.limit + 1);
+    const chunkQuery = `WITH ${cte}
+      SELECT * FROM filtered
+      WHERE ${cursorCondition}
+      ORDER BY ${order}
+      LIMIT ${limitParam}`;
+    const [chunkResult, summaryResult] = await Promise.all([
+      pool.query(chunkQuery, chunkValues),
+      pool.query(summaryQuery, values),
+    ]);
+    const hasMore = chunkResult.rows.length > continuous.limit;
+    const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
+    const rows = visibleRaw.map(({ voucher_date: _date, source_rank: _rank, source_id: _source, ...row }) => row);
+    const previousChunkNet = cursor?.net ?? 0;
+    const chunkNet = rows.reduce((sum, row: any) => {
+      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
+    }, 0);
+    const last = visibleRaw.at(-1);
+    let nextCursor: string | null = null;
+    if (hasMore && last) {
+      const sortDate = cursorDate(last.voucher_date);
+      const voucherNumber = typeof last.voucherNumber === "string" ? last.voucherNumber : null;
+      const sourceRank = finiteNumber(last.source_rank);
+      const sourceId = finiteNumber(last.source_id);
+      if (!sortDate || voucherNumber === null || sourceRank === null || sourceId === null) {
+        throw new Error("Unable to build factory customer statement cursor");
+      }
+      nextCursor = encodeContinuousCursor(scope, {
+        sortDate,
+        voucherNumber,
+        sourceRank,
+        sourceId,
+        net: previousChunkNet + chunkNet,
+      } satisfies FactoryCustomerCursor);
+    }
+    return buildContinuousResponse({
+      rows,
+      summary: summaryResult.rows[0],
+      prePeriodNet,
+      previousChunkNet,
+      limit: continuous.limit,
+      dates,
+      hadCursor: !!cursor,
+      hasMore,
+      nextCursor,
+    });
+  }
+
+  const pageQuery = `WITH ${cte}
+    SELECT * FROM filtered
+    ORDER BY ${order}
+    LIMIT $${baseCount + 1} OFFSET $${baseCount + 2}`;
+  const precedingQuery =
+    pagination.offset === 0
+      ? null
+      : `WITH ${cte}
+         SELECT COALESCE(
+           SUM(previous."debitAmount"::numeric - previous."creditAmount"::numeric),
+           0
+         )::text AS net
+         FROM (
+           SELECT * FROM filtered ORDER BY ${order} LIMIT $${baseCount + 1}
+         ) previous`;
 
   const [pageResult, summaryResult, precedingResult] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
@@ -553,6 +930,9 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
       try {
         await handler(req, res);
       } catch (error: unknown) {
+        if (error instanceof ContinuousCursorError) {
+          return res.status(400).json({ message: error.message, code: error.code });
+        }
         return res.status(500).json({ message: getErrorMessage(error) });
       }
     };
@@ -581,6 +961,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
       }
 
       const pagination = parsePagination(req);
+      const continuous = parseContinuousWindow(req);
       const dates = dateContext(req);
       const linkedCustomer = await getCustomerByLedgerId(accountId);
       if (linkedCustomer && linkedCustomer.companyId === account.companyId) {
@@ -598,6 +979,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
               companyId: linkedCustomer.companyId,
               pagination,
               dates,
+              continuous,
             })
           );
         }
@@ -610,6 +992,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId: account.companyId,
           pagination,
           dates,
+          continuous,
         })
       );
     })
@@ -640,6 +1023,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId: account.companyId,
           pagination: parsePagination(req),
           dates: dateContext(req),
+          continuous: parseContinuousWindow(req),
         })
       );
     })
@@ -670,6 +1054,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId: account.companyId,
           pagination: parsePagination(req),
           dates: dateContext(req),
+          continuous: parseContinuousWindow(req),
         })
       );
     })
@@ -711,6 +1096,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId,
           pagination: parsePagination(req),
           dates: dateContext(req),
+          continuous: parseContinuousWindow(req),
         })
       );
     })
@@ -741,6 +1127,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId: account.companyId,
           pagination: parsePagination(req),
           dates: dateContext(req),
+          continuous: parseContinuousWindow(req),
         })
       );
     })
@@ -770,6 +1157,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
           companyId: account.companyId,
           pagination: parsePagination(req),
           dates: dateContext(req),
+          continuous: parseContinuousWindow(req),
         })
       );
     })
