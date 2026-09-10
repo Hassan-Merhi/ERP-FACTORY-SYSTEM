@@ -157,6 +157,16 @@ const factoryStaffTrackingTranslations = {
     ar: "تعذر إرسال صورة الحضور",
     fr: "Impossible d’envoyer l’image de présence",
   },
+  productionWhatsappImageSent: {
+    en: "Production image sent to WhatsApp group",
+    ar: "تم إرسال صورة الإنتاج إلى مجموعة واتساب",
+    fr: "Image de production envoyée au groupe WhatsApp",
+  },
+  productionWhatsappImageFailed: {
+    en: "Production ended, but the WhatsApp image was not sent",
+    ar: "تم إنهاء الإنتاج، لكن لم يتم إرسال الصورة عبر واتساب",
+    fr: "La production est terminée, mais l’image WhatsApp n’a pas été envoyée",
+  },
   dailyTotal: { en: "Daily Total", ar: "الإجمالي اليومي", fr: "Total du jour" },
 } as const;
 
