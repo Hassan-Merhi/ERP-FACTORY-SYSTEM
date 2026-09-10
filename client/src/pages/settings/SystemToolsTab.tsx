@@ -136,7 +136,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
       ? "/properties/net-position-details"
       : "/net-position-details";
 
-  if (groupNetPositionOpen && !isProperties) {
+  if (groupNetPositionOpen && !isFactory && !isProperties) {
     return <GroupNetPositionPage onBack={() => setGroupNetPositionOpen(false)} />;
   }
 
@@ -175,7 +175,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
       onAction: () => navigate(netPositionPath),
       testId: "card-net-position",
     },
-    ...(!isProperties
+    ...(!isFactory && !isProperties
       ? [
           {
             category: "Financials",
@@ -183,7 +183,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
             icon: <Layers3 className="h-6 w-6 text-blue-500" />,
             iconBg: "bg-blue-500/10",
             title: "Group Net Position",
-            description: "Combine What We Have, What We Owe, and Net Position across every active company except Properties.",
+            description: "Combine What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.",
             actionLabel: "View Group",
             onAction: () => setGroupNetPositionOpen(true),
             testId: "card-group-net-position",
