@@ -62,7 +62,11 @@ export function registerGroupNetPositionRoutes(app: Express) {
     try {
       const asOfDate = resolveAsOfDate(req);
       const allowedCompanyIds = await resolveAllowedCompanyIds(req);
-      const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds);
+      // When the requested date is the user's current date, use the same live ERP
+      // snapshot as the normal Net Position page so cash/bank current translation
+      // and every ERP presentation rule reconcile exactly. Older dates stay historical.
+      const useCurrentSnapshot = asOfDate === getClientDate(req);
+      const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds, useCurrentSnapshot);
       res.setHeader("Cache-Control", "no-store");
       return res.json(snapshot);
     } catch (error: unknown) {
@@ -74,7 +78,8 @@ export function registerGroupNetPositionRoutes(app: Express) {
     try {
       const asOfDate = resolveAsOfDate(req);
       const allowedCompanyIds = await resolveAllowedCompanyIds(req);
-      const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds);
+      const useCurrentSnapshot = asOfDate === getClientDate(req);
+      const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds, useCurrentSnapshot);
       const workbook = await generateGroupNetPositionExcel(snapshot);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="group-net-position-${asOfDate}.xlsx"`);

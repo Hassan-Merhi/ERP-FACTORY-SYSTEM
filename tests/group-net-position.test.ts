@@ -2,11 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   getAllCompanies: vi.fn(),
-  calculateNetPositionAsOf: vi.fn(),
   getHistoricalCurrencyReadiness: vi.fn(),
-  loadNetProfitData: vi.fn(),
-  projectGoldenCoastResidualEquity: vi.fn(),
-  factoryResponse: vi.fn(),
+  erpResponse: vi.fn(),
 }));
 
 vi.mock("../server/storage", () => ({
@@ -15,26 +12,55 @@ vi.mock("../server/storage", () => ({
   },
 }));
 
-vi.mock("../server/helpers/calculateNetPositionAsOf", () => ({
-  calculateNetPositionAsOf: harness.calculateNetPositionAsOf,
-}));
-
 vi.mock("../server/services/accounting/historicalCurrencyReadiness", () => ({
   getHistoricalCurrencyReadiness: harness.getHistoricalCurrencyReadiness,
 }));
 
-vi.mock("../server/routes/stats/netProfitDataLoad", () => ({
-  loadNetProfitData: harness.loadNetProfitData,
-}));
-
+// The real Group Net Position helper captures these same registered middleware
+// and route handlers. Keep the focused test deterministic while proving that the
+// current/live response wrappers are actually part of the group calculation.
 vi.mock("../server/routes/stats/goldenCoastResidualEquityProjection", () => ({
-  projectGoldenCoastResidualEquity: harness.projectGoldenCoastResidualEquity,
+  registerGoldenCoastResidualEquityProjection: (app: any) => {
+    app.use("/api/stats/net-profit", async (_req: any, _res: any, next: any) => next());
+  },
 }));
 
-vi.mock("../server/routes/factory/employee-pos/employeeNetPositionRoutes", () => ({
-  registerEmployeeNetPositionRoutes: (app: any) => {
-    app.get("/api/factory/net-position", () => undefined, async (req: any, res: any) => {
-      return res.json(harness.factoryResponse(req));
+vi.mock("../server/routes/stats/statsMultiCurrencyRoutes", () => ({
+  registerStatsMultiCurrencyRoutes: (app: any) => {
+    app.use(async (req: any, res: any, next: any) => {
+      if (req.method !== "GET" || req.path !== "/api/stats/net-profit" || req.query.toDate) {
+        return next();
+      }
+      const originalJson = res.json.bind(res);
+      res.json = (body: any) => {
+        const translatedCash = 25;
+        return originalJson({
+          ...body,
+          forUsTotal: body.forUsTotal + translatedCash,
+          netPosition: body.netPosition + translatedCash,
+          forUs: {
+            ...body.forUs,
+            total: body.forUs.total + translatedCash,
+            accounts: [
+              ...body.forUs.accounts,
+              {
+                name: "Cash (Current Translation)",
+                value: translatedCash,
+                category: "Cash / Bank (Current Translation)",
+              },
+            ],
+          },
+        });
+      };
+      return next();
+    });
+  },
+}));
+
+vi.mock("../server/routes/stats/statsNetProfitRoutes", () => ({
+  registerStatsNetProfitRoutes: (app: any) => {
+    app.get("/api/stats/net-profit", () => undefined, () => undefined, async (req: any, res: any) => {
+      return res.json(harness.erpResponse(req));
     });
   },
 }));
@@ -56,57 +82,96 @@ const ready = {
   unresolvedEmployeeOpeningCount: 0,
   unresolvedFixedAssetCount: 0,
   sampleVoucherIds: [],
-  asOfDate: "2026-09-09",
+  asOfDate: "2026-09-10",
 };
 
-const baseSnapshot = (forUsTotal = 100, onUsTotal = 40) => ({
+const baseResponse = (forUsTotal = 100, onUsTotal = 40, netPosition = forUsTotal - onUsTotal) => ({
   forUsTotal,
   onUsTotal,
-  netPosition: forUsTotal - onUsTotal,
-  netPositionLabel: "We Have More",
-  forUsLines: [{ label: "Cash", value: forUsTotal, category: "Cash", side: "forUs" }],
-  onUsLines: [{ label: "Loan", value: onUsTotal, category: "Loan", side: "onUs" }],
+  netPosition,
+  netPositionLabel: netPosition >= 0 ? "Net Assets" : "Net Liabilities",
+  forUs: {
+    total: forUsTotal,
+    accounts: [{ name: "Stock On The Way", value: forUsTotal, category: "Stock OTW" }],
+  },
+  onUs: {
+    total: onUsTotal,
+    accounts: [{ name: "Liability", value: onUsTotal, category: "Liability" }],
+  },
 });
 
 describe("Group Net Position", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.getHistoricalCurrencyReadiness.mockResolvedValue(ready);
-    harness.calculateNetPositionAsOf.mockResolvedValue(baseSnapshot());
-    harness.loadNetProfitData.mockResolvedValue({
-      companyAccounts: [],
-      accountBalances: new Map(),
-    });
-    harness.projectGoldenCoastResidualEquity.mockImplementation(({ body }: any) => body);
-    harness.factoryResponse.mockReturnValue({
-      forUsTotal: 250,
-      onUsTotal: 75,
-      netPosition: 175,
-      netPositionLabel: "We have more than we owe",
-      forUs: { accounts: [{ name: "Factory Stock", value: 250, category: "Inventory" }] },
-      onUs: { accounts: [{ name: "Factory Payables", value: 75, category: "Liability" }] },
-    });
+    harness.erpResponse.mockImplementation(() => baseResponse());
   });
 
-  it("excludes Properties and inactive companies before calculating", async () => {
+  it("includes only active ERP-side companies and excludes Properties and Factory modes", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI", companyType: "erp", active: true },
       { id: 2, code: "PROP", name: "Properties", companyType: "properties", active: true },
-      { id: 3, code: "OLD", name: "Inactive", companyType: "erp", active: false },
-      { id: 4, code: "ERP2", name: "Second ERP", companyType: "erp", active: true },
+      { id: 3, code: "FAC", name: "Factory", companyType: "factory", active: true },
+      { id: 4, code: "FAC2", name: "Factory V2", companyType: "factory_v2", active: true },
+      { id: 5, code: "GC", name: "GC - LSHI", companyType: "supplier_partner", active: true },
+      { id: 6, code: "OLD", name: "Inactive", companyType: "erp", active: false },
     ]);
 
-    harness.calculateNetPositionAsOf.mockImplementation(async (companyId: number) =>
-      companyId === 1 ? baseSnapshot(100, 40) : baseSnapshot(80, 30),
+    const result = await calculateGroupNetPosition("2026-09-10");
+
+    expect(harness.erpResponse).toHaveBeenCalledTimes(2);
+    expect(result.companies.map((company) => company.companyName)).toEqual(["GC - LSHI", "HADI"]);
+    expect(result.excludedCompanyTypes).toEqual(["properties", "factory", "factory_v2"]);
+    expect(result.companyCount).toBe(2);
+  });
+
+  it("uses the live ERP Net Position pipeline for the current date", async () => {
+    harness.getAllCompanies.mockResolvedValue([
+      { id: 7, code: "BE", name: "Beira", companyType: "erp", active: true },
+    ]);
+    harness.erpResponse.mockReturnValue(baseResponse(100, 40));
+
+    const result = await calculateGroupNetPosition("2026-09-10", undefined, true);
+
+    expect(harness.erpResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: { currentCompanyId: 7 },
+        query: {},
+        path: "/api/stats/net-profit",
+      }),
     );
+    expect(result.companies[0]).toMatchObject({
+      forUsTotal: 125,
+      onUsTotal: 40,
+      netPosition: 85,
+    });
+    expect(result.companies[0].forUsLines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Cash (Current Translation)",
+          value: 25,
+          category: "Cash / Bank (Current Translation)",
+        }),
+      ]),
+    );
+  });
 
-    const result = await calculateGroupNetPosition("2026-09-09");
+  it("keeps older as-of dates on the historical ERP snapshot", async () => {
+    harness.getAllCompanies.mockResolvedValue([
+      { id: 7, code: "BE", name: "Beira", companyType: "erp", active: true },
+    ]);
+    harness.erpResponse.mockReturnValue(baseResponse(100, 40));
 
-    expect(harness.calculateNetPositionAsOf).toHaveBeenCalledTimes(2);
-    expect(harness.calculateNetPositionAsOf).toHaveBeenCalledWith(1, "2026-09-09");
-    expect(harness.calculateNetPositionAsOf).toHaveBeenCalledWith(4, "2026-09-09");
-    expect(result.companies.map((company) => company.companyName)).toEqual(["HADI", "Second ERP"]);
-    expect(result.excludedCompanyTypes).toEqual(["properties"]);
+    const result = await calculateGroupNetPosition("2026-09-01", undefined, false);
+
+    expect(harness.erpResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { toDate: "2026-09-01" } }),
+    );
+    expect(result.companies[0]).toMatchObject({
+      forUsTotal: 100,
+      onUsTotal: 40,
+      netPosition: 60,
+    });
   });
 
   it("intersects companies with the caller access allowlist before readiness or calculations", async () => {
@@ -115,19 +180,20 @@ describe("Group Net Position", () => {
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true },
     ]);
 
-    const result = await calculateGroupNetPosition("2026-09-09", new Set([2]));
+    const result = await calculateGroupNetPosition("2026-09-10", new Set([2]));
 
     expect(result.companyCount).toBe(1);
     expect(result.companies[0].companyId).toBe(2);
     expect(harness.getHistoricalCurrencyReadiness).toHaveBeenCalledTimes(1);
-    expect(harness.getHistoricalCurrencyReadiness).toHaveBeenCalledWith(2, "2026-09-09");
-    expect(harness.calculateNetPositionAsOf).toHaveBeenCalledTimes(1);
-    expect(harness.calculateNetPositionAsOf).toHaveBeenCalledWith(2, "2026-09-09");
+    expect(harness.getHistoricalCurrencyReadiness).toHaveBeenCalledWith(2, "2026-09-10");
+    expect(harness.erpResponse).toHaveBeenCalledTimes(1);
+    expect(harness.erpResponse.mock.calls[0][0].session.currentCompanyId).toBe(2);
   });
 
-  it("blocks the full group snapshot when any included company has unresolved historical FX data", async () => {
+  it("blocks the full group snapshot when any included ERP company has unresolved historical FX data", async () => {
     harness.getAllCompanies.mockResolvedValue([
-      { id: 7, code: "FX", name: "FX Company", companyType: "erp", active: true },
+      { id: 8, code: "FX", name: "FX Company", companyType: "erp", active: true },
+      { id: 9, code: "FAC", name: "Factory", companyType: "factory", active: true },
     ]);
     harness.getHistoricalCurrencyReadiness.mockResolvedValue({
       ...ready,
@@ -137,81 +203,23 @@ describe("Group Net Position", () => {
       sampleVoucherIds: [99],
     });
 
-    await expect(calculateGroupNetPosition("2026-09-09")).rejects.toBeInstanceOf(GroupHistoricalCurrencyError);
-    expect(harness.calculateNetPositionAsOf).not.toHaveBeenCalled();
+    await expect(calculateGroupNetPosition("2026-09-10")).rejects.toBeInstanceOf(GroupHistoricalCurrencyError);
+    expect(harness.getHistoricalCurrencyReadiness).toHaveBeenCalledTimes(1);
+    expect(harness.getHistoricalCurrencyReadiness).toHaveBeenCalledWith(8, "2026-09-10");
+    expect(harness.erpResponse).not.toHaveBeenCalled();
   });
 
-  it("delegates factory companies to the existing factory Net Position calculation", async () => {
-    harness.getAllCompanies.mockResolvedValue([
-      { id: 9, code: "FAC", name: "Factory", companyType: "factory", active: true },
-    ]);
-
-    const result = await calculateGroupNetPosition("2026-09-09");
-
-    expect(harness.calculateNetPositionAsOf).not.toHaveBeenCalled();
-    expect(harness.factoryResponse).toHaveBeenCalledWith(
-      expect.objectContaining({
-        session: expect.objectContaining({ factoryCompanyId: 9, currentCompanyId: 9 }),
-        query: { asOf: "2026-09-09" },
-      }),
-    );
-    expect(result.companies[0]).toMatchObject({
-      companyId: 9,
-      forUsTotal: 250,
-      onUsTotal: 75,
-      netPosition: 175,
-    });
-    expect(result.companies[0].forUsLines[0].label).toBe("Factory Stock");
-  });
-
-  it("passes supplier-partner values through the Golden Coast residual-equity projection", async () => {
-    harness.getAllCompanies.mockResolvedValue([
-      { id: 4, code: "GC", name: "Golden Coast", companyType: "supplier_partner", active: true },
-    ]);
-    harness.calculateNetPositionAsOf.mockResolvedValue(baseSnapshot(80, 30));
-    harness.loadNetProfitData.mockResolvedValue({
-      companyAccounts: [{ id: 44, name: "Cash" }, { id: 45, name: "Loan" }],
-      accountBalances: new Map([[44, { debit: 80, credit: 0 }]]),
-    });
-    harness.projectGoldenCoastResidualEquity.mockImplementation(({ body }: any) => ({
-      ...body,
-      forUs: { ...body.forUs, total: 120, accounts: body.forUs.accounts },
-      onUs: { ...body.onUs, total: 30, accounts: body.onUs.accounts },
-      forUsTotal: 120,
-      onUsTotal: 30,
-      netPosition: 90,
-      netPositionLabel: "Net Assets",
-    }));
-
-    const result = await calculateGroupNetPosition("2026-09-09");
-
-    expect(harness.loadNetProfitData).toHaveBeenCalledWith(4, "2026-09-09");
-    expect(harness.projectGoldenCoastResidualEquity).toHaveBeenCalledTimes(1);
-    const projectionArg = harness.projectGoldenCoastResidualEquity.mock.calls[0][0];
-    expect(projectionArg.body.forUs.accounts[0]).toMatchObject({ id: 44, name: "Cash", value: 80 });
-    expect(result.companies[0]).toMatchObject({
-      forUsTotal: 120,
-      onUsTotal: 30,
-      netPosition: 90,
-      netAdjustment: 0,
-    });
-  });
-
-  it("reconciles group totals to the sum of the exact per-company Net Position values", async () => {
+  it("reconciles group totals to the exact ERP Net Position values returned per company", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true },
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true },
     ]);
 
-    harness.calculateNetPositionAsOf.mockImplementation(async (companyId: number) => {
-      if (companyId === 1) return baseSnapshot(100, 40);
-      return {
-        ...baseSnapshot(80, 30),
-        netPosition: 40,
-      };
-    });
+    harness.erpResponse.mockImplementation((req: any) =>
+      req.session.currentCompanyId === 1 ? baseResponse(100, 40, 60) : baseResponse(80, 30, 40),
+    );
 
-    const result = await calculateGroupNetPosition("2026-09-09");
+    const result = await calculateGroupNetPosition("2026-09-10");
 
     expect(result.totals.forUsTotal).toBe(180);
     expect(result.totals.onUsTotal).toBe(70);
@@ -223,10 +231,11 @@ describe("Group Net Position", () => {
     expect(result.intercompany.additionalElimination).toBe(0);
   });
 
-  it("treats active non-Properties company types as eligible", () => {
+  it("treats Factory and Properties as ineligible for Group Net Position", () => {
     expect(isGroupNetPositionCompany({ active: true, companyType: "erp" } as any)).toBe(true);
-    expect(isGroupNetPositionCompany({ active: true, companyType: "factory" } as any)).toBe(true);
     expect(isGroupNetPositionCompany({ active: true, companyType: "supplier_partner" } as any)).toBe(true);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "factory" } as any)).toBe(false);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "factory_v2" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "properties" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: false, companyType: "erp" } as any)).toBe(false);
   });
