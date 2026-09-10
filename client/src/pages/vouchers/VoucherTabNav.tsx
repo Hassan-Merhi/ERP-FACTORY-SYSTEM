@@ -54,7 +54,11 @@ export function VoucherMobileTabs({ visibleSidebarGroups, activeTab, setActiveTa
 export function VoucherDesktopNav({ visibleSidebarGroups, activeTab, setActiveTab }: VoucherTabNavProps) {
   return (
     <nav
-      className="hidden sm:flex flex-col w-52 shrink-0 rounded-xl border bg-card p-2 gap-3 self-start sticky top-4"
+      // A landscape phone is wide enough for the sm sidebar but only ~390px tall, so the full
+      // voucher-type list is taller than the screen. Sticky means it never scrolls up, which
+      // left the lower voucher types permanently unreachable. Cap it to the visible height and
+      // let it scroll internally; taller viewports never reach the cap, so nothing changes there.
+      className="hidden sm:flex flex-col w-52 shrink-0 rounded-xl border bg-card p-2 gap-3 self-start sticky top-4 max-h-[calc(var(--app-viewport-height)-6rem)] overflow-y-auto overscroll-contain"
       style={{ zIndex: 10 }}
     >
       {visibleSidebarGroups.map((group, groupIdx) => (

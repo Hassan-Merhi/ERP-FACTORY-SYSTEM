@@ -56,6 +56,21 @@ jobs:
           node-version: "24.21.0"
           cache: npm
 
+      # The postgres service is 18.x and ubuntu-24.04 ships client 16, which
+      # makes pg_dump abort on sight of a newer server rather than dump it.
+      # Install the matching major and put it ahead of the preinstalled one.
+      - name: Install PostgreSQL 18 client
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
       - name: Normalize package registry URLs
         run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
@@ -102,6 +117,11 @@ jobs:
 
       - name: Create and verify backup
         run: |
+          # Record both versions before dumping. pg_dump refuses a server newer
+          # than itself and writes nothing, which otherwise surfaces only as an
+          # empty dump several steps later.
+          echo "client: $(pg_dump --version)"
+          echo "server: $(psql "$DATABASE_URL" -tAc 'SHOW server_version')"
           BACKUP_FILE="$RUNNER_TEMP/erp-resilience.dump"
           started_at=$(date +%s)
           pg_dump \

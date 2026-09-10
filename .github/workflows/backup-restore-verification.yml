@@ -34,11 +34,21 @@ jobs:
         if: env.BACKUP_DATABASE_URL == ''
         run: echo "BACKUP_DATABASE_URL is not configured; restore verification is skipped safely."
 
-      - name: Install PostgreSQL client
+      # The postgres service is 18.x and ubuntu-24.04 ships client 16, which
+      # makes pg_dump abort on sight of a newer server rather than dump it.
+      # Install the matching major and put it ahead of the preinstalled one.
+      - name: Install PostgreSQL 18 client
         if: env.BACKUP_DATABASE_URL != ''
         run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
       - name: Create fresh logical backup
         if: env.BACKUP_DATABASE_URL != ''
