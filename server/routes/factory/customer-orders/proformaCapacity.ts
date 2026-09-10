@@ -105,10 +105,7 @@ export function buildProformaCapacitySnapshot(
   contributionRows: ContributionRow[]
 ): ProformaCapacitySnapshot {
   const currentOrderId = options.currentOrderId ?? null;
-  const requestedByArticle = new Map<
-    string,
-    { articleCode: string; requestedQty: number; isOnProforma: true }
-  >();
+  const requestedByArticle = new Map<string, { articleCode: string; requestedQty: number; isOnProforma: true }>();
 
   for (const line of lineRows) {
     const normalized = normalizeLoadingArticleCode(line.articleCode);
@@ -151,10 +148,7 @@ export function buildProformaCapacitySnapshot(
     }
   }
 
-  const normalizedCodes = new Set<string>([
-    ...requestedByArticle.keys(),
-    ...contributionsByArticle.keys(),
-  ]);
+  const normalizedCodes = new Set<string>([...requestedByArticle.keys(), ...contributionsByArticle.keys()]);
 
   const articles: ProformaCapacityArticle[] = [...normalizedCodes]
     .sort((a, b) => a.localeCompare(b))
