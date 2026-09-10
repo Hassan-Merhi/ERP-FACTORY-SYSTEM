@@ -109,35 +109,57 @@ jobs:
       - name: Authenticated responsive and multilingual browser smoke
         run: |
           mkdir -p artifacts/ux-regression-startup
-          npm start > artifacts/ux-regression-startup/server.log 2>&1 &
-          app_pid=$!
+          : > artifacts/ux-regression-startup/server.log
+          app_pid=""
+
+          stop_app() {
+            if [ -n "${app_pid:-}" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=""
+            fi
+          }
+
+          start_app() {
+            local suite="$1"
+            stop_app
+            printf '\n=== %s ===\n' "$suite" >> artifacts/ux-regression-startup/server.log
+            npm start >> artifacts/ux-regression-startup/server.log 2>&1 &
+            app_pid=$!
+
+            for attempt in $(seq 1 180); do
+              if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
+                > artifacts/ux-regression-startup/health-db.json; then
+                return
+              fi
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat artifacts/ux-regression-startup/server.log
+                exit 1
+              fi
+              if [ "$attempt" = "180" ]; then
+                cat artifacts/ux-regression-startup/server.log
+                exit 1
+              fi
+              sleep 1
+            done
+          }
+
+          run_smoke() {
+            local script="$1"
+            start_app "$script"
+            node "$script"
+          }
+
           cleanup() {
-            kill "$app_pid" 2>/dev/null || true
-            wait "$app_pid" 2>/dev/null || true
+            stop_app
           }
           trap cleanup EXIT
 
-          for attempt in $(seq 1 180); do
-            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
-              > artifacts/ux-regression-startup/health-db.json; then
-              break
-            fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat artifacts/ux-regression-startup/server.log
-              exit 1
-            fi
-            if [ "$attempt" = "180" ]; then
-              cat artifacts/ux-regression-startup/server.log
-              exit 1
-            fi
-            sleep 1
-          done
-
-          node scripts/run-phase9-language-browser-smoke.mjs
-          node scripts/verify-mobile-responsive-phase1-browser.mjs
-          node scripts/verify-mobile-responsive-wave2-browser.mjs
-          node scripts/verify-mobile-responsive-wave3-browser.mjs
-          node scripts/verify-mobile-responsive-wave4-browser.mjs
+          run_smoke scripts/run-phase9-language-browser-smoke.mjs
+          run_smoke scripts/verify-mobile-responsive-phase1-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave2-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave3-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave4-browser.mjs
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
       - name: Focused responsive tests
