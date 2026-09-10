@@ -19,7 +19,32 @@ concurrency:
 jobs:
   implement:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: phase2-capacity-test-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
     steps:
       - name: Checkout Phase 2 branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -81,6 +106,9 @@ jobs:
             server/routes/factory/stock-allocation-v5/proforma-create.ts \
             tests/proforma-capacity-enforcement.test.ts \
             tests/factory-loading-proforma-quantity-alignment.test.ts
+
+      - name: Prepare focused test database
+        run: node node_modules/drizzle-kit/bin.cjs push --force
 
       - name: Focused Phase 1 and Phase 2 regression tests
         run: |
