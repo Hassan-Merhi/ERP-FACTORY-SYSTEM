@@ -9,6 +9,7 @@ describe("Mobile repair Phase 1 critical flows", () => {
   it("keeps desktop split panes while stacking the critical legacy flows only below md", () => {
     const compat = source("client/src/mobile-browser-compat.css");
     const boundary = source("client/src/components/ui/workspace-route-boundary.tsx");
+    const erpShell = source("client/src/app/ErpShell.tsx");
 
     expect(compat).toContain("@media (max-width: 767px) {");
     expect(compat).toContain('[data-workspace-route^="/agents"]');
@@ -20,6 +21,8 @@ describe("Mobile repair Phase 1 critical flows", () => {
     expect(compat).toContain("Tablet/desktop layout remains untouched because these overrides stop at md.");
     expect(boundary).toContain("data-workspace-route={routeKey}");
     expect(boundary).toContain("routeKey={resetKey}");
+    expect(erpShell).toContain("data-workspace-route={routePath}");
+    expect(erpShell).toContain("data-erp-route={routePath}");
   });
 
   it("uses Firefox-baseline-safe selectors for the critical phone layouts", () => {

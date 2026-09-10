@@ -8,6 +8,7 @@ const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
 
 const browserCompat = await read("client/src/mobile-browser-compat.css");
 const workspaceBoundary = await read("client/src/components/ui/workspace-route-boundary.tsx");
+const erpShell = await read("client/src/app/ErpShell.tsx");
 const agents = await read("client/src/pages/Agents.tsx");
 const accountGroups = await read("client/src/pages/AccountGroups.tsx");
 const chat = await read("client/src/pages/Chat.tsx");
@@ -37,6 +38,10 @@ if (browserCompat.includes(":has(")) {
 
 for (const token of ['data-workspace-route={routeKey}', 'routeKey={resetKey}']) {
   if (!workspaceBoundary.includes(token)) failures.push(`Workspace route marker contract missing: ${token}`);
+}
+
+for (const token of ['data-workspace-route={routePath}', 'data-erp-route={routePath}']) {
+  if (!erpShell.includes(token)) failures.push(`ERP route wrapper contract missing: ${token}`);
 }
 
 for (const [name, source, tokens] of [
