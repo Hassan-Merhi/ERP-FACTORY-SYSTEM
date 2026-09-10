@@ -1,0 +1,197 @@
+/*
+ * ERP Wave 3 mobile-operation utilities.
+ *
+ * The ERP shell keeps tablet/desktop layouts intact at 768px and above, while
+ * short-height coarse-pointer landscape phones (for example 844x390) continue
+ * to receive the phone interaction model. Components opt into these helpers so
+ * we do not globally rewrite legacy desktop layouts.
+ */
+
+.erp-phone-only {
+  display: none;
+}
+
+.erp-desktop-data-only {
+  display: block;
+}
+
+.erp-mobile-scroll-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.erp-mobile-scroll-tabs > * {
+  min-width: max-content;
+}
+
+.erp-mobile-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.erp-mobile-touch-visible {
+  transition: opacity 150ms ease;
+}
+
+@media (max-width: 767px) {
+  .erp-phone-only {
+    display: block;
+  }
+
+  .erp-desktop-data-only {
+    display: none !important;
+  }
+
+  .erp-mobile-full-width {
+    width: 100% !important;
+  }
+
+  .erp-mobile-touch-visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .erp-mobile-touch-target,
+  [data-erp-route] button,
+  [data-erp-route] input,
+  [data-erp-route] select {
+    min-height: 44px !important;
+  }
+
+  .erp-mobile-touch-target,
+  [data-erp-route] button {
+    min-width: 44px;
+  }
+
+  [data-erp-route] input,
+  [data-erp-route] textarea,
+  [data-erp-route] select {
+    font-size: 16px !important;
+  }
+
+  .erp-mobile-card-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* These operational rows expose real edit/delete actions only on hover on desktop. */
+  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* Landscape phones can cross Tailwind's sm/md widths while still being phone-class touch devices. */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .erp-phone-only {
+    display: block !important;
+  }
+
+  .erp-desktop-data-only {
+    display: none !important;
+  }
+
+  .erp-mobile-full-width {
+    width: 100% !important;
+  }
+
+  .erp-mobile-touch-visible {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .erp-mobile-touch-target,
+  [data-erp-route] button,
+  [data-erp-route] input,
+  [data-erp-route] select {
+    min-height: 44px !important;
+  }
+
+  .erp-mobile-touch-target,
+  [data-erp-route] button {
+    min-width: 44px;
+  }
+
+  [data-erp-route] input,
+  [data-erp-route] textarea,
+  [data-erp-route] select {
+    font-size: 16px !important;
+  }
+
+  .erp-mobile-card-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.75rem;
+  }
+
+  [data-erp-route="/accounts"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/accounts"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/parties"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/containers"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] button[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route="/settings"] div[class*="invisible"][class*="group-hover"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* Keep existing phone card/list UIs active on landscape phones wider than 768px. */
+  [data-erp-route="/inventory"] [class~="md:hidden"],
+  [data-erp-route="/stock"] [class~="md:hidden"],
+  [data-erp-route="/sales-tools"] [class~="md:hidden"],
+  [data-erp-route="/optional-vouchers"] [class~="md:hidden"],
+  [data-erp-route^="/stock-items/"] [class~="md:hidden"],
+  [data-erp-route="/barcode-manager"] [class~="md:hidden"],
+  [data-erp-route="/orphaned-records"] [class~="md:hidden"],
+  [data-erp-route="/deleted-items"] [class~="md:hidden"] {
+    display: block !important;
+  }
+
+  [data-erp-route="/inventory"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/stock"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/sales-tools"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/optional-vouchers"] [class~="hidden"][class~="md:block"],
+  [data-erp-route^="/stock-items/"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/barcode-manager"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/orphaned-records"] [class~="hidden"][class~="md:block"],
+  [data-erp-route="/deleted-items"] [class~="hidden"][class~="md:block"] {
+    display: none !important;
+  }
+
+  /* Opening/closing stock use sm columns; keep compact phone columns in landscape. */
+  [data-erp-route="/opening-stock"] [class*="sm:grid-cols-7"],
+  [data-erp-route="/closing-stock-summary"] [class*="sm:grid-cols-4"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  [data-erp-route="/opening-stock"] [class~="hidden"][class~="sm:block"],
+  [data-erp-route="/closing-stock-summary"] [class~="hidden"][class~="sm:block"] {
+    display: none !important;
+  }
+
+  [data-erp-route="/closing-stock-summary"] [class~="sm:hidden"] {
+    display: block !important;
+  }
+
+  /* Literal desktop viewport caps are replaced by the shared visual viewport on phone-class devices. */
+  [data-erp-route="/daybook"] [data-table-scroll-region],
+  [data-erp-route="/transaction-journal"] [data-table-scroll-region],
+  [data-erp-route="/vouchers"] [data-table-scroll-region],
+  [data-erp-route="/optional-vouchers"] [data-table-scroll-region] {
+    max-height: calc(var(--app-viewport-height) - 10rem) !important;
+  }
+}

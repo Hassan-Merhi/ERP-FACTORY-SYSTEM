@@ -411,16 +411,16 @@ async function capture(page, language, viewport, route) {
   return path.relative(process.cwd(), file);
 }
 
-const browser = await puppeteer.launch({
-  headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox"],
-});
+await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
-try {
-  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+for (const language of LANGUAGES) {
+  for (const viewport of VIEWPORTS) {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
 
-  for (const language of LANGUAGES) {
-    for (const viewport of VIEWPORTS) {
+    try {
       const page = await browser.newPage();
       const browserErrors = [];
       await page.setViewport(viewport);
@@ -516,10 +516,10 @@ try {
         report.failures.push(...browserErrors.map((error) => `${language.name} ${viewport.name}: ${error}`));
         await page.close();
       }
+    } finally {
+      await browser.close();
     }
   }
-} finally {
-  await browser.close();
 }
 
 if (REQUIRE_AUTHENTICATED && !AUTHENTICATED) {
