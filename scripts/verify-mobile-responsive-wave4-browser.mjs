@@ -198,6 +198,7 @@ async function exerciseSafeControls(page, route) {
   const interaction = {
     focusedTextControl: null,
     comboboxExercised: false,
+    comboboxLayerOpened: false,
     scannerFocused: false,
   };
 
@@ -247,9 +248,31 @@ async function exerciseSafeControls(page, route) {
 
   if (comboboxSelector) {
     await page.click(comboboxSelector);
-    await page.keyboard.press("Escape");
+    // Escape belongs to the combobox only while its layer is actually open.
+    // With no open layer the app's global Escape handler treats the key as
+    // Back (use-escape-back.ts) and navigates to the previously visited route,
+    // which the route assertion then reports as an unexpected redirect. Radix
+    // mounts the listbox asynchronously, so wait for it instead of racing it,
+    // and leave the key unpressed if it never opens.
+    const layerOpened = await page
+      .waitForFunction(
+        () =>
+          Boolean(
+            document.querySelector("[data-radix-popper-content-wrapper]") ||
+              document.querySelector("[data-radix-select-viewport]") ||
+              document.querySelector('[role="listbox"]') ||
+              document.querySelector('[data-state="open"][role="dialog"]'),
+          ),
+        { timeout: 2_000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (layerOpened) {
+      await page.keyboard.press("Escape");
+    }
     await settle(page);
     interaction.comboboxExercised = true;
+    interaction.comboboxLayerOpened = layerOpened;
   }
 
   if (route === "/factory/sales/loading/new") {
@@ -326,6 +349,48 @@ async function readState(page, route, viewport) {
         .filter(({ rect }) => rect && (rect.x < -2 || rect.right > viewportWidth + 2 || rect.y < -2 || rect.bottom > viewportHeight + 2))
         .map(({ element, rect }) => `${element.getAttribute("data-testid") || "dialog"}:${Math.round(rect.width)}x${Math.round(rect.height)}`);
 
+      // A sticky or fixed control has "escaped" only when part of it is permanently
+      // out of reach. Elements that never intersect the viewport are not that: it covers
+      // html2canvas render templates parked at -9999px and the header of any table further
+      // down the page.
+      //
+      // For the rest, reachability follows from how each position scheme is laid out:
+      //   - `fixed` is placed in viewport coordinates and no scrolling moves it, so it has
+      //     to fit the viewport.
+      //   - `sticky` is pinned to its scrollport on whichever axes it sets an offset for.
+      //     On a pinned axis it never scrolls, so anything longer than the scrollport's
+      //     visible size is unreachable. On the other axis it scrolls normally, so a wide
+      //     table's sticky header inside a horizontally scrolling wrapper is fine — that is
+      //     what the wrapper is for, and page-level overflow is asserted separately by
+      //     horizontalOverflow above.
+      //
+      // Sizes are compared rather than edge positions so the result does not depend on where
+      // the page happens to be scrolled when it is measured.
+      const intersectsViewport = (rect) =>
+        rect.right > 0 && rect.bottom > 0 && rect.x < viewportWidth && rect.y < viewportHeight;
+      const scrollportOf = (element) => {
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          const style = getComputedStyle(parent);
+          if (/auto|scroll/.test(`${style.overflowX} ${style.overflowY}`)) return parent;
+        }
+        return null;
+      };
+      const escapesItsBox = (element, rect) => {
+        const style = getComputedStyle(element);
+        if (style.position === "fixed") {
+          return rect.x < -3 || rect.right > viewportWidth + 3 || rect.bottom > viewportHeight + 3;
+        }
+        const scrollport = scrollportOf(element);
+        const availableWidth = scrollport ? scrollport.clientWidth : viewportWidth;
+        const availableHeight = scrollport ? scrollport.clientHeight : viewportHeight;
+        const pinnedVertically = style.top !== "auto" || style.bottom !== "auto";
+        const pinnedHorizontally = style.left !== "auto" || style.right !== "auto";
+        return (
+          (pinnedVertically && rect.height > availableHeight + 3) ||
+          (pinnedHorizontally && rect.width > availableWidth + 3)
+        );
+      };
+
       const stickyFixedViewportViolations = main
         ? [...main.querySelectorAll("*")]
             .filter((element) => {
@@ -334,7 +399,7 @@ async function readState(page, route, viewport) {
               return position === "fixed" || position === "sticky";
             })
             .map((element) => ({ element, rect: rectOf(element) }))
-            .filter(({ rect }) => rect && (rect.x < -3 || rect.right > viewportWidth + 3 || rect.bottom > viewportHeight + 3))
+            .filter(({ element, rect }) => rect && intersectsViewport(rect) && escapesItsBox(element, rect))
             .map(({ element }) => element.getAttribute("data-testid") || element.getAttribute("aria-label") || element.tagName)
         : [];
 
