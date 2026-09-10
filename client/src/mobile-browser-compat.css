@@ -194,9 +194,8 @@ body {
    * Phase 1 critical legacy master/detail layouts.
    *
    * Stable route markers come from WorkspaceRouteBoundary, so these rules do
-   * not depend on relational parent selectors and work across the documented
-   * browser baseline. Tablet/desktop layout remains untouched because these
-   * overrides stop at md.
+   * not depend on relational parent selectors and work across the documented browser baseline.
+   * Tablet/desktop layout remains untouched because these overrides stop at md.
    */
   [data-workspace-route^="/agents"] > .flex.h-full,
   [data-workspace-route^="/factory/agents"] > .flex.h-full,
