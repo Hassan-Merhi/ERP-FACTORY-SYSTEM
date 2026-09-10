@@ -106,35 +106,62 @@ jobs:
           node node_modules/drizzle-kit/bin.cjs push --force
           node scripts/prepare-phase9-browser-smoke-fixture.mjs
       - name: Authenticated responsive and multilingual browser smoke
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p artifacts/ux-regression-startup
-          npm start > artifacts/ux-regression-startup/server.log 2>&1 &
-          app_pid=$!
-          cleanup() {
+
+          run_browser_suite() {
+            local script="$1"
+            local log_name="$2"
+            local server_log="artifacts/ux-regression-startup/${log_name}.log"
+
+            npm start > "$server_log" 2>&1 &
+            local app_pid=$!
+            local ready=0
+
+            for attempt in $(seq 1 180); do
+              if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
+                > artifacts/ux-regression-startup/health-db.json; then
+                ready=1
+                break
+              fi
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat "$server_log"
+                wait "$app_pid" 2>/dev/null || true
+                return 1
+              fi
+              sleep 1
+            done
+
+            if [ "$ready" != "1" ]; then
+              cat "$server_log"
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              return 1
+            fi
+
+            set +e
+            node "$script"
+            local suite_status=$?
+            set -e
+
             kill "$app_pid" 2>/dev/null || true
             wait "$app_pid" 2>/dev/null || true
+
+            if [ "$suite_status" -ne 0 ]; then
+              echo "Browser suite failed: $script"
+              tail -n 250 "$server_log" || true
+              return "$suite_status"
+            fi
           }
-          trap cleanup EXIT
 
-          for attempt in $(seq 1 180); do
-            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
-              > artifacts/ux-regression-startup/health-db.json; then
-              break
-            fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat artifacts/ux-regression-startup/server.log
-              exit 1
-            fi
-            if [ "$attempt" = "180" ]; then
-              cat artifacts/ux-regression-startup/server.log
-              exit 1
-            fi
-            sleep 1
-          done
-
-          node scripts/run-phase9-language-browser-smoke.mjs
-          node scripts/verify-mobile-responsive-wave2-browser.mjs
-          node scripts/verify-mobile-responsive-wave4-browser.mjs
+          # Keep the production login limiter enabled. Each rendered suite gets a
+          # fresh app process so its synthetic login checks cannot exhaust another
+          # suite's in-memory 15-minute login-rate-limit window.
+          run_browser_suite scripts/run-phase9-language-browser-smoke.mjs phase9-language
+          run_browser_suite scripts/verify-mobile-responsive-wave2-browser.mjs mobile-wave2
+          run_browser_suite scripts/verify-mobile-responsive-wave4-browser.mjs mobile-wave4
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
       - name: Focused responsive tests
