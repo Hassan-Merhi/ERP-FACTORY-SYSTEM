@@ -1,0 +1,58 @@
+name: Format PR 1357
+
+on:
+  push:
+    branches:
+      - feat/tracking-supplier-location-agent-defaults
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download repository source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | \
+            tar --extract --gzip --strip-components=1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Format failing files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            client/src/pages/settings/SupplierTrackingDefaultsTab.tsx \
+            server/helpers/generateGroupNetPositionExcel.ts \
+            server/helpers/groupNetPosition.ts \
+            server/services/supplierTrackingDefaults.ts \
+            server/storage/company-deletion.ts \
+            tests/supplier-tracking-defaults.test.ts
+
+      - name: Upload formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: formatted-pr-1357
+          path: |
+            client/src/pages/factory/FactoryProductionTargets.tsx
+            client/src/pages/settings/SupplierTrackingDefaultsTab.tsx
+            server/helpers/generateGroupNetPositionExcel.ts
+            server/helpers/groupNetPosition.ts
+            server/services/supplierTrackingDefaults.ts
+            server/storage/company-deletion.ts
+            tests/supplier-tracking-defaults.test.ts
+          retention-days: 1
