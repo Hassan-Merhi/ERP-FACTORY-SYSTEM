@@ -73,16 +73,37 @@ jobs:
           node scripts/phase3-finalize-creation-locks.mjs
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
-          const path = "server/routes/factory/customer-orders/bale-scanning/bulk-import.ts";
-          let source = readFileSync(path, "utf8");
-          const oldText = "          if (order.proformaIdUsed && !ignoreProforma && !capacity) return [];";
-          const newText =
+
+          const bulkPath = "server/routes/factory/customer-orders/bale-scanning/bulk-import.ts";
+          let bulkSource = readFileSync(bulkPath, "utf8");
+          const oldBulkText = "          if (order.proformaIdUsed && !ignoreProforma && !capacity) return [];";
+          const newBulkText =
             "          if (order.proformaIdUsed && !ignoreProforma && !capacity) {\n" +
             "            return { orderChanged: false, addedIds: [] as number[] };\n" +
             "          }";
-          if (!source.includes(oldText)) throw new Error("Phase 3 bulk-import unavailable-capacity return anchor missing");
-          source = source.replace(oldText, newText);
-          writeFileSync(path, source);
+          if (!bulkSource.includes(oldBulkText)) {
+            throw new Error("Phase 3 bulk-import unavailable-capacity return anchor missing");
+          }
+          bulkSource = bulkSource.replace(oldBulkText, newBulkText);
+          writeFileSync(bulkPath, bulkSource);
+
+          const testPath = "tests/customer-loading-routes-behavior.test.ts";
+          let testSource = readFileSync(testPath, "utf8");
+          const unusedFinalize = `    const finalize = (body: Record<string, unknown> = {}) =>
+              routes.get("POST /api/factory/customer-orders/:id/finalize-loading")!(
+                req({ body, params: { id: "10" } }),
+                resHarness()
+              ) as Promise<void>;
+          `;
+          const normalizedUnusedFinalize = unusedFinalize
+            .split("\n")
+            .map((line) => line.replace(/^ {10}/, ""))
+            .join("\n");
+          if (!testSource.includes(normalizedUnusedFinalize)) {
+            throw new Error("Phase 3 unused finalize helper anchor missing");
+          }
+          testSource = testSource.replace(normalizedUnusedFinalize, "");
+          writeFileSync(testPath, testSource);
           NODE
 
       - name: Format and verify Phase 3 files
