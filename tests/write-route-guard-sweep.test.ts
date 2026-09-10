@@ -238,7 +238,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/customer-orders",
   "POST /api/factory/customer-orders-loading",
   "POST /api/factory/customer-orders/:id/assign-container",
-  "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/bales",
   "POST /api/factory/customer-orders/:id/bales/bulk-import",
   "POST /api/factory/customer-orders/:id/bales/exchange",
@@ -248,12 +247,10 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/customer-orders/:id/finalize",
   "POST /api/factory/customer-orders/:id/finalize-loading",
   "POST /api/factory/customer-orders/:id/force-sync-bale-status",
-  "POST /api/factory/customer-orders/:id/recover-bales",
   "POST /api/factory/customer-orders/:id/restore-loading",
   "POST /api/factory/customer-orders/:id/return-to-loading",
   "POST /api/factory/customer-orders/:id/unfinalize",
   "POST /api/factory/customer-orders/:id/verify",
-  "POST /api/factory/customer-proformas/:id/create-loading",
   "POST /api/factory/dispatch-batches",
   "POST /api/factory/dispatch-batches/:id/generate-invoice",
   "POST /api/factory/dispatch-truck-rides/:id/scan-bale",
@@ -437,6 +434,24 @@ afterAll(() => {
   closeTestServer();
 });
 
+/**
+ * Routes the audit no longer classifies as sensitive, but which still write
+ * bales, orders and daybook entries through a sibling module.
+ *
+ * Phase 3 moved each of these endpoints' whole transaction into a `*Atomic`
+ * module beside its route file so the proforma-capacity and physical-bale locks
+ * commit with the rest of the write. The audit classifies by the registering
+ * file's own text, so the extraction took them out of its sensitive set — but
+ * unlike the retired stock-transfer-revision routes above, these still write
+ * exactly what they wrote before. Narrowing the sweep to match the audit would
+ * drop the one assertion that holds for them, so they are swept explicitly.
+ */
+const DELEGATED_WRITE_ROUTES = [
+  "POST /api/factory/customer-orders/:id/auto-recover-bales",
+  "POST /api/factory/customer-orders/:id/recover-bales",
+  "POST /api/factory/customer-proformas/:id/create-loading",
+];
+
 describe("sensitive write-route guard sweep", () => {
   it("lists exactly the routes the coverage audit calls sensitive", () => {
     const audited = auditWriteRouteCoverage()
@@ -455,7 +470,7 @@ describe("sensitive write-route guard sweep", () => {
     const reachable: string[] = [];
     const errored: string[] = [];
 
-    for (const route of SENSITIVE_WRITE_ROUTES) {
+    for (const route of [...SENSITIVE_WRITE_ROUTES, ...DELEGATED_WRITE_ROUTES]) {
       const [method, routePath] = route.split(" ");
       // Concrete values for path params. An unauthenticated request must be
       // rejected before any of them is read, so the values never matter.
