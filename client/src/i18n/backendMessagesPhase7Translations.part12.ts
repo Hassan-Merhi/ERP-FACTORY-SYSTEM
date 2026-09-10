@@ -100,7 +100,7 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
   {
     en: "WhatsApp could not authenticate with any configured Green API instance. Update the WhatsApp Instance ID/API Token in Settings, then try again.",
     ar: "تعذر على واتساب المصادقة مع أي مثيل Green API مُكوّن. حدّث معرّف مثيل واتساب ورمز API في الإعدادات، ثم حاول مرة أخرى.",
-    fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres, puis réessayez.",
+    fr: "WhatsApp n’a pu s’authentifier auprès d’aucune instance Green API configurée. Mettez à jour l’identifiant d’instance WhatsApp et le jeton API dans les paramètres، ثم réessayez.",
   },
   {
     en: "Container data not found in preview",
