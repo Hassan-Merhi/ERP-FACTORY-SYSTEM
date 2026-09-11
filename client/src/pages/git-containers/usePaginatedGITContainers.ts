@@ -1,14 +1,15 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   canonicalApiUrl,
   canonicalSetValues,
+  companyDataKey,
   frontendQueryPolicies,
-  paginatedCompanyDataKey,
   type CompanyIdentity,
   type QueryParams,
 } from "@/lib/frontendDataArchitecture";
+import { fetchContinuousJson, withContinuousCursor } from "@/lib/continuousListClient";
 import type { EnrichedContainerRow, EtaFilterValue, GitContainersResponse } from "./gitContainerTypes";
 
 interface PaginatedContainerFilters {
@@ -33,6 +34,20 @@ interface PaginatedContainerFilters {
   enabled: boolean;
 }
 
+interface GitContinuousResponse {
+  containers: EnrichedContainerRow[];
+  mode: "single" | "all";
+  companyId?: number;
+  companyName?: string;
+  total: number;
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  asOf: string;
+  summary?: GitContainersResponse["summary"];
+  facets?: GitContainersResponse["facets"];
+}
+
 const compactSet = (values: readonly string[]): string | undefined => {
   const normalized = canonicalSetValues(values);
   return normalized.length > 0 ? normalized.join(",") : undefined;
@@ -43,8 +58,6 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
   const queryUrl = useMemo(() => {
     const etaDates = filters.etaFilter === "ALL" ? undefined : compactSet(filters.etaFilter.selectedDates);
     const params: QueryParams = {
-      page: filters.page,
-      pageSize: filters.pageSize,
       profile: "compact",
       allCompanies: filters.allCompanies ? true : undefined,
       company: filters.companyFilter !== "ALL" ? filters.companyFilter : undefined,
@@ -65,40 +78,68 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
         filters.etaFilter !== "ALL" && filters.etaFilter.includeNoEta ? true : undefined,
     };
     return canonicalApiUrl("/api/git/containers", params);
-  }, [filters.etaFilter, filters.page, filters.pageSize, filters.allCompanies, filters.companyFilter, filters.containerFilters, filters.supplierFilters, filters.transporterFilters, filters.agentFilters, filters.truckFilters, filters.locationFilters, filters.docsFilter, filters.delayedFilter, filters.freightFilter, filters.notesFilter, filters.sortOrder, debouncedSearch]);
+  }, [filters.etaFilter, filters.allCompanies, filters.companyFilter, filters.containerFilters, filters.supplierFilters, filters.transporterFilters, filters.agentFilters, filters.truckFilters, filters.locationFilters, filters.docsFilter, filters.delayedFilter, filters.freightFilter, filters.notesFilter, filters.sortOrder, debouncedSearch]);
 
-  const query = useQuery<GitContainersResponse>({
-    queryKey: paginatedCompanyDataKey(
+  const query = useInfiniteQuery({
+    queryKey: companyDataKey(
       queryUrl,
       filters.companyIdentity,
-      filters.page,
-      filters.pageSize,
       "git-containers",
+      "continuous",
       filters.allCompanies ? "all-accessible" : "active-company",
     ),
-    queryFn: async ({ signal }) => {
-      const response = await fetch(queryUrl, { credentials: "include", signal });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({ message: "Failed to load containers" }));
-        throw new Error(body.message || "Failed to load containers");
-      }
-      return response.json();
-    },
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      fetchContinuousJson<GitContinuousResponse>(
+        withContinuousCursor(queryUrl, { cursor: pageParam, limit: filters.pageSize }),
+        { signal, fallbackError: "Failed to load containers" }
+      ),
+    getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : undefined),
     enabled: filters.enabled,
     ...frontendQueryPolicies.operational,
     staleTime: 45_000,
-    placeholderData: (previous) => previous,
   });
+
+  // Once the first chunk paints, continue through the finite cursor chain automatically.
+  // React Query passes an AbortSignal to every request, so changing scope/filters cancels
+  // obsolete work instead of letting an old list keep downloading in the background.
+  useEffect(() => {
+    if (!filters.enabled || !query.hasNextPage || query.isFetchingNextPage || query.isError) return;
+    void query.fetchNextPage();
+  }, [filters.enabled, query.hasNextPage, query.isFetchingNextPage, query.isError, query.fetchNextPage]);
+
+  const containers = useMemo(
+    () => query.data?.pages.flatMap((page) => page.containers) ?? [],
+    [query.data?.pages]
+  );
+  const firstPage = query.data?.pages[0];
+  const data: GitContainersResponse | undefined = firstPage
+    ? {
+        containers,
+        mode: firstPage.mode,
+        companyId: firstPage.companyId,
+        companyName: firstPage.companyName,
+        total: firstPage.total,
+        page: 1,
+        pageSize: Math.max(containers.length, 1),
+        totalPages: firstPage.total > 0 ? 1 : 0,
+        hasMore: Boolean(query.hasNextPage),
+        summary: firstPage.summary,
+        facets: firstPage.facets,
+      }
+    : undefined;
 
   const loadContainerDetail = async (id: number, companyId: number): Promise<EnrichedContainerRow> => {
     const detailUrl = canonicalApiUrl(`/api/git/containers/${id}`, { companyId });
     const response = await fetch(detailUrl, { credentials: "include" });
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ message: "Failed to load container details" }));
+      const body = (await response.json().catch(() => ({ message: "Failed to load container details" }))) as {
+        message?: string;
+      };
       throw new Error(body.message || "Failed to load container details");
     }
-    return response.json();
+    return response.json() as Promise<EnrichedContainerRow>;
   };
 
-  return { ...query, queryUrl, loadContainerDetail };
+  return { ...query, data, queryUrl, loadContainerDetail };
 }
