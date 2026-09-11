@@ -1,6 +1,12 @@
+import {
+  collectContinuousChunks,
+  fetchContinuousJson,
+  withContinuousCursor,
+  type ContinuousChunk,
+} from "./continuousListClient";
+
 export type ErpDaybookRow =
-  | { _type: "voucher"; data: Record<string, unknown> }
-  | { _type: "offload"; data: Record<string, unknown> };
+  { _type: "voucher"; data: Record<string, unknown> } | { _type: "offload"; data: Record<string, unknown> };
 
 export interface ErpDaybookPage {
   items: ErpDaybookRow[];
@@ -12,8 +18,13 @@ export interface ErpDaybookPage {
   hasPreviousPage: boolean;
 }
 
+export interface ErpDaybookChunk extends ContinuousChunk<ErpDaybookRow> {
+  limit: number;
+  asOf?: string;
+}
+
 const ENDPOINT = "/api/daybook";
-const EXPORT_PAGE_SIZE = 250;
+const EXPORT_CHUNK_SIZE = 250;
 
 function pageUrl(baseParams: URLSearchParams, page: number, limit: number): string {
   const params = new URLSearchParams(baseParams);
@@ -23,25 +34,43 @@ function pageUrl(baseParams: URLSearchParams, page: number, limit: number): stri
   return `${ENDPOINT}?${params.toString()}`;
 }
 
+function continuousBaseUrl(baseParams: URLSearchParams): string {
+  const suffix = baseParams.toString();
+  return suffix ? `${ENDPOINT}?${suffix}` : ENDPOINT;
+}
+
+/** Legacy page helper retained while callers outside the full-list view migrate. */
 export async function fetchErpDaybookPage(
   baseParams: URLSearchParams,
   page: number,
-  limit: number
+  limit: number,
+  signal?: AbortSignal
 ): Promise<ErpDaybookPage> {
-  const response = await fetch(pageUrl(baseParams, page, limit), { credentials: "include" });
+  const response = await fetch(pageUrl(baseParams, page, limit), { credentials: "include", signal });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body?.message || "Failed to load Daybook page");
+    const body = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(body?.message || "Failed to load transactions");
   }
-  return response.json();
+  return response.json() as Promise<ErpDaybookPage>;
 }
 
-export async function fetchAllErpDaybookRows(baseParams: URLSearchParams): Promise<ErpDaybookRow[]> {
-  const first = await fetchErpDaybookPage(baseParams, 1, EXPORT_PAGE_SIZE);
-  const rows = Array.isArray(first.items) ? [...first.items] : [];
-  for (let page = 2; page <= Math.max(1, first.totalPages || 1); page += 1) {
-    const next = await fetchErpDaybookPage(baseParams, page, EXPORT_PAGE_SIZE);
-    if (Array.isArray(next.items)) rows.push(...next.items);
-  }
-  return rows;
+export function fetchErpDaybookChunk(
+  baseParams: URLSearchParams,
+  cursor: string | null,
+  limit: number,
+  signal?: AbortSignal
+): Promise<ErpDaybookChunk> {
+  const url = withContinuousCursor(continuousBaseUrl(baseParams), { cursor, limit });
+  return fetchContinuousJson<ErpDaybookChunk>(url, { signal, fallbackError: "Failed to load transactions" });
+}
+
+export async function fetchAllErpDaybookRows(
+  baseParams: URLSearchParams,
+  signal?: AbortSignal
+): Promise<ErpDaybookRow[]> {
+  const result = await collectContinuousChunks<ErpDaybookRow, ErpDaybookChunk>({
+    signal,
+    load: (cursor, requestSignal) => fetchErpDaybookChunk(baseParams, cursor, EXPORT_CHUNK_SIZE, requestSignal),
+  });
+  return result.rows;
 }

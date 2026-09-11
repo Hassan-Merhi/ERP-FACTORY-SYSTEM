@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   TrendingUp,
@@ -22,12 +23,20 @@ import { PeriodFilter } from "@/components/ui/period-filter";
 import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import type { Account, Transaction, WaRule } from "./accountTypes";
 import { AccountTransactionRows } from "./AccountTransactionRows";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 interface AccountStatementRow extends Transaction {
   totalDebit: number;
   totalCredit: number;
   runningBalance: number;
+}
+
+interface AccountStatementPageMetadata {
+  total?: number;
+  periodDebitTotal?: number;
+  periodCreditTotal?: number;
+  closingNetBalance?: number;
 }
 
 interface StatementSendMutation {
@@ -95,8 +104,31 @@ export function AccountStatementView({
   transactionError,
 }: AccountStatementViewProps) {
   const { formatTransactionAmount } = useCurrencyContext();
+  const { selectedCompany } = useCompany();
+  const queryClient = useQueryClient();
   const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
   const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
+
+  const statementMetadata = queryClient.getQueryData<AccountStatementPageMetadata>([
+    "account-statement",
+    selectedCompany?.id,
+    selectedAccount.type,
+    selectedAccount.accountId,
+    periodFilter.fromDate || null,
+    periodFilter.toDate || null,
+  ]);
+  const rawOpeningBalance = Number.parseFloat(String(selectedAccount.openingBalance ?? 0)) || 0;
+  const signedStoredOpening = selectedAccount.openingBalanceSide === "Cr" ? -rawOpeningBalance : rawOpeningBalance;
+  const hasServerClosing = Number.isFinite(statementMetadata?.closingNetBalance);
+  const isGoldenCoastFreshStart =
+    selectedCompany?.companyType === "supplier_partner" && selectedAccount.subType === "gc_partner_capital";
+  // Golden Coast Fresh Start is intentionally projected to Net Position in AccountsLegacy.
+  // Every other paginated account uses the explicit server period aggregate carried by the
+  // same React Query response, so financial totals no longer depend on the global pagination snapshot.
+  const displayClosingBalance =
+    !isGoldenCoastFreshStart && hasServerClosing
+      ? signedStoredOpening + Number(statementMetadata?.closingNetBalance)
+      : closingBalance;
 
   const pdfTypeMap: Record<string, string> = {
     ledger: "ledger",
@@ -118,13 +150,22 @@ export function AccountStatementView({
   };
 
   const totalDebit = useMemo(
-    () => vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0),
-    [vouchersWithBalance]
+    () =>
+      Number.isFinite(statementMetadata?.periodDebitTotal)
+        ? Number(statementMetadata?.periodDebitTotal)
+        : vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0),
+    [statementMetadata?.periodDebitTotal, vouchersWithBalance]
   );
   const totalCredit = useMemo(
-    () => vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0),
-    [vouchersWithBalance]
+    () =>
+      Number.isFinite(statementMetadata?.periodCreditTotal)
+        ? Number(statementMetadata?.periodCreditTotal)
+        : vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0),
+    [statementMetadata?.periodCreditTotal, vouchersWithBalance]
   );
+  const transactionCount = Number.isFinite(statementMetadata?.total)
+    ? Number(statementMetadata?.total)
+    : vouchersWithBalance.length;
 
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
 
@@ -183,8 +224,8 @@ export function AccountStatementView({
             <>
               <span className="text-muted-foreground text-xs shrink-0">|</span>
               <span className="text-sm font-mono tabular-nums shrink-0">
-                {formatAmount(Math.abs(closingBalance))}
-                <span className="ml-1 text-[10px] opacity-70">{closingBalance >= 0 ? "Dr" : "Cr"}</span>
+                {formatAmount(Math.abs(displayClosingBalance))}
+                <span className="ml-1 text-[10px] opacity-70">{displayClosingBalance >= 0 ? "Dr" : "Cr"}</span>
               </span>
             </>
           )}
@@ -328,7 +369,7 @@ export function AccountStatementView({
             <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
               <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Transactions</p>
-              <p className="text-base font-semibold leading-none tabular-nums">{vouchersWithBalance.length}</p>
+              <p className="text-base font-semibold leading-none tabular-nums">{transactionCount}</p>
             </div>
           </div>
           <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-center gap-3 min-w-[150px]">
@@ -350,8 +391,8 @@ export function AccountStatementView({
             <div>
               <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Closing Balance</p>
               <p className="text-base font-semibold leading-none tabular-nums">
-                {formatAmount(Math.abs(closingBalance))}
-                <span className="ml-1 text-[10px] font-normal opacity-70">{balSide(closingBalance)}</span>
+                {formatAmount(Math.abs(displayClosingBalance))}
+                <span className="ml-1 text-[10px] font-normal opacity-70">{balSide(displayClosingBalance)}</span>
               </p>
             </div>
           </div>
@@ -374,7 +415,7 @@ export function AccountStatementView({
             hideBalances={hideBalances}
             appMode={appMode}
             openingBalance={openingBalance}
-            closingBalance={closingBalance}
+            closingBalance={displayClosingBalance}
             selectedAccount={selectedAccount}
             formatDisplayDate={formatDisplayDate}
           />
