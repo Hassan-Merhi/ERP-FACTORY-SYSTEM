@@ -12,7 +12,9 @@ async function read(relativePath) {
 
 const [
   routes,
-  statsIndex,
+  statsRegistry,
+  statsFolderBarrel,
+  applicationRoutes,
   client,
   bandwidthPlugin,
   invalidationPlugin,
@@ -23,7 +25,9 @@ const [
   queryClient,
 ] = await Promise.all([
   read("server/routes/stats/salesReportBandwidthRoutes.ts"),
+  read("server/routes/statsRoutes.ts"),
   read("server/routes/stats/index.ts"),
+  read("server/routes/applicationRoutes.ts"),
   read("client/src/lib/salesReportBandwidthClient.ts"),
   read("build/viteSalesReportBandwidthPlugin.ts"),
   read("build/viteSalesReportInvalidationPlugin.ts"),
@@ -54,9 +58,33 @@ assert.match(
 assert.match(routes, /getAccessibleCompanyIds/, "all-company routes must retain company access scoping");
 assert.match(routes, /stockGroupNames/, "all-company stock groups must filter by cross-company names");
 
+// The compact endpoints must be mounted by the registry the server actually
+// uses. A barrel that nothing imports can hold a perfectly ordered list and
+// still 404 every report: the SPA fallback then answers the API request with
+// index.html and the page only shows "Sales report unavailable".
+assert.match(
+  applicationRoutes,
+  /import\s*\{\s*registerStatsRoutes\s*\}\s*from\s*"\.\/statsRoutes"/,
+  "the application must mount server/routes/statsRoutes.ts, the registry this check reads"
+);
+assert.match(
+  statsRegistry,
+  /import\s*\{[^}]*registerSalesReportBandwidthRoutes[^}]*\}\s*from\s*"\.\/stats\/salesReportBandwidthRoutes"/,
+  "the mounted stats registry must import the compact Sales Report route module"
+);
 assert.ok(
-  statsIndex.indexOf("registerSalesReportBandwidthRoutes(app)") < statsIndex.indexOf("registerStatsDataRoutes(app)"),
+  statsRegistry.indexOf("registerSalesReportBandwidthRoutes(app)") > -1,
+  "the mounted stats registry must invoke registerSalesReportBandwidthRoutes(app)"
+);
+assert.ok(
+  statsRegistry.indexOf("registerSalesReportBandwidthRoutes(app)") <
+    statsRegistry.indexOf("registerStatsDataRoutes(app)"),
   "compact Sales Report routes must register before legacy raw routes"
+);
+assert.doesNotMatch(
+  statsFolderBarrel,
+  /export function registerStatsRoutes/,
+  "server/routes/stats/index.ts must not keep a second registration list that can drift from the mounted one"
 );
 
 assert.match(client, /fetchSalesReportSummary/, "compact summary client is required");
@@ -156,6 +184,7 @@ console.log(
       phase: 3,
       area: "sales-report-bandwidth",
       checks: [
+        "compact routes mounted by the stats registry the server uses",
         "server-side current-company summary aggregation",
         "server-side all-company summary aggregation",
         "server-side product/company comparison aggregation",
