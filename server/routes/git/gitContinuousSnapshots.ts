@@ -28,15 +28,15 @@ export class GitContinuousSnapshotError extends Error {
   readonly status = 409;
 
   constructor() {
-    super("This continuous tracking snapshot expired. Restart the list from the first chunk.");
+    super("git-continuous-snapshot-expired");
     this.name = "GitContinuousSnapshotError";
   }
 }
 
 const snapshots = new Map<string, Snapshot<unknown, unknown, unknown>>();
 
-function finitePositiveConfig(name: string, fallback: number): number {
-  const parsed = Number(process.env[name]);
+function finitePositiveConfig(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
@@ -44,7 +44,7 @@ function prune(now = Date.now()): void {
   for (const [id, snapshot] of snapshots) {
     if (snapshot.expiresAt <= now) snapshots.delete(id);
   }
-  const maxSnapshots = finitePositiveConfig("GIT_CONTINUOUS_MAX_SNAPSHOTS", DEFAULT_MAX_SNAPSHOTS);
+  const maxSnapshots = finitePositiveConfig(process.env.GIT_CONTINUOUS_MAX_SNAPSHOTS, DEFAULT_MAX_SNAPSHOTS);
   while (snapshots.size > maxSnapshots) {
     const oldest = snapshots.keys().next().value;
     if (typeof oldest !== "string") break;
@@ -89,7 +89,7 @@ export function createGitContinuousSnapshot<T, TFacets, TSummary>(input: {
   limit: number;
 }) {
   prune();
-  const ttlMs = finitePositiveConfig("GIT_CONTINUOUS_SNAPSHOT_TTL_MS", DEFAULT_TTL_MS);
+  const ttlMs = finitePositiveConfig(process.env.GIT_CONTINUOUS_SNAPSHOT_TTL_MS, DEFAULT_TTL_MS);
   const snapshot: Snapshot<T, TFacets, TSummary> = {
     id: randomUUID(),
     scope: input.scope,
