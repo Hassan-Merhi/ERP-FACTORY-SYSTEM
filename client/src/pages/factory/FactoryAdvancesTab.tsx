@@ -8,6 +8,7 @@ import {} from "@/components/ui/dropdown-menu";
 import {AdvancesView} from "./factoryadvancestab/components/AdvancesView";
 import {RepaymentsView} from "./factoryadvancestab/components/RepaymentsView";
 import {DeductionsView} from "./factoryadvancestab/components/DeductionsView";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 export default function FactoryAdvancesTab() {
   const [subTab, setSubTab] = useState("advances");
 
@@ -20,7 +21,7 @@ export default function FactoryAdvancesTab() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const showRepayments =

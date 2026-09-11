@@ -21,6 +21,7 @@ import {
   Loader2,
   TrendingUp,
 } from "lucide-react";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type Period =
   | "today"
@@ -245,7 +246,7 @@ function AccountSection({
 }
 
 export default function NetProfitReport() {
-  const { data: user } = useQuery<any>({ queryKey: ["/api/auth/me"] });
+  const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdminOrDev = user?.role === "Admin" || user?.role === "Developer";
 
   const now = new Date();
@@ -274,7 +275,7 @@ export default function NetProfitReport() {
     return PERIODS.find((p) => p.value === period)?.label || "This Month";
   }, [period, specificMonth, specificYear, customFromDate, customToDate]);
 
-  const { data: companies = [] } = useQuery<any[]>({
+  const { data: companies = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/companies"],
     enabled: isAdminOrDev,
   });

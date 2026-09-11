@@ -377,7 +377,7 @@ export function SilentProductionDialog({ model }: Props) {
                         });
                         const data = await res.json();
                         setSilentProdDone(data.applied || validItems.length);
-                      } catch (error: any) {
+                      } catch (error: unknown) {
                         console.error("Silent production error:", error);
                       } finally {
                         setSilentProdApplying(false);

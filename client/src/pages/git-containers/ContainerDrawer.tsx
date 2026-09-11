@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
 import { ContainerDrawerTracking } from "./ContainerDrawerTracking";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export function ContainerDrawer({
   container,
@@ -192,7 +193,7 @@ export function ContainerDrawer({
 
   const eventsQueryKey = container?.id ? `/api/container-tracking/${container.id}/events` : null;
   const trackingCompanyIdentity = sessionCompanyId ?? container?.companyId ?? "no-company";
-  const { data: events, isLoading: eventsLoading } = useQuery<any[]>({
+  const { data: events, isLoading: eventsLoading } = useQuery<ApiListRow[]>({
     queryKey: eventsQueryKey
       ? companyDataKey(eventsQueryKey, trackingCompanyIdentity, "container-tracking-events")
       : [],

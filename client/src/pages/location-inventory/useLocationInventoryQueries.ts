@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { locationInventoryFullUrl } from "@/api/inventoryApi";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface InventoryItem {
   inventoryId: number | null;
@@ -22,7 +23,7 @@ interface InventoryItem {
 
 interface UseLocationInventoryQueriesParams {
   waGroupDialogOpen: boolean;
-  posUser?: any;
+  posUser?: AuthMe;
   companyId: number | undefined;
   selectedLocationLocal: Location | null;
   showZeroStock: boolean;

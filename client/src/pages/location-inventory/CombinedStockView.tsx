@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface CombinedStockViewProps {
   allInventoryLoading: boolean;
@@ -30,7 +31,7 @@ interface CombinedStockViewProps {
   allStockSelectedRowIndex: number;
   openMovement: (locId: number | null, locName: string | null, stockItemId: number, stockItemName: string) => void;
   formatAmount: (amt: number) => string;
-  posUser?: any;
+  posUser?: AuthMe;
   allStockTableRef: React.RefObject<HTMLDivElement | null>;
 }
 

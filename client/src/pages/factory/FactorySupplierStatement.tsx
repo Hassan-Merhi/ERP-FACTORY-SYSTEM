@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/formatNumber";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 const _CURRENCIES = ["USD", "EUR", "GBP", "AUD", "LBP", "XOF", "XAF"];
 
@@ -91,16 +92,15 @@ export default function FactorySupplierStatement() {
   const [supplierId, setSupplierId] = useState<string>("");
   const [estimatedRates, setEstimatedRates] = useState<Record<string, string>>({});
 
-  const { data: companies = [] } = useQuery<any[]>({
+  const { data: companies = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/user/companies"],
   });
 
-  const { data: me } = useQuery<any>({
-    queryKey: ["/api/auth/me"],
+  const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"],
   });
   const isAdmin = me?.role === "Admin" || me?.role === "Owner" || me?.role === "Developer";
 
-  const { data: suppliers = [], isLoading: suppliersLoading } = useQuery<any[]>({
+  const { data: suppliers = [], isLoading: suppliersLoading } = useQuery<ApiListRow[]>({
     queryKey: ["/api/factory/suppliers", companyId],
     queryFn: async () => {
       const res = await fetch(`/api/factory/suppliers?companyId=${companyId}`, { credentials: "include" });

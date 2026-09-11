@@ -5,10 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import type { Location } from "./posTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type { BankAccountRow, LedgerPickerAccount, Location } from "./posTypes";
 
 interface PosCheckoutStripProps {
-  posUser: any;
+  posUser?: AuthMe | null;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -27,9 +28,9 @@ interface PosCheckoutStripProps {
   setCustomerComboOpen: (v: boolean) => void;
   selectedCustomerId: string;
   setSelectedCustomerId: (id: string) => void;
-  customerAccounts: any[];
-  bankAccounts: any[];
-  cashLedgerAccounts: any[];
+  customerAccounts: LedgerPickerAccount[];
+  bankAccounts: BankAccountRow[];
+  cashLedgerAccounts: LedgerPickerAccount[];
   /** Supplier Partner sales support cash/bank settlement like normal ERP POS — no credit option. */
   isSpCompany?: boolean;
 }
@@ -197,7 +198,7 @@ export function PosCheckoutStrip({
                   {customerAccounts.map((acc) => (
                     <CommandItem
                       key={acc.id}
-                      value={acc.name}
+                      value={acc.name ?? ""}
                       onSelect={() => {
                         setSelectedCustomerId(String(acc.id));
                         setCustomerComboOpen(false);

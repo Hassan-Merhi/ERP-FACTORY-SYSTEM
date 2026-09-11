@@ -9,11 +9,12 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type Section = "workers" | "employees" | "production-targets" | "attendance-register" | "insurance";
 
 export default function FactoryPayrollHub() {
-  const { data: myAccess } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);

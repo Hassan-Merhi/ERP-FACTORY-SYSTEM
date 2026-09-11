@@ -17,9 +17,10 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { LocationWhatsappScheduleDialog } from "./LocationWhatsappScheduleDialog";
 import { LocationWhatsappDeliveryHistoryDialog } from "./LocationWhatsappDeliveryHistoryDialog";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface LocationInventoryHeaderProps {
-  posUser?: any;
+  posUser?: AuthMe;
   showNegativeStock: boolean;
   setShowNegativeStock: (v: boolean) => void;
 }

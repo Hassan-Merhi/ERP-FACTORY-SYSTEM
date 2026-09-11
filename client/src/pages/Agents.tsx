@@ -78,10 +78,10 @@ interface AgentAccount {
   accountName: string;
 }
 
-function parseBalance(value: any): number {
+function parseBalance(value: unknown): number {
   if (value === null || value === undefined || value === "") return 0;
-  const parsed = typeof value === "string" ? parseFloat(value) : value;
-  return isNaN(parsed) ? 0 : parsed;
+  const parsed = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 const VOUCHER_TYPE_COLORS: Record<string, string> = {

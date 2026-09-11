@@ -6,6 +6,7 @@ import BalesHistory from "./BalesHistory";
 import BarcodeLookup from "../BarcodeLookup";
 import BaleProducts from "../BaleProductsBilingual";
 import CustomerLoading from "./CustomerLoading";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export default function FactoryBalesHub() {
   const hash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
@@ -19,8 +20,7 @@ export default function FactoryBalesHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<any>({
-    queryKey: ["/api/factory/my-access"],
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60000,
   });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];

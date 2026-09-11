@@ -7,11 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import type { SaleRow, InventoryItem, Location } from "./posTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type {
+  BankAccountRow,
+  InventoryItem,
+  LedgerPickerAccount,
+  Location,
+  PosMutationPending,
+  SaleRow,
+} from "./posTypes";
 import { getFilteredInventory } from "../utils/posCalculations";
 
 interface PosMobileLayoutProps {
-  posUser: any;
+  posUser?: AuthMe | null;
   activeLocation: Location | null;
   allLocations: Location[];
   posAssignedLocations: Location[];
@@ -24,26 +32,26 @@ interface PosMobileLayoutProps {
   setPaymentAccountType: (type: "bank" | "cash") => void;
   paymentAccountId: string | null;
   setPaymentAccountId: (id: string) => void;
-  bankAccounts: any[];
-  cashLedgerAccounts: any[];
+  bankAccounts: BankAccountRow[];
+  cashLedgerAccounts: LedgerPickerAccount[];
   isCreditSale: boolean;
   setIsCreditSale: (v: boolean) => void;
   mobileCustomerComboOpen: boolean;
   setMobileCustomerComboOpen: (v: boolean) => void;
   selectedCustomerId: string;
   setSelectedCustomerId: (id: string) => void;
-  customerAccounts: any[];
+  customerAccounts: LedgerPickerAccount[];
   searchTerm: string;
   setSearchTerm: (v: string) => void;
   mobileSearchInputRef: React.RefObject<HTMLInputElement | null>;
   inventory: InventoryItem[];
-  selectItem: (item: any) => void;
+  selectItem: (item: InventoryItem) => void;
   rows: SaleRow[];
   setRows: React.Dispatch<React.SetStateAction<SaleRow[]>>;
-  updateRow: (index: number, field: keyof SaleRow, value: any) => void;
+  updateRow: (index: number, field: keyof SaleRow, value: string | number) => void;
   notes: string;
   setNotes: (v: string) => void;
-  saveMutation: any;
+  saveMutation: PosMutationPending;
   hasValidItems: boolean;
   disableSave?: boolean;
   handleSaveSale: () => void;
@@ -298,7 +306,7 @@ export function PosMobileLayout({
                       {customerAccounts.map((account) => (
                         <CommandItem
                           key={account.id}
-                          value={account.name}
+                          value={account.name ?? ""}
                           onSelect={() => {
                             setSelectedCustomerId(String(account.id));
                             setMobileCustomerComboOpen(false);

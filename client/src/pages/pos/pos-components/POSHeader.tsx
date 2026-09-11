@@ -22,21 +22,24 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
+import type { AuthMe } from "@shared/apiTypes";
+import type { Location, PosDraftSummary, PosMutationPending } from "./posTypes";
+
 export interface POSHeaderProps {
-  posUser: any;
+  posUser?: AuthMe | null;
   editVoucherId?: string;
-  activeLocation: any;
+  activeLocation: Location | null;
   showPosImport: boolean;
   onExportInventory: () => void;
   onImportClick: () => void;
   onShowStockReport: () => void;
   navigate: (path: string) => void;
-  saveMutation?: any;
+  saveMutation?: PosMutationPending;
   hasValidItems?: boolean;
   disableSave?: boolean;
   handleSaveSale?: () => void;
   lastAutosaved?: Date | null;
-  drafts?: any[];
+  drafts?: PosDraftSummary[];
   onOpenDraftDialog?: () => void;
   onUpdateDraft?: () => void;
   onSummaryExport?: () => void;

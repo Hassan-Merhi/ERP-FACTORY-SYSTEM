@@ -31,6 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface MonthlyData {
   month: number;
@@ -79,7 +80,7 @@ interface LocationMonthlySummaryData {
   };
 }
 
-export default function LocationMonthlySummary({ posUser }: { posUser?: any } = {}) {
+export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe } = {}) {
   const { formatAmount } = useCurrencyContext();
   const { registerCursorNav, clearCursorNav } = useCursorNav();
   const params = useParams();
