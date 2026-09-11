@@ -61,7 +61,45 @@ describe("gitContinuousSnapshots", () => {
     });
   });
 
-  it("fails closed when a process-local snapshot expires", () => {
+  it("extends the inactivity timeout while a large cursor chain is actively advancing", () => {
+    process.env.GIT_CONTINUOUS_SNAPSHOT_TTL_MS = "100";
+    let now = 1_000;
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      const first = createGitContinuousSnapshot({
+        scope: "git:slow-active-chain",
+        rows: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }],
+        facets: {},
+        summary: {},
+        asOf: "2026-09-10T19:00:00.000Z",
+        limit: 1,
+      });
+
+      now = 1_060;
+      const second = readGitContinuousSnapshot<{ id: number }, {}, {}>({
+        scope: "git:slow-active-chain",
+        cursor: first.nextCursor!,
+        limit: 1,
+      });
+      expect(second.containers).toEqual([{ id: 2 }]);
+
+      // 1,120 is beyond the original 1,100 expiry, but still within the
+      // refreshed 1,160 inactivity deadline established by the valid read.
+      now = 1_120;
+      const third = readGitContinuousSnapshot<{ id: number }, {}, {}>({
+        scope: "git:slow-active-chain",
+        cursor: second.nextCursor!,
+        limit: 1,
+      });
+      expect(third.containers).toEqual([{ id: 3 }]);
+      expect(third.hasMore).toBe(true);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it("fails closed when a process-local snapshot expires from inactivity", () => {
     process.env.GIT_CONTINUOUS_SNAPSHOT_TTL_MS = "1";
     const first = createGitContinuousSnapshot({
       scope: "git:short-lived",
