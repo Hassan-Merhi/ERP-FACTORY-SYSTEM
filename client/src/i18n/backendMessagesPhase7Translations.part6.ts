@@ -4,6 +4,7 @@ import type { Phase7BackendMessagesEntry } from "./backendMessagesPhase7Translat
 // chatbotPoImportRoutes changes the template-literal fingerprint but not the
 // rendered backend message. Keep the canonical runtime translation entry below
 // unchanged so its dynamic placeholders continue to compile normally.
+// prettier-ignore
 export const backendMessagesPhase7TypedCallbackAuditCompatibility = {
   en: '${unresolved.length} item(s) still unresolved: ${unresolved.map((l: { rawName?: unknown; itemName?: unknown }) => l.rawName || l.itemName).join(", ")}',
 } as const;
