@@ -175,16 +175,7 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(state.layers).toHaveLength(0);
 
-    await adjustInventory(
-      db as any,
-      ctx.locationId,
-      stockItemId,
-      -5,
-      ctx.companyId,
-      undefined,
-      "pos-sale",
-      voucher.id
-    );
+    await adjustInventory(db as any, ctx.locationId, stockItemId, -5, ctx.companyId, undefined, "pos-sale", voucher.id);
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-3);
@@ -222,16 +213,7 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.quantity)).toBe(-5);
     expect(totalLayerQty(state.layers)).toBe(5);
 
-    await adjustInventory(
-      db as any,
-      ctx.locationId,
-      stockItemId,
-      -5,
-      ctx.companyId,
-      undefined,
-      "pos-sale",
-      voucher.id
-    );
+    await adjustInventory(db as any, ctx.locationId, stockItemId, -5, ctx.companyId, undefined, "pos-sale", voucher.id);
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-10);
@@ -260,16 +242,7 @@ describe("inventory valuation regression guards", () => {
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
-    await adjustInventory(
-      db as any,
-      ctx.locationId,
-      stockItemId,
-      -7,
-      ctx.companyId,
-      undefined,
-      "pos-sale",
-      voucher.id
-    );
+    await adjustInventory(db as any, ctx.locationId, stockItemId, -7, ctx.companyId, undefined, "pos-sale", voucher.id);
 
     for (let i = 0; i < 2; i += 1) {
       await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
@@ -317,16 +290,7 @@ describe("inventory valuation regression guards", () => {
     `);
 
     await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
-    await adjustInventory(
-      db as any,
-      ctx.locationId,
-      stockItemId,
-      -1,
-      ctx.companyId,
-      undefined,
-      "pos-sale",
-      voucher.id
-    );
+    await adjustInventory(db as any, ctx.locationId, stockItemId, -1, ctx.companyId, undefined, "pos-sale", voucher.id);
 
     const state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(18);

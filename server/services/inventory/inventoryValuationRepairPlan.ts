@@ -65,9 +65,7 @@ export function buildInventoryValuationRepairPlan(
   const baselineQuantityEstimate = evidence.currentQuantity - evidence.netDeltaSinceEdit;
   const expectedRate = evidence.baselineRate && evidence.baselineRate > 0 ? evidence.baselineRate : null;
   const expectedValueEstimate =
-    expectedRate !== null && evidence.currentQuantity > 0
-      ? roundMoney(evidence.currentQuantity * expectedRate)
-      : null;
+    expectedRate !== null && evidence.currentQuantity > 0 ? roundMoney(evidence.currentQuantity * expectedRate) : null;
   const repairValueDeltaEstimate =
     expectedValueEstimate === null ? null : roundMoney(expectedValueEstimate - evidence.currentValue);
 

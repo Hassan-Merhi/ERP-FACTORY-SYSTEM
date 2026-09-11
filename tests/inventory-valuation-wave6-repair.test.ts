@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  classifyWave6InventoryState,
-  parseWave6RepairConfig,
-} from "../server/inventoryValuationWave6RepairBridge.mjs";
+import { classifyWave6InventoryState, parseWave6RepairConfig } from "../server/inventoryValuationWave6RepairBridge.mjs";
 
 const REPAIR = {
   repairKey: "wave6-shmix3-20260911",
@@ -46,11 +43,7 @@ describe("inventory valuation Wave 6 guarded repair", () => {
     expect(classifyWave6InventoryState({ ...BEFORE, average_rate: "33.93" }, config!, 0)).toBe("conflict");
     expect(classifyWave6InventoryState({ ...BEFORE, total_value: "576.57" }, config!, 0)).toBe("conflict");
     expect(
-      classifyWave6InventoryState(
-        { ...BEFORE, last_updated_text: "2026-09-11T12:44:00.000000Z" },
-        config!,
-        0
-      )
+      classifyWave6InventoryState({ ...BEFORE, last_updated_text: "2026-09-11T12:44:00.000000Z" }, config!, 0)
     ).toBe("conflict");
     expect(classifyWave6InventoryState(BEFORE, config!, 1)).toBe("conflict");
   });
@@ -74,8 +67,6 @@ describe("inventory valuation Wave 6 guarded repair", () => {
   });
 
   it("fails configuration validation when the target value does not match quantity times target rate", () => {
-    expect(() =>
-      parseWave6RepairConfig(JSON.stringify({ ...REPAIR, targetValue: "1133.06" }))
-    ).toThrow(/targetValue/);
+    expect(() => parseWave6RepairConfig(JSON.stringify({ ...REPAIR, targetValue: "1133.06" }))).toThrow(/targetValue/);
   });
 });

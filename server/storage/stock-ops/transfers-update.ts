@@ -45,10 +45,7 @@ export async function updateStockTransfer(
       .where(eq(schema.stockTransferVouchers.id, id));
     if (!existingTransfer) throw new Error(`Stock transfer ${id} not found`);
 
-    const [voucher] = await tx
-      .select()
-      .from(schema.vouchers)
-      .where(eq(schema.vouchers.id, existingTransfer.voucherId));
+    const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, existingTransfer.voucherId));
     if (!voucher) throw new Error(`Voucher ${existingTransfer.voucherId} not found`);
     const isOptional = voucher.optional;
 
@@ -342,11 +339,7 @@ export async function updateStockAdjustment(
         .where(
           and(
             eq(schema.ledgerAccounts.companyId, location.companyId),
-            inArray(schema.ledgerAccounts.code, [
-              "STOCK_ADJUSTMENT",
-              "PRODUCTION_ADJUSTMENT",
-              "CONSUMPTION_EXPENSE",
-            ]),
+            inArray(schema.ledgerAccounts.code, ["STOCK_ADJUSTMENT", "PRODUCTION_ADJUSTMENT", "CONSUMPTION_EXPENSE"]),
             isNull(schema.ledgerAccounts.deletedAt)
           )
         );
@@ -467,15 +460,11 @@ export async function updateStockAdjustment(
             // stored value byte-for-byte. Otherwise the requested rate defines
             // the replacement production value. In both cases the live stored
             // total_value — not qty × rounded average_rate — is the base.
-            const oldQty = historicalMatch
-              ? toInventoryDecimal(historicalMatch.quantity).abs()
-              : toInventoryDecimal(0);
+            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
             const oldRate = historicalMatch ? toInventoryDecimal(historicalMatch.rate) : toInventoryDecimal(0);
             if (historicalMatch && sameDecimal(oldQty, absoluteQuantity) && sameDecimal(oldRate, requestedRate)) {
               actualTotalAmount = toInventoryDecimal(historicalMatch.totalAmount).abs();
-              actualRate = absoluteQuantity.gt(0)
-                ? actualTotalAmount.dividedBy(absoluteQuantity)
-                : requestedRate;
+              actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : requestedRate;
             }
 
             newQty = addInventoryValues(currentQty, absoluteQuantity);
@@ -486,9 +475,7 @@ export async function updateStockAdjustment(
             // Preserve the historical value for the overlap with the old issue;
             // only additional quantity is costed from the live inventory that
             // exists after the historical issue was reversed.
-            const oldQty = historicalMatch
-              ? toInventoryDecimal(historicalMatch.quantity).abs()
-              : toInventoryDecimal(0);
+            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
             const oldValue = historicalMatch
               ? toInventoryDecimal(historicalMatch.totalAmount).abs()
               : toInventoryDecimal(0);
@@ -498,19 +485,14 @@ export async function updateStockAdjustment(
             const extraQty = absoluteQuantity.minus(overlapQty);
 
             const qtyAfterPreserved = currentQty.minus(overlapQty);
-            const valueAfterPreserved = Decimal.max(
-              currentValue.minus(preservedValue),
-              toInventoryDecimal(0)
-            );
+            const valueAfterPreserved = Decimal.max(currentValue.minus(preservedValue), toInventoryDecimal(0));
             const liveExtraRate = qtyAfterPreserved.gt(0)
               ? valueAfterPreserved.dividedBy(qtyAfterPreserved)
               : currentRate;
             const extraValue = multiplyInventoryValues(extraQty, liveExtraRate);
 
             actualTotalAmount = addInventoryValues(preservedValue, extraValue);
-            actualRate = absoluteQuantity.gt(0)
-              ? actualTotalAmount.dividedBy(absoluteQuantity)
-              : liveExtraRate;
+            actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : liveExtraRate;
             newQty = subtractInventoryValues(currentQty, absoluteQuantity);
             newValue = newQty.isPositive()
               ? Decimal.max(currentValue.minus(actualTotalAmount), toInventoryDecimal(0))
