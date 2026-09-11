@@ -77,7 +77,11 @@ describe("gitContinuousSnapshots", () => {
       });
 
       now = 1_060;
-      const second = readGitContinuousSnapshot<{ id: number }, {}, {}>({
+      const second = readGitContinuousSnapshot<
+        { id: number },
+        Record<string, never>,
+        Record<string, never>
+      >({
         scope: "git:slow-active-chain",
         cursor: first.nextCursor!,
         limit: 1,
@@ -87,7 +91,11 @@ describe("gitContinuousSnapshots", () => {
       // 1,120 is beyond the original 1,100 expiry, but still within the
       // refreshed 1,160 inactivity deadline established by the valid read.
       now = 1_120;
-      const third = readGitContinuousSnapshot<{ id: number }, {}, {}>({
+      const third = readGitContinuousSnapshot<
+        { id: number },
+        Record<string, never>,
+        Record<string, never>
+      >({
         scope: "git:slow-active-chain",
         cursor: second.nextCursor!,
         limit: 1,
