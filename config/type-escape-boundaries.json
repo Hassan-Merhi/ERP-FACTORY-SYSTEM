@@ -1434,18 +1434,8 @@
         0,
         0
       ],
-      "client/src/pages/vouchers/useAccountBalance.ts": [
-        7,
-        0,
-        0
-      ],
       "client/src/pages/vouchers/useVoucherHandlers.ts": [
         5,
-        0,
-        0
-      ],
-      "client/src/pages/vouchers/useVoucherHydration.ts": [
-        12,
         0,
         0
       ],
@@ -1521,6 +1511,11 @@
       ],
       "server/routes/accountStatementRoutes.ts": [
         2,
+        0,
+        0
+      ],
+      "server/routes/accountTransactionPaginationRoutes.ts": [
+        1,
         0,
         0
       ],
@@ -2222,6 +2217,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1058
+    "typeEscapeCeiling": 1040
   }
 }
