@@ -7,6 +7,8 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
   scrollLabel?: string;
   scrollDescription?: string;
   minimumWidth?: string;
+  /** Optional ref to the actual scroll-region wrapper, used by bounded large-list rendering. */
+  scrollRef?: React.Ref<HTMLDivElement>;
   /**
    * Caps the scroll region's height so `TableHeader`'s sticky positioning has something to
    * stick against. Any CSS length; pass `"none"` to let the table run its full height (which
@@ -23,6 +25,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       scrollLabel = "Scrollable data table",
       scrollDescription,
       minimumWidth,
+      scrollRef,
       maxHeight,
       style,
       ...props
@@ -32,6 +35,14 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     const descriptionId = React.useId();
     const wrapperRef = React.useRef<HTMLDivElement>(null);
     const [usesParentScroll, setUsesParentScroll] = React.useState(false);
+    const setWrapperRef = React.useCallback(
+      (node: HTMLDivElement | null) => {
+        wrapperRef.current = node;
+        if (typeof scrollRef === "function") scrollRef(node);
+        else if (scrollRef) scrollRef.current = node;
+      },
+      [scrollRef]
+    );
 
     // Some callers opt out of clipping so menus and popovers rendered inside a row can escape
     // the box. Those must not get a height cap either: with `overflow: visible` a capped table
@@ -60,7 +71,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
 
     return (
       <div
-        ref={wrapperRef}
+        ref={setWrapperRef}
         role="region"
         aria-label={scrollLabel}
         aria-describedby={descriptionId}
