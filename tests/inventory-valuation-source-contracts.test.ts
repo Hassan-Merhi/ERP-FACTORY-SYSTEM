@@ -22,6 +22,19 @@ describe("inventory valuation source contracts", () => {
 
     expect(source).toMatch(/totalValue:\s*inventory\.totalValue/);
     expect(source).not.toMatch(/const\s+actualValue\s*=\s*actualQty\s*\*\s*actualRate/);
+    expect(source).toContain("buildInventoryValuationReconciliation(");
+  });
+
+  it("historical inventory reconstruction uses exact stored values for live stock and exact movement totals", () => {
+    const source = read("server/routes/helpers/inventoryHistoryHelpers.ts");
+
+    expect(source).toMatch(/totalValue:\s*inventory\.totalValue/);
+    expect(source).toMatch(/totalCost:\s*salesItems\.totalCost/);
+    expect(source).toMatch(/totalAmount:\s*stockAdjustmentItems\.totalAmount/);
+    expect(source).toMatch(/totalAmount:\s*stockTransferItems\.totalAmount/);
+    expect(source).toMatch(/totalValue:\s*containerOffloadItems\.totalValue/);
+    expect(source).toContain("inventorySnapshotFromStoredValues(inv.quantity, inv.totalValue, inv.averageRate)");
+    expect(source).not.toContain("totalValue: qty * rate");
   });
 
   it("stock-adjustment edit reversal uses exact stored quantity and value", () => {
