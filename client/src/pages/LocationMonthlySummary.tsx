@@ -31,7 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 interface MonthlyData {
   month: number;
@@ -152,12 +152,15 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
     return showAllMonths ? data.monthlyData : data.monthlyData.filter(hasActivity);
   }, [data?.monthlyData, showAllMonths]);
 
-  const handleMonthClick = useCallback((month: number) => {
-    if (!isAllLocationsMode) {
-      const year = new Date(periodFilter.fromDate).getFullYear();
-      navigate(`/locations/${locationId}/stock-items/${stockItemId}/vouchers/${year}/${month}`);
-    }
-  }, [isAllLocationsMode, locationId, navigate, periodFilter.fromDate, stockItemId]);
+  const handleMonthClick = useCallback(
+    (month: number) => {
+      if (!isAllLocationsMode) {
+        const year = new Date(periodFilter.fromDate).getFullYear();
+        navigate(`/locations/${locationId}/stock-items/${stockItemId}/vouchers/${year}/${month}`);
+      }
+    },
+    [isAllLocationsMode, locationId, navigate, periodFilter.fromDate, stockItemId]
+  );
 
   const fmtQty = (n: number) => {
     if (n === 0) return "—";

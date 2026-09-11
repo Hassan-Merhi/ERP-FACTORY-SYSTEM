@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Book, ArrowLeftRight, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 const POSDaybook = lazy(() => import("@/pages/pos/POSDaybook"));
 const StockTransfers = lazy(() => import("@/pages/StockTransfers"));
@@ -26,8 +26,7 @@ const POS_TAB_KEYS = POS_TABS.map((t) => t.key) as unknown as readonly ("daybook
 const ERP_TAB_KEYS = ERP_TABS.map((t) => t.key) as unknown as readonly ("transfers" | "pricelist")[];
 
 export default function SalesToolsHub() {
-  const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"],
-  });
+  const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
 
   const isPOS = user?.role === "POS";
   const tabs = isPOS ? POS_TABS : ERP_TABS;

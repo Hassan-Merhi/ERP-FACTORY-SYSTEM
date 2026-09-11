@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { Bale } from "@shared/schema";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { ApiListRow } from "@shared/apiTypes";
 
 /**
  * Provides the bales and containers data queries.

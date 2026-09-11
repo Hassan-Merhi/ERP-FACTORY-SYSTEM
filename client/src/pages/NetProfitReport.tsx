@@ -21,17 +21,10 @@ import {
   Loader2,
   TrendingUp,
 } from "lucide-react";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe, ApiListRow } from "@shared/apiTypes";
 
 type Period =
-  | "today"
-  | "yesterday"
-  | "this_week"
-  | "this_month"
-  | "this_year"
-  | "all_time"
-  | "specific_month"
-  | "custom_range";
+  "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
 
 const PERIODS: { value: Period; label: string }[] = [
   { value: "today", label: "Today" },

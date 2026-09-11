@@ -4,9 +4,17 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Workbook } from "@fortune-sheet/react";
 import { PageHeader } from "@/components/PageHeader";
 import "@fortune-sheet/react/dist/index.css";
-import type { Sheet as FortuneSheet, Cell as FortuneCell, CellWithRowAndCol } from "@fortune-sheet/core";
-import type { CellObject as XlsxCellObject, ColInfo, RowInfo, WorkSheet as XlsxWorkSheet } from "xlsx-js-style";
+import type { Sheet as FortuneSheet } from "@fortune-sheet/core";
+import type { ColInfo, RowInfo, WorkSheet as XlsxWorkSheet } from "xlsx-js-style";
 import type { WorkbookInstance } from "@fortune-sheet/react";
+import { ensureCelldata } from "./spreadsheetEditorModel";
+import type {
+  EditorCell,
+  FortuneCellBorder,
+  SpreadsheetListItem,
+  XlCell,
+  XlsxCellStyleParts,
+} from "./spreadsheetEditorModel";
 import { excelToFortune } from "@/lib/excelImport";
 import { isExcelMode, type SpreadsheetData, arrayBufferToBase64, syncFortuneToXlsx } from "@/lib/excelSync";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -52,61 +60,6 @@ const FS_BORDER: Record<string, string> = {
 const FS_HT: Record<string, string> = { "0": "center", "1": "left", "2": "right" };
 // Vertical:   toolbar reveals value: 1=top, 0=middle, 2=bottom
 const FS_VT: Record<string, string> = { "0": "center", "1": "top", "2": "bottom" };
-
-// Fortune Sheet's onChange delivers sheets in dense `data` format.
-// When re-opening a saved sheet, convert back to sparse `celldata` so
-// Fortune Sheet's initSheetData() correctly populates the grid.
-function ensureCelldata(sheet: FortuneSheet): FortuneSheet {
-  if (sheet.celldata !== undefined) return sheet; // already sparse
-  if (!Array.isArray(sheet.data)) return sheet;
-  const celldata: CellWithRowAndCol[] = [];
-  for (let r = 0; r < sheet.data.length; r++) {
-    const row = sheet.data[r];
-    if (!Array.isArray(row)) continue;
-    for (let c = 0; c < row.length; c++) {
-      const v = row[c];
-      if (v !== null && v !== undefined) {
-        celldata.push({ r, c, v });
-      }
-    }
-  }
-  const { data: _data, ...rest } = sheet;
-  return { ...rest, celldata };
-}
-
-/** One spreadsheet entry in the /api/spreadsheets list. */
-interface SpreadsheetListItem {
-  id: number;
-  name: string;
-  updatedAt: string;
-  createdBy?: string | null;
-}
-
-/** Border record Fortune Sheet stores on a cell (not part of its public Cell type). */
-type FortuneCellBorder = Partial<Record<"l" | "r" | "t" | "b", { style?: string | number; color?: string }>>;
-
-/** Cell shape this editor reads, including the app-written border record. */
-type EditorCell = FortuneCell & { b?: FortuneCellBorder };
-
-/** xlsx-js-style cell, extended with this editor's formula sentinel type. */
-type XlCell = Omit<XlsxCellObject, "t"> & { t: XlsxCellObject["t"] | "f" };
-
-interface XlsxFontStyle {
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  strike?: boolean;
-  sz?: number;
-  color?: { rgb: string };
-  name?: string;
-}
-
-interface XlsxCellStyleParts {
-  font?: XlsxFontStyle;
-  fill?: { patternType: string; fgColor: { rgb: string } };
-  alignment?: { horizontal?: string; vertical?: string; wrapText?: boolean };
-  border?: Record<string, { style: string; color: { rgb: string } }>;
-}
 
 function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-style")) {
   const wb = XLSX.utils.book_new();

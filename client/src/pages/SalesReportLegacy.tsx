@@ -44,7 +44,7 @@ import { ErrorState } from "@/components/ui/page-state";
 import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";
 import { useSalesReportDateKeyboard } from "./salesreportlegacy/useSalesReportDateKeyboard";
 import { exportSalesReportExcel } from "./salesreportlegacy/exportExcel";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { ApiListRow } from "@shared/apiTypes";
 export default function SalesReport() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
