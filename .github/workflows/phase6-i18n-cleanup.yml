@@ -43,7 +43,7 @@ jobs:
           npx prettier --write server/routes/accountTransactionPaginationRoutes.ts
       - name: Verify focused gates
         run: |
-          npm run audit:i18n
+          node scripts/audit-i18n-phase14.mjs
           npm run audit:type-escapes
           npx prettier --check \
             client/src/hooks/useBoundedTableRows.ts \
