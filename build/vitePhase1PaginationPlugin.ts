@@ -2,6 +2,7 @@ import type { Plugin } from "vite";
 
 const MAIN_SUFFIX = "/client/src/main.tsx";
 const DAYBOOK_SUFFIX = "/client/src/pages/Daybook.tsx";
+const DAYBOOK_TABLE_SUFFIX = "/client/src/pages/daybook/DaybookTable.tsx";
 const ACCOUNTS_MODEL_SUFFIX = "/client/src/pages/accountslegacy/useAccountsLegacyModel.ts";
 
 function replaceExactly(
@@ -121,6 +122,63 @@ function transformDaybook(source: string): string {
   return code;
 }
 
+function transformDaybookTable(source: string): string {
+  let code = source;
+  code = replaceExactly(
+    code,
+    `import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";`,
+    `import { isVoucherMutationBlocked, voucherLockLabel } from "@/lib/migratedVoucherGuard";\nimport { useBoundedTableRows } from "@/hooks/useBoundedTableRows";`,
+    "Daybook bounded-render import",
+  );
+
+  code = replaceExactly(
+    code,
+    `  // Loading, failure and empty are three different situations. Rendering a bare`,
+    `  const daybookDesktopWindow = useBoundedTableRows({\n    rowCount: displayedRows.length,\n    rowHeight: 52,\n    minimumRows: 120,\n    overscan: 18,\n    enabled: viewMode === "detailed" && expandedVoucherId === null,\n  });\n  const daybookMobileWindow = useBoundedTableRows({\n    rowCount: displayedRows.length,\n    rowHeight: 86,\n    minimumRows: 80,\n    overscan: 12,\n    enabled: viewMode === "detailed",\n  });\n  const desktopRows = displayedRows.slice(daybookDesktopWindow.startIndex, daybookDesktopWindow.endIndex);\n  const mobileRows = displayedRows.slice(daybookMobileWindow.startIndex, daybookMobileWindow.endIndex);\n\n  // Loading, failure and empty are three different situations. Rendering a bare`,
+    "Daybook bounded windows",
+  );
+
+  code = replaceExactly(
+    code,
+    `  const tableRows: React.JSX.Element[] = [];\n  let lastDate = "";\n  for (const row of displayedRows) {`,
+    `  const tableRows: React.JSX.Element[] = [];\n  if (daybookDesktopWindow.topSpacerHeight > 0) {\n    tableRows.push(\n      <TableRow key="daybook-virtual-spacer-top" aria-hidden="true" data-testid="daybook-virtual-spacer-top">\n        <TableCell colSpan={hideAmounts ? 4 : 5} className="p-0 border-0" style={{ height: daybookDesktopWindow.topSpacerHeight }} />\n      </TableRow>\n    );\n  }\n  let lastDate = "";\n  for (const row of desktopRows) {`,
+    "Daybook desktop render window",
+  );
+  code = replaceAllChecked(
+    code,
+    `const dayRows = displayedRows.filter((r) => {`,
+    `const dayRows = visibleRows.filter((r) => {`,
+    2,
+    "Daybook complete date totals",
+  );
+  code = replaceExactly(
+    code,
+    `  // ── Build mobile card items ───────────────────────────────────────────────\n  const mobileItems: React.JSX.Element[] = [];\n  let mobileLastDate = "";\n  for (const row of displayedRows) {`,
+    `  if (daybookDesktopWindow.bottomSpacerHeight > 0) {\n    tableRows.push(\n      <TableRow key="daybook-virtual-spacer-bottom" aria-hidden="true" data-testid="daybook-virtual-spacer-bottom">\n        <TableCell colSpan={hideAmounts ? 4 : 5} className="p-0 border-0" style={{ height: daybookDesktopWindow.bottomSpacerHeight }} />\n      </TableRow>\n    );\n  }\n\n  // ── Build mobile card items ───────────────────────────────────────────────\n  const mobileItems: React.JSX.Element[] = [];\n  if (daybookMobileWindow.topSpacerHeight > 0) {\n    mobileItems.push(\n      <div key="daybook-mobile-spacer-top" aria-hidden="true" data-testid="daybook-mobile-spacer-top" style={{ height: daybookMobileWindow.topSpacerHeight }} />\n    );\n  }\n  let mobileLastDate = "";\n  for (const row of mobileRows) {`,
+    "Daybook mobile render window",
+  );
+  code = replaceExactly(
+    code,
+    `  const loadMoreButton = displayedRows.length < visibleRows.length && (`,
+    `  if (daybookMobileWindow.bottomSpacerHeight > 0) {\n    mobileItems.push(\n      <div key="daybook-mobile-spacer-bottom" aria-hidden="true" data-testid="daybook-mobile-spacer-bottom" style={{ height: daybookMobileWindow.bottomSpacerHeight }} />\n    );\n  }\n\n  const loadMoreButton = displayedRows.length < visibleRows.length && (`,
+    "Daybook mobile bottom spacer",
+  );
+  code = replaceAllChecked(
+    code,
+    `<Table wrapperClassName="max-h-[calc(100vh-220px)]">`,
+    `<Table scrollRef={daybookDesktopWindow.scrollRef} wrapperClassName="max-h-[calc(100vh-220px)]">`,
+    2,
+    "Daybook table scroll owner",
+  );
+  code = replaceExactly(
+    code,
+    `<div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100vh-260px)]">`,
+    `<div ref={daybookMobileWindow.scrollRef} className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100vh-260px)]">`,
+    "Daybook mobile scroll owner",
+  );
+  return code;
+}
+
 function transformAccountsModel(source: string): string {
   let code = source;
   code = replaceExactly(
@@ -158,6 +216,9 @@ export function phase1PaginationPlugin(): Plugin {
       }
       if (normalizedId.endsWith(DAYBOOK_SUFFIX)) {
         return { code: transformDaybook(source), map: null };
+      }
+      if (normalizedId.endsWith(DAYBOOK_TABLE_SUFFIX)) {
+        return { code: transformDaybookTable(source), map: null };
       }
       if (normalizedId.endsWith(ACCOUNTS_MODEL_SUFFIX)) {
         return { code: transformAccountsModel(source), map: null };
