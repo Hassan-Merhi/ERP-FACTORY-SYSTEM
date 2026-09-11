@@ -92,7 +92,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
             <TableHead className="text-xs">Article</TableHead>
             <TableHead className="text-xs">Product</TableHead>
             <TableHead className="text-xs text-right">Expected</TableHead>
-            <TableHead className="text-xs text-right">Loaded</TableHead>
+            <TableHead className="text-xs text-right">Loaded (This+Other)</TableHead>
             <TableHead className="text-xs text-right">Remaining</TableHead>
             <TableHead className="text-xs">Status</TableHead>
             <TableHead className="text-xs text-right">Stock</TableHead>
@@ -121,7 +121,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           {[...proformaProgress]
             .sort((a, b) => (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3))
             .map((line) => {
-              const remaining = line.quantity - line.loaded;
+              const remaining = line.remaining;
               const rowClass =
                 line.status === "short" || line.status === "none"
                   ? "bg-red-50 dark:bg-red-950"
@@ -133,7 +133,12 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
                   <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
                   <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
                   <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
-                  <TableCell className="text-xs text-right font-mono py-1.5">{line.loaded}</TableCell>
+                  <TableCell className="text-xs text-right font-mono py-1.5">
+                    <span>{line.totalLoaded}</span>
+                    <div className="text-[10px] text-muted-foreground">
+                      {line.loaded}+{line.siblingLoaded}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-xs text-right font-mono py-1.5">
                     {remaining > 0 ? (
                       <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>

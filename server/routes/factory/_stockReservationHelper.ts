@@ -1,36 +1,20 @@
 import { sql, and, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { customerProformas, customerProformaLines, proformaStockReservations, companies } from "@shared/schema";
-import { firstRow, resultRows } from "../../lib/queryResult";
+import { proformaStockReservations, companies } from "@shared/schema";
+import { firstRow } from "../../lib/queryResult";
+import { getProformaCapacitySnapshot } from "./customer-orders/proformaCapacity";
+import { normalizeLoadingArticleCode } from "./customer-orders/bale-scanning/proformaScanPolicy";
 
 type DbOrTx = Pick<typeof db, "select" | "insert" | "update" | "delete" | "execute">;
 
 /**
- * syncProformaReservations — backend single source of truth for stock reservation state.
- *
- * Computes and persists:
- *   reservedQty = max(0, proformaLineQty − alreadyLoadedInActiveOrders)
- *
- * One quantity lives in exactly one bucket:
- *   inLoading           → bale physically scanned into a LOADING / PENDING_VERIFICATION order
- *   reservedNotYetLoaded → proforma commitment still owed (stored here as reservedQty)
- *
- * Rules:
- *   - If proforma is inactive or deleted → clear all its reservations (reservation released).
- *   - If a line was removed → delete its reservation row.
- *   - reservedQty is never negative.
- *
- * Call after EVERY mutation that touches proformas, lines, or loadings.
+ * Rebuild the derived reservation cache from the authoritative capacity engine.
+ * reservedQty is exactly the per-article remaining commitment after every
+ * non-cancelled, non-deleted linked order, including verified/finalized history.
  */
 export async function syncProformaReservations(tx: DbOrTx, companyId: number, proformaId: number): Promise<void> {
-  // 1. Check proforma existence and active status
-  const [proforma] = await tx
-    .select({ isActive: customerProformas.isActive })
-    .from(customerProformas)
-    .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)));
-
-  // If proforma is gone or inactive → release all reservations
-  if (!proforma || !proforma.isActive) {
+  const snapshot = await getProformaCapacitySnapshot(tx, { companyId, proformaId });
+  if (!snapshot || !snapshot.proformaActive) {
     await tx
       .delete(proformaStockReservations)
       .where(
@@ -39,14 +23,16 @@ export async function syncProformaReservations(tx: DbOrTx, companyId: number, pr
     return;
   }
 
-  // 2. Fetch all lines for this proforma
-  const lines = await tx
-    .select({ articleCode: customerProformaLines.articleCode, quantity: customerProformaLines.quantity })
-    .from(customerProformaLines)
-    .where(eq(customerProformaLines.proformaId, proformaId));
+  const desiredRows = snapshot.articles
+    .filter((article) => article.isOnProforma && article.normalizedArticleCode)
+    .map((article) => ({
+      companyId,
+      proformaId,
+      articleCode: article.articleCode.trim() || article.normalizedArticleCode,
+      reservedQty: article.remainingQty,
+    }));
 
-  // No lines → clear reservations
-  if (lines.length === 0) {
+  if (desiredRows.length === 0) {
     await tx
       .delete(proformaStockReservations)
       .where(
@@ -55,64 +41,29 @@ export async function syncProformaReservations(tx: DbOrTx, companyId: number, pr
     return;
   }
 
-  // 3. Count bales already loaded into ACTIVE orders for this proforma
-  //    (status LOADING or PENDING_VERIFICATION — not yet shipped/finalized)
-  const loadedRaw = await tx.execute(
-    sql`SELECT fb.article_code AS "articleCode", COUNT(*)::int AS loaded
-        FROM customer_order_bales cob
-        JOIN factory_bales fb   ON fb.id  = cob.bale_id
-        JOIN customer_orders co ON co.id  = cob.order_id
-        WHERE co.company_id        = ${companyId}
-          AND co.proforma_id_used  = ${proformaId}
-          AND co.status IN ('LOADING', 'PENDING_VERIFICATION')
-        GROUP BY fb.article_code`
+  await tx
+    .insert(proformaStockReservations)
+    .values(desiredRows)
+    .onConflictDoUpdate({
+      target: [
+        proformaStockReservations.companyId,
+        proformaStockReservations.proformaId,
+        proformaStockReservations.articleCode,
+      ],
+      set: { reservedQty: sql`excluded.reserved_qty` },
+    });
+
+  const keepCodes = desiredRows.map((row) => row.articleCode);
+  const keepList = sql.join(
+    keepCodes.map((code) => sql`${code}`),
+    sql`, `
   );
-  const loadedMap = new Map<string, number>(
-    resultRows(loadedRaw).map((r) => [r.articleCode as string, Number(r.loaded)])
-  );
-
-  // 4. Upsert reservations for every current line
-  const currentCodes = new Set<string>();
-  for (const line of lines) {
-    if (!line.articleCode) continue;
-    currentCodes.add(line.articleCode);
-    const loaded = loadedMap.get(line.articleCode) ?? 0;
-    const reservedQty = Math.max(0, Number(line.quantity) - loaded);
-
-    await tx.execute(
-      sql`INSERT INTO proforma_stock_reservations
-            (company_id, proforma_id, article_code, reserved_qty)
-          VALUES
-            (${companyId}, ${proformaId}, ${line.articleCode}, ${reservedQty})
-          ON CONFLICT (company_id, proforma_id, article_code)
-          DO UPDATE SET reserved_qty = ${reservedQty}`
-    );
-  }
-
-  // 5. Delete stale rows for article codes that no longer have a line
-  // NOTE: <> ALL(array) fails when Drizzle expands JS arrays to individual
-  // positional params.  Use NOT IN with sql.join so each code becomes its own
-  // bound parameter in a valid IN-list.
-  if (currentCodes.size > 0) {
-    const codeArr = Array.from(currentCodes);
-    const notInList = sql.join(
-      codeArr.map((c) => sql`${c}`),
-      sql`, `
-    );
-    await tx.execute(
-      sql`DELETE FROM proforma_stock_reservations
-          WHERE company_id  = ${companyId}
-            AND proforma_id = ${proformaId}
-            AND article_code NOT IN (${notInList})`
-    );
-  }
+  await tx.execute(sql`DELETE FROM proforma_stock_reservations
+      WHERE company_id = ${companyId}
+        AND proforma_id = ${proformaId}
+        AND article_code NOT IN (${keepList})`);
 }
 
-/**
- * Returns whether a company uses factory-mode reservation logic.
- * Applies to both "factory" and "factory_v2" company types — v2 is now the
- * default behaviour for all factory companies.
- */
 export async function isFactoryV2Company(companyId: number): Promise<boolean> {
   const [co] = await db
     .select({ companyType: companies.companyType })
@@ -122,31 +73,43 @@ export async function isFactoryV2Company(companyId: number): Promise<boolean> {
 }
 
 /**
- * Computes the current free-to-promise quantity for a single articleCode in a company.
- * FTP = max(0, inStock − SUM(reservedQty from proforma_stock_reservations))
- * Intended for use in proforma line creation guards (factory_v2 only).
+ * Current free-to-promise stock for one normalized article bucket. Reconcile
+ * matching active proformas first so stale historical cache rows cannot block
+ * or inflate a new promise.
  */
 export async function computeFreeToPromise(companyId: number, articleCode: string): Promise<number> {
+  const normalized = normalizeLoadingArticleCode(articleCode);
+  if (!normalized) return 0;
+
+  const matchingProformas = await db.execute(sql`SELECT DISTINCT cp.id
+      FROM customer_proformas cp
+      JOIN customer_proforma_lines cpl ON cpl.proforma_id = cp.id
+      WHERE cp.company_id = ${companyId}
+        AND cp.deleted_at IS NULL
+        AND cp.is_active = true
+        AND LOWER(TRIM(cpl.article_code)) = ${normalized}`);
+  for (const row of matchingProformas.rows) {
+    const proformaId = Number(row.id);
+    if (Number.isSafeInteger(proformaId) && proformaId > 0) {
+      await syncProformaReservations(db, companyId, proformaId);
+    }
+  }
+
   const inStockRow = firstRow<{ count: number | null }>(
-    await db.execute(
-      sql`SELECT COUNT(*)::int AS count
+    await db.execute(sql`SELECT COUNT(*)::int AS count
         FROM factory_bales
         WHERE company_id = ${companyId}
-          AND article_code = ${articleCode}
-          AND status = 'IN_STOCK'`
-    )
+          AND LOWER(TRIM(article_code)) = ${normalized}
+          AND status = 'IN_STOCK'`)
   );
   const inStock = Number(inStockRow?.count ?? 0);
 
   const reservedRow = firstRow<{ total: number | null }>(
-    await db.execute(
-      sql`SELECT COALESCE(SUM(reserved_qty),0)::int AS total
+    await db.execute(sql`SELECT COALESCE(SUM(reserved_qty),0)::int AS total
         FROM proforma_stock_reservations
         WHERE company_id = ${companyId}
-          AND article_code = ${articleCode}`
-    )
+          AND LOWER(TRIM(article_code)) = ${normalized}`)
   );
   const reservedNotYetLoaded = Number(reservedRow?.total ?? 0);
-
   return Math.max(0, inStock - reservedNotYetLoaded);
 }

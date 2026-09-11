@@ -15,11 +15,14 @@ import { requireAuth } from "../../../auth";
 import {
   factoryBaleProducts,
   customerProformas,
+  customerProformaLines,
   customers,
   insertCustomerProformaSchema,
   proformaStockReservations,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
+import { normalizeLoadingArticleCode } from "../customer-orders/bale-scanning/proformaScanPolicy";
 
 /** Row shape returned by the raw `customer_proformas` queries below. */
 type ProformaRow = {
@@ -64,6 +67,46 @@ type ProformaLine = {
 };
 
 export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
+  // Authoritative capacity read contract. Keep the summary list compact; screens
+  // that need live progress fetch this one snapshot instead of re-deriving it.
+  app.get("/api/factory/customer-proformas/:id/capacity", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const proformaId = parseId(req.params.id);
+      if (proformaId === null) return res.status(400).json({ message: "Invalid id" });
+      const currentOrderId = parseOptionalId(req.query.currentOrderId);
+      if (req.query.currentOrderId !== undefined && req.query.currentOrderId !== "" && currentOrderId === null) {
+        return res.status(400).json({ message: "Invalid currentOrderId" });
+      }
+
+      const snapshot = await getProformaCapacitySnapshot(db, { companyId, proformaId, currentOrderId });
+      if (!snapshot) return res.status(404).json({ message: "Proforma not found" });
+
+      const sourceLines = await db
+        .select({ articleCode: customerProformaLines.articleCode, productName: customerProformaLines.productName })
+        .from(customerProformaLines)
+        .where(eq(customerProformaLines.proformaId, proformaId));
+      const productNames = new Map<string, string>();
+      for (const line of sourceLines) {
+        const normalized = normalizeLoadingArticleCode(line.articleCode);
+        const name = String(line.productName || "").trim();
+        if (normalized && name && !productNames.has(normalized)) productNames.set(normalized, name);
+      }
+
+      res.set("Cache-Control", "private, no-store");
+      return res.json({
+        ...snapshot,
+        articles: snapshot.articles.map((article) => ({
+          ...article,
+          productName: productNames.get(article.normalizedArticleCode) || article.articleCode,
+        })),
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   /* Single proforma by ID — used by EditProformaV5Drawer and lazy detail readers. */
   app.get("/api/factory/customer-proformas/:id", requireAuth, async (req: Request, res: Response) => {
     try {

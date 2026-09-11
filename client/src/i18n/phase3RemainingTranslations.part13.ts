@@ -843,4 +843,34 @@ export const phase3RemainingTranslationsPart13: readonly Phase3SharedUiEntry[] =
     ar: "لا توجد أصناف مع UOM 'bale وجدت لتحديث",
     fr: "Aucun élément avec UOM 'bale' trouvé pour mettre à jour",
   },
+  {
+    en: "Failed to fetch proforma capacity",
+    ar: "تعذر تحميل سعة البروفورما",
+    fr: "Impossible de charger la capacité du proforma",
+  },
+  {
+    en: "Proforma fully consumed",
+    ar: "تم استهلاك كمية البروفورما بالكامل",
+    fr: "Proforma entièrement consommé",
+  },
+  {
+    en: "No remaining quantity is available for a new loading.",
+    ar: "لا توجد كمية متبقية متاحة لعملية تحميل جديدة.",
+    fr: "Aucune quantité restante n’est disponible pour un nouveau chargement.",
+  },
+  {
+    en: "remaining across all loadings",
+    ar: "متبقية عبر جميع عمليات التحميل",
+    fr: "restant sur tous les chargements",
+  },
+  {
+    en: "Loaded (This+Other)",
+    ar: "المحمّل (هذا + الآخر)",
+    fr: "Chargé (celui-ci + autres)",
+  },
+  {
+    en: "Invalid currentOrderId",
+    ar: "معرّف طلب التحميل الحالي غير صالح",
+    fr: "Identifiant de chargement actuel invalide",
+  },
 ];
