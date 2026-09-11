@@ -117,7 +117,10 @@ describe("ERP data tools behavior", () => {
     vi.clearAllMocks();
     harness.apiRequest.mockImplementation(async (_method: string, url: string) => {
       if (url === "/api/sales-report/recalculate-costs") {
-        return { updatedCount: 4, totalChecked: 5 };
+        // apiRequest resolves to a Response, and the mutation reads the summary
+        // off res.json(). Returning a bare object here made the mutation reject
+        // before it could invalidate the sales report.
+        return { ok: true, json: async () => ({ updatedCount: 4, totalChecked: 5 }) };
       }
       return {
         ok: true,
