@@ -64,7 +64,7 @@ function transformSalesReport(source: string): string {
 
   code = replaceExactly(
     code,
-    `  // Fetch stock items (lightweight — only needs id/name/code for filter dropdown)\n  const { data: stockItems = [] } = useQuery<any[]>({\n    queryKey: ["/api/stock-items/light", selectedCompany?.id],\n    staleTime: 10 * 60 * 1000,\n    refetchOnWindowFocus: false,\n    refetchOnMount: false,\n    refetchOnReconnect: false,\n  });\n\n`,
+    `  // Fetch stock items (lightweight — only needs id/name/code for filter dropdown)\n  const { data: stockItems = [] } = useQuery<ApiListRow[]>({\n    queryKey: ["/api/stock-items/light", selectedCompany?.id],\n    staleTime: 10 * 60 * 1000,\n    refetchOnWindowFocus: false,\n    refetchOnMount: false,\n    refetchOnReconnect: false,\n  });\n\n`,
     ``,
     "remove stock item download from summary screen"
   );
