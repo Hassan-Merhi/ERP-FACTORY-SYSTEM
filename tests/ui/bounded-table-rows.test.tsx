@@ -51,6 +51,20 @@ describe("useBoundedTableRows", () => {
     expect(Number.parseFloat(screen.getByTestId("top-spacer").style.height)).toBeGreaterThan(0);
   });
 
+  it("clamps a stale deep scroll position when filters shrink the result set", async () => {
+    const { rerender } = render(<Harness count={500} />);
+    const scroller = screen.getByTestId("scroller");
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 16_000, writable: true });
+    fireEvent.scroll(scroller);
+    await waitFor(() => expect(screen.getByTestId("row-400")).toBeTruthy());
+
+    rerender(<Harness count={200} />);
+
+    await waitFor(() => expect(screen.getByTestId("row-199")).toBeTruthy());
+    expect(screen.queryByTestId("row-400")).toBeNull();
+    expect(screen.queryAllByTestId(/^row-/).length).toBeLessThanOrEqual(100);
+  });
+
   it("expands the logical list for browser printing and restores virtualization afterward", async () => {
     render(<Harness count={180} />);
 
