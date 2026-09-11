@@ -50,7 +50,7 @@ export async function fetchErpDaybookPage(
   const response = await fetch(pageUrl(baseParams, page, limit), { credentials: "include", signal });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(body?.message || "Failed to load Daybook page");
+    throw new Error(body?.message || "Failed to load transactions");
   }
   return response.json() as Promise<ErpDaybookPage>;
 }
@@ -62,7 +62,7 @@ export function fetchErpDaybookChunk(
   signal?: AbortSignal
 ): Promise<ErpDaybookChunk> {
   const url = withContinuousCursor(continuousBaseUrl(baseParams), { cursor, limit });
-  return fetchContinuousJson<ErpDaybookChunk>(url, { signal, fallbackError: "Failed to load Daybook" });
+  return fetchContinuousJson<ErpDaybookChunk>(url, { signal, fallbackError: "Failed to load transactions" });
 }
 
 export async function fetchAllErpDaybookRows(
