@@ -76,6 +76,10 @@ type StatementSummary = {
   creditTotal?: unknown;
 };
 
+type StatementQueryResult = {
+  rows: Record<string, unknown>[];
+};
+
 interface StatementPage {
   transactions: unknown[];
   currencySummary: ReturnType<typeof summarizeAccountStatementCurrency>;
@@ -509,7 +513,7 @@ async function runVoucherEntryStatement(options: {
       ORDER BY ${order}
       LIMIT ${limitParam}`;
 
-    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let chunkResult: StatementQueryResult;
     let meta: ContinuousStatementMeta;
     if (cursor) {
       chunkResult = await pool.query(chunkQuery, chunkValues);
@@ -693,7 +697,7 @@ async function runCustomerBalanceStatement(options: {
       ORDER BY sort_date ASC, sort_id ASC
       LIMIT ${limitParam}`;
 
-    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let chunkResult: StatementQueryResult;
     let meta: ContinuousStatementMeta;
     if (cursor) {
       chunkResult = await pool.query(chunkQuery, chunkValues);
@@ -934,7 +938,7 @@ async function runFactoryCustomerLedgerStatement(options: {
       ORDER BY ${order}
       LIMIT ${limitParam}`;
 
-    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let chunkResult: StatementQueryResult;
     let meta: ContinuousStatementMeta;
     if (cursor) {
       chunkResult = await pool.query(chunkQuery, chunkValues);
