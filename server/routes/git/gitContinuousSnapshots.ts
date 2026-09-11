@@ -40,6 +40,10 @@ function finitePositiveConfig(value: string | undefined, fallback: number): numb
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+function snapshotTtlMs(): number {
+  return finitePositiveConfig(process.env.GIT_CONTINUOUS_SNAPSHOT_TTL_MS, DEFAULT_TTL_MS);
+}
+
 function prune(now = Date.now()): void {
   for (const [id, snapshot] of snapshots) {
     if (snapshot.expiresAt <= now) snapshots.delete(id);
@@ -89,7 +93,6 @@ export function createGitContinuousSnapshot<T, TFacets, TSummary>(input: {
   limit: number;
 }) {
   prune();
-  const ttlMs = finitePositiveConfig(process.env.GIT_CONTINUOUS_SNAPSHOT_TTL_MS, DEFAULT_TTL_MS);
   const snapshot: Snapshot<T, TFacets, TSummary> = {
     id: randomUUID(),
     scope: input.scope,
@@ -97,7 +100,7 @@ export function createGitContinuousSnapshot<T, TFacets, TSummary>(input: {
     facets: input.facets,
     summary: input.summary,
     asOf: input.asOf,
-    expiresAt: Date.now() + ttlMs,
+    expiresAt: Date.now() + snapshotTtlMs(),
   };
   if (snapshot.rows.length > input.limit) {
     snapshots.set(snapshot.id, snapshot as Snapshot<unknown, unknown, unknown>);
@@ -111,7 +114,8 @@ export function readGitContinuousSnapshot<T, TFacets, TSummary>(input: {
   cursor: string;
   limit: number;
 }) {
-  prune();
+  const now = Date.now();
+  prune(now);
   let decoded: unknown;
   try {
     decoded = decodeContinuousCursor<unknown>(input.scope, input.cursor);
@@ -121,10 +125,15 @@ export function readGitContinuousSnapshot<T, TFacets, TSummary>(input: {
   }
   if (!isSnapshotCursor(decoded)) throw new ContinuousCursorError();
   const snapshot = snapshots.get(decoded.snapshotId) as Snapshot<T, TFacets, TSummary> | undefined;
-  if (!snapshot || snapshot.scope !== input.scope || snapshot.expiresAt <= Date.now()) {
+  if (!snapshot || snapshot.scope !== input.scope || snapshot.expiresAt <= now) {
     if (snapshot) snapshots.delete(snapshot.id);
     throw new GitContinuousSnapshotError();
   }
+
+  // Treat the TTL as an inactivity timeout rather than a hard lifetime. A slow
+  // connection or a very large list should not lose its stable snapshot while
+  // it is actively advancing through valid cursor chunks.
+  snapshot.expiresAt = now + snapshotTtlMs();
   return chunkFromSnapshot(snapshot, input.scope, decoded.offset, input.limit);
 }
 
