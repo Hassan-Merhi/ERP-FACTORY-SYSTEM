@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { adjustInventory } from "../server/inventoryHelper";
 import { reverseOriginalSaleInventory } from "../server/services/pos/edit/reverseOriginalSaleInventory";
+import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "invvalreg";
@@ -13,6 +14,22 @@ async function resetInventory(locationId: number, stockItemId: number): Promise<
     sql`DELETE FROM inventory_negative_layers WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}`
   );
   await db.execute(sql`DELETE FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}`);
+}
+
+async function createSaleVoucher(label: string): Promise<number> {
+  const [voucher] = await db
+    .insert(schema.vouchers)
+    .values({
+      companyId: ctx.companyId,
+      voucherType: "Journal",
+      voucherNumber: `${TEST_PREFIX}-${label}-${ctx.companyId}`,
+      voucherDate: "2026-09-11",
+      description: "Inventory valuation regression fixture",
+      totalAmount: "0",
+      currency: "USD",
+    })
+    .returning({ id: schema.vouchers.id });
+  return voucher.id;
 }
 
 async function readInventory(locationId: number, stockItemId: number) {
@@ -42,6 +59,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  if (ctx) {
+    await db.execute(sql`DELETE FROM inventory_negative_layers WHERE company_id = ${ctx.companyId}`);
+  }
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 30_000);
@@ -55,9 +75,8 @@ beforeEach(async () => {
 describe("inventory valuation regression guards", () => {
   it("POS edit reversal must not consume an unrelated negative layer or change the live cost basis", async () => {
     const stockItemId = ctx.stockItemIds[0];
+    const voucherId = await createSaleVoucher("unrelated-layer");
 
-    // Mirrors the production failure mode observed for SH.MIX3:
-    // positive live stock at its normal cost, plus an older unrelated shortage layer.
     await db.execute(sql`
       INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
       VALUES (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 16, 66.65, 1066.40, NOW())
@@ -66,24 +85,19 @@ describe("inventory valuation regression guards", () => {
       INSERT INTO inventory_negative_layers
         (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
       VALUES
-        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', 999001)
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
     await reverseOriginalSaleInventory(
       db as any,
-      { id: 700001, companyId: ctx.companyId, locationId: ctx.locationId },
+      { id: voucherId, companyId: ctx.companyId, locationId: ctx.locationId },
       [{ id: 800001, stockItemId, quantity: "5", costPrice: "66.65" }]
     );
 
     const state = await readInventory(ctx.locationId, stockItemId);
-
-    // Reversing an already-issued POS line restores quantity at the current live
-    // cost basis. It must not run receipt settlement against unrelated negative
-    // layers, because that silently destroys positive-stock valuation.
     expect(Number(state.inventory.quantity)).toBe(21);
     expect(Number(state.inventory.total_value)).toBeCloseTo(1399.65, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
-
     expect(state.layers).toHaveLength(1);
     expect(Number(state.layers[0].qty)).toBe(5);
     expect(Number(state.layers[0].provisional_rate)).toBeCloseTo(60.47, 4);
@@ -92,6 +106,11 @@ describe("inventory valuation regression guards", () => {
 
   it("repeating a no-op POS edit must be valuation-neutral", async () => {
     const stockItemId = ctx.stockItemIds[1];
+    const voucher = {
+      id: await createSaleVoucher("repeat-no-op"),
+      companyId: ctx.companyId,
+      locationId: ctx.locationId,
+    };
     await db.execute(sql`
       INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
       VALUES (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 16, 66.65, 1066.40, NOW())
@@ -100,14 +119,11 @@ describe("inventory valuation regression guards", () => {
       INSERT INTO inventory_negative_layers
         (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
       VALUES
-        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 7, 60.47, 'legacy-shortage', 999002)
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 7, 60.47, 'legacy-shortage', NULL)
     `);
 
     const saleLine = { id: 800002, stockItemId, quantity: "7", costPrice: "66.65" };
-    const voucher = { id: 700002, companyId: ctx.companyId, locationId: ctx.locationId };
 
-    // Reverse/re-issue cycle, twice. A real no-op edit rebuilds the sale after this
-    // reversal; we emulate that issue with the same inventory footprint and repeat.
     for (let i = 0; i < 2; i += 1) {
       await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
       await adjustInventory(
@@ -133,7 +149,11 @@ describe("inventory valuation regression guards", () => {
 
   it("POS edit reversal releases shortage attributed to that sale and recreates it symmetrically", async () => {
     const stockItemId = ctx.stockItemIds[2];
-    const voucher = { id: 700003, companyId: ctx.companyId, locationId: ctx.locationId };
+    const voucher = {
+      id: await createSaleVoucher("own-shortage"),
+      companyId: ctx.companyId,
+      locationId: ctx.locationId,
+    };
     const saleLine = { id: 800003, stockItemId, quantity: "5", costPrice: "66.65" };
 
     await db.execute(sql`
@@ -178,7 +198,11 @@ describe("inventory valuation regression guards", () => {
 
   it("mixed negative layers keep aggregate shortage symmetric across a no-op edit", async () => {
     const stockItemId = ctx.stockItemIds[0];
-    const voucher = { id: 700004, companyId: ctx.companyId, locationId: ctx.locationId };
+    const voucher = {
+      id: await createSaleVoucher("mixed-layers"),
+      companyId: ctx.companyId,
+      locationId: ctx.locationId,
+    };
     const saleLine = { id: 800004, stockItemId, quantity: "5", costPrice: "66.65" };
 
     await db.execute(sql`
@@ -189,7 +213,7 @@ describe("inventory valuation regression guards", () => {
       INSERT INTO inventory_negative_layers
         (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
       VALUES
-        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 7, 60.47, 'legacy-shortage', 999004),
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 7, 60.47, 'legacy-shortage', NULL),
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 3, 66.65, 'pos-sale', ${voucher.id})
     `);
 
@@ -218,7 +242,11 @@ describe("inventory valuation regression guards", () => {
 
   it("create-edit-edit-delete lifecycle does not let a stale layer collapse positive stock value", async () => {
     const stockItemId = ctx.stockItemIds[2];
-    const voucher = { id: 700006, companyId: ctx.companyId, locationId: ctx.locationId };
+    const voucher = {
+      id: await createSaleVoucher("full-lifecycle"),
+      companyId: ctx.companyId,
+      locationId: ctx.locationId,
+    };
     const saleLine = { id: 800006, stockItemId, quantity: "7", costPrice: "66.65" };
 
     await db.execute(sql`
@@ -229,10 +257,9 @@ describe("inventory valuation regression guards", () => {
       INSERT INTO inventory_negative_layers
         (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
       VALUES
-        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', 999006)
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
-    // Create the sale.
     await adjustInventory(
       db as any,
       ctx.locationId,
@@ -244,7 +271,6 @@ describe("inventory valuation regression guards", () => {
       voucher.id
     );
 
-    // Edit it twice without changing its inventory footprint.
     for (let i = 0; i < 2; i += 1) {
       await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
       await adjustInventory(
@@ -259,9 +285,6 @@ describe("inventory valuation regression guards", () => {
       );
     }
 
-    // Existing single/bulk POS delete paths restore the issued quantity through
-    // adjustInventory with the historical cost. A nonnegative live balance must
-    // not let that reversal consume a stale negative layer.
     await adjustInventory(db as any, ctx.locationId, stockItemId, 7, ctx.companyId, 66.65);
 
     const state = await readInventory(ctx.locationId, stockItemId);
@@ -275,11 +298,13 @@ describe("inventory valuation regression guards", () => {
 
   it("preserves an exact stored total value through an unchanged POS edit", async () => {
     const stockItemId = ctx.stockItemIds[1];
-    const voucher = { id: 700005, companyId: ctx.companyId, locationId: ctx.locationId };
+    const voucher = {
+      id: await createSaleVoucher("exact-total"),
+      companyId: ctx.companyId,
+      locationId: ctx.locationId,
+    };
     const saleLine = { id: 800005, stockItemId, quantity: "1", costPrice: "68.02" };
 
-    // Mirrors the screenshot shape: stored value may carry information that
-    // quantity × rounded average_rate cannot reproduce exactly.
     await db.execute(sql`
       INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
       VALUES (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 18, 68.02, 1224.41, NOW())
@@ -288,7 +313,7 @@ describe("inventory valuation regression guards", () => {
       INSERT INTO inventory_negative_layers
         (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
       VALUES
-        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', 999005)
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
     await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
