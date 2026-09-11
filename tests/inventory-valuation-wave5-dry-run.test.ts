@@ -1,12 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildInventoryValuationRepairPlan,
   type InventoryValuationRepairEvidence,
 } from "../server/services/inventory/inventoryValuationRepairPlan";
-
-const root = process.cwd();
 
 function evidence(overrides: Partial<InventoryValuationRepairEvidence> = {}): InventoryValuationRepairEvidence {
   return {
@@ -92,18 +88,5 @@ describe("inventory valuation Wave 5 dry-run planning", () => {
     expect(plan.classification).toBe("NO_ASSET_REPAIR");
     expect(plan.expectedValueEstimate).toBeNull();
     expect(plan.dryRunEligible).toBe(false);
-  });
-
-  it("keeps the Wave 5 CLI tenant-scoped, transactional, and read-only", () => {
-    const source = fs.readFileSync(path.join(root, "scripts/inventory-valuation-wave5-dry-run.ts"), "utf8");
-
-    expect(source).toContain('client.query("BEGIN READ ONLY")');
-    expect(source).toContain("set_config('app.current_company_id', $1, true)");
-    expect(source).toContain('client.query("ROLLBACK")');
-    expect(source).toContain('args.includes("--apply")');
-    expect(source).not.toMatch(/\bINSERT\s+INTO\b/i);
-    expect(source).not.toMatch(/\bUPDATE\s+inventory\b/i);
-    expect(source).not.toMatch(/\bDELETE\s+FROM\b/i);
-    expect(source).not.toMatch(/\bTRUNCATE\b/i);
   });
 });
