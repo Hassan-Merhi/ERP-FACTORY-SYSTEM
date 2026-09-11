@@ -24,16 +24,32 @@ describe("inventory valuation source contracts", () => {
     expect(source).not.toMatch(/const\s+actualValue\s*=\s*actualQty\s*\*\s*actualRate/);
   });
 
-  it("stock-adjustment edit reversal must not reconstruct old value with today's average rate", () => {
+  it("stock-adjustment edit reversal uses exact stored quantity and value", () => {
     const source = read("server/storage/stock-ops/transfers-update.ts");
     const start = source.indexOf("export async function updateStockAdjustment");
     expect(start).toBeGreaterThanOrEqual(0);
     const adjustmentSource = source.slice(start);
 
-    // Wave 2/3 will replace this with an exact reversal primitive. The old path
-    // derives reversal value from current inventory and therefore changes cost basis.
+    expect(adjustmentSource).toContain("reverseInventoryByExactValue(");
+    expect(adjustmentSource).toContain("restoreInventoryByExactValue(");
+    expect(adjustmentSource).toContain("oldItem.totalAmount");
     expect(adjustmentSource).not.toContain(
       "weightedAverageInventoryCost(currentQty, currentRate, absoluteQuantity, rate)"
     );
+  });
+
+  it("stock-transfer edit reversal moves the same exact historical value between both locations", () => {
+    const source = read("server/storage/stock-ops/transfers-update.ts");
+    const start = source.indexOf("export async function updateStockTransfer");
+    const end = source.indexOf("export async function updateStockAdjustment");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const transferSource = source.slice(start, end);
+
+    expect(transferSource).toContain("oldItem.totalAmount");
+    expect(transferSource).toContain("restoreInventoryByExactValue(");
+    expect(transferSource).toContain("reverseInventoryByExactValue(");
+    expect(transferSource).toContain('sourceType: "stock_transfer_edit_reverse"');
+    expect(transferSource).toContain('sourceType: "stock_transfer_edit_apply"');
   });
 });
