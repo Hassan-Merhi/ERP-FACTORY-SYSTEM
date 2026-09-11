@@ -7,6 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
+import { ContinuousCursorError, continuousCursorScope } from "../../lib/continuousCursor";
 import {
   resolveGitCompanyScope,
   fetchActiveContainers,
@@ -25,7 +26,30 @@ import {
   toGitCompactRow,
   type GitListingQuery,
 } from "./gitListingProfiles";
+import {
+  createGitContinuousSnapshot,
+  GitContinuousSnapshotError,
+  readGitContinuousSnapshot,
+} from "./gitContinuousSnapshots";
 import { buildAgentsForCompany } from "./_helpers";
+
+function continuousChunkSize(req: Request): number {
+  const parsed = Number.parseInt(String(req.query.limit ?? req.query.pageSize ?? "50"), 10);
+  return Math.min(100, Number.isFinite(parsed) && parsed > 0 ? parsed : 50);
+}
+
+function continuousQueryIdentity(req: Request): Array<[string, string | string[]]> {
+  const ignored = new Set(["continuous", "cursor", "page", "offset"]);
+  return Object.entries(req.query)
+    .filter(([key, value]) => !ignored.has(key) && value !== undefined)
+    .map(([key, value]) => {
+      const normalized = Array.isArray(value)
+        ? value.map(String).sort((left, right) => left.localeCompare(right))
+        : String(value);
+      return [key, normalized] as [string, string | string[]];
+    })
+    .sort(([left], [right]) => left.localeCompare(right));
+}
 
 export function registerGitReportRoutes(app: Express) {
   /**
@@ -118,6 +142,34 @@ export function registerGitReportRoutes(app: Express) {
       }
 
       const companyIds = scope.mode === "all" ? scope.companyIds : [scope.companyId];
+      const listingQuery = req.query as GitListingQuery;
+      const continuous = req.query.continuous === "1" || typeof req.query.cursor === "string";
+      const chunkSize = continuousChunkSize(req);
+      const continuousScope = continuousCursorScope("git-containers", {
+        userId,
+        path: req.path,
+        companyIds: [...companyIds].sort((left, right) => left - right),
+        query: continuousQueryIdentity(req),
+      });
+
+      if (continuous && typeof req.query.cursor === "string" && req.query.cursor.trim()) {
+        const chunk = readGitContinuousSnapshot<
+          ReturnType<typeof toGitCompactRow> | EnrichedContainer,
+          unknown,
+          unknown
+        >({
+          scope: continuousScope,
+          cursor: req.query.cursor.trim(),
+          limit: chunkSize,
+        });
+        res.setHeader("Cache-Control", "private, no-store");
+        if (scope.mode === "all") {
+          res.json({ mode: "all", limit: chunkSize, ...chunk });
+        } else {
+          res.json({ mode: "single", companyId: scope.companyId, limit: chunkSize, ...chunk });
+        }
+        return;
+      }
 
       const includeOffloaded = req.query.includeOffloaded === "true";
 
@@ -131,10 +183,31 @@ export function registerGitReportRoutes(app: Express) {
       // Route-level pre-filter (e.g. at-port, truck-location)
       if (preFilter) enriched = preFilter(enriched);
 
-      const listingQuery = req.query as GitListingQuery;
       const facets = buildGitFacets(enriched);
       const filtered = sortGitRows(applyGitTableFilters(enriched, listingQuery), listingQuery.sort);
       const summary = buildGitTableSummary(filtered);
+      const asOf = new Date().toISOString();
+
+      if (continuous) {
+        const continuousRows = listingQuery.profile === "full" ? filtered : filtered.map(toGitCompactRow);
+        const chunk = createGitContinuousSnapshot({
+          scope: continuousScope,
+          rows: continuousRows,
+          facets,
+          summary,
+          asOf,
+          limit: chunkSize,
+        });
+        res.setHeader("Cache-Control", "private, no-store");
+        if (scope.mode === "all") {
+          res.json({ mode: "all", limit: chunkSize, ...chunk });
+        } else {
+          const companyName = nameMap[scope.companyId] ?? `Company ${scope.companyId}`;
+          res.json({ mode: "single", companyId: scope.companyId, companyName, limit: chunkSize, ...chunk });
+        }
+        return;
+      }
+
       const explicitFull = listingQuery.all === "true" || listingQuery.profile === "full";
       const { page, pageSize } = parseGitPagination(listingQuery);
       const totalPages = filtered.length === 0 ? 0 : Math.ceil(filtered.length / pageSize);
@@ -142,7 +215,6 @@ export function registerGitReportRoutes(app: Express) {
       const safeOffset = (safePage - 1) * pageSize;
       const selectedRows = explicitFull ? filtered : filtered.slice(safeOffset, safeOffset + pageSize);
       const containers = explicitFull ? selectedRows : selectedRows.map(toGitCompactRow);
-      const asOf = new Date().toISOString();
       const pageMeta = explicitFull
         ? { page: 1, pageSize: filtered.length, totalPages: filtered.length > 0 ? 1 : 0, hasMore: false }
         : { page: safePage, pageSize, totalPages, hasMore: safePage < totalPages };
@@ -173,6 +245,14 @@ export function registerGitReportRoutes(app: Express) {
         });
       }
     } catch (err) {
+      if (err instanceof GitContinuousSnapshotError) {
+        res.status(err.status).json({ message: err.message, code: err.code });
+        return;
+      }
+      if (err instanceof ContinuousCursorError) {
+        res.status(400).json({ message: err.message, code: err.code });
+        return;
+      }
       logger.error("[gitRoutes] listing error:", { error: err });
       res.status(500).json({ message: "Internal server error" });
     }

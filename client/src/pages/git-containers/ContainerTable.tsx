@@ -11,6 +11,7 @@ import {
   InlineBoolCell,
 } from "./InlineCells";
 import { cn } from "@/lib/utils";
+import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
 
 interface ContainerTableProps {
   containers: EnrichedContainerRow[];
@@ -20,10 +21,20 @@ interface ContainerTableProps {
   printRef: React.RefObject<HTMLDivElement | null>;
 }
 
+const TRACKING_ROW_HEIGHT = 40;
+
 export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDrawer, printRef }: ContainerTableProps) {
+  const virtualRows = useBoundedTableRows({
+    rowCount: containers.length,
+    rowHeight: TRACKING_ROW_HEIGHT,
+    minimumRows: 100,
+    overscan: 16,
+  });
+  const visibleContainers = containers.slice(virtualRows.startIndex, virtualRows.endIndex);
+
   return (
     <div className="rounded-md border bg-card h-full flex flex-col shadow-sm overflow-clip">
-      <div className="flex-1 overflow-auto custom-scrollbar relative">
+      <div ref={virtualRows.scrollRef} className="flex-1 overflow-auto custom-scrollbar relative">
         <div ref={printRef as React.RefObject<HTMLDivElement>}>
           <Table className="text-xs" wrapperClassName="overflow-visible border-0 rounded-none">
             <TableHeader className="sticky top-0 z-[50] bg-teal-800 dark:bg-teal-950">
@@ -75,233 +86,254 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                   </TableCell>
                 </TableRow>
               ) : (
-                containers.map((c, idx) => {
-                  const freight = parseFloat(c.poFreight ?? "0");
-                  const canEditRow = sessionCompanyId === null || c.companyId === sessionCompanyId;
-
-                  const transUpper = (c.transporter ?? "").toUpperCase();
-                  const transDays = transUpper.includes("FARHAT") || transUpper.includes("CONTINENTAL") ? 11 : 14;
-                  const maxOffDate = c.borderDate
-                    ? (() => {
-                        const d = new Date(c.borderDate);
-                        d.setDate(d.getDate() + transDays);
-                        return d.toISOString().slice(0, 10);
-                      })()
-                    : null;
-
-                  return (
-                    <TableRow
-                      key={c.id}
-                      className="cursor-pointer group hover:bg-muted/50 transition-colors border-b last:border-0"
-                      onClick={() => onOpenDrawer(c)}
-                      data-testid={`row-container-${c.id}`}
-                    >
-                      <TableCell className="text-center text-muted-foreground font-mono text-[10px] h-10 select-none">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell className="font-mono font-bold text-[11px] h-10">
-                        <Link
-                          href={`/containers/${c.id}`}
-                          className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
-                          onClick={(event) => event.stopPropagation()}
-                          data-testid={`link-container-${c.id}`}
-                          title={`Open container ${c.containerNumber}`}
-                        >
-                          {c.containerNumber}
-                        </Link>
-                      </TableCell>
-                      {colVis.supplier && (
-                        <TableCell className="text-muted-foreground h-10">
-                          <span className="truncate block max-w-[90px]" title={c.supplierName ?? ""}>
-                            {c.supplierCode || "—"}
-                          </span>
-                        </TableCell>
-                      )}
-                      {colVis.company && (
-                        <TableCell className="font-medium h-10">
-                          <span className="truncate block max-w-[110px]" title={c.companyName}>
-                            {c.companyName}
-                          </span>
-                        </TableCell>
-                      )}
-                      {colVis.shopName && (
-                        <TableCell className="h-10">
-                          <span className="truncate block max-w-[90px]" title={c.shopName ?? ""}>
-                            {canEditRow ? (
-                              <InlineTextCell id={c.id} field="shopName" value={c.shopName} width="90px" />
-                            ) : (
-                              c.shopName || "—"
-                            )}
-                          </span>
-                        </TableCell>
-                      )}
-                      {colVis.eta && (
-                        <TableCell className="h-10">
-                          {canEditRow ? <EtaCell container={c} /> : fmtDate(c.eta)}
-                        </TableCell>
-                      )}
-                      {colVis.cost && (
-                        <TableCell className="text-right font-mono text-muted-foreground h-10">
-                          {c.grandTotal ? `$${Number(c.grandTotal).toLocaleString()}` : "—"}
-                        </TableCell>
-                      )}
-                      {colVis.freight && (
-                        <TableCell className="text-right font-mono text-muted-foreground h-10">
-                          {freight > 0 ? `$${freight.toLocaleString()}` : "—"}
-                        </TableCell>
-                      )}
-                      {colVis.truckNo && (
-                        <TableCell className="font-mono text-primary font-medium h-10">
-                          {canEditRow ? (
-                            <InlineTextCell
-                              id={c.id}
-                              field="numberPlate"
-                              value={c.numberPlate}
-                              width="90px"
-                              uppercase
-                            />
-                          ) : (
-                            c.numberPlate || "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.location && (
-                        <TableCell className="h-10">
-                          <span className="truncate block max-w-[100px]" title={c.trackingLocation ?? ""}>
-                            {canEditRow ? (
-                              <InlineTextCell
-                                id={c.id}
-                                field="trackingLocation"
-                                value={c.trackingLocation}
-                                width="100px"
-                              />
-                            ) : (
-                              c.trackingLocation || "—"
-                            )}
-                          </span>
-                        </TableCell>
-                      )}
-                      {colVis.borderDate && (
-                        <TableCell className="h-10">
-                          {canEditRow ? (
-                            <InlineDateCell id={c.id} field="borderDate" value={c.borderDate} />
-                          ) : (
-                            fmtDate(c.borderDate)
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.maxOffload && (
-                        <TableCell className="h-10 font-medium">
-                          {maxOffDate ? (
-                            <span className={cn(c.isOverdue && "text-red-600")}>{fmtDate(maxOffDate)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.delayed && (
-                        <TableCell className="text-center h-10">
-                          {c.daysDelayed && c.daysDelayed > 0 ? (
-                            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-md font-bold">
-                              {c.daysDelayed}d
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.docs && (
-                        <TableCell className="h-10">
-                          <div className="flex justify-center">
-                            {canEditRow ? (
-                              <InlineBoolCell id={c.id} field="docReceived" value={c.docReceived} />
-                            ) : c.docReceived ? (
-                              "✅"
-                            ) : (
-                              "❌"
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
-                      {colVis.docsSent && (
-                        <TableCell className="h-10">
-                          {canEditRow ? (
-                            <InlineDateCell id={c.id} field="docsSentDate" value={c.docsSentDate} />
-                          ) : (
-                            fmtDate(c.docsSentDate)
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.transporter && (
-                        <TableCell className="h-10">
-                          {canEditRow ? (
-                            <InlineTransporterCell id={c.id} value={c.transporter} />
-                          ) : (
-                            c.transporter || "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.transportFee && (
-                        <TableCell className="text-right h-10">
-                          {canEditRow ? (
-                            <InlineNumberCell id={c.id} field="transportFee" value={c.transportFee} width="70px" />
-                          ) : c.transportFee ? (
-                            `$${Number(c.transportFee).toLocaleString()}`
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.agent && (
-                        <TableCell className="h-10">
-                          {canEditRow ? (
-                            <InlineTextCell id={c.id} field="agent" value={c.agent} width="80px" />
-                          ) : (
-                            c.agent || "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.dutyFee && (
-                        <TableCell className="text-right h-10">
-                          {canEditRow ? (
-                            <InlineNumberCell id={c.id} field="dutyFee" value={c.dutyFee} width="70px" />
-                          ) : c.dutyFee ? (
-                            `$${Number(c.dutyFee).toLocaleString()}`
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                      )}
-                      {colVis.notes && (
-                        <TableCell className="h-10">
-                          <span className="truncate block max-w-[110px]" title={c.trackingDescription ?? ""}>
-                            {canEditRow ? (
-                              <InlineTextCell
-                                id={c.id}
-                                field="trackingDescription"
-                                value={c.trackingDescription}
-                                width="110px"
-                              />
-                            ) : (
-                              c.trackingDescription || "—"
-                            )}
-                          </span>
-                        </TableCell>
-                      )}
-                      {colVis.blDocs && (
-                        <TableCell className="h-10">
-                          <span className="truncate block max-w-[110px]" title={c.blDocs ?? ""}>
-                            {canEditRow ? (
-                              <InlineTextCell id={c.id} field="blDocs" value={c.blDocs} width="110px" />
-                            ) : (
-                              c.blDocs || "—"
-                            )}
-                          </span>
-                        </TableCell>
-                      )}
+                <>
+                  {virtualRows.topSpacerHeight > 0 && (
+                    <TableRow aria-hidden="true" data-testid="tracking-virtual-spacer-top">
+                      <TableCell
+                        colSpan={25}
+                        className="p-0 border-0"
+                        style={{ height: virtualRows.topSpacerHeight }}
+                      />
                     </TableRow>
-                  );
-                })
+                  )}
+                  {visibleContainers.map((c, visibleIndex) => {
+                    const idx = virtualRows.startIndex + visibleIndex;
+                    const freight = parseFloat(c.poFreight ?? "0");
+                    const canEditRow = sessionCompanyId === null || c.companyId === sessionCompanyId;
+
+                    const transUpper = (c.transporter ?? "").toUpperCase();
+                    const transDays = transUpper.includes("FARHAT") || transUpper.includes("CONTINENTAL") ? 11 : 14;
+                    const maxOffDate = c.borderDate
+                      ? (() => {
+                          const d = new Date(c.borderDate);
+                          d.setDate(d.getDate() + transDays);
+                          return d.toISOString().slice(0, 10);
+                        })()
+                      : null;
+
+                    return (
+                      <TableRow
+                        key={c.id}
+                        className="cursor-pointer group hover:bg-muted/50 transition-colors border-b last:border-0"
+                        onClick={() => onOpenDrawer(c)}
+                        data-testid={`row-container-${c.id}`}
+                      >
+                        <TableCell className="text-center text-muted-foreground font-mono text-[10px] h-10 select-none">
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell className="font-mono font-bold text-[11px] h-10">
+                          <Link
+                            href={`/containers/${c.id}`}
+                            className="text-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
+                            onClick={(event) => event.stopPropagation()}
+                            data-testid={`link-container-${c.id}`}
+                            title={`Open container ${c.containerNumber}`}
+                          >
+                            {c.containerNumber}
+                          </Link>
+                        </TableCell>
+                        {colVis.supplier && (
+                          <TableCell className="text-muted-foreground h-10">
+                            <span className="truncate block max-w-[90px]" title={c.supplierName ?? ""}>
+                              {c.supplierCode || "—"}
+                            </span>
+                          </TableCell>
+                        )}
+                        {colVis.company && (
+                          <TableCell className="font-medium h-10">
+                            <span className="truncate block max-w-[110px]" title={c.companyName}>
+                              {c.companyName}
+                            </span>
+                          </TableCell>
+                        )}
+                        {colVis.shopName && (
+                          <TableCell className="h-10">
+                            <span className="truncate block max-w-[90px]" title={c.shopName ?? ""}>
+                              {canEditRow ? (
+                                <InlineTextCell id={c.id} field="shopName" value={c.shopName} width="90px" />
+                              ) : (
+                                c.shopName || "—"
+                              )}
+                            </span>
+                          </TableCell>
+                        )}
+                        {colVis.eta && (
+                          <TableCell className="h-10">
+                            {canEditRow ? <EtaCell container={c} /> : fmtDate(c.eta)}
+                          </TableCell>
+                        )}
+                        {colVis.cost && (
+                          <TableCell className="text-right font-mono text-muted-foreground h-10">
+                            {c.grandTotal ? `$${Number(c.grandTotal).toLocaleString()}` : "—"}
+                          </TableCell>
+                        )}
+                        {colVis.freight && (
+                          <TableCell className="text-right font-mono text-muted-foreground h-10">
+                            {freight > 0 ? `$${freight.toLocaleString()}` : "—"}
+                          </TableCell>
+                        )}
+                        {colVis.truckNo && (
+                          <TableCell className="font-mono text-primary font-medium h-10">
+                            {canEditRow ? (
+                              <InlineTextCell
+                                id={c.id}
+                                field="numberPlate"
+                                value={c.numberPlate}
+                                width="90px"
+                                uppercase
+                              />
+                            ) : (
+                              c.numberPlate || "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.location && (
+                          <TableCell className="h-10">
+                            <span className="truncate block max-w-[100px]" title={c.trackingLocation ?? ""}>
+                              {canEditRow ? (
+                                <InlineTextCell
+                                  id={c.id}
+                                  field="trackingLocation"
+                                  value={c.trackingLocation}
+                                  width="100px"
+                                />
+                              ) : (
+                                c.trackingLocation || "—"
+                              )}
+                            </span>
+                          </TableCell>
+                        )}
+                        {colVis.borderDate && (
+                          <TableCell className="h-10">
+                            {canEditRow ? (
+                              <InlineDateCell id={c.id} field="borderDate" value={c.borderDate} />
+                            ) : (
+                              fmtDate(c.borderDate)
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.maxOffload && (
+                          <TableCell className="h-10 font-medium">
+                            {maxOffDate ? (
+                              <span className={cn(c.isOverdue && "text-red-600")}>{fmtDate(maxOffDate)}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.delayed && (
+                          <TableCell className="text-center h-10">
+                            {c.daysDelayed && c.daysDelayed > 0 ? (
+                              <span className="px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-md font-bold">
+                                {c.daysDelayed}d
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.docs && (
+                          <TableCell className="h-10">
+                            <div className="flex justify-center">
+                              {canEditRow ? (
+                                <InlineBoolCell id={c.id} field="docReceived" value={c.docReceived} />
+                              ) : c.docReceived ? (
+                                "✅"
+                              ) : (
+                                "❌"
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                        {colVis.docsSent && (
+                          <TableCell className="h-10">
+                            {canEditRow ? (
+                              <InlineDateCell id={c.id} field="docsSentDate" value={c.docsSentDate} />
+                            ) : (
+                              fmtDate(c.docsSentDate)
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.transporter && (
+                          <TableCell className="h-10">
+                            {canEditRow ? (
+                              <InlineTransporterCell id={c.id} value={c.transporter} />
+                            ) : (
+                              c.transporter || "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.transportFee && (
+                          <TableCell className="text-right h-10">
+                            {canEditRow ? (
+                              <InlineNumberCell id={c.id} field="transportFee" value={c.transportFee} width="70px" />
+                            ) : c.transportFee ? (
+                              `$${Number(c.transportFee).toLocaleString()}`
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.agent && (
+                          <TableCell className="h-10">
+                            {canEditRow ? (
+                              <InlineTextCell id={c.id} field="agent" value={c.agent} width="80px" />
+                            ) : (
+                              c.agent || "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.dutyFee && (
+                          <TableCell className="text-right h-10">
+                            {canEditRow ? (
+                              <InlineNumberCell id={c.id} field="dutyFee" value={c.dutyFee} width="70px" />
+                            ) : c.dutyFee ? (
+                              `$${Number(c.dutyFee).toLocaleString()}`
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                        )}
+                        {colVis.notes && (
+                          <TableCell className="h-10">
+                            <span className="truncate block max-w-[110px]" title={c.trackingDescription ?? ""}>
+                              {canEditRow ? (
+                                <InlineTextCell
+                                  id={c.id}
+                                  field="trackingDescription"
+                                  value={c.trackingDescription}
+                                  width="110px"
+                                />
+                              ) : (
+                                c.trackingDescription || "—"
+                              )}
+                            </span>
+                          </TableCell>
+                        )}
+                        {colVis.blDocs && (
+                          <TableCell className="h-10">
+                            <span className="truncate block max-w-[110px]" title={c.blDocs ?? ""}>
+                              {canEditRow ? (
+                                <InlineTextCell id={c.id} field="blDocs" value={c.blDocs} width="110px" />
+                              ) : (
+                                c.blDocs || "—"
+                              )}
+                            </span>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {virtualRows.bottomSpacerHeight > 0 && (
+                    <TableRow aria-hidden="true" data-testid="tracking-virtual-spacer-bottom">
+                      <TableCell
+                        colSpan={25}
+                        className="p-0 border-0"
+                        style={{ height: virtualRows.bottomSpacerHeight }}
+                      />
+                    </TableRow>
+                  )}
+                </>
               )}
             </TableBody>
           </Table>

@@ -118,11 +118,24 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
           )}
         </div>
 
+        {!orderId && model.selectedProformaId && model.selectedProformaId !== "none" && model.proformaCapacity && (
+          <p className="text-xs text-muted-foreground" data-testid="text-proforma-capacity">
+            {model.proformaCapacity.remainingTotalQty} / {model.proformaCapacity.requestedTotalQty} remaining across all
+            loadings
+          </p>
+        )}
+
         {!orderId && (
           <Button
             className="w-full"
             onClick={model.handleStartLoading}
-            disabled={!customerId || !model.selectedLocationId || model.createOrderMutation.isPending}
+            disabled={
+              !customerId ||
+              !model.selectedLocationId ||
+              model.createOrderMutation.isPending ||
+              model.isProformaCapacityLoading ||
+              model.selectedProformaExhausted
+            }
             data-testid="button-start-loading"
           >
             <Play className="mr-2 h-4 w-4" />

@@ -218,7 +218,7 @@ function localizeRecord(
   );
   record.language = language;
   record.direction = language === "ar" ? "rtl" : "ltr";
-  if (articleCode) record.normalizedArticleCode = articleCode;
+  if (articleCode && !clean(record.normalizedArticleCode)) record.normalizedArticleCode = articleCode;
   if (displayName) {
     record.displayName = displayName;
     record.displayProductName = displayName;
