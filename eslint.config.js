@@ -43,6 +43,17 @@ export default tseslint.config(
       "@typescript-eslint/no-empty-interface": "error",
       "@typescript-eslint/no-empty-object-type": "error",
       "@typescript-eslint/no-unsafe-function-type": "error",
+      // dangerouslySetInnerHTML parses its input as HTML, so a single hostile
+      // string can break out of its element (XSS). Inline styles must go
+      // through <SafeStyle> (text children = inert text node) instead.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message:
+            "Do not use dangerouslySetInnerHTML. Render inline CSS with <SafeStyle css={...}/> from @/components/SafeStyle instead.",
+        },
+      ],
 
       // ── Deliberately disabled, with a reason per rule ──────────────────────
       // Type escapes have their own zero-tolerance gate in

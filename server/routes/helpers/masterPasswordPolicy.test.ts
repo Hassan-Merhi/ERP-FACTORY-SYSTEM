@@ -7,7 +7,7 @@ async function loadPolicy(env: Record<string, string | undefined>) {
   vi.resetModules();
   for (const key of ENV_KEYS) delete process.env[key];
   Object.assign(process.env, env);
-  await import("./masterPasswordPolicy");
+  return import("./masterPasswordPolicy");
 }
 
 afterEach(() => {
@@ -52,5 +52,39 @@ describe("masterPasswordPolicy", () => {
     });
 
     expect(process.env.MASTER_PASSWORD).toBeUndefined();
+  });
+
+  it("expires an enabled emergency password at runtime without a restart", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+      const policy = await loadPolicy({
+        NODE_ENV: "development",
+        MASTER_PASSWORD: "dev-emergency-secret",
+        MASTER_PASSWORD_ENABLED: "true",
+        MASTER_PASSWORD_EXPIRES_AT: "2026-06-01T12:05:00.000Z",
+      });
+
+      expect(process.env.MASTER_PASSWORD).toBe("dev-emergency-secret");
+      expect(policy.isMasterPasswordWindowActive()).toBe(true);
+
+      // The process outlives the window: the emergency password must stop
+      // working on the next attempt even though nothing was restarted.
+      vi.setSystemTime(new Date("2026-06-01T12:06:00.000Z"));
+      expect(policy.isMasterPasswordWindowActive()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never reports the emergency password window as active in production", async () => {
+    const policy = await loadPolicy({
+      NODE_ENV: "production",
+      MASTER_PASSWORD: "legacy-emergency-secret",
+      MASTER_PASSWORD_ENABLED: "true",
+      MASTER_PASSWORD_EXPIRES_AT: "2999-01-01T00:00:00.000Z",
+    });
+
+    expect(policy.isMasterPasswordWindowActive()).toBe(false);
   });
 });

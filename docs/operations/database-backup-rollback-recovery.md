@@ -34,6 +34,33 @@ Production Recovery Point Objective (RPO) and Recovery Time Objective (RTO) depe
 
 Before claiming a production RPO or RTO, an authorized operator must record the provider's backup schedule/retention and complete a timed restore rehearsal using a production-sized, non-production copy. The approved objectives and evidence location belong in the private operations record, not in repository secrets or public logs.
 
+### Automated live-backup verification
+
+The disposable rehearsals above prove the *mechanics* of dump/restore. The
+`Maintenance - Backup Restore Verification` workflow proves the *live path*:
+every Sunday at 03:11 UTC (and on manual dispatch) it dumps the real
+production database, restores into an isolated scratch PostgreSQL, and fails
+unless the restore preserves every row of `companies`, `vouchers`,
+`voucher_entries`, `inventory`, and `ledger_accounts` and contains the `users`
+and `migrations_log` tables. Each run publishes backup size, SHA-256, restore
+duration, and the row-count fingerprint to its job summary.
+
+Setup (one time, by an authorized operator):
+
+1. In the Render dashboard, copy the production database's **External**
+   connection string (GitHub Actions connects over the public internet, so
+   the internal URL will not work).
+2. Store it as the repository secret `BACKUP_DATABASE_URL`
+   (Settings → Secrets and variables → Actions → New repository secret).
+3. Run the workflow once via `workflow_dispatch` and confirm it goes green.
+
+The workflow only ever reads production (`pg_dump` plus aggregate row
+counts); it can never write to it. If the secret is missing or invalid the
+run fails loudly with setup instructions — a red run means live restores are
+unproven and must be treated as an open ops incident, not muted. Only
+aggregate counts leave the database; no row data, credentials, or hashes
+appear in logs or summaries.
+
 ## Migration risk classes
 
 | Class | Examples | Deployment expectation | Rollback expectation |
