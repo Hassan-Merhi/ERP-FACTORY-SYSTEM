@@ -1,11 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { SaleRow } from "./posTypes";
+import type { PosToast, SaleRow } from "./posTypes";
+import type { POSColumn } from "../utils/posCalculations";
 
 export interface SaleGridProps {
   rows: SaleRow[];
-  columns: any[];
+  columns: POSColumn[];
   selectedCell: { row: number; col: number };
   setSelectedCell: (cell: { row: number; col: number }) => void;
   updateRow: (index: number, field: keyof SaleRow, value: string | number) => void;
@@ -21,7 +22,7 @@ export interface SaleGridProps {
   inputRefs: React.MutableRefObject<{ [key: string]: HTMLInputElement }>;
   clearActiveRowTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
   focusCell: (rowIndex: number, colIndex: number) => void;
-  toast: any;
+  toast: PosToast;
   /** When true (edit mode), skip the "incomplete item" mousedown guard so
    *  items loaded from the DB don't lock the entire grid. */
   isEditMode?: boolean;

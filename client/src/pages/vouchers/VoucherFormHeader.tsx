@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { UseFormReturn } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
+import type { VoucherFormData } from "./voucherTypes";
 
 interface VoucherFormHeaderProps {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<VoucherFormData>;
   voucherNumber?: string;
   title: string;
   description?: string;

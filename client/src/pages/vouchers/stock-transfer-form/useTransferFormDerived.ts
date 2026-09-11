@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import type { StockTransferFormData } from "../stocktransferform/types";
 import { queryClient } from "@/lib/queryClient";
 import { locationInventoryLightUrl } from "@/api/inventoryApi";
 
@@ -26,8 +27,7 @@ export function useFilteredTransferInventory(transferInventory: TransferInventor
     const term = transferSearchTerm.trim().toLowerCase();
     const filtered = term
       ? transferInventory.filter(
-          (item) =>
-            item.stockItemName?.toLowerCase().includes(term) || item.stockItemCode?.toLowerCase().includes(term)
+          (item) => item.stockItemName?.toLowerCase().includes(term) || item.stockItemCode?.toLowerCase().includes(term)
         )
       : transferInventory.slice();
     return filtered.sort((a, b) => (a.stockItemName || "").localeCompare(b.stockItemName || ""));
@@ -49,7 +49,7 @@ export function usePendingTransferRevisions<T extends { optional?: boolean }>(tr
  */
 export function useTransferRateAutofill(
   transferEntries: { sourceLocationId: number; stockItemId: number; rate?: string }[],
-  stockTransferForm: UseFormReturn<any>
+  stockTransferForm: UseFormReturn<StockTransferFormData>
 ) {
   const signature = transferEntries.map((e) => `${e.sourceLocationId}-${e.stockItemId}-${e.rate ? 1 : 0}`).join(",");
 
@@ -85,6 +85,5 @@ export function useTransferRateAutofill(
     return () => {
       cancelled = true;
     };
-    
   }, [signature, stockTransferForm, transferEntries]);
 }

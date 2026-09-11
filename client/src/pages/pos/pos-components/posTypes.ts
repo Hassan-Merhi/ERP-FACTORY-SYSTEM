@@ -1,3 +1,5 @@
+export type PosToast = (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
+
 export interface SaleRow {
   id: string;
   itemName: string;

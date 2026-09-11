@@ -15,7 +15,15 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import type { Customer, LedgerAccount, Location } from "./types";
+import type {
+  Customer,
+  ImportedSale,
+  LedgerAccount,
+  Location,
+  PosImportItem,
+  PosImportPreview,
+  PosImportValidationResult,
+} from "./types";
 
 function createImportIdentity(scope: string): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
@@ -30,8 +38,8 @@ export function usePosImportModel() {
   const { displayCurrency, exchangeRate, isLoadingCompany } = useCurrencyContext();
   const { selectedCompany } = useCompany();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [preview, setPreview] = useState<PosImportPreview | null>(null);
+  const [validationResult, setValidationResult] = useState<PosImportValidationResult | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string>("");
   const [selectedCashAccount, setSelectedCashAccount] = useState<string>("");
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
@@ -40,7 +48,7 @@ export function usePosImportModel() {
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [saleCurrency, setSaleCurrency] = useState<"USD" | "CFA">("USD");
   const [showPrintDialog, setShowPrintDialog] = useState(false);
-  const [importedSale, setImportedSale] = useState<any>(null);
+  const [importedSale, setImportedSale] = useState<ImportedSale | null>(null);
   const [printTime, setPrintTime] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
   const errorsRef = useRef<HTMLDivElement>(null);
@@ -93,9 +101,9 @@ export function usePosImportModel() {
   }, [displayCurrency]);
 
   /** Excel rates arrive in the sale currency; the backend always stores USD. */
-  const toUsdItems = (items: any[]) =>
+  const toUsdItems = (items: PosImportItem[]): PosImportItem[] =>
     saleCurrency === "CFA" && exchangeRate
-      ? items.map((item) => ({ ...item, rate: (parseFloat(item.rate) / exchangeRate).toFixed(2) }))
+      ? items.map((item) => ({ ...item, rate: (parseFloat(String(item.rate)) / exchangeRate).toFixed(2) }))
       : items;
 
   const parseMutation = useMutation({
@@ -316,6 +324,8 @@ export function usePosImportModel() {
   };
 
   const doImport = () => {
+    if (!validationResult) return;
+
     // Convert CFA rates to USD if needed
     const itemsToImport = toUsdItems(validationResult.validatedItems);
     const requestIdentity = {

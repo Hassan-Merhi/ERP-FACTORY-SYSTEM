@@ -16,7 +16,7 @@ interface NavGroup {
 interface VoucherTabNavProps {
   visibleSidebarGroups: NavGroup[];
   activeTab: string;
-  setActiveTab: (tab: any) => void;
+  setActiveTab: (tab: string) => void;
 }
 
 export function VoucherMobileTabs({ visibleSidebarGroups, activeTab, setActiveTab }: VoucherTabNavProps) {

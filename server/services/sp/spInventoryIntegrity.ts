@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { adjustInventory, type AdjustInventoryResult } from "../../inventoryHelper";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { firstRow as firstQueryRow } from "../../lib/queryResult";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
 
@@ -32,8 +33,8 @@ function positiveInteger(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function firstRow(result: any): unknown | null {
-  return result?.rows?.[0] ?? result?.[0] ?? null;
+function firstRow(result: unknown): unknown | null {
+  return firstQueryRow(result) ?? null;
 }
 
 export async function requireSpInventoryMapping(

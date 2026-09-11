@@ -4,20 +4,20 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from PosTransferOrders.tsx during the Phase 4 god-file split.
  */
-import {useState, useMemo, useRef, useEffect, useCallback} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {ArrowLeft, Loader2, Save, CheckCircle2, X, ArrowRight, Clock, Lock, Plus} from "lucide-react";
-import {Button} from "@/components/ui/button";
-import {Card, CardContent} from "@/components/ui/card";
-import {Badge} from "@/components/ui/badge";
-import {Textarea} from "@/components/ui/textarea";
-import {useToast} from "@/hooks/use-toast";
-import {apiRequest, queryClient} from "@/lib/queryClient";
-import {cn} from "@/lib/utils";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ArrowLeft, Loader2, Save, CheckCircle2, X, ArrowRight, Clock, Lock, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 
-import type {ExtraItem, InventoryItem, PosUser, TransferDetail} from "../types";
-import {fmtQty, formatDate, formatDateTime} from "../utils";
-import {ItemSearchPanel} from "./ItemSearchPanel";
+import type { ExtraItem, InventoryItem, PosUser, TransferDetail } from "../types";
+import { fmtQty, formatDate, formatDateTime } from "../utils";
+import { ItemSearchPanel } from "./ItemSearchPanel";
 
 export // ─── Editable detail view ─────────────────────────────────────────────────────
 function EditableTransferDetail({
@@ -119,11 +119,17 @@ function EditableTransferDetail({
   };
 
   const myItems = detail.items;
-  const locationInventory = (rawInventory as any[]).map((i) => ({
-    stockItemId: i.stockItemId ?? i.id,
-    name: i.stockItemName ?? i.name ?? "",
-    quantity: i.quantity ?? "0",
-  }));
+  const locationInventory = rawInventory.flatMap((item) => {
+    const stockItemId = item.stockItemId ?? item.id;
+    if (stockItemId === undefined) return [];
+    return [
+      {
+        stockItemId,
+        name: item.stockItemName ?? item.name ?? "",
+        quantity: String(item.quantity ?? "0"),
+      },
+    ];
+  });
 
   const alreadyAddedIds = useMemo(
     () => new Set([...extraItems.map((e) => e.stockItemId), ...myItems.map((i) => i.stockItemId)]),

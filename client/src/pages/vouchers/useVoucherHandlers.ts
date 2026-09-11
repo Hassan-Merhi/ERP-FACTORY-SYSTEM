@@ -1,17 +1,23 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import type { Account } from "@/components/AccountSidebar";
 import { focusScopedTestId } from "@/lib/scopedFocus";
+import type { QueryClient } from "@tanstack/react-query";
+import type { UseFieldArrayAppend, UseFormReturn } from "react-hook-form";
+import type { VoucherFormData } from "./voucherTypes";
+import { useToast } from "@/hooks/use-toast";
+
+type ToastFn = ReturnType<typeof useToast>["toast"];
 
 interface UseVoucherHandlersProps {
-  form: any;
-  append: any;
+  form: UseFormReturn<VoucherFormData>;
+  append: UseFieldArrayAppend<VoucherFormData, "entries">;
   activeRowIndex: number | null;
   setActiveRowIndex: (i: number | null) => void;
   sidebarAccounts: Account[];
   selectedCompany: { id: number } | null;
   setIsAutoCreating: (v: boolean) => void;
-  queryClient: any;
-  toast: any;
+  queryClient: QueryClient;
+  toast: ToastFn;
   setSelectedAccountId: (v: number | null) => void;
   setSelectedAccountType: (v: string | null) => void;
   setSidebarSearchValue: (v: string) => void;
@@ -43,7 +49,7 @@ export function useVoucherHandlers({
       form.setValue(`entries.${activeRowIndex}.accountId`, account.id);
       form.setValue(`entries.${activeRowIndex}.accountName`, account.name);
     } else {
-      const emptyEntryIndex = currentEntries.findIndex((entry: any) => entry.accountId === 0 || !entry.accountName);
+      const emptyEntryIndex = currentEntries.findIndex((entry) => entry.accountId === 0 || !entry.accountName);
       if (emptyEntryIndex >= 0) {
         targetRowIndex = emptyEntryIndex;
         form.setValue(`entries.${emptyEntryIndex}.accountType`, account.type);

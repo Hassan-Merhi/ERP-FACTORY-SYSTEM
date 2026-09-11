@@ -268,9 +268,9 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
                           </thead>
                           <tbody>
                             {revision.items
-                              .filter((item: any) => parseFloat(item.delta) !== 0)
-                              .map((item: any, index: number) => {
-                                const delta = parseFloat(item.delta);
+                              .filter((item) => parseFloat(item.delta ?? "0") !== 0)
+                              .map((item, index: number) => {
+                                const delta = parseFloat(item.delta ?? "0");
                                 return (
                                   <tr key={index} className="border-t">
                                     <td className="p-2 font-medium">{item.stockItemName}</td>
@@ -278,7 +278,7 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
                                       {item.sourceLocationName || "—"}
                                     </td>
                                     <td className="p-2 text-right font-mono text-muted-foreground">
-                                      {formatNumber(parseFloat(item.originalQuantity), 0)}
+                                      {formatNumber(parseFloat(item.originalQuantity ?? "0"), 0)}
                                     </td>
                                     <td
                                       className={`p-2 text-right font-mono font-semibold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
@@ -287,7 +287,7 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
                                       {formatNumber(delta, 0)}
                                     </td>
                                     <td className="p-2 text-right font-mono font-semibold">
-                                      {formatNumber(parseFloat(item.newQuantity), 0)}
+                                      {formatNumber(parseFloat(item.newQuantity ?? "0"), 0)}
                                     </td>
                                   </tr>
                                 );
