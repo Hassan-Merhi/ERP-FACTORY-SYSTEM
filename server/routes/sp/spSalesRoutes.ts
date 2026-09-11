@@ -18,6 +18,28 @@ import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
 
+type SpSaleLotRow = {
+  id: number;
+  article_code: string;
+  description: string | null;
+  stock_item_id: number | null;
+} & Record<string, unknown>;
+
+type SpSalePostedLine = {
+  movementId: number;
+  articleCode: string;
+  description: string | null;
+  stockItemId: number | null;
+  qtySold: number;
+  salePricePerUnit: number;
+  baseUnitCostUsd: number;
+  landedUnitCostUsd: number;
+  finalUnitCostUsd: number;
+  saleTotal: number;
+  baseTotal: number;
+  finalTotal: number;
+};
+
 // ── Sales + Stock Movements ───────────────────────────────────────────────────
 
 export function registerSpSalesRoutes(app: Express) {
@@ -118,7 +140,7 @@ export function registerSpSalesRoutes(app: Express) {
         let totalSalePrice = 0;
         let totalBaseCost = 0;
         let totalFinalCost = 0;
-        const postedLines: any[] = [];
+        const postedLines: SpSalePostedLine[] = [];
 
         for (const sl of saleLines) {
           const qtySold = parseNum(sl.qtySold);
@@ -142,7 +164,7 @@ export function registerSpSalesRoutes(app: Express) {
           }
 
           // ── FIFO lot selection (server-side) ──────────────────────────────
-          let lotsQuery: any;
+          let lotsQuery: unknown;
           if (stockItemId) {
             lotsQuery = await tx.execute(
               sql`SELECT * FROM sp_stock_movements
@@ -157,7 +179,7 @@ export function registerSpSalesRoutes(app: Express) {
             );
           }
 
-          const lots = resultRows(lotsQuery);
+          const lots = resultRows<SpSaleLotRow>(lotsQuery);
           const totalAvail = lots.reduce((s: number, l) => s + parseNum(l.qty_remaining), 0);
           if (qtySold > totalAvail + 0.0001) {
             throw new Error(

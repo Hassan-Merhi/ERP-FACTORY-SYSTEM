@@ -203,7 +203,8 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
           }
 
           const plans = accountIds.map((accountId) => {
-            const account: any = sourceById.get(accountId);
+            // Every id passed the missingId guard above, so the lookup cannot miss.
+            const account = sourceById.get(accountId)!;
             return {
               account,
               originalCode: account.code,
@@ -327,7 +328,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
     requireRole("Admin", "Developer"),
     async (req, res, next) => {
       const accountIds = idArray(
-        Array.isArray(req.body?.accounts) ? req.body.accounts.map((account: any) => account?.accountId) : null
+        Array.isArray(req.body?.accounts) ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId) : null
       );
       const movedVoucherIds = idArray(req.body?.movedVoucherIds, true);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);

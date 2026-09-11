@@ -12,6 +12,12 @@ import { PostingValidationError } from "../../services/accounting/centralPosting
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { buildPaymentReceiptPostingRequest } from "../../services/accounting/paymentReceiptPosting";
+import type { BuildPaymentReceiptPostingInput } from "../../services/accounting/paymentReceiptPosting";
+
+type CentralPaymentReceiptBody = Omit<
+  BuildPaymentReceiptPostingInput,
+  "companyId" | "voucherNumber" | "actor" | "resolveTarget"
+> & { optional?: unknown };
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { buildVoucherChangesForUpdate, logAudit, snapshotVoucherEntries } from "../_helpers";
 
@@ -90,7 +96,7 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       return;
     }
 
-    const body = req.body as Record<string, any>;
+    const body = req.body as CentralPaymentReceiptBody;
     // Keep optional transitions and all non-Payment/Receipt edits on the legacy route.
     if (
       !isActivePaymentReceiptType(existing.voucherType) ||

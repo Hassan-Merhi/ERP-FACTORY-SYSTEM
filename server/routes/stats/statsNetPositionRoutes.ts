@@ -9,7 +9,12 @@ import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { inventory, containers, vouchers, suppliers, locations, factoryWorkerAdvances } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
-import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../../netPositionHelper";
+import {
+  classifyEquityAccounts,
+  classifyNetPositionAccounts,
+  round2,
+  type NetPositionAccount,
+} from "../../netPositionHelper";
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 
 export function registerStatsNetPositionRoutes(app: Express) {
@@ -331,7 +336,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
       // ── Sheet 1: Summary ──────────────────────────────────────────────────
       // ── Merge stock accounts into one combined Inventory line (Excel) ────────
       {
-        const isStockEntry = (a: any) => {
+        const isStockEntry = (a: NetPositionAccount) => {
           const nl = (a.name || "").toLowerCase();
           const cat = (a.category || "").toLowerCase();
           return cat === "inventory" || nl.includes("stock in hand") || nl.includes("stock on floor");

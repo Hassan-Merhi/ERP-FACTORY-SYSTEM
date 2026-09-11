@@ -26,8 +26,8 @@ export function registerOrphanedVoucherRepairRoutes(app: Express) {
   // since been undone or deleted, leaving stale ledger entries (wrong cash balance etc).
   app.post("/api/factory/repair-orphaned-vouchers", requireAuth, async (req: Request, res: Response) => {
     try {
-      const currentRole = (req.session as any).currentRole;
-      if (!["Admin", "Owner", "Developer"].includes(currentRole)) {
+      const currentRole = req.session.currentRole;
+      if (!["Admin", "Owner", "Developer"].includes(currentRole ?? "")) {
         return res.status(403).json({ message: "Only Admin, Owner, or Developer can run ledger repair" });
       }
       const companyId = req.body.companyId || getFactoryCompanyId(req);

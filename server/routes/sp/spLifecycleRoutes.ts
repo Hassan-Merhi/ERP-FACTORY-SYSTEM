@@ -26,14 +26,8 @@ import {
 } from "../../services/sp/spLifecyclePolicy";
 import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp/spReleasePolicy";
 import { requireSpCompany } from "./spHelpers";
+import { firstRow } from "../../lib/queryResult";
 
-function resultRows(result: any): unknown[] {
-  return result?.rows ?? result ?? [];
-}
-
-function firstRow(result: any): any | null {
-  return resultRows(result)[0] ?? null;
-}
 
 function lifecycleDate(value: unknown): string {
   const date = String(value ?? "").trim();

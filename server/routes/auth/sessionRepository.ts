@@ -5,7 +5,7 @@ import { db, pool } from "../../db";
 
 export interface StoredSessionRow {
   sid: string;
-  sess: Record<string, any>;
+  sess: Record<string, unknown>;
   expire: Date | string;
 }
 

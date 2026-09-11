@@ -42,7 +42,7 @@ export function registerFactorySupplierScoreRoutes(app: Express, requireAuth: Au
 
       const containers = await db.select().from(factoryContainers).where(eq(factoryContainers.companyId, companyId));
 
-      const containerMap = new Map<number, any>(containers.map((c) => [c.id, c]));
+      const containerMap = new Map<number, (typeof containers)[number]>(containers.map((c) => [c.id, c]));
 
       const wasteEntries = await db
         .select()
@@ -57,7 +57,7 @@ export function registerFactorySupplierScoreRoutes(app: Express, requireAuth: Au
 
       const suppliers = await db.select().from(factorySuppliers).where(eq(factorySuppliers.companyId, companyId));
 
-      const supplierMap = new Map<number, any>(suppliers.map((s) => [s.id, s]));
+      const supplierMap = new Map<number, (typeof suppliers)[number]>(suppliers.map((s) => [s.id, s]));
 
       const mixSources = await db.select().from(factoryMixBatchSources);
 

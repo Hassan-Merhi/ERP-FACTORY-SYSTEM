@@ -25,6 +25,10 @@ const EXPLICIT_CURRENCY_FIELDS = [
   "openingBalanceBaseAmount",
 ] as const;
 
+/** Flat account-payload values at the JSON/row boundary: strings, numbers, or absent. */
+type AccountPayload = Record<string, string | number | null | undefined>;
+type ExistingAccount = typeof ledgerAccounts.$inferSelect | typeof bankAccounts.$inferSelect;
+
 function hasOwn(body: Record<string, unknown>, field: string): boolean {
   return Object.prototype.hasOwnProperty.call(body, field);
 }
@@ -42,7 +46,7 @@ async function getBaseCurrency(companyId: number): Promise<string> {
   return company?.baseCurrency || "USD";
 }
 
-function unresolvedOpeningPayload(body: Record<string, any>, rawAmount: Decimal) {
+function unresolvedOpeningPayload(body: AccountPayload, rawAmount: Decimal): AccountPayload {
   return {
     ...body,
     openingBalance: rawAmount.toFixed(),
@@ -54,10 +58,10 @@ function unresolvedOpeningPayload(body: Record<string, any>, rawAmount: Decimal)
 }
 
 function normalizedOpeningPayload(
-  body: Record<string, any>,
-  existing: Record<string, any> | null,
+  body: AccountPayload,
+  existing: ExistingAccount | null,
   baseCurrency: string
-): Record<string, any> {
+): AccountPayload {
   const hasExplicitCurrencyPayload = EXPLICIT_CURRENCY_FIELDS.some((field) => hasOwn(body, field));
   const existingIsResolved = Boolean(
     existing?.openingBalanceNativeAmount != null &&
@@ -98,7 +102,10 @@ function normalizedOpeningPayload(
     existing?.openingBalance ??
     "0";
   const amount = new Decimal(nativeOpeningBalance || 0);
-  const rawCurrency = body.openingBalanceCurrency ?? existing?.openingBalanceCurrency ?? null;
+  const rawCurrency = (body.openingBalanceCurrency ?? existing?.openingBalanceCurrency ?? null) as
+    | string
+    | null
+    | undefined;
 
   if (!amount.isFinite() || amount.lt(0)) {
     throw new Error("Opening balance must be a finite non-negative amount.");

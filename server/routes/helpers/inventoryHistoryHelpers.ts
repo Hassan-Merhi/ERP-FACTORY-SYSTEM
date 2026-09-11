@@ -24,11 +24,27 @@ import { eq, and, sql, gt, inArray } from "drizzle-orm";
 const DEBUG_HISTORICAL_INVENTORY = process.env.DEBUG_HISTORICAL_INVENTORY === "1";
 
 // ─── Historical inventory ─────────────────────────────────────────────────────
+export type HistoricalLocationInventoryRow = {
+  stockItemId: number;
+  quantity: string;
+  averageRate: string;
+  totalValue: string;
+  stockItemCode: string;
+  stockItemName: string;
+  stockItemUom: string;
+  stockGroupId: number | null;
+  stockGroupName: string;
+  stockGroupCode: string;
+  categoryId: number | null;
+  categoryName: string | null;
+  stockItemActive: boolean;
+};
+
 export async function calculateHistoricalLocationInventory(
   locationId: number,
   companyId: number,
   asOfDate: string
-): Promise<any[]> {
+): Promise<HistoricalLocationInventoryRow[]> {
   const cutoffDateStr = asOfDate;
   const cutoffTimestamp = new Date(asOfDate + "T23:59:59.999");
 

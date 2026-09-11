@@ -184,12 +184,14 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
 
         type ColDef = { header: string; key: string; width: number; numFmt?: string };
 
+        type SheetRow = Record<string, string | number | boolean | null | undefined>;
+
         const addBlock = (
           title: string,
           sectionColor: string,
           columns: ColDef[],
-          data: any[],
-          statusColorFn?: (row: any) => string | null,
+          data: SheetRow[],
+          statusColorFn?: (row: SheetRow) => string | null,
           includeAutoFilter = false
         ) => {
           const numCols = columns.length;
@@ -252,7 +254,10 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
             sheet.addRow([]);
             const totalValues = columns.map((c, i) => {
               if (i === 0) return "TOTAL";
-              const sum = data.reduce((s: number, item) => s + (typeof item[c.key] === "number" ? item[c.key] : 0), 0);
+              const sum = data.reduce((s: number, item) => {
+                const value = item[c.key];
+                return s + (typeof value === "number" ? value : 0);
+              }, 0);
               return typeof data[0]?.[c.key] === "number" ? sum : "";
             });
             const totalRow = sheet.addRow(totalValues);

@@ -621,7 +621,18 @@ export function registerOffloadRoutes(app: Express) {
         WHERE c.ledger_account_id IS NOT NULL
         ORDER BY c.id
       `);
-        const rows: any[] = resultRows(chargesRes);
+        type OffloadChargeRow = {
+          id: number;
+          container_id: number;
+          description: string | null;
+          amount: string | null;
+          currency_code: string | null;
+          fx_rate_to_usd: string | null;
+          ledger_account_id: number;
+          created_at: Date | string | null;
+          container_number: string;
+        };
+        const rows = resultRows<OffloadChargeRow>(chargesRes);
 
         for (const row of rows) {
           scanned++;

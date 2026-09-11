@@ -5,7 +5,12 @@ import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { containers, suppliers, employees, salaryAdvances, exchangeRates } from "@shared/schema";
 import { eq, and, or, desc, inArray, sql, isNull, lte } from "drizzle-orm";
-import { classifyEquityAccounts, classifyNetPositionAccounts, getAccountNetBalance } from "../../netPositionHelper";
+import {
+  classifyEquityAccounts,
+  classifyNetPositionAccounts,
+  getAccountNetBalance,
+  type NetPositionAccount,
+} from "../../netPositionHelper";
 
 import { _getCached, _setCached } from "../../services/shared/ttlCache";
 import { computeRentalOutstanding } from "./netProfitRentalSection";
@@ -583,7 +588,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // accounts like "Stock on Floor" (accountType: Asset) represent the same
       // physical stock and should appear as a single line in the breakdown.
       {
-        const isStockEntry = (a: any) => {
+        const isStockEntry = (a: NetPositionAccount) => {
           const nl = (a.name || "").toLowerCase();
           const cat = (a.category || "").toLowerCase();
           return cat === "inventory" || nl.includes("stock in hand") || nl.includes("stock on floor");

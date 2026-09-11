@@ -57,7 +57,21 @@ export function registerWorkerStatementReadRoutes(app: Express) {
         .where(and(...payrollConditions))
         .orderBy(factoryPayrolls.paidAt);
 
-      const entries: any[] = [];
+      type WorkerStatementEntry = {
+        entryId: number;
+        voucherId: number;
+        date: string;
+        debitAmount: string;
+        creditAmount: string;
+        narration: string;
+        voucherNumber: string;
+        voucherType: string;
+        voucherDate: string;
+        voucherDescription: string;
+        currency: string;
+        runningBalance?: number;
+      };
+      const entries: WorkerStatementEntry[] = [];
 
       for (const adv of advances) {
         entries.push({
@@ -153,7 +167,14 @@ export function registerWorkerStatementReadRoutes(app: Express) {
         .orderBy(factoryPayrolls.paidAt);
 
       // Build entries
-      const entries: any[] = [];
+      type WorkerStatementPdfEntry = {
+        date: string;
+        type: string;
+        description: string;
+        debit: number;
+        credit: number;
+      };
+      const entries: WorkerStatementPdfEntry[] = [];
       for (const adv of advances) {
         entries.push({
           date: adv.advanceDate,
@@ -231,7 +252,7 @@ export function registerWorkerStatementReadRoutes(app: Express) {
       // Arabic reshaping helpers — always loaded
       let wConvertArabic: ((t: string) => string) | null = null;
       let wBidiInst: {
-        getEmbeddingLevels: (t: string, d: string) => any;
+        getEmbeddingLevels: (t: string, d: string) => Record<string, unknown>;
         getReorderedString: (t: string, l: Record<string, unknown>) => string;
       } | null = null;
       try {

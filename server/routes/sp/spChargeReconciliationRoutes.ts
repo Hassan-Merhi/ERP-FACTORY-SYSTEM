@@ -3,11 +3,12 @@ import { sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { firstRow } from "../../lib/queryResult";
 import { requireSpCompany } from "./spHelpers";
 import { ensureSpOffloadReversalStorage } from "./spOffloadLifecycleRoutes";
 
-function first(result: any) {
-  return (result?.rows ?? result ?? [])[0] ?? {};
+function first(result: unknown): Record<string, unknown> {
+  return (firstRow(result) ?? {}) as Record<string, unknown>;
 }
 
 export function registerSpChargeReconciliationRoutes(app: Express): void {

@@ -133,14 +133,32 @@ function zonedLocalToUtc(
   return new Date(guess);
 }
 
-function lastScheduledLocalDate(value: any): string | null {
+type WhatsappScheduleRow = {
+  enabled?: boolean | null;
+  timezone?: string | null;
+  send_time?: string | null;
+  frequency?: string | null;
+  days_of_week?: unknown;
+  last_scheduled_for?: unknown;
+  include_cost?: boolean | null;
+  include_zero_stock?: boolean | null;
+  include_negative_stock?: boolean | null;
+  stock_group_id?: number | string | null;
+  category_id?: number | string | null;
+  last_attempt_at?: string | Date | null;
+  last_sent_at?: string | Date | null;
+  last_status?: string | null;
+  last_error?: string | null;
+};
+
+function lastScheduledLocalDate(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   return String(value).slice(0, 10);
 }
 
-function computeNextSendAt(row: any, now = new Date()): string | null {
+function computeNextSendAt(row: WhatsappScheduleRow, now = new Date()): string | null {
   if (!row?.enabled) return null;
   const timezone = row.timezone || DEFAULT_TIMEZONE;
   if (!isValidTimezone(timezone)) return null;
@@ -194,7 +212,7 @@ function defaultSchedule(locationId: number) {
   };
 }
 
-function serializeSchedule(row: any, locationId: number) {
+function serializeSchedule(row: WhatsappScheduleRow, locationId: number) {
   if (!row) return defaultSchedule(locationId);
   const sendTime = typeof row.send_time === "string" ? row.send_time.slice(0, 5) : "18:00";
   return {

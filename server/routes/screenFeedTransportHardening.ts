@@ -25,9 +25,18 @@ function reconnectDelay(): number {
   return MIN_RECONNECT_DELAY_MS + Math.floor(Math.random() * (MAX_RECONNECT_JITTER_MS + 1));
 }
 
-function frameEtag(userId: string, frame: any): string {
+type ScreenFeedFrame = {
+  clicks?: unknown;
+  capturedAt?: unknown;
+  dataUrl?: unknown;
+  cursor?: { ts?: unknown } | null;
+  capture?: { encodedBytes?: unknown } | null;
+  captureFailure?: { occurredAt?: unknown; stage?: unknown; reason?: unknown } | null;
+};
+
+function frameEtag(userId: string, frame: ScreenFeedFrame): string {
   const latestClickTs = Array.isArray(frame?.clicks)
-    ? frame.clicks.reduce((latest: number, click: any) => Math.max(latest, Number(click?.ts) || 0), 0)
+    ? frame.clicks.reduce((latest: number, click: { ts?: unknown }) => Math.max(latest, Number(click?.ts) || 0), 0)
     : 0;
   const identity = [
     userId,
@@ -54,7 +63,7 @@ function matchesEtag(header: string | string[] | undefined, etag: string): boole
 }
 
 function installReconnectJitter(res: Response): void {
-  const originalWrite = res.write.bind(res) as (...args: any[]) => boolean;
+  const originalWrite = res.write.bind(res) as (...args: unknown[]) => boolean;
   let retryRewritten = false;
   res.write = ((chunk, ...args) => {
     if (!retryRewritten && typeof chunk === "string" && chunk.includes("retry: 3000")) {

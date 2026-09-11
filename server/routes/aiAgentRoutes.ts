@@ -135,18 +135,36 @@ async function generateTaskPlan(instruction: string): Promise<TaskPlan> {
   };
 }
 
-function normalise(raw: any): TaskPlan {
+// Raw plan JSON from the model (or JSON.parse): unvalidated, so every field is
+// unknown and asserted at the boundary below. Assertions preserve the current
+// runtime values exactly rather than coercing them.
+type RawPlanStep = {
+  id?: unknown;
+  name?: unknown;
+  tool?: unknown;
+  params?: unknown;
+  requiresApproval?: unknown;
+};
+
+type RawTaskPlan = {
+  taskType?: unknown;
+  description?: unknown;
+  steps?: unknown;
+};
+
+function normalise(raw: RawTaskPlan): TaskPlan {
+  const steps = (raw.steps || []) as RawPlanStep[];
   return {
     taskType: String(raw.taskType || "general"),
     description: String(raw.description || ""),
-    steps: (raw.steps || []).slice(0, 6).map((s: any, i: number) => {
-      const toolDef = TOOL_REGISTRY_MAP.get(s.tool);
+    steps: steps.slice(0, 6).map((s: RawPlanStep, i: number) => {
+      const toolDef = TOOL_REGISTRY_MAP.get(s.tool as string);
       return {
-        id: s.id || `step_${i + 1}`,
-        name: s.name || s.tool,
-        tool: s.tool,
-        params: s.params || {},
-        requiresApproval: toolDef?.requiresApproval ?? s.requiresApproval ?? false,
+        id: (s.id || `step_${i + 1}`) as string,
+        name: (s.name || s.tool) as string,
+        tool: s.tool as string,
+        params: (s.params || {}) as Record<string, unknown>,
+        requiresApproval: toolDef?.requiresApproval ?? (s.requiresApproval as boolean | undefined) ?? false,
         status: "pending",
       } satisfies PlanStep;
     }),

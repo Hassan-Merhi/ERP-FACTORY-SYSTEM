@@ -66,8 +66,8 @@ export function registerCreditSalesImportRoutes(app: Express) {
         return res.status(400).json({ message: "Excel file is empty" });
       }
 
-      const rows = rawData as any[];
-      const items: any[] = [];
+      const rows = rawData;
+      const items: { rowNum: number; barcode: string; quantity: number; rate: number; value: number }[] = [];
       let totalValue = 0;
 
       for (let i = 0; i < rows.length; i++) {
@@ -75,8 +75,8 @@ export function registerCreditSalesImportRoutes(app: Express) {
         const rowNum = i + 2;
 
         const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = parseFloat(row.Quantity || row.quantity || row.Qty || row.qty || "0");
-        const rate = parseFloat(row.Rate || row.rate || row.Price || row.price || "0");
+        const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
+        const rate = parseFloat(String(row.Rate || row.rate || row.Price || row.price || "0"));
 
         if (!barcode) {
           continue;
@@ -91,7 +91,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
 
         items.push({
           rowNum,
-          barcode: barcode.toString().trim(),
+          barcode: String(barcode).trim(),
           quantity,
           rate,
           value: itemValue,
@@ -124,7 +124,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
 
       const errors: string[] = [];
       const warnings: string[] = [];
-      const validatedItems: any[] = [];
+      const validatedItems: Record<string, unknown>[] = [];
 
       const location = await storage.getLocationById(locationId);
       if (!location) {

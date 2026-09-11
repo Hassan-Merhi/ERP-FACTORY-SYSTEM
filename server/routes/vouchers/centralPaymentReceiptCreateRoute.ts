@@ -12,6 +12,12 @@ import { createDatabasePostingDependencies } from "../../services/accounting/dat
 import { buildFactoryDaybookPosting } from "../../services/accounting/daybookConvergence";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { buildPaymentReceiptPostingRequest } from "../../services/accounting/paymentReceiptPosting";
+import type { BuildPaymentReceiptPostingInput } from "../../services/accounting/paymentReceiptPosting";
+
+type CentralPaymentReceiptBody = Omit<
+  BuildPaymentReceiptPostingInput,
+  "companyId" | "voucherNumber" | "actor" | "resolveTarget"
+> & { optional?: unknown };
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { buildVoucherChangesForCreate, logAudit, snapshotVoucherEntries } from "../_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
@@ -136,7 +142,7 @@ async function createCentralPaymentReceipt(req: Request, res: Response, next: Ne
       return;
     }
 
-    const body = req.body as Record<string, any>;
+    const body = req.body as CentralPaymentReceiptBody;
     const result = await db.transaction(async (tx) => {
       const built = await buildPaymentReceiptPostingRequest({
         companyId,

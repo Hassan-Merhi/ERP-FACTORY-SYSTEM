@@ -33,7 +33,7 @@ function username(req: Request): string | null {
   return String(req.user?.username ?? req.session.username ?? "") || null;
 }
 
-async function latestActiveCutover(companyId: number): Promise<any | null> {
+async function latestActiveCutover(companyId: number): Promise<Record<string, unknown> | null> {
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutovers
     WHERE target_company_id = ${companyId} AND status = 'active'
@@ -42,7 +42,37 @@ async function latestActiveCutover(companyId: number): Promise<any | null> {
   return firstRow(result) ?? null;
 }
 
-export async function buildSpProductionClosureStatus(companyId: number) {
+export type SpProductionClosureCheck = {
+  type: string;
+  status: string;
+  detail: unknown;
+  recorded_by: unknown;
+  recorded_at: unknown;
+};
+
+export type SpProductionClosureFailure = {
+  type: string;
+  status: string;
+  sourceWriteCount?: number;
+  migrationSuspenseEntryCount?: number;
+};
+
+export type SpProductionClosureStatus =
+  | { status: "BLOCKED"; blocker: string; cutover: null; checks: SpProductionClosureCheck[] }
+  | {
+      status: "PASS" | "FAIL";
+      cutover: Record<string, unknown>;
+      checks: SpProductionClosureCheck[];
+      sourceWriteCount: number;
+      migrationSuspenseEntryCount: number;
+      failureCount: number;
+      failures: SpProductionClosureFailure[];
+      completionRecord: Record<string, unknown> | null;
+    };
+
+export async function buildSpProductionClosureStatus(
+  companyId: number
+): Promise<SpProductionClosureStatus> {
   const cutover = await latestActiveCutover(companyId);
   if (!cutover) {
     return {

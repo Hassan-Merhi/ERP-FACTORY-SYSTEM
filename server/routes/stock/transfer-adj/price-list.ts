@@ -21,6 +21,19 @@ import {
 } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 
+type PriceListRow = {
+  stockItemId: number;
+  code: string;
+  name: string;
+  stockGroupName: string;
+  baseSellingPrice: string | null;
+  hasCustomPrice: boolean;
+  sellingPrice: string | null;
+  quantity: string;
+  costPrice?: string | null;
+  offloadingCost?: string | null;
+};
+
 export function registerPosPriceListRoutes(app: Express) {
   // POS Price List: get all stock items with location-specific selling prices
   // Fallback rule: if no custom location price, falls back to stock item base selling price
@@ -67,7 +80,7 @@ export function registerPosPriceListRoutes(app: Express) {
         }
       }
 
-      let rows: any[];
+      let rows: PriceListRow[];
 
       if (showAll) {
         rows = await db

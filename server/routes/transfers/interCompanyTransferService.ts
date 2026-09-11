@@ -130,8 +130,8 @@ export const interCompanyTransferService = {
         amount: fromBuilt.amount,
         fromLedgerAccountId: parsed.fromLedgerAccountId,
         toLedgerAccountId: parsed.toLedgerAccountId,
-        fromVoucherId: (fromPosted.voucher as { id: unknown }).id,
-        toVoucherId: (toPosted.voucher as { id: unknown }).id,
+        fromVoucherId: Number((fromPosted.voucher as { id: unknown }).id),
+        toVoucherId: Number((toPosted.voucher as { id: unknown }).id),
         description: parsed.description ?? null,
         sourcePaymentId: parsed.sourcePaymentId ?? null,
       });
