@@ -26,6 +26,33 @@ import type { FactoryBaleProduct, Location } from "@shared/schema";
 import { RemoveBaleAuthDialog, AssignWorkerDialog } from "./RemoveFromStockDialogs";
 import { RemoveFromStockTable } from "./RemoveFromStockTable";
 
+export interface WorkerOption {
+  id: number;
+  active?: boolean | null;
+  fullName?: string | null;
+  name?: string | null;
+}
+
+export interface InStockBale {
+  id: number;
+  productId: number;
+  articleCode?: string | null;
+  productName?: string | null;
+  weightKg: string;
+  referenceNumber?: string | null;
+  locationName?: string | null;
+  finalizedAt?: string | null;
+  finalizedBy?: number | null;
+  finalizedByName?: string | null;
+}
+
+interface LabelPrintResult {
+  referenceNumber: string;
+  articleCode?: string | null;
+  pieces?: number;
+  approxWeightKg?: string | number | null;
+}
+
 export function RemoveFromStockTab() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("");
@@ -38,7 +65,7 @@ export function RemoveFromStockTab() {
   const [viewMode, setViewMode] = useState<"condensed" | "detailed">("condensed");
   const [_designPickerOpen, _setDesignPickerOpen] = useState(false);
   const [_pendingPrintLabels, _setPendingPrintLabels] = useState<LabelData[] | null>(null);
-  const [printWorkerBale, setPrintWorkerBale] = useState<any | null>(null);
+  const [printWorkerBale, setPrintWorkerBale] = useState<InStockBale | null>(null);
   const [printWorkerIdSelected, setPrintWorkerIdSelected] = useState<string>("");
   const [assigningWorker, setAssigningWorker] = useState(false);
   const { colors: _designColors } = useLabelDesignColors();
@@ -51,7 +78,7 @@ export function RemoveFromStockTab() {
   const modeApiRequest = getApiRequest(appMode);
   const { formatDisplayDate } = useDateFormat();
 
-  const { data: workers = [] } = useQuery<any[]>({ queryKey: ["/api/factory/workers"] });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers"] });
   const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products"] });
 
   const bulkUpdateNamesMutation = useMutation({
@@ -189,7 +216,7 @@ export function RemoveFromStockTab() {
     }
   };
 
-  const printSingleBale = async (bale: any) => {
+  const printSingleBale = async (bale: InStockBale) => {
     try {
       const labelResponse = await modeApiRequest("POST", "/api/bale-label-prints", {
         bales: [
@@ -204,7 +231,7 @@ export function RemoveFromStockTab() {
       });
       if (!labelResponse.ok) throw new Error("Failed to create label");
       const { labelPrints } = await labelResponse.json();
-      const labels: LabelData[] = labelPrints.map((lp: any) => ({
+      const labels: LabelData[] = labelPrints.map((lp: LabelPrintResult) => ({
         referenceNumber: lp.referenceNumber,
         articleCode: lp.articleCode || bale.articleCode || "",
         pieces: lp.pieces || 1,
@@ -253,7 +280,7 @@ export function RemoveFromStockTab() {
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const activeLocations = (locations || []).filter((l) => l.active);
 
-  const { data: inStockBales, isLoading: balesLoading } = useQuery<any[]>({
+  const { data: inStockBales, isLoading: balesLoading } = useQuery<InStockBale[]>({
     queryKey: ["/api/factory/stock-entry/in-stock", selectedLocationId],
     queryFn: async () => {
       const locParam = selectedLocationId && selectedLocationId !== "all" ? `?locationId=${selectedLocationId}` : "";

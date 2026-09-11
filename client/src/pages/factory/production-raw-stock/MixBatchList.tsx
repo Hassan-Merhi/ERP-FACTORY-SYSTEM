@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, Pencil, Trash2, MessageCircle, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface MixBatchRow {
+export interface MixBatchRow {
   id: number;
   batchCode: string;
   name: string | null;

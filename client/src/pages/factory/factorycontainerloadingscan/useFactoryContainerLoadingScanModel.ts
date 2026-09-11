@@ -508,7 +508,7 @@ export function useFactoryContainerLoadingScanModel() {
           credentials: "include",
         });
         if (res.ok) {
-          const allOrders: any[] = await res.json();
+          const allOrders = await res.json();
           const pending = allOrders.filter((o: { status: string }) => OPEN_ORDER_STATUSES.includes(o.status));
           if (pending.length > 0) {
             setPendingOrders(pending);
@@ -713,7 +713,7 @@ export function useFactoryContainerLoadingScanModel() {
   const proformaArticleCodesForStock = useMemo(
     () =>
       proformaCapacity?.articles
-        .filter((article) => article.isOnProforma)
+        ?.filter((article) => article.isOnProforma)
         .map((article) => article.articleCode)
         .filter(Boolean) ?? [],
     [proformaCapacity]

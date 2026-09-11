@@ -9,10 +9,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
+interface RevisionItem {
+  stockItemName?: string;
+  delta?: string;
+  originalQuantity?: string;
+  newQuantity?: string;
+}
+
+interface RevisionTarget {
+  id: number;
+  items?: RevisionItem[];
+}
+
+interface ApproveRevisionMutation {
+  isPending: boolean;
+  mutate: (revisionId: number) => void;
+}
+
 interface ApproveRevisionDialogProps {
-  approveRevisionTarget: any;
-  setApproveRevisionTarget: (target: null) => void;
-  approveRevisionMutation: any;
+  approveRevisionTarget: RevisionTarget | null;
+  setApproveRevisionTarget: (target: RevisionTarget | null) => void;
+  approveRevisionMutation: ApproveRevisionMutation;
   formatNumber: (num: number, decimals?: number) => string;
 }
 
@@ -49,14 +66,14 @@ export function ApproveRevisionDialog({
               </thead>
               <tbody>
                 {(approveRevisionTarget.items ?? [])
-                  .filter((item: any) => parseFloat(item.delta) !== 0)
-                  .map((item: any, idx: number) => {
-                    const delta = parseFloat(item.delta);
+                  .filter((item) => parseFloat(item.delta as string) !== 0)
+                  .map((item, idx: number) => {
+                    const delta = parseFloat(item.delta as string);
                     return (
                       <tr key={idx} className="border-t">
                         <td className="p-2 font-medium">{item.stockItemName}</td>
                         <td className="p-2 text-right font-mono text-muted-foreground">
-                          {formatNumber(parseFloat(item.originalQuantity), 0)}
+                          {formatNumber(parseFloat(item.originalQuantity as string), 0)}
                         </td>
                         <td
                           className={`p-2 text-right font-mono font-semibold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
@@ -65,7 +82,7 @@ export function ApproveRevisionDialog({
                           {formatNumber(delta, 0)}
                         </td>
                         <td className="p-2 text-right font-mono font-semibold">
-                          {formatNumber(parseFloat(item.newQuantity), 0)}
+                          {formatNumber(parseFloat(item.newQuantity as string), 0)}
                         </td>
                       </tr>
                     );

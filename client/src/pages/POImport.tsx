@@ -33,6 +33,50 @@ interface SupplierComboboxProps {
   hasError?: boolean;
 }
 
+interface POImportItem {
+  poNumber: string;
+  itemName: string;
+  quantity: string | number;
+  rate: string | number;
+  lineTotal: string | number;
+}
+
+interface POImportCharges {
+  freight: string | number;
+  surcharge: string | number;
+  fumigation: string | number;
+  discount: string | number;
+  documentCharges: string | number;
+}
+
+interface POImportContainer {
+  containerNumber: string;
+  itemsCount: number;
+  posCount: number;
+  itemsTotal: string | number;
+  grandTotal: string | number;
+  charges: POImportCharges;
+  items: POImportItem[];
+}
+
+interface POImportPreview {
+  fileHash: string;
+  fileName: string;
+  preview: POImportContainer[];
+}
+
+interface POValidationResult {
+  errors: React.ReactNode[];
+}
+
+type POImportPayload = POImportPreview & {
+  containerNumber: string;
+  supplierId: number;
+  importDate: string;
+  freightPaidBy: "supplier" | "parent";
+  freightParentAccountId: number | null;
+};
+
 function SupplierCombobox({
   value,
   onValueChange,
@@ -100,8 +144,8 @@ export default function POImport() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [preview, setPreview] = useState<POImportPreview | null>(null);
+  const [validationResult, setValidationResult] = useState<POValidationResult | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
   const [containerNumber, setContainerNumber] = useState<string>("");
   const [importDate, setImportDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
@@ -149,7 +193,10 @@ export default function POImport() {
       if (data.preview.length > 0) setContainerNumber(data.preview[0].containerNumber || "");
       toast({
         title: "File parsed successfully",
-        description: `Found ${data.preview.length} container(s) with ${data.preview.reduce((sum: number, p: any) => sum + p.itemsCount, 0)} items. Click Validate to check the data.`,
+        description: `Found ${data.preview.length} container(s) with ${data.preview.reduce(
+          (sum: number, p: POImportContainer) => sum + p.itemsCount,
+          0
+        )} items. Click Validate to check the data.`,
       });
     },
     onError: (error: ClientErrorLike) => {
@@ -159,7 +206,7 @@ export default function POImport() {
   });
 
   const validateMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: POImportPayload) => {
       const res = await apiRequest("POST", "/api/po-import/validate", data);
       return await res.json();
     },
@@ -182,7 +229,7 @@ export default function POImport() {
   });
 
   const importMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: POImportPayload) => {
       const res = await apiRequest("POST", "/api/po-import/import", data);
       return await res.json();
     },
@@ -231,18 +278,18 @@ export default function POImport() {
     parseMutation.mutate(formData);
   };
 
-  const selectedContainer = preview?.preview?.find((c: any) => c.containerNumber === containerNumber);
+  const selectedContainer = preview?.preview?.find((c: POImportContainer) => c.containerNumber === containerNumber);
   const hasValidationErrors = Boolean(validationResult?.errors?.length);
   const isValidated = validationResult !== null;
 
   const buildPayload = useCallback(
     () => ({
-      fileHash: preview.fileHash,
-      fileName: preview.fileName,
+      fileHash: preview!.fileHash,
+      fileName: preview!.fileName,
       containerNumber,
       supplierId: Number.parseInt(selectedSupplier, 10),
       importDate,
-      preview: preview.preview,
+      preview: preview!.preview,
       freightPaidBy,
       freightParentAccountId: freightParentAccountId ? Number.parseInt(freightParentAccountId, 10) : null,
     }),
@@ -312,7 +359,7 @@ export default function POImport() {
       });
       return;
     }
-    if (freightPaidBy === "parent" && (selectedContainer?.charges?.freight || 0) > 0 && !freightParentAccountId) {
+    if (freightPaidBy === "parent" && Number(selectedContainer?.charges?.freight || 0) > 0 && !freightParentAccountId) {
       toast({
         title: "Parent freight account required",
         description: "Please select a parent company account to book the freight against",
@@ -427,7 +474,7 @@ export default function POImport() {
                 </div>
               </div>
 
-              {(selectedContainer?.charges?.freight || 0) > 0 && parentFreightAccounts.length > 0 && (
+              {Number(selectedContainer?.charges?.freight || 0) > 0 && parentFreightAccounts.length > 0 && (
                 <div className="space-y-3 pt-1">
                   <Label>Freight Paid By</Label>
                   <div className="flex gap-2">
@@ -514,7 +561,7 @@ export default function POImport() {
               </div>
             )}
 
-            {preview.preview.map((container: any, idx: number) => (
+            {preview.preview.map((container: POImportContainer, idx: number) => (
               <div key={idx} className="space-y-4 mb-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Container: {container.containerNumber}</h3>
@@ -535,7 +582,7 @@ export default function POImport() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {container.items.map((item: any, itemIdx: number) => (
+                      {container.items.map((item: POImportItem, itemIdx: number) => (
                         <TableRow key={itemIdx}>
                           <TableCell>{item.poNumber}</TableCell>
                           <TableCell>{item.itemName}</TableCell>
@@ -555,25 +602,25 @@ export default function POImport() {
                     <p className="text-sm text-muted-foreground">Items Total</p>
                     <p className="text-lg font-semibold">${formatCurrency(Number(container.itemsTotal))}</p>
                   </div>
-                  {container.charges.freight > 0 && (
+                  {Number(container.charges.freight) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Freight</p>
                       <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.freight))}</p>
                     </div>
                   )}
-                  {container.charges.surcharge > 0 && (
+                  {Number(container.charges.surcharge) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Surcharge</p>
                       <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.surcharge))}</p>
                     </div>
                   )}
-                  {container.charges.fumigation > 0 && (
+                  {Number(container.charges.fumigation) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Fumigation</p>
                       <p className="text-lg font-semibold">${formatCurrency(Number(container.charges.fumigation))}</p>
                     </div>
                   )}
-                  {container.charges.discount > 0 && (
+                  {Number(container.charges.discount) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Discount</p>
                       <p className="text-lg font-semibold text-red-500">
@@ -581,7 +628,7 @@ export default function POImport() {
                       </p>
                     </div>
                   )}
-                  {container.charges.documentCharges > 0 && (
+                  {Number(container.charges.documentCharges) > 0 && (
                     <div>
                       <p className="text-sm text-muted-foreground">Document Charges</p>
                       <p className="text-lg font-semibold">

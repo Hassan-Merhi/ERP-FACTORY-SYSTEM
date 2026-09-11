@@ -9,6 +9,8 @@ import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/di
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
+import type { BadgeVariant, DaybookEntry, DisplayDate, LoadingBale, LoadingLine, LoadingOrder, Navigate } from "./types";
+import { apiNumber } from "./types";
 
 export function LoadingCreatedView({
   entry,
@@ -19,20 +21,20 @@ export function LoadingCreatedView({
   badgeClass,
   onNavigate,
 }: {
-  entry: any;
-  onClose: any;
-  formatDisplayDate: any;
-  loadingOrder: any;
-  badgeVariant: any;
-  badgeClass: any;
-  onNavigate: any;
+  entry: DaybookEntry;
+  onClose: () => void;
+  formatDisplayDate: DisplayDate;
+  loadingOrder: LoadingOrder | null | undefined;
+  badgeVariant: BadgeVariant;
+  badgeClass: string | undefined;
+  onNavigate: Navigate;
 }) {
   const lo = loadingOrder;
-  const lines: any[] = lo?.lines ?? [];
-  const balesList: any[] = lo?.bales ?? [];
-  const n = (v: string) => parseFloat(v || "0");
+  const lines: LoadingLine[] = lo?.lines ?? [];
+  const balesList: LoadingBale[] = lo?.bales ?? [];
+  const n = apiNumber;
 
-  const expectedBalesTotal = lines.reduce((s: number, l) => s + (parseInt(l.quantity || "0") || 0), 0);
+  const expectedBalesTotal = lines.reduce((s: number, l) => s + (apiNumber(l.quantity)), 0);
   const scannedBales = balesList.length;
   const totalWeightKg = balesList.reduce((s: number, b) => s + n(b.weight), 0);
   const grandTotal = lo ? n(lo.grandTotal) : 0;
@@ -142,7 +144,7 @@ export function LoadingCreatedView({
                     </thead>
                     <tbody>
                       {lines.map((l, i: number) => {
-                        const qty = parseInt(l.quantity || "0") || 0;
+                        const qty = apiNumber(l.quantity);
                         const price = n(l.pricePerBale || l.unitPrice || "0");
                         const total = n(l.totalAmount || l.lineTotal || String(qty * price));
                         return (
@@ -206,7 +208,7 @@ export function LoadingCreatedView({
                           const key = b.productName || b.baleName || b.articleCode || "Unknown";
                           if (!acc[key]) acc[key] = { count: 0, weight: 0 };
                           acc[key].count += 1;
-                          acc[key].weight += parseFloat(b.weight || b.weightKg || "0");
+                          acc[key].weight += apiNumber(b.weight ?? b.weightKg);
                           return acc;
                         }, {})
                       )
@@ -228,7 +230,7 @@ export function LoadingCreatedView({
                         <td className="px-3 py-2 text-right font-mono text-muted-foreground">
                           {formatNumber(
                             balesList.reduce(
-                              (sum: number, b) => sum + parseFloat(b.weight || b.weightKg || "0"),
+                              (sum: number, b) => sum + apiNumber(b.weight ?? b.weightKg),
                               0
                             )
                           )}

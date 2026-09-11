@@ -24,6 +24,26 @@ import {
 } from "lucide-react";
 import { StatementResponse, SupplierWithBalance } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
+import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
+
+type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
+
+interface StatementDisplayRow {
+  key: string;
+  date: string;
+  type: "purchase" | "payment" | "fx" | "commission";
+  ref: string;
+  detail?: string;
+  amount: string;
+  amountVal: number;
+  rowCc: string;
+  status?: string;
+  optional?: boolean;
+  amountIsNeg?: boolean;
+  onMove?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
+}
 import { CurrencyPools } from "./CurrencyPools";
 import { SupplierStatementRows } from "./SupplierStatementRows";
 
@@ -53,23 +73,23 @@ interface SupplierStatementProps {
   today: string;
   fxConversionOpen: boolean;
   setFxConversionOpen: (val: boolean) => void;
-  fxConversionForm: any;
-  setFxConversionForm: (val: any) => void;
+  fxConversionForm: SuppliersModel["fxConversionForm"];
+  setFxConversionForm: SuppliersModel["setFxConversionForm"];
   fxSourceType: "supplier" | "commission" | "both";
   setFxSourceType: (val: "supplier" | "commission" | "both") => void;
   allSuppliers: SupplierWithBalance[];
   subAccountsByParent: Record<number, SupplierWithBalance[]>;
   wrapAdminAction: (fn: () => void, title: string) => void;
-  deleteFxTransferMutation: any;
+  deleteFxTransferMutation: SuppliersModel["deleteFxTransferMutation"];
   statDateFilter: "all" | "today" | "yesterday" | "this_month" | "this_year";
   setStatDateFilter: (val: "all" | "today" | "yesterday" | "this_month" | "this_year") => void;
-  onEditPayment: (p: any) => void;
+  onEditPayment: (payment: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;
-  setEditObComm: (val: any) => void;
-  statusColor: (status: string) => any;
+  setEditObComm: SuppliersModel["setEditObComm"];
+  statusColor: SuppliersModel["statusColor"];
   statusDisplayLabel: (status: string) => string;
   typeBadge: (type: string) => React.ReactNode;
-  displayedRows: any[];
+  displayedRows: StatementDisplayRow[];
   balanceByKey: Record<string, { bal: number; cc: string }>;
   sfTotalPurchases: number;
   sfTotalPayments: number;

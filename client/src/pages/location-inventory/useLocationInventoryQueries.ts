@@ -1,25 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { locationInventoryFullUrl } from "@/api/inventoryApi";
-import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { InventoryLocation as Location, InventoryItem } from "./locationInventoryTypes";
 import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
-
-interface InventoryItem {
-  inventoryId: number | null;
-  locationId: number;
-  stockItemId: number;
-  quantity: string;
-  averageRate: string | null;
-  totalValue: string | null;
-  stockItemCode: string;
-  stockItemName: string;
-  stockItemUom: string;
-  stockGroupId: number | null;
-  stockGroupName: string | null;
-  stockGroupCode: string | null;
-  stockItemActive: boolean | null;
-  categoryId?: number | null;
-  categoryName?: string | null;
-}
 
 interface UseLocationInventoryQueriesParams {
   waGroupDialogOpen: boolean;

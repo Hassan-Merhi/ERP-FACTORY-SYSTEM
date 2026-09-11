@@ -23,6 +23,29 @@ import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
+type SpreadsheetCell = string | number | null | undefined;
+type SpreadsheetRow = Record<string, SpreadsheetCell>;
+
+interface ParsedStockTransferItem {
+  rowNum: number;
+  barcode: string;
+  quantity: number;
+  sourceLocation?: string;
+}
+
+interface ValidatedStockTransferItem extends ParsedStockTransferItem {
+  sourceLocationId?: number;
+  stockItemId?: number;
+  stockItemName?: string;
+  stockItemUom?: string;
+  currentStock?: number;
+  remainingStock?: number;
+  averageRate?: string | null;
+  rate?: string | null;
+  error?: string;
+  warning?: string;
+}
+
 export function registerStockTransferImportRoutes(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
 
@@ -47,8 +70,8 @@ export function registerStockTransferImportRoutes(app: Express) {
       }
 
       // Parse rows
-      const rows = rawData as any[];
-      const items: any[] = [];
+      const rows = rawData as SpreadsheetRow[];
+      const items: ParsedStockTransferItem[] = [];
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -56,7 +79,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
         // Expected columns: Barcode, Quantity
         const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = parseFloat(row.Quantity || row.quantity || row.Qty || row.qty || "0");
+        const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
 
         if (!barcode) {
           continue; // Skip rows without barcode
@@ -104,7 +127,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       const errors: string[] = [];
       const warnings: string[] = [];
-      const validatedItems: any[] = [];
+      const validatedItems: ValidatedStockTransferItem[] = [];
 
       // Validate locations exist
       const sourceLocation = await storage.getLocationById(sourceLocationId);
@@ -122,7 +145,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       // Validate each item
       for (const item of items) {
-        const validatedItem = { ...item };
+        const validatedItem: ValidatedStockTransferItem = { ...item };
 
         // Find stock item by barcode (code or alias)
         const stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
@@ -469,8 +492,8 @@ export function registerStockTransferImportRoutes(app: Express) {
           return res.status(400).json({ message: "Excel file is empty" });
         }
 
-        const rows = rawData as any[];
-        const items: any[] = [];
+        const rows = rawData as SpreadsheetRow[];
+        const items: ParsedStockTransferItem[] = [];
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -479,7 +502,7 @@ export function registerStockTransferImportRoutes(app: Express) {
           // Expected columns: Source Location, Barcode, Quantity
           const sourceLocation = row["Source Location"] || row.SourceLocation || row.sourceLocation || row.source || "";
           const barcode = row.Barcode || row.barcode || row.Code || row.code;
-          const quantity = parseFloat(row.Quantity || row.quantity || row.Qty || row.qty || "0");
+          const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
 
           if (!barcode) {
             continue; // Skip rows without barcode
@@ -491,7 +514,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
           items.push({
             rowNum,
-            sourceLocation: sourceLocation.toString().trim(),
+            sourceLocation: String(sourceLocation).trim(),
             barcode: barcode.toString().trim(),
             quantity,
           });
@@ -529,7 +552,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       const errors: string[] = [];
       const warnings: string[] = [];
-      const validatedItems: any[] = [];
+      const validatedItems: ValidatedStockTransferItem[] = [];
 
       // Validate destination location exists
       const destLocation = await storage.getLocationById(destinationLocationId);
@@ -547,7 +570,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       // Validate each item
       for (const item of items) {
-        const validatedItem = { ...item };
+        const validatedItem: ValidatedStockTransferItem = { ...item };
 
         // Find source location by name
         const sourceLocationName = item.sourceLocation?.toLowerCase().trim();

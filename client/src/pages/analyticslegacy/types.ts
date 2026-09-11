@@ -29,6 +29,50 @@ export interface LocationSales {
   totalQuantity: number;
 }
 
+export interface FactorySalesByCustomer {
+  customerId: number | null;
+  customerName: string | null;
+  containers: number;
+  totalAmount: string;
+  paidAmount: string;
+}
+
+export interface FactoryPosCustomerSummary {
+  customerId: number | null;
+  customerName: string;
+  sales: number;
+  totalAmount: string;
+  cashSales: string;
+  creditSales: string;
+  depositAmount: string;
+}
+
+export interface FactoryPosSummary {
+  byCustomer?: FactoryPosCustomerSummary[];
+  grand?: FactoryPosCustomerSummary;
+}
+
+export interface FactoryContainerSalesData {
+  summary: {
+    count: number;
+    total: number;
+    paid: number;
+    outstanding: number;
+  };
+  rows: Array<{
+    id: number;
+    containerNumber?: string | null;
+    customerId: number | null;
+    customerName?: string | null;
+    invoiceNumber?: string | null;
+    saleDate: string;
+    containerStatus?: string | null;
+    paymentStatus: string;
+    totalAmount: string;
+    paidAmount: string;
+  }>;
+}
+
 export interface POSTransaction {
   id: number;
   voucherNumber: string;

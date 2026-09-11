@@ -9,20 +9,26 @@ import { Plus, HardHat, Pencil, MinusCircle } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { ERPWorkerDetail } from "@/components/ERPWorkerDetail";
 import type { Employee } from "@shared/schema";
+import type { Employee as DetailEmployee } from "@/components/erpworkerdetail/types";
+import type { WorkerGroup } from "./payrollTypes";
 import { getEmpAvatarColor, getEmpInitials } from "./payrollSchemas";
+
+interface AddWorkerToGroupMutation {
+  mutate: (variables: { groupId: number; workerId: number }) => void;
+}
 
 interface WorkerProfilesTabProps {
   selectedWorkerProfileId: number | null;
   setSelectedWorkerProfileId: (val: number | null) => void;
   workerStaff: Employee[];
-  workerGroups: any[];
+  workerGroups: WorkerGroup[];
   workerProfileGroupFilter: number | null;
   setWorkerProfileGroupFilter: (val: number | null) => void;
   workerProfileSearch: string;
   setWorkerProfileSearch: (val: string) => void;
   employeesLoading: boolean;
   setNewWorkerDialogOpen: (val: boolean) => void;
-  addWorkerToWorkerGroupMutation: any;
+  addWorkerToWorkerGroupMutation: AddWorkerToGroupMutation;
   setWorkerDeductionTarget: (val: Employee | null) => void;
   setSelectedWorkerForEdit: (val: Employee | null) => void;
   setEditWorkerDialogOpen: (val: boolean) => void;
@@ -51,12 +57,12 @@ export function WorkerProfilesTab({
     : null;
 
   // Workers belonging to the selected group filter (-1 = ungrouped)
-  const allGroupedWorkerIds = workerGroups.flatMap((g) => (g.members || []).map((m: any) => m.id));
+  const allGroupedWorkerIds = workerGroups.flatMap((g) => (g.members || []).map((m) => m.id));
   const workerIdsInSelectedGroup =
     workerProfileGroupFilter === -1
       ? workerStaff.filter((w) => !allGroupedWorkerIds.includes(w.id)).map((w) => w.id)
       : workerProfileGroupFilter !== null
-        ? (workerGroups.find((g) => g.id === workerProfileGroupFilter)?.members || []).map((m: any) => m.id)
+        ? (workerGroups.find((g) => g.id === workerProfileGroupFilter)?.members || []).map((m) => m.id)
         : null;
 
   const filteredWorkers = workerStaff.filter((w) => {
@@ -74,7 +80,7 @@ export function WorkerProfilesTab({
   // Group membership lookup: workerId → group name
   const workerGroupMap: Record<number, string> = {};
   workerGroups.forEach((g) =>
-    (g.members || []).forEach((m: any) => {
+    (g.members || []).forEach((m) => {
       workerGroupMap[m.id] = g.name;
     })
   );
@@ -82,7 +88,16 @@ export function WorkerProfilesTab({
   if (selectedWorkerProfile) {
     return (
       <ERPWorkerDetail
-        worker={selectedWorkerProfile as any}
+        worker={{
+          ...selectedWorkerProfile,
+          email: selectedWorkerProfile.email ?? undefined,
+          phone: selectedWorkerProfile.phone ?? undefined,
+          department: selectedWorkerProfile.department ?? undefined,
+          openingBalance: selectedWorkerProfile.openingBalance ?? undefined,
+          currentBalance: selectedWorkerProfile.currentBalance ?? undefined,
+          totalDeposits: selectedWorkerProfile.totalDeposits ?? undefined,
+          totalWithdrawals: selectedWorkerProfile.totalWithdrawals ?? undefined,
+        } satisfies DetailEmployee}
         onBack={() => setSelectedWorkerProfileId(null)}
         onEdit={(w) => {
           setSelectedWorkerForEdit(

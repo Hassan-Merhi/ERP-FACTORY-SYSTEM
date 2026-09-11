@@ -3,10 +3,11 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StockItem, StockItemCombobox } from "./VoucherEditHelpers";
+import type { EditLineItem } from "./PurchaseAdjustmentEditForm";
 
 interface AdjustmentEditFormRowsProps {
-  fields: any[];
-  append: (item: Record<string, unknown>) => void;
+  fields: Array<{ id: string }>;
+  append: (item: EditLineItem) => void;
   remove: (index: number) => void;
   stockItems: StockItem[];
   formatAmount: (amount: number) => string;

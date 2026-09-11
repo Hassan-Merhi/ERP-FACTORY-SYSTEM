@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown, Eye, EyeOff, FlaskRound, Plus, MinusCircle, Layers } from "lucide-react";
 import { SupplierMixBatchHistoryDialog } from "./SupplierMixBatchHistoryDialog";
 
-interface RawStockRow {
+export interface RawStockRow {
   supplierName: string;
   supplierId: number | null;
   categoryId: number | null;
@@ -21,6 +21,7 @@ interface RawStockRow {
   costPerKgUsd?: string;
   valueRemaining: string;
   valueRemainingUsd: string;
+  usedValueUsd?: string;
   lastOffloaded: string;
 }
 

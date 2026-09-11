@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Phase 2.3 (API / service boundary typing) rebuilt the baseline at its earned value: the route, POS, report-shard, raw-SQL, migration and injected db/tx/pool boundaries now carry named contracts, and the ceiling falls from 2208 to 1775.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup.",
   "scan": {
     "roots": [
       "server",
@@ -129,11 +129,6 @@
         0,
         0
       ],
-      "client/src/pages/POImport.tsx": [
-        8,
-        0,
-        0
-      ],
       "client/src/pages/PressingBales.tsx": [
         2,
         0,
@@ -154,18 +149,8 @@
         0,
         0
       ],
-      "client/src/pages/StockTransferImport.tsx": [
-        8,
-        0,
-        0
-      ],
       "client/src/pages/SupplierProformas.tsx": [
         2,
-        0,
-        0
-      ],
-      "client/src/pages/Suppliers.tsx": [
-        7,
         0,
         0
       ],
@@ -204,11 +189,6 @@
         0,
         0
       ],
-      "client/src/pages/accountslegacy/useAccountsLegacyModel.ts": [
-        6,
-        0,
-        0
-      ],
       "client/src/pages/analytics/ContainerReportPanel.tsx": [
         4,
         0,
@@ -216,16 +196,6 @@
       ],
       "client/src/pages/analytics/SalesReportPanel.tsx": [
         3,
-        0,
-        0
-      ],
-      "client/src/pages/analyticslegacy/components/ContainersSectionPanel.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/analyticslegacy/components/SalesSectionPanel.tsx": [
-        6,
         0,
         0
       ],
@@ -324,11 +294,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/FactoryBrokerVisualStatement.tsx": [
-        5,
-        0,
-        0
-      ],
       "client/src/pages/factory/FactoryContainers.tsx": [
         3,
         0,
@@ -374,16 +339,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/GroundScan.tsx": [
-        6,
-        0,
-        0
-      ],
-      "client/src/pages/factory/ProductionRawStock.tsx": [
-        10,
-        0,
-        0
-      ],
       "client/src/pages/factory/ProductionSummary.tsx": [
         2,
         0,
@@ -391,11 +346,6 @@
       ],
       "client/src/pages/factory/ProformaAddLine.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/WasteDispatch.tsx": [
-        9,
         0,
         0
       ],
@@ -414,33 +364,8 @@
         0,
         0
       ],
-      "client/src/pages/factory/bale-stock-entry/RemoveFromStockDialogs.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/bale-stock-entry/RemoveFromStockTab.tsx": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/factory/bale-stock-entry/RemoveFromStockTable.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/factory/bale-stock-entry/StockEntryCart.tsx": [
-        4,
-        0,
-        0
-      ],
       "client/src/pages/factory/bale-stock-entry/StockEntryDialogs.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/bale-stock-entry/StockEntryPrinting.ts": [
-        5,
         0,
         0
       ],
@@ -464,43 +389,8 @@
         0,
         0
       ],
-      "client/src/pages/factory/baleshistory/useBalesHistoryModel.tsx": [
-        7,
-        0,
-        0
-      ],
-      "client/src/pages/factory/daybook/ViewEntryModal.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/factory/daybook/entry-views/ContainerImportView.tsx": [
-        6,
-        0,
-        0
-      ],
-      "client/src/pages/factory/daybook/entry-views/LoadingCreatedView.tsx": [
-        9,
-        0,
-        0
-      ],
-      "client/src/pages/factory/daybook/entry-views/MixBatchView.tsx": [
-        9,
-        0,
-        0
-      ],
-      "client/src/pages/factory/daybook/entry-views/PayrollPaymentView.tsx": [
-        5,
-        0,
-        0
-      ],
       "client/src/pages/factory/factory-containers/ContainerDetailDialog.tsx": [
         2,
-        0,
-        0
-      ],
-      "client/src/pages/factory/factory-containers/ContainerDialogs.tsx": [
-        5,
         0,
         0
       ],
@@ -539,11 +429,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/factory-suppliers/SupplierStatement.tsx": [
-        7,
-        0,
-        0
-      ],
       "client/src/pages/factory/factory-suppliers/SupplierStatementRows.tsx": [
         2,
         0,
@@ -555,7 +440,7 @@
         0
       ],
       "client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts": [
-        2,
+        1,
         0,
         0
       ],
@@ -589,11 +474,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/factorypos/useFactoryPosModel.ts": [
-        7,
-        0,
-        0
-      ],
       "client/src/pages/factory/factoryproformas/useFactoryProformasModel.ts": [
         1,
         0,
@@ -620,7 +500,7 @@
         0
       ],
       "client/src/pages/factory/production-raw-stock/AddToBatchDialog.tsx": [
-        4,
+        3,
         0,
         0
       ],
@@ -631,11 +511,6 @@
       ],
       "client/src/pages/factory/production-raw-stock/MixBatchList.tsx": [
         2,
-        0,
-        0
-      ],
-      "client/src/pages/factory/production-raw-stock/OffloadDialog.tsx": [
-        8,
         0,
         0
       ],
@@ -664,11 +539,6 @@
         0,
         0
       ],
-      "client/src/pages/git-containers/ContainerDrawerTracking.tsx": [
-        6,
-        0,
-        0
-      ],
       "client/src/pages/git-containers/useGITContainersData.ts": [
         2,
         0,
@@ -679,18 +549,8 @@
         0,
         0
       ],
-      "client/src/pages/location-inventory/CombinedStockView.tsx": [
-        6,
-        0,
-        0
-      ],
       "client/src/pages/location-inventory/InventoryTable.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/LocationDialogs.tsx": [
-        11,
         0,
         0
       ],
@@ -705,11 +565,6 @@
         0
       ],
       "client/src/pages/location-inventory/StockMovementDialog.tsx": [
-        8,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useCombinedStockRows.ts": [
         2,
         0,
         0
@@ -725,18 +580,13 @@
         0
       ],
       "client/src/pages/location-inventory/useLocationInventoryState.ts": [
-        4,
+        1,
         0,
         0
       ],
       "client/src/pages/payroll/AdvancesTab.tsx": [
         3,
         0,
-        0
-      ],
-      "client/src/pages/payroll/WorkerProfilesTab.tsx": [
-        5,
-        1,
         0
       ],
       "client/src/pages/pendinginvoiceverify/types.ts": [
@@ -1079,51 +929,6 @@
         0,
         0
       ],
-      "client/src/pages/voucher-edit/AdjustmentEditForm.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/AdjustmentEditFormRows.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/JournalEditForm.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/PaymentReceiptEditForm.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/PurchaseAdjustmentEditForm.tsx": [
-        9,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/PurchaseEditForm.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/PurchaseEditFormTable.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/SalesEditForm.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/voucher-edit/TransferEditForm.tsx": [
-        3,
-        0,
-        0
-      ],
       "client/src/pages/voucher-edit/VoucherAccountHelpers.ts": [
         1,
         0,
@@ -1139,18 +944,8 @@
         0,
         0
       ],
-      "client/src/pages/vouchers/ApproveRevisionDialog.tsx": [
-        4,
-        0,
-        0
-      ],
       "client/src/pages/vouchers/SaveRevisionDialog.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/vouchers/StockTransferImportDialog.tsx": [
-        6,
         0,
         0
       ],
@@ -1194,11 +989,6 @@
         0,
         0
       ],
-      "client/src/pages/vouchers/stock-transfer-form/dialogs/ApproveRevisionDialog.tsx": [
-        6,
-        0,
-        0
-      ],
       "client/src/pages/vouchers/stock-transfer-form/dialogs/ImportTransferExcelDialog.tsx": [
         2,
         0,
@@ -1229,17 +1019,7 @@
         0,
         0
       ],
-      "client/src/routes/ErpRoutes.tsx": [
-        6,
-        0,
-        0
-      ],
       "client/src/routes/PosRoutes.tsx": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/lookupDrafts.ts": [
         1,
         0,
         0
@@ -1286,11 +1066,6 @@
       ],
       "server/routes/accountStatementRoutes.ts": [
         2,
-        0,
-        0
-      ],
-      "server/routes/accountTransactionPaginationRoutes.ts": [
-        1,
         0,
         0
       ],
@@ -1844,11 +1619,6 @@
         0,
         0
       ],
-      "server/routes/stockTransferImportRoutes.ts": [
-        6,
-        0,
-        0
-      ],
       "server/routes/supplierProformaRoutes.ts": [
         2,
         0,
@@ -1987,6 +1757,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 913
+    "typeEscapeCeiling": 662
   }
 }

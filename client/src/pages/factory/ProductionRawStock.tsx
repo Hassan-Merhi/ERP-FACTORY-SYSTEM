@@ -12,15 +12,21 @@ import { getApiRequest } from "@/lib/factoryApi";
 import type { FactoryMixBatch } from "@shared/schema";
 
 import { SupplierCategoriesDialog } from "./production-raw-stock/ProductionRawStockHelpers";
-import { RawStockTable } from "./production-raw-stock/RawStockTable";
-import { MixBatchList } from "./production-raw-stock/MixBatchList";
+import { RawStockTable, type RawStockRow } from "./production-raw-stock/RawStockTable";
+import { MixBatchList, type MixBatchRow } from "./production-raw-stock/MixBatchList";
 import { KpiCards } from "./production-raw-stock/KpiCards";
-import { OffloadDialog } from "./production-raw-stock/OffloadDialog";
+import { OffloadDialog, type OffloadContainer, type OffloadLedgerAccount, type OffloadPayload, type OffloadSupplierOption } from "./production-raw-stock/OffloadDialog";
 import { StockAdjustmentDialog } from "./production-raw-stock/StockAdjustmentDialog";
 import { DeductStockDialog } from "./production-raw-stock/DeductStockDialog";
-import { AddToBatchDialog } from "./production-raw-stock/AddToBatchDialog";
+import { AddToBatchDialog, type AddToBatchSource } from "./production-raw-stock/AddToBatchDialog";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
+
+interface AddToBatchPayload {
+  batchId: number;
+  supplierId: number;
+  weightKg: string;
+}
 
 export default function ProductionRawStock() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
@@ -37,44 +43,44 @@ export default function ProductionRawStock() {
   const [createMixBatchOpen, setCreateMixBatchOpen] = useState(false);
   const [editBatch, setEditBatch] = useState<FactoryMixBatch | null>(null);
 
-  const [adjustingRow, setAdjustingRow] = useState<any>(null);
+  const [adjustingRow, setAdjustingRow] = useState<RawStockRow | null>(null);
   const [adjIsNewMaterial, setAdjIsNewMaterial] = useState(false);
-  const [deductingRow, setDeductingRow] = useState<any>(null);
-  const [addToBatchSource, setAddToBatchSource] = useState<any>(null);
+  const [deductingRow, setDeductingRow] = useState<RawStockRow | null>(null);
+  const [addToBatchSource, setAddToBatchSource] = useState<AddToBatchSource | null>(null);
   const [mixBatchDate, setMixBatchDate] = useState(() => new Date().toISOString().substring(0, 10));
 
   const mixBatchPrintRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawStock, isLoading: _rawStockLoading } = useQuery<any[]>({
+  const { data: rawStock, isLoading: _rawStockLoading } = useQuery<RawStockRow[]>({
     queryKey: ["/api/factory/raw-stock"],
   });
 
-  const { data: mixBatches, isLoading: mixBatchesLoading } = useQuery<any[]>({
+  const { data: mixBatches, isLoading: mixBatchesLoading } = useQuery<MixBatchRow[]>({
     queryKey: ["/api/factory/mix-batches"],
   });
 
-  const { data: factorySuppliers = [] } = useQuery<any[]>({
+  const { data: factorySuppliers = [] } = useQuery<OffloadSupplierOption[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<OffloadLedgerAccount[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
-  const { data: availableContainersRaw = [] } = useQuery<any[]>({
+  const { data: availableContainersRaw = [] } = useQuery<OffloadContainer[]>({
     queryKey: ["/api/factory/raw-stock/available-containers"],
   });
   const availableContainers = availableContainersRaw.filter((c) => c.status !== "PARTIALLY_RECEIVED");
 
-  const { data: mixBatchesByDate = [], isLoading: mixBatchesByDateLoading } = useQuery<any[]>({
+  const { data: mixBatchesByDate = [], isLoading: mixBatchesByDateLoading } = useQuery<unknown[]>({
     queryKey: [`/api/factory/mix-batches-by-date?date=${encodeURIComponent(mixBatchDate)}`],
     enabled: !!mixBatchDate,
   });
 
   const offloadMutation = useMutation({
-    mutationFn: async (data) => {
+    mutationFn: async (data: OffloadPayload) => {
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/offload", data);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to offload");
       return res.json();
@@ -135,7 +141,7 @@ export default function ProductionRawStock() {
   });
 
   const addToBatchMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: AddToBatchPayload) => {
       const res = await modeApiRequest("POST", `/api/factory/mix-batches/${data.batchId}/top-up`, {
         supplierSources: [{ supplierId: data.supplierId, weightKg: data.weightKg }],
       });
@@ -261,6 +267,7 @@ export default function ProductionRawStock() {
               setDeductDialogOpen(true);
             }}
             onAddToBatch={(row) => {
+              if (row.supplierId === null) return;
               setAddToBatchSource({
                 supplierId: row.supplierId,
                 supplierName: row.supplierName,

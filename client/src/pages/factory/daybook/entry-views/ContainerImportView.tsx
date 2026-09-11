@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import { currencySymbol } from "../daybookUtils";
+import type { ContainerImportDetail, DaybookEntry, DisplayDate, Navigate, SupplierBalance } from "./types";
+import { apiNumber } from "./types";
 
 export function ContainerImportView({
   entry,
@@ -19,26 +21,27 @@ export function ContainerImportView({
   formatDisplayDate,
   onNavigate,
 }: {
-  entry: any;
-  containerDetail: any;
-  supplierBalance: any;
-  onClose: any;
-  formatDisplayDate: any;
-  onNavigate: any;
+  entry: DaybookEntry;
+  containerDetail: ContainerImportDetail | null | undefined;
+  supplierBalance: SupplierBalance | null | undefined;
+  onClose: () => void;
+  formatDisplayDate: DisplayDate;
+  onNavigate: Navigate;
 }) {
   const c = containerDetail;
   const csym = c ? currencySymbol(c.currencyCode || "USD") : "$";
-  const fx = c ? parseFloat(c.fxRateToUsd || "1") || 1 : 1;
-  const totalKg = c ? parseFloat(c.totalKg || "0") : 0;
-  const ratePerKg = c ? parseFloat(c.ratePerKg || "0") : 0;
+  const fx = c ? apiNumber(c.fxRateToUsd || "1") || 1 : 1;
+  const totalKg = c ? apiNumber(c.totalKg || "0") : 0;
+  const ratePerKg = c ? apiNumber(c.ratePerKg || "0") : 0;
   const goodsTotal = totalKg * ratePerKg;
-  const freight = c ? parseFloat(c.freight || "0") : 0;
-  const commission = c ? parseFloat(c.commissionAmount || "0") : 0;
+  const freight = c ? apiNumber(c.freight || "0") : 0;
+  const commission = c ? apiNumber(c.commissionAmount || "0") : 0;
   const grandTotal = c
-    ? parseFloat(c.finalPayableAmount || String(goodsTotal + freight + commission)) || goodsTotal + freight + commission
+    ? apiNumber(c.finalPayableAmount || String(goodsTotal + freight + commission)) || goodsTotal + freight + commission
     : 0;
-  const grandTotalUsd = c ? parseFloat(c.finalPayableAmountUsd || "0") || grandTotal * fx : 0;
-  const balanceUsd: number = supplierBalance?.balance ?? supplierBalance?.outstandingUsd ?? null;
+  const grandTotalUsd = c ? apiNumber(c.finalPayableAmountUsd || "0") || grandTotal * fx : 0;
+  const balanceValue = supplierBalance?.balance ?? supplierBalance?.outstandingUsd;
+  const balanceUsd = balanceValue == null ? null : apiNumber(balanceValue);
 
   return (
     <>
@@ -64,11 +67,11 @@ export function ContainerImportView({
                   )}
                   <p className="text-xs text-muted-foreground mt-0.5">Container: {c.containerNumber}</p>
                   {c.origin && <p className="text-xs text-muted-foreground">Origin: {c.origin}</p>}
-                  {totalKg > 0 && parseFloat(c.actualReceivedKg || "0") < totalKg && (
+                  {totalKg > 0 && apiNumber(c.actualReceivedKg || "0") < totalKg && (
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className="text-xs text-muted-foreground">Total KG imported:</span>
                       <span className="font-mono text-sm font-semibold">{formatNumber(totalKg)} kg</span>
-                      {parseFloat(c.actualReceivedKg || "0") === 0 ? (
+                      {apiNumber(c.actualReceivedKg || "0") === 0 ? (
                         <Badge
                           variant="outline"
                           className="text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40"
@@ -77,7 +80,7 @@ export function ContainerImportView({
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">
-                          ({formatNumber(parseFloat(c.actualReceivedKg))} kg received)
+                          ({formatNumber(apiNumber(c.actualReceivedKg))} kg received)
                         </span>
                       )}
                     </div>
@@ -158,13 +161,13 @@ export function ContainerImportView({
                   </tr>
                 )}
                 {/* Actual received KG info */}
-                {parseFloat(c.actualReceivedKg || "0") > 0 && parseFloat(c.actualReceivedKg || "0") !== totalKg && (
+                {apiNumber(c.actualReceivedKg || "0") > 0 && apiNumber(c.actualReceivedKg || "0") !== totalKg && (
                   <tr className="border-b bg-muted/20">
                     <td className="px-3 py-2 text-muted-foreground text-xs" colSpan={2}>
                       Actual Received
                     </td>
                     <td className="px-3 py-2 text-right text-xs text-muted-foreground font-mono" colSpan={2}>
-                      {formatNumber(parseFloat(c.actualReceivedKg))} kg
+                      {formatNumber(apiNumber(c.actualReceivedKg))} kg
                     </td>
                   </tr>
                 )}

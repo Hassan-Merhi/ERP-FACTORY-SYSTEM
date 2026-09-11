@@ -4,7 +4,13 @@ import { useLocation } from "@/contexts/LocationContext";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { getDefaultPeriodValue } from "@/components/ui/period-filter";
-import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
+import type {
+  InventoryLocation as Location,
+  StockGroupSummary,
+  StockMovementItem,
+  StockMovementMonth,
+  StockMovementPeriod,
+} from "./locationInventoryTypes";
 
 interface UseLocationInventoryStateParams {
   companyId: number | undefined;
@@ -37,9 +43,11 @@ export function useLocationInventoryState({ companyId, toast }: UseLocationInven
   const tableRef = useRef<HTMLDivElement>(null);
   const [allStockSelectedRowIndex, setAllStockSelectedRowIndex] = useState<number>(-1);
   const [stockMovementOpen, setStockMovementOpen] = useState(false);
-  const [stockMovementItem, setStockMovementItem] = useState<any>(null);
-  const [stockMovementPeriod, setStockMovementPeriod] = useState<any>(() => getDefaultPeriodValue("this_month"));
-  const [drillMonth, setDrillMonth] = useState<any>(null);
+  const [stockMovementItem, setStockMovementItem] = useState<StockMovementItem | null>(null);
+  const [stockMovementPeriod, setStockMovementPeriod] = useState<StockMovementPeriod>(() =>
+    getDefaultPeriodValue("this_month")
+  );
+  const [drillMonth, setDrillMonth] = useState<StockMovementMonth | null>(null);
   const allStockTableRef = useRef<HTMLDivElement>(null);
 
   // Keep the shared location context aligned with the Location Inventory page so

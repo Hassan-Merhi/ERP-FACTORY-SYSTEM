@@ -16,20 +16,39 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 
+interface RevisionItem {
+  stockItemName?: string;
+  delta?: string;
+  originalQuantity?: string;
+  newQuantity?: string;
+}
+
+interface Revision {
+  id: number;
+  revisionNumber?: number;
+  sourceLocationName?: string;
+  items?: RevisionItem[];
+}
+
+interface ApproveRevisionMutation {
+  isPending: boolean;
+  mutate: (revisionId: number) => void;
+}
+
 export function ApproveRevisionDialog({
   approveRevisionMutation,
   approveRevisionTarget,
   setApproveRevisionTarget,
   pendingRevisions = [],
 }: {
-  approveRevisionMutation: any;
-  approveRevisionTarget: any;
-  setApproveRevisionTarget: any;
+  approveRevisionMutation: ApproveRevisionMutation;
+  approveRevisionTarget: Revision | null;
+  setApproveRevisionTarget: (target: Revision | null) => void;
   /**
    * Every revision still awaiting review. Approving one applies all of them,
    * so the dialog previews the whole set rather than just the clicked row.
    */
-  pendingRevisions?: any[];
+  pendingRevisions?: Revision[];
 }) {
   const revisionsToApply = approveRevisionTarget
     ? pendingRevisions.some((rev) => rev.id === approveRevisionTarget.id)
@@ -74,14 +93,14 @@ export function ApproveRevisionDialog({
                 </thead>
                 <tbody>
                   {(revision.items ?? [])
-                    .filter((item: any) => parseFloat(item.delta) !== 0)
-                    .map((item: any, idx: number) => {
-                      const delta = parseFloat(item.delta);
+                    .filter((item) => parseFloat(item.delta as string) !== 0)
+                    .map((item, idx: number) => {
+                      const delta = parseFloat(item.delta as string);
                       return (
                         <tr key={idx} className="border-t">
                           <td className="p-2 font-medium">{item.stockItemName}</td>
                           <td className="p-2 text-right font-mono text-muted-foreground">
-                            {formatNumber(parseFloat(item.originalQuantity), 0)}
+                            {formatNumber(parseFloat(item.originalQuantity as string), 0)}
                           </td>
                           <td
                             className={`p-2 text-right font-mono font-semibold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}
@@ -90,7 +109,7 @@ export function ApproveRevisionDialog({
                             {formatNumber(delta, 0)}
                           </td>
                           <td className="p-2 text-right font-mono font-semibold">
-                            {formatNumber(parseFloat(item.newQuantity), 0)}
+                            {formatNumber(parseFloat(item.newQuantity as string), 0)}
                           </td>
                         </tr>
                       );

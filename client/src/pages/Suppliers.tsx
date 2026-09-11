@@ -46,6 +46,7 @@ import { format } from "date-fns";
 import { utils, writeFile } from "@/lib/excelHelper";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
+import type { Company } from "@/contexts/CompanyContext";
 
 interface SupplierWithStats {
   id: number;
@@ -61,6 +62,50 @@ interface SupplierWithStats {
   balance: number;
   balancesByCurrency?: Record<string, { debit: number; credit: number; net: number }>;
   historicalBaseBalance?: number;
+}
+
+interface SupplierLedgerRow {
+  type: string;
+  date: string | null;
+  companyId: number | null;
+  companyName: string;
+  docNumber: string;
+  voucherId: number | null;
+  description: string;
+  voucherType: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  currency?: string | null;
+  transactionCurrency?: string | null;
+  transactionDebitAmount?: number | string | null;
+  transactionCreditAmount?: number | string | null;
+  debitAmount?: number | string | null;
+  creditAmount?: number | string | null;
+  baseDebitAmount?: number | string | null;
+  baseCreditAmount?: number | string | null;
+  historicalExchangeRate?: number | string | null;
+  historicalBaseBalance?: number | string | null;
+  currencyStatus?: string | null;
+  containerNumber?: string | null;
+  containerId?: number | null;
+}
+
+interface SupplierPurchaseOrder {
+  id: number;
+  companyId: number;
+  containerId: number | null;
+  containerNumber: string | null;
+  companyName: string;
+  importDate: string | null;
+  createdAt: string;
+  itemsTotal: number | string | null;
+  freight: number | string | null;
+  surcharge: number | string | null;
+  fumigation: number | string | null;
+  documentCharges: number | string | null;
+  discount: number | string | null;
+  otherCharges: number | string | null;
 }
 
 export default function Suppliers() {
@@ -103,7 +148,7 @@ export default function Suppliers() {
     },
   });
 
-  const handleTransactionClick = async (txn: any) => {
+  const handleTransactionClick = async (txn: SupplierLedgerRow) => {
     const targetCompany = companies.find((c) => c.id === txn.companyId);
     if (targetCompany && (!selectedCompany || selectedCompany.id !== txn.companyId)) {
       await apiRequest("POST", "/api/auth/set-company", { companyId: txn.companyId });
@@ -134,7 +179,7 @@ export default function Suppliers() {
     queryKey: companyDataKey("/api/suppliers/stats", selectedCompany?.id),
   });
 
-  const { data: companies = [] } = useQuery<any[]>({
+  const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
@@ -143,7 +188,7 @@ export default function Suppliers() {
       ? `/api/suppliers/${selectedSupplier?.id}/unified-ledger?companyId=${companyFilter}`
       : `/api/suppliers/${selectedSupplier?.id}/unified-ledger`;
 
-  const { data: unifiedLedger = [], isLoading: ledgerLoading } = useQuery<any[]>({
+  const { data: unifiedLedger = [], isLoading: ledgerLoading } = useQuery<SupplierLedgerRow[]>({
     queryKey: [unifiedLedgerUrl],
     enabled: !!selectedSupplier,
   });
@@ -153,7 +198,7 @@ export default function Suppliers() {
       ? `/api/suppliers/${selectedSupplier?.id}/purchase-orders?companyId=${companyFilter}`
       : `/api/suppliers/${selectedSupplier?.id}/purchase-orders`;
 
-  const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<any[]>({
+  const { data: purchaseOrders = [], isLoading: posLoading } = useQuery<SupplierPurchaseOrder[]>({
     queryKey: [purchaseOrdersUrl],
     enabled: !!selectedSupplier,
   });
@@ -181,7 +226,7 @@ export default function Suppliers() {
     setDateFilter("all");
   };
 
-  const handlePOClick = async (po: any) => {
+  const handlePOClick = async (po: SupplierPurchaseOrder) => {
     const targetCompany = companies.find((c) => c.id === po.companyId);
     if (targetCompany && (!selectedCompany || selectedCompany.id !== po.companyId)) {
       await apiRequest("POST", "/api/auth/set-company", { companyId: po.companyId });
@@ -191,7 +236,7 @@ export default function Suppliers() {
     navigate(`/purchase-orders/${po.id}/edit`);
   };
 
-  const handleContainerClick = async (po: any) => {
+  const handleContainerClick = async (po: { companyId: number | null; containerId?: number | null }) => {
     if (!po.containerId) return;
     const targetCompany = companies.find((c) => c.id === po.companyId);
     if (targetCompany && (!selectedCompany || selectedCompany.id !== po.companyId)) {
@@ -251,15 +296,15 @@ export default function Suppliers() {
               });
 
   const txCount = filteredLedgerRows.length;
-  const totalPurchases = filteredLedgerRows.reduce((s: number, t) => s + (parseFloat(t.credit) || 0), 0);
-  const totalPayments = filteredLedgerRows.reduce((s: number, t) => s + (parseFloat(t.debit) || 0), 0);
+  const totalPurchases = filteredLedgerRows.reduce((s: number, t) => s + (Number(t.credit) || 0), 0);
+  const totalPayments = filteredLedgerRows.reduce((s: number, t) => s + (Number(t.debit) || 0), 0);
   const totalPurchasesQty = filteredLedgerRows.filter(
-    (t) => t.voucherType === "Purchase" || (t.voucherType === "Journal" && (parseFloat(t.credit) || 0) > 0)
+    (t) => t.voucherType === "Purchase" || (t.voucherType === "Journal" && (Number(t.credit) || 0) > 0)
   ).length;
   const currentBalance = unifiedLedger.length > 0 ? (unifiedLedger[unifiedLedger.length - 1]?.balance ?? 0) : 0;
 
   // Display rows — optionally hide payment/debit rows from the table (KPIs are always full)
-  const isPaymentRow = (t: any) => t.debit > 0 || t.voucherType === "Payment" || t.voucherType === "Receipt";
+  const isPaymentRow = (t: SupplierLedgerRow) => t.debit > 0 || t.voucherType === "Payment" || t.voucherType === "Receipt";
   const displayedLedgerRows = hidePayments ? filteredLedgerRows.filter((t) => !isPaymentRow(t)) : filteredLedgerRows;
   const hiddenPaymentsCount = hidePayments ? filteredLedgerRows.filter((t) => isPaymentRow(t)).length : 0;
 
@@ -799,13 +844,13 @@ export default function Suppliers() {
                         new Date(a.importDate || a.createdAt).getTime()
                     )
                     .map((po) => {
-                      const itemsTotal = parseFloat(po.itemsTotal || "0");
-                      const freight = parseFloat(po.freight || "0");
-                      const surcharge = parseFloat(po.surcharge || "0");
-                      const fumigation = parseFloat(po.fumigation || "0");
-                      const documentCharges = parseFloat(po.documentCharges || "0");
-                      const discount = parseFloat(po.discount || "0");
-                      const otherCharges = parseFloat(po.otherCharges || "0");
+                      const itemsTotal = parseFloat(String(po.itemsTotal || "0"));
+                      const freight = parseFloat(String(po.freight || "0"));
+                      const surcharge = parseFloat(String(po.surcharge || "0"));
+                      const fumigation = parseFloat(String(po.fumigation || "0"));
+                      const documentCharges = parseFloat(String(po.documentCharges || "0"));
+                      const discount = parseFloat(String(po.discount || "0"));
+                      const otherCharges = parseFloat(String(po.otherCharges || "0"));
                       const totalAmount =
                         itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
                       return { ...po, totalAmount };

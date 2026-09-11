@@ -14,7 +14,18 @@ import { useReactToPrint } from "react-to-print";
 import { useCompany } from "@/contexts/CompanyContext";
 import { apiRequest, queryClient, getAppDate } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { CartRow, ExpenseRow, InventoryItem } from "./types";
+import type {
+  CartRow,
+  EditSaleItem,
+  ExpenseRow,
+  InventoryItem,
+  ParsedExpense,
+  PosCustomer,
+  PosLedgerAccount,
+  PosLocation,
+  PosSale,
+  SavedSale,
+} from "./types";
 import { emptyRow, formatNum } from "./utils";
 
 const normSearch = (s: string) => (s || "").toLowerCase().replace(/[\s.\-_]/g, "");
@@ -66,7 +77,7 @@ export function useFactoryPosModel() {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const itemListRef = useRef<HTMLDivElement>(null);
-  const [savedSale, setSavedSale] = useState<any>(null);
+  const [savedSale, setSavedSale] = useState<SavedSale | null>(null);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [voidId, setVoidId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -80,8 +91,8 @@ export function useFactoryPosModel() {
   const [mobileRowTarget, setMobileRowTarget] = useState<number | null>(null);
 
   // Queries
-  const { data: locations } = useQuery<any[]>({ queryKey: ["/api/locations"] });
-  const { data: allCustomers } = useQuery<any[]>({ queryKey: ["/api/factory/customers"] });
+  const { data: locations } = useQuery<PosLocation[]>({ queryKey: ["/api/locations"] });
+  const { data: allCustomers } = useQuery<PosCustomer[]>({ queryKey: ["/api/factory/customers"] });
   const { data: inventory, isLoading: invLoading } = useQuery<InventoryItem[]>({
     queryKey: ["/api/factory/location-inventory", locationId],
     queryFn: async () => {
@@ -92,13 +103,13 @@ export function useFactoryPosModel() {
     },
     enabled: !!locationId,
   });
-  const { data: ledgerAccounts } = useQuery<any[]>({
+  const { data: ledgerAccounts } = useQuery<PosLedgerAccount[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const cashAccounts = (ledgerAccounts || []).filter((a) => a.accountType === "Cash");
-  const { data: sales, isLoading: salesLoading } = useQuery<any[]>({
+  const { data: sales, isLoading: salesLoading } = useQuery<PosSale[]>({
     queryKey: ["/api/factory/pos/sales"],
     enabled: showHistory,
   });
@@ -132,14 +143,14 @@ export function useFactoryPosModel() {
     setCashAccountId(editSaleData.cashAccountId ? String(editSaleData.cashAccountId) : "");
     if (editSaleData.items && editSaleData.items.length > 0) {
       setRows(
-        editSaleData.items.map((it: any) => ({
+        editSaleData.items.map((it: EditSaleItem) => ({
           id: String(it.id),
           productId: it.productId || null,
           productName: it.productName,
           articleCode: it.articleCode || "",
           availableQty: 9999,
-          quantity: parseInt(it.quantity) || 1,
-          unitPrice: parseFloat(it.unitPrice) || 0,
+          quantity: parseInt(String(it.quantity), 10) || 1,
+          unitPrice: parseFloat(String(it.unitPrice)) || 0,
           weightPerBale: 0,
         }))
       );
@@ -148,7 +159,7 @@ export function useFactoryPosModel() {
       try {
         const expArr = JSON.parse(editSaleData.expensesJson);
         setExpenseRows(
-          expArr.map((e: any) => ({
+          expArr.map((e: ParsedExpense) => ({
             id: String(Date.now() + Math.random()),
             accountId: String(e.accountId),
             description: e.description || "",

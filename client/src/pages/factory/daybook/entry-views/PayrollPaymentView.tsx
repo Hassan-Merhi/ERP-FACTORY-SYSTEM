@@ -8,6 +8,8 @@
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
+import type { BadgeVariant, DaybookEntry, DisplayDate, PayrollSummary } from "./types";
+import { apiNumber } from "./types";
 
 export function PayrollPaymentView({
   entry,
@@ -16,14 +18,14 @@ export function PayrollPaymentView({
   badgeVariant,
   badgeClass,
 }: {
-  entry: any;
-  payrollSummary: any;
-  formatDisplayDate: any;
-  badgeVariant: any;
-  badgeClass: any;
+  entry: DaybookEntry;
+  payrollSummary: PayrollSummary | null | undefined;
+  formatDisplayDate: DisplayDate;
+  badgeVariant: BadgeVariant;
+  badgeClass: string | undefined;
 }) {
   const p = payrollSummary;
-  const n = (v: string) => parseFloat(v || "0");
+  const n = apiNumber;
 
   const grossEarnings = p
     ? n(p.baseSalary) + n(p.baleEarnings) + n(p.kgEarnings) + n(p.overtimePay) + n(p.bonuses) + n(p.transport)
@@ -195,7 +197,7 @@ export function PayrollPaymentView({
                   <p className="text-xs text-muted-foreground">Days Absent</p>
                   <p className="font-semibold">{p.absentDays}</p>
                 </div>
-                {p.totalWorkingDays > 0 && (
+                {apiNumber(p.totalWorkingDays) > 0 && (
                   <div className="flex-1 rounded-md border px-3 py-2 text-center">
                     <p className="text-xs text-muted-foreground">Working Days</p>
                     <p className="font-semibold">{p.totalWorkingDays}</p>

@@ -10,6 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CurrencySelector } from "@/components/CurrencySelector";
 import { AccountAutocomplete, CombinedAccount } from "@/components/AccountAutocomplete";
 import { cn } from "@/lib/utils";
+import type { VoucherFormData } from "./VoucherEditSchemas";
 
 export function PaymentReceiptEditForm({
   form,
@@ -23,9 +24,9 @@ export function PaymentReceiptEditForm({
   total,
   focusByTestId,
 }: {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<VoucherFormData>;
   voucherType: string;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: VoucherFormData) => void;
   onCancel: () => void;
   isPending: boolean;
   allAccountsWithBalances: CombinedAccount[];

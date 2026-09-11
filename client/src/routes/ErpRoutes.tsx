@@ -90,9 +90,16 @@ import {
   Vouchers,
 } from "@/lazyPages";
 
-interface ErpRoutesProps {
-  user: any;
+interface ErpRouteUser {
+  role?: string | null;
+  currentRole?: string | null;
 }
+
+interface ErpRoutesProps {
+  user: ErpRouteUser;
+}
+
+type RouteComponent = ComponentType;
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
   const { data: erpAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[] }>({
@@ -103,7 +110,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
   const isAdminOrDev = user?.role === "Admin" || user?.role === "Developer";
   const canAccess = (key: string) => !erpAccess || erpAccess.fullAccess || erpAccess.pageKeys.includes(key);
-  const G = (path: string, key: string, Comp: ComponentType<any>) =>
+  const G = (path: string, key: string, Comp: RouteComponent) =>
     canAccess(key) ? (
       <Route path={path} component={Comp} />
     ) : (
@@ -164,10 +171,10 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       )}
 
-      {isAdminOrDev && <Route path="/mock-containers-otw" component={ContainersOTW as ComponentType<any>} />}
-      {isAdminOrDev && <Route path="/containers-otw" component={ContainersOTW as ComponentType<any>} />}
-      <Route path="/mock-git" component={GITMockup as ComponentType<any>} />
-      <Route path="/git" component={GITMockup as ComponentType<any>} />
+      {isAdminOrDev && <Route path="/mock-containers-otw" component={ContainersOTW as RouteComponent} />}
+      {isAdminOrDev && <Route path="/containers-otw" component={ContainersOTW as RouteComponent} />}
+      <Route path="/mock-git" component={GITMockup as RouteComponent} />
+      <Route path="/git" component={GITMockup as RouteComponent} />
 
       {G("/containers/:containerId/verification", "containers", ContainerVerification)}
       {G("/containers/:id", "containers", ContainerDetailPage)}

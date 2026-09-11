@@ -10,6 +10,42 @@ import { Satellite, AlertTriangle, RefreshCw, History, Loader2, ExternalLink, Cl
 import { cn } from "@/lib/utils";
 import { EnrichedContainerRow, fmtSkipReason, getContainerPriority } from "./gitContainerTypes";
 
+export interface TrackingStatus {
+  scraperAvailable: boolean;
+  seventeenTrackConfigured: boolean;
+  seventeenTrackQuotaExhausted: boolean;
+  seventeenTrackRemaining: number;
+  seventeenTrackMonthlyLimit: number;
+  parcelsAppConfigured: boolean;
+  parcelsAppQuotaExhausted: boolean;
+  parcelsAppRemaining: number;
+  parcelsAppMonthlyLimit: number;
+}
+
+export interface TrackingEvent {
+  status: string;
+  eventDate: string;
+  location?: string | null;
+  description?: string | null;
+}
+
+export interface TrackProgressStep {
+  label: string;
+  status: string;
+  detail: string | null;
+  ts: number;
+}
+
+interface TrackingSettingsMutation {
+  isPending: boolean;
+  mutate: (data: Record<string, unknown>) => void;
+}
+
+interface TrackNowMutation {
+  isPending: boolean;
+  mutate: () => void;
+}
+
 interface ContainerDrawerTrackingProps {
   container: EnrichedContainerRow;
   trackEnabled: boolean;
@@ -18,14 +54,14 @@ interface ContainerDrawerTrackingProps {
   setTrackAutoUpdate: (v: boolean) => void;
   trackCarrierHint: string;
   setTrackCarrierHint: (v: string) => void;
-  trackingSettingsMutation: any;
-  trackNowMutation: any;
-  trackNowResult: any; // Result from trackNowMutation.data (started or TrackNowResult)
-  trackProgress: any[];
-  trackingStatus: any;
+  trackingSettingsMutation: TrackingSettingsMutation;
+  trackNowMutation: TrackNowMutation;
+  trackNowResult: unknown; // Result from trackNowMutation.data (started or TrackNowResult)
+  trackProgress: TrackProgressStep[];
+  trackingStatus: TrackingStatus | undefined;
   showEvents: boolean;
   setShowEvents: (v: boolean) => void;
-  events: any[] | undefined;
+  events: TrackingEvent[] | undefined;
   eventsLoading: boolean;
   canEdit: boolean;
 }

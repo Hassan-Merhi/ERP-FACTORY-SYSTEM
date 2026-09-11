@@ -13,8 +13,13 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
-import { ContainerDrawerTracking } from "./ContainerDrawerTracking";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import {
+  ContainerDrawerTracking,
+  type TrackProgressStep,
+  type TrackingEvent,
+  type TrackingStatus,
+} from "./ContainerDrawerTracking";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 
 export function ContainerDrawer({
   container,
@@ -164,7 +169,6 @@ export function ContainerDrawer({
     },
   });
 
-  type TrackProgressStep = { label: string; status: string; detail: string | null; ts: number };
   const [trackProgress, setTrackProgress] = useState<TrackProgressStep[]>([]);
   const trackProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -193,7 +197,7 @@ export function ContainerDrawer({
 
   const eventsQueryKey = container?.id ? `/api/container-tracking/${container.id}/events` : null;
   const trackingCompanyIdentity = sessionCompanyId ?? container?.companyId ?? "no-company";
-  const { data: events, isLoading: eventsLoading } = useQuery<ApiListRow[]>({
+  const { data: events, isLoading: eventsLoading } = useQuery<TrackingEvent[]>({
     queryKey: eventsQueryKey
       ? companyDataKey(eventsQueryKey, trackingCompanyIdentity, "container-tracking-events")
       : [],
@@ -201,7 +205,7 @@ export function ContainerDrawer({
     ...frontendQueryPolicies.operational,
   });
 
-  const { data: trackingStatus } = useQuery<unknown>({
+  const { data: trackingStatus } = useQuery<TrackingStatus>({
     queryKey: ["/api/container-tracking/status"],
     staleTime: 5 * 60_000,
   });

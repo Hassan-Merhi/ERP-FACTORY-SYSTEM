@@ -1,7 +1,8 @@
 import { useMemo } from "react";
+import type { CombinedStockRow, InventoryItem } from "./locationInventoryTypes";
 
 interface UseCombinedStockRowsParams {
-  allInventoryData: any[];
+  allInventoryData: InventoryItem[];
   allStockGroupFilter: string;
   allStockCategoryFilter: string[];
   allStockLocationFilter: string;
@@ -35,7 +36,8 @@ export function useCombinedStockRows({
   }, [allInventoryData]);
 
   const combinedStockRows = useMemo(() => {
-    const itemMap = new Map<number, any>();
+    type CombinedStockAccumulator = Omit<CombinedStockRow, "avgCost">;
+    const itemMap = new Map<number, CombinedStockAccumulator>();
     allInventoryData.forEach((item) => {
       const qty = parseFloat(item.quantity || "0");
       if (qty === 0) return;

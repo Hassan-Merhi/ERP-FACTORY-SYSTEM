@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { WorkerOption } from "./RemoveFromStockTab";
 
 interface RemoveBaleAuthDialogProps {
   open: boolean;
@@ -104,7 +105,7 @@ export function RemoveBaleAuthDialog({
 interface AssignWorkerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  workers: any[];
+  workers: WorkerOption[];
   workerIdSelected: string;
   onWorkerIdChange: (val: string) => void;
   isPending: boolean;

@@ -23,6 +23,37 @@ import type { FactoryMixBatch } from "@shared/schema";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
 
+interface BaleRecord {
+  id: number;
+  referenceNumber: string;
+  baleCode: string;
+  articleCode?: string | null;
+  category?: string | null;
+  barcodeValue?: string | null;
+  productName?: string | null;
+  quantity: number;
+  weightKg: string;
+  status: string;
+  mixBatchId?: number | null;
+  stockEntryDate?: string | null;
+  createdAt?: string | null;
+}
+
+interface BaleProduct {
+  name?: string | null;
+  articleCode?: string | null;
+  sellingPrice?: string | null;
+}
+
+interface BaleRow {
+  bale: BaleRecord;
+  product?: BaleProduct | null;
+  mixBatch?: { name?: string | null } | null;
+  lastPrintedAt?: string | null;
+}
+
+type BalesPage = { items: BaleRow[]; total: number; page: number; limit: number; totalPages: number };
+
 export function useBalesHistoryModel() {
   const { wrapAdminAction, AdminDialog } = useAdminOverride();
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -44,8 +75,8 @@ export function useBalesHistoryModel() {
   const [editingNameValue, setEditingNameValue] = useState("");
   const [designPickerOpen, setDesignPickerOpen] = useState(false);
   const [pendingReprintLabels, setPendingReprintLabels] = useState<LabelData[] | null>(null);
-  const [repackConfirm, setRepackConfirm] = useState<any>(null);
-  const [returnToStockBale, setReturnToStockBale] = useState<any>(null);
+  const [repackConfirm, setRepackConfirm] = useState<BaleRow | null>(null);
+  const [returnToStockBale, setReturnToStockBale] = useState<BaleRow | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
   const reimportFileRef = useRef<HTMLInputElement>(null);
@@ -106,7 +137,6 @@ export function useBalesHistoryModel() {
   });
   const _hiddenCost = myAccess?.hiddenCostFields ?? [];
 
-  type BalesPage = { items: any[]; total: number; page: number; limit: number; totalPages: number };
   const { data: balesResponse, isLoading } = useQuery<BalesPage>({
     queryKey: [
       "/api/factory/bales",
@@ -397,7 +427,7 @@ export function useBalesHistoryModel() {
     });
   };
 
-  const toggleSelectAll = (filteredItems: any[]) => {
+  const toggleSelectAll = (filteredItems: BaleRow[]) => {
     const filteredIds = filteredItems.map((r) => r.bale.id);
     const allSelected = filteredIds.every((id: number) => selectedIds.has(id));
     if (allSelected) {
@@ -407,7 +437,7 @@ export function useBalesHistoryModel() {
     }
   };
 
-  const handleReprint = async (baleRow: any) => {
+  const handleReprint = async (baleRow: BaleRow) => {
     const label: LabelData = {
       referenceNumber: baleRow.bale.referenceNumber || baleRow.bale.baleCode,
       articleCode: baleRow.product?.articleCode || baleRow.bale.articleCode || baleRow.bale.category || "",
@@ -523,8 +553,8 @@ export function useBalesHistoryModel() {
         product?.articleCode,
         batch?.name,
       ]
-        .filter(Boolean)
-        .map((s: string) => s.toLowerCase());
+        .filter((s): s is string => typeof s === "string" && s.length > 0)
+        .map((s) => s.toLowerCase());
       if (!searchFields.some((f) => f.includes(term))) return false;
     }
 
@@ -544,7 +574,7 @@ export function useBalesHistoryModel() {
         sellingPrice: string | null;
         totalQty: number;
         totalWeightKg: number;
-        rows: any[];
+        rows: BaleRow[];
       }
     >();
     for (const row of filtered) {
@@ -595,10 +625,10 @@ export function useBalesHistoryModel() {
 
   // Robust classification: check category → productName → product.name with includes() matching
   // so "Garbage Bales", "GARBAGE", " garbage " and "wiper"/"WIPERS" all classify correctly
-  const getBaleClassification = (row: any): "garbage" | "wipers" | "regular" => {
+  const getBaleClassification = (row: BaleRow): "garbage" | "wipers" | "regular" => {
     const candidates = [row.bale?.category, row.bale?.productName, row.product?.name]
-      .filter((v) => v && typeof v === "string")
-      .map((v: string) => v.toLowerCase().trim());
+      .filter((v): v is string => typeof v === "string" && v.length > 0)
+      .map((v) => v.toLowerCase().trim());
 
     for (const c of candidates) {
       if (c.includes("garbage")) return "garbage";

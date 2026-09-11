@@ -40,7 +40,7 @@ describe("tracking continuous-list cleanup", () => {
       totals: { typeEscapeCeiling: number };
     };
 
-    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(1058);
-    expect(qualityProgram).toContain("| Type escapes (AST) | 1,058 total |");
+    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(662);
+    expect(qualityProgram).toContain("| Type escapes (AST) | 662 total |");
   });
 });
