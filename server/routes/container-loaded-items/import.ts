@@ -103,9 +103,9 @@ export function registerContainerLoadedItemImportRoutes(app: Express, requireAut
           });
         }
 
-        const values = itemsWithBarcode.map((item: any) => ({
+        const values = itemsWithBarcode.map((item) => ({
           containerId,
-          barcode: item.stockItemCode.trim(),
+          barcode: item.stockItemCode!.trim(),
           itemName: item.itemName || null,
           qty: Math.round(parseFloat(item.quantity || "0")),
           weightPerBale: null as string | null,

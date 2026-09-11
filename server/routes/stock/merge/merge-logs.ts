@@ -191,13 +191,16 @@ export function registerStockMergeLogRoutes(app: Express) {
             averageRate: string;
             totalValue: string;
           };
-          const snapEntries: SnapEntry[] = Object.values(snapshotBefore as Record<string, unknown>).map((v: any) => ({
-            stockItemId: Number(v.stockItemId),
-            locationId: Number(v.locationId),
-            quantity: String(v.quantity),
-            averageRate: String(v.averageRate),
-            totalValue: String(v.totalValue),
-          }));
+          const snapEntries: SnapEntry[] = Object.values(snapshotBefore as Record<string, unknown>).map((v) => {
+            const row = v as SnapEntry;
+            return {
+              stockItemId: Number(row.stockItemId),
+              locationId: Number(row.locationId),
+              quantity: String(row.quantity),
+              averageRate: String(row.averageRate),
+              totalValue: String(row.totalValue),
+            };
+          });
 
           // Collect the locations touched by either item in the snapshot
           const keptLocations = snapEntries.filter((e) => e.stockItemId === keptItemId).map((e) => e.locationId);

@@ -9,6 +9,26 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { sql } from "drizzle-orm";
+import { resultRows } from "../../lib/queryResult";
+
+/** Shape of a git_agent_adjustments row as selected by the queries below. */
+type GitAgentAdjustmentRow = {
+  id: number;
+  agent_name?: string;
+  description: string | null;
+  amount: string;
+  type: string;
+  created_at: string | Date;
+};
+
+/** DTO returned to the client for one adjustment. */
+type GitAgentAdjustment = {
+  id: number;
+  description: string | null;
+  amount: number;
+  type: string;
+  createdAt: string | Date;
+};
 
 export function registerGitAgentRoutes(app: Express) {
   // ── Agent notes (per-company, per-agent, shared across all users) ─────────
@@ -63,10 +83,11 @@ export function registerGitAgentRoutes(app: Express) {
             WHERE company_id = ${companyId}
             ORDER BY created_at ASC`
       );
-      const byAgent: Record<string, any[]> = {};
-      for (const r of result.rows as any[]) {
-        if (!byAgent[r.agent_name]) byAgent[r.agent_name] = [];
-        byAgent[r.agent_name].push({
+      const byAgent: Record<string, GitAgentAdjustment[]> = {};
+      for (const r of resultRows<GitAgentAdjustmentRow>(result)) {
+        const agentName = r.agent_name ?? "";
+        if (!byAgent[agentName]) byAgent[agentName] = [];
+        byAgent[agentName].push({
           id: r.id,
           description: r.description,
           amount: parseFloat(r.amount),
@@ -91,8 +112,9 @@ export function registerGitAgentRoutes(app: Express) {
             WHERE company_id = ${companyId} AND agent_name = ${agentName}
             ORDER BY created_at ASC`
       );
+      const rows = resultRows<GitAgentAdjustmentRow>(result);
       res.json(
-        result.rows.map((r: any) => ({
+        rows.map((r) => ({
           id: r.id,
           description: r.description,
           amount: parseFloat(r.amount),

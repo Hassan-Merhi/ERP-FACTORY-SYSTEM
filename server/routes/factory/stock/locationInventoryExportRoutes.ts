@@ -222,7 +222,7 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
           totalKg += row.totalWeight;
           totalValue += tv;
 
-          const rd: any = {
+          const rd: Record<string, string | number> = {
             locationName: row.locationName,
             articleCode: row.articleCode,
             productName: row.productName,
@@ -248,7 +248,7 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
         }
 
         ws.addRow({});
-        const td: any = {
+        const td: Record<string, string | number> = {
           locationName: "GRAND TOTAL",
           articleCode: "",
           productName: `${rows.length} ${label} across ${locationRecords.length} locations`,
@@ -309,7 +309,7 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
       mainBales.forEach((b, idx) => {
         const locId = b.erpLocationId ?? 0;
         const pid = b.productId ?? 0;
-        const rd: any = {
+        const rd: Record<string, string | number> = {
           locationName: locationMap.get(locId) || `Location #${locId}`,
           referenceNumber: b.referenceNumber,
           articleCode: b.articleCode || "",
@@ -369,7 +369,7 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
         const pid = b.productId ?? 0;
         const w = parseFloat(String(b.weightKg || "0"));
         gbTotalKgAll += w;
-        const rd: any = {
+        const rd: Record<string, string | number> = {
           locationName: locationMap.get(locId) || `Location #${locId}`,
           referenceNumber: b.referenceNumber,
           baleCode: b.baleCode || "",
@@ -394,7 +394,7 @@ export function registerFactoryLocationInventoryExportRoutes(app: Express) {
 
       if (garbageBalesAll.length > 0) {
         garbageDetailSheetAll.addRow({});
-        const gtd: any = {
+        const gtd: Record<string, string | number> = {
           locationName: "GRAND TOTAL",
           referenceNumber: "",
           baleCode: "",

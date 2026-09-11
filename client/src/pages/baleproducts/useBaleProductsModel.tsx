@@ -512,9 +512,11 @@ export function useBaleProductsModel() {
         row.height = 18;
 
         const isAlt = i % 2 === 1;
-        const rowFill = isAlt ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } } : undefined;
+        const rowFill: import("exceljs").FillPattern | undefined = isAlt
+          ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } }
+          : undefined;
 
-        row.eachCell((cell: any, colNum: number) => {
+        row.eachCell((cell: import("exceljs").Cell, colNum: number) => {
           if (rowFill) cell.fill = rowFill;
           cell.font = { size: 10 };
           cell.border = { bottom: { style: "hair", color: { argb: C_BORDER } } };
@@ -546,8 +548,12 @@ export function useBaleProductsModel() {
         { formula: `=SUM(H${DATA_START}:H${lastDataRow})`, result: 0 },
       ]);
       totalRow.height = 22;
-      const totalFill = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
-      totalRow.eachCell((cell: any, _colNum: number) => {
+      const totalFill: import("exceljs").FillPattern = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: C_TOTAL },
+      };
+      totalRow.eachCell((cell: import("exceljs").Cell, _colNum: number) => {
         cell.fill = totalFill;
         cell.border = {
           top: { style: "medium", color: { argb: C_NAVY } },
@@ -686,9 +692,11 @@ export function useBaleProductsModel() {
         row.height = 18;
 
         const isAlt = i % 2 === 1;
-        const rowFill = isAlt ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } } : undefined;
+        const rowFill: import("exceljs").FillPattern | undefined = isAlt
+          ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } }
+          : undefined;
 
-        row.eachCell((cell: any, colNum: number) => {
+        row.eachCell((cell: import("exceljs").Cell, colNum: number) => {
           if (rowFill) cell.fill = rowFill;
           cell.font = { size: 10 };
           cell.border = { bottom: { style: "hair", color: { argb: C_BORDER } } };
@@ -710,8 +718,12 @@ export function useBaleProductsModel() {
         { formula: `=SUM(F${DATA_START}:F${lastDataRow})`, result: 0 },
       ]);
       totalRow.height = 22;
-      const totalFill = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
-      totalRow.eachCell((cell: any) => {
+      const totalFill: import("exceljs").FillPattern = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: C_TOTAL },
+      };
+      totalRow.eachCell((cell: import("exceljs").Cell) => {
         cell.fill = totalFill;
         cell.border = {
           top: { style: "medium", color: { argb: C_NAVY } },

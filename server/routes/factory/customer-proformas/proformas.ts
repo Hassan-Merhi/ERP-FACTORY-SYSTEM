@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { resultRows } from "../../../lib/queryResult";
 import { syncProformaReservations } from "../_stockReservationHelper";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -20,6 +21,48 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
+/** Row shape returned by the raw `customer_proformas` queries below. */
+type ProformaRow = {
+  id: number;
+  company_id: number;
+  customer_id: number;
+  name: string | null;
+  is_active: boolean | null;
+  deleted_at: string | Date | null;
+  created_at: string | Date | null;
+  updated_at: string | Date | null;
+};
+
+/** Row shape returned by the raw `customer_proforma_lines` queries below. */
+type ProformaLineRow = {
+  id: number;
+  proforma_id: number;
+  article_code: string | null;
+  product_name: string | null;
+  quantity: string | number | null;
+  price_per_bale: string | null;
+  production_price_per_bale: string | null;
+  price_fixed: boolean | null;
+  pricing_mode: string | null;
+  price_per_kg: string | null;
+  created_at?: string | Date | null;
+};
+
+/** A proforma line after mapping to the UI contract. */
+type ProformaLine = {
+  id: number;
+  proformaId: number;
+  articleCode: string;
+  productName: string;
+  quantity: number;
+  pricePerBale: string;
+  productionPricePerBale: string;
+  priceFixed: boolean;
+  pricingMode: string;
+  pricePerKg: string | null;
+  createdAt?: string | Date | null;
+};
+
 export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
   /* Single proforma by ID — used by EditProformaV5Drawer and lazy detail readers. */
   app.get("/api/factory/customer-proformas/:id", requireAuth, async (req: Request, res: Response) => {
@@ -31,7 +74,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
       const rawProformaRes = await db.execute(
         sql`SELECT * FROM customer_proformas WHERE id = ${id} AND company_id = ${companyId} AND deleted_at IS NULL LIMIT 1`
       );
-      const rawProformaRows = (rawProformaRes).rows ?? (rawProformaRes as unknown as unknown[]);
+      const rawProformaRows = rawProformaRes.rows ?? (rawProformaRes as unknown as unknown[]);
       if (!rawProformaRows.length) return res.status(404).json({ message: "Proforma not found" });
       const pr = rawProformaRows[0];
       const proforma = {
@@ -45,7 +88,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         updatedAt: pr.updated_at ?? pr.created_at,
       };
       const rawLinesRes = await db.execute(sql`SELECT * FROM customer_proforma_lines WHERE proforma_id = ${id}`);
-      const lines = ((rawLinesRes).rows ?? (rawLinesRes as unknown as unknown[])).map((l) => ({
+      const lines = resultRows<ProformaLineRow>(rawLinesRes).map((l) => ({
         id: l.id,
         proformaId: l.proforma_id,
         articleCode: l.article_code ?? "",
@@ -78,7 +121,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
           if (p.articleCode) weightMap.set(p.articleCode, p.weightPerBaleKg || "0");
         });
       }
-      const enrichedLines = lines.map((l: any) => ({ ...l, weightPerBaleKg: weightMap.get(l.articleCode) || "0" }));
+      const enrichedLines = lines.map((l) => ({ ...l, weightPerBaleKg: weightMap.get(l.articleCode) || "0" }));
       res.set("Cache-Control", "private, max-age=60");
       res.json({ ...proforma, lines: enrichedLines });
     } catch (error: unknown) {
@@ -137,7 +180,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
           GROUP BY cp.id, cp.company_id, cp.customer_id, cp.name, cp.is_active, cp.created_at
           ORDER BY cp.name ASC
         `);
-        const summaryRows = (rawSummary).rows ?? (rawSummary as unknown as unknown[]);
+        const summaryRows = rawSummary.rows ?? (rawSummary as unknown as unknown[]);
         const summaries = summaryRows.map((row) => ({
           id: row.id,
           companyId: row.company_id,
@@ -166,7 +209,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
               AND deleted_at IS NULL
             ORDER BY name ASC`
       );
-      const proformas = ((rawProformasRes).rows ?? (rawProformasRes as unknown as unknown[])).map((r) => ({
+      const proformas = resultRows<ProformaRow>(rawProformasRes).map((r) => ({
         id: r.id,
         companyId: r.company_id,
         customerId: r.customer_id,
@@ -177,8 +220,8 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         updatedAt: r.updated_at ?? r.created_at,
       }));
 
-      const proformaIds = proformas.map((p: any) => p.id);
-      let lines = [];
+      const proformaIds = proformas.map((p) => p.id);
+      let lines: ProformaLine[] = [];
       if (proformaIds.length > 0) {
         const idList = sql.join(
           proformaIds.map((id: number) => sql`${id}`),
@@ -193,8 +236,8 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
           FROM customer_proforma_lines
           WHERE proforma_id IN (${idList})
         `);
-        const rawRows = (rawLines as any).rows ?? (rawLines as unknown as unknown[]);
-        lines = rawRows.map((l: any) => ({
+        const rawRows = resultRows<ProformaLineRow>(rawLines);
+        lines = rawRows.map((l) => ({
           id: l.id,
           proformaId: l.proforma_id,
           articleCode: l.article_code ?? "",
@@ -208,7 +251,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         }));
       }
 
-      const articleCodes = [...new Set(lines.map((l: any) => l.articleCode).filter(Boolean))];
+      const articleCodes = [...new Set(lines.map((l) => l.articleCode).filter(Boolean))];
       const weightMap = new Map<string, string>();
       const nameMap = new Map<string, string>();
       if (articleCodes.length > 0) {
@@ -233,7 +276,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         });
       }
 
-      const enrichedLines = lines.map((l: any) => ({
+      const enrichedLines = lines.map((l) => ({
         ...l,
         weightPerBaleKg: weightMap.get(l.articleCode) || "0",
         productName: nameMap.get(l.articleCode) || l.productName,
@@ -245,7 +288,7 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
         current.push(line);
         linesByProforma.set(line.proformaId, current);
       }
-      const result = proformas.map((p: any) => ({
+      const result = proformas.map((p) => ({
         ...p,
         lines: linesByProforma.get(p.id) || [],
       }));

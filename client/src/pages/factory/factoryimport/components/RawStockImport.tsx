@@ -49,12 +49,12 @@ export function RawStockImport() {
     const ext = file.name.split(".").pop()?.toLowerCase();
 
     if (ext === "csv" || ext === "txt") {
-      Papa.parse(file, {
+      Papa.parse<Record<string, string>>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
           const parsed: RawStockRow[] = results.data
-            .map((row: any) => ({
+            .map((row) => ({
               containerNumber: (row.containerNumber || row.container_number || "").trim(),
               supplierName: (row.supplierName || row.supplier_name || "").trim(),
               receivedKg: (row.receivedKg || row.received_kg || "").trim(),

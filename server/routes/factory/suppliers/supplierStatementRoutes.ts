@@ -602,7 +602,10 @@ export function registerSupplierStatementRoutes(app: Express) {
       }, 0);
 
       // Build OB commissions list
-      const containerMap: Record<number, any> = {};
+      const containerMap: Record<
+        number,
+        Pick<(typeof containers)[number], "id" | "containerNumber" | "createdAt">
+      > = {};
       for (const c of containers) containerMap[c.id] = c;
 
       // Offload charges may reference containers belonging to child suppliers (broker receives a charge

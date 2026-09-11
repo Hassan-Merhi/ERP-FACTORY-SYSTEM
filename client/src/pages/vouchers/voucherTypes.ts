@@ -25,6 +25,7 @@ export interface Customer {
   id: number;
   code: string;
   legalName: string;
+  openingBalance?: string;
 }
 
 export interface Employee {

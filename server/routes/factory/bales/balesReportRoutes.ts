@@ -11,6 +11,7 @@ import { parseOptionalId } from "../../../lib/parseId";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { resultRows } from "../../../lib/queryResult";
 
 import { factoryRawStock, factoryMixBatches, factoryBales, baleLabelPrints } from "@shared/schema";
 import { eq, and, or, sql, inArray, not } from "drizzle-orm";
@@ -310,9 +311,39 @@ export function registerBalesReportRoutes(app: Express) {
         ORDER BY fb.stock_entry_date DESC, l.name NULLS LAST, fw.full_name NULLS LAST, fbp.name NULLS LAST
       `);
 
-      const groups: any[] = rows.rows;
+      type StockEntryHistoryBaleRow = {
+        id: number;
+        referenceNumber: string | null;
+        weightKg: string | number;
+        status: string;
+        finalizedAt: string | null;
+        stockEntryDate: string | null;
+        locationName: string;
+        workerName: string | null;
+        productName: string | null;
+        articleCode: string | null;
+      };
+
+      type StockEntryHistoryGroupRow = {
+        stockEntryDate: string;
+        erpLocationId: number | null;
+        locationName: string;
+        workerId: number | null;
+        workerName: string | null;
+        productId: number | null;
+        productName: string | null;
+        articleCode: string | null;
+        baleCount: number;
+        totalWeight: string | number;
+        avgWeight: string | number;
+        firstFinalizedAt: string | Date | null;
+        lastFinalizedAt: string | Date | null;
+        bales: StockEntryHistoryBaleRow[] | null;
+      };
+
+      const groups: StockEntryHistoryGroupRow[] = resultRows<StockEntryHistoryGroupRow>(rows);
       const totalBales = groups.reduce((s: number, g) => s + (g.baleCount || 0), 0);
-      const totalWeight = groups.reduce((s: number, g) => s + parseFloat(g.totalWeight || "0"), 0);
+      const totalWeight = groups.reduce((s: number, g) => s + Number(g.totalWeight || 0), 0);
 
       const PDFDocument = (await import("pdfkit")).default;
       const doc = new PDFDocument({ margin: 40, size: "A4" });
@@ -323,8 +354,8 @@ export function registerBalesReportRoutes(app: Express) {
       );
       doc.pipe(res);
 
-      const fmtN = (v: any, dec = 3) =>
-        parseFloat(v || "0").toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+      const fmtN = (v: string | number | null | undefined, dec = 3) =>
+        Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
       const NAVY = "#1F3864";
       const _LIGHT_BLUE = "#EFF3FB";
       const STRIPE = "#F8F8F8";
@@ -408,7 +439,7 @@ export function registerBalesReportRoutes(app: Express) {
         y += 14;
 
         // bale detail rows
-        const bales: any[] = g.bales || [];
+        const bales: StockEntryHistoryBaleRow[] = g.bales || [];
         for (let bi = 0; bi < bales.length; bi++) {
           if (y > 790) {
             doc.addPage();

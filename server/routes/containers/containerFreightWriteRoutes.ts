@@ -111,8 +111,8 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           .where(
             and(
               eq(ledgerAccounts.companyId, existingPO.companyId),
-              inArray(ledgerAccounts.id, requestedLedgerAccountIds),
-            ),
+              inArray(ledgerAccounts.id, requestedLedgerAccountIds)
+            )
           );
         const scopedAccountIds = new Set(scopedAccounts.map((account) => account.id));
         if (requestedLedgerAccountIds.some((accountId) => !scopedAccountIds.has(accountId))) {
@@ -527,7 +527,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           // (interco sync moved to unconditional block below the transaction)
 
           // Update container totals if applicable
-    const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
+          const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
           if (container) {
             // Get all POs for this container and recalculate totals
             const allPOs = await storage.getAllPurchaseOrders(existingPO.companyId);
@@ -787,7 +787,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
       // INTERCO-FREIGHT sync removed — freight is now inside the purchase voucher itself.
 
       try {
-        const _poChanges: Record<string, any> = {};
+        const _poChanges: Record<string, { old: unknown; new: unknown }> = {};
         for (const _f of [
           "poNumber",
           "currency",

@@ -183,7 +183,7 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
         }
       }
 
-      const productUpdate: any = { updatedAt: new Date() };
+      const productUpdate: Partial<typeof factoryBaleProducts.$inferInsert> = { updatedAt: new Date() };
       if (name !== undefined) productUpdate.name = name;
       if (weightPerBaleKg !== undefined) productUpdate.weightPerBaleKg = weightPerBaleKg;
       if (nextArticleCode !== undefined) productUpdate.articleCode = nextArticleCode;
@@ -207,7 +207,7 @@ export function registerFactoryProductCascadeRoutes(app: Express) {
         .where(and(eq(factoryBaleProducts.id, id), eq(factoryBaleProducts.companyId, companyId)))
         .returning();
 
-      const baleUpdate: any = {};
+      const baleUpdate: Partial<typeof factoryBales.$inferInsert> = {};
       if (name !== undefined && name !== existing.name) baleUpdate.productName = name;
       if (weightPerBaleKg !== undefined && weightPerBaleKg !== existing.weightPerBaleKg)
         baleUpdate.weightKg = weightPerBaleKg;

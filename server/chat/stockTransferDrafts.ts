@@ -16,6 +16,35 @@ import {
   buildStockTransferSuggestionContext,
   matchLocationByName,
 } from "../services/stockTransferAnalysis";
+/** One item inside a stock-transfer chat draft. */
+type StockTransferDraftItem = {
+  stockItemId: number;
+  stockItemName?: string;
+  stockItemCode?: string;
+  quantity?: number;
+  currentStock?: number;
+  destinationQty?: number;
+  reason?: string;
+};
+
+/** Stock-transfer draft payload produced by chat flows (also parsed back from JSON). */
+type StockTransferChatDraft = {
+  date: string;
+  sourceLocationId: number;
+  sourceLocationName: string;
+  destinationLocationId: number;
+  destinationLocationName: string;
+  notes?: string;
+  optional?: boolean;
+  analysisSummary?: string;
+  items?: StockTransferDraftItem[];
+  locationCandidates?: { id: number; name: string }[];
+  analysisDateRange?: { from: string; to: string };
+  aggressiveness?: string;
+  comparedLocations?: string;
+  oldTransferSummary?: string;
+};
+
 export async function buildStockTransferDrafts(params: {
   userMessage: string;
   companyId: number;
@@ -25,8 +54,8 @@ export async function buildStockTransferDrafts(params: {
 }) {
   const { userMessage, companyId, selectedProvider, voucherDraft, stockAdjustmentDraft } = params;
   // ── Stock transfer detection ───────────────────────────────────────
-  let stockTransferDraft = undefined;
-  let stockTransferDrafts: any[] | undefined = undefined;
+  let stockTransferDraft: StockTransferChatDraft | undefined = undefined;
+  let stockTransferDrafts: StockTransferChatDraft[] | undefined = undefined;
   // When set, this is used verbatim as the assistant's text response for the
   // stock-transfer flow, bypassing the generic "prepared a draft" acknowledgement
   // prompt — guarantees we never claim a draft exists when it doesn't.
@@ -405,10 +434,16 @@ If intent is unclear or this is not a stock transfer request, respond with exact
           .replace(/```json\n?|```/g, "")
           .trim();
         if (rawTf !== "null" && rawTf.startsWith("{")) {
-          const parsedTf = JSON.parse(rawTf);
-          if (parsedTf && parsedTf.sourceLocationId && parsedTf.destinationLocationId && parsedTf.items?.length > 0) {
+          const parsedTf: StockTransferChatDraft = JSON.parse(rawTf);
+          if (
+            parsedTf &&
+            parsedTf.sourceLocationId &&
+            parsedTf.destinationLocationId &&
+            Array.isArray(parsedTf.items) &&
+            parsedTf.items.length > 0
+          ) {
             // Enrich with currentStock
-            for (const item of parsedTf.items) {
+            for (const item of parsedTf.items ?? []) {
               if (item.stockItemId && parsedTf.sourceLocationId) {
                 const invResult = await db.execute(sql`
                   SELECT COALESCE(SUM(CAST(quantity AS numeric)), 0) AS qty

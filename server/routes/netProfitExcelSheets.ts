@@ -447,7 +447,7 @@ export function writeSummarySheet(
       indent?: boolean;
     } = {}
   ) => {
-    const rowData: any[] = [opts.indent ? "  " + label : label];
+    const rowData: (string | number)[] = [opts.indent ? "  " + label : label];
     for (const v of monthVals) rowData.push(opts.pct ? v / 100 : fmt(v));
     rowData.push(opts.pct ? fmt(totalVal) / 100 : fmt(totalVal));
     const row = ws.addRow(rowData);
@@ -506,7 +506,7 @@ export function writeSummarySheet(
   writeSectionHdr("COST OF GOODS SOLD (COGS)", "FFDC2626");
   // Opening Stock: only show in total column (not per-month)
   {
-    const rowData: any[] = ["Opening Stock"];
+    const rowData: (string | number)[] = ["Opening Stock"];
     for (let i = 0; i < numMonths; i++) rowData.push("—");
     rowData.push(fmt(totalStats.openingSt));
     const row = ws.addRow(rowData);
@@ -534,7 +534,7 @@ export function writeSummarySheet(
   );
   // Closing Stock: only show in total column (negative, reduces COGS)
   {
-    const rowData: any[] = ["Less: Closing Stock"];
+    const rowData: (string | number)[] = ["Less: Closing Stock"];
     for (let i = 0; i < numMonths; i++) rowData.push("—");
     rowData.push(fmt(-totalStats.closingSt));
     const row = ws.addRow(rowData);
