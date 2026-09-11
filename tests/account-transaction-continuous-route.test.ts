@@ -63,7 +63,7 @@ describe("account transaction continuous chunks", () => {
     else process.env.CONTINUOUS_CURSOR_SECRET = previousSecret;
   });
 
-  it("advances equal-date/equal-voucher rows by entry id and carries the signed chunk opening net", async () => {
+  it("advances equal-date rows and reuses signed first-chunk aggregates on later chunks", async () => {
     harness.poolQuery
       .mockResolvedValueOnce({
         rows: [
@@ -99,11 +99,17 @@ describe("account transaction continuous chunks", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ total: 3, debitTotal: "10", creditTotal: "4" }] });
+      .mockResolvedValueOnce({ rows: [{ total: 3, debitTotal: "10", creditTotal: "4" }] })
+      .mockResolvedValueOnce({ rows: [{ net: "25" }] });
 
     const firstReq = {
       params: { id: "55" },
-      query: { continuous: "1", limit: "2", endDate: "2026-09-10" },
+      query: {
+        continuous: "1",
+        limit: "2",
+        startDate: "2026-09-01",
+        endDate: "2026-09-10",
+      },
       session: { currentCompanyId: 4 },
     };
     const firstRes = { status: vi.fn(), json: vi.fn(), setHeader: vi.fn() };
@@ -117,30 +123,32 @@ describe("account transaction continuous chunks", () => {
       total: 3,
       limit: 2,
       hasMore: true,
-      chunkOpeningNet: 0,
+      chunkOpeningNet: 25,
+      periodPreNetBalance: 25,
       periodDebitTotal: 10,
       periodCreditTotal: 4,
-      closingNetBalance: 6,
+      closingNetBalance: 31,
     });
     expect(firstPayload.nextCursor).toEqual(expect.any(String));
+    expect(harness.poolQuery).toHaveBeenCalledTimes(3);
     expect(String(harness.poolQuery.mock.calls[0][0])).not.toContain(" OFFSET ");
+    expect(String(harness.poolQuery.mock.calls[1][0])).toContain("COUNT(*)::int AS total");
+    expect(String(harness.poolQuery.mock.calls[2][0])).toContain("< $3::date");
 
-    harness.poolQuery
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            entryId: 103,
-            voucherId: 7,
-            debitAmount: "0",
-            creditAmount: "1",
-            voucherDate: "2026-09-10",
-            sort_date: "2026-09-10",
-            sort_id: 7,
-            sort_entry_id: 103,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({ rows: [{ total: 3, debitTotal: "10", creditTotal: "4" }] });
+    harness.poolQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          entryId: 103,
+          voucherId: 7,
+          debitAmount: "0",
+          creditAmount: "1",
+          voucherDate: "2026-09-10",
+          sort_date: "2026-09-10",
+          sort_id: 7,
+          sort_entry_id: 103,
+        },
+      ],
+    });
 
     const secondReq = {
       ...firstReq,
@@ -151,19 +159,25 @@ describe("account transaction continuous chunks", () => {
 
     await harness.handlers.get("/api/accounts/bank/:id/transactions")!(secondReq, secondRes, vi.fn());
 
-    const secondSql = String(harness.poolQuery.mock.calls[2][0]);
-    const secondValues = harness.poolQuery.mock.calls[2][1];
+    expect(harness.poolQuery).toHaveBeenCalledTimes(4);
+    const secondSql = String(harness.poolQuery.mock.calls[3][0]);
+    const secondValues = harness.poolQuery.mock.calls[3][1];
     expect(secondSql).toContain("sort_id =");
     expect(secondSql).toContain("sort_entry_id >");
     expect(secondSql).not.toContain(" OFFSET ");
+    expect(secondSql).not.toContain("COUNT(*)::int AS total");
     expect(secondValues).toEqual(expect.arrayContaining(["2026-09-10", 7, 102]));
     expect(secondRes.json).toHaveBeenCalledWith(
       expect.objectContaining({
         continuous: true,
+        total: 3,
+        periodDebitTotal: 10,
+        periodCreditTotal: 4,
+        closingNetBalance: 31,
         hasMore: false,
         nextCursor: null,
-        chunkOpeningNet: 7,
-        preNetBalance: 7,
+        chunkOpeningNet: 32,
+        preNetBalance: 32,
       })
     );
   });
