@@ -15,10 +15,14 @@ const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-type DaybookCursor = {
+type DaybookSortCursor = {
   sortDate: string;
   typeRank: number;
   sortId: number;
+};
+
+type DaybookCursor = DaybookSortCursor & {
+  total: number;
 };
 
 function parsePositiveInt(value: unknown, fallback: number): number {
@@ -48,15 +52,21 @@ function normalizeDate(value: unknown): string | undefined {
   return typeof value === "string" && ISO_DATE.test(value) ? value : undefined;
 }
 
-function isDaybookCursor(value: unknown): value is DaybookCursor {
+function isDaybookSortCursor(value: unknown): value is DaybookSortCursor {
   if (!value || typeof value !== "object") return false;
-  const cursor = value as Partial<DaybookCursor>;
+  const cursor = value as Partial<DaybookSortCursor>;
   return (
     typeof cursor.sortDate === "string" &&
     ISO_DATE.test(cursor.sortDate) &&
     Number.isInteger(cursor.typeRank) &&
     Number.isInteger(cursor.sortId)
   );
+}
+
+function isDaybookCursor(value: unknown): value is DaybookCursor {
+  if (!isDaybookSortCursor(value)) return false;
+  const cursor = value as Partial<DaybookCursor>;
+  return Number.isInteger(cursor.total) && Number(cursor.total) >= 0;
 }
 
 export function registerDaybookPaginationRoutes(app: Express): void {
@@ -269,6 +279,7 @@ export function registerDaybookPaginationRoutes(app: Express): void {
               ? `(sort_date > ${dateParam}::date OR (sort_date = ${dateParam}::date AND (type_rank > ${rankParam} OR (type_rank = ${rankParam} AND sort_id > ${idParam}))))`
               : `(sort_date < ${dateParam}::date OR (sort_date = ${dateParam}::date AND (type_rank > ${rankParam} OR (type_rank = ${rankParam} AND sort_id < ${idParam}))))`;
         }
+        const totalExpression = cursor ? `${bind(cursor.total)}::int` : `(SELECT COUNT(*)::int FROM combined)`;
         const chunkLimitParam = bind(limit + 1);
         const reverseDirection = direction === "ASC" ? "DESC" : "ASC";
         const query = `
@@ -287,7 +298,7 @@ export function registerDaybookPaginationRoutes(app: Express): void {
             LIMIT ${limit}
           )
           SELECT
-            (SELECT COUNT(*)::int FROM combined) AS total,
+            ${totalExpression} AS total,
             COALESCE(
               (
                 SELECT jsonb_agg(
@@ -312,11 +323,14 @@ export function registerDaybookPaginationRoutes(app: Express): void {
         `;
         const result = await pool.query(query, values);
         const row = result.rows[0] ?? {};
-        const total = Number(row.total || 0);
+        const total = cursor?.total ?? Number(row.total || 0);
         const items = Array.isArray(row.items) ? row.items : [];
         const hasMore = row.has_more === true;
         const lastCursor = row.last_cursor;
-        const nextCursor = hasMore && isDaybookCursor(lastCursor) ? encodeContinuousCursor(scope, lastCursor) : null;
+        const nextCursor =
+          hasMore && isDaybookSortCursor(lastCursor)
+            ? encodeContinuousCursor(scope, { ...lastCursor, total } satisfies DaybookCursor)
+            : null;
 
         res.setHeader("X-Total-Count", String(total));
         res.setHeader("Access-Control-Expose-Headers", "X-Total-Count");
