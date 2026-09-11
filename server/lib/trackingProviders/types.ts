@@ -41,3 +41,56 @@ export interface CarrierTrackResult {
   /** Provider responded but returned no useful tracking data */
   noData?: boolean;
 }
+
+/** Object view over an unknown carrier payload node, when it actually is one. */
+export function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/** Array view over an unknown carrier payload node, when it actually is one. */
+export function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** First element of an unknown payload node, when it actually is an array. */
+export function asFirst(value: unknown): unknown {
+  return Array.isArray(value) && value.length > 0 ? value[0] : null;
+}
+
+export interface CarrierRawEventLocation {
+  portName?: unknown;
+  locationName?: unknown;
+}
+
+/**
+ * Loose shape of one carrier event before normalization. Carriers name the
+ * same concept differently, so every field is optional.
+ */
+export interface CarrierRawEvent {
+  eventDateTime?: unknown;
+  eventDate?: unknown;
+  actualDate?: unknown;
+  timestamp?: unknown;
+  date?: unknown;
+  typeCode?: unknown;
+  eventCode?: unknown;
+  activityCode?: unknown;
+  activityName?: unknown;
+  transportEventTypeCode?: unknown;
+  status?: unknown;
+  description?: unknown;
+  eventDescription?: unknown;
+  location?: unknown;
+  locationName?: unknown;
+  portName?: unknown;
+}
+
+/** Read a raw event field as a nullable string. */
+export function rawStr(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** Object form of a raw event's `location`, when it is one. */
+export function asRawEventLocationObject(value: unknown): CarrierRawEventLocation | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as CarrierRawEventLocation) : null;
+}

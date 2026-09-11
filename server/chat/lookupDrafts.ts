@@ -10,7 +10,12 @@ export async function buildLookupDrafts(params: {
 }) {
   const { userMessage, companyId, selectedProvider } = params;
   // ── Voucher search by description ─────────────────────────────────
-  let voucherSearchResults: any[] | undefined = undefined;
+  let voucherSearchResults:
+    | Pick<
+        typeof schema.vouchers.$inferSelect,
+        "id" | "voucherNumber" | "voucherType" | "voucherDate" | "description" | "totalAmount" | "optional"
+      >[]
+    | undefined = undefined;
 
   if (RE_VOUCHER_SEARCH.test(userMessage)) {
     try {

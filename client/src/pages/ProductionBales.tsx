@@ -106,7 +106,29 @@ function generateFinalLabelHtml(
   </style></head><body><div class="print-note">FINAL LABELS - disable "Headers and Footers" in print settings for cleanest output.</div>${labelsHtml}</body></html>`;
 }
 
-function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) {
+/** Bale inside a pressing-batch response (subset of production bales). */
+interface PressingBale {
+  id: number;
+  referenceNumber: string | null;
+  status: string;
+  weightKg: string | null;
+  articleCode?: string | null;
+  productName?: string | null;
+  productId?: number | null;
+  pressingBatchId?: number | null;
+}
+
+/** Pressing batch row returned by /api/factory/pressing-batches. */
+interface PressingBatch {
+  id: number;
+  status: string;
+  createdAt: string;
+  pendingCount: number;
+  finalizedCount?: number;
+  bales?: PressingBale[];
+}
+
+function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () => void }) {
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [selectedMixBatchId, setSelectedMixBatchId] = useState<string>("");
   const [scannedBaleIds, setScannedBaleIds] = useState<Set<number>>(new Set());
@@ -124,10 +146,10 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
   const activeLocations = locations?.filter((l) => l.active);
   const activeMixBatches = mixBatches?.filter((b) => b.status === "ACTIVE");
 
-  const pendingBales = batch.bales?.filter((b: any) => b.status === "PENDING_PRESSING") || [];
+  const pendingBales = batch.bales?.filter((b) => b.status === "PENDING_PRESSING") || [];
   const scannedCount = scannedBaleIds.size;
   const expectedCount = pendingBales.length;
-  const missingBales = pendingBales.filter((b: any) => !scannedBaleIds.has(b.id));
+  const missingBales = pendingBales.filter((b) => !scannedBaleIds.has(b.id));
   const countsMatch = scannedCount === expectedCount && expectedCount > 0;
   const hasScanned = scannedCount > 0;
 
@@ -137,8 +159,8 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
     : 0;
 
   const totalScannedWeight = pendingBales
-    .filter((b: any) => scannedBaleIds.has(b.id))
-    .reduce((sum: number, b: any) => sum + parseFloat(b.weightKg || "0"), 0);
+    .filter((b) => scannedBaleIds.has(b.id))
+    .reduce((sum, b) => sum + parseFloat(b.weightKg || "0"), 0);
 
   const selectedLocationName = activeLocations?.find((l) => l.id.toString() === selectedLocationId);
 
@@ -253,10 +275,10 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
 
       const locName = selectedLocationName ? `${selectedLocationName.code} - ${selectedLocationName.name}` : "";
-      const finalizedBales = pendingBales.filter((b: any) => scannedBaleIds.has(b.id));
+      const finalizedBales = pendingBales.filter((b) => scannedBaleIds.has(b.id));
 
       try {
-        const labelData = finalizedBales.map((bale: any) => ({
+        const labelData = finalizedBales.map((bale) => ({
           productionBaleId: bale.id,
           productId: bale.productId,
           articleCode: bale.articleCode || "",
@@ -267,17 +289,25 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
         const labelResponse = await apiRequest("POST", "/api/bale-label-prints", { bales: labelData });
 
         if (labelResponse.ok) {
-          const { labelPrints } = await labelResponse.json();
+          const { labelPrints }: {
+            labelPrints: {
+              productionBaleId: number;
+              referenceNumber: string | null;
+              articleCode: string | null;
+              pieces?: number | null;
+              approxWeightKg?: string | number | null;
+            }[];
+          } = await labelResponse.json();
 
-          const baleMap = new Map(finalizedBales.map((b: any) => [b.id, b]));
-          const labels = labelPrints.map((lp: any) => {
+          const baleMap = new Map(finalizedBales.map((b) => [b.id, b]));
+          const labels = labelPrints.map((lp) => {
             const bale = baleMap.get(lp.productionBaleId) || {};
             return {
-              referenceNumber: lp.referenceNumber,
-              articleCode: lp.articleCode || (bale as { articleCode: unknown }).articleCode || "",
+              referenceNumber: String(lp.referenceNumber ?? ""),
+              articleCode: String(lp.articleCode ?? (bale as { articleCode?: unknown }).articleCode ?? ""),
               pieces: lp.pieces || 1,
-              approxWeightKg: lp.approxWeightKg || (bale as { weightKg: unknown }).weightKg || "0",
-              productName: (bale as { productName: unknown }).productName || "",
+              approxWeightKg: String(lp.approxWeightKg ?? (bale as { weightKg?: unknown }).weightKg ?? "0"),
+              productName: String((bale as { productName?: unknown }).productName ?? ""),
               locationName: locName,
             };
           });
@@ -327,11 +357,11 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
   });
 
   const productGroups = new Map<string, number>();
-  pendingBales.forEach((b: any) => {
+  pendingBales.forEach((b) => {
     const name = b.productName || "Unknown";
     productGroups.set(name, (productGroups.get(name) || 0) + 1);
   });
-  const totalWeight = pendingBales.reduce((sum: number, b: any) => sum + parseFloat(b.weightKg || "0"), 0);
+  const totalWeight = pendingBales.reduce((sum, b) => sum + parseFloat(b.weightKg || "0"), 0);
 
   return (
     <div className="space-y-4">
@@ -408,7 +438,7 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pendingBales.map((bale: any) => {
+                {pendingBales.map((bale) => {
                   const isScanned = scannedBaleIds.has(bale.id);
                   return (
                     <TableRow
@@ -586,7 +616,7 @@ function BatchDetailView({ batch, onBack }: { batch: any; onBack: () => void }) 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {missingBales.map((bale: any) => (
+                    {missingBales.map((bale) => (
                       <TableRow key={bale.id}>
                         <TableCell className="font-mono text-sm">{bale.referenceNumber}</TableCell>
                         <TableCell className="text-sm">{bale.productName || "-"}</TableCell>
@@ -661,7 +691,7 @@ export default function ProductionBales() {
 
   useEscapeBack(selectedBatchId !== null ? () => setSelectedBatchId(null) : null);
 
-  const { data: pressingBatches, isLoading: batchesLoading } = useQuery<any[]>({
+  const { data: pressingBatches, isLoading: batchesLoading } = useQuery<PressingBatch[]>({
     queryKey: ["/api/factory/pressing-batches"],
   });
 
@@ -708,13 +738,13 @@ export default function ProductionBales() {
       {pendingBatches.length > 0 && (
         <div className="grid gap-3">
           {pendingBatches.map((batch) => {
-            const batchBales = batch.bales?.filter((b: any) => b.status === "PENDING_PRESSING") || [];
+            const batchBales = batch.bales?.filter((b) => b.status === "PENDING_PRESSING") || [];
             const productGroups = new Map<string, number>();
-            batchBales.forEach((b: any) => {
+            batchBales.forEach((b) => {
               const name = b.productName || "Unknown";
               productGroups.set(name, (productGroups.get(name) || 0) + 1);
             });
-            const totalWeight = batchBales.reduce((sum: number, b: any) => sum + parseFloat(b.weightKg || "0"), 0);
+            const totalWeight = batchBales.reduce((sum, b) => sum + parseFloat(b.weightKg || "0"), 0);
             const productList = Array.from(productGroups.entries());
 
             return (
@@ -732,9 +762,9 @@ export default function ProductionBales() {
                         <Badge variant="secondary" className="text-xs">
                           {batch.pendingCount} pending
                         </Badge>
-                        {batch.finalizedCount > 0 && (
+                        {(batch.finalizedCount ?? 0) > 0 && (
                           <Badge variant="outline" className="text-xs">
-                            {batch.finalizedCount} finalized
+                            {batch.finalizedCount ?? 0} finalized
                           </Badge>
                         )}
                         {batch.status === "PARTIALLY_FINALIZED" && (

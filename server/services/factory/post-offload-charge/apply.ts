@@ -82,7 +82,7 @@ export async function applyPostOffloadChargeMutation(
       .for("update");
     if (!chargeRow) throw new Error("Charge not found or already undone");
     if (expectedVersion !== undefined && chargeRow.version !== expectedVersion) {
-      const err: any = new Error("Charge was modified by another request — please retry");
+      const err: Error & { status?: number } = new Error("Charge was modified by another request — please retry");
       err.status = 409;
       throw err;
     }
@@ -359,7 +359,7 @@ export async function applyPostOffloadChargeMutation(
       .for("update");
     if (!rawCharge) throw new Error("Charge not found or already undone");
     if (expectedVersion !== undefined && rawCharge.version !== expectedVersion) {
-      const err: any = new Error("Charge was modified by another request — please retry");
+      const err: Error & { status?: number } = new Error("Charge was modified by another request — please retry");
       err.status = 409;
       throw err;
     }
@@ -694,7 +694,7 @@ export async function applyPostOffloadChargeMutation(
     }
 
     if (expectedVersion !== undefined && rawCharge.version !== expectedVersion) {
-      const err: any = new Error("Charge was modified by another request — please retry");
+      const err: Error & { status?: number } = new Error("Charge was modified by another request — please retry");
       err.status = 409;
       throw err;
     }

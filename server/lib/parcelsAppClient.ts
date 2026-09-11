@@ -25,6 +25,8 @@ export interface ParcelsAppEvent {
 
 export interface ParcelsAppShipment {
   trackingId: string;
+  /** Alternate id some ParcelsApp payloads use instead of trackingId */
+  id?: string;
   done: boolean;
   fromCache?: boolean;
   // ParcelsApp normally returns attributes as an array of {l, val} objects,

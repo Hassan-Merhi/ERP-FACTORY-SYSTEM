@@ -18,7 +18,7 @@
  * blocked=true so the caller knows to fall back to the next provider.
  */
 
-import type { HTTPResponse } from "puppeteer";
+import type { Browser, HTTPResponse, Page } from "puppeteer";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "./logger";
 import { execSync } from "child_process";
@@ -143,7 +143,7 @@ export const ensureChromiumAvailable = ensureChromiumInstalled;
 // One Chrome process is kept alive and reused across all scrape calls.
 // Replaced automatically if it crashes.
 
-let _sharedBrowser: any = null;
+let _sharedBrowser: Browser | null = null;
 let _stealthRegistered = false;
 
 async function getSharedBrowser() {
@@ -166,7 +166,7 @@ async function getSharedBrowser() {
 
   const chromePath = getChromiumPath();
   logger.info("[ParcelsAppScraper] Launching shared Chrome instance…");
-  _sharedBrowser = await puppeteerExtra.launch({
+  _sharedBrowser = (await puppeteerExtra.launch({
     headless: true,
     ...(chromePath ? { executablePath: chromePath } : {}),
     args: [
@@ -204,15 +204,16 @@ async function getSharedBrowser() {
       "--safebrowsing-disable-auto-update",
       "--password-store=basic",
     ],
-  });
+  })) as Browser;
 
-  _sharedBrowser.on("disconnected", () => {
+  const browser = _sharedBrowser;
+  browser.on("disconnected", () => {
     logger.warn("[ParcelsAppScraper] Shared browser disconnected (crash or killed)");
     _sharedBrowser = null;
   });
 
   logger.info("[ParcelsAppScraper] Shared Chrome instance ready");
-  return _sharedBrowser;
+  return browser;
 }
 
 // ── Main scrape function ──────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
   }
   logger.info(`[ParcelsAppScraper] ${containerNumber}: Puppeteer slot acquired`);
 
-  let page: any = null;
+  let page: Page | null = null;
   const hardStop = setTimeout(() => {
     logger.warn(`[ParcelsAppScraper] ${containerNumber}: hard timeout — closing page`);
     try {
@@ -338,7 +339,9 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
     const data = capturedData as unknown as { shipments: ParcelsAppShipment[] } & { parcels: ParcelsAppShipment[] };
     const all: ParcelsAppShipment[] = data.shipments ?? data.parcels ?? [];
     const shipment =
-      all.find((s: any) => s.trackingId === containerNumber || s.id === containerNumber) ?? all[0] ?? null;
+      all.find((s: ParcelsAppShipment) => s.trackingId === containerNumber || s.id === containerNumber) ??
+      all[0] ??
+      null;
 
     return {
       success: !!shipment,

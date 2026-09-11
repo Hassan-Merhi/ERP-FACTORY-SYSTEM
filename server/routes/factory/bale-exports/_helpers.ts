@@ -226,7 +226,7 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
     LB = "FFE0EAFF",
     DG = "FF374151",
     TBG = "FFD1FAE5";
-  const BS: any = { style: "thin", color: { argb: "FFD1D5DB" } };
+  const BS: import("exceljs").Border = { style: "thin", color: { argb: "FFD1D5DB" } };
   const BA = { top: BS, left: BS, bottom: BS, right: BS };
   sh.getColumn(1).width = 24;
   sh.getColumn(2).width = 14;

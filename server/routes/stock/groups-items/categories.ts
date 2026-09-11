@@ -68,7 +68,7 @@ export function registerStockCategoryRoutes(app: Express) {
         .from(stockCategories)
         .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Stock category not found" });
-      const updates: any = {};
+      const updates: Partial<typeof stockCategories.$inferInsert> = {};
       if (req.body.name !== undefined) {
         const n = String(req.body.name).trim();
         if (!n) return res.status(400).json({ message: "Name is required" });

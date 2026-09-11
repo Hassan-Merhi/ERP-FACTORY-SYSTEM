@@ -134,7 +134,11 @@ async function lockTransferScope(tx: Parameters<Parameters<typeof db.transaction
 function assertLockedTransfer(locked: any, companyId: number): asserts locked {
   if (!locked) throw new Error("Stock transfer not found");
   if (Number(locked.company_id) !== companyId) throw new Error("Stock transfer belongs to a different company");
-  if (locked.voucher_type !== "Stock Transfer" && locked.voucher_type !== "StockTransfer" && locked.voucher_type !== "Transfer") {
+  if (
+    locked.voucher_type !== "Stock Transfer" &&
+    locked.voucher_type !== "StockTransfer" &&
+    locked.voucher_type !== "Transfer"
+  ) {
     throw new Error("Voucher is not a stock transfer");
   }
   if (locked.deleted_at) throw new Error("Deleted stock transfers cannot be revised");
@@ -150,13 +154,7 @@ async function assertCompanyScope(
   const validLocations = await tx
     .select({ id: locations.id })
     .from(locations)
-    .where(
-      and(
-        eq(locations.companyId, companyId),
-        inArray(locations.id, locationIds),
-        isNull(locations.deletedAt)
-      )
-    );
+    .where(and(eq(locations.companyId, companyId), inArray(locations.id, locationIds), isNull(locations.deletedAt)));
   if (validLocations.length !== locationIds.length) {
     throw new Error("One or more revision locations do not belong to the current company");
   }
@@ -359,7 +357,11 @@ export async function approvePendingStockTransferRevision(
     const requested = firstRow(requestedResult);
     if (!requested) throw new Error("Revision not found");
     if (Number(requested.company_id) !== companyId) throw new Error("Revision belongs to a different company");
-    if (requested.voucher_type !== "Stock Transfer" && requested.voucher_type !== "StockTransfer" && requested.voucher_type !== "Transfer") {
+    if (
+      requested.voucher_type !== "Stock Transfer" &&
+      requested.voucher_type !== "StockTransfer" &&
+      requested.voucher_type !== "Transfer"
+    ) {
       throw new Error("Voucher is not a stock transfer");
     }
     if (requested.deleted_at) throw new Error("Deleted stock transfers cannot be revised");
@@ -377,7 +379,7 @@ export async function approvePendingStockTransferRevision(
       ORDER BY revision_number ASC
       FOR UPDATE
     `);
-    const pendingRows = ((pendingResult.rows ?? pendingResult));
+    const pendingRows = pendingResult.rows ?? pendingResult;
     if (pendingRows.length === 0) {
       const currentItems = await tx
         .select({ quantity: stockTransferItems.quantity, rate: stockTransferItems.rate })
@@ -433,7 +435,13 @@ export async function approvePendingStockTransferRevision(
         ) || null;
       const oldQuantity = existing ? Number(existing.quantity) : 0;
       if (Math.abs(oldQuantity - target.originalQuantity) > 0.001) {
-        const error: any = new Error(
+        const error: Error & {
+          code?: string;
+          stockItemId?: number;
+          sourceLocationId?: number;
+          requiredQuantity?: number;
+          availableQuantity?: number;
+        } = new Error(
           `Revision is stale for item ${target.stockItemId} at source ${target.sourceLocationId}. ` +
             `Expected ${target.originalQuantity}, current transfer quantity is ${oldQuantity}.`
         );
@@ -508,7 +516,13 @@ export async function approvePendingStockTransferRevision(
         const row = firstRow(lockedInventory);
         const available = Number(row?.quantity ?? 0);
         if (available + 1e-9 < requirement.quantity) {
-          const error: any = new Error(
+          const error: Error & {
+            code?: string;
+            stockItemId?: number;
+            sourceLocationId?: number;
+            requiredQuantity?: number;
+            availableQuantity?: number;
+          } = new Error(
             `Insufficient stock for revision item ${requirement.stockItemId} at source ${requirement.sourceLocationId}: ` +
               `required ${requirement.quantity}, available ${available}`
           );
@@ -533,7 +547,13 @@ export async function approvePendingStockTransferRevision(
         const row = firstRow(lockedDestination);
         const available = Number(row?.quantity ?? 0);
         if (available + 1e-9 < required) {
-          const error: any = new Error(
+          const error: Error & {
+            code?: string;
+            stockItemId?: number;
+            sourceLocationId?: number;
+            requiredQuantity?: number;
+            availableQuantity?: number;
+          } = new Error(
             `Destination stock is too low to reduce transfer item ${stockItemId}: required ${required}, available ${available}`
           );
           error.code = "STOCK_TRANSFER_DESTINATION_STOCK_CONFLICT";
@@ -570,29 +590,12 @@ export async function approvePendingStockTransferRevision(
       }
 
       if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
-        await adjustInventory(
-          tx,
-          change.sourceLocationId,
-          change.stockItemId,
-          -change.delta,
-          companyId,
-          change.rate
-        );
-        await adjustInventory(
-          tx,
-          destinationLocationId,
-          change.stockItemId,
-          change.delta,
-          companyId,
-          change.rate
-        );
+        await adjustInventory(tx, change.sourceLocationId, change.stockItemId, -change.delta, companyId, change.rate);
+        await adjustInventory(tx, destinationLocationId, change.stockItemId, change.delta, companyId, change.rate);
       }
     }
 
-    const finalItems = await tx
-      .select()
-      .from(stockTransferItems)
-      .where(eq(stockTransferItems.transferId, transferId));
+    const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems
       .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
       .toFixed(2);

@@ -127,7 +127,7 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         ).toFixed(2)
       );
 
-      const updateData: any = {
+      const updateData: Partial<typeof factoryPayrolls.$inferInsert> = {
         bonuses: updatedBonuses.toFixed(2),
         deductions: updatedDeductions.toFixed(2),
         advances: updatedAdvances.toFixed(2),

@@ -42,7 +42,7 @@ export function registerV5LocationSummaryRoutes(app: Express) {
             GROUP BY article_code`
       );
       const inStockMap = new Map<string, number>(
-        resultRows(inStockRaw).map((r: any) => [r.articleCode, Number(r.count)])
+        resultRows<{ articleCode: string; count: number }>(inStockRaw).map((r) => [r.articleCode, Number(r.count)])
       );
 
       // 2. reservedExpected — SUM(expected_qty) for DRAFT V5 orders on active proformas (company-wide)
@@ -60,7 +60,7 @@ export function registerV5LocationSummaryRoutes(app: Express) {
             GROUP BY cel.article_code`
       );
       const reservedMap = new Map<string, number>(
-        resultRows(reservedRaw).map((r: any) => [r.articleCode, Number(r.total)])
+        resultRows<{ articleCode: string; total: number }>(reservedRaw).map((r) => [r.articleCode, Number(r.total)])
       );
 
       // 3. loading — bales at this location that have been scanned into LOADING V5 containers
@@ -78,7 +78,7 @@ export function registerV5LocationSummaryRoutes(app: Express) {
             GROUP BY fb.article_code`
       );
       const loadingMap = new Map<string, number>(
-        resultRows(loadingRaw).map((r: any) => [r.articleCode, Number(r.count)])
+        resultRows<{ articleCode: string; count: number }>(loadingRaw).map((r) => [r.articleCode, Number(r.count)])
       );
 
       // 4. Resolve product names + weight_per_bale_kg (bidirectional code/articleCode lookup)
@@ -101,9 +101,11 @@ export function registerV5LocationSummaryRoutes(app: Express) {
               WHERE matched_code IS NOT NULL
               ORDER BY matched_code`
         );
-        resultRows(nameRaw).forEach((r: any) => {
-          if (r.name) productNameMap.set(r.articleCode, r.name);
-          if (r.weightPerBaleKg != null) weightMap.set(r.articleCode, parseFloat(r.weightPerBaleKg));
+        resultRows<{ articleCode: string | null; name: string | null; weightPerBaleKg: string | null }>(
+          nameRaw
+        ).forEach((r) => {
+          if (r.name && r.articleCode) productNameMap.set(r.articleCode, r.name);
+          if (r.weightPerBaleKg != null && r.articleCode) weightMap.set(r.articleCode, parseFloat(r.weightPerBaleKg));
         });
       }
 

@@ -39,6 +39,28 @@ import {
   TOOL_INTENTS,
 } from "./chat/prompts";
 
+/** One file change proposed by the AI in a code_edit response. */
+interface FilePatchDraft {
+  filePath: string;
+  description: string;
+  originalContent: string;
+  newContent: string;
+}
+
+/** Raw AI patch payload fields, as best-guess parsed from model JSON. */
+interface CodePatchPayload {
+  description?: string;
+  filePath?: string;
+  originalContent?: string;
+  newContent?: string;
+  patches?: Array<{
+    filePath?: string;
+    description?: string;
+    originalContent?: string;
+    newContent?: string;
+  }>;
+}
+
 export async function chat(
   userMessage: string,
   companyId: number,
@@ -60,7 +82,7 @@ export async function chat(
   accountQueryResult?: unknown;
   verifyContainerDraft?: unknown;
   dataQueryResult?: unknown;
-  filePatchDrafts?: unknown[];
+  filePatchDrafts?: FilePatchDraft[];
   readFiles?: string[];
 }> {
   const available = getAvailableProviders();
@@ -332,7 +354,7 @@ Rules:
     logger.info(`[ChatService] AI call (${usedProvider}) took ${Date.now() - aiStart}ms`);
 
     // ── Code Edit: parse filePatchDrafts (single or multi-file) from AI JSON ──
-    let filePatchDrafts: any[] | undefined = undefined;
+    let filePatchDrafts: FilePatchDraft[] | undefined = undefined;
     let finalResponse = response;
 
     if (intent === "code_edit") {
@@ -343,15 +365,15 @@ Rules:
           .replace(/\n?```$/, "")
           .trim();
         if (raw.startsWith("{")) {
-          const parsed = JSON.parse(raw);
+          const parsed: CodePatchPayload = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.patches) && parsed.patches.length > 0) {
             // Multi-file patches
             filePatchDrafts = parsed.patches
-              .filter((p: any) => p.filePath && "newContent" in p)
-              .map((p: any) => ({
-                filePath: p.filePath,
+              .filter((p) => p.filePath && "newContent" in p)
+              .map((p) => ({
+                filePath: p.filePath as string,
                 description: p.description || parsed.description || "Apply code changes",
-                originalContent: p.originalContent ?? codeEditOriginalMap[p.filePath] ?? "",
+                originalContent: p.originalContent ?? codeEditOriginalMap[p.filePath as string] ?? "",
                 newContent: p.newContent ?? "",
               }));
             if (filePatchDrafts && filePatchDrafts.length > 0) {

@@ -11,28 +11,31 @@ export function makeId(): string {
 }
 
 export function fromApiSheet(s: ApiSheet): StatusBuilderSheet {
-  const rawCols: any[] = Array.isArray(s.columns) ? s.columns : [];
-  const rawRows: any[] = Array.isArray(s.rows) ? s.rows : [];
+  const rawCols: unknown[] = Array.isArray(s.columns) ? s.columns : [];
+  const rawRows: unknown[] = Array.isArray(s.rows) ? s.rows : [];
 
   const columns: ColumnDef[] = rawCols.map((c, i: number) => {
     if (typeof c === "string") return { id: `col_${makeId()}`, label: c };
-    return { id: c.id ?? `col_${i}`, label: c.label ?? "" };
+    const col = c as { id?: string; label?: string };
+    return { id: col.id ?? `col_${i}`, label: col.label ?? "" };
   });
 
   const rows: SheetRow[] = rawRows.map((r, ri: number) => {
-    const rawCells: any[] = Array.isArray(r.cells) ? r.cells : [];
+    const row = r as { id?: string; label?: string; cells?: unknown };
+    const rawCells: unknown[] = Array.isArray(row.cells) ? row.cells : [];
     const cells: Cell[] = rawCells.map((c) => {
       if (c === null || c === undefined) return { value: null };
       if (typeof c === "number" || typeof c === "string") return { value: c };
       if (typeof c === "object" && "value" in c) {
-        return { value: c.value ?? null, link: c.link ?? null };
+        const cell = c as { value?: Cell["value"]; link?: Cell["link"] };
+        return { value: cell.value ?? null, link: cell.link ?? null };
       }
       return { value: null };
     });
     while (cells.length < columns.length) cells.push({ value: null });
     return {
-      id: r.id ?? `row_${ri}`,
-      label: r.label ?? "",
+      id: row.id ?? `row_${ri}`,
+      label: row.label ?? "",
       cells,
     };
   });

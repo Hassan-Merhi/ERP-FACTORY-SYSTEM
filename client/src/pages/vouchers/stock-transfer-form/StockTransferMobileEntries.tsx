@@ -214,7 +214,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
                       }}
                     >
                       <div className="font-medium truncate">{item.stockItemName}</div>
-                      <div className="text-xs text-muted-foreground">Qty: {formatNumber(item.quantity, 0)}</div>
+                      <div className="text-xs text-muted-foreground">Qty: {formatNumber(typeof item.quantity === "number" ? item.quantity : undefined, 0)}</div>
                     </button>
                   ))}
                 </div>

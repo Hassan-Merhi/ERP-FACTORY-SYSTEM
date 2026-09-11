@@ -20,6 +20,7 @@ import {
   useFilteredTransferInventory,
   usePendingTransferRevisions,
   useTransferRateAutofill,
+  type TransferInventoryItem,
 } from "./useTransferFormDerived";
 
 export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: StockTransferFormProps) {
@@ -34,6 +35,56 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   const hydratedVoucherIdRef = useRef<number | null>(null);
   const lastKnownTransferIdRef = useRef<number | null>(null);
   const savingTransferRevisionRef = useRef(false);
+
+  type TransferRevisionItem = {
+    stockItemName?: string;
+    sourceLocationName?: string;
+    delta?: string;
+    originalQuantity?: string;
+    newQuantity?: string;
+  };
+
+  type TransferRevision = {
+    id: number;
+    revisionNumber?: number;
+    revisionDate?: string | Date | null;
+    optional?: boolean;
+    note?: string | null;
+    items?: TransferRevisionItem[];
+    _mergedCount?: number;
+  };
+
+  type StockTransferLineItem = {
+    stockItemId: number;
+    sourceLocationId: number;
+    quantity: string;
+    rate?: string;
+    stockItemName?: string;
+    stockItemCode?: string;
+    sourceLocationName?: string;
+  };
+
+  type ValidatedTransferImportItem = {
+    rowNum?: number;
+    barcode?: string;
+    quantity: string;
+    error?: string;
+    warning?: string;
+    stockItemId?: number;
+    stockItemName?: string;
+    stockItemUom?: string;
+    sourceLocationId?: number;
+    currentStock?: number;
+    remainingStock?: number;
+    averageRate?: string;
+    rate?: string;
+  };
+
+  type TransferImportValidationResult = {
+    errors: string[];
+    warnings: string[];
+    validatedItems: ValidatedTransferImportItem[];
+  };
 
   const { data: stockItems = [] } = useQuery<StockItem[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
@@ -77,7 +128,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   if (stockTransferToEdit?.id) lastKnownTransferIdRef.current = stockTransferToEdit.id;
   const stableTransferId = stockTransferToEdit?.id ?? lastKnownTransferIdRef.current;
 
-  const { data: transferRevisions = [] } = useQuery<any[]>({
+  const { data: transferRevisions = [] } = useQuery<TransferRevision[]>({
     queryKey: ["/api/stock-transfers", stableTransferId, "revisions"],
     queryFn: async () => {
       const res = await fetch(`/api/stock-transfers/${stableTransferId}/revisions`, { credentials: "include" });
@@ -152,8 +203,12 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importPreview, setImportPreview] = useState<any>(null);
-  const [importValidationResult, setImportValidationResult] = useState<any>(null);
+  const [importPreview, setImportPreview] = useState<{
+    items: { rowNum: number; barcode: string; quantity: number; sourceLocation?: string }[];
+    totalItems?: number;
+    fileName?: string;
+  } | null>(null);
+  const [importValidationResult, setImportValidationResult] = useState<TransferImportValidationResult | null>(null);
   const [importDestLocation, setImportDestLocation] = useState<string>("");
   const [importDate, setImportDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
   const [importNotes, setImportNotes] = useState<string>("");
@@ -161,11 +216,11 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
 
   const importIsValidated = importValidationResult !== null;
   const importHasErrors = importValidationResult?.errors && importValidationResult.errors.length > 0;
-  const importValidItems = importValidationResult?.validatedItems?.filter((item: any) => !item.error) || [];
+  const importValidItems = importValidationResult?.validatedItems?.filter((item) => !item.error) || [];
   const importValidItemsCount = importValidItems.length;
   const importTotalItemsCount = importValidationResult?.validatedItems?.length || 0;
 
-  const { data: transferInventory = [] } = useQuery<any[]>({
+  const { data: transferInventory = [] } = useQuery<TransferInventoryItem[]>({
     queryKey: transferInventorySource ? [`/api/locations/${transferInventorySource}/inventory`] : [],
     enabled: !!transferInventorySource && transferInventorySource > 0,
   });
@@ -191,7 +246,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       stockItems.length > 0
     ) {
       if (hydratedVoucherIdRef.current === voucherIdToEdit) return;
-      const formEntries = stockTransferToEdit.items.map((item: any) => {
+      const formEntries = (stockTransferToEdit.items as StockTransferLineItem[]).map((item) => {
         const sourceLocation = locations.find((l) => l.id === item.sourceLocationId);
         const stockItem = stockItems.find((s) => s.id === item.stockItemId);
         return {
@@ -576,7 +631,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       setTransferRevisionNote("");
       setTransferRevisionDialogOpen(false);
       setTransferRevisionsExpanded(true);
-      const refreshedRevisions = queryClient.getQueryData<any[]>(["/api/stock-transfers", transferId, "revisions"]);
+      const refreshedRevisions = queryClient.getQueryData<TransferRevision[]>(["/api/stock-transfers", transferId, "revisions"]);
       const nextRevNum = refreshedRevisions?.length ?? transferRevisions.length + 1;
       toast({ title: "Revision Saved", description: `Rev ${nextRevNum} recorded and transfer updated` });
     } catch (error) {
@@ -616,7 +671,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
           const res = await fetch(`/api/locations/${entry.sourceLocationId}/inventory`);
           if (res.ok) {
             const inventory = await res.json();
-            const inv = inventory.find((item: any) => item.stockItemId === entry.stockItemId);
+            const inv = (inventory as TransferInventoryItem[]).find((item) => item.stockItemId === entry.stockItemId);
             return {
               stockItemId: entry.stockItemId,
               sourceLocationId: entry.sourceLocationId,
@@ -642,9 +697,9 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       (e) => !(e.stockItemId > 0 && e.sourceLocationId > 0 && parseFloat(e.quantity) === 0)
     );
     const isEditMode = !!voucherIdToEdit;
-    let originalItems = [];
+    let originalItems: StockTransferLineItem[] = [];
     if (isEditMode && voucherIdToEdit) {
-      let st = stockTransferToEdit as any | undefined;
+      let st = stockTransferToEdit as ({ items?: StockTransferLineItem[] } & Record<string, unknown>) | undefined;
       if (!st) {
         try {
           const res = await fetch(`/api/stock-transfers?voucherId=${voucherIdToEdit}`);
@@ -769,7 +824,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       });
       return;
     }
-    const validItems = importValidationResult.validatedItems.filter((item: any) => !item.error);
+    const validItems = importValidationResult.validatedItems.filter((item) => !item.error);
     if (importValidationResult?.errors?.length > 0) {
       setImportConfirmDialogOpen(true);
       return;
@@ -782,7 +837,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     });
   };
   const handleConfirmedImport = () => {
-    const validItems = importValidationResult?.validatedItems?.filter((item: any) => !item.error) || [];
+    const validItems = importValidationResult?.validatedItems?.filter((item) => !item.error) || [];
     setImportConfirmDialogOpen(false);
     if (validItems.length === 0) {
       setImportDialogOpen(false);

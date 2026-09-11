@@ -61,14 +61,18 @@ export async function buildSpProductionClosureStatus(companyId: number) {
     ORDER BY evidence_type
   `);
   const evidence = resultRows(evidenceResult);
-  const evidenceMap = new Map(evidence.map((row: any) => [row.evidence_type, row]));
+  const evidenceMap = new Map(evidence.map((row: Record<string, unknown>) => [row.evidence_type, row]));
   const checks = REQUIRED_STABILIZATION_CHECKS.map((type) => ({
     type,
-    ...(evidenceMap.get(type) ?? {
-      status: "MISSING",
-      detail: null,
-      recorded_by: null,
-      recorded_at: null,
+    status: "MISSING",
+    detail: null,
+    recorded_by: null,
+    recorded_at: null,
+    ...((evidenceMap.get(type) ?? {}) as {
+      status?: string;
+      detail?: unknown;
+      recorded_by?: unknown;
+      recorded_at?: unknown;
     }),
   }));
 
@@ -96,7 +100,12 @@ export async function buildSpProductionClosureStatus(companyId: number) {
   `);
   const migrationSuspenseEntryCount = Number(firstRow(suspense)?.count ?? 0);
 
-  const failures = checks.filter((check: { status: string }) => check.status !== "PASS");
+  const failures: {
+    type: string;
+    status: string;
+    sourceWriteCount?: number;
+    migrationSuspenseEntryCount?: number;
+  }[] = checks.filter((check) => check.status !== "PASS");
   if (sourceWriteCount > 0) {
     failures.push({ type: "source_write_lock_database", status: "FAIL", sourceWriteCount });
   }

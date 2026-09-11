@@ -290,11 +290,15 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
       });
       document.body.removeChild(el);
       const imageBase64 = canvas.toDataURL("image/png");
-      const data: any = await apiRequest("POST", `/api/transporter-statement/${selectedAccountId}/send-whatsapp`, {
-        dateFrom,
-        dateTo,
-        imageBase64,
-      });
+      const data: Response & { sent?: number } = await apiRequest(
+        "POST",
+        `/api/transporter-statement/${selectedAccountId}/send-whatsapp`,
+        {
+          dateFrom,
+          dateTo,
+          imageBase64,
+        }
+      );
       toast({ title: "WhatsApp sent", description: `Delivered to ${data?.sent ?? 0} recipient(s).` });
     } catch (err) {
       if (el.parentNode) document.body.removeChild(el);

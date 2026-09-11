@@ -231,7 +231,15 @@ export function UserManagementDrawer({ user, open, onClose, companies, onUserDel
   ]);
 
   const handleSaveAll = () => {
-    const payload: any = {
+    const payload: {
+      displayName: string;
+      username?: string;
+      password?: string;
+      hasErpAccess?: boolean;
+      hasFactoryAccess?: boolean;
+      pageAccess?: string[];
+      hiddenCostFields?: string[];
+    } = {
       displayName,
     };
     if (username !== user.username) payload.username = username;

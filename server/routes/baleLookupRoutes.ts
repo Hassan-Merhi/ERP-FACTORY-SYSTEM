@@ -309,7 +309,25 @@ export function registerBaleLookupRoutes(app: Express) {
       }
 
       // ── Enrich with factory_bales data (stable id first, normalized reference fallback) ──
-      let baleInfo: any = null;
+      type BaleLookupInfo = Pick<
+        typeof factoryBales.$inferSelect,
+        | "id"
+        | "baleCode"
+        | "productName"
+        | "status"
+        | "weightKg"
+        | "costPerKg"
+        | "totalCost"
+        | "grade"
+        | "stockEntryDate"
+        | "pressedAt"
+        | "finalizedAt"
+        | "workerName"
+        | "createdAt"
+        | "updatedAt"
+        | "deletedAt"
+      > & { isInLoadingOrder?: boolean };
+      let baleInfo: BaleLookupInfo | null = null;
       let locationInfo = null;
       let pressingBatch = null;
       let mixBatch = null;

@@ -71,7 +71,14 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
       });
 
       // Credit: Bank/Cash Account
-      const creditEntry: any = {
+      const creditEntry: {
+        voucherId: number;
+        debitAmount: string;
+        creditAmount: string;
+        narration: string;
+        ledgerAccountId?: number;
+        bankAccountId?: number;
+      } = {
         voucherId: voucher.id,
         debitAmount: "0",
         creditAmount: withdrawalAmount.toFixed(2),

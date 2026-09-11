@@ -83,14 +83,24 @@ async function lockCompanies(
   }
 }
 
-function deepestError(error: unknown) {
-  let current: any = error;
-  const seen = new Set();
-  while (current?.cause && !seen.has(current.cause)) {
+/** Loose view over a thrown value's error fields, including the cause chain. */
+interface PgErrorLike {
+  message?: string;
+  code?: string;
+  constraint?: string;
+  detail?: string;
+  cause?: unknown;
+}
+
+function deepestError(error: unknown): PgErrorLike {
+  const asPgError = (value: unknown): PgErrorLike => (value && typeof value === "object" ? (value as PgErrorLike) : {});
+  let current = asPgError(error);
+  const seen = new Set<unknown>();
+  while (current.cause && !seen.has(current.cause)) {
     seen.add(current);
-    current = current.cause;
+    current = asPgError(current.cause);
   }
-  return current ?? error;
+  return current;
 }
 
 function respondWithError(res: import("express").Response, error: unknown) {

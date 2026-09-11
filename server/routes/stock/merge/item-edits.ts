@@ -45,7 +45,7 @@ export function registerStockItemEditRoutes(app: Express) {
 
       const updated = await storage.updateStockTransferItem(itemId, req.body);
       try {
-        const _sti: Record<string, any> = {};
+        const _sti: Record<string, { new: string }> = {};
         if (req.body.quantity !== undefined) _sti.quantity = { new: String(req.body.quantity) };
         if (req.body.rate !== undefined) _sti.rate = { new: String(req.body.rate) };
         if (req.body.stockItemId !== undefined) _sti.stockItemId = { new: String(req.body.stockItemId) };
