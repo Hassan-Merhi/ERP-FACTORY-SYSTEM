@@ -7,7 +7,6 @@ import { usePaginatedGITContainers } from "../../client/src/pages/git-containers
 const filters = {
   companyIdentity: 4,
   allCompanies: false,
-  page: 1,
   pageSize: 1,
   companyFilter: "ALL",
   containerFilters: [],
@@ -108,7 +107,9 @@ describe("usePaginatedGITContainers continuous loading", () => {
     window.fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse(trackingChunk({ id: 1, containerNumber: "OLD-A", hasMore: true, nextCursor: "expired-cursor" }))
+        jsonResponse(
+          trackingChunk({ id: 1, containerNumber: "OLD-A", hasMore: true, nextCursor: "expired-cursor" })
+        )
       )
       .mockResolvedValueOnce(
         jsonResponse(
@@ -117,7 +118,9 @@ describe("usePaginatedGITContainers continuous loading", () => {
         )
       )
       .mockResolvedValueOnce(
-        jsonResponse(trackingChunk({ id: 10, containerNumber: "FRESH-A", hasMore: true, nextCursor: "fresh-cursor" }))
+        jsonResponse(
+          trackingChunk({ id: 10, containerNumber: "FRESH-A", hasMore: true, nextCursor: "fresh-cursor" })
+        )
       )
       .mockResolvedValueOnce(
         jsonResponse(trackingChunk({ id: 20, containerNumber: "FRESH-B", hasMore: false, nextCursor: null }))
