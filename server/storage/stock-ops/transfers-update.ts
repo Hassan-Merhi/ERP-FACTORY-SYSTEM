@@ -45,7 +45,10 @@ export async function updateStockTransfer(
       .where(eq(schema.stockTransferVouchers.id, id));
     if (!existingTransfer) throw new Error(`Stock transfer ${id} not found`);
 
-    const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, existingTransfer.voucherId));
+    const [voucher] = await tx
+      .select()
+      .from(schema.vouchers)
+      .where(eq(schema.vouchers.id, existingTransfer.voucherId));
     if (!voucher) throw new Error(`Voucher ${existingTransfer.voucherId} not found`);
     const isOptional = voucher.optional;
 
@@ -70,7 +73,12 @@ export async function updateStockTransfer(
         const totalAmount = toInventoryDecimal(oldItem.totalAmount).abs();
         const rate = quantity.gt(0) ? totalAmount.dividedBy(quantity) : toInventoryDecimal(oldItem.rate);
         const sourceLocationId = oldItem.sourceLocationId || existingTransfer.sourceLocationId;
-        if (!sourceLocationId) throw new Error(`Stock transfer item ${oldItem.id} has no source location`);
+        if (!sourceLocationId) {
+          throw Object.assign(new Error(), {
+            code: "STOCK_TRANSFER_SOURCE_LOCATION_MISSING",
+            stockTransferItemId: oldItem.id,
+          });
+        }
 
         // Original transfer issued value from the source and received the same
         // value at the destination. Undo those exact effects in the opposite
@@ -334,7 +342,11 @@ export async function updateStockAdjustment(
         .where(
           and(
             eq(schema.ledgerAccounts.companyId, location.companyId),
-            inArray(schema.ledgerAccounts.code, ["STOCK_ADJUSTMENT", "PRODUCTION_ADJUSTMENT", "CONSUMPTION_EXPENSE"]),
+            inArray(schema.ledgerAccounts.code, [
+              "STOCK_ADJUSTMENT",
+              "PRODUCTION_ADJUSTMENT",
+              "CONSUMPTION_EXPENSE",
+            ]),
             isNull(schema.ledgerAccounts.deletedAt)
           )
         );
@@ -455,13 +467,11 @@ export async function updateStockAdjustment(
             // stored value byte-for-byte. Otherwise the requested rate defines
             // the replacement production value. In both cases the live stored
             // total_value — not qty × rounded average_rate — is the base.
-            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
+            const oldQty = historicalMatch
+              ? toInventoryDecimal(historicalMatch.quantity).abs()
+              : toInventoryDecimal(0);
             const oldRate = historicalMatch ? toInventoryDecimal(historicalMatch.rate) : toInventoryDecimal(0);
-            if (
-              historicalMatch &&
-              sameDecimal(oldQty, absoluteQuantity) &&
-              sameDecimal(oldRate, requestedRate)
-            ) {
+            if (historicalMatch && sameDecimal(oldQty, absoluteQuantity) && sameDecimal(oldRate, requestedRate)) {
               actualTotalAmount = toInventoryDecimal(historicalMatch.totalAmount).abs();
               actualRate = absoluteQuantity.gt(0)
                 ? actualTotalAmount.dividedBy(absoluteQuantity)
@@ -476,15 +486,22 @@ export async function updateStockAdjustment(
             // Preserve the historical value for the overlap with the old issue;
             // only additional quantity is costed from the live inventory that
             // exists after the historical issue was reversed.
-            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
-            const oldValue = historicalMatch ? toInventoryDecimal(historicalMatch.totalAmount).abs() : toInventoryDecimal(0);
+            const oldQty = historicalMatch
+              ? toInventoryDecimal(historicalMatch.quantity).abs()
+              : toInventoryDecimal(0);
+            const oldValue = historicalMatch
+              ? toInventoryDecimal(historicalMatch.totalAmount).abs()
+              : toInventoryDecimal(0);
             const overlapQty = historicalMatch ? Decimal.min(oldQty, absoluteQuantity) : toInventoryDecimal(0);
             const preservedValue =
               historicalMatch && oldQty.gt(0) ? oldValue.times(overlapQty).dividedBy(oldQty) : toInventoryDecimal(0);
             const extraQty = absoluteQuantity.minus(overlapQty);
 
             const qtyAfterPreserved = currentQty.minus(overlapQty);
-            const valueAfterPreserved = Decimal.max(currentValue.minus(preservedValue), toInventoryDecimal(0));
+            const valueAfterPreserved = Decimal.max(
+              currentValue.minus(preservedValue),
+              toInventoryDecimal(0)
+            );
             const liveExtraRate = qtyAfterPreserved.gt(0)
               ? valueAfterPreserved.dividedBy(qtyAfterPreserved)
               : currentRate;
