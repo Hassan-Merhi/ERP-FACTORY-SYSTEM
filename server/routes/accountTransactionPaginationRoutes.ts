@@ -60,6 +60,12 @@ type FactoryCustomerCursor = {
   net: number;
 };
 
+type StatementSummary = {
+  total?: unknown;
+  debitTotal?: unknown;
+  creditTotal?: unknown;
+};
+
 interface StatementPage {
   transactions: unknown[];
   currencySummary: ReturnType<typeof summarizeAccountStatementCurrency>;
@@ -140,17 +146,35 @@ function exposePaginationHeaders(res: Response, page: StatementPage): void {
   res.setHeader("Access-Control-Expose-Headers", "X-Total-Count, X-Page, X-Page-Size, X-Total-Pages");
 }
 
+function statementSummaryNumbers(summary: StatementSummary | null | undefined): {
+  total: number;
+  periodDebitTotal: number;
+  periodCreditTotal: number;
+} {
+  return {
+    total: Number(summary?.total ?? 0) || 0,
+    periodDebitTotal: Number.parseFloat(String(summary?.debitTotal ?? "0")) || 0,
+    periodCreditTotal: Number.parseFloat(String(summary?.creditTotal ?? "0")) || 0,
+  };
+}
+
+function statementRowNet(row: unknown): number {
+  if (!row || typeof row !== "object") return 0;
+  const record = row as Record<string, unknown>;
+  const debit = Number.parseFloat(String(record.debitAmount ?? "0")) || 0;
+  const credit = Number.parseFloat(String(record.creditAmount ?? "0")) || 0;
+  return debit - credit;
+}
+
 function buildPageResponse(
   rows: unknown[],
-  summary: any,
+  summary: StatementSummary | null | undefined,
   precedingPageNet: number,
   prePeriodNet: number,
   pagination: Pagination,
   dates: DateContext
 ): StatementPage {
-  const total = Number(summary?.total || 0);
-  const periodDebitTotal = Number.parseFloat(summary?.debitTotal || "0") || 0;
-  const periodCreditTotal = Number.parseFloat(summary?.creditTotal || "0") || 0;
+  const { total, periodDebitTotal, periodCreditTotal } = statementSummaryNumbers(summary);
   const totalPages = total === 0 ? 0 : Math.ceil(total / pagination.limit);
   return {
     transactions: rows,
@@ -176,7 +200,7 @@ function buildPageResponse(
 
 function buildContinuousResponse(options: {
   rows: unknown[];
-  summary: any;
+  summary: StatementSummary | null | undefined;
   prePeriodNet: number;
   previousChunkNet: number;
   limit: number;
@@ -186,9 +210,7 @@ function buildContinuousResponse(options: {
   nextCursor: string | null;
 }): StatementPage {
   const { rows, summary, prePeriodNet, previousChunkNet, limit, dates, hadCursor, hasMore, nextCursor } = options;
-  const total = Number(summary?.total || 0);
-  const periodDebitTotal = Number.parseFloat(summary?.debitTotal || "0") || 0;
-  const periodCreditTotal = Number.parseFloat(summary?.creditTotal || "0") || 0;
+  const { total, periodDebitTotal, periodCreditTotal } = statementSummaryNumbers(summary);
   const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
   const chunkOpeningNet = prePeriodNet + previousChunkNet;
   return {
@@ -457,24 +479,27 @@ async function runVoucherEntryStatement(options: {
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, sort_entry_id: _entry, ...row }) => row);
     const previousChunkNet = cursor?.net ?? 0;
-    const chunkNet = rows.reduce((sum, row: any) => {
-      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
-    }, 0);
+    const chunkNet = rows.reduce((sum, row) => sum + statementRowNet(row), 0);
     const last = visibleRaw.at(-1);
     let nextCursor: string | null = null;
     if (hasMore && last) {
       const sortDate = cursorDate(last.sort_date);
       const sortId = finiteNumber(last.sort_id);
       const sortEntryId = finiteNumber(last.sort_entry_id);
-      if (!sortDate || sortId === null || (kind !== "ledger" && sortEntryId === null)) {
+      if (!sortDate || sortId === null) {
         throw new Error("Unable to build account statement cursor from the last chunk row");
       }
-      nextCursor = encodeContinuousCursor(scope, {
-        sortDate,
-        sortId,
-        ...(kind === "ledger" ? {} : { sortEntryId }),
-        net: previousChunkNet + chunkNet,
-      } satisfies VoucherEntryCursor);
+      const net = previousChunkNet + chunkNet;
+      let payload: VoucherEntryCursor;
+      if (kind === "ledger") {
+        payload = { sortDate, sortId, net };
+      } else {
+        if (sortEntryId === null) {
+          throw new Error("Unable to build account statement cursor from the last chunk row");
+        }
+        payload = { sortDate, sortId, sortEntryId, net };
+      }
+      nextCursor = encodeContinuousCursor(scope, payload);
     }
     return buildContinuousResponse({
       rows,
@@ -625,9 +650,7 @@ async function runCustomerBalanceStatement(options: {
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
     const previousChunkNet = cursor?.net ?? 0;
-    const chunkNet = rows.reduce((sum, row: any) => {
-      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
-    }, 0);
+    const chunkNet = rows.reduce((sum, row) => sum + statementRowNet(row), 0);
     const last = visibleRaw.at(-1);
     let nextCursor: string | null = null;
     if (hasMore && last) {
@@ -854,9 +877,7 @@ async function runFactoryCustomerLedgerStatement(options: {
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ voucher_date: _date, source_rank: _rank, source_id: _source, ...row }) => row);
     const previousChunkNet = cursor?.net ?? 0;
-    const chunkNet = rows.reduce((sum, row: any) => {
-      return sum + (Number.parseFloat(row.debitAmount || "0") || 0) - (Number.parseFloat(row.creditAmount || "0") || 0);
-    }, 0);
+    const chunkNet = rows.reduce((sum, row) => sum + statementRowNet(row), 0);
     const last = visibleRaw.at(-1);
     let nextCursor: string | null = null;
     if (hasMore && last) {
