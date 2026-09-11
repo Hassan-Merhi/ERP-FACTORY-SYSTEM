@@ -39,31 +39,40 @@ function decimal(value: string | number | null | undefined): Decimal {
 }
 
 /**
- * Undo only shortage layers that belong to the POS voucher being edited.
- * An edit is a reversal of a historical issue, not a new receipt, so it must
- * never settle an unrelated shortage merely because that layer is older.
+ * Release only the shortage quantity that the reversal actually resolves.
+ *
+ * If live stock is already positive, any open layer is historical/anomalous and
+ * an edit must leave it alone. If live stock is negative, restoring an old sale
+ * reduces the aggregate shortage. Layers owned by that voucher are removed
+ * first; any remainder is removed FIFO from other layers so layer quantity stays
+ * equal to the remaining negative balance.
  */
-async function releaseVoucherNegativeLayers(
+async function releaseResolvedNegativeLayers(
   tx: DbTransaction,
   companyId: number,
   locationId: number,
   stockItemId: number,
   voucherId: number,
-  quantityToRestore: Decimal
+  quantityToRelease: Decimal
 ): Promise<void> {
+  if (quantityToRelease.lte(QTY_EPSILON)) return;
+
   const result = await tx.execute(sql`
     SELECT id, qty
     FROM inventory_negative_layers
     WHERE company_id = ${companyId}
       AND location_id = ${locationId}
       AND stock_item_id = ${stockItemId}
-      AND source_voucher_type = 'pos-sale'
-      AND source_voucher_id = ${voucherId}
-    ORDER BY id ASC
+    ORDER BY
+      CASE
+        WHEN source_voucher_type = 'pos-sale' AND source_voucher_id = ${voucherId} THEN 0
+        ELSE 1
+      END,
+      id ASC
     FOR UPDATE
   `);
 
-  let remaining = quantityToRestore;
+  let remaining = quantityToRelease;
 
   for (const layer of resultRows<NegativeLayerRow>(result)) {
     if (remaining.lte(QTY_EPSILON)) break;
@@ -87,7 +96,7 @@ async function releaseVoucherNegativeLayers(
 
 /**
  * Restore inventory for an old POS sale line while preserving the live cost
- * basis and leaving unrelated shortage layers untouched.
+ * basis and leaving unrelated positive-stock anomalies untouched.
  *
  * This deliberately does not use adjustInventory(): that helper's positive
  * branch is a real receipt and therefore settles all negative layers FIFO.
@@ -123,8 +132,9 @@ async function restorePosSaleInventoryForEdit(
   const currentRate = Decimal.max(decimal(existing.average_rate), ZERO);
   const currentValue = Decimal.max(decimal(existing.total_value), ZERO);
   const newQty = currentQty.plus(restoreQty);
+  const shortageResolved = currentQty.isNegative() ? Decimal.min(currentQty.abs(), restoreQty) : ZERO;
 
-  await releaseVoucherNegativeLayers(tx, companyId, locationId, stockItemId, voucherId, restoreQty);
+  await releaseResolvedNegativeLayers(tx, companyId, locationId, stockItemId, voucherId, shortageResolved);
 
   let newValue = ZERO;
   let newRate = currentRate;
@@ -157,8 +167,7 @@ async function restorePosSaleInventoryForEdit(
  *
  * The normal incoming-stock path settles every negative layer FIFO. That is
  * correct for a receipt, but wrong for an edit: an edit must not consume a
- * shortage created by another sale. The POS-specific restoration preserves the
- * live cost basis and only releases shortage layers attributed to this voucher.
+ * shortage merely because an unrelated historical layer happens to be older.
  */
 export async function reverseOriginalSaleInventory(
   tx: DbTransaction,
