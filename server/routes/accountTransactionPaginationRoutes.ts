@@ -39,17 +39,26 @@ interface ContinuousWindow {
   token?: string;
 }
 
+type ContinuousStatementMeta = {
+  total: number;
+  periodDebitTotal: number;
+  periodCreditTotal: number;
+  prePeriodNet: number;
+};
+
 type VoucherEntryCursor = {
   sortDate: string;
   sortId: number;
   sortEntryId?: number;
   net: number;
+  meta: ContinuousStatementMeta;
 };
 
 type CustomerCursor = {
   sortDate: string;
   sortId: number;
   net: number;
+  meta: ContinuousStatementMeta;
 };
 
 type FactoryCustomerCursor = {
@@ -58,6 +67,7 @@ type FactoryCustomerCursor = {
   sourceRank: number;
   sourceId: number;
   net: number;
+  meta: ContinuousStatementMeta;
 };
 
 type StatementSummary = {
@@ -158,6 +168,31 @@ function statementSummaryNumbers(summary: StatementSummary | null | undefined): 
   };
 }
 
+function continuousMeta(summary: StatementSummary | null | undefined, prePeriodNet: number): ContinuousStatementMeta {
+  const { total, periodDebitTotal, periodCreditTotal } = statementSummaryNumbers(summary);
+  return { total, periodDebitTotal, periodCreditTotal, prePeriodNet };
+}
+
+function summaryFromContinuousMeta(meta: ContinuousStatementMeta): StatementSummary {
+  return {
+    total: meta.total,
+    debitTotal: meta.periodDebitTotal,
+    creditTotal: meta.periodCreditTotal,
+  };
+}
+
+function isContinuousStatementMeta(value: unknown): value is ContinuousStatementMeta {
+  if (!value || typeof value !== "object") return false;
+  const meta = value as Partial<ContinuousStatementMeta>;
+  return (
+    Number.isInteger(meta.total) &&
+    Number(meta.total) >= 0 &&
+    Number.isFinite(meta.periodDebitTotal) &&
+    Number.isFinite(meta.periodCreditTotal) &&
+    Number.isFinite(meta.prePeriodNet)
+  );
+}
+
 function statementRowNet(row: unknown): number {
   if (!row || typeof row !== "object") return 0;
   const record = row as Record<string, unknown>;
@@ -256,6 +291,7 @@ function isVoucherEntryCursor(value: unknown, kind: AccountKind): value is Vouch
     ISO_DATE.test(cursor.sortDate) &&
     Number.isInteger(cursor.sortId) &&
     Number.isFinite(cursor.net) &&
+    isContinuousStatementMeta(cursor.meta) &&
     (kind === "ledger" || Number.isInteger(cursor.sortEntryId))
   );
 }
@@ -267,7 +303,8 @@ function isCustomerCursor(value: unknown): value is CustomerCursor {
     typeof cursor.sortDate === "string" &&
     ISO_DATE.test(cursor.sortDate) &&
     Number.isInteger(cursor.sortId) &&
-    Number.isFinite(cursor.net)
+    Number.isFinite(cursor.net) &&
+    isContinuousStatementMeta(cursor.meta)
   );
 }
 
@@ -280,7 +317,8 @@ function isFactoryCustomerCursor(value: unknown): value is FactoryCustomerCursor
     typeof cursor.voucherNumber === "string" &&
     Number.isInteger(cursor.sourceRank) &&
     Number.isInteger(cursor.sourceId) &&
-    Number.isFinite(cursor.net)
+    Number.isFinite(cursor.net) &&
+    isContinuousStatementMeta(cursor.meta)
   );
 }
 
@@ -433,7 +471,6 @@ async function runVoucherEntryStatement(options: {
       COALESCE(SUM("debitAmount"::numeric), 0)::text AS "debitTotal",
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
-  const prePeriodNet = await loadVoucherPrePeriodNet({ accountId, companyId, column, dates });
 
   if (continuous) {
     const scope = continuousCursorScope("account-statement", {
@@ -471,10 +508,22 @@ async function runVoucherEntryStatement(options: {
       WHERE ${cursorCondition}
       ORDER BY ${order}
       LIMIT ${limitParam}`;
-    const [chunkResult, summaryResult] = await Promise.all([
-      pool.query(chunkQuery, chunkValues),
-      pool.query(summaryQuery, values),
-    ]);
+
+    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let meta: ContinuousStatementMeta;
+    if (cursor) {
+      chunkResult = await pool.query(chunkQuery, chunkValues);
+      meta = cursor.meta;
+    } else {
+      const [firstChunkResult, summaryResult, prePeriodNet] = await Promise.all([
+        pool.query(chunkQuery, chunkValues),
+        pool.query(summaryQuery, values),
+        loadVoucherPrePeriodNet({ accountId, companyId, column, dates }),
+      ]);
+      chunkResult = firstChunkResult;
+      meta = continuousMeta(summaryResult.rows[0], prePeriodNet);
+    }
+
     const hasMore = chunkResult.rows.length > continuous.limit;
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, sort_entry_id: _entry, ...row }) => row);
@@ -492,19 +541,19 @@ async function runVoucherEntryStatement(options: {
       const net = previousChunkNet + chunkNet;
       let payload: VoucherEntryCursor;
       if (kind === "ledger") {
-        payload = { sortDate, sortId, net };
+        payload = { sortDate, sortId, net, meta };
       } else {
         if (sortEntryId === null) {
           throw new Error("Unable to build account statement cursor from the last chunk row");
         }
-        payload = { sortDate, sortId, sortEntryId, net };
+        payload = { sortDate, sortId, sortEntryId, net, meta };
       }
       nextCursor = encodeContinuousCursor(scope, payload);
     }
     return buildContinuousResponse({
       rows,
-      summary: summaryResult.rows[0],
-      prePeriodNet,
+      summary: summaryFromContinuousMeta(meta),
+      prePeriodNet: meta.prePeriodNet,
       previousChunkNet,
       limit: continuous.limit,
       dates,
@@ -532,12 +581,13 @@ async function runVoucherEntryStatement(options: {
            SELECT * FROM filtered ORDER BY ${order} LIMIT $${baseCount + 1}
          ) previous`;
 
-  const [pageResult, summaryResult, precedingResult] = await Promise.all([
+  const [pageResult, summaryResult, precedingResult, prePeriodNet] = await Promise.all([
     pool.query(pageQuery, pageValues),
     pool.query(summaryQuery, values),
     precedingQuery
       ? pool.query(precedingQuery, [...values, pagination.offset])
       : Promise.resolve({ rows: [{ net: "0" }] }),
+    loadVoucherPrePeriodNet({ accountId, companyId, column, dates }),
   ]);
   const rows = pageResult.rows.map(({ sort_date: _date, sort_id: _id, sort_entry_id: _entry, ...row }) => row);
   return buildPageResponse(
@@ -596,8 +646,8 @@ async function runCustomerBalanceStatement(options: {
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
 
-  let prePeriodNet = 0;
-  if (dates.rawStart) {
+  const loadPrePeriodNet = async (): Promise<number> => {
+    if (!dates.rawStart) return 0;
     const preResult = await pool.query(
       `SELECT COALESCE(
          SUM(cb.debit_amount::numeric - cb.credit_amount::numeric),
@@ -609,8 +659,8 @@ async function runCustomerBalanceStatement(options: {
          AND cb.transaction_date < $3::date`,
       [customerId, companyId, dates.rawStart]
     );
-    prePeriodNet = Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
-  }
+    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+  };
 
   if (continuous) {
     const scope = continuousCursorScope("customer-statement", {
@@ -642,10 +692,22 @@ async function runCustomerBalanceStatement(options: {
       WHERE ${cursorCondition}
       ORDER BY sort_date ASC, sort_id ASC
       LIMIT ${limitParam}`;
-    const [chunkResult, summaryResult] = await Promise.all([
-      pool.query(chunkQuery, chunkValues),
-      pool.query(summaryQuery, values),
-    ]);
+
+    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let meta: ContinuousStatementMeta;
+    if (cursor) {
+      chunkResult = await pool.query(chunkQuery, chunkValues);
+      meta = cursor.meta;
+    } else {
+      const [firstChunkResult, summaryResult, prePeriodNet] = await Promise.all([
+        pool.query(chunkQuery, chunkValues),
+        pool.query(summaryQuery, values),
+        loadPrePeriodNet(),
+      ]);
+      chunkResult = firstChunkResult;
+      meta = continuousMeta(summaryResult.rows[0], prePeriodNet);
+    }
+
     const hasMore = chunkResult.rows.length > continuous.limit;
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
@@ -661,12 +723,13 @@ async function runCustomerBalanceStatement(options: {
         sortDate,
         sortId,
         net: previousChunkNet + chunkNet,
+        meta,
       } satisfies CustomerCursor);
     }
     return buildContinuousResponse({
       rows,
-      summary: summaryResult.rows[0],
-      prePeriodNet,
+      summary: summaryFromContinuousMeta(meta),
+      prePeriodNet: meta.prePeriodNet,
       previousChunkNet,
       limit: continuous.limit,
       dates,
@@ -694,12 +757,13 @@ async function runCustomerBalanceStatement(options: {
            LIMIT $${baseCount + 1}
          ) previous`;
 
-  const [pageResult, summaryResult, precedingResult] = await Promise.all([
+  const [pageResult, summaryResult, precedingResult, prePeriodNet] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
     pool.query(summaryQuery, values),
     precedingQuery
       ? pool.query(precedingQuery, [...values, pagination.offset])
       : Promise.resolve({ rows: [{ net: "0" }] }),
+    loadPrePeriodNet(),
   ]);
   const rows = pageResult.rows.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
   return buildPageResponse(
@@ -812,8 +876,8 @@ async function runFactoryCustomerLedgerStatement(options: {
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
 
-  let prePeriodNet = 0;
-  if (dates.rawStart) {
+  const loadPrePeriodNet = async (): Promise<number> => {
+    if (!dates.rawStart) return 0;
     const preResult = await pool.query(
       `WITH ${allRows}
        SELECT COALESCE(
@@ -824,8 +888,8 @@ async function runFactoryCustomerLedgerStatement(options: {
        WHERE voucher_date < $4::date`,
       [companyId, customerId, ledgerAccountId, dates.rawStart]
     );
-    prePeriodNet = Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
-  }
+    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+  };
 
   if (continuous) {
     const scope = continuousCursorScope("factory-customer-statement", {
@@ -869,10 +933,22 @@ async function runFactoryCustomerLedgerStatement(options: {
       WHERE ${cursorCondition}
       ORDER BY ${order}
       LIMIT ${limitParam}`;
-    const [chunkResult, summaryResult] = await Promise.all([
-      pool.query(chunkQuery, chunkValues),
-      pool.query(summaryQuery, values),
-    ]);
+
+    let chunkResult: Awaited<ReturnType<typeof pool.query>>;
+    let meta: ContinuousStatementMeta;
+    if (cursor) {
+      chunkResult = await pool.query(chunkQuery, chunkValues);
+      meta = cursor.meta;
+    } else {
+      const [firstChunkResult, summaryResult, prePeriodNet] = await Promise.all([
+        pool.query(chunkQuery, chunkValues),
+        pool.query(summaryQuery, values),
+        loadPrePeriodNet(),
+      ]);
+      chunkResult = firstChunkResult;
+      meta = continuousMeta(summaryResult.rows[0], prePeriodNet);
+    }
+
     const hasMore = chunkResult.rows.length > continuous.limit;
     const visibleRaw = chunkResult.rows.slice(0, continuous.limit);
     const rows = visibleRaw.map(({ voucher_date: _date, source_rank: _rank, source_id: _source, ...row }) => row);
@@ -894,12 +970,13 @@ async function runFactoryCustomerLedgerStatement(options: {
         sourceRank,
         sourceId,
         net: previousChunkNet + chunkNet,
+        meta,
       } satisfies FactoryCustomerCursor);
     }
     return buildContinuousResponse({
       rows,
-      summary: summaryResult.rows[0],
-      prePeriodNet,
+      summary: summaryFromContinuousMeta(meta),
+      prePeriodNet: meta.prePeriodNet,
       previousChunkNet,
       limit: continuous.limit,
       dates,
@@ -925,12 +1002,13 @@ async function runFactoryCustomerLedgerStatement(options: {
            SELECT * FROM filtered ORDER BY ${order} LIMIT $${baseCount + 1}
          ) previous`;
 
-  const [pageResult, summaryResult, precedingResult] = await Promise.all([
+  const [pageResult, summaryResult, precedingResult, prePeriodNet] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
     pool.query(summaryQuery, values),
     precedingQuery
       ? pool.query(precedingQuery, [...values, pagination.offset])
       : Promise.resolve({ rows: [{ net: "0" }] }),
+    loadPrePeriodNet(),
   ]);
   const rows = pageResult.rows.map(({ voucher_date: _date, source_rank: _rank, source_id: _source, ...row }) => row);
   return buildPageResponse(
@@ -1090,9 +1168,7 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
       const requestedCompanyId =
-        typeof req.query.companyId === "string"
-          ? Number.parseInt(req.query.companyId, 10)
-          : req.session.currentCompanyId;
+        typeof req.query.companyId === "string" ? Number.parseInt(req.query.companyId, 10) : req.session.currentCompanyId;
       const companyId = await authorizeCompanyIdParam(req, requestedCompanyId);
       if (companyId === null) {
         return res.status(403).json({ message: "No access to this company" });
