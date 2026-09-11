@@ -1,8 +1,10 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
 import type { Account, Transaction } from "./accountTypes";
 
 const HISTORICAL_REFERENCE_TYPE = "Historical PO Reference";
+const ACCOUNT_ROW_HEIGHT = 56;
 
 export interface AccountStatementRow extends Transaction {
   totalDebit: number;
@@ -42,6 +44,7 @@ export function AccountTransactionRows({
   formatDisplayDate,
 }: AccountTransactionRowsProps) {
   const colSpanMid = appMode === "factory" ? 3 : 2;
+  const totalColumns = 3 + (appMode === "factory" ? 1 : 0) + (hideBalances ? 0 : 3);
   const totalDebit = vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0);
   const totalCredit = vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0);
   const isSupplier = selectedAccount.type === "supplier";
@@ -49,6 +52,13 @@ export function AccountTransactionRows({
   const selectableRows = vouchersWithBalance.filter((v) => !isReferenceRow(v));
   const allSelectableSelected =
     selectableRows.length > 0 && selectableRows.every((v) => selectedVoucherIds.has(v.voucherId));
+  const virtualRows = useBoundedTableRows({
+    rowCount: vouchersWithBalance.length,
+    rowHeight: ACCOUNT_ROW_HEIGHT,
+    minimumRows: 120,
+    overscan: 16,
+  });
+  const renderedVouchers = vouchersWithBalance.slice(virtualRows.startIndex, virtualRows.endIndex);
 
   const handleSelectAllRows = () => {
     if (selectableRows.length === vouchersWithBalance.length) {
@@ -69,8 +79,12 @@ export function AccountTransactionRows({
   const balSide = (val: number) => (val >= 0 ? "Dr" : "Cr");
 
   return (
-    <div className="rounded-xl border overflow-hidden table-responsive print:border-0 hidden md:block print:!block">
-      <Table>
+    <div
+      ref={virtualRows.scrollRef}
+      className="rounded-xl border overflow-auto max-h-[70vh] table-responsive print:border-0 print:max-h-none print:overflow-visible hidden md:block print:!block"
+      data-testid="account-statement-scroll-region"
+    >
+      <Table wrapperClassName="overflow-visible border-0 rounded-none max-h-none">
         <TableHeader className="sticky top-0 z-30 bg-background">
           <TableRow className="bg-muted/40 hover:bg-muted/40">
             <TableHead className="w-[40px] py-3 print:hidden">
@@ -109,7 +123,6 @@ export function AccountTransactionRows({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {/* Opening Balance Row */}
           <TableRow className="bg-accent/20 border-b border-border/60" data-testid="row-opening-balance">
             <TableCell className="py-3 print:hidden" />
             <TableCell className="py-3 text-xs text-muted-foreground tabular-nums font-mono" colSpan={colSpanMid}>
@@ -147,7 +160,13 @@ export function AccountTransactionRows({
             </TableCell>
           </TableRow>
 
-          {vouchersWithBalance.map((v) => {
+          {virtualRows.topSpacerHeight > 0 && (
+            <TableRow aria-hidden="true" data-testid="account-virtual-spacer-top">
+              <TableCell colSpan={totalColumns} className="p-0 border-0" style={{ height: virtualRows.topSpacerHeight }} />
+            </TableRow>
+          )}
+
+          {renderedVouchers.map((v) => {
             const isReference = isReferenceRow(v);
             return (
               <TableRow
@@ -230,7 +249,12 @@ export function AccountTransactionRows({
             );
           })}
 
-          {/* Footer totals */}
+          {virtualRows.bottomSpacerHeight > 0 && (
+            <TableRow aria-hidden="true" data-testid="account-virtual-spacer-bottom">
+              <TableCell colSpan={totalColumns} className="p-0 border-0" style={{ height: virtualRows.bottomSpacerHeight }} />
+            </TableRow>
+          )}
+
           {!hideBalances && (
             <>
               <TableRow className="bg-muted/20 border-t-2 text-xs font-medium text-muted-foreground">
