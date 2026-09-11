@@ -7,16 +7,20 @@
 import type { DbTransaction } from "../../../db";
 import { salesItems, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { adjustInventory } from "../../../inventoryHelper";
 import { inventoryQuantity, inventoryUnitCost, toInventoryDecimal } from "../../../lib/inventoryMath";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
+import { restorePosSaleInventoryForEdit } from "./restoreSaleInventory";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 /**
- * Add back the old quantities without passing a rate. POS activity must not
- * change the inventory cost basis during a reversal.
+ * Restore the old POS issue without treating the reversal as new stock.
+ *
+ * The normal incoming-stock path settles every negative layer FIFO. That is
+ * correct for a receipt, but wrong for an edit: an edit must not consume a
+ * shortage created by another sale. The POS-specific restoration preserves the
+ * live cost basis and only releases shortage layers attributed to this voucher.
  */
 export async function reverseOriginalSaleInventory(
   tx: DbTransaction,
@@ -26,13 +30,13 @@ export async function reverseOriginalSaleInventory(
 ): Promise<void> {
   for (const oldItem of oldSalesItems) {
     const oldQuantity = toInventoryDecimal(oldItem.quantity);
-    await adjustInventory(
-      tx,
-      existingVoucher.locationId!,
-      oldItem.stockItemId,
-      oldQuantity.toNumber(),
-      existingVoucher.companyId
-    );
+    await restorePosSaleInventoryForEdit(tx, {
+      companyId: existingVoucher.companyId,
+      locationId: existingVoucher.locationId!,
+      stockItemId: oldItem.stockItemId,
+      quantity: oldQuantity.toNumber(),
+      voucherId: existingVoucher.id,
+    });
 
     // Include the sales_item id in the canonical identity. A valid sale can
     // contain more than one row for the same stock item, and each row must post
