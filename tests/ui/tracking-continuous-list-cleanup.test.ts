@@ -33,4 +33,14 @@ describe("tracking continuous-list cleanup", () => {
     expect(route).toContain("factory-customer-cursor-row-invalid");
     expect(route).not.toContain("Unable to build account statement cursor");
   });
+
+  it("keeps the quality reference synchronized with the earned type-escape ceiling", () => {
+    const qualityProgram = source("docs/system-quality-program.md");
+    const typeEscapeBoundaries = JSON.parse(source("config/type-escape-boundaries.json")) as {
+      totals: { typeEscapeCeiling: number };
+    };
+
+    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(1058);
+    expect(qualityProgram).toContain("| Type escapes (AST) | 1,058 total |");
+  });
 });
