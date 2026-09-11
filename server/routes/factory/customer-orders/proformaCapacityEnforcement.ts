@@ -3,6 +3,19 @@ import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy"
 
 export type ProformaCapacityRejectionReason = "not_in_proforma" | "quantity_exceeded";
 
+/**
+ * Which loaded quantity the capacity check is measured against.
+ *
+ * - `"global"` — the proforma quantity is a total shared across every
+ *   loading/container that references it (the historical default). Sibling
+ *   containers consume each other's capacity.
+ * - `"per_loading"` — each loading/container is an independent unit. A bale is
+ *   counted only against what has already been loaded into the *current*
+ *   loading, so reusing one proforma for several containers lets every
+ *   container load up to the full proforma quantity on its own.
+ */
+export type ProformaCapacityScope = "global" | "per_loading";
+
 export interface ProformaArticleCapacityDecision {
   allowed: boolean;
   reason: ProformaCapacityRejectionReason | null;
@@ -52,7 +65,8 @@ function nonNegativeQuantity(value: unknown): number {
 export function evaluateProformaArticleCapacity(
   snapshot: ProformaCapacitySnapshot,
   articleCode: unknown,
-  requestedAdditionalQty: unknown = 1
+  requestedAdditionalQty: unknown = 1,
+  scope: ProformaCapacityScope = "global"
 ): ProformaArticleCapacityDecision {
   const normalizedArticleCode = normalizeLoadingArticleCode(articleCode);
   const additionalQty = nonNegativeQuantity(requestedAdditionalQty);
@@ -72,8 +86,13 @@ export function evaluateProformaArticleCapacity(
     };
   }
 
-  const projectedConsumedQty = article.totalConsumedQty + additionalQty;
+  // Per-loading mode measures only what the current loading has already
+  // consumed, so sibling containers sharing the same proforma no longer block
+  // this container from loading up to the full proforma quantity.
+  const consumedQty = scope === "per_loading" ? article.currentOrderLoadedQty : article.totalConsumedQty;
+  const projectedConsumedQty = consumedQty + additionalQty;
   const allowed = projectedConsumedQty <= article.requestedQty;
+  const remainingQty = scope === "per_loading" ? Math.max(0, article.requestedQty - consumedQty) : article.remainingQty;
   return {
     allowed,
     reason: allowed ? null : "quantity_exceeded",
@@ -81,8 +100,8 @@ export function evaluateProformaArticleCapacity(
     normalizedArticleCode,
     requestedAdditionalQty: additionalQty,
     requestedQty: article.requestedQty,
-    consumedQty: article.totalConsumedQty,
-    remainingQty: article.remainingQty,
+    consumedQty,
+    remainingQty,
     projectedConsumedQty,
   };
 }

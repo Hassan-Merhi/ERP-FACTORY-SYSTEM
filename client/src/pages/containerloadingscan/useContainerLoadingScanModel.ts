@@ -23,6 +23,7 @@ import type { Customer, Location, OrderBale, OrderDetail, Proforma } from "./typ
 import {
   buildProformaProgress,
   normalizeProformaArticleCode,
+  proformaCapacityArticles,
   type ProformaCapacitySnapshot,
 } from "@/lib/proformaCapacity";
 
@@ -427,9 +428,9 @@ export function useContainerLoadingScanModel() {
   const totalLines = proformaProgress.length;
 
   const proformaArticleCodes = new Set(
-    proformaCapacity?.articles
+    proformaCapacityArticles(proformaCapacity)
       .filter((article) => article.isOnProforma)
-      .map((article) => article.normalizedArticleCode) ?? []
+      .map((article) => article.normalizedArticleCode)
   );
   const extraArticles = Object.keys(loadedByArticle).filter(
     (code) => !proformaArticleCodes.has(normalizeProformaArticleCode(code))

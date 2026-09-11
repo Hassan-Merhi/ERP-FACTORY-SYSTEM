@@ -318,7 +318,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
               };
             }
 
-            const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1);
+            const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading");
             if (decision.reason === "quantity_exceeded" && enforceOverload) {
               return {
                 ok: false,

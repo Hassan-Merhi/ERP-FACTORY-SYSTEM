@@ -17,6 +17,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import {
   buildProformaProgress,
   normalizeProformaArticleCode,
+  proformaCapacityArticles,
   type ProformaCapacitySnapshot,
 } from "@/lib/proformaCapacity";
 import type {
@@ -712,10 +713,10 @@ export function useFactoryContainerLoadingScanModel() {
   // Stock count targets come from the same authoritative capacity buckets.
   const proformaArticleCodesForStock = useMemo(
     () =>
-      proformaCapacity?.articles
-        ?.filter((article) => article.isOnProforma)
+      proformaCapacityArticles(proformaCapacity)
+        .filter((article) => article.isOnProforma)
         .map((article) => article.articleCode)
-        .filter(Boolean) ?? [],
+        .filter(Boolean),
     [proformaCapacity]
   );
   const stockLocationId = orderDetail?.locationId || (selectedLocationId ? parseInt(selectedLocationId) : null);
@@ -761,9 +762,9 @@ export function useFactoryContainerLoadingScanModel() {
   const totalLines = proformaProgress.length;
 
   const proformaArticleCodes = new Set(
-    proformaCapacity?.articles
+    proformaCapacityArticles(proformaCapacity)
       .filter((article) => article.isOnProforma)
-      .map((article) => article.normalizedArticleCode) ?? []
+      .map((article) => article.normalizedArticleCode)
   );
   const remainingProformaBales = proformaCapacity?.remainingTotalQty ?? 0;
   const extraArticles = Object.keys(loadedByArticle).filter(
