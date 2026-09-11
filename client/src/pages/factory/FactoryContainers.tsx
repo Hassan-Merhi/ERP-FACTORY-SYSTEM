@@ -40,7 +40,7 @@ import {
   ReverseOffloadDialog,
   downloadContainerTemplate,
 } from "./factory-containers/ContainerDialogs";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { ApiListRow } from "@shared/apiTypes";
 
 export default function FactoryContainers() {
   const { selectedCompany } = useCompany();

@@ -11,7 +11,6 @@ import type {
   PosDraftSummary,
   PosEditVoucher,
   PosShift,
-  PosViewEntry,
 } from "../pos-components/posTypes";
 import { buildPosInventory, type SpMovement } from "./posInventory";
 

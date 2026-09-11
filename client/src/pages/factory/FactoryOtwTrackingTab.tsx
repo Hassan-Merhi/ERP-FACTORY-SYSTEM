@@ -49,7 +49,7 @@ import { EventTimelineSheet } from "./factoryotwtrackingtab/components/EventTime
 import { TrackingSettingsSheet } from "./factoryotwtrackingtab/components/TrackingSettingsSheet";
 import { TrackNowProgressLog } from "./factoryotwtrackingtab/components/TrackNowProgressLog";
 import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
   const tqClient = useTQClient();

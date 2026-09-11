@@ -14,7 +14,7 @@ import DailyScan from "./DailyScan";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 export default function BaleStockEntry() {
   const todayStr = new Date().toLocaleDateString("en-CA");

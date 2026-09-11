@@ -19,7 +19,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { insertSupplierSchema } from "@shared/schema";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { ApiListRow } from "@shared/apiTypes";
 
 export default function EditSupplier() {
   const params = useParams();

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Loader2, Info } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 interface BaleCost {
   baleRef: string;

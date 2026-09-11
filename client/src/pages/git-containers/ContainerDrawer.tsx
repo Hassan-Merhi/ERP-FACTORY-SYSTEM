@@ -2,11 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import {
-  companyDataKey,
-  frontendQueryPolicies,
-  invalidateApiFamily,
-} from "@/lib/frontendDataArchitecture";
+import { companyDataKey, frontendQueryPolicies, invalidateApiFamily } from "@/lib/frontendDataArchitecture";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -14,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
 import { ContainerDrawerTracking } from "./ContainerDrawerTracking";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { ApiListRow } from "@shared/apiTypes";
 
 export function ContainerDrawer({
   container,

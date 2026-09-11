@@ -9,7 +9,7 @@ import FactoryAdvancesTab from "@/pages/factory/FactoryAdvancesTab";
 import FactoryWorkerBonusesTab from "@/pages/factory/FactoryWorkerBonusesTab";
 import FactoryWorkerAttendanceReport from "@/pages/factory/FactoryWorkerAttendanceReport";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 type TabValue = "workers" | "payroll" | "attendance" | "report" | "advances" | "bonuses";
 
@@ -21,11 +21,41 @@ const ALL_TAB_OPTIONS: {
   hiddenKey?: string;
 }[] = [
   { value: "workers", label: "Workers", icon: HardHat },
-  { value: "payroll", label: "Payroll", icon: DollarSign, settingKey: "workersTabPayrollEnabled", hiddenKey: "hide_tab_workers_payroll" },
-  { value: "attendance", label: "Attendance", icon: CalendarDays, settingKey: "workersTabAttendanceEnabled", hiddenKey: "hide_tab_workers_attendance" },
-  { value: "report", label: "Report", icon: BarChart3, settingKey: "workersTabReportEnabled", hiddenKey: "hide_tab_workers_report" },
-  { value: "advances", label: "Advances", icon: Banknote, settingKey: "workersTabAdvancesEnabled", hiddenKey: "hide_tab_workers_advances" },
-  { value: "bonuses", label: "Bonuses", icon: Gift, settingKey: "workersTabBonusesEnabled", hiddenKey: "hide_tab_workers_bonuses" },
+  {
+    value: "payroll",
+    label: "Payroll",
+    icon: DollarSign,
+    settingKey: "workersTabPayrollEnabled",
+    hiddenKey: "hide_tab_workers_payroll",
+  },
+  {
+    value: "attendance",
+    label: "Attendance",
+    icon: CalendarDays,
+    settingKey: "workersTabAttendanceEnabled",
+    hiddenKey: "hide_tab_workers_attendance",
+  },
+  {
+    value: "report",
+    label: "Report",
+    icon: BarChart3,
+    settingKey: "workersTabReportEnabled",
+    hiddenKey: "hide_tab_workers_report",
+  },
+  {
+    value: "advances",
+    label: "Advances",
+    icon: Banknote,
+    settingKey: "workersTabAdvancesEnabled",
+    hiddenKey: "hide_tab_workers_advances",
+  },
+  {
+    value: "bonuses",
+    label: "Bonuses",
+    icon: Gift,
+    settingKey: "workersTabBonusesEnabled",
+    hiddenKey: "hide_tab_workers_bonuses",
+  },
 ];
 
 export default function FactoryWorkersHub() {
@@ -84,12 +114,24 @@ export default function FactoryWorkersHub() {
         </Select>
       </div>
 
-      <TabsContent value="workers" className="mt-0"><FactoryWorkers /></TabsContent>
-      <TabsContent value="payroll" className="mt-0"><FactoryPayrollTab /></TabsContent>
-      <TabsContent value="attendance" className="mt-0"><FactoryAttendance /></TabsContent>
-      <TabsContent value="report" className="mt-0"><FactoryWorkerAttendanceReport /></TabsContent>
-      <TabsContent value="advances" className="mt-0"><FactoryAdvancesTab /></TabsContent>
-      <TabsContent value="bonuses" className="mt-0"><FactoryWorkerBonusesTab /></TabsContent>
+      <TabsContent value="workers" className="mt-0">
+        <FactoryWorkers />
+      </TabsContent>
+      <TabsContent value="payroll" className="mt-0">
+        <FactoryPayrollTab />
+      </TabsContent>
+      <TabsContent value="attendance" className="mt-0">
+        <FactoryAttendance />
+      </TabsContent>
+      <TabsContent value="report" className="mt-0">
+        <FactoryWorkerAttendanceReport />
+      </TabsContent>
+      <TabsContent value="advances" className="mt-0">
+        <FactoryAdvancesTab />
+      </TabsContent>
+      <TabsContent value="bonuses" className="mt-0">
+        <FactoryWorkerBonusesTab />
+      </TabsContent>
     </Tabs>
   );
 }

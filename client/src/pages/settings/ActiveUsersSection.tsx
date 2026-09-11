@@ -32,7 +32,7 @@ type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 import { getPageLabel } from "./WatchUserDialog";
 import { RemoteSupportWatchDialog } from "./RemoteSupportWatchDialog";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 export function ActiveUsersSection() {
   const [watchingUser, setWatchingUser] = useState<{ userId: string; username: string } | null>(null);
