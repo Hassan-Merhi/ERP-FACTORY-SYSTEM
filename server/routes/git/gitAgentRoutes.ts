@@ -239,7 +239,7 @@ export function registerGitAgentRoutes(app: Express) {
         sql`SELECT id, container_number, duty_fee FROM containers
             WHERE id IN (${oldContainerId}, ${newContainerId})`
       );
-      const rows = cResult.rows as any[];
+      const rows = resultRows<{ id: number; container_number: string; duty_fee: string | null }>(cResult);
       const oldC = rows.find((r) => r.id === oldContainerId || r.id === Number(oldContainerId));
       const newC = rows.find((r) => r.id === newContainerId || r.id === Number(newContainerId));
 
@@ -258,12 +258,12 @@ export function registerGitAgentRoutes(app: Express) {
       }
 
       // Warn on mismatched duty amounts
-      const amountsDiffer = Math.abs(parseFloat(oldC.duty_fee) - parseFloat(newC.duty_fee)) > 0.01;
+      const amountsDiffer = Math.abs(parseFloat(oldC.duty_fee ?? "") - parseFloat(newC.duty_fee ?? "")) > 0.01;
       if (amountsDiffer && !confirmDifferentAmount) {
         return res.status(409).json({
           message: "Duty amounts differ between the two containers.",
-          oldAmount: parseFloat(oldC.duty_fee),
-          newAmount: parseFloat(newC.duty_fee),
+          oldAmount: parseFloat(oldC.duty_fee ?? ""),
+          newAmount: parseFloat(newC.duty_fee ?? ""),
           requiresConfirmation: true,
         });
       }
@@ -288,7 +288,7 @@ export function registerGitAgentRoutes(app: Express) {
               (${companyId}, ${agentName}, 'replace',
                ${Number(oldContainerId)}, ${Number(newContainerId)},
                ${oldC.container_number}, ${newC.container_number},
-               ${parseFloat(newC.duty_fee)}, ${userId})`
+               ${parseFloat(newC.duty_fee ?? "")}, ${userId})`
       );
 
       res.json({

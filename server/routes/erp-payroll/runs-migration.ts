@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express, Response } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and } from "drizzle-orm";
 import { db, pool } from "../../db";
@@ -21,10 +21,11 @@ import {
 
 export function registerPayrollRunMigrationRoutes(app: Express) {
   // ── Migrate old PAID runs to per-group Salary Expense - {Group} accounts ──
-  app.post("/api/payroll/runs/migrate-group-expenses", requireAuth, requireNonPOS, async (req: any, res: Response) => {
+  app.post("/api/payroll/runs/migrate-group-expenses", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const companyIdNum: number = companyId;
 
       // Shared group-membership lookup: employeeId → groupName (current assignments)
       const groupMemberships = await db
@@ -39,12 +40,12 @@ export function registerPayrollRunMigrationRoutes(app: Express) {
 
       // Helper: get or create a ledger account by code
       async function getOrCreateAccount(code: string, name: string) {
-        const accs = await storage.getAllLedgerAccounts(companyId);
+        const accs = await storage.getAllLedgerAccounts(companyIdNum);
         let acc = accs.find((a) => a.code === code);
         if (!acc) {
           const isBonus = code === "BONUS_EXPENSE" || code.startsWith("BONUS_EXP_");
           acc = await storage.createLedgerAccount({
-            companyId,
+            companyId: companyIdNum,
             code,
             name,
             accountType: isBonus ? "Indirect Expense" : "Expense",

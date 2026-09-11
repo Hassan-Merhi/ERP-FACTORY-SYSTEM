@@ -158,7 +158,54 @@ async function getCompletedActions(sourceId: number, targetId: number): Promise<
   return new Set(resultRows(result).map((row) => String(row.action)));
 }
 
-export async function buildCutoverReadiness(sourceId: number, targetId: number): Promise<any> {
+export type CutoverReadinessStockDiff = {
+  sourceInventoryId: number;
+  targetInventoryId: number | null;
+  sourceStockItemId: number;
+  targetStockItemId: number;
+  sourceLocationId: number | null;
+  targetLocationId: number;
+  sourceQty: number;
+  targetQty: number;
+  sourceRate: number;
+  targetRate: number;
+};
+
+export type CutoverReadinessUnmappedInventory = {
+  sourceInventoryId: number;
+  sourceStockItemId: number;
+  sourceLocationId: number | null;
+  missing: string;
+};
+
+export type CutoverReadiness = {
+  sourceCompanyId: number;
+  targetCompanyId: number;
+  canPrepare: boolean;
+  canFinalize: boolean;
+  blockers: Array<{ code: string; message: string; count?: number; detail?: unknown }>;
+  deltas: Array<{ code: string; message: string; count: number }>;
+  counts: {
+    sourceInventoryRows: number;
+    stockDiffs: number;
+    unmappedInventory: number;
+    salesDelta: number;
+    containerDelta: number;
+    suspenseEntries: number;
+    chargeReview: number;
+    chargeUnmapped: number;
+    unbalancedVouchers: number;
+    targetLiveActivity: number;
+    unmappablePosUsers: number;
+  };
+  stockDiffs: CutoverReadinessStockDiff[];
+  unmappedInventory: CutoverReadinessUnmappedInventory[];
+};
+
+export async function buildCutoverReadiness(
+  sourceId: number,
+  targetId: number
+): Promise<CutoverReadiness> {
   await Promise.all([ensurePhase2Schema(), ensureCutoverSchema()]);
   const blockers: Array<{ code: string; message: string; count?: number }> = [];
   const deltas: Array<{ code: string; message: string; count: number }> = [];
@@ -454,7 +501,11 @@ export async function buildCutoverReadiness(sourceId: number, targetId: number):
   };
 }
 
-export async function synchronizeCutoverStock(cutoverId: number, sourceId: number, targetId: number): Promise<any> {
+export async function synchronizeCutoverStock(
+  cutoverId: number,
+  sourceId: number,
+  targetId: number
+): Promise<{ updated: number; inserted: number; unchanged: number }> {
   await ensureCutoverSchema();
   const stockItemMap = await loadStockItemMap(sourceId, targetId);
   const sourceResult = await db.execute(sql`

@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { auditLog, interCompanyTransfers, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import type { InsertLedgerAccount, LedgerAccount } from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
@@ -27,7 +28,7 @@ export const transferRepository = {
     return storage.getAllLedgerAccounts(companyId, includeHidden);
   },
 
-  createLedgerAccount(values: any) {
+  createLedgerAccount(values: InsertLedgerAccount & Partial<Pick<LedgerAccount, "id" | "createdAt">>) {
     return storage.createLedgerAccount(values);
   },
 
@@ -35,7 +36,10 @@ export const transferRepository = {
     return storage.getAllInterCompanyTransfers(companyId);
   },
 
-  async createTransferTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], values: any) {
+  async createTransferTx(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+    values: typeof interCompanyTransfers.$inferInsert
+  ) {
     const [transfer] = await tx.insert(interCompanyTransfers).values(values).returning();
     return transfer;
   },

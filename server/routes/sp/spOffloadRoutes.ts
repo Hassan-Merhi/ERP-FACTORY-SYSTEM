@@ -20,6 +20,16 @@ import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
+type SpOffloadChargeLine = {
+  amountUsd?: unknown;
+  chargeType: string;
+  description?: string;
+  prepaidChargeId?: string;
+  parentAgentAccountId?: string;
+  creditLedgerAccountId?: string;
+  creditBankAccountId?: string;
+};
+
 // ── Parent Company Agents + Offload ──────────────────────────────────────────
 
 export function registerSpOffloadRoutes(app: Express) {
@@ -115,7 +125,7 @@ export function registerSpOffloadRoutes(app: Express) {
       );
 
       // Landed charges
-      const charges: any[] = chargeLines || [];
+      const charges: SpOffloadChargeLine[] = chargeLines || [];
       const totalLandedCost = charges.reduce((s: number, c) => s + parseNum(c.amountUsd), 0);
       const landedPerUnit = totalQty > 0 ? totalLandedCost / totalQty : 0;
       const totalFinalCost = totalBaseCost + totalLandedCost;
@@ -395,7 +405,7 @@ export function registerSpOffloadRoutes(app: Express) {
 
           // Dr each agent account in HADI L'SHI
           for (const ac of agentCharges) {
-            const agentLedgerId = parseInt(ac.parentAgentAccountId);
+            const agentLedgerId = parseInt(ac.parentAgentAccountId ?? "");
             await tx.insert(voucherEntries).values({
               voucherId: voucherC.id,
               ledgerAccountId: agentLedgerId,

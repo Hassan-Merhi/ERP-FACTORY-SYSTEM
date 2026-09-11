@@ -347,20 +347,22 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
           titleFont: "FFFFFF",
         };
 
-        const thinBorder: any = {
+        const thinBorder: Partial<import("exceljs").Borders> = {
           top: { style: "thin", color: { argb: "BDBDBD" } },
           left: { style: "thin", color: { argb: "BDBDBD" } },
           bottom: { style: "thin", color: { argb: "BDBDBD" } },
           right: { style: "thin", color: { argb: "BDBDBD" } },
         };
 
+        type SheetRow = Record<string, string | number | boolean | null | undefined>;
+
         const addStyledSheet = (
           name: string,
           sectionTitle: string,
           sectionColor: string,
           columns: { header: string; key: string; width: number; numFmt?: string }[],
-          data: any[],
-          statusColorFn?: (row: any) => string | null
+          data: SheetRow[],
+          statusColorFn?: (row: SheetRow) => string | null
         ) => {
           const sheet = workbook.addWorksheet(name);
 
@@ -425,10 +427,10 @@ export function registerContainerLoadedItemReportRoutes(app: Express, requireAut
               "TOTAL",
               "",
               ...columns.slice(2).map((c) => {
-                const sum = data.reduce(
-                  (s: number, item) => s + (typeof item[c.key] === "number" ? item[c.key] : 0),
-                  0
-                );
+                const sum = data.reduce((s: number, item) => {
+                  const value = item[c.key];
+                  return s + (typeof value === "number" ? value : 0);
+                }, 0);
                 return sum;
               }),
             ]);

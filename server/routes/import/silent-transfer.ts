@@ -70,7 +70,7 @@ export function registerSilentTransferRoutes(app: Express) {
 
         const workbook = await readExcel(req.file.buffer);
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawData = sheetToJson(worksheet) as any[];
+        const rawData = sheetToJson(worksheet);
 
         if (rawData.length === 0) return res.status(400).json({ message: "Excel file is empty" });
 
@@ -85,9 +85,9 @@ export function registerSilentTransferRoutes(app: Express) {
         for (let i = 0; i < rawData.length; i++) {
           const row = rawData[i];
           const rowNum = i + 2;
-          const barcode = (row.Barcode || row.barcode || row.Code || row.code || "").toString().trim();
+          const barcode = String(row.Barcode || row.barcode || row.Code || row.code || "").trim();
           const quantityRaw = row.Quantity ?? row.quantity ?? row.Qty ?? row.qty;
-          const quantity = parseFloat(quantityRaw ?? "0");
+          const quantity = parseFloat(String(quantityRaw ?? "0"));
 
           if (!barcode) continue; // blank row — silently skip
 

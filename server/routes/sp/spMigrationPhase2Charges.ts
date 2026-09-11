@@ -225,7 +225,7 @@ export async function getContainerChargeCandidates(container: Record<string, unk
 export async function getSourceContainerLines(
   container: Record<string, unknown>,
   po: Record<string, unknown> | null
-): Promise<{ source: string; rows: any[] }> {
+): Promise<{ source: string; rows: Record<string, unknown>[] }> {
   if (po) {
     const poLines = await db.execute(sql`
       SELECT li.stock_item_id, COALESCE(si.code, li.item_name) AS article_code,

@@ -66,7 +66,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Log if user confirmed negative inventory override
       if (allowNegativeInventory) {
         logger.info(
-          `[AUDIT] User ${req.session.userId} confirmed negative inventory override for stock transfer. Items: ${JSON.stringify(items.map((i: any) => ({ stockItemId: i.stockItemId, quantity: i.quantity, sourceLocationId: i.sourceLocationId })))}`
+          `[AUDIT] User ${req.session.userId} confirmed negative inventory override for stock transfer. Items: ${JSON.stringify(items.map((i: { stockItemId?: unknown; quantity?: unknown; sourceLocationId?: unknown }) => ({ stockItemId: i.stockItemId, quantity: i.quantity, sourceLocationId: i.sourceLocationId })))}`
         );
       }
       const companyId = req.session.currentCompanyId;
@@ -74,7 +74,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Branch: Create new transfer from scratch (sourceLocationId provided, no voucherId)
       if (
         !voucherId &&
-        (sourceLocationId || (items && items.length > 0 && items.every((i: any) => i.sourceLocationId)))
+        (sourceLocationId || (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
       ) {
         if (!companyId) {
           return res.status(400).json({ message: "No company selected" });

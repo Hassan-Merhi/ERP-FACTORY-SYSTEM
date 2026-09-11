@@ -163,7 +163,10 @@ export function registerRentalPaymentsAccrualRoutes(
         .parse(req.body);
 
       const clientDate = getClientDate(req);
-      const results: any[] = [];
+      type RentalBulkPaymentResult =
+        | { contractId: number; error: string }
+        | { contractId: number; scheduled: boolean; paymentGroupId: string; paymentsCreated: number };
+      const results: RentalBulkPaymentResult[] = [];
       for (const data of items) {
         try {
           const [contract] = await db
@@ -374,10 +377,22 @@ export function registerRentalPaymentsAccrualRoutes(
           )
         );
 
-      let ledger: any[] = [];
-      let postedPayments: any[] = [];
-      let scheduledPayments: any[] = [];
-      let guaranteePayments: any[] = [];
+      type PropertyPaymentRow = typeof propertyPayments.$inferSelect;
+      type RentalLedgerRow = typeof propertyMonthlyLedger.$inferSelect & {
+        dueDate: string;
+        isDue: boolean;
+        expectedAsOf: number;
+        effectivePaidAmount: number;
+        allPostedPaid: number;
+        scheduledAmount: number;
+        outstanding: number;
+        prepaidCredit: number;
+        status: string;
+      };
+      let ledger: RentalLedgerRow[] = [];
+      let postedPayments: PropertyPaymentRow[] = [];
+      let scheduledPayments: PropertyPaymentRow[] = [];
+      let guaranteePayments: PropertyPaymentRow[] = [];
 
       if (contract) {
         await ensureMonthlyLedgerRows(contract.id, asOfDate);

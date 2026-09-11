@@ -1,15 +1,33 @@
 import { eq, isNull, lte } from "drizzle-orm";
 
-import { vouchers } from "@shared/schema";
+import { vouchers, type Company } from "@shared/schema";
 import { pool } from "../../db";
 import { storage } from "../../storage";
 import { resultRows } from "../../lib/queryResult";
 
+/** One ledger account row as mapped to camelCase below: the original columns
+ *  guaranteed to exist in every deployment (including pre-migration prod).
+ *  Satisfies the shared `AccountLike` the net-position classifiers accept. */
+export type NetProfitLedgerAccount = {
+  id: number;
+  companyId: number;
+  code: string;
+  name: string;
+  accountType: string;
+  subType: string | null;
+  openingBalance: string;
+  openingBalanceSide: string;
+  active: boolean;
+  isHidden: boolean;
+  parentId: number | null;
+  deletedAt: string | null;
+  createdAt: string;
+  category: string | null;
+};
+
 export interface NetProfitData {
-  companyRecord: any;
-  /** Ledger accounts, mapped to camelCase. Element type stays `any` because the
-   *  raw pool query deliberately selects only pre-migration-safe columns. */
-  companyAccounts: any[];
+  companyRecord: Company | undefined;
+  companyAccounts: NetProfitLedgerAccount[];
   parentCompanyId: number | null;
   hasMigratedEntries: boolean;
   companyBaseCurrency: string;

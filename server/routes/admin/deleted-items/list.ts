@@ -172,7 +172,16 @@ export function registerDeletedItemsListRoutes(app: Express) {
 
       // Get orphaned POS sales - vouchers with locationId pointing to deleted or non-existent locations
       // Wrap in try-catch to prevent breaking the entire endpoint if this query fails
-      let orphanedPosSales: any[] = [];
+      let orphanedPosSales: {
+        id: number;
+        voucherNumber: string;
+        voucherType: string;
+        date: string;
+        totalAmount: string;
+        locationId: number | null;
+        locationName: string | null;
+        locationDeletedAt: Date | null;
+      }[] = [];
       try {
         orphanedPosSales = await db
           .select({

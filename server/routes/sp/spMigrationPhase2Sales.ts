@@ -18,7 +18,7 @@ import {
 } from "./spMigrationPhase2Common";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
-export async function importHistoricalSales(req: Request, res: Response): Promise<any> {
+export async function importHistoricalSales(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, true);
   if (!pair) return;
   const dependencyError = await requireCompletedAction(pair.sourceId, pair.targetId, "gc_sales_readonly");

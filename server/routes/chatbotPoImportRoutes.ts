@@ -372,10 +372,10 @@ export function registerChatbotPoImportRoutes(app: Express) {
         return res.status(400).json({ message: "Supplier not found" });
       }
 
-      const unresolved = lines.filter((l: any) => !l.stockItemId);
+      const unresolved = lines.filter((l: { stockItemId?: unknown }) => !l.stockItemId);
       if (unresolved.length > 0) {
         return res.status(400).json({
-          message: `${unresolved.length} item(s) still unresolved: ${unresolved.map((l: any) => l.rawName || l.itemName).join(", ")}`,
+          message: `${unresolved.length} item(s) still unresolved: ${unresolved.map((l: { rawName?: unknown; itemName?: unknown }) => l.rawName || l.itemName).join(", ")}`,
         });
       }
 

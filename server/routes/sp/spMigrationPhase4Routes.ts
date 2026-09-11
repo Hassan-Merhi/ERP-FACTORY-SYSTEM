@@ -26,7 +26,7 @@ import { repairSpSupplierVoucherLinks } from "./spSupplierVoucherSync";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
 const installedApps = new WeakSet<object>();
-let holdCache: { expiresAt: number; byCompany: Map<number, any> } | null = null;
+let holdCache: { expiresAt: number; byCompany: Map<number, Record<string, unknown> | null> } | null = null;
 let phase4RouteSchemaPromise: Promise<void> | null = null;
 
 function invalidatePhase4HoldCache(): void {
@@ -73,7 +73,9 @@ function collectCompanyIds(req: Request): number[] {
   );
 }
 
-async function loadLatestCutoversForCompanies(companyIds: number[]): Promise<Map<number, any>> {
+async function loadLatestCutoversForCompanies(
+  companyIds: number[]
+): Promise<Map<number, Record<string, unknown> | null>> {
   await ensurePhase4Schema();
   if (holdCache && holdCache.expiresAt > Date.now() && companyIds.every((id) => holdCache!.byCompany.has(id))) {
     return holdCache.byCompany;
@@ -352,7 +354,7 @@ async function normalizedVerification(sourceId: number, targetId: number, requir
       detail: activity,
     });
   }
-  verification.counts.targetLiveActivity = activity;
+  verification.counts.targetLiveActivity = activity.total;
   verification.overall = classifyFinalVerification(verification.blockers, verification.deltas ?? []);
   verification.canPrepare = verification.blockers.length === 0;
   verification.canFinalize = verification.blockers.length === 0 && (verification.deltas ?? []).length === 0;

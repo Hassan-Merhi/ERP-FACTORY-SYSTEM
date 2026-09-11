@@ -14,8 +14,10 @@ import {
   spOffloads,
   spOffloadCharges,
   spStockMovements,
+  type SpOffloadCharge,
 } from "@shared/schema";
 import { getClientDate } from "../../lib/dateUtils";
+import { resultRows } from "../../lib/queryResult";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 
 // ── Containers + Prepaid Charges ─────────────────────────────────────────────
@@ -359,7 +361,7 @@ export function registerSpContainerRoutes(app: Express) {
         .from(spOffloads)
         .where(and(eq(spOffloads.containerId, id), eq(spOffloads.companyId, companyId)));
 
-      let offloadCharges: any[] = [];
+      let offloadCharges: SpOffloadCharge[] = [];
       if (offload) {
         offloadCharges = await db.select().from(spOffloadCharges).where(eq(spOffloadCharges.offloadId, offload.id));
       }
@@ -397,6 +399,12 @@ export function registerSpContainerRoutes(app: Express) {
         .where(eq(spContainerLines.containerId, id))
         .orderBy(asc(spContainerLines.id));
 
+      type SpContainerAliasRow = {
+        alias_code: string;
+        stock_item_id: number;
+        item_code: string;
+        item_name: string;
+      };
       const aliasResult = await db.execute(sql`
         SELECT a.alias_code, a.stock_item_id, si.code AS item_code, si.name AS item_name
         FROM stock_item_code_aliases a
@@ -404,7 +412,7 @@ export function registerSpContainerRoutes(app: Express) {
         WHERE a.company_id = ${companyId}
       `);
       const aliasMap = new Map<string, { stockItemId: number; itemCode: string; itemName: string }>();
-      for (const row of aliasResult.rows as any[]) {
+      for (const row of resultRows<SpContainerAliasRow>(aliasResult)) {
         aliasMap.set(row.alias_code, {
           stockItemId: row.stock_item_id,
           itemCode: row.item_code,

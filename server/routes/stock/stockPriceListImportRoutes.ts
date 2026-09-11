@@ -16,9 +16,23 @@ import {
   locationPriceGroups,
   stockGrades,
   stockCategories,
+  type StockItem,
 } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { readExcel, sheetToJson } from "../../excelHelper";
+
+type PriceListRow = {
+  stockItemId: number;
+  code: string;
+  name: string;
+  stockGroupName: string;
+  baseSellingPrice: string | null;
+  hasCustomPrice: boolean;
+  sellingPrice: string | null;
+  quantity: string;
+  costPrice?: string | null;
+  offloadingCost?: string | null;
+};
 
 export function registerStockPriceListImportRoutes(app: Express) {
   app.get("/api/location-price-groups", requireAuth, requireNonPOS, async (req, res) => {
@@ -119,7 +133,7 @@ export function registerStockPriceListImportRoutes(app: Express) {
         }
       }
 
-      let rows: any[];
+      let rows: PriceListRow[];
 
       if (showAll) {
         rows = await db
@@ -357,10 +371,14 @@ export function registerStockPriceListImportRoutes(app: Express) {
       const validStockGroups = await storage.getAllStockGroups(req.session.currentCompanyId);
       const validStockGroupIds = new Set(validStockGroups.map((sg) => sg.id));
 
-      const results = {
-        created: [] as any[],
-        skipped: [] as any[],
-        errors: [] as any[],
+      const results: {
+        created: StockItem[];
+        skipped: Array<{ code: string; name: string; reason: string }>;
+        errors: Array<{ code: unknown; name: unknown; error: string }>;
+      } = {
+        created: [],
+        skipped: [],
+        errors: [],
       };
 
       for (const item of items) {

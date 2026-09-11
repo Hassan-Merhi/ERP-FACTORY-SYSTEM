@@ -22,7 +22,7 @@ export function summarizeVerification(areas: VerificationArea[]): VerificationSt
   return "PASS";
 }
 
-async function companyRow(companyId: number): Promise<any | null> {
+async function companyRow(companyId: number): Promise<Record<string, unknown> | null> {
   const result = await db.execute(sql`
     SELECT id, code, name, company_type, active
     FROM companies

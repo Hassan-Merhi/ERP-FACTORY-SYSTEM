@@ -18,6 +18,7 @@ import {
   employees,
   voucherEntries,
   vouchers,
+  type LedgerAccount,
 } from "@shared/schema";
 
 export function registerPayrollBulkAdjustmentRoutes(app: Express) {
@@ -249,7 +250,12 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
 
       if (paymentAccountType === "bank") {
         // For bank accounts, find the corresponding ledger account
-        paymentLedgerAccount = allAccounts.find((a: any) => a.bankAccountId === paymentAccountId_num);
+        // Ledger rows carry no bankAccountId column, so this predicate never matches and the
+        // bank branch answers 404. Preserved as-is; wiring the bank-to-ledger link is a
+        // behaviour change for a separate fix.
+        paymentLedgerAccount = allAccounts.find(
+          (a: LedgerAccount & { bankAccountId?: unknown }) => a.bankAccountId === paymentAccountId_num
+        );
         if (!paymentLedgerAccount) {
           return res.status(404).json({ message: "Ledger account for bank account not found" });
         }

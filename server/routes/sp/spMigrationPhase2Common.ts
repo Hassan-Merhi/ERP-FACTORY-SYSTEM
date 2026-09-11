@@ -278,7 +278,7 @@ export async function loadTargetAccounts(targetId: number): Promise<{
   return { rows, bySubType, byCode, byType };
 }
 
-export async function loadSourceAccounts(sourceId: number): Promise<Map<number, any>> {
+export async function loadSourceAccounts(sourceId: number): Promise<Map<number, Record<string, unknown>>> {
   const result = await db.execute(sql`
     SELECT id, code, name, account_type, sub_type
     FROM ledger_accounts
