@@ -540,7 +540,7 @@ async function runVoucherEntryStatement(options: {
       const sortId = finiteNumber(last.sort_id);
       const sortEntryId = finiteNumber(last.sort_entry_id);
       if (!sortDate || sortId === null) {
-        throw new Error("Unable to build account statement cursor from the last chunk row");
+        throw new Error("account-statement-cursor-row-invalid");
       }
       const net = previousChunkNet + chunkNet;
       let payload: VoucherEntryCursor;
@@ -548,7 +548,7 @@ async function runVoucherEntryStatement(options: {
         payload = { sortDate, sortId, net, meta };
       } else {
         if (sortEntryId === null) {
-          throw new Error("Unable to build account statement cursor from the last chunk row");
+          throw new Error("account-statement-cursor-row-invalid");
         }
         payload = { sortDate, sortId, sortEntryId, net, meta };
       }
@@ -722,7 +722,7 @@ async function runCustomerBalanceStatement(options: {
     if (hasMore && last) {
       const sortDate = cursorDate(last.sort_date);
       const sortId = finiteNumber(last.sort_id);
-      if (!sortDate || sortId === null) throw new Error("Unable to build customer statement cursor");
+      if (!sortDate || sortId === null) throw new Error("customer-statement-cursor-row-invalid");
       nextCursor = encodeContinuousCursor(scope, {
         sortDate,
         sortId,
@@ -966,7 +966,7 @@ async function runFactoryCustomerLedgerStatement(options: {
       const sourceRank = finiteNumber(last.source_rank);
       const sourceId = finiteNumber(last.source_id);
       if (!sortDate || voucherNumber === null || sourceRank === null || sourceId === null) {
-        throw new Error("Unable to build factory customer statement cursor");
+        throw new Error("factory-customer-cursor-row-invalid");
       }
       nextCursor = encodeContinuousCursor(scope, {
         sortDate,
