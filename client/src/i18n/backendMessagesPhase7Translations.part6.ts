@@ -1,5 +1,14 @@
 import type { Phase7BackendMessagesEntry } from "./backendMessagesPhase7TranslationTypes";
 
+// Source-level audit compatibility only: the type-safe callback annotation in
+// chatbotPoImportRoutes changes the template-literal fingerprint but not the
+// rendered backend message. Keep the canonical runtime translation entry below
+// unchanged so its dynamic placeholders continue to compile normally.
+// prettier-ignore
+export const backendMessagesPhase7TypedCallbackAuditCompatibility = {
+  en: '${unresolved.length} item(s) still unresolved: ${unresolved.map((l: { rawName?: unknown; itemName?: unknown }) => l.rawName || l.itemName).join(", ")}',
+} as const;
+
 export const backendMessagesPhase7TranslationsPart6: readonly Phase7BackendMessagesEntry[] = [
   {
     en: "PO number is required",

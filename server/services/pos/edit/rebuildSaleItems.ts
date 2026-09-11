@@ -108,7 +108,16 @@ export async function rebuildSaleItems(
       configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
     });
 
-    await adjustInventory(tx, targetLocationId, stockItemId, sellQty.negated().toNumber(), companyId);
+    await adjustInventory(
+      tx,
+      targetLocationId,
+      stockItemId,
+      sellQty.negated().toNumber(),
+      companyId,
+      undefined,
+      "pos-sale",
+      voucherId
+    );
 
     if (canonicalRevision !== undefined && !sellQty.isZero()) {
       const issueOrdinal = (issueOrdinalByStockItem.get(stockItemId) ?? 0) + 1;
