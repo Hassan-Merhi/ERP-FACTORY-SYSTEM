@@ -22,6 +22,8 @@ import {
   useTransferRateAutofill,
   type TransferInventoryItem,
 } from "./useTransferFormDerived";
+import type { StockTransferLineItem, TransferImportValidationResult, TransferRevision } from "./transferFormTypes";
+import { computeTransferRevisionDiff } from "./transferRevisionDiff";
 
 export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: StockTransferFormProps) {
   const { toast } = useToast();
@@ -35,56 +37,6 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   const hydratedVoucherIdRef = useRef<number | null>(null);
   const lastKnownTransferIdRef = useRef<number | null>(null);
   const savingTransferRevisionRef = useRef(false);
-
-  type TransferRevisionItem = {
-    stockItemName?: string;
-    sourceLocationName?: string;
-    delta?: string;
-    originalQuantity?: string;
-    newQuantity?: string;
-  };
-
-  type TransferRevision = {
-    id: number;
-    revisionNumber?: number;
-    revisionDate?: string | Date | null;
-    optional?: boolean;
-    note?: string | null;
-    items?: TransferRevisionItem[];
-    _mergedCount?: number;
-  };
-
-  type StockTransferLineItem = {
-    stockItemId: number;
-    sourceLocationId: number;
-    quantity: string;
-    rate?: string;
-    stockItemName?: string;
-    stockItemCode?: string;
-    sourceLocationName?: string;
-  };
-
-  type ValidatedTransferImportItem = {
-    rowNum?: number;
-    barcode?: string;
-    quantity: string;
-    error?: string;
-    warning?: string;
-    stockItemId?: number;
-    stockItemName?: string;
-    stockItemUom?: string;
-    sourceLocationId?: number;
-    currentStock?: number;
-    remainingStock?: number;
-    averageRate?: string;
-    rate?: string;
-  };
-
-  type TransferImportValidationResult = {
-    errors: string[];
-    warnings: string[];
-    validatedItems: ValidatedTransferImportItem[];
-  };
 
   const { data: stockItems = [] } = useQuery<StockItem[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
@@ -510,61 +462,13 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
     },
   });
 
-  const computeTransferRevisionItems = () => {
-    if (!stockTransferToEdit?.items) return [];
-    type RevKey = string;
-    const originalMap = new Map<
-      RevKey,
-      { qty: number; stockItemId: number; stockItemName: string; sourceLocationId: number; sourceLocationName: string }
-    >();
-    for (const item of stockTransferToEdit.items) {
-      const key: RevKey = `${item.stockItemId}-${item.sourceLocationId ?? "null"}`;
-      const si = stockItems.find((s) => s.id === item.stockItemId);
-      const sl = locations.find((l) => l.id === item.sourceLocationId);
-      originalMap.set(key, {
-        qty: parseFloat(item.quantity) || 0,
-        stockItemId: item.stockItemId,
-        stockItemName: si?.name || "",
-        sourceLocationId: item.sourceLocationId ?? null,
-        sourceLocationName: sl?.name || "",
-      });
-    }
-    const currentEntries = stockTransferForm.getValues("entries");
-    const currentMap = new Map<RevKey, (typeof currentEntries)[0]>();
-    for (const entry of currentEntries) {
-      if (!entry.stockItemId || entry.stockItemId <= 0) continue;
-      const key: RevKey = `${entry.stockItemId}-${entry.sourceLocationId ?? "null"}`;
-      currentMap.set(key, entry);
-    }
-    const allKeys = new Set([...originalMap.keys(), ...currentMap.keys()]);
-    const result: Array<{
-      stockItemId: number;
-      stockItemName: string;
-      sourceLocationId: number | null;
-      sourceLocationName: string;
-      originalQuantity: number;
-      delta: number;
-      newQuantity: number;
-    }> = [];
-    for (const key of allKeys) {
-      const orig = originalMap.get(key);
-      const cur = currentMap.get(key);
-      const origQty = orig?.qty ?? 0;
-      const curQty = parseFloat(cur?.quantity || "0");
-      const delta = curQty - origQty;
-      if (Math.abs(delta) < 0.001) continue;
-      result.push({
-        stockItemId: cur?.stockItemId ?? orig?.stockItemId ?? 0,
-        stockItemName: cur?.stockItemName || orig?.stockItemName || "",
-        sourceLocationId: cur?.sourceLocationId ?? orig?.sourceLocationId ?? null,
-        sourceLocationName: cur?.sourceLocationName || orig?.sourceLocationName || "",
-        originalQuantity: origQty,
-        delta,
-        newQuantity: curQty,
-      });
-    }
-    return result;
-  };
+  const computeTransferRevisionItems = () =>
+    computeTransferRevisionDiff(
+      stockTransferToEdit?.items,
+      stockItems,
+      locations,
+      stockTransferForm.getValues("entries")
+    );
 
   const handleTransferSaveAsRevision = () => {
     if (!voucherIdToEdit || !stockTransferToEdit?.id) return;
@@ -631,7 +535,11 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       setTransferRevisionNote("");
       setTransferRevisionDialogOpen(false);
       setTransferRevisionsExpanded(true);
-      const refreshedRevisions = queryClient.getQueryData<TransferRevision[]>(["/api/stock-transfers", transferId, "revisions"]);
+      const refreshedRevisions = queryClient.getQueryData<TransferRevision[]>([
+        "/api/stock-transfers",
+        transferId,
+        "revisions",
+      ]);
       const nextRevNum = refreshedRevisions?.length ?? transferRevisions.length + 1;
       toast({ title: "Revision Saved", description: `Rev ${nextRevNum} recorded and transfer updated` });
     } catch (error) {
