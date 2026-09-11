@@ -14,6 +14,11 @@ import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { getErrorDetails } from "@shared/errorUtils";
+import {
+  buildProformaProgress,
+  normalizeProformaArticleCode,
+  type ProformaCapacitySnapshot,
+} from "@/lib/proformaCapacity";
 import type {
   AddLoadingBaleInput,
   AddLoadingBaleResponse,
@@ -174,6 +179,30 @@ export function useFactoryContainerLoadingScanModel() {
     staleTime: 15_000,
   });
 
+  const selectedCapacityProformaId =
+    selectedProformaId && selectedProformaId !== "none" ? Number(selectedProformaId) : null;
+  const capacityProformaId = orderDetail?.proformaIdUsed ?? selectedCapacityProformaId;
+  const capacityQuery = useQuery<ProformaCapacitySnapshot>({
+    queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (orderId) params.set("currentOrderId", String(orderId));
+      const suffix = params.size ? `?${params.toString()}` : "";
+      const res = await fetch(`/api/factory/customer-proformas/${capacityProformaId}/capacity${suffix}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to fetch proforma capacity");
+      return res.json();
+    },
+    enabled: !!capacityProformaId,
+    staleTime: 0,
+  });
+  const proformaCapacity = capacityQuery.data ?? null;
+  const selectedProformaExhausted =
+    !!selectedCapacityProformaId &&
+    proformaCapacity?.proformaId === selectedCapacityProformaId &&
+    proformaCapacity.remainingTotalQty <= 0;
+
   const { data: baleRemovals = [] } = useQuery<BaleRemoval[]>({
     queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
     queryFn: async () => {
@@ -265,6 +294,12 @@ export function useFactoryContainerLoadingScanModel() {
         });
       }
       queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], data);
+      if (capacityProformaId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
+          refetchType: "active",
+        });
+      }
       setScanCode("");
     },
     onError: (error: Error, variables: AddLoadingBaleInput) => {
@@ -330,6 +365,12 @@ export function useFactoryContainerLoadingScanModel() {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
       });
+      if (capacityProformaId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
+          refetchType: "active",
+        });
+      }
       setBaleToDelete(null);
       toast({ title: "Bale removed" });
     },
@@ -369,6 +410,12 @@ export function useFactoryContainerLoadingScanModel() {
         { queryKey: ["/api/factory/customer-orders", orderId], exact: true, refetchType: "active" },
         { cancelRefetch: false }
       );
+      if (capacityProformaId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
+          refetchType: "active",
+        });
+      }
       setShowImportDialog(false);
       setImportPreview([]);
       setImportRefNumbers([]);
@@ -449,6 +496,10 @@ export function useFactoryContainerLoadingScanModel() {
   const handleStartLoading = useCallback(async () => {
     if (!customerId || !selectedLocationId) return;
     const proforma = chosenProforma();
+    if (proforma && proformaCapacity?.proformaId === proforma.id && proformaCapacity.remainingTotalQty <= 0) {
+      toast({ title: "Proforma fully consumed", description: "No remaining quantity is available for a new loading." });
+      return;
+    }
 
     // Check if there are already pending loading orders for this proforma
     if (proforma) {
@@ -477,7 +528,16 @@ export function useFactoryContainerLoadingScanModel() {
       orderDate,
       containerNotes: loadingNote.trim() || undefined,
     });
-  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation]);
+  }, [
+    customerId,
+    selectedLocationId,
+    chosenProforma,
+    proformaCapacity,
+    orderDate,
+    loadingNote,
+    createOrderMutation,
+    toast,
+  ]);
 
   /** "Start New Loading" from the pending-orders warning — no note is carried over. */
   const startNewLoadingAnyway = () => {
@@ -649,12 +709,15 @@ export function useFactoryContainerLoadingScanModel() {
 
   const totalWeight = bales.reduce((sum, b) => sum + parseFloat(b.weight || "0"), 0);
 
-  // Stock count query — fetches IN_STOCK bale counts per article code for proforma lines
-  const proformaArticleCodesForStock = useMemo(() => {
-    if (!orderDetail?.proformaIdUsed) return [];
-    const pf = proformas.find((p) => p.id === orderDetail.proformaIdUsed) || proformas.find((p) => p.isActive);
-    return (Array.isArray(pf?.lines) ? pf!.lines : []).map((l) => l.articleCode).filter(Boolean);
-  }, [orderDetail?.proformaIdUsed, proformas]);
+  // Stock count targets come from the same authoritative capacity buckets.
+  const proformaArticleCodesForStock = useMemo(
+    () =>
+      proformaCapacity?.articles
+        .filter((article) => article.isOnProforma)
+        .map((article) => article.articleCode)
+        .filter(Boolean) ?? [],
+    [proformaCapacity]
+  );
   const stockLocationId = orderDetail?.locationId || (selectedLocationId ? parseInt(selectedLocationId) : null);
   const { data: stockCounts = {} } = useQuery<Record<string, number>>({
     queryKey: ["/api/factory/bale-stock-count", proformaArticleCodesForStock.join(","), stockLocationId],
@@ -670,11 +733,20 @@ export function useFactoryContainerLoadingScanModel() {
     refetchInterval: 30000,
   });
 
-  // Linked proforma logic
+  // Linked proforma metadata stays compact; all quantity math comes from the
+  // authoritative capacity snapshot so sibling loadings are never missed.
   const linkedProforma = orderDetail?.proformaIdUsed
-    ? proformas.find((p) => p.id === orderDetail.proformaIdUsed)
+    ? proformas.find((p) => p.id === orderDetail.proformaIdUsed) ||
+      (proformaCapacity
+        ? {
+            id: proformaCapacity.proformaId,
+            customerId: proformaCapacity.customerId,
+            name: proformaCapacity.proformaName,
+            isActive: proformaCapacity.proformaActive,
+            lines: [],
+          }
+        : null)
     : proformas.find((p) => p.isActive) || null;
-  const effectiveProformaLines = orderDetail?.proformaRemainingLines ?? linkedProforma?.lines ?? [];
 
   const loadedByArticle = bales.reduce<Record<string, number>>((map, b) => {
     const key = b.articleCode ?? "__unknown__";
@@ -682,35 +754,21 @@ export function useFactoryContainerLoadingScanModel() {
     return map;
   }, {});
 
-  const proformaProgress =
-    effectiveProformaLines.map((line) => {
-      const loaded = loadedByArticle[line.articleCode] || 0;
-      const remaining = line.quantity - loaded;
-      const status: ProformaLineStatus =
-        loaded === 0
-          ? "none"
-          : loaded > line.quantity
-            ? "overloaded"
-            : loaded === line.quantity
-              ? "fulfilled"
-              : "short";
-      return {
-        ...line,
-        loaded,
-        remaining,
-        fulfilled: loaded >= line.quantity,
-        status,
-        excess: Math.max(0, loaded - line.quantity),
-      };
-    }) || [];
-
-  const fulfilledCount = proformaProgress.filter((l) => l.status === "fulfilled" || l.status === "overloaded").length;
+  const proformaProgress = buildProformaProgress(proformaCapacity);
+  const fulfilledCount = proformaProgress.filter(
+    (line) => line.status === "fulfilled" || line.status === "overloaded"
+  ).length;
   const totalLines = proformaProgress.length;
 
-  // Extra bales not in proforma
-  const proformaArticleCodes = new Set(effectiveProformaLines.map((l) => l.articleCode));
-  const remainingProformaBales = proformaProgress.reduce((sum, line) => sum + Math.max(0, line.remaining), 0);
-  const extraArticles = Object.keys(loadedByArticle).filter((code) => !proformaArticleCodes.has(code));
+  const proformaArticleCodes = new Set(
+    proformaCapacity?.articles
+      .filter((article) => article.isOnProforma)
+      .map((article) => article.normalizedArticleCode) ?? []
+  );
+  const remainingProformaBales = proformaCapacity?.remainingTotalQty ?? 0;
+  const extraArticles = Object.keys(loadedByArticle).filter(
+    (code) => !proformaArticleCodes.has(normalizeProformaArticleCode(code))
+  );
 
   const scanInputClass =
     scanFlash === "success"
@@ -731,6 +789,9 @@ export function useFactoryContainerLoadingScanModel() {
     customerId,
     activeProformas,
     selectedProformaId,
+    proformaCapacity,
+    isProformaCapacityLoading: capacityQuery.isLoading || capacityQuery.isFetching,
+    selectedProformaExhausted,
     setSelectedProformaId,
     loadingNote,
     setLoadingNote,
