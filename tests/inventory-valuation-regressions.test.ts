@@ -8,7 +8,9 @@ const TEST_PREFIX = "invvalreg";
 let ctx: TestContext;
 
 async function resetInventory(locationId: number, stockItemId: number): Promise<void> {
-  await db.execute(sql`DELETE FROM inventory_negative_layers WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}`);
+  await db.execute(
+    sql`DELETE FROM inventory_negative_layers WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}`
+  );
   await db.execute(sql`DELETE FROM inventory WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}`);
 }
 
@@ -109,7 +111,7 @@ describe("inventory valuation regression guards", () => {
 
     const state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(16);
-    expect(Number(state.inventory.total_value)).toBeCloseTo(1066.40, 2);
+    expect(Number(state.inventory.total_value)).toBeCloseTo(1066.4, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(state.layers).toHaveLength(1);
     expect(Number(state.layers[0].qty)).toBe(7);
