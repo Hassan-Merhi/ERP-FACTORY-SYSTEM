@@ -43,7 +43,7 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
                 <div className="text-muted-foreground text-xs">{line.productName}</div>
               </TableCell>
               <TableCell className="text-right font-mono text-sm">{line.quantity}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{line.loaded}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{line.totalLoaded}</TableCell>
               <TableCell className="text-right text-sm">
                 {line.status === "fulfilled" && (
                   <span className="text-green-600 dark:text-green-400 font-semibold">✓ Done</span>
