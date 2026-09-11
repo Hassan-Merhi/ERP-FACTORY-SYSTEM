@@ -47,7 +47,7 @@ import {
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 
 import type { Customer, CustomerOrder, StatusFilter } from "./factoryinvoices/types";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 export default function FactoryInvoices() {
   const { toast } = useToast();
   const [, navigate] = useLocation();

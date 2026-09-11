@@ -8,9 +8,10 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
+import type { Cell as ExcelCell, FillPattern } from "exceljs";
 import type { GroupedProduct, ImportPreviewRow } from "./types";
 import { hmdLogoPath } from "./utils";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 export function useBaleProductsModel() {
   const { colors: designColors } = useLabelDesignColors();
@@ -513,11 +514,11 @@ export function useBaleProductsModel() {
         row.height = 18;
 
         const isAlt = i % 2 === 1;
-        const rowFill: import("exceljs").FillPattern | undefined = isAlt
+        const rowFill: FillPattern | undefined = isAlt
           ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } }
           : undefined;
 
-        row.eachCell((cell: import("exceljs").Cell, colNum: number) => {
+        row.eachCell((cell: ExcelCell, colNum: number) => {
           if (rowFill) cell.fill = rowFill;
           cell.font = { size: 10 };
           cell.border = { bottom: { style: "hair", color: { argb: C_BORDER } } };
@@ -549,12 +550,8 @@ export function useBaleProductsModel() {
         { formula: `=SUM(H${DATA_START}:H${lastDataRow})`, result: 0 },
       ]);
       totalRow.height = 22;
-      const totalFill: import("exceljs").FillPattern = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: C_TOTAL },
-      };
-      totalRow.eachCell((cell: import("exceljs").Cell, _colNum: number) => {
+      const totalFill: FillPattern = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
+      totalRow.eachCell((cell: ExcelCell, _colNum: number) => {
         cell.fill = totalFill;
         cell.border = {
           top: { style: "medium", color: { argb: C_NAVY } },
@@ -693,11 +690,11 @@ export function useBaleProductsModel() {
         row.height = 18;
 
         const isAlt = i % 2 === 1;
-        const rowFill: import("exceljs").FillPattern | undefined = isAlt
+        const rowFill: FillPattern | undefined = isAlt
           ? { type: "pattern", pattern: "solid", fgColor: { argb: C_ALT_ROW } }
           : undefined;
 
-        row.eachCell((cell: import("exceljs").Cell, colNum: number) => {
+        row.eachCell((cell: ExcelCell, colNum: number) => {
           if (rowFill) cell.fill = rowFill;
           cell.font = { size: 10 };
           cell.border = { bottom: { style: "hair", color: { argb: C_BORDER } } };
@@ -719,12 +716,8 @@ export function useBaleProductsModel() {
         { formula: `=SUM(F${DATA_START}:F${lastDataRow})`, result: 0 },
       ]);
       totalRow.height = 22;
-      const totalFill: import("exceljs").FillPattern = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: C_TOTAL },
-      };
-      totalRow.eachCell((cell: import("exceljs").Cell) => {
+      const totalFill: FillPattern = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
+      totalRow.eachCell((cell: ExcelCell) => {
         cell.fill = totalFill;
         cell.border = {
           top: { style: "medium", color: { argb: C_NAVY } },

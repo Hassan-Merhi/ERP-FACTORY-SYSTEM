@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatNumber } from "@/lib/formatNumber";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe, ApiListRow } from "@shared/apiTypes";
 
 const _CURRENCIES = ["USD", "EUR", "GBP", "AUD", "LBP", "XOF", "XAF"];
 
@@ -96,8 +96,7 @@ export default function FactorySupplierStatement() {
     queryKey: ["/api/user/companies"],
   });
 
-  const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"],
-  });
+  const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = me?.role === "Admin" || me?.role === "Owner" || me?.role === "Developer";
 
   const { data: suppliers = [], isLoading: suppliersLoading } = useQuery<ApiListRow[]>({

@@ -23,7 +23,7 @@ import { StockGroupItemsView } from "./location-inventory/StockGroupItemsView";
 import { AllItemsView } from "./location-inventory/AllItemsView";
 import { LocationInventoryBreadcrumb } from "./location-inventory/LocationInventoryBreadcrumb";
 import type { InventoryLocation as Location } from "./location-inventory/locationInventoryTypes";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}) {
   const { setSelectedLocation: _setSelectedLocation } = useLocation();

@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
 import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 export // ──────────────────────────────────────────────────────────
 // LEDGER VIEW / STATEMENT
@@ -86,7 +86,8 @@ function LedgerView({
       queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
       onNoteUpdated?.();
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Reversal failed", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Reversal failed", description: e.message, variant: "destructive" }),
   });
 
   // FIX #7: use backend-calculated fields when available; fall back to frontend calculation.
