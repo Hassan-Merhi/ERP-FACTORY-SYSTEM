@@ -7,10 +7,22 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { resultRows } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import {} from "@shared/schema";
 import { sql } from "drizzle-orm";
+
+type CorruptedInventoryRow = {
+  id: number;
+  location_id: number | null;
+  stock_item_id: number | null;
+  quantity: string | null;
+  average_rate: string | null;
+  total_value: string | null;
+  location_name?: string | null;
+  stock_item_name?: string | null;
+};
 
 export function registerAdminInventoryValueRepairRoutes(app: Express) {
   app.get("/api/admin/repair-inventory-values/preview", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -36,14 +48,14 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
             )`
       );
 
-      const corruptedRows = detectResult.rows || detectResult;
+      const corruptedRows = resultRows<CorruptedInventoryRow>(detectResult);
 
       if (!corruptedRows || corruptedRows.length === 0) {
         return res.json({ rows: [] });
       }
 
       const previewRows = [];
-      for (const row of corruptedRows as any[]) {
+      for (const row of corruptedRows) {
         const qty = parseFloat(row.quantity || "0");
         const oldRate = parseFloat(row.average_rate || "0");
         const oldValue = parseFloat(row.total_value || "0");
@@ -108,14 +120,14 @@ export function registerAdminInventoryValueRepairRoutes(app: Express) {
             )`
       );
 
-      const corruptedRows = detectResult.rows || detectResult;
+      const corruptedRows = resultRows<CorruptedInventoryRow>(detectResult);
 
       if (!corruptedRows || corruptedRows.length === 0) {
         return res.json({ message: "No corrupted inventory rows found", corrected: 0, rows: [] });
       }
 
       const correctedRows = [];
-      for (const row of corruptedRows as any[]) {
+      for (const row of corruptedRows) {
         const qty = parseFloat(row.quantity || "0");
         const oldRate = parseFloat(row.average_rate || "0");
         const oldValue = parseFloat(row.total_value || "0");

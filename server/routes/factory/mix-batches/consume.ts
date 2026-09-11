@@ -30,7 +30,16 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
       }
       if (!usedDate) return res.status(400).json({ message: "usedDate is required" });
 
-      const results: any[] = [];
+      type ConsumeResult =
+        | { batchId: number; action: "closed"; carryForwardId: null }
+        | {
+            batchId: number;
+            action: "carry_forward";
+            carryForwardId: number;
+            carryForwardCode: string;
+            leftoverKg: number;
+          };
+      const results: ConsumeResult[] = [];
       await db.transaction(async (tx) => {
         for (const u of usages) {
           const { batchId, kgUsed, notes } = u;

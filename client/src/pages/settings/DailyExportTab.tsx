@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar, Download, Mail, MessageSquare, ChevronDown, ChevronRight, RefreshCw, Building2 } from "lucide-react";
-import { Recipient, ExportSettings, Company, BackupStatus } from "./ExportCenterTypes";
+import { Recipient, ExportSettings, Company, BackupStatus, BackupRun } from "./ExportCenterTypes";
 import { BackupStatusCard } from "./BackupStatusCard";
 
 interface DailyExportTabProps {
@@ -27,7 +27,7 @@ interface DailyExportTabProps {
   setShowHistory: (v: boolean | ((v: boolean) => boolean)) => void;
   historyFilter: string;
   setHistoryFilter: (f: string) => void;
-  filteredRuns: any[];
+  filteredRuns: BackupRun[];
 }
 
 import { Badge } from "@/components/ui/badge";

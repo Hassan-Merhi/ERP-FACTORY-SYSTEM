@@ -23,6 +23,13 @@ import { fmt, formatDateLabel, r2, shiftDate, todayStr } from "./factorynetposit
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
+interface SupplierWithBalance {
+  id: number;
+  name: string;
+  parentId: number | null;
+  totalValue: string;
+}
+
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
@@ -46,7 +53,7 @@ export default function FactoryNetPosition() {
 
   // Authoritative supplier balances — only used for today (live override).
   // For historical dates we rely solely on the date-filtered net-position endpoint.
-  const { data: supplierWithBalances = [] } = useQuery<any[]>({
+  const { data: supplierWithBalances = [] } = useQuery<SupplierWithBalance[]>({
     queryKey: ["/api/factory/suppliers/with-balances", "net-position-merge"],
     queryFn: async () => {
       const res = await fetch("/api/factory/suppliers/with-balances?includeOtw=true", { credentials: "include" });
@@ -70,7 +77,7 @@ export default function FactoryNetPosition() {
     // would double-count their EUR/AUD exposure.
     const correctedItems = supplierWithBalances
       .filter((s) => !s.parentId)
-      .map((s) => ({ id: s.id as number, name: s.name as string, balanceUsd: parseFloat(s.totalValue || "0") }))
+      .map((s) => ({ id: s.id, name: s.name, balanceUsd: parseFloat(s.totalValue || "0") }))
       .filter((s) => Math.abs(s.balanceUsd) > 0.01);
 
     const correctedLiabilities = r2(

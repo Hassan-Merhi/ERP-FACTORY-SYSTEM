@@ -3,13 +3,20 @@ import { Package, AlertTriangle, ShieldCheck, Layers } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+
+type OrphanedChargesDiagnostic = {
+  count: number;
+  impact: string | number | null;
+  vouchers: { id: number; voucherNumber?: string | null }[];
+} | null;
 
 export function DiagnosticsSection({
   setOrphanedChargesDiagnostic,
   toast,
 }: {
-  setOrphanedChargesDiagnostic: (v: any) => void;
-  toast: any;
+  setOrphanedChargesDiagnostic: (v: OrphanedChargesDiagnostic) => void;
+  toast: ReturnType<typeof useToast>["toast"];
 }) {
   const [, navigate] = useLocation();
 

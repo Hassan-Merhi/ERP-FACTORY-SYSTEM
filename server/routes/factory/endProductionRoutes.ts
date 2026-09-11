@@ -65,7 +65,7 @@ async function getProductionWaGroupId(companyId: number): Promise<string | null>
     .select({ extraSettings: factorySettings.extraSettings })
     .from(factorySettings)
     .where(eq(factorySettings.companyId, companyId));
-  const extra = (settings?.extraSettings as any) ?? {};
+  const extra = (settings?.extraSettings ?? {}) as { productionWorkerMatrixWhatsappGroupId?: string | null };
   return extra.productionWorkerMatrixWhatsappGroupId ?? null;
 }
 

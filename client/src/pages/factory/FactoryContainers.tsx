@@ -42,6 +42,23 @@ import {
 } from "./factory-containers/ContainerDialogs";
 import type { ApiListRow } from "@shared/apiTypes";
 
+/** Row shape produced by the Excel import mapper below and posted to import-excel. */
+interface ContainerImportRow {
+  containerNumber: string;
+  supplierName: string;
+  origin: string;
+  totalKg: string;
+  ratePerKg: string;
+  currencyCode: string;
+  fxRateToUsd: string;
+  fxSource: string;
+  arrivalDate: string;
+  notes: string;
+  status: string;
+  commissionAmount: string;
+  commissionCurrencyCode: string;
+}
+
 export default function FactoryContainers() {
   const { selectedCompany } = useCompany();
   const [viewMode, setViewMode] = useState<"list" | "summary">("summary");
@@ -65,7 +82,7 @@ export default function FactoryContainers() {
   const { toast } = useToast();
 
   const [importOpen, setImportOpen] = useState(false);
-  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [importPreview, setImportPreview] = useState<ContainerImportRow[]>([]);
   const [importResult, setImportResult] = useState<{ imported: number; errors: string[]; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reversingContainer, setReversingContainer] = useState<ContainerWithSupplier | null>(null);
@@ -138,7 +155,7 @@ export default function FactoryContainers() {
 
   // ── Import ────────────────────────────────────────────────────────────────
   const importMutation = useMutation({
-    mutationFn: async (rows: any[]) => {
+    mutationFn: async (rows: ContainerImportRow[]) => {
       const res = await factoryApiRequest("POST", "/api/factory/containers/import-excel", { rows });
       if (!res.ok) {
         const err = await res.json();
@@ -168,8 +185,8 @@ export default function FactoryContainers() {
     const data = await file.arrayBuffer();
     const wb = await XLSX.read(data, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const jsonRows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-    const get = (row: any, keys: string[]) => {
+    const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+    const get = (row: Record<string, unknown>, keys: string[]) => {
       for (const k of keys) {
         const val = row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
         if (val !== undefined && val !== "") return String(val).trim();

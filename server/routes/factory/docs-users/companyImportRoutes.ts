@@ -59,6 +59,18 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+
+type DynamicTable = PgTable & { id: PgColumn };
+type ImportRow = Record<string, unknown> & { id?: number };
+type CompanyExportPayload = { sourceCompanyId: number; tables: Record<string, ImportRow[]> };
+
+/** Export payloads are untyped JSON, so a row object cannot be checked against the target
+ *  table's insert type — the payload format itself is validated before import starts. */
+const asDynamicInsert = (rec: ImportRow): never => rec as never;
+/** `inserted.id` is `unknown` when the table is only known as a dynamic `PgTable`. */
+const insertedIdOf = (inserted: { id: unknown } | undefined): number | null =>
+  inserted && typeof inserted.id === "number" ? inserted.id : null;
 
 export function registerFactoryCompanyImportRoutes(app: Express) {
   app.post("/api/factory/import-company-data", requireAuth, async (req: Request, res: Response) => {
@@ -75,9 +87,9 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
           if (!targetCompanyId) return res.status(400).json({ message: "No company selected" });
 
           const jsonStr = req.file.buffer.toString("utf-8");
-          let payload: any;
+          let payload: CompanyExportPayload;
           try {
-            payload = JSON.parse(jsonStr);
+            payload = JSON.parse(jsonStr) as CompanyExportPayload;
           } catch {
             return res.status(400).json({ message: "Uploaded file is not valid JSON" });
           }
@@ -135,7 +147,12 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             return mapped ?? null;
           };
 
-          async function makeUniqueCode(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], table: any, field: any, baseValue: string): Promise<string> {
+          async function makeUniqueCode(
+            tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+            table: DynamicTable,
+            field: PgColumn,
+            baseValue: string
+          ): Promise<string> {
             const [existing] = await tx.select({ id: table.id }).from(table).where(eq(field, baseValue)).limit(1);
             if (!existing) return baseValue;
             const attempt = baseValue + importSuffix;
@@ -221,7 +238,7 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             "loadingFinalizedAt",
             "lastUpdated",
           ]);
-          function fixDates(rec: any) {
+          function fixDates(rec: ImportRow): ImportRow {
             for (const key of Object.keys(rec)) {
               if (rec[key] == null) continue;
               if (dateFieldNames.has(key) && typeof rec[key] === "string") {
@@ -234,8 +251,8 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
           await db.transaction(async (tx) => {
             async function insertAndMap(
               tableName: string,
-              drizzleTable: any,
-              rows: any[],
+              drizzleTable: DynamicTable,
+              rows: ImportRow[],
               fkRemaps: Record<string, string>,
               opts?: { hasCompanyId?: boolean; nullifyFields?: string[] }
             ) {
@@ -248,14 +265,15 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 delete rec.id;
                 if (hasCompanyId) rec.companyId = targetCompanyId;
                 for (const [fkField, remapKey] of Object.entries(fkRemaps)) {
-                  rec[fkField] = r(remapKey, rec[fkField]);
+                  rec[fkField] = r(remapKey, rec[fkField] as number | null | undefined);
                 }
                 for (const field of nullifyFields) {
                   rec[field] = null;
                 }
                 const [inserted] = await tx.insert(drizzleTable).values(rec).returning({ id: drizzleTable.id });
-                if (inserted && oldId != null) {
-                  remap[tableName].set(oldId, inserted.id);
+                const insertedId = insertedIdOf(inserted);
+                if (insertedId != null && oldId != null) {
+                  remap[tableName].set(oldId, insertedId);
                 }
                 count++;
               }
@@ -265,8 +283,8 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
 
             async function insertSelfReferencing(
               tableName: string,
-              drizzleTable: any,
-              rows: any[],
+              drizzleTable: DynamicTable,
+              rows: ImportRow[],
               parentField: string,
               fkRemaps: Record<string, string>,
               opts?: { hasCompanyId?: boolean }
@@ -283,19 +301,20 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 if (hasCompanyId) rec.companyId = targetCompanyId;
                 rec[parentField] = null;
                 for (const [fkField, remapKey] of Object.entries(fkRemaps)) {
-                  rec[fkField] = r(remapKey, rec[fkField]);
+                  rec[fkField] = r(remapKey, rec[fkField] as number | null | undefined);
                 }
                 const [inserted] = await tx.insert(drizzleTable).values(rec).returning({ id: drizzleTable.id });
-                if (inserted && oldId != null) remap[tableName].set(oldId, inserted.id);
+                const insertedId = insertedIdOf(inserted);
+                if (insertedId != null && oldId != null) remap[tableName].set(oldId, insertedId);
                 count++;
               }
 
               let remaining = [...children];
               let maxPasses = 20;
               while (remaining.length > 0 && maxPasses > 0) {
-                const nextRemaining = [];
+                const nextRemaining: ImportRow[] = [];
                 for (const row of remaining) {
-                  const parentMapped = r(tableName, row[parentField]);
+                  const parentMapped = r(tableName, row[parentField] as number | null | undefined);
                   if (parentMapped != null) {
                     const oldId = row.id;
                     const rec = fixDates({ ...row });
@@ -303,10 +322,11 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                     if (hasCompanyId) rec.companyId = targetCompanyId;
                     rec[parentField] = parentMapped;
                     for (const [fkField, remapKey] of Object.entries(fkRemaps)) {
-                      rec[fkField] = r(remapKey, rec[fkField]);
+                      rec[fkField] = r(remapKey, rec[fkField] as number | null | undefined);
                     }
                     const [inserted] = await tx.insert(drizzleTable).values(rec).returning({ id: drizzleTable.id });
-                    if (inserted && oldId != null) remap[tableName].set(oldId, inserted.id);
+                    const insertedId = insertedIdOf(inserted);
+                    if (insertedId != null && oldId != null) remap[tableName].set(oldId, insertedId);
                     count++;
                   } else {
                     nextRemaining.push(row);
@@ -324,10 +344,11 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                   if (hasCompanyId) rec.companyId = targetCompanyId;
                   rec[parentField] = null;
                   for (const [fkField, remapKey] of Object.entries(fkRemaps)) {
-                    rec[fkField] = r(remapKey, rec[fkField]);
+                    rec[fkField] = r(remapKey, rec[fkField] as number | null | undefined);
                   }
                   const [inserted] = await tx.insert(drizzleTable).values(rec).returning({ id: drizzleTable.id });
-                  if (inserted && oldId != null) remap[tableName].set(oldId, inserted.id);
+                  const insertedId = insertedIdOf(inserted);
+                  if (insertedId != null && oldId != null) remap[tableName].set(oldId, insertedId);
                   count++;
                 }
               }
@@ -342,8 +363,11 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 const rec = fixDates({ ...row });
                 delete rec.id;
                 rec.companyId = targetCompanyId;
-                rec.code = await makeUniqueCode(tx, locations, locations.code, rec.code);
-                const [inserted] = await tx.insert(locations).values(rec).returning({ id: locations.id });
+                rec.code = await makeUniqueCode(tx, locations, locations.code, String(rec.code));
+                const [inserted] = await tx
+                  .insert(locations)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: locations.id });
                 if (inserted && oldId != null) remap["locations"].set(oldId, inserted.id);
               }
               summary["locations"] = t.locations.length;
@@ -360,9 +384,12 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 const rec = fixDates({ ...row });
                 delete rec.id;
                 rec.companyId = targetCompanyId;
-                rec.linkedLedgerId = r("ledger_accounts", rec.linkedLedgerId);
-                rec.code = await makeUniqueCode(tx, bankAccounts, bankAccounts.code, rec.code);
-                const [inserted] = await tx.insert(bankAccounts).values(rec).returning({ id: bankAccounts.id });
+                rec.linkedLedgerId = r("ledger_accounts", rec.linkedLedgerId as number | null | undefined);
+                rec.code = await makeUniqueCode(tx, bankAccounts, bankAccounts.code, String(rec.code));
+                const [inserted] = await tx
+                  .insert(bankAccounts)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: bankAccounts.id });
                 if (inserted && oldId != null) remap["bank_accounts"].set(oldId, inserted.id);
               }
               summary["bank_accounts"] = t.bank_accounts.length;
@@ -697,9 +724,17 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 const rec = fixDates({ ...row });
                 delete rec.id;
                 rec.companyId = targetCompanyId;
-                rec.locationId = r("locations", rec.locationId);
-                rec.voucherNumber = await makeUniqueCode(tx, vouchers, vouchers.voucherNumber, rec.voucherNumber);
-                const [inserted] = await tx.insert(vouchers).values(rec).returning({ id: vouchers.id });
+                rec.locationId = r("locations", rec.locationId as number | null | undefined);
+                rec.voucherNumber = await makeUniqueCode(
+                  tx,
+                  vouchers,
+                  vouchers.voucherNumber,
+                  String(rec.voucherNumber)
+                );
+                const [inserted] = await tx
+                  .insert(vouchers)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: vouchers.id });
                 if (inserted && oldId != null) remap["vouchers"].set(oldId, inserted.id);
               }
               summary["vouchers"] = t.vouchers.length;

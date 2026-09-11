@@ -55,7 +55,7 @@ export interface LoadedGroup {
 }
 
 export interface VerificationSummary {
-  order: any;
+  order: OrderDetail | null;
   proformaLines: ProformaLine[];
   loadedItems: LoadedGroup[];
   comparison: ComparisonItem[];
@@ -84,6 +84,7 @@ export interface OrderDetail {
   otherChargesTotal: string;
   grandTotal: string;
   totalQtyBales: number;
+  proformaIdUsed?: number | null;
   charges: OrderCharge[];
   containerNumber?: string;
   shippingCompany?: string;

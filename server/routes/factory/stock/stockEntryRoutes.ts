@@ -133,9 +133,9 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         );
 
         // ── Build all bale rows in memory, track per-bale metadata for later ──
-        const baleValues: any[] = [];
-        const baleProductRefs: any[] = [];
-        const baleAttributionRefs: any[] = [];
+        const baleValues: (typeof factoryBales.$inferInsert)[] = [];
+        const baleProductRefs: (typeof factoryBaleProducts.$inferSelect)[] = [];
+        const baleAttributionRefs: Awaited<ReturnType<typeof resolveStockEntryProductionAttributions>>[number][] = [];
 
         for (const [itemIndex, item] of items.entries()) {
           const qty = parseInt(item.quantity || item.qty || "1");
@@ -477,7 +477,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           allProducts.map((p: ImportedStockProduct) => [p.name.toLowerCase(), p] as const)
         );
 
-        const createdBales: any[] = [];
+        const createdBales: (typeof factoryBales.$inferSelect)[] = [];
         let totalWeight = 0;
 
         for (const b of bales) {

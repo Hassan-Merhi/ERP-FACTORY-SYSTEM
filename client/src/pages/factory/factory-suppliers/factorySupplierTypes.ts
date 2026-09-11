@@ -102,6 +102,23 @@ export interface FxTransfer {
   containerRefs?: Array<{ containerNumber: string; allocatedAmount: string }>;
 }
 
+export interface StatementDisplayRow {
+  key: string;
+  date: string;
+  type: "purchase" | "payment" | "fx" | "commission" | "freight";
+  ref: string;
+  detail?: string;
+  amount: string;
+  amountVal: number;
+  rowCc: string;
+  status?: string;
+  optional?: boolean;
+  amountIsNeg?: boolean;
+  onMove?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
+}
+
 export interface StatementResponse {
   supplier: FactorySupplier;
   statement: StatementEntry[];

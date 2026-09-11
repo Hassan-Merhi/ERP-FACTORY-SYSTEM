@@ -38,7 +38,7 @@ import {
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 
-import type { ApplyItem, ParsedRow, Step, ValidationResult } from "./factorybalerelabeling/types";
+import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
 
@@ -79,7 +79,7 @@ export default function FactoryBaleRelabeling() {
   const validRows = validationResults.filter((r) => r.valid);
   const invalidRows = validationResults.filter((r) => !r.valid);
 
-  const { data: sessions = [] } = useQuery<any[]>({
+  const { data: sessions = [] } = useQuery<RelabelSession[]>({
     queryKey: ["/api/factory/bales/relabel/sessions"],
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/bales/relabel/sessions");
@@ -224,7 +224,12 @@ export default function FactoryBaleRelabeling() {
             />
           </div>
           {step !== "upload" && (
-            <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto" data-testid="button-start-over">
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              className="w-full sm:w-auto"
+              data-testid="button-start-over"
+            >
               <RefreshCw className="h-4 w-4 mr-2" /> Start Over
             </Button>
           )}
@@ -680,7 +685,9 @@ export default function FactoryBaleRelabeling() {
                     <TableBody>
                       {sessions.map((s) => (
                         <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
-                          <TableCell className="text-sm">{formatDisplayDate(s.createdAt?.split("T")[0] || "")}</TableCell>
+                          <TableCell className="text-sm">
+                            {formatDisplayDate(s.createdAt?.split("T")[0] || "")}
+                          </TableCell>
                           <TableCell className="text-sm text-muted-foreground truncate max-w-40">
                             {s.uploadedFilename || "—"}
                           </TableCell>

@@ -12,9 +12,16 @@ import {
 } from "@shared/schema";
 import { checkFactoryAdmin } from "../../_helpers";
 
+type ProductionPositionRuleValues = {
+  targetBales: number;
+  bonusPerExtraBale: string;
+  bonusEnabled: boolean;
+};
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const actor = (req: import("express").Request) => String(req.session?.userId ?? req.session?.username ?? "unknown").slice(0, 100);
+const actor = (req: import("express").Request) =>
+  String(req.session?.userId ?? req.session?.username ?? "unknown").slice(0, 100);
 const companyIdFor = (req: import("express").Request) => req.session?.factoryCompanyId || req.session?.currentCompanyId;
 
 const createSchema = z.object({
@@ -107,7 +114,7 @@ async function writeRuleVersion(
   companyId: number,
   positionId: number,
   effectiveFrom: string,
-  values: any,
+  values: ProductionPositionRuleValues,
   createdBy: string
 ) {
   const [current] = await tx
@@ -176,7 +183,9 @@ async function replaceMemberships(
       .set({ effectiveTo: effectiveFrom, updatedAt: new Date() })
       .where(eq(factoryProductionPositionMemberships.id, row.id));
   }
-  const currentIds = new Set(activeRows.filter((r: { workerId: number }) => desired.has(r.workerId)).map((r) => r.workerId));
+  const currentIds = new Set(
+    activeRows.filter((r: { workerId: number }) => desired.has(r.workerId)).map((r) => r.workerId)
+  );
   const toAdd = workerIds.filter((id) => !currentIds.has(id));
   if (toAdd.length) {
     await tx

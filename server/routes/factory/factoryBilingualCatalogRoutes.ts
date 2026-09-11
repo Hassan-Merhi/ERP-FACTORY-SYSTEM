@@ -128,7 +128,12 @@ async function sendProducts(req: import("express").Request, res: import("express
   );
 }
 
-async function sendProductDetail(req: import("express").Request, res: import("express").Response, companyId: number, id: number) {
+async function sendProductDetail(
+  req: import("express").Request,
+  res: import("express").Response,
+  companyId: number,
+  id: number
+) {
   const language = getRequestLanguage(req);
   const [row] = await db
     .select({
@@ -170,11 +175,12 @@ async function sendProductDetail(req: import("express").Request, res: import("ex
 
 async function applyDeferredProductArabic(
   req: import("express").Request,
-  payload: any,
+  payload: unknown,
   deferred: { nameAr?: string | null; descriptionAr?: string | null },
   suppressFallbacks: boolean
 ) {
-  const current = payload?.product ?? payload;
+  const payloadObject = (payload ?? {}) as { product?: { id?: unknown } | null } & Record<string, unknown>;
+  const current = payloadObject.product ?? payloadObject;
   const productId = Number(current?.id);
   const companyId = getFactoryCompanyId(req);
   if (!companyId || !Number.isSafeInteger(productId) || productId <= 0) return payload;
@@ -197,10 +203,14 @@ async function applyDeferredProductArabic(
       )
     )
     .returning();
-  return product ? (payload?.product ? { ...payload, product } : product) : payload;
+  return product ? (payloadObject.product ? { ...payloadObject, product } : product) : payload;
 }
 
-function prepareMutation(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {
+function prepareMutation(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+) {
   const method = req.method.toUpperCase();
   const path = req.path;
   const language = getRequestLanguage(req);
@@ -284,7 +294,11 @@ function prepareMutation(req: import("express").Request, res: import("express").
   return next();
 }
 
-async function factoryBilingualCatalogMiddleware(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {
+async function factoryBilingualCatalogMiddleware(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+) {
   if (req.method !== "GET") return prepareMutation(req, res, next);
   if (req.query.legacy === "1") return next();
 

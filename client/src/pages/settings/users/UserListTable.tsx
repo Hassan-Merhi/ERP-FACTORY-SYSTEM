@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Users, ChevronRight, Shield } from "lucide-react";
 import { FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
 import { FEATURE_KEYS } from "@shared/schema";
+import type { SettingsUserRow } from "../settingsTypes";
 
 const FACTORY_PAGE_COUNT = FACTORY_NAV_PAGES.length;
 const ERP_PAGE_COUNT = FEATURE_KEYS.length;
@@ -26,8 +27,8 @@ function getRoleBadgeClass(role: string): string {
   }
 }
 
-function accessSummary(user: any): { label: string; variant: "default" | "secondary" | "outline" } {
-  const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase());
+function accessSummary(user: SettingsUserRow): { label: string; variant: "default" | "secondary" | "outline" } {
+  const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase() ?? "");
   const hasERP = privileged || (user.hasErpAccess ?? true);
   const hasFactory = privileged || (user.hasFactoryAccess ?? true);
   if (hasERP && hasFactory) return { label: "ERP + Factory", variant: "default" };
@@ -36,8 +37,8 @@ function accessSummary(user: any): { label: string; variant: "default" | "second
   return { label: "No access", variant: "outline" };
 }
 
-function pagesSummary(user: any): string {
-  const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase());
+function pagesSummary(user: SettingsUserRow): string {
+  const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase() ?? "");
   if (privileged || !user.pageAccess || user.pageAccess.length === 0) return "Full access";
   const factoryKeys = new Set(FACTORY_NAV_PAGES.map((p) => p.key));
   const erpKeys = new Set<string>(FEATURE_KEYS);
@@ -50,10 +51,10 @@ function pagesSummary(user: any): string {
 }
 
 interface UserListTableProps {
-  users: any[];
+  users: SettingsUserRow[];
   isLoading: boolean;
   selectedUserId?: string | null;
-  onSelectUser: (user: unknown) => void;
+  onSelectUser: (user: SettingsUserRow) => void;
 }
 
 export function UserListTable({ users, isLoading, selectedUserId, onSelectUser }: UserListTableProps) {
@@ -80,7 +81,7 @@ export function UserListTable({ users, isLoading, selectedUserId, onSelectUser }
   return (
     <div className="space-y-1.5">
       {users.map((user) => {
-        const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase());
+        const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase() ?? "");
         const access = accessSummary(user);
         const pages = pagesSummary(user);
         const isSelected = selectedUserId === user.id;

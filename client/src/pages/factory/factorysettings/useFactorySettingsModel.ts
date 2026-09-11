@@ -261,7 +261,9 @@ export function useFactorySettingsModel() {
   useEffect(() => {
     if (data) {
       setSettings({ ...defaultSettings, ...data });
-      setProdWaGroupId((data as any).productionWorkerMatrixWhatsappGroupId ?? "");
+      const waGroupId = (data as FactorySettingsData & { productionWorkerMatrixWhatsappGroupId?: string | null })
+        .productionWorkerMatrixWhatsappGroupId;
+      setProdWaGroupId(waGroupId ?? "");
     }
   }, [data]);
 

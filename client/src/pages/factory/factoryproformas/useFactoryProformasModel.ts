@@ -254,9 +254,12 @@ export function useFactoryProformasModel() {
 
   const transferProformaMutation = useMutation({
     mutationFn: async ({ id, targetCustomerId }: { id: number; targetCustomerId: number }) => {
-      return await modeApiRequest("PATCH", `/api/factory/customer-proformas/${id}/transfer`, { targetCustomerId });
+      const res = await modeApiRequest("PATCH", `/api/factory/customer-proformas/${id}/transfer`, {
+        targetCustomerId,
+      });
+      return (await res.json()) as { targetCustomerName?: string };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: { targetCustomerName?: string }) => {
       toast({ title: "Proforma transferred", description: `Proforma moved to ${data.targetCustomerName}` });
       invalidateCustomerProformas();
       setTransferProforma(null);

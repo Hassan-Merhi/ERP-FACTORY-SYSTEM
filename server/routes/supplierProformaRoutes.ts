@@ -18,7 +18,7 @@ import { supplierProformas, supplierProformaLines, suppliers } from "@shared/sch
  * decimal point with fractional digits, optional currency prefix/suffix, and surrounding
  * whitespace.  Everything else (text, "N/A", scientific notation, etc.) returns "0".
  */
-function sanitizeDecimal(v: any): string {
+function sanitizeDecimal(v: unknown): string {
   const raw = String(v ?? "").trim();
   // Strip leading/trailing currency symbols and whitespace
   const stripped = raw.replace(/^[^0-9\-(]+/, "").replace(/[^0-9.]+$/, "");
@@ -352,7 +352,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
 
         const thin = (c = C.borderCol) => ({ style: "thin" as const, color: { argb: c } });
         const medium = (c = C.navy) => ({ style: "medium" as const, color: { argb: c } });
-        const allBorder = (t = thin(), m?: any) => ({
+        const allBorder = (t = thin(), m?: ReturnType<typeof thin>) => ({
           top: m ?? t,
           bottom: m ?? t,
           left: t,

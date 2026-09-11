@@ -19,12 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Save } from "lucide-react";
 import { UserManagementForm } from "./UserManagementForm";
+import type { SettingsUserRow } from "../settingsTypes";
+import type { Company } from "@shared/schema";
 
 interface UserManagementDrawerProps {
-  user: any | null;
+  user: SettingsUserRow;
   open: boolean;
   onClose: () => void;
-  companies: unknown[];
+  companies: Company[];
   onUserDeleted: () => void;
 }
 

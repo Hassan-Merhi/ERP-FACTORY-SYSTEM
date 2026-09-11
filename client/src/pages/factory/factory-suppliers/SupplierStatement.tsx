@@ -22,28 +22,12 @@ import {
   Users,
   Package,
 } from "lucide-react";
-import { StatementResponse, SupplierWithBalance } from "./factorySupplierTypes";
+import { StatementResponse, SupplierWithBalance, type StatementDisplayRow } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
-interface StatementDisplayRow {
-  key: string;
-  date: string;
-  type: "purchase" | "payment" | "fx" | "commission";
-  ref: string;
-  detail?: string;
-  amount: string;
-  amountVal: number;
-  rowCc: string;
-  status?: string;
-  optional?: boolean;
-  amountIsNeg?: boolean;
-  onMove?: () => void;
-  onDelete?: () => void;
-  onEdit?: () => void;
-}
 import { CurrencyPools } from "./CurrencyPools";
 import { SupplierStatementRows } from "./SupplierStatementRows";
 
@@ -178,10 +162,7 @@ export function SupplierStatement({
 
   const activeSt = (statementData.statement || []).filter((c) => c.status !== "OFFLOADED");
   const activeContainerCount = activeSt.length;
-  const activeKg = activeSt.reduce(
-    (sum: number, c) => sum + parseFloat(c.actualReceivedKg || c.totalKg || "0"),
-    0
-  );
+  const activeKg = activeSt.reduce((sum: number, c) => sum + parseFloat(c.actualReceivedKg || c.totalKg || "0"), 0);
   const currencyGroups = statementData.currencyGroups || [];
 
   const ownMap: Record<string, { own: number; totalFreight: number }> = {};

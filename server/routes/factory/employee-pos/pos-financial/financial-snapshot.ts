@@ -158,7 +158,8 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
           .groupBy(voucherEntries.ledgerAccountId);
 
         const balMap = new Map<number, { debit: number; credit: number }>();
-        for (const e of equityEntries as any[]) {
+        for (const e of equityEntries) {
+          if (e.ledgerAccountId === null) continue;
           balMap.set(e.ledgerAccountId, { debit: parseFloat(e.debit || "0"), credit: parseFloat(e.credit || "0") });
         }
 

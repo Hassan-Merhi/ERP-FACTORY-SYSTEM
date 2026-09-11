@@ -99,7 +99,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
 
       if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate required" });
 
-      const toDateStr = (v: any): string | null => {
+      const toDateStr = (v: unknown): string | null => {
         if (!v) return null;
         if (v instanceof Date) return v.toISOString().split("T")[0];
         return String(v).split("T")[0];

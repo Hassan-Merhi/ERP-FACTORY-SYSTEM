@@ -4,10 +4,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSpCompany } from "./spHelpers";
-
-function rows(result: any) {
-  return result?.rows ?? result ?? [];
-}
+import { resultRows } from "../../lib/queryResult";
 
 function num(value: unknown): number {
   const parsed = Number(value ?? 0);
@@ -125,18 +122,18 @@ async function buildFullReconciliation(companyId: number) {
       .catch(() => ({ rows: [{ fail_count: 0, total_count: 0 }] })),
   ]);
 
-  const stockRow = rows(stock)[0] ?? {};
-  const inventoryRow = rows(inventory)[0] ?? {};
-  const otwRow = rows(otw)[0] ?? {};
-  const payableRow = rows(payable)[0] ?? {};
-  const statementRow = rows(statements)[0] ?? {};
-  const profitRow = rows(profit)[0] ?? {};
-  const splitRow = rows(splits)[0] ?? {};
-  const openingRow = rows(openings)[0] ?? {};
-  const containerRow = rows(containers)[0] ?? {};
-  const prepaidRow = rows(prepaid)[0] ?? {};
-  const parentRow = rows(parentAgent)[0] ?? {};
-  const migrationRow = rows(migration)[0] ?? {};
+  const stockRow = resultRows(stock)[0] ?? {};
+  const inventoryRow = resultRows(inventory)[0] ?? {};
+  const otwRow = resultRows(otw)[0] ?? {};
+  const payableRow = resultRows(payable)[0] ?? {};
+  const statementRow = resultRows(statements)[0] ?? {};
+  const profitRow = resultRows(profit)[0] ?? {};
+  const splitRow = resultRows(splits)[0] ?? {};
+  const openingRow = resultRows(openings)[0] ?? {};
+  const containerRow = resultRows(containers)[0] ?? {};
+  const prepaidRow = resultRows(prepaid)[0] ?? {};
+  const parentRow = resultRows(parentAgent)[0] ?? {};
+  const migrationRow = resultRows(migration)[0] ?? {};
 
   const surfaces = [
     { key: "stock_on_hand", databaseValue: num(stockRow.value), reportValue: num(stockRow.value), pass: true },

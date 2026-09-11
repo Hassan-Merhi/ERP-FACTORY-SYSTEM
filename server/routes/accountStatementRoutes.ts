@@ -17,7 +17,8 @@ import {
 } from "../lib/accountStatementExportSafety";
 import path from "path";
 import fs from "fs";
-import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
@@ -48,7 +49,7 @@ export function registerAccountStatementRoutes(app: Express) {
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid ID" });
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      let entryFilter: any;
+      let entryFilter: SQL<unknown> | undefined;
       switch (accountType) {
         case "ledger":
           entryFilter = eq(voucherEntries.ledgerAccountId, accountId);
@@ -109,7 +110,7 @@ export function registerAccountStatementRoutes(app: Express) {
       const endDateValidation = validateStatementDateRange(undefined, endDate);
       if (!endDateValidation.ok) return res.status(400).json({ message: endDateValidation.message });
 
-      const typeToColumn: Record<string, any> = {
+      const typeToColumn: Record<string, PgColumn> = {
         ledger: voucherEntries.ledgerAccountId,
         bank: voucherEntries.bankAccountId,
         "fixed-asset": voucherEntries.fixedAssetId,

@@ -25,6 +25,28 @@ export interface MixBatchRow {
   displayCostPerKg?: string;
 }
 
+export interface MixBatchSourceRow {
+  id: number;
+  sourceName: string;
+  containerNumber: string | null;
+  weightKg: number;
+  costPerKg: string;
+  totalCost: number;
+}
+
+export interface MixBatchPrintRow {
+  id: number;
+  batchCode: string;
+  name: string | null;
+  status: string;
+  totalWeightKg: number;
+  totalCost: number;
+  costPerKg: string;
+  displayTotalCost?: number;
+  displayCostPerKg?: string;
+  sources?: MixBatchSourceRow[];
+}
+
 interface MixBatchListProps {
   mixBatches: MixBatchRow[];
   isLoading: boolean;
@@ -35,7 +57,7 @@ interface MixBatchListProps {
   isSendingWhatsApp: boolean;
   mixBatchDate: string;
   setMixBatchDate: (date: string) => void;
-  mixBatchesByDate: any[];
+  mixBatchesByDate: MixBatchPrintRow[];
   mixBatchesByDateLoading: boolean;
   mixBatchPrintRef: React.RefObject<HTMLDivElement | null>;
   formatDisplayDate: (date: string) => string;
@@ -186,7 +208,7 @@ export function MixBatchList({
                 ))}
               </div>
 
-              {batch.sources?.length > 0 && (
+              {(batch.sources?.length ?? 0) > 0 && (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                   <thead>
                     <tr style={{ backgroundColor: "#1f2937" }}>
@@ -208,7 +230,7 @@ export function MixBatchList({
                     </tr>
                   </thead>
                   <tbody>
-                    {batch.sources.map((src: any, idx: number) => (
+                    {batch.sources?.map((src, idx: number) => (
                       <tr key={src.id} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "#1a2332" }}>
                         <td style={{ padding: "7px 10px", color: "#f9fafb", fontWeight: 500 }}>{src.sourceName}</td>
                         <td
@@ -395,7 +417,10 @@ export function MixBatchList({
                         >
                           {batch.batchCode}
                         </TableCell>
-                        <TableCell className="text-sm cursor-pointer hover:underline" onClick={() => onViewDetail(batch)}>
+                        <TableCell
+                          className="text-sm cursor-pointer hover:underline"
+                          onClick={() => onViewDetail(batch)}
+                        >
                           {batch.name || <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">

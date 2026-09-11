@@ -128,10 +128,10 @@ export function registerNotificationRoutes(app: Express) {
   });
 
   // GET /api/notification-rules — admin/dev only
-  app.get("/api/notification-rules", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/notification-rules", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
     try {
       const role = req.session?.currentRole;
-      if (!ALLOWED_ROLES.includes(role)) {
+      if (!ALLOWED_ROLES.includes(role ?? "")) {
         return res.status(403).json({ message: "Forbidden" });
       }
       const rules = await db.select().from(notificationRules).orderBy(notificationRules.eventType);
@@ -142,10 +142,10 @@ export function registerNotificationRoutes(app: Express) {
   });
 
   // PUT /api/notification-rules — admin/dev only; replaces all rules for given eventType
-  app.put("/api/notification-rules", requireAuth, async (req: any, res: import("express").Response) => {
+  app.put("/api/notification-rules", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
     try {
       const role = req.session?.currentRole;
-      if (!ALLOWED_ROLES.includes(role)) {
+      if (!ALLOWED_ROLES.includes(role ?? "")) {
         return res.status(403).json({ message: "Forbidden" });
       }
       const { eventType, recipientUserIds } = req.body;
@@ -175,10 +175,10 @@ export function registerNotificationRoutes(app: Express) {
   });
 
   // GET /api/notification-users — users list for recipient picker (admin/dev only)
-  app.get("/api/notification-users", requireAuth, async (req: any, res: import("express").Response) => {
+  app.get("/api/notification-users", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
     try {
       const role = req.session?.currentRole;
-      if (!ALLOWED_ROLES.includes(role)) {
+      if (!ALLOWED_ROLES.includes(role ?? "")) {
         return res.status(403).json({ message: "Forbidden" });
       }
       const allUsers = await db

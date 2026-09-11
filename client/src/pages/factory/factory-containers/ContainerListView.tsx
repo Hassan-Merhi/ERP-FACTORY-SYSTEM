@@ -74,7 +74,9 @@ export function ContainerListView({
     });
   };
 
-  const _renderCharges = (c: any) => {
+  const _renderCharges = (
+    c: ContainerWithSupplier & { additionalChargesSum?: string | null; preRegisteredChargesByCurrency?: unknown }
+  ) => {
     const ccy = c.currencyCode || "USD";
     const freightAmt = parseFloat(c.freight || "0");
     const freightCcy = c.freightCurrencyCode || ccy;

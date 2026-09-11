@@ -51,7 +51,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   // POST /api/factory/containers/refresh-etas — bulk JSONCargo ETA refresh (admin-only)
   app.post("/api/factory/containers/refresh-etas", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
-      const role = (req.session as any)?.user?.role || req.user?.role;
+      const role = req.session?.user?.role || req.user?.role || "";
       if (!JSONCARGO_ADMIN_ROLES.includes(role)) {
         return res.status(403).json({ message: "Not authorized to run bulk ETA refresh" });
       }

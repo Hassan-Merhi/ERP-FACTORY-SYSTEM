@@ -1,4 +1,4 @@
-import { StatementResponse } from "./factorySupplierTypes";
+import { StatementResponse, type StatementDisplayRow } from "./factorySupplierTypes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,12 +14,14 @@ interface SupplierStatementRowsProps {
   currencyTotals: Record<string, number>;
   statDateFilter: "all" | "today" | "yesterday" | "this_month" | "this_year";
   setStatDateFilter: (val: "all" | "today" | "yesterday" | "this_month" | "this_year") => void;
-  displayedRows: any[];
+  displayedRows: StatementDisplayRow[];
   balanceByKey: Record<string, { bal: number; cc: string }>;
   formatDate: (val: string) => string;
   formatNum: (val: string) => string;
   typeBadge: (type: string) => React.ReactNode;
-  statusColor: (status: string) => any;
+  statusColor: (
+    status: string
+  ) => "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info" | "muted";
   statusDisplayLabel: (status: string) => string;
   onEditPayment: (p: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;

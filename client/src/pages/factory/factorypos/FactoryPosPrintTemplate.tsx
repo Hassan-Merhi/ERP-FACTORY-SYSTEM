@@ -41,9 +41,27 @@ const footCell = (align: "left" | "center" = "center") => ({
   backgroundColor: HEAD_BG,
 });
 
+interface PrintExpense {
+  description?: string | null;
+  accountName?: string | null;
+  amount?: string | number | null;
+}
+
+interface SavedSale {
+  cartRows?: CartRow[];
+  expenses?: PrintExpense[];
+  netTotal?: number;
+  total?: number;
+  paymentType?: string;
+  saleNumber?: string | number;
+  txDate?: string;
+  customerName?: string | null;
+  notes?: string | null;
+}
+
 interface PrintProps {
   printRef: RefObject<HTMLDivElement | null>;
-  savedSale: any;
+  savedSale: SavedSale | null | undefined;
   printUserName: string;
   fmtPrint: (n: number, prefix?: string) => string;
   fmtPrintAmt: (n: number) => string;
@@ -121,7 +139,7 @@ function ItemsSection({ savedSale, fmtPrint, fmtPrintAmt }: Omit<PrintProps, "pr
           }}
         >
           <tbody>
-            {printExpenses.map((exp: any, idx: number) => (
+            {printExpenses.map((exp, idx: number) => (
               <tr key={idx}>
                 <td style={{ padding: "2px 5px", fontSize: "7pt", fontWeight: "600", color: "#333" }}>
                   {exp.description || exp.accountName || "Deduction"}
@@ -129,7 +147,7 @@ function ItemsSection({ savedSale, fmtPrint, fmtPrintAmt }: Omit<PrintProps, "pr
                 <td
                   style={{ textAlign: "right", padding: "2px 5px", fontSize: "7pt", fontWeight: "700", color: "#c00" }}
                 >
-                  -{fmtPrintAmt(parseFloat(exp.amount))}
+                  -{fmtPrintAmt(parseFloat(String(exp.amount ?? "0")))}
                 </td>
               </tr>
             ))}

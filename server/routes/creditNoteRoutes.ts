@@ -11,7 +11,7 @@ import {
   subtractInventoryValues,
   toInventoryDecimal,
 } from "../lib/inventoryMath";
-import { db } from "../db";
+import { db, type DatabaseOrTransaction } from "../db";
 import { normalizeVoucherEntryAmounts } from "../services/accounting/currencyAmounts";
 import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
@@ -31,7 +31,17 @@ import { adjustInventory } from "../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 
-async function getOrCreateSalesReturnsAccount(companyId: number, txOrDb: any = db): Promise<number | null> {
+type CreditNoteItemInput = {
+  stockItemId?: unknown;
+  quantity?: unknown;
+  rate?: unknown;
+  refundRate?: unknown;
+};
+
+async function getOrCreateSalesReturnsAccount(
+  companyId: number,
+  txOrDb: DatabaseOrTransaction = db
+): Promise<number | null> {
   const byName = await txOrDb
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
@@ -639,11 +649,16 @@ export function registerCreditNoteRoutes(app: Express) {
                 rate: it.rate,
                 totalValue: it.totalValue,
               })),
-              (items as any[]).map((it) => ({
+              (items as CreditNoteItemInput[]).map((it) => ({
                 stockItemId: Number(it.stockItemId),
                 quantity: String(it.quantity ?? ""),
                 rate: String(it.refundRate ?? it.rate ?? ""),
-                totalValue: inventoryMoney(multiplyInventoryValues(it.quantity, it.refundRate ?? it.rate)),
+                totalValue: inventoryMoney(
+                  multiplyInventoryValues(
+                    it.quantity as string | number | null | undefined,
+                    (it.refundRate ?? it.rate) as string | number | null | undefined
+                  )
+                ),
               })),
               resolveName
             )

@@ -96,8 +96,8 @@ async function buildInvoiceWorkbookBuffer(params: InvoiceWorkbookParams): Promis
   const { orderId, companyId, hideSelling, noCharges } = params;
 
   // Sanitize helpers — used throughout to prevent NaN/null/undefined reaching ExcelJS cells.
-  const safeStr = (v: any): string => (v == null ? "" : String(v));
-  const safeNum = (v: any): number => {
+  const safeStr = (v: unknown): string => (v == null ? "" : String(v));
+  const safeNum = (v: unknown): number => {
     const n = Number(v);
     return isFinite(n) ? n : 0;
   };
@@ -509,7 +509,7 @@ export function registerOrderExcelExportRoutes(app: Express) {
               .from(factoryBaleProducts)
               .where(inArray(factoryBaleProducts.id, productIds as number[]))
           : [];
-      const productMap = new Map(productRecords.map((p: any) => [p.id, p]));
+      const productMap = new Map(productRecords.map((p) => [p.id, p] as const));
       const balePriceMap = new Map<number, number>(baleLinks.map((l) => [l.baleId, parseFloat(l.priceUsed || "0")]));
 
       // Also read order lines for pricing mode metadata
@@ -539,7 +539,7 @@ export function registerOrderExcelExportRoutes(app: Express) {
       }
       const grouped = new Map<string, ProductGroup>();
       for (const bale of baleRows) {
-        const product = productMap.get(bale.productId);
+        const product = bale.productId === null ? undefined : productMap.get(bale.productId);
         const articleCode = product?.articleCode || bale.articleCode || "UNKNOWN";
         const productName = product?.name || bale.productName || articleCode;
         const wtPerBale = parseFloat(product?.weightPerBaleKg || bale.weightKg || "0");
@@ -696,10 +696,10 @@ export function registerOrderExcelExportRoutes(app: Express) {
       }
 
       const lines = rawLines
-        .map((l: any) => ({
+        .map((l) => ({
           articleCode: l.articleCode || "",
           productName: productNameMap.get(l.articleCode) || l.baleName || l.articleCode || "",
-          qty: parseInt(l.qty || "0"),
+          qty: parseInt(String(l.qty || "0"), 10),
           wtPerBale: wtPerBaleMap.get(l.articleCode) || parseFloat(l.weightPerBale || "0"),
           totalWt: parseFloat(l.totalWeight || "0"),
           pricePerBale: parseFloat(l.pricePerBale || "0"),

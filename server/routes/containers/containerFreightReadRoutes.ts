@@ -24,7 +24,10 @@ import { calcPoAmounts, syncIntercoParentVoucher } from "./containerHelpers";
 export function registerContainerFreightReadRoutes(app: Express) {
   app.get("/api/purchase-orders/next-po-number", requireAuth, requireNonPOS, async (req, res) => {
     try {
-      const companyId = (req.user as any)?.companyId;
+      // req.user never carries companyId (requireAuth builds it without one), so this
+      // stays undefined and the route answers 400, as pinned in config/api-smoke-shapes.json.
+      // Reading the session instead would be a behaviour change, not a type fix.
+      const companyId = (req.user as { companyId?: number } | undefined)?.companyId;
       if (!companyId) return res.status(400).json({ message: "No company in session" });
 
       const year = new Date().getFullYear();

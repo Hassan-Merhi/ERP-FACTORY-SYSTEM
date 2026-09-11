@@ -23,6 +23,19 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 
+type StatementVoucherRow = {
+  transactionDate: string;
+  transactionType: string;
+  referenceType: string;
+  referenceNumber: string;
+  description: string | null;
+  debitAmount: string;
+  creditAmount: string;
+  referenceId?: number | null;
+  rowNote?: string | null;
+  _fromVoucher: boolean;
+};
+
 export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
   // ── Customer Statement: PDF Export ──────────────────────────────────────
   app.get("/api/factory/customers/:id/statement/export-pdf", requireAuth, async (req: Request, res: Response) => {
@@ -48,7 +61,7 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
         .orderBy(customerBalances.transactionDate, customerBalances.id);
 
       // Pull voucher entries (same logic as statement endpoint)
-      const voucherRowsPdf: any[] = [];
+      const voucherRowsPdf: StatementVoucherRow[] = [];
       const ledgerAccountIdPdf = customer.ledgerAccountId;
       const voucherCondPdf = ledgerAccountIdPdf
         ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountIdPdf} OR ${voucherEntries.customerId} = ${customerId})`
@@ -230,7 +243,7 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
           logoBuffer = await new Promise<Buffer>((resolve, reject) => {
             const proto = logoUrl.startsWith("https") ? require("https") : require("http");
             proto
-              .get(logoUrl, (r: any) => {
+              .get(logoUrl, (r: import("http").IncomingMessage) => {
                 const parts: Buffer[] = [];
                 r.on("data", (d: Buffer) => parts.push(d));
                 r.on("end", () => resolve(Buffer.concat(parts)));
@@ -265,8 +278,8 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
       // ── Arabic reshaper ──
       let custConvAr: ((t: string) => string) | null = null;
       let custBidi: {
-        getEmbeddingLevels: (t: string, d: string) => any;
-        getReorderedString: (t: string, l: any) => string;
+        getEmbeddingLevels: (t: string, d: string) => unknown;
+        getReorderedString: (t: string, l: unknown) => string;
       } | null = null;
       try {
         custConvAr = require("arabic-reshaper").convertArabic;

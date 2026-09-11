@@ -157,14 +157,17 @@ export function useFactoryStockAllocationV5Model() {
   }
 
   const editDraftMut = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       proformaId,
       updates,
     }: {
       proformaId: number;
       updates: { articleCode: string; expectedQty: number }[];
-    }) => apiRequest("PATCH", `/api/factory/v5/proforma/${proformaId}/draft-expected-lines`, { updates }),
-    onSuccess: (data: any) => {
+    }) => {
+      const res = await apiRequest("PATCH", `/api/factory/v5/proforma/${proformaId}/draft-expected-lines`, { updates });
+      return (await res.json()) as { updated?: number };
+    },
+    onSuccess: (data: { updated?: number }) => {
       toast({ title: `Draft quantities updated (${data?.updated ?? 0} lines changed).` });
       setEditDraftDialog(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });
@@ -274,8 +277,11 @@ export function useFactoryStockAllocationV5Model() {
   });
 
   const restoreContainerMut = useMutation({
-    mutationFn: (orderId: number) => apiRequest("POST", `/api/factory/v5/containers/${orderId}/restore`, {}),
-    onSuccess: (data: any) => {
+    mutationFn: async (orderId: number) => {
+      const res = await apiRequest("POST", `/api/factory/v5/containers/${orderId}/restore`, {});
+      return (await res.json()) as { restoredTo?: string };
+    },
+    onSuccess: (data: { restoredTo?: string }) => {
       toast({ title: `Container restored to ${data?.restoredTo === "LOADING" ? "Loading" : "Draft"}.` });
       cancelledContainersQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/stock-allocation"] });

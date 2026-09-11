@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import type { LedgerAccount } from "@shared/schema";
 /**
  * Statistics and ExcelJS sheet rendering for the net-profit workbook.
  *
@@ -16,14 +17,22 @@ import ExcelJS from "exceljs";
  * to the code that moved.
  */
 export interface NetProfitSheetContext {
-  companyAccounts: any[];
+  companyAccounts: LedgerAccount[];
   importChargesIds: Set<number>;
   companyName: string;
 }
 
 export const fmt = (n: number) => parseFloat(n.toFixed(2));
 
-export function computeBalancesFromEntries(entries: any[]): Map<number, { debit: number; credit: number }> {
+export type NetProfitBalanceEntry = {
+  ledgerAccountId?: number | null;
+  debitAmount?: string | null;
+  creditAmount?: string | null;
+};
+
+export function computeBalancesFromEntries(
+  entries: NetProfitBalanceEntry[]
+): Map<number, { debit: number; credit: number }> {
   const bal = new Map<number, { debit: number; credit: number }>();
   for (const e of entries) {
     if (e.ledgerAccountId) {
@@ -244,7 +253,7 @@ export function writeSheet(
   };
 
   // Helper: account detail rows
-  const addAccRows = (rows: any[]) => {
+  const addAccRows = (rows: { name: string; debit: number; credit: number; balance: number }[]) => {
     if (rows.length === 0) {
       const empty = ws.addRow(["", "(none)", "", "", ""]);
       empty.getCell(2).font = { italic: true, color: { argb: "FF888888" } };

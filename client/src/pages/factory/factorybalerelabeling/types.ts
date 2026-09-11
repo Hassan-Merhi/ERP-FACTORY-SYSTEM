@@ -3,7 +3,7 @@
  *
  * Extracted from FactoryBaleRelabeling.tsx during the Phase 4 god-file split.
  */
-import {type A4DesignColor} from "@/lib/labelHtml";
+import { type A4DesignColor } from "@/lib/labelHtml";
 
 export type Step = "upload" | "validate" | "done";
 
@@ -28,6 +28,16 @@ export interface ApplyItem {
   productName: string;
   articleCode: string;
   weightKg: string;
+}
+
+export interface RelabelSession {
+  id: number;
+  createdAt: string | null;
+  uploadedFilename: string | null;
+  printFormat: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
 }
 
 export interface LabelPreviewCardProps {

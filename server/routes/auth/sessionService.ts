@@ -39,7 +39,9 @@ export const sessionService = {
 
     return rows.map((row) => {
       const stored = row.sess || {};
-      const geo = stored.ip ? geoByIp[stored.ip] || { city: null, country: null } : { city: null, country: null };
+      const geo = stored.ip
+        ? geoByIp[stored.ip as string] || { city: null, country: null }
+        : { city: null, country: null };
       return {
         sid: row.sid,
         isCurrent: row.sid === params.currentSid,

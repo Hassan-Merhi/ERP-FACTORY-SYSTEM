@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { randomBytes } from "crypto";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { resultRows } from "../lib/queryResult";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -154,7 +155,14 @@ export function registerPasskeyRoutes(app: Express) {
         return res.status(400).json({ message: "Passkey not found" });
       }
 
-      const cred = (credRow.rows as any[])[0];
+      const cred = resultRows<{
+        credential_id: string;
+        public_key: string;
+        counter: number;
+        transports: string | null;
+        uid: string;
+        username: string;
+      }>(credRow)[0];
 
       const verification = await verifyAuthenticationResponse({
         response: req.body,

@@ -30,6 +30,13 @@ import {
 type AttendanceStatus = "Present" | "Absent" | "Late" | "Half Day" | "Leave";
 type ViewMode = "daily" | "perEmployee";
 
+interface EmployeeAttendanceBulkRecord {
+  employeeId: number;
+  attendanceDate: string;
+  status: string;
+  notes?: string;
+}
+
 interface EmpRow {
   id: number;
   firstName: string;
@@ -151,7 +158,8 @@ export default function FactoryEmployeeAttendanceTab() {
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: (records: any[]) => apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
+    mutationFn: (records: EmployeeAttendanceBulkRecord[]) =>
+      apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/employee-attendance", selectedDate] });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });
@@ -501,7 +509,8 @@ function PerEmployeeView() {
   const absentCount = dates.length - presentCount;
 
   const saveMutation = useMutation({
-    mutationFn: (records: any[]) => apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
+    mutationFn: (records: EmployeeAttendanceBulkRecord[]) =>
+      apiRequest("POST", "/api/factory/employee-attendance/bulk", { records }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/employee-attendance/employee", empIdNum, startDate, endDate],

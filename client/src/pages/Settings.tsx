@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { ApiListRow } from "@shared/apiTypes";
+import type { Company } from "@shared/schema";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -57,7 +57,7 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState("users-permissions");
   const [userToDelete, setUserToDelete] = useState<any>(null);
 
-  const { data: companies = [], isLoading: _isLoadingCompanies } = useQuery<ApiListRow[]>({
+  const { data: companies = [], isLoading: _isLoadingCompanies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 

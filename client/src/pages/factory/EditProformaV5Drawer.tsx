@@ -169,7 +169,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
       });
 
       // 2. Process each article row
-      const ops: Promise<any>[] = [];
+      const ops: Promise<unknown>[] = [];
       for (const row of articleRows) {
         const rawQty = quantities[row.articleCode] ?? "";
         const qty = parseInt(rawQty);

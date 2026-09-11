@@ -154,7 +154,7 @@ export function registerProductionBaleRoutes(app: Express) {
               productId,
               expectedCount: numBales,
               status: "PENDING",
-              createdBy: (req.session as any).userId || null,
+              createdBy: req.session.userId || null,
             })
             .returning();
           pressingBatchId = pb.id;

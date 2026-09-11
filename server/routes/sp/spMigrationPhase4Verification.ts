@@ -46,7 +46,7 @@ async function verifyHistoricalSales(
   blockers: VerificationIssue[];
   deltas: VerificationIssue[];
   area: VerificationArea;
-  counts: any;
+  counts: Record<string, number>;
 }> {
   const blockers: VerificationIssue[] = [];
   const deltas: VerificationIssue[] = [];
@@ -161,7 +161,7 @@ async function verifyContainers(
   blockers: VerificationIssue[];
   deltas: VerificationIssue[];
   area: VerificationArea;
-  counts: any;
+  counts: Record<string, number>;
 }> {
   const blockers: VerificationIssue[] = [];
   const deltas: VerificationIssue[] = [];
@@ -358,7 +358,7 @@ async function verifyUserMappings(
 ): Promise<{
   blockers: VerificationIssue[];
   area: VerificationArea;
-  counts: any;
+  counts: Record<string, number>;
 }> {
   const blockers: VerificationIssue[] = [];
   const rolesResult = await db.execute(sql`

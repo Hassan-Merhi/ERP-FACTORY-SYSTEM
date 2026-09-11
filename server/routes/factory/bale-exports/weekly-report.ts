@@ -19,6 +19,7 @@ import {
   factorySupplierCategories,
 } from "@shared/schema";
 import { eq, and, sql, isNull, not } from "drizzle-orm";
+import { _wrDateOnly } from "./_helpers";
 import path from "path";
 import fs from "fs";
 
@@ -154,8 +155,7 @@ export function registerFactoryWeeklyReportExportRoutes(app: Express) {
           catBalMap.set(ck, { name: catName, currentBalance: isAdd ? kg : -kg });
         }
 
-        const dateStr =
-          typeof adj.date === "string" ? adj.date.slice(0, 10) : (adj.date as any).toISOString().slice(0, 10);
+        const dateStr = _wrDateOnly(adj.date);
         if (isAdd) {
           // Treat manual ADD the same as receiving container stock
           if (!stockInByDate.has(dateStr)) stockInByDate.set(dateStr, new Map());

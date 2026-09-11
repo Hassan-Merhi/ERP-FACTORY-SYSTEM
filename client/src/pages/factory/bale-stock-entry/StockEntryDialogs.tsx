@@ -15,12 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatNumber } from "@/lib/formatNumber";
 import { getPaperFormat } from "@/components/LabelPrintSettings";
 import { AdminAuthDialog } from "@/components/AdminAuthDialog";
-import type { FactoryCategory } from "@shared/schema";
+import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
 import type { A4DesignColor } from "@/lib/labelHtml";
 
 interface CartItem {
   productId: number;
-  product: any;
+  product: FactoryBaleProduct;
   qty: number;
   weightPerBaleKg: number;
   finalizedBy: number | null;

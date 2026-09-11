@@ -3,7 +3,8 @@
  *
  * Extracted from PostOffloadDialog.tsx during the Phase 4 god-file split.
  */
-import type {ContainerWithSupplier} from ".././otwHelpers";
+import type { ContainerWithSupplier } from ".././otwHelpers";
+import type { ApiListRow } from "@shared/apiTypes";
 
 export type PostOffloadCharge = {
   id: string;
@@ -73,7 +74,7 @@ export type MutationResult = {
 
 export interface PostOffloadDialogProps {
   container: ContainerWithSupplier | null;
-  ledgerAccounts: any[];
+  ledgerAccounts: ApiListRow[];
   onClose: () => void;
 }
 

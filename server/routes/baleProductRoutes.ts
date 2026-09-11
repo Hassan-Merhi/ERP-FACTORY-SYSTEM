@@ -347,9 +347,9 @@ export function registerBaleProductRoutes(app: Express) {
           categoryCache[cat.name.toLowerCase()] = cat.id;
         }
 
-        for (const row of rows as any[]) {
+        for (const row of rows) {
           const itemNumber = row.itemNumber || row.item_number || row.ItemNumber;
-          let articleCode = row.articleCode || row.article_code || row.ArticleCode || "";
+          let articleCode = (row.articleCode || row.article_code || row.ArticleCode || "") as string;
           if (!articleCode && itemNumber) {
             const num = parseInt(String(itemNumber));
             if (!isNaN(num) && num >= 1 && num <= 99) {
@@ -359,10 +359,10 @@ export function registerBaleProductRoutes(app: Express) {
 
           if (!articleCode) continue;
 
-          const name = row.name || row.Name || row.product_name || "";
+          const name = (row.name || row.Name || row.product_name || "") as string;
           if (!name) continue;
 
-          const categoryName = (row.category || row.Category || row.category_name || "").toString().trim();
+          const categoryName = String(row.category || row.Category || row.category_name || "").trim();
           let categoryId: number | null = null;
 
           if (categoryName) {
@@ -384,8 +384,8 @@ export function registerBaleProductRoutes(app: Express) {
             }
           }
 
-          const code = row.code || row.Code || row.product_code || articleCode;
-          const description = row.description || row.Description || "";
+          const code = (row.code || row.Code || row.product_code || articleCode) as string;
+          const description = (row.description || row.Description || "") as string;
           const weightPerBaleKg = row.weightPerBaleKg || row.weight_per_bale_kg || row.weight || undefined;
           const active = row.active === undefined ? true : Boolean(row.active);
 

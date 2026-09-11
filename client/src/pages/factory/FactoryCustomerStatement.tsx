@@ -155,9 +155,10 @@ export default function FactoryCustomerStatement() {
 
   const savePricesMutation = useMutation({
     mutationFn: async (lines: { articleCode: string; pricePerBale: string | number }[]) => {
-      return await factoryApiRequest("PUT", `/api/factory/customer-price-lists/${customerId}`, lines);
+      const res = await factoryApiRequest("PUT", `/api/factory/customer-price-lists/${customerId}`, lines);
+      return (await res.json()) as { saved?: number };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: { saved?: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-price-lists", customerId] });
       setPriceEdits({});
       setNewCode("");

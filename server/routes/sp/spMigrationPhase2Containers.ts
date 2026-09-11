@@ -22,7 +22,7 @@ import {
 import { getContainerChargeCandidates, getSourceContainerLines, upsertChargeMapping } from "./spMigrationPhase2Charges";
 import { resultRows, firstRow } from "../../lib/queryResult";
 
-export async function importContainers(req: Request, res: Response): Promise<any> {
+export async function importContainers(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, true);
   if (!pair) return;
   const dependencyError = await requireCompletedAction(pair.sourceId, pair.targetId, "gc_containers");

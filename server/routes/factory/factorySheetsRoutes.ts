@@ -15,22 +15,33 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // ── STATUS sheet helpers ───────────────────────────────────────────────────────
 type CellVal = number | string | null;
+/** Raw cell values as produced by xlsx: dates/booleans also occur despite `defval: null`. */
+type RawCell = number | string | boolean | Date | null | undefined;
 type SRow = { id?: string; label: string; cells: number[] };
 type SSheet = { id?: number; name: string; columns: unknown[]; rows: SRow[]; orderIndex?: number };
 
 const STATUS_NAME = "STATUS";
 
 // Support both old format (string) and new format ({ id, label })
-function getColLabel(col: any): string {
+function getColLabel(col: unknown): string {
   if (typeof col === "string") return col;
-  return col?.label ?? "";
+  if (col && typeof col === "object" && "label" in col) {
+    const label = (col as { label?: unknown }).label;
+    return typeof label === "string" ? label : "";
+  }
+  return "";
 }
 
 // Support both old format (primitive) and new format ({ value, link? })
-function getCellRawValue(cell: any): CellVal {
+function getCellRawValue(cell: unknown): CellVal {
   if (cell === null || cell === undefined) return null;
   if (typeof cell === "number" || typeof cell === "string") return cell;
-  if (typeof cell === "object" && "value" in cell) return cell.value ?? null;
+  if (typeof cell === "object" && "value" in cell) {
+    const value = (cell as { value?: unknown }).value;
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number" || typeof value === "string") return value;
+    return String(value);
+  }
   return null;
 }
 
@@ -288,7 +299,7 @@ export function registerFactorySheetsRoutes(app: Express) {
       for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
         const sheetName = wb.SheetNames[sheetIdx];
         const ws = wb.Sheets[sheetName];
-        const rawData: any[][] = xlsxUtils.sheet_to_json(ws, { header: 1, defval: null });
+        const rawData = xlsxUtils.sheet_to_json<RawCell[]>(ws, { header: 1, defval: null });
 
         if (!rawData || rawData.length === 0) {
           // Empty sheet — just create blank
@@ -443,7 +454,7 @@ export function registerFactorySheetsRoutes(app: Express) {
       const wb = xlsxUtils.book_new();
 
       for (const sheet of sheets) {
-        const rawColumns = (sheet.columns as any[]) ?? [];
+        const rawColumns: unknown[] = Array.isArray(sheet.columns) ? sheet.columns : [];
         const rows = (sheet.rows as SRow[]) ?? [];
         const colLabels = rawColumns.map(getColLabel);
 

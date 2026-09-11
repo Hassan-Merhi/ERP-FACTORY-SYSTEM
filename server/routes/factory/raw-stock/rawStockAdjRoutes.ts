@@ -286,7 +286,7 @@ export function registerRawStockAdjRoutes(app: Express) {
         }
       }
 
-      let inserted: any;
+      let inserted: typeof factoryRawMaterialAdjustments.$inferSelect | undefined;
       await db.transaction(async (tx) => {
         [inserted] = await tx
           .insert(factoryRawMaterialAdjustments)

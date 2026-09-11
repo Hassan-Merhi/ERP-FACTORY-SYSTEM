@@ -43,7 +43,7 @@ import { buildZplBatch } from "@/lib/zplBuilder";
 import { LabelPrintSettings, getPaperFormat } from "@/components/LabelPrintSettings";
 import { type LabelData, type A4DesignColor, formatLabelNum } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import type { FactoryBaleProduct, Location, FactoryCategory } from "@shared/schema";
+import type { FactoryBale, FactoryBaleProduct, Location, FactoryCategory } from "@shared/schema";
 import * as XLSX from "@/lib/excelHelper";
 import type { CartItem, CreatedBale } from "./wipersreentry/types";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
@@ -75,8 +75,17 @@ export default function WipersReEntry() {
   });
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories = [] } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
-  const { data: workers = [] } = useQuery<any[]>({ queryKey: ["/api/factory/workers"] });
-  const { data: allBalesData = [], isLoading: balesLoading } = useQuery<any[]>({
+  interface WorkerOption {
+    id: number;
+    fullName?: string;
+    name?: string;
+  }
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers"] });
+  interface BaleListRow {
+    bale: FactoryBale;
+    product: FactoryBaleProduct;
+  }
+  const { data: allBalesData = [], isLoading: balesLoading } = useQuery<BaleListRow[]>({
     queryKey: ["/api/factory/bales"],
     enabled: cleanupOpen,
   });

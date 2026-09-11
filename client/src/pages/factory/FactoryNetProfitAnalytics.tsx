@@ -25,14 +25,7 @@ import {
 import { useLocation } from "wouter";
 
 type Period =
-  | "today"
-  | "yesterday"
-  | "this_week"
-  | "this_month"
-  | "this_year"
-  | "all_time"
-  | "specific_month"
-  | "custom_range";
+  "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
 
 const PERIODS: { value: Period; label: string }[] = [
   { value: "today", label: "Today" },
@@ -125,6 +118,14 @@ function fmt(n: number): string {
   );
 }
 
+interface BreakdownAccount {
+  id?: number;
+  name: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
 function AccountBreakdown({
   title,
   accounts,
@@ -133,7 +134,7 @@ function AccountBreakdown({
   badgeClass,
 }: {
   title: string;
-  accounts: any[];
+  accounts: BreakdownAccount[];
   total: number;
   type: "income" | "expense";
   badgeClass: string;

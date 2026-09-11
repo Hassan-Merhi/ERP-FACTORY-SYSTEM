@@ -45,6 +45,16 @@ interface ExportAccount {
   balanceSide?: string | null;
 }
 
+interface AccountTransactionRow {
+  debitAmount?: string | number | null;
+  creditAmount?: string | number | null;
+  voucherDate?: string | null;
+  voucherNumber?: string | null;
+  voucherType?: string | null;
+  narration?: string | null;
+  voucherDescription?: string | null;
+}
+
 export function ExportAccountsSection() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [fromDate, setFromDate] = useState("");
@@ -85,7 +95,7 @@ export function ExportAccountsSection() {
 
   const filtered = allAccounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
-  const grouped = filtered.reduce<Record<string, any[]>>((acc, account) => {
+  const grouped = filtered.reduce<Record<string, ExportAccount[]>>((acc, account) => {
     const type = account.type || "ledger";
     if (!acc[type]) acc[type] = [];
     acc[type].push(account);
@@ -135,7 +145,7 @@ export function ExportAccountsSection() {
     baseName: string,
     part: number,
     totalParts: number,
-    txnsChunk: any[],
+    txnsChunk: AccountTransactionRow[],
     startBalance: number
   ) => {
     const suffix = totalParts > 1 ? ` ${part}` : "";
@@ -160,8 +170,8 @@ export function ExportAccountsSection() {
 
     let runningBalance = startBalance;
     for (const txn of txnsChunk) {
-      const debit = parseFloat(txn.debitAmount || "0");
-      const credit = parseFloat(txn.creditAmount || "0");
+      const debit = parseFloat(String(txn.debitAmount || "0"));
+      const credit = parseFloat(String(txn.creditAmount || "0"));
       runningBalance += debit - credit;
       const row = ws.addRow({
         date: txn.voucherDate ? new Date(txn.voucherDate).toLocaleDateString("en-GB") : "",

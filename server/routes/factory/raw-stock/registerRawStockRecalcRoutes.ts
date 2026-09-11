@@ -15,19 +15,25 @@ const UNDO_LOG_CREATE_TABLE_PATTERN = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+fact
  * until the large route module is split and the obsolete helper can be deleted
  * directly without risking an unrelated rewrite.
  */
-export function registerRawStockRecalcRoutes(app: Express): void {
-  const mutablePool = pool as typeof pool & {
-    query: (...args: any[]) => Promise<any>;
-  };
-  const originalQuery = mutablePool.query;
+type PoolQuery = typeof pool.query;
 
-  mutablePool.query = function guardedRegistrationQuery(...args: any[]) {
-    const sqlText = typeof args[0] === "string" ? args[0] : args[0]?.text;
+export function registerRawStockRecalcRoutes(app: Express): void {
+  const mutablePool = pool as unknown as { query: PoolQuery };
+  const originalQuery = pool.query.bind(pool) as PoolQuery;
+
+  mutablePool.query = ((...args: Parameters<PoolQuery>) => {
+    const first: unknown = args[0];
+    const sqlText = typeof first === "string" ? first : (first as { text?: string } | undefined)?.text;
     if (typeof sqlText === "string" && UNDO_LOG_CREATE_TABLE_PATTERN.test(sqlText)) {
-      return Promise.resolve({ rows: [], rowCount: 0, command: "SKIPPED_RUNTIME_DDL", fields: [] });
+      return Promise.resolve({
+        rows: [],
+        rowCount: 0,
+        command: "SKIPPED_RUNTIME_DDL",
+        fields: [],
+      }) as unknown as ReturnType<PoolQuery>;
     }
-    return originalQuery.apply(pool, args);
-  };
+    return originalQuery(...args);
+  }) as PoolQuery;
 
   try {
     registerLegacyRawStockRecalcRoutes(app);

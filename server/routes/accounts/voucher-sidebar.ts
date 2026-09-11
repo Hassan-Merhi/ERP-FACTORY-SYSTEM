@@ -349,11 +349,13 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           const openingBalance = parseFloat(supplier.openingBalance || "0");
 
           // Collect all supplier IDs to aggregate (the supplier itself + any children brokered through it)
-          const linkedChildIds = (fSuppliers as any[]).filter((s) => s.parentId === supplier.id).map((s) => s.id);
+          const linkedChildIds = fSuppliers.filter((s) => s.parentId === supplier.id).map((s) => s.id);
           const aggregateIds = [supplier.id, ...linkedChildIds];
 
           // Container value: sum((actualReceivedKg || totalKg) * ratePerKg + freight) * fxRateToUsd
-          const supplierContainers = fContainers.filter((c) => aggregateIds.includes(c.supplierId));
+          const supplierContainers = fContainers.filter(
+            (c) => c.supplierId != null && aggregateIds.includes(c.supplierId)
+          );
           const containerValueUsd = supplierContainers.reduce((sum: number, c) => {
             const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
             const rate = parseFloat(c.ratePerKg || "0");
@@ -366,7 +368,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           const brokerContainers = fContainers.filter(
             (c) =>
               c.commissionSupplierId === supplier.id &&
-              !aggregateIds.includes(c.supplierId) &&
+              (c.supplierId == null || !aggregateIds.includes(c.supplierId)) &&
               parseFloat(c.commissionAmount || "0") > 0
           );
           const commissionValueUsd = brokerContainers.reduce((sum: number, c) => {

@@ -23,6 +23,8 @@ import { getCompanyId } from "./_helpers";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
 
+type RawProformaLineRow = { article_code: string; quantity: number };
+
 export function registerDispatchInvoiceRoutes(app: Express) {
   // ── GET /api/factory/dispatch-batches/:id/invoice-preview ─────────────────
   // Preview the final invoice before generation — proforma-aware
@@ -45,7 +47,7 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
       // Proforma info
       let proforma = null;
-      let proformaLines: any[] = [];
+      let proformaLines: (typeof customerProformaLines.$inferSelect)[] = [];
       if (batch.proformaId) {
         const rows = await db.select().from(customerProformas).where(eq(customerProformas.id, batch.proformaId));
         proforma = rows[0] || null;
@@ -220,7 +222,7 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
         // 2. Check proforma status
         let proforma = null;
-        let proformaLines: any[] = [];
+        let proformaLines: RawProformaLineRow[] = [];
         if (batch.proforma_id) {
           const pfRows = await tx.execute(
             sql`SELECT * FROM customer_proformas WHERE id = ${batch.proforma_id} FOR UPDATE`
@@ -234,7 +236,7 @@ export function registerDispatchInvoiceRoutes(app: Express) {
           const plRows = await tx.execute(
             sql`SELECT * FROM customer_proforma_lines WHERE proforma_id = ${batch.proforma_id}`
           );
-          proformaLines = resultRows(plRows);
+          proformaLines = resultRows<RawProformaLineRow>(plRows);
         }
 
         // 3. Check all rides are DISPATCHED

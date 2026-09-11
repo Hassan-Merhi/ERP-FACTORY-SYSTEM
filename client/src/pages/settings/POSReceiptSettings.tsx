@@ -6,18 +6,19 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Loader2 } from "lucide-react";
+import type { SettingsPosReceipt } from "./settingsTypes";
 
 export function POSReceiptSettings() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
 
-  const { data: settings, isLoading } = useQuery<any>({
+  const { data: settings, isLoading } = useQuery<SettingsPosReceipt>({
     queryKey: ["/api/settings/pos-receipt", selectedCompany?.id],
     enabled: !!selectedCompany?.id,
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (newSettings) => {
+    mutationFn: async (newSettings: SettingsPosReceipt) => {
       const res = await apiRequest("POST", `/api/settings/pos-receipt/${selectedCompany?.id}`, newSettings);
       return res.json();
     },

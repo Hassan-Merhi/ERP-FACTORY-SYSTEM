@@ -75,7 +75,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const advResult = await db.execute(
         sql`SELECT * FROM employee_advances WHERE id = ${advId} AND company_id = ${companyId}`
       );
-      const adv = advResult.rows[0] as any;
+      const adv = advResult.rows[0] as { remaining_balance: string; employee_id: number } | undefined;
       if (!adv) return res.status(404).json({ message: "Advance not found" });
 
       const remaining = parseFloat(adv.remaining_balance) - amt;
@@ -243,7 +243,8 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const bonusResult = await db.execute(
         sql`SELECT * FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
       );
-      const bonus = bonusResult.rows[0] as any;
+      const bonus = bonusResult.rows[0] as
+        { employee_id: number; amount: string; voucher_id: number | null } | undefined;
       if (!bonus) return res.status(404).json({ message: "Bonus not found" });
 
       // Reversing a bonus touches four rows, and all four have to move or none
@@ -361,7 +362,12 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         WHERE wb.id = ${parseInt(req.params.id)} AND wb.company_id = ${companyId} AND wb.status = 'pending'
       `);
       if (!bonusRows.rows.length) return res.status(404).json({ message: "Bonus not found or already paid" });
-      const wb = bonusRows.rows[0] as any;
+      const wb = bonusRows.rows[0] as {
+        amount: string | null;
+        full_name: string | null;
+        worker_id: number;
+        notes: string | null;
+      };
       const amt = parseFloat(wb.amount || "0");
       const workerName = (wb.full_name as string | null)?.trim() || `Worker #${wb.worker_id}`;
 

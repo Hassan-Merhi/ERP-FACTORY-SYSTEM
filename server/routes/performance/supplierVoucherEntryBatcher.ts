@@ -20,8 +20,10 @@ type EntryRow = {
   currency: string | null;
 };
 
+type PublicEntryRow = Omit<EntryRow, "__supplierId">;
+
 type Resolver = {
-  resolve: (rows: any[]) => void;
+  resolve: (rows: PublicEntryRow[]) => void;
   reject: (error: unknown) => void;
 };
 
@@ -90,7 +92,7 @@ async function flushBatch(key: string, companyId: number | undefined, batch: Pen
       params
     );
 
-    const rowsBySupplier = new Map<number, any[]>();
+    const rowsBySupplier = new Map<number, PublicEntryRow[]>();
     for (const row of result.rows as EntryRow[]) {
       const supplierId = Number(row.__supplierId);
       if (!rowsBySupplier.has(supplierId)) rowsBySupplier.set(supplierId, []);
@@ -128,7 +130,7 @@ export function getVoucherEntriesBySupplierBatched(supplierId: number, companyId
 
   batch.supplierIds.add(supplierId);
 
-  const promise = new Promise<any[]>((resolve, reject) => {
+  const promise = new Promise<PublicEntryRow[]>((resolve, reject) => {
     const resolvers = batch!.resolvers.get(supplierId) || [];
     resolvers.push({ resolve, reject });
     batch!.resolvers.set(supplierId, resolvers);

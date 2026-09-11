@@ -9,6 +9,15 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
+
+type ProformaLineRow = {
+  id: number;
+  proformaId: number;
+  articleCode: string;
+  productName: string;
+  quantity: number;
+  pricePerBale: string;
+};
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerProformas, customerProformaLines, customers, proformaStockReservations } from "@shared/schema";
@@ -39,7 +48,7 @@ export function registerFactoryStockAllocationRoutes(app: Express) {
         .orderBy(customerProformas.createdAt);
 
       const proformaIds = allProformas.map((p) => p.id);
-      let allLines: any[] = [];
+      let allLines: ProformaLineRow[] = [];
       if (proformaIds.length > 0) {
         allLines = await db
           .select({
@@ -106,7 +115,7 @@ export function registerFactoryStockAllocationRoutes(app: Express) {
       const allCustomerIds = [...new Set(allProformas.map((p) => p.customerId))].filter(
         (id): id is number => id != null && !isNaN(Number(id))
       );
-      let customerRows: any[] = [];
+      let customerRows: { id: number; legalName: string }[] = [];
       if (allCustomerIds.length > 0) {
         customerRows = await db
           .select({ id: customers.id, legalName: customers.legalName })

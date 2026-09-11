@@ -18,6 +18,7 @@ import {
   tableShortName,
 } from "./AuditLogUtils";
 import { AuditLogDialog } from "./AuditLogDialog";
+import type { SettingsAuditLogRow } from "./settingsTypes";
 
 export { fmtDate, getDetailsSentence, getRecordLabel, tableShortName };
 
@@ -41,11 +42,11 @@ const ACTION_FILTER_OPTIONS: { label: string; value: string }[] = [
 type DayGroup = {
   dateKey: string;
   dateLabel: string;
-  logs: any[];
+  logs: SettingsAuditLogRow[];
 };
 
-function groupLogsByDay(logs: any[]): DayGroup[] {
-  const dayMap = new Map<string, any[]>();
+function groupLogsByDay(logs: SettingsAuditLogRow[]): DayGroup[] {
+  const dayMap = new Map<string, SettingsAuditLogRow[]>();
 
   for (const log of logs) {
     const date = new Date(log.createdAt);
@@ -94,7 +95,7 @@ export function AuditLog({
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedLog, setSelectedLog] = useState<any>(null);
+  const [selectedLog, setSelectedLog] = useState<SettingsAuditLogRow | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,7 +175,7 @@ export function AuditLog({
   });
 
   const activityLoading = isCompanyLoading || activeCompanyId === null || isLoading;
-  const rawAuditLogs: any[] = useMemo(() => data?.logs || [], [data?.logs]);
+  const rawAuditLogs: SettingsAuditLogRow[] = useMemo(() => data?.logs || [], [data?.logs]);
 
   // Defence in depth: the API is company-scoped, but the browser also rejects
   // any unexpected row so a stale cache or future backend regression cannot

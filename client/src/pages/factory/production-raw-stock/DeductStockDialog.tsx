@@ -5,12 +5,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle } from "lucide-react";
+import type { RawStockRow } from "./RawStockTable";
+
+export interface DeductStockPayload {
+  supplierId: number | null;
+  kg: string;
+  notes: string;
+  reference: string;
+  costPerKg?: string;
+  currencyCode: string;
+}
+
+interface MutationLike<TVars> {
+  isPending: boolean;
+  mutate: (vars: TVars) => void;
+}
 
 interface DeductStockDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  deductingRow: any;
-  deductReceivedMutation: any;
+  deductingRow: RawStockRow | null;
+  deductReceivedMutation: MutationLike<DeductStockPayload>;
   wrapAdminAction: (action: () => void, title: string) => void;
 }
 
@@ -28,11 +43,11 @@ export function DeductStockDialog({
   const handleSubmit = () => {
     if (!deductKg || parseFloat(deductKg) <= 0) return;
     deductReceivedMutation.mutate({
-      supplierId: deductingRow.supplierId,
+      supplierId: deductingRow?.supplierId ?? null,
       kg: deductKg,
       notes: deductNotes,
       reference: deductReference,
-      costPerKg: deductingRow.costPerKgUsd || deductingRow.costPerKg,
+      costPerKg: deductingRow?.costPerKgUsd || deductingRow?.costPerKg || undefined,
       currencyCode: "USD",
     });
   };

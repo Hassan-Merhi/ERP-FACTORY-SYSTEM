@@ -35,6 +35,11 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCompany } from "@/contexts/CompanyContext";
 
 import type { InsuranceMember } from "./factoryinsurance/types";
+
+interface LedgerAccountOption {
+  id: number;
+  name: string;
+}
 import { MONTHS, YEARS } from "./factoryinsurance/utils";
 import { MemberFormDialog } from "./factoryinsurance/components/MemberFormDialog";
 import { MemberStatementDrawer } from "./factoryinsurance/components/MemberStatementDrawer";
@@ -73,7 +78,7 @@ export default function FactoryInsurance() {
   const ecDrRef = useRef<HTMLDivElement>(null);
   const ecCrRef = useRef<HTMLDivElement>(null);
 
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<LedgerAccountOption[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
