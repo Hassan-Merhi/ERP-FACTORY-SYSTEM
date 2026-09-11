@@ -129,7 +129,7 @@ export function registerOrderBaleExchangeRoutes(app: Express) {
             currentOrderId: orderId,
           });
           if (!capacity) throw new Error("Linked proforma is unavailable");
-          const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1);
+          const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading");
           if (!decision.allowed) {
             throw new Error(
               decision.reason === "not_in_proforma"

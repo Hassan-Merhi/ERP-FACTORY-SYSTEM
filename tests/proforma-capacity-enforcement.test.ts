@@ -140,3 +140,72 @@ describe("Phase 2 proforma capacity enforcement", () => {
     expect(allocation[1].line.pricePerBale).toBe("20");
   });
 });
+
+describe("Phase 2 per-loading capacity scope", () => {
+  const buildScoped = (contributions: Array<{ orderId: number; loadedQty: number }>) =>
+    buildProformaCapacitySnapshot(
+      { companyId: 12, proformaId: 71, currentOrderId: 170 },
+      proforma,
+      [{ articleCode: "HMD12630", quantity: 2 }],
+      contributions.map(({ orderId, loadedQty }) => ({
+        normalizedArticleCode: "hmd12630",
+        orderId,
+        orderStatus: "LOADING",
+        loadedQty,
+      }))
+    );
+
+  it("ignores sibling containers so a fresh loading can load the full proforma quantity", () => {
+    // Sibling order 154 already consumed the whole line (2 of 2).
+    const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
+
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "per_loading");
+
+    expect(decision).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        reason: null,
+        requestedQty: 2,
+        consumedQty: 0,
+        remainingQty: 2,
+        projectedConsumedQty: 1,
+      })
+    );
+  });
+
+  it("still blocks when the current loading alone exceeds the proforma quantity", () => {
+    // Current order 170 already loaded 2 of 2; sibling 154 loaded 5 (over-consumed).
+    const capacity = buildScoped([
+      { orderId: 154, loadedQty: 5 },
+      { orderId: 170, loadedQty: 2 },
+    ]);
+
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "per_loading");
+
+    expect(decision).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "quantity_exceeded",
+        requestedQty: 2,
+        consumedQty: 2,
+        remainingQty: 0,
+        projectedConsumedQty: 3,
+      })
+    );
+  });
+
+  it("keeps the historical global default counting sibling consumption", () => {
+    const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
+
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
+
+    expect(decision).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "quantity_exceeded",
+        consumedQty: 2,
+        projectedConsumedQty: 3,
+      })
+    );
+  });
+});
