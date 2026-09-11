@@ -122,3 +122,7 @@ if (!globalThis[INSTALL_KEY]) {
   globalThis[INSTALL_KEY] = true;
   await ensureHistoricalWorkerBonusExpenseNames();
 }
+
+// Wave 6 inventory repair is separately env-gated and fail-closed. It runs
+// after company-scope RLS readiness so the tenant-scoped transaction is valid.
+await import("./inventoryValuationWave6RepairBridge.mjs");
