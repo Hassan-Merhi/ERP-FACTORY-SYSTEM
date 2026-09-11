@@ -49,3 +49,15 @@ replaceOne(
   "  if (articleCode && !clean(record.normalizedArticleCode)) record.normalizedArticleCode = articleCode;",
   "preserve semantic normalized article code"
 );
+
+// Phase 4 adds loading-capacity copy to both the Factory and ERP loading
+// surfaces. These inventories are consumed by the runtime compatibility
+// translator and by the enforced i18n audit, so add the new English source
+// values with Arabic/French equivalents instead of increasing the untranslated
+// literal baseline.
+replaceOne(
+  "client/src/i18n/phase3RemainingTranslations.part13.ts",
+  "\n];\n",
+  `\n  {\n    en: "Failed to fetch proforma capacity",\n    ar: "تعذر تحميل سعة البروفورما",\n    fr: "Impossible de charger la capacité du proforma",\n  },\n  {\n    en: "Proforma fully consumed",\n    ar: "تم استهلاك كمية البروفورما بالكامل",\n    fr: "Proforma entièrement consommé",\n  },\n  {\n    en: "No remaining quantity is available for a new loading.",\n    ar: "لا توجد كمية متبقية متاحة لعملية تحميل جديدة.",\n    fr: "Aucune quantité restante n’est disponible pour un nouveau chargement.",\n  },\n  {\n    en: "remaining across all loadings",\n    ar: "متبقية عبر جميع عمليات التحميل",\n    fr: "restant sur tous les chargements",\n  },\n  {\n    en: "Loaded (This+Other)",\n    ar: "المحمّل (هذا + الآخر)",\n    fr: "Chargé (celui-ci + autres)",\n  },\n];\n`,
+  "phase4 loading translation inventory"
+);
