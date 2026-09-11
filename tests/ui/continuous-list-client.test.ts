@@ -41,7 +41,7 @@ describe("continuous list client", () => {
       .fn()
       .mockResolvedValueOnce({ items: [1], total: 3, hasMore: true, nextCursor: "same" })
       .mockResolvedValueOnce({ items: [2], total: 3, hasMore: true, nextCursor: "same" });
-    await expect(collectContinuousChunks({ load: loopingLoad })).rejects.toThrow("cursor did not advance");
+    await expect(collectContinuousChunks({ load: loopingLoad })).rejects.toThrow("continuous-list-cursor-stalled");
   });
 
   it("surfaces server status and error code for retry decisions", async () => {
