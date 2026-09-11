@@ -65,6 +65,16 @@ describe("frontend company-state isolation wiring", () => {
     expect(appData).toContain('companyQueryKey("/api/factory/settings", selectedCompanyId)');
   });
 
+  it("remounts the active workspace when the company identity changes", () => {
+    const app = source("client/src/app/AuthenticatedApp.tsx");
+
+    expect(app).toContain("const companySessionKey = selectedCompany.id;");
+    expect(app).toContain("<PosShell\n            key={companySessionKey}");
+    expect(app).toContain("<PropertiesShell\n            key={companySessionKey}");
+    expect(app).toContain("<FactoryShell\n            key={companySessionKey}");
+    expect(app).toContain("<ErpShell\n          key={companySessionKey}");
+  });
+
   it("scopes company-transfer history, account options, and rules", () => {
     const transfers = source("client/src/pages/CompanyTransfer.tsx");
 
