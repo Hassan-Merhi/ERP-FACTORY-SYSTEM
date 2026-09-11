@@ -32,3 +32,67 @@ export interface ExpenseRow {
   description: string;
   amount: string;
 }
+
+export interface PosLocation {
+  id: number;
+  name: string;
+}
+
+export interface PosCustomer {
+  id: number;
+  legalName?: string | null;
+  name?: string | null;
+  balance?: string | null;
+  balanceSide?: "Dr" | "Cr" | string | null;
+}
+
+export interface PosLedgerAccount {
+  id: number;
+  name: string;
+  accountType: string;
+}
+
+export interface PosSale {
+  id: number;
+  saleNumber: string;
+  txDate: string;
+  customerName?: string | null;
+  totalAmount: string;
+  status: string;
+  currencyCode: string;
+}
+
+export interface SavedSaleExpense extends ExpenseRow {
+  accountName?: string;
+}
+
+export interface SavedSale {
+  saleNumber?: string;
+  cartRows: CartRow[];
+  customerName?: string;
+  notes?: string;
+  currencyCode: string;
+  total: number;
+  totalWeight: number;
+  expenses: SavedSaleExpense[];
+  netTotal: number;
+  txDate: string;
+  companyName: string;
+  paymentType: string;
+  depositAmount: string;
+}
+
+export interface EditSaleItem {
+  id: number;
+  productId: number | null;
+  productName: string;
+  articleCode?: string | null;
+  quantity: string | number;
+  unitPrice: string | number;
+}
+
+export interface ParsedExpense {
+  accountId: string | number;
+  description?: string | null;
+  amount: string | number;
+}

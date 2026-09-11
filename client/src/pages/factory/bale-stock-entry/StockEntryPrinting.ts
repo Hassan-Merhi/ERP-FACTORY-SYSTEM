@@ -10,6 +10,26 @@ import {
 import { getPaperFormat } from "@/components/LabelPrintSettings";
 import { isZebraMode, printRawZpl } from "@/lib/zebraPrint";
 import { buildZplBatch } from "@/lib/zplBuilder";
+import type { FactoryBaleProduct } from "@shared/schema";
+import type { useToast } from "@/hooks/use-toast";
+
+interface PrintBale {
+  id: number;
+  productId: number;
+  referenceNumber: string;
+  articleCode?: string | null;
+  productName?: string | null;
+  weightKg: string;
+}
+
+interface PrintCartItem {
+  productId: number;
+  product: Pick<FactoryBaleProduct, "articleCode" | "code">;
+  overrideLogoId: number | null;
+}
+
+type RequestDelegate = (method: string, url: string, data?: unknown) => Promise<Response>;
+type ToastFn = ReturnType<typeof useToast>["toast"];
 
 export const openBrowserPrint = (
   labels: LabelData[],
@@ -81,12 +101,12 @@ export const openBrowserPrint = (
 };
 
 export const printLabels = async (
-  bales: any[],
-  cart: any[],
-  baleProducts: any[] | undefined,
+  bales: PrintBale[],
+  cart: PrintCartItem[],
+  baleProducts: FactoryBaleProduct[] | undefined,
   selectedLogoId: number | null,
-  modeApiRequest: any,
-  toast: any,
+  modeApiRequest: RequestDelegate,
+  toast: ToastFn,
   preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>
 ) => {
   try {

@@ -23,3 +23,30 @@ export interface ProductGroup {
   totalCost: number;
   avgRate: number;
 }
+
+export interface WasteDispatchHistoryBale {
+  id: number;
+  referenceNumber: string;
+  productName: string;
+  weightKg: number | string;
+  totalCost: number | string;
+}
+
+export interface WasteDispatchHistoryEntry {
+  id: number;
+  dispatchNumber: string;
+  dispatchDate: string;
+  notes?: string | null;
+  totalBales: number;
+  totalWeightKg: number | string;
+  totalCostWrittenOff: number | string;
+  bales: WasteDispatchHistoryBale[];
+}
+
+export interface WasteDispatchPrintData {
+  dispatch: { dispatchNumber: string; dispatchDate: string; notes?: string | null };
+  bales: Array<Pick<WasteDispatchHistoryBale, "id" | "referenceNumber" | "weightKg" | "totalCost">>;
+  totalBales: number;
+  totalWeightKg: number | string;
+  totalCostWrittenOff: number | string;
+}

@@ -25,6 +25,9 @@ import { getApiRequest } from "@/lib/factoryApi";
 import type {
   Account,
   ContainerData,
+  FactoryContainerSalesData,
+  FactoryPosSummary,
+  FactorySalesByCustomer,
   Location,
   LocationSales,
   NetProfitStatementData,
@@ -336,7 +339,7 @@ export function useAnalyticsLegacy() {
     return qs ? `${base}?${qs}` : base;
   };
 
-  const { data: factorySalesByCustomer = [], isLoading: loadingFactorySales } = useQuery({
+  const { data: factorySalesByCustomer = [], isLoading: loadingFactorySales } = useQuery<FactorySalesByCustomer[]>({
     queryKey: [
       "/api/factory/analytics/sales-by-customer",
       selectedCompany?.id,
@@ -353,7 +356,7 @@ export function useAnalyticsLegacy() {
     enabled: !!selectedCompany && appMode === "factory",
   });
 
-  const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery({
+  const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
     queryKey: ["/api/factory/analytics/pos-summary", selectedCompany?.id, factorySalesStartDate, factorySalesEndDate],
     queryFn: async () => {
       const res = await fetch(buildFactorySalesUrl("/api/factory/analytics/pos-summary"), { credentials: "include" });
@@ -378,7 +381,7 @@ export function useAnalyticsLegacy() {
     data: factoryContainerSales,
     refetch: _refetchFactoryContainerSales,
     isLoading: loadingFactoryContainerSales,
-  } = useQuery({
+  } = useQuery<FactoryContainerSalesData>({
     queryKey: [buildFactoryContainerSalesUrl(), selectedCompany?.id],
     queryFn: async ({ queryKey }) => {
       const res = await fetch(queryKey[0] as string, { credentials: "include" });

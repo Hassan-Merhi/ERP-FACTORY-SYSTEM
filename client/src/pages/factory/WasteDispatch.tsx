@@ -27,7 +27,13 @@ import {
   X,
 } from "lucide-react";
 
-import type { Bale, ProductGroup } from "./wastedispatch/types";
+import type {
+  Bale,
+  ProductGroup,
+  WasteDispatchHistoryBale,
+  WasteDispatchHistoryEntry,
+  WasteDispatchPrintData,
+} from "./wastedispatch/types";
 import { fmt, fmtKg, today } from "./wastedispatch/utils";
 import { WasteDispatchDialogs } from "./wastedispatch/components/WasteDispatchDialogs";
 export default function WasteDispatch() {
@@ -45,7 +51,7 @@ export default function WasteDispatch() {
   const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<number>>(new Set());
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [printData, setPrintData] = useState<any | null>(null);
+  const [printData, setPrintData] = useState<WasteDispatchPrintData | null>(null);
   const [deleteDispatchId, setDeleteDispatchId] = useState<number | null>(null);
 
   // ── Dispatch queries ───────────────────────────────────────────
@@ -60,7 +66,7 @@ export default function WasteDispatch() {
     },
   });
 
-  const { data: history = [] } = useQuery<any[]>({
+  const { data: history = [] } = useQuery<WasteDispatchHistoryEntry[]>({
     queryKey: ["/api/factory/waste-dispatch/history"],
     queryFn: async () => {
       const r = await fetch("/api/factory/waste-dispatch/history", { credentials: "include" });
@@ -184,18 +190,18 @@ export default function WasteDispatch() {
     });
   };
 
-  const handleHistoryPrint = (d: any) => {
+  const handleHistoryPrint = (d: WasteDispatchHistoryEntry) => {
     const dispatchBales = d.bales || [];
-    const totalW = dispatchBales.reduce((s: number, b: any) => s + parseFloat(b.weightKg || 0), 0);
-    const totalC = dispatchBales.reduce((s: number, b: any) => s + parseFloat(b.totalCost || 0), 0);
+    const totalW = dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.weightKg || 0)), 0);
+    const totalC = dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.totalCost || 0)), 0);
     const baleRows = dispatchBales
       .map(
-        (b: any) =>
+        (b: WasteDispatchHistoryBale) =>
           `<tr>
           <td style="border:1px solid #ccc;padding:5px 8px;font-family:monospace">${b.referenceNumber}</td>
           <td style="border:1px solid #ccc;padding:5px 8px">${b.productName || ""}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:right">${fmtKg(parseFloat(b.weightKg || 0))}</td>
-          <td style="border:1px solid #ccc;padding:5px 8px;text-align:right">${fmt(parseFloat(b.totalCost || 0))}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:right">${fmtKg(parseFloat(String(b.weightKg || 0)))}</td>
+          <td style="border:1px solid #ccc;padding:5px 8px;text-align:right">${fmt(parseFloat(String(b.totalCost || 0)))}</td>
         </tr>`
       )
       .join("");
@@ -629,9 +635,9 @@ export default function WasteDispatch() {
                           <span className="text-muted-foreground">
                             {d.totalBales} bale{d.totalBales !== 1 ? "s" : ""}
                           </span>
-                          <span className="text-muted-foreground">{fmtKg(parseFloat(d.totalWeightKg || "0"))} kg</span>
+                          <span className="text-muted-foreground">{fmtKg(parseFloat(String(d.totalWeightKg || "0")))} kg</span>
                           <Badge variant="outline" className="text-destructive border-destructive/30 text-xs">
-                            {fmt(parseFloat(d.totalCostWrittenOff || "0"))}
+                            {fmt(parseFloat(String(d.totalCostWrittenOff || "0")))}
                           </Badge>
                           <Button
                             size="sm"
@@ -680,12 +686,12 @@ export default function WasteDispatch() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {dispatchBales.map((b: any) => (
+                                {dispatchBales.map((b: WasteDispatchHistoryBale) => (
                                   <tr key={b.id} className="border-b border-border/40 last:border-0">
                                     <td className="py-1 font-mono text-primary">{b.referenceNumber}</td>
                                     <td className="py-1">{b.productName}</td>
-                                    <td className="py-1 text-right">{fmtKg(parseFloat(b.weightKg || "0"))}</td>
-                                    <td className="py-1 text-right">{fmt(parseFloat(b.totalCost || "0"))}</td>
+                                    <td className="py-1 text-right">{fmtKg(parseFloat(String(b.weightKg || "0")))}</td>
+                                    <td className="py-1 text-right">{fmt(parseFloat(String(b.totalCost || "0")))}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -696,12 +702,12 @@ export default function WasteDispatch() {
                                   </td>
                                   <td className="pt-1.5 text-right">
                                     {fmtKg(
-                                      dispatchBales.reduce((s: number, b: any) => s + parseFloat(b.weightKg || 0), 0)
+                                      dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.weightKg || 0)), 0)
                                     )}
                                   </td>
                                   <td className="pt-1.5 text-right text-destructive">
                                     {fmt(
-                                      dispatchBales.reduce((s: number, b: any) => s + parseFloat(b.totalCost || 0), 0)
+                                      dispatchBales.reduce((s: number, b: WasteDispatchHistoryBale) => s + parseFloat(String(b.totalCost || 0)), 0)
                                     )}
                                   </td>
                                 </tr>

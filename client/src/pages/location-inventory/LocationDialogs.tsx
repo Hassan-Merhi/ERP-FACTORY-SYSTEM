@@ -27,7 +27,18 @@ import { AlertTriangle, Check, Loader2, MessageCircle, RefreshCw, Send } from "l
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { StockMovementDialog } from "./StockMovementDialog";
-import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type {
+  InventoryLocation as Location,
+  PendingMutation,
+  RenameLocationVariables,
+  StockGroupSummary,
+  StockMovementItem,
+  StockMovementMonth,
+  StockMovementPeriod,
+  WhatsappGroup,
+  WhatsappGroupVariables,
+  WhatsappTestVariables,
+} from "./locationInventoryTypes";
 
 interface LocationDialogsProps {
   // Rename Dialog
@@ -38,7 +49,7 @@ interface LocationDialogsProps {
   setRenameInput: (s: string) => void;
   renameDeductionInput: string;
   setRenameDeductionInput: (s: string) => void;
-  renameLocationMutation: any;
+  renameLocationMutation: PendingMutation<RenameLocationVariables>;
 
   // Delete Dialog
   deleteDialogOpen: boolean;
@@ -52,30 +63,30 @@ interface LocationDialogsProps {
   setArchiveDialogOpen: (o: boolean) => void;
   isArchiving: boolean;
   handleArchiveStockGroup: () => void;
-  selectedGroup: any;
+  selectedGroup: StockGroupSummary | null;
 
   // WhatsApp Dialog
   waGroupDialogOpen: boolean;
   setWaGroupDialogOpen: (o: boolean) => void;
-  waChats: any[];
+  waChats: WhatsappGroup[];
   waChatsLoading: boolean;
   waGroupSearch: string;
   setWaGroupSearch: (s: string) => void;
   waGroupSelectedId: string;
   setWaGroupSelectedId: (s: string) => void;
-  waGroupMutation: any;
-  waTestMutation: any;
+  waGroupMutation: PendingMutation<WhatsappGroupVariables>;
+  waTestMutation: PendingMutation<WhatsappTestVariables>;
   waGroupLocation: Location | null;
 
   // Stock Movement Dialog
   stockMovementOpen: boolean;
   setStockMovementOpen: (o: boolean) => void;
-  stockMovementItem: any;
-  setStockMovementItem: (item: any) => void;
-  stockMovementPeriod: any;
-  setStockMovementPeriod: (p: any) => void;
-  drillMonth: any;
-  setDrillMonth: (m: any) => void;
+  stockMovementItem: StockMovementItem | null;
+  setStockMovementItem: (item: StockMovementItem | null) => void;
+  stockMovementPeriod: StockMovementPeriod;
+  setStockMovementPeriod: (period: StockMovementPeriod) => void;
+  drillMonth: StockMovementMonth | null;
+  setDrillMonth: (month: StockMovementMonth | null) => void;
   formatAmount: (amt: number) => string;
   navigate: (path: string) => void;
 }

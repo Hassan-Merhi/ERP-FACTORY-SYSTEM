@@ -3,6 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRightLeft } from "lucide-react";
 import { StatementResponse } from "./factorySupplierTypes";
+import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
+
+type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
+type FxConversionForm = SuppliersModel["fxConversionForm"];
 
 interface CurrencyPoolsProps {
   statementData: StatementResponse;
@@ -13,7 +17,7 @@ interface CurrencyPoolsProps {
   formatKg: (val: string) => string;
   formatNum: (val: string) => string;
   setFxSourceType: (val: "supplier" | "commission" | "both") => void;
-  setFxConversionForm: (val: unknown) => void;
+  setFxConversionForm: SuppliersModel["setFxConversionForm"];
   setFxConversionOpen: (val: boolean) => void;
   openFxConversionDialog: (
     fromSupplierId: number,
@@ -211,7 +215,7 @@ export function CurrencyPools({
                                 const hasBalance = netPay > 0;
                                 const netPayStr = hasBalance ? group.netPayable : "0";
                                 const toSupId = statementData.supplier.parentId || statementSupplierId!;
-                                let form: Record<string, unknown>;
+                                let form: FxConversionForm;
                                 let sourceType: string;
                                 if (isCrossFreightPool) {
                                   form = {
@@ -224,6 +228,7 @@ export function CurrencyPools({
                                     commissionBalance: group.totalCommission,
                                     fxRateToUsd: group.currencyCode === "USD" ? "1" : "",
                                     date: today,
+                                    effectiveDate: "",
                                     notes: hasCommission ? "Freight + commission settlement" : "Freight settlement",
                                   };
                                   sourceType = hasCommission ? "both" : "supplier";
@@ -238,6 +243,7 @@ export function CurrencyPools({
                                     commissionBalance: group.totalCommission,
                                     fxRateToUsd: group.currencyCode === "USD" ? "1" : "",
                                     date: today,
+                                    effectiveDate: "",
                                     notes: "",
                                   };
                                   sourceType = hasBalance ? "supplier" : "commission";

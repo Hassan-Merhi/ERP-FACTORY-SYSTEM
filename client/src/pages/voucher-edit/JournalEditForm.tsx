@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CurrencySelector } from "@/components/CurrencySelector";
 import { AccountAutocomplete, CombinedAccount } from "@/components/AccountAutocomplete";
 import { cn } from "@/lib/utils";
+import type { JournalFormData } from "./VoucherEditSchemas";
 
 export function JournalEditForm({
   form,
@@ -24,8 +25,8 @@ export function JournalEditForm({
   crTotal,
   focusByTestId,
 }: {
-  form: UseFormReturn<any>;
-  onSubmit: (data: any) => void;
+  form: UseFormReturn<JournalFormData>;
+  onSubmit: (data: JournalFormData) => void;
   onCancel: () => void;
   isPending: boolean;
   allAccountsWithBalances: CombinedAccount[];

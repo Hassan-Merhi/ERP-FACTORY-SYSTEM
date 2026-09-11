@@ -9,7 +9,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +52,36 @@ const DEFAULT_WA_RULE: WaRule = {
   sendOnReceipt: true,
   sendOnJournal: true,
 };
+
+interface VoucherSearchResult {
+  id: number;
+  voucherType?: string | null;
+  locationName?: string | null;
+  description?: string | null;
+  totalAmount?: string | null;
+  currency?: string | null;
+  effectiveDate?: string | null;
+  voucherDate: string;
+}
+
+interface GroupOption {
+  id: number;
+  name: string;
+  parentId?: number | null;
+  subType?: string | null;
+}
+
+interface VoucherNavigationRow {
+  voucherId: number;
+  voucherType?: string | null;
+}
+
+interface PayrollMigrationResponse {
+  vouchersUpdated?: number;
+  accountsDeleted?: number;
+  salaryAccountsReparented?: number;
+  bonusAccountsReparented?: number;
+}
 
 export function useAccountsLegacyModel() {
   const { selectedCompany } = useCompany();
@@ -158,7 +188,7 @@ export function useAccountsLegacyModel() {
     },
   });
 
-  const { data: voucherSearchResults = [], isLoading: voucherSearchLoading } = useQuery<any[]>({
+  const { data: voucherSearchResults = [], isLoading: voucherSearchLoading } = useQuery<VoucherSearchResult[]>({
     queryKey: ["/api/vouchers/search", debouncedFindQuery],
     queryFn: async () => {
       if (!debouncedFindQuery.trim()) return [];
@@ -222,7 +252,7 @@ export function useAccountsLegacyModel() {
   });
 
   const updateBankMutation = useMutation({
-    mutationFn: async (data: { id: number; [key: string]: any }) => {
+    mutationFn: async (data: { id: number } & Record<string, unknown>) => {
       const { id, ...rest } = data;
       const res = await apiRequest("PUT", `/api/bank-accounts/${id}`, rest);
       if (!res.ok) {
@@ -288,7 +318,7 @@ export function useAccountsLegacyModel() {
     },
   });
 
-  const onBankSubmit = (data: any) => {
+  const onBankSubmit: SubmitHandler<Omit<InsertBankAccount, "companyId">> = (data) => {
     if (bankToEdit) {
       updateBankMutation.mutate({ id: bankToEdit.id, ...data });
     } else {
@@ -305,12 +335,14 @@ export function useAccountsLegacyModel() {
   const [exportLang, setExportLang] = useState<"en" | "fr" | "ar">("en");
 
   const fixPayrollAccountsMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/factory/payroll/migrate-worker-names", {
+    mutationFn: async (): Promise<PayrollMigrationResponse> => {
+      const response = await apiRequest("POST", "/api/factory/payroll/migrate-worker-names", {
         companyId: selectedCompany?.id,
         confirm: true,
-      }),
-    onSuccess: (data: any) => {
+      });
+      return response.json();
+    },
+    onSuccess: (data: PayrollMigrationResponse) => {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({
         title: "Payroll accounts fixed",
@@ -450,7 +482,7 @@ export function useAccountsLegacyModel() {
   // groups created there always appear here without needing /api/accounts/all to refresh.
   // Groups = accounts marked with subType "Group" OR accounts that happen to have children
   // (backward-compat: groups created before subType tagging still show up)
-  const { data: groupOptions = [] } = useQuery<any[]>({
+  const { data: groupOptions = [] } = useQuery<GroupOption[]>({
     queryKey: ["/api/ledger-accounts", selectedCompany?.id],
     queryFn: async () => {
       const url = selectedCompany?.id ? `/api/ledger-accounts?companyId=${selectedCompany.id}` : "/api/ledger-accounts";
@@ -585,7 +617,7 @@ export function useAccountsLegacyModel() {
     else setSelectedVoucherIds(new Set(vouchersWithBalance.map((v) => v.voucherId)));
   };
 
-  const handleOpenVoucher = (v: any) => {
+  const handleOpenVoucher = (v: VoucherNavigationRow) => {
     const id = v.voucherId;
     const rawType = (v.voucherType || "").toLowerCase().replace(/\s+/g, "");
 

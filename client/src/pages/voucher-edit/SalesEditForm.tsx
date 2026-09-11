@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { StockItemCombobox, StockItem, Location } from "./VoucherEditHelpers";
+import { StockItemCombobox, StockItem, Location, VoucherData } from "./VoucherEditHelpers";
+import type { SalesFormData } from "./VoucherEditSchemas";
 import { cn } from "@/lib/utils";
 
 export function SalesEditForm({
@@ -26,9 +27,9 @@ export function SalesEditForm({
   formatAmount,
   grandTotal,
 }: {
-  form: UseFormReturn<any>;
-  voucher: any;
-  onSubmit: (data: any) => void;
+  form: UseFormReturn<SalesFormData>;
+  voucher: VoucherData;
+  onSubmit: (data: SalesFormData) => void;
   onCancel: () => void;
   onToggleOptional: (optional: boolean) => void;
   isPending: boolean;

@@ -100,7 +100,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {factorySalesByCustomer.map((row: any) => (
+                        {factorySalesByCustomer.map((row) => (
                           <TableRow key={row.customerId ?? "null"}>
                             <TableCell className="font-medium">
                               {row.customerName || `Customer #${row.customerId}`}
@@ -122,22 +122,22 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         <TableRow>
                           <TableCell>Total</TableCell>
                           <TableCell className="text-right hidden sm:table-cell">
-                            {factorySalesByCustomer.reduce((s: number, r: any) => s + Number(r.containers), 0)}
+                            {factorySalesByCustomer.reduce((s: number, r) => s + Number(r.containers), 0)}
                           </TableCell>
                           <TableCell className="text-right font-mono hidden sm:table-cell">
                             {formatAmount(
-                              factorySalesByCustomer.reduce((s: number, r: any) => s + parseFloat(r.totalAmount), 0)
+                              factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.totalAmount), 0)
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono hidden sm:table-cell">
                             {formatAmount(
-                              factorySalesByCustomer.reduce((s: number, r: any) => s + parseFloat(r.paidAmount), 0)
+                              factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.paidAmount), 0)
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {formatAmount(
                               factorySalesByCustomer.reduce(
-                                (s: number, r: any) => s + parseFloat(r.totalAmount) - parseFloat(r.paidAmount),
+                                (s: number, r) => s + parseFloat(r.totalAmount) - parseFloat(r.paidAmount),
                                 0
                               )
                             )}
@@ -177,7 +177,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(factoryPosSummary.byCustomer ?? []).map((row: any, idx: number) => (
+                        {(factoryPosSummary.byCustomer ?? []).map((row, idx: number) => (
                           <TableRow key={row.customerId ?? idx}>
                             <TableCell className="font-medium">{row.customerName}</TableCell>
                             <TableCell className="text-right hidden sm:table-cell">{row.sales}</TableCell>

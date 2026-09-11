@@ -394,7 +394,7 @@ If intent is not about an account query, respond with exactly: null`;
             const target = parseFloat(parsed.targetBalance);
             const tolerance = Math.max(Math.abs(target) * 0.01, 1); // 1% or ±1
 
-            const matches: any[] = [];
+            const matches = [];
             for (const row of allRows) {
               running += parseFloat(row.debitAmount || "0") - parseFloat(row.creditAmount || "0");
               if (Math.abs(running - target) <= tolerance) {

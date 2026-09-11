@@ -17,14 +17,33 @@ import {
 } from "@/components/ui/responsive-data-list";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BaleLogoPickerPopover } from "./BaleLogoPickerPopover";
+import type { FactoryBaleProduct } from "@shared/schema";
+
+type StockEntryProduct = FactoryBaleProduct & {
+  grade?: string | null;
+  categoryName?: string | null;
+};
 
 interface CartItem {
   productId: number;
-  product: any;
+  product: StockEntryProduct;
   qty: number;
   weightPerBaleKg: number;
   finalizedBy: number | null;
   overrideLogoId: number | null;
+}
+
+interface WorkerOption {
+  id: number;
+  fullName?: string | null;
+  name?: string | null;
+  active?: boolean | null;
+}
+
+interface CustomerOption {
+  id: number;
+  legalName?: string | null;
+  active?: boolean | null;
 }
 
 export function StockEntryCart({
@@ -43,7 +62,7 @@ export function StockEntryCart({
   filteredWorkers,
 }: {
   cart: CartItem[];
-  workers: any[];
+  workers: WorkerOption[];
   workerCategoryFilter: string;
   onUpdateQty: (productId: number, delta: number) => void;
   onSetQty: (productId: number, qty: number) => void;
@@ -51,10 +70,10 @@ export function StockEntryCart({
   onRemoveItem: (productId: number) => void;
   onAssignWorker: (productId: number, workerId: number | null) => void;
   onSetLogoOverride: (productId: number, logoId: number | null) => void;
-  allCustomers: any[];
+  allCustomers: CustomerOption[];
   logoPickerOpen: number | null;
   onLogoPickerOpenChange: (productId: number | null) => void;
-  filteredWorkers: any[];
+  filteredWorkers: WorkerOption[];
 }) {
   const isMobile = useIsMobile();
 

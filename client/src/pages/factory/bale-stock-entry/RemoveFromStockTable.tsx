@@ -1,17 +1,18 @@
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { InStockBale } from "./RemoveFromStockTab";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface RemoveFromStockTableProps {
   viewMode: "condensed" | "detailed";
   loading: boolean;
-  filteredBales: any[] | undefined;
+  filteredBales: InStockBale[] | undefined;
   condensedRows: { groupKey: string; articleCode: string; productName: string; qty: number; totalWeight: number; baleIds: number[]; }[];
   selectedBaleIds: Set<number>;
   onToggleBale: (id: number) => void;
   onToggleCondensedRow: (ids: number[]) => void;
   formatDisplayDate: (date: Date | string) => string;
-  onPrintBale: (bale: any) => void;
+  onPrintBale: (bale: InStockBale) => void;
 }
 
 export function RemoveFromStockTable({
@@ -81,7 +82,7 @@ export function RemoveFromStockTable({
                   <div className="text-[10px] text-muted-foreground font-mono">{bale.articleCode}</div>
                 </TableCell>
                 <TableCell className="text-xs">{bale.locationName}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{formatDisplayDate(bale.finalizedAt)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatDisplayDate(bale.finalizedAt ?? "")}</TableCell>
                 <TableCell className="text-xs">{bale.finalizedByName || "-"}</TableCell>
                 <TableCell className="text-right font-bold text-sm">
                   {parseFloat(bale.weightKg || "0").toFixed(1)}{" "}

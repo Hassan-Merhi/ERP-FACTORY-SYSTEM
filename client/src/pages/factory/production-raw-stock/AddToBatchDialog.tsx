@@ -6,11 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from "@/lib/formatNumber";
 
+export interface AddToBatchSource {
+  supplierId: number;
+  supplierName: string;
+  costPerKg: string;
+  remainingKg: string;
+}
+
 interface AddToBatchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  addToBatchSource: any;
-  setAddToBatchSource: (source: Record<string, unknown>) => void;
+  addToBatchSource: AddToBatchSource | null;
+  setAddToBatchSource: (source: AddToBatchSource) => void;
   mixBatches: any[];
   rawStock: any[];
   addToBatchMutation: any;
@@ -35,6 +42,7 @@ export function AddToBatchDialog({
     mixBatches?.filter((b) => b.status === "ACTIVE" || b.status === "OPEN" || b.status === "CARRY_FORWARD") ?? [];
   const supplierOptions = rawStock?.filter((r) => r.supplierId && parseFloat(r.freeKg || "0") > 0.001) ?? [];
   const isNoSourcePreset = addToBatchSource === null;
+  const selectedSupplierId = addToBatchSource?.supplierId?.toString() || "";
 
   const handleSupplierChange = (val: string) => {
     const found = rawStock?.find((r) => r.supplierId?.toString() === val);
@@ -82,7 +90,7 @@ export function AddToBatchDialog({
           {isNoSourcePreset && (
             <div className="space-y-2">
               <Label>Source Supplier</Label>
-              <Select value={addToBatchSource?.supplierId?.toString() || ""} onValueChange={handleSupplierChange}>
+              <Select value={selectedSupplierId} onValueChange={handleSupplierChange}>
                 <SelectTrigger data-testid="select-add-to-batch-supplier">
                   <SelectValue placeholder="Select supplier..." />
                 </SelectTrigger>

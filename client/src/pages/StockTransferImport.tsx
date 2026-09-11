@@ -22,6 +22,31 @@ interface Location {
   name: string;
 }
 
+interface StockTransferItem {
+  barcode: string;
+  quantity: string | number;
+  error?: string;
+  stockItemName?: string;
+  currentStock?: number;
+}
+
+interface StockTransferPreview {
+  items: StockTransferItem[];
+}
+
+interface StockTransferValidationResult {
+  errors: string[];
+  validatedItems: StockTransferItem[];
+}
+
+type StockTransferImportPayload = {
+  sourceLocationId: number;
+  destinationLocationId: number;
+  transferDate?: string;
+  notes?: string;
+  items: StockTransferItem[];
+};
+
 interface StockTransferImportProps {
   posUser?: AuthMe;
 }
@@ -32,8 +57,8 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
   const isPOS = !!posUser;
 
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<any>(null);
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [preview, setPreview] = useState<StockTransferPreview | null>(null);
+  const [validationResult, setValidationResult] = useState<StockTransferValidationResult | null>(null);
   const [selectedSourceLocation, setSelectedSourceLocation] = useState<string>(
     isPOS && posUser?.assignedLocationId ? posUser.assignedLocationId.toString() : ""
   );
@@ -76,7 +101,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
   });
 
   const validateMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: StockTransferImportPayload) => {
       const res = await apiRequest("POST", "/api/stock-transfer-import/validate", data);
       return await res.json();
     },
@@ -107,7 +132,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
   });
 
   const importMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: StockTransferImportPayload) => {
       const res = await apiRequest("POST", "/api/stock-transfer-import/import", data);
       return await res.json();
     },
@@ -258,7 +283,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
     }
 
     // No errors - proceed directly with valid items
-    const itemsToImport = validationResult.validatedItems.filter((item: any) => !item.error);
+    const itemsToImport = validationResult.validatedItems.filter((item: StockTransferItem) => !item.error);
     importMutation.mutate({
       sourceLocationId: parseInt(selectedSourceLocation),
       destinationLocationId: parseInt(selectedDestLocation),
@@ -270,7 +295,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
 
   const handleConfirmedImport = () => {
     // Filter valid items and proceed with import
-    const itemsToImport = validationResult?.validatedItems?.filter((item: any) => !item.error) || [];
+    const itemsToImport = validationResult?.validatedItems?.filter((item: StockTransferItem) => !item.error) || [];
 
     // Close confirmation dialog first
     setConfirmDialogOpen(false);
@@ -309,7 +334,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
   const hasValidationErrors = validationResult?.errors && validationResult.errors.length > 0;
 
   // Calculate valid items (items without errors)
-  const validItems = validationResult?.validatedItems?.filter((item: any) => !item.error) || [];
+  const validItems = validationResult?.validatedItems?.filter((item: StockTransferItem) => !item.error) || [];
   const validItemsCount = validItems.length;
   const totalItemsCount = validationResult?.validatedItems?.length || 0;
 
@@ -482,7 +507,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {preview.items.map((item: any, index: number) => {
+                  {preview.items.map((item: StockTransferItem, index: number) => {
                     const validation = validationResult?.validatedItems?.[index];
                     const hasError = validation?.error;
 

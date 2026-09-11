@@ -11,6 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/formatNumber";
 import type { DaybookEntry } from "./types";
+import type {
+  ContainerDetail,
+  ContainerImportDetail,
+  LoadingOrder,
+  MixBatchDetail,
+  MixBatchSource,
+  PayrollSummary,
+  SupplierBalance,
+  VoucherViewEntry,
+} from "./entry-views/types";
+import { apiNumber } from "./entry-views/types";
 import { ContainerImportView } from "./entry-views/ContainerImportView";
 import { PayrollPaymentView } from "./entry-views/PayrollPaymentView";
 import { MixBatchView } from "./entry-views/MixBatchView";
@@ -57,47 +68,47 @@ export function ViewEntryModal({
   })();
   const metaContainerId: number | undefined = entryMeta.containerId;
 
-  const { data: viewEntries = [] } = useQuery<any[]>({
+  const { data: viewEntries = [] } = useQuery<VoucherViewEntry[]>({
     queryKey: [`/api/vouchers/${entry.referenceId}/view-entries`],
     enabled: isVoucherBacked && !!entry.referenceId,
   });
 
-  const { data: containerDetail } = useQuery<any>({
+  const { data: containerDetail } = useQuery<ContainerImportDetail>({
     queryKey: [`/api/factory/containers/${entry.referenceId}`],
     enabled: isContainerImport,
   });
 
-  const { data: supplierBalance } = useQuery({
+  const { data: supplierBalance } = useQuery<SupplierBalance>({
     queryKey: [`/api/factory/suppliers/${containerDetail?.supplierId}/balance`],
     enabled: isContainerImport && !!containerDetail?.supplierId,
   });
 
-  const { data: payrollSummary } = useQuery({
+  const { data: payrollSummary } = useQuery<PayrollSummary>({
     queryKey: [`/api/factory/payroll/${entry.referenceId}/summary`],
     enabled: isPayrollPayment,
   });
 
-  const { data: mixBatchDetail } = useQuery({
+  const { data: mixBatchDetail } = useQuery<MixBatchDetail>({
     queryKey: [`/api/factory/mix-batches/${entry.referenceId}`],
     enabled: isMixBatchCreated,
   });
 
-  const { data: mixBatchSources = [] } = useQuery({
+  const { data: mixBatchSources = [] } = useQuery<MixBatchSource[]>({
     queryKey: [`/api/factory/mix-batches/${entry.referenceId}/sources`],
     enabled: isMixBatchCreated,
   });
 
-  const { data: loadingOrder } = useQuery({
+  const { data: loadingOrder } = useQuery<LoadingOrder>({
     queryKey: [`/api/factory/customer-orders/${entry.referenceId}`],
     enabled: isLoadingCreated,
   });
 
-  const { data: metaContainerDetail } = useQuery<any>({
+  const { data: metaContainerDetail } = useQuery<ContainerDetail>({
     queryKey: [`/api/factory/containers/${metaContainerId}`],
     enabled: (isOffloadRawStock || isCommission) && !!metaContainerId,
   });
 
-  const { data: otherChargeContainerDetail } = useQuery<any>({
+  const { data: otherChargeContainerDetail } = useQuery<ContainerDetail>({
     queryKey: [`/api/factory/containers/${entry.referenceId}`],
     enabled: isOtherCharge && !!entry.referenceId,
   });
@@ -122,27 +133,20 @@ export function ViewEntryModal({
     // Determine source entry (the "Paid From" / "Received In" account)
     const src =
       txType === "PAYMENT"
-        ? viewEntries.find((e) => parseFloat(e.creditAmount || "0") > 0)
+        ? viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
         : txType === "RECEIPT"
-          ? viewEntries.find((e) => parseFloat(e.debitAmount || "0") > 0)
+          ? viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
           : null;
 
     // Determine display entries
     const display =
       txType === "PAYMENT"
-        ? viewEntries.filter((e) => parseFloat(e.debitAmount || "0") > 0)
+        ? viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
         : txType === "RECEIPT"
-          ? viewEntries.filter((e) => parseFloat(e.creditAmount || "0") > 0)
+          ? viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
           : viewEntries;
 
-    const resolveUrl = (e: {
-      bankAccountId: string | number | bigint | boolean | null | undefined;
-      customerId: string | number | bigint | boolean | null | undefined;
-      employeeId: string | number | bigint | boolean | null | undefined;
-      factorySupplierId: string | number | bigint | boolean | null | undefined;
-      ledgerAccountId: string | number | bigint | boolean | null | undefined;
-      supplierId: string | number | bigint | boolean | null | undefined;
-    }): string | null => {
+    const resolveUrl = (e: VoucherViewEntry): string | null => {
       if (e.ledgerAccountId) return `/api/accounts/ledger/${e.ledgerAccountId}/balance`;
       if (e.bankAccountId) return `/api/accounts/ledger/${e.bankAccountId}/balance`;
       if (e.customerId) return `/api/customers/${e.customerId}/balance`;
@@ -195,8 +199,8 @@ export function ViewEntryModal({
   const amt = parseFloat(entry.amountCurrency || "0");
   const sym = currencySymbol(entry.currencyCode);
 
-  const totalDebit = viewEntries.reduce((s, e) => s + parseFloat(e.debitAmount || "0"), 0);
-  const totalCredit = viewEntries.reduce((s, e) => s + parseFloat(e.creditAmount || "0"), 0);
+  const totalDebit = viewEntries.reduce((s, e) => s + apiNumber(e.debitAmount), 0);
+  const totalCredit = viewEntries.reduce((s, e) => s + apiNumber(e.creditAmount), 0);
 
   const { variant: badgeVariant, className: badgeClass } = getFactoryTxTypeBadge(entry.txType);
 
@@ -218,23 +222,23 @@ export function ViewEntryModal({
 
     // Source account: For Payment = credit entry (cash going OUT), For Receipt = debit entry (cash coming IN)
     const sourceEntry = isPayment
-      ? viewEntries.find((e) => parseFloat(e.creditAmount || "0") > 0)
+      ? viewEntries.find((e) => apiNumber(e.creditAmount) > 0)
       : isReceipt
-        ? viewEntries.find((e) => parseFloat(e.debitAmount || "0") > 0)
+        ? viewEntries.find((e) => apiNumber(e.debitAmount) > 0)
         : null;
 
     // Total = opposite side of source for Payment/Receipt
     const totalAmount = isPayment
-      ? viewEntries.reduce((s: number, e) => s + parseFloat(e.debitAmount || "0"), 0)
+      ? viewEntries.reduce((s: number, e) => s + apiNumber(e.debitAmount), 0)
       : isReceipt
-        ? viewEntries.reduce((s: number, e) => s + parseFloat(e.creditAmount || "0"), 0)
+        ? viewEntries.reduce((s: number, e) => s + apiNumber(e.creditAmount), 0)
         : Math.max(totalDebit, totalCredit);
 
     // Display entries: Payment = debit side only, Receipt = credit side only, Journal = all
     const displayEntries = isPayment
-      ? viewEntries.filter((e) => parseFloat(e.debitAmount || "0") > 0)
+      ? viewEntries.filter((e) => apiNumber(e.debitAmount) > 0)
       : isReceipt
-        ? viewEntries.filter((e) => parseFloat(e.creditAmount || "0") > 0)
+        ? viewEntries.filter((e) => apiNumber(e.creditAmount) > 0)
         : viewEntries;
 
     return (
@@ -333,19 +337,19 @@ export function ViewEntryModal({
                           <td className="px-3 py-2 text-right font-mono">
                             {sym}
                             {formatNumber(
-                              Math.max(parseFloat(e.debitAmount || "0"), parseFloat(e.creditAmount || "0"))
+                              Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount))
                             )}
                           </td>
                         ) : (
                           <>
                             <td className="px-3 py-2 text-right font-mono">
-                              {parseFloat(e.debitAmount || "0") > 0
-                                ? `${sym}${formatNumber(parseFloat(e.debitAmount))}`
+                              {apiNumber(e.debitAmount) > 0
+                                ? `${sym}${formatNumber(apiNumber(e.debitAmount))}`
                                 : "-"}
                             </td>
                             <td className="px-3 py-2 text-right font-mono">
-                              {parseFloat(e.creditAmount || "0") > 0
-                                ? `${sym}${formatNumber(parseFloat(e.creditAmount))}`
+                              {apiNumber(e.creditAmount) > 0
+                                ? `${sym}${formatNumber(apiNumber(e.creditAmount))}`
                                 : "-"}
                             </td>
                           </>

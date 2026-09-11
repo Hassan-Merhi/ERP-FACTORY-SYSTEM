@@ -11,11 +11,41 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { CurrencySelector } from "@/components/CurrencySelector";
+import type { Currency } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { StockItem, StockItemCombobox } from "./VoucherEditHelpers";
 import { PurchaseEditFormTable } from "./PurchaseEditFormTable";
 import { AdjustmentEditFormRows } from "./AdjustmentEditFormRows";
 import { TransferEditForm } from "./TransferEditForm";
+
+export interface EditLineItem {
+  stockItemId: number;
+  stockItemName: string;
+  quantity: string;
+  rate: string;
+}
+
+interface EditFormValues {
+  voucherDate: Date;
+  currency: Currency;
+  locationId?: number;
+  items: EditLineItem[];
+  notes: string;
+}
+
+interface OptionalVoucher {
+  optional: boolean;
+}
+
+interface LocationOption {
+  id: number;
+  name: string;
+}
+
+interface OptionalMutation {
+  isPending: boolean;
+  mutate: (checked: boolean) => void;
+}
 
 export function PurchaseEditForm({
   form,
@@ -29,16 +59,16 @@ export function PurchaseEditForm({
   total,
   toggleOptionalMutation,
 }: {
-  form: UseFormReturn<any>;
-  onSubmit: (data: any) => void;
+  form: UseFormReturn<EditFormValues>;
+  onSubmit: (data: EditFormValues) => void;
   onCancel: () => void;
   isPending: boolean;
-  voucher: any;
+  voucher: OptionalVoucher;
   stockItems: StockItem[];
   formatDisplayDate: (date: Date) => string;
   formatAmount: (amount: number) => string;
   total: number;
-  toggleOptionalMutation: any;
+  toggleOptionalMutation: OptionalMutation;
 }) {
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -304,18 +334,18 @@ export function AdjustmentEditForm({
   total,
   toggleOptionalMutation,
 }: {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<EditFormValues>;
   voucherType: string;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: EditFormValues) => void;
   onCancel: () => void;
   isPending: boolean;
-  voucher: any;
+  voucher: OptionalVoucher;
   stockItems: StockItem[];
-  locations: any[];
+  locations: LocationOption[];
   formatDisplayDate: (date: Date) => string;
   formatAmount: (amount: number) => string;
   total: number;
-  toggleOptionalMutation: any;
+  toggleOptionalMutation: OptionalMutation;
 }) {
   const { fields, append, remove } = useFieldArray({
     control: form.control,

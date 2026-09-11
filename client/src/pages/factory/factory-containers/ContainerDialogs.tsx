@@ -26,7 +26,7 @@ interface ImportDialogProps {
 export function ImportDialog({ open, onClose }: ImportDialogProps) {
   const { toast: _toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [_importPreview, setImportPreview] = [([]), (_v: any[]) => {}];
+  const [_importPreview, setImportPreview] = [([]), (_v: unknown[]) => {}];
 
   const handleClose = () => {
     setImportPreview([]);
@@ -328,7 +328,7 @@ export function ReverseOffloadDialog({ container, onClose }: ReverseOffloadDialo
 
 // ── Excel Import/Export Utilities ─────────────────────────────────────────────
 
-export async function exportContainers(rows: ContainerWithSupplier[], suppliersData?: any[]) {
+export async function exportContainers(rows: ContainerWithSupplier[], suppliersData?: Array<{ id: number; name: string }>) {
   const XLSX = await import("@/lib/excelHelper");
   const headers = [
     "Container Number",
@@ -459,7 +459,7 @@ export async function downloadContainerTemplate() {
   await XLSX.writeFile(wb, "factory_containers_template.xlsx");
 }
 
-export async function parseContainerImportFile(file: File): Promise<any[]> {
+export async function parseContainerImportFile(file: File): Promise<Record<string, string>[]> {
   const XLSX = await import("@/lib/excelHelper");
   const data = await file.arrayBuffer();
   const wb = await XLSX.read(data, { type: "array" });
@@ -504,8 +504,8 @@ interface FullImportDialogProps {
 export function FullImportDialog({ open: _open, onClose: _onClose }: FullImportDialogProps) {
   const { toast: _toast } = useToast();
   const _fileInputRef = useRef<HTMLInputElement>(null);
-  const [_importPreview, _setImportPreview] = [([]), (_v: any[]) => {}];
-  const [_importResult, _setImportResult] = [null, (_v: any) => {}];
+  const [_importPreview, _setImportPreview] = [([]), (_v: unknown[]) => {}];
+  const [_importResult, _setImportResult] = [null, (_v: unknown) => {}];
 
   // This component is intentionally kept simple since the import state
   // lives in the parent (FactoryContainers) for now.

@@ -19,6 +19,45 @@ import { FileText, TrendingUp, CreditCard, DollarSign } from "lucide-react";
 const _DISPLAY_CURRENCIES = ["EUR", "AUD", "USD"] as const;
 type _DisplayCcy = (typeof _DISPLAY_CURRENCIES)[number];
 
+interface BrokerSupplier {
+  id: number;
+  name: string;
+  parentId?: number | null;
+}
+
+interface BrokerContainer {
+  id: number;
+  supplierName: string;
+  containerNumber: string;
+  arrivalDate?: string | null;
+  ratePerKg: number;
+  weight: number;
+  goodsAmount: number;
+  goodsCurrency: string;
+  freightAmount: number;
+  freightCurrency: string;
+  commissionAmount: number;
+  commissionCurrency: string;
+}
+
+interface BrokerPayment {
+  id: number;
+  date?: string | null;
+  type: string;
+  supplierName?: string | null;
+  fromCurrency: string;
+  fromAmount: number;
+  fxRate?: number | null;
+  usdAmount: number;
+  notes?: string | null;
+}
+
+interface BrokerStatement {
+  broker?: { name: string } | null;
+  containers: BrokerContainer[];
+  payments: BrokerPayment[];
+}
+
 function fmt(n: number, decimals = 2) {
   if (!n || n === 0) return "";
   return formatNumber(Math.abs(n), decimals);
@@ -47,19 +86,19 @@ export default function FactoryBrokerVisualStatement() {
   const [to, setTo] = useState<string>("");
 
   // Suppliers for the current factory company (server reads company from session)
-  const { data: suppliers = [] } = useQuery({
+  const { data: suppliers = [] } = useQuery<BrokerSupplier[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
   // Brokers = suppliers that have children OR have parentId = null and are linked
   const parentIds = useMemo(() => {
     const ids = new Set<number>();
-    for (const s of suppliers as any[]) {
+    for (const s of suppliers) {
       if (s.parentId) ids.add(s.parentId);
     }
     return ids;
   }, [suppliers]);
-  const brokers = useMemo(() => (suppliers as any[]).filter((s) => parentIds.has(s.id)), [suppliers, parentIds]);
+  const brokers = useMemo(() => suppliers.filter((s) => parentIds.has(s.id)), [suppliers, parentIds]);
 
   // Visual statement data
   const queryParams = useMemo(() => {
@@ -73,7 +112,7 @@ export default function FactoryBrokerVisualStatement() {
     data: statement,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<BrokerStatement>({
     queryKey: ["/api/factory/suppliers", brokerId, "broker-visual-statement", from, to],
     queryFn: async () => {
       const qs = queryParams ? `?${queryParams}` : "";
@@ -121,7 +160,7 @@ export default function FactoryBrokerVisualStatement() {
   }, [containerTotals, paymentTotals]);
 
   // Per-container grand total by currency
-  function containerGrandTotal(c: { commissionAmount: number; commissionCurrency: string; freightAmount: number; freightCurrency: string; goodsAmount: number; goodsCurrency: string }): Partial<Record<string, number>> {
+  function containerGrandTotal(c: BrokerContainer): Partial<Record<string, number>> {
     const out: Record<string, number> = {};
     const add = (cc: string, amt: number) => {
       out[cc] = (out[cc] || 0) + amt;
@@ -280,7 +319,7 @@ export default function FactoryBrokerVisualStatement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(statement.containers as any[]).map((c) => {
+                    {statement.containers.map((c) => {
                       const grandTotal = containerGrandTotal(c);
                       return (
                         <TableRow key={c.id} className="text-xs" data-testid={`row-container-${c.id}`}>
@@ -408,7 +447,7 @@ export default function FactoryBrokerVisualStatement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(statement.payments as any[]).map((p) => {
+                    {statement.payments.map((p) => {
                       const isNeg = p.fromAmount < 0 || p.usdAmount < 0;
                       const typeLabel: Record<string, string> = {
                         payment: "Payment",
@@ -476,7 +515,7 @@ export default function FactoryBrokerVisualStatement() {
                           ))}
                       </TableCell>
                       <TableCell className="py-2 text-right tabular-nums font-bold">
-                        {fmt((statement.payments as any[]).reduce((s: number, p) => s + p.usdAmount, 0))}
+                        {fmt(statement.payments.reduce((s: number, p) => s + p.usdAmount, 0))}
                       </TableCell>
                       <TableCell />
                     </TableRow>

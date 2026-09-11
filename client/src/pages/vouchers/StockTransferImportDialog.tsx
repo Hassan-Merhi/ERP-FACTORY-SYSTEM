@@ -8,10 +8,36 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Upload, Download, FileSpreadsheet, CheckCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface ImportLocation {
+  id: number;
+  name: string;
+}
+
+interface ImportItem {
+  sourceLocation?: string | null;
+  barcode: string;
+  quantity: string | number;
+}
+
+interface ImportPreview {
+  items: ImportItem[];
+}
+
+interface ImportValidationItem {
+  error?: string;
+  stockItemName?: string;
+  currentStock?: number;
+}
+
+interface ImportValidationResult {
+  errors: string[];
+  validatedItems: ImportValidationItem[];
+}
+
 interface StockTransferImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  locations: any[];
+  locations: ImportLocation[];
   importFile: File | null;
   handleImportFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   downloadImportTemplate: () => void;
@@ -30,9 +56,9 @@ interface StockTransferImportDialogProps {
   handleImportSubmit: () => void;
   importMutationPending: boolean;
   importValidItemsCount: number;
-  importPreview: any;
-  importValidationResult: any;
-  formatNumber: (num: any, decimals?: number) => string;
+  importPreview: ImportPreview | null;
+  importValidationResult: ImportValidationResult | null;
+  formatNumber: (num: number, decimals?: number) => string;
 }
 
 export function StockTransferImportDialog({
@@ -217,7 +243,7 @@ export function StockTransferImportDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {importPreview.items.map((item: any, index: number) => {
+                    {importPreview.items.map((item, index: number) => {
                       const validation = importValidationResult?.validatedItems?.[index];
                       const hasError = validation?.error;
 
@@ -262,7 +288,7 @@ export function StockTransferImportDialog({
                 </Table>
               </div>
               <div className="sm:hidden max-h-60 overflow-y-auto p-2 space-y-2">
-                {importPreview.items.map((item: any, index: number) => {
+                {importPreview.items.map((item, index: number) => {
                   const validation = importValidationResult?.validatedItems?.[index];
                   const hasError = validation?.error;
 

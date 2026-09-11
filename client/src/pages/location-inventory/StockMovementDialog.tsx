@@ -6,16 +6,21 @@ import { Package, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PeriodFilter } from "@/components/ui/period-filter";
+import type {
+  StockMovementItem,
+  StockMovementMonth,
+  StockMovementPeriod,
+} from "./locationInventoryTypes";
 
 interface StockMovementDialogProps {
   stockMovementOpen: boolean;
   setStockMovementOpen: (o: boolean) => void;
-  stockMovementItem: any;
-  setStockMovementItem: (item: any) => void;
-  stockMovementPeriod: any;
-  setStockMovementPeriod: (p: any) => void;
-  drillMonth: any;
-  setDrillMonth: (m: any) => void;
+  stockMovementItem: StockMovementItem | null;
+  setStockMovementItem: (item: StockMovementItem | null) => void;
+  stockMovementPeriod: StockMovementPeriod;
+  setStockMovementPeriod: (period: StockMovementPeriod) => void;
+  drillMonth: StockMovementMonth | null;
+  setDrillMonth: (month: StockMovementMonth | null) => void;
   formatAmount: (amt: number) => string;
   navigate: (path: string) => void;
 }

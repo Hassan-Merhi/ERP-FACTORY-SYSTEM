@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { StockItemCombobox, StockItem, Location } from "./VoucherEditHelpers";
+import { StockItemCombobox, StockItem, Location, VoucherData } from "./VoucherEditHelpers";
+import type { TransferFormData } from "./VoucherEditSchemas";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -27,9 +28,9 @@ export function TransferEditForm({
   formatAmount,
   grandTotal,
 }: {
-  form: UseFormReturn<any>;
-  voucher: any;
-  onSubmit: (data: any) => void;
+  form: UseFormReturn<TransferFormData>;
+  voucher: VoucherData;
+  onSubmit: (data: TransferFormData) => void;
   onCancel: () => void;
   onToggleOptional: (optional: boolean) => void;
   isPending: boolean;

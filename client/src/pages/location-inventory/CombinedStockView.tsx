@@ -10,16 +10,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { AuthMe } from "@shared/apiTypes";
+import type {
+  CombinedStockRow,
+  InventoryGroupOption,
+  InventoryItem,
+  InventoryLocation,
+  InventoryLocationOption,
+} from "./locationInventoryTypes";
+
+type StockCategory = { id: number; name: string; active: boolean };
 
 interface CombinedStockViewProps {
   allInventoryLoading: boolean;
-  filteredCombinedRows: any[];
-  allInventoryData: any[];
-  allInventoryLocations: any[];
-  allInventoryGroups: any[];
+  filteredCombinedRows: CombinedStockRow[];
+  allInventoryData: InventoryItem[];
+  allInventoryLocations: InventoryLocationOption[];
+  allInventoryGroups: InventoryGroupOption[];
   /** Full location list from /api/locations — used for the dropdown so empty locations are still visible */
-  allLocations?: any[];
-  categoriesList: any[];
+  allLocations?: InventoryLocation[];
+  categoriesList: StockCategory[];
   allStockSearchTerm: string;
   setAllStockSearchTerm: (s: string) => void;
   allStockGroupFilter: string;

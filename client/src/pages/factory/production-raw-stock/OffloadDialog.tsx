@@ -15,15 +15,81 @@ import { formatNumber } from "@/lib/formatNumber";
 import { resolveFactoryOffloadValuationKg } from "@shared/factoryOffloadValuation";
 import { AccountCombobox } from "./ProductionRawStockHelpers";
 
+export interface OffloadContainer {
+  id: number;
+  containerNumber?: string | null;
+  supplierName?: string | null;
+  status?: string | null;
+  totalKg?: string | null;
+  declaredKg?: string | null;
+  actualReceivedKg?: string | null;
+  fixedCostPerKgUsd?: string | null;
+  currencyCode?: string | null;
+  fxRateToUsd?: string | null;
+  ratePerKg?: string | null;
+  freight?: string | null;
+  freightCurrencyCode?: string | null;
+  freightAccountId?: number | null;
+  freightSupplierId?: number | null;
+  freightOwnAccountId?: number | null;
+  freightPaidBy?: string | null;
+  otherCharges?: string | null;
+  otherChargesCurrencyCode?: string | null;
+  otherChargesAccountId?: number | null;
+  otherChargesSupplierId?: number | null;
+  commissionAmount?: string | null;
+  commissionCurrencyCode?: string | null;
+  commissionSupplierId?: number | null;
+  commissionFxRateToUsd?: string | null;
+  commissionFxRateConfirmed?: boolean | null;
+}
+
+export interface OffloadSupplierOption {
+  id: number;
+  name: string;
+}
+
+export interface OffloadLedgerAccount {
+  id: number;
+  name: string;
+  code?: string;
+  accountType?: string;
+  subType?: string;
+}
+
+interface AdditionalCharge {
+  id: string;
+  description: string;
+  amount: string;
+  currencyCode: string;
+  fxRate: string;
+  fxRateLoading: boolean;
+  ledgerAccountId: string;
+}
+
+interface MixBatchAllocation {
+  mixBatchId?: string;
+  weightKg?: string;
+}
+
+export interface OffloadPayload {
+  [key: string]: unknown;
+}
+
+interface OffloadMutationLike {
+  isPending: boolean;
+  mutate: (payload: OffloadPayload) => void;
+}
+
 interface OffloadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  availableContainers: any[];
-  factorySuppliers: any[];
-  ledgerAccounts: any[];
-  offloadMutation: any;
+  availableContainers: OffloadContainer[];
+  factorySuppliers: OffloadSupplierOption[];
+  ledgerAccounts: OffloadLedgerAccount[];
+  offloadMutation: OffloadMutationLike;
   wrapAdminAction: (action: () => void, title: string) => void;
-  mixBatches: any[];
+  mixBatches: unknown[];
 }
 
 export function OffloadDialog({
@@ -78,8 +144,8 @@ export function OffloadDialog({
   const [dutyAccountId, setDutyAccountId] = useState("");
   const [dutyPending, setDutyPending] = useState(false);
   const [dutyNotes, _setDutyNotes] = useState("");
-  const [additionalCharges, setAdditionalCharges] = useState<any[]>([]);
-  const [mixBatchAllocations, _setMixBatchAllocations] = useState<any[]>([]);
+  const [additionalCharges, setAdditionalCharges] = useState<AdditionalCharge[]>([]);
+  const [mixBatchAllocations, _setMixBatchAllocations] = useState<MixBatchAllocation[]>([]);
 
   // ── Additional charge helpers ──────────────────────────────────────────────
   const handleAddAdditionalCharge = () => {
@@ -378,7 +444,7 @@ export function OffloadDialog({
     const dutyStatus = dutyPending ? "PENDING" : parseFloat(dutyAmount || "0") > 0 ? "CONFIRMED" : "NONE";
     const fxRate = parseFloat(fxRateToUsd || "1");
 
-    const payload: any = {
+    const payload: OffloadPayload = {
       containerId: selectedContainerId,
       offloadDate,
       destination: offloadDestination.trim() || null,
@@ -434,7 +500,7 @@ export function OffloadDialog({
       mixBatchAllocations: mixBatchAllocations
         .filter((a) => a.mixBatchId && parseFloat(a.weightKg || "0") > 0)
         .map((a) => ({
-          mixBatchId: parseInt(a.mixBatchId),
+          mixBatchId: parseInt(a.mixBatchId || "0", 10),
           weightKg: a.weightKg,
         })),
     };
