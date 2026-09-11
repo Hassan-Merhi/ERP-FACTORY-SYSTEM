@@ -20,7 +20,7 @@
     "verify:observability": "node scripts/verify-program1-observability-foundation.mjs",
     "verify:stabilization": "node scripts/verify-memory-stabilization.mjs",
     "verify:mobile-web-routing": "node scripts/verify-mobile-web-routing.mjs",
-    "verify:bandwidth": "node scripts/verify-bandwidth-phases-1-2.mjs",
+    "verify:bandwidth": "node scripts/verify-bandwidth-phases-1-2.mjs && node scripts/verify-bandwidth-phase-3-sales-report.mjs",
     "smoke:bandwidth": "node scripts/run-bandwidth-production-smoke.mjs",
     "audit:exports": "node scripts/audit-large-export-buffers.mjs",
     "audit:heavy-apis": "node scripts/audit-heavy-list-endpoints.mjs",
