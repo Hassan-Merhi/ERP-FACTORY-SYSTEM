@@ -76,71 +76,63 @@ export interface LoadingLine {
 export interface LoadingBale {
   productName?: string | null;
   baleName?: string | null;
-  weightKg?: ApiValue;
-  quantity?: ApiValue;
-  bales?: ApiValue;
-  totalAmount?: ApiValue;
-  totalCost?: ApiValue;
-  pricePerBale?: ApiValue;
-  unitPrice?: ApiValue;
   articleCode?: string | null;
+  weight?: ApiValue;
+  weightKg?: ApiValue;
 }
 
-export interface LoadingDetail {
-  reference?: string | null;
+export interface LoadingOrder {
+  lines?: LoadingLine[];
+  bales?: LoadingBale[];
+  customerName?: string | null;
+  customerId?: ApiValue;
+  customerCode?: string | null;
   destination?: string | null;
-  customerName?: string | null;
-  totalAmount?: ApiValue;
-  totalBales?: ApiValue;
-  lines?: LoadingLine[] | null;
-  bales?: LoadingBale[] | null;
+  containerNotes?: string | null;
+  status?: string | null;
+  proformaName?: string | null;
+  loadingStartedAt?: string | null;
+  grandTotal?: ApiValue;
+  subtotalBales?: ApiValue;
+  freightAmount?: ApiValue;
 }
 
-export interface ProductionDetail {
-  producedKg?: ApiValue;
-  totalWeightKg?: ApiValue;
-  totalBales?: ApiValue;
-  quantity?: ApiValue;
-  productName?: string | null;
-  baleName?: string | null;
-  mixBatchCode?: string | null;
-  batchCode?: string | null;
+export interface PayrollSummary {
+  baseSalary?: ApiValue;
+  baleEarnings?: ApiValue;
+  kgEarnings?: ApiValue;
+  overtimePay?: ApiValue;
+  bonuses?: ApiValue;
+  transport?: ApiValue;
+  deductions?: ApiValue;
+  advances?: ApiValue;
+  netSalary?: ApiValue;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  workerName?: string | null;
+  workerId?: ApiValue;
+  workerPosition?: string | null;
+  workerCode?: string | null;
+  status?: string | null;
+  cashAccountName?: string | null;
+  balesCount?: ApiValue;
+  kgProcessed?: ApiValue;
+  overtimeHours?: ApiValue;
+  presentDays?: ApiValue;
+  absentDays?: ApiValue;
+  totalWorkingDays?: ApiValue;
+  notes?: string | null;
 }
 
-export interface PaymentDetail {
-  amount?: ApiValue;
+export interface VoucherViewEntry {
+  id: number;
   accountName?: string | null;
-  supplierName?: string | null;
-  customerName?: string | null;
-  currency?: string | null;
-  reference?: string | null;
-}
-
-export interface TransferDetail {
-  amount?: ApiValue;
-  sourceAccountName?: string | null;
-  destinationAccountName?: string | null;
-  currency?: string | null;
-  reference?: string | null;
-}
-
-export interface ManualEntryDetail {
-  description?: string | null;
-  amount?: ApiValue;
   debitAmount?: ApiValue;
   creditAmount?: ApiValue;
-  accountName?: string | null;
-}
-
-export interface FactoryExpenseDetail {
-  description?: string | null;
-  amount?: ApiValue;
-  currency?: string | null;
-  accountName?: string | null;
-}
-
-export interface DaybookEntryViewProps {
-  entry: DaybookEntry;
-  displayDate: DisplayDate;
-  navigate: Navigate;
+  bankAccountId?: ApiValue;
+  customerId?: ApiValue;
+  employeeId?: ApiValue;
+  factorySupplierId?: ApiValue;
+  ledgerAccountId?: ApiValue;
+  supplierId?: ApiValue;
 }
