@@ -15,7 +15,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, ArrowRightLeft } from "lucide-react";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 interface Location {
   id: number;
@@ -347,7 +347,7 @@ export default function StockTransferImport({ posUser }: StockTransferImportProp
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <PageHeader title="Stock Transfer Import" icon={<ArrowRightLeft className="h-5 w-5" />} />
+          <PageHeader title="Stock Transfer Import" icon={<ArrowLeftRight className="h-5 w-5" />} />
           <p className="text-muted-foreground mt-1">Import stock transfers from Excel (Barcode, Quantity)</p>
         </div>
         <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
