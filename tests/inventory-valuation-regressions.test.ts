@@ -216,6 +216,63 @@ describe("inventory valuation regression guards", () => {
     expect(totalLayerQty(state.layers)).toBe(10);
   });
 
+  it("create-edit-edit-delete lifecycle does not let a stale layer collapse positive stock value", async () => {
+    const stockItemId = ctx.stockItemIds[2];
+    const voucher = { id: 700006, companyId: ctx.companyId, locationId: ctx.locationId };
+    const saleLine = { id: 800006, stockItemId, quantity: "7", costPrice: "66.65" };
+
+    await db.execute(sql`
+      INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
+      VALUES (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 20, 66.65, 1333.00, NOW())
+    `);
+    await db.execute(sql`
+      INSERT INTO inventory_negative_layers
+        (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
+      VALUES
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', 999006)
+    `);
+
+    // Create the sale.
+    await adjustInventory(
+      db as any,
+      ctx.locationId,
+      stockItemId,
+      -7,
+      ctx.companyId,
+      undefined,
+      "pos-sale",
+      voucher.id
+    );
+
+    // Edit it twice without changing its inventory footprint.
+    for (let i = 0; i < 2; i += 1) {
+      await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+      await adjustInventory(
+        db as any,
+        ctx.locationId,
+        stockItemId,
+        -7,
+        ctx.companyId,
+        undefined,
+        "pos-sale",
+        voucher.id
+      );
+    }
+
+    // Existing single/bulk POS delete paths restore the issued quantity through
+    // adjustInventory with the historical cost. A nonnegative live balance must
+    // not let that reversal consume a stale negative layer.
+    await adjustInventory(db as any, ctx.locationId, stockItemId, 7, ctx.companyId, 66.65);
+
+    const state = await readInventory(ctx.locationId, stockItemId);
+    expect(Number(state.inventory.quantity)).toBe(20);
+    expect(Number(state.inventory.total_value)).toBeCloseTo(1333, 2);
+    expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
+    expect(state.layers).toHaveLength(1);
+    expect(Number(state.layers[0].qty)).toBe(5);
+    expect(state.layers[0].source_voucher_type).toBe("legacy-shortage");
+  });
+
   it("preserves an exact stored total value through an unchanged POS edit", async () => {
     const stockItemId = ctx.stockItemIds[1];
     const voucher = { id: 700005, companyId: ctx.companyId, locationId: ctx.locationId };
