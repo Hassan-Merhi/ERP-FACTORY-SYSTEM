@@ -186,7 +186,8 @@ async function settleNegativeLayers(
  *  - inventory.totalValue  always ≥ 0  (only positive on-hand stock is valued)
  *  - inventory.averageRate preserved even when qty ≤ 0  (cost memory)
  *  - outgoing beyond zero  → negative layer created with provisional rate
- *  - incoming             → settles oldest layers FIFO, then adds to positive stock
+ *  - incoming while short → settles oldest layers FIFO, then adds to positive stock
+ *  - stale layers are never consumed when the live balance is already nonnegative
  *  - averageRate is recalculated only from positive on-hand qty
  */
 export async function adjustInventory(
@@ -218,9 +219,11 @@ export async function adjustInventory(
     let newRate: Decimal;
 
     if (delta.gt(ZERO)) {
-      // ── INCOMING: settle negative layers first, then add to positive stock ──
+      // ── INCOMING: settle layers only when the live balance is actually short ──
       const effectiveRate = incomingRate === undefined ? prevRate : toDecimal(incomingRate);
-      const { remaining } = await settleNegativeLayers(tx, locationId, stockItemId, delta, effectiveRate);
+      const remaining = prevQty.isNegative()
+        ? (await settleNegativeLayers(tx, locationId, stockItemId, delta, effectiveRate)).remaining
+        : delta;
 
       const addValue = remaining.times(effectiveRate);
       newTotalValue = Decimal.max(prevTotalValue.plus(addValue), ZERO);
