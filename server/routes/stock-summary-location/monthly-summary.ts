@@ -11,6 +11,10 @@ import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import {
+  buildInventoryValuationReconciliation,
+  inventorySnapshotFromStoredValues,
+} from "../../services/inventory/inventoryValuationSnapshot";
 import { calculateHistoricalLocationInventory } from "../_helpers";
 import {
   inventory,
@@ -278,20 +282,35 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         monthBuckets[month].inVal += baseValue + additionalCost;
       }
 
-      // Get ACTUAL current inventory for this location and item (source of truth)
+      // Live inventory is the current snapshot source of truth. Use stored
+      // total_value as the authoritative asset amount; average_rate is rounded
+      // cost memory and must never be multiplied back into a replacement value.
       const currentInventoryResult = await db
         .select({
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
-        .where(and(eq(inventory.stockItemId, stockItemId), eq(inventory.locationId, locationId)))
+        .where(
+          and(
+            eq(inventory.companyId, companyId),
+            eq(inventory.stockItemId, stockItemId),
+            eq(inventory.locationId, locationId)
+          )
+        )
         .limit(1);
 
-      const actualQty = currentInventoryResult.length > 0 ? parseFloat(currentInventoryResult[0].quantity) : 0;
-      const actualRate = currentInventoryResult.length > 0 ? parseFloat(currentInventoryResult[0].averageRate) : 0;
-      // Calculate value dynamically as qty * rate
-      const actualValue = actualQty * actualRate;
+      const liveInventory = currentInventoryResult[0]
+        ? inventorySnapshotFromStoredValues(
+            currentInventoryResult[0].quantity,
+            currentInventoryResult[0].totalValue,
+            currentInventoryResult[0].averageRate
+          )
+        : inventorySnapshotFromStoredValues(0, 0, 0);
+      const actualQty = liveInventory.quantity;
+      const actualValue = liveInventory.totalValue;
+      const actualRate = liveInventory.rate;
 
       // Calculate total movements for the year from vouchers
       const totalYearInQty = Object.values(monthBuckets).reduce((s, b) => s + b.inQty, 0);
@@ -301,7 +320,8 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
       const _totalYearNetQty = totalYearInQty - totalYearOutQty;
       const _totalYearNetVal = totalYearInVal - totalYearOutVal;
 
-      const currentYear = new Date().getFullYear();
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
 
       // Derive the opening balance for Jan 1 of `year` by reconstructing the historical
       // balance backward from current live inventory (same source-of-truth approach used
@@ -317,7 +337,7 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
       );
       const historicalRow = historicalAsOfPriorYearEnd.find((r) => r.stockItemId === stockItemId);
       const derivedOpeningQty = historicalRow ? parseFloat(historicalRow.quantity) || 0 : 0;
-      const derivedOpeningVal = historicalRow ? parseFloat(historicalRow.averageRate) * derivedOpeningQty || 0 : 0;
+      const derivedOpeningVal = historicalRow ? parseFloat(historicalRow.totalValue) || 0 : 0;
 
       // Calculate running closing balance starting from derived opening
       let runningQty = derivedOpeningQty;
@@ -369,12 +389,26 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         });
       }
 
-      // For current year: force December closing to match actual inventory
-      if (year === currentYear) {
-        monthlyData[11].closingQty = Math.round(actualQty * 1000) / 1000;
-        monthlyData[11].closingValue = actualValue;
-        monthlyData[11].closingRate = rate(actualValue, actualQty);
-      }
+      // Never mutate a calendar month with today's inventory. For a current-year
+      // report, compare the derived current-month closing with the live snapshot
+      // and expose any drift explicitly so it can be audited without corrupting
+      // future months such as December.
+      const reconciliation =
+        year === currentYear
+          ? (() => {
+              const asOfMonth = currentDate.getMonth() + 1;
+              const derivedCurrentMonth = monthlyData[asOfMonth - 1];
+              return buildInventoryValuationReconciliation(
+                asOfMonth,
+                liveInventory,
+                inventorySnapshotFromStoredValues(
+                  derivedCurrentMonth.closingQty,
+                  derivedCurrentMonth.closingValue,
+                  derivedCurrentMonth.closingRate
+                )
+              );
+            })()
+          : null;
 
       const grandTotal = {
         openingQty: Math.round(derivedOpeningQty * 1000) / 1000,
@@ -388,7 +422,7 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         outwardRate: rate(totalYearOutVal, totalYearOutQty),
         closingQty: year === currentYear ? Math.round(actualQty * 1000) / 1000 : Math.round(runningQty * 1000) / 1000,
         closingValue: year === currentYear ? actualValue : runningVal,
-        closingRate: year === currentYear ? rate(actualValue, actualQty) : rate(runningVal, runningQty),
+        closingRate: year === currentYear ? actualRate : rate(runningVal, runningQty),
       };
 
       res.json({
@@ -397,6 +431,7 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         year,
         monthlyData,
         grandTotal,
+        reconciliation,
       });
     } catch (error: unknown) {
       logger.error("Location stock item monthly summary error:", { error: error });

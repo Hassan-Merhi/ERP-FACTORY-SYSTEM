@@ -32,11 +32,14 @@ function createsTableRow(source, table, camel) {
   return drizzle.test(source) || raw.test(source);
 }
 
-const STOCK_BALANCE_HELPER = /\b(?:adjustInventory|reverseInventoryByExactValue)\s*\(/;
-const STOCK_BALANCE_HELPER_MODULE = "server/inventoryHelper.ts";
+const STOCK_BALANCE_HELPER = /\b(?:adjustInventory|reverseInventoryByExactValue|restoreInventoryByExactValue)\s*\(/;
+const STOCK_BALANCE_HELPER_MODULES = new Set([
+  "server/inventoryHelper.ts",
+  "server/services/inventory/exactValueInventory.ts",
+]);
 
 function mutatesStock(file, source) {
-  if (file === STOCK_BALANCE_HELPER_MODULE) return false;
+  if (STOCK_BALANCE_HELPER_MODULES.has(file)) return false;
   return writesTable(source, "inventory", "inventory") || STOCK_BALANCE_HELPER.test(source);
 }
 

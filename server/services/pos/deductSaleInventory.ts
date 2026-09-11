@@ -51,7 +51,20 @@ export async function lockAndDeductInventoryForSaleItem(
     );
   }
 
-  await adjustInventory(tx, locationId, item.stockItemId, requestedQuantity.negated().toNumber(), companyId);
+  const sourceVoucherId = canonicalSource ? Number(canonicalSource.sourceId) : Number.NaN;
+  const attributableVoucherId =
+    Number.isSafeInteger(sourceVoucherId) && sourceVoucherId > 0 ? sourceVoucherId : undefined;
+
+  await adjustInventory(
+    tx,
+    locationId,
+    item.stockItemId,
+    requestedQuantity.negated().toNumber(),
+    companyId,
+    undefined,
+    attributableVoucherId ? "pos-sale" : undefined,
+    attributableVoucherId
+  );
 
   const costPrice = toInventoryDecimal(lockedRow?.average_rate ?? currentRate);
 
