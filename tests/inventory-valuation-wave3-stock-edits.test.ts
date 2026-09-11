@@ -3,14 +3,8 @@ import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { firstRow, resultRows } from "../server/lib/queryResult";
 import { adjustInventory } from "../server/inventoryHelper";
-import {
-  createStockAdjustment,
-  createStockTransfer,
-} from "../server/storage/stock-ops/transfers-create";
-import {
-  updateStockAdjustment,
-  updateStockTransfer,
-} from "../server/storage/stock-ops/transfers-update";
+import { createStockAdjustment, createStockTransfer } from "../server/storage/stock-ops/transfers-create";
+import { updateStockAdjustment, updateStockTransfer } from "../server/storage/stock-ops/transfers-update";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "invvalw3";
