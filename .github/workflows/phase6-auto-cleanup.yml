@@ -25,7 +25,7 @@ jobs:
       - run: npm ci --no-audit --bin-links=true
       - name: Print current accounting i18n findings
         run: |
-          node scripts/audit-i18n-phase14.mjs --no-enforce --json-out=/tmp/i18n.json
+          node scripts/audit-i18n-phase14.mjs --no-enforce --json-out /tmp/i18n.json
           node - <<'NODE'
           const fs = require('fs');
           const report = JSON.parse(fs.readFileSync('/tmp/i18n.json','utf8'));
