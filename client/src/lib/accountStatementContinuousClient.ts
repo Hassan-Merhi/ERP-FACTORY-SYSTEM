@@ -28,6 +28,6 @@ export function fetchAccountStatementChunk<T>(
 ): Promise<AccountStatementChunk<T>> {
   return fetchContinuousJson<AccountStatementChunk<T>>(
     withContinuousCursor(baseUrl, { cursor, limit: STATEMENT_CHUNK_SIZE }),
-    { signal, fallbackError: "Failed to load account statement" }
+    { signal, fallbackError: "Failed to load transactions" }
   );
 }
