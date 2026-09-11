@@ -19,7 +19,7 @@ type PoolQuery = typeof pool.query;
 function registerLegacyRawStockRecalcRoutes(app: Express): void {
   const mutablePool = pool as unknown as { query: PoolQuery };
   const originalQuery = pool.query.bind(pool) as PoolQuery;
-  mutablePool.query = ((...args: Parameters<PoolQuery>) => {
+  const guardedRegistrationQuery = ((...args: Parameters<PoolQuery>) => {
     const first: unknown = args[0];
     const sqlText = typeof first === "string" ? first : (first as { text?: string } | undefined)?.text;
     if (typeof sqlText === "string" && /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+factory_recalc_undo_log/i.test(sqlText)) {
@@ -27,6 +27,7 @@ function registerLegacyRawStockRecalcRoutes(app: Express): void {
     }
     return originalQuery(...args);
   }) as PoolQuery;
+  mutablePool.query = guardedRegistrationQuery;
   try {
     registerPreservedRawStockRecalcRoutes(app);
   } finally {

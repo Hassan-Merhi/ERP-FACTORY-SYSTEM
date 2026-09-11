@@ -17,7 +17,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Search,
@@ -60,12 +59,13 @@ import { DocumentsModal } from "./factoryshippingcontainers/components/Documents
 import { WhatsAppModal } from "./factoryshippingcontainers/components/WhatsAppModal";
 import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 import { useShippingColumnVisibility } from "./factoryshippingcontainers/hooks/useShippingColumnVisibility";
+import { FilterPanel, type DocsFilter } from "./factoryshippingcontainers/components/FilterPanel";
 
 export default function FactoryShippingContainers() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
-  const [filterDocs, setFilterDocs] = useState<"all" | "has" | "missing">("all");
+  const [filterDocs, setFilterDocs] = useState<DocsFilter>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [docsRowId, setDocsRowId] = useState<number | null>(null);
@@ -386,54 +386,12 @@ export default function FactoryShippingContainers() {
 
         {/* ── Filter Panel ── */}
         {showFilters && (
-          <div className="flex flex-wrap gap-3 items-center p-3 rounded-md border bg-muted/30">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Documents</p>
-              <Select
-                value={filterDocs}
-                onValueChange={(v) => {
-                  if (v === "all" || v === "has" || v === "missing") setFilterDocs(v);
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs w-36" data-testid="select-filter-docs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="has">Has Documents</SelectItem>
-                  <SelectItem value="missing">Missing Documents</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Status</p>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="h-8 text-xs w-44" data-testid="select-filter-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="LOADING">Loading</SelectItem>
-                  <SelectItem value="VERIFIED">Verified</SelectItem>
-                  <SelectItem value="FINALIZED">Finalized</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => {
-                  setFilterDocs("all");
-                  setFilterStatus("all");
-                }}
-                data-testid="button-clear-filters"
-              >
-                Clear All
-              </Button>
-            </div>
-          </div>
+          <FilterPanel
+            filterDocs={filterDocs}
+            setFilterDocs={setFilterDocs}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+          />
         )}
 
         {/* ── Legend ── */}
