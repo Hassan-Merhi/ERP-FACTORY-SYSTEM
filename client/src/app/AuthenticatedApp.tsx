@@ -74,11 +74,21 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
     </>
   );
 
+  // The company switch is intentionally SPA-native, but company-owned pages can
+  // still hold local component state and active query observers that were
+  // created under the previous server session. Key the workspace shell to the
+  // active company so a successful switch rebuilds that subtree immediately.
+  // CompanyContext has already cancelled/removed the previous company's query
+  // cache before committing this ID, so the remounted page fetches fresh data
+  // for the new company without requiring a browser refresh.
+  const companySessionKey = selectedCompany.id;
+
   if (isPOS) {
     return (
       <>
         <Suspense fallback={<AppLoadingState />}>
           <PosShell
+            key={companySessionKey}
             user={user}
             posImportEnabled={posImportEnabled}
             chatUnread={chatUnread}
@@ -97,6 +107,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       <>
         <Suspense fallback={<AppLoadingState />}>
           <PropertiesShell
+            key={companySessionKey}
             user={user}
             currentLocation={currentLocation}
             handleLogout={handleLogout}
@@ -113,6 +124,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       <>
         <Suspense fallback={<AppLoadingState />}>
           <FactoryShell
+            key={companySessionKey}
             user={user}
             myAccess={myAccess}
             factoryDefaultPage={routeState.factoryDefaultPage}
@@ -129,6 +141,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
     <>
       <Suspense fallback={<AppLoadingState />}>
         <ErpShell
+          key={companySessionKey}
           user={user}
           hasErpAccess={routeState.hasErpAccess}
           handleLogout={handleLogout}
