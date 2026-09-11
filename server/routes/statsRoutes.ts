@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { registerStatsNetProfitRoutes } from "./stats/statsNetProfitRoutes";
 import { registerStatsNetPositionRoutes } from "./stats/statsNetPositionRoutes";
 import { registerGroupNetPositionRoutes } from "./stats/groupNetPositionRoutes";
+import { registerSalesReportBandwidthRoutes } from "./stats/salesReportBandwidthRoutes";
 import { registerStatsDataRoutes } from "./stats/statsDataRoutes";
 import { registerStatsSalesRoutes } from "./stats/statsSalesRoutes";
 import { registerStatsReportsRoutes } from "./stats/statsReportsRoutes";
@@ -21,6 +22,12 @@ export function registerStatsRoutes(app: Express) {
   registerStatsNetProfitRoutes(app);
   registerStatsNetPositionRoutes(app);
   registerGroupNetPositionRoutes(app);
+  // The built Sales Report list, drill-down, and comparison pages request the
+  // compact SQL-aggregated endpoints (see build/viteSalesReportInvalidationPlugin.ts,
+  // which applies that transform unconditionally), so they must be mounted by
+  // this registry — the one the server actually uses — and before the legacy raw
+  // /api/sales-report route below.
+  registerSalesReportBandwidthRoutes(app);
   registerStatsDataRoutes(app);
   registerStatsSalesRoutes(app);
   registerStockInSalesReportRoutes(app);

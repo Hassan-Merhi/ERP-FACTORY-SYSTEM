@@ -110,11 +110,13 @@ Note: A `voucher_entries_company_id_idx` was attempted but reverted — `voucher
 
 All other key tables (`vouchers`, `containers`, `factory_bales`, `purchase_orders`, `factory_containers`) already had `company_id` indexes from prior migrations.
 
-### N+1 Identified (Not Fixed — Logic Change Required)
+**Resolution (follow-up):** the revert is correct and needs no schema change. Company-scoped `voucher_entries` reads join `vouchers` on `voucher_entries.voucher_id = vouchers.id` and filter `vouchers.company_id`; both sides are already indexed (`voucher_entries_voucher_idx` on `voucher_entries(voucher_id)`, `vouchers_company_idx` on `vouchers(company_id)`), so the join path the reverted index was trying to accelerate is already covered. No further index is warranted.
 
-**`server/routes/factory/factoryBalesRoutes.ts` line ~288:** Inside a loop over `items`, the code calls `await tx.select().from(factoryBaleProducts).where(eq(factoryBaleProducts.id, item.productId))` per iteration. This is a true N+1: one DB round-trip per bale product.
+### N+1 Identified — Fixed in follow-up
 
-Fix would require batching: fetch all `productId`s upfront with an `inArray` query and build a lookup map. This is a logic restructure and is **out of scope for this hardening task** to avoid regression risk. Flagged as proposed Task #2.
+**`server/routes/factory/factoryBalesRoutes.ts` line ~288** (now `server/routes/factory/bales/balesPressingRoutes.ts`): inside a loop over `items`, the code called `await tx.select().from(factoryBaleProducts).where(eq(factoryBaleProducts.id, item.productId))` per iteration — a true N+1 with one DB round-trip per bale product.
+
+**Resolution:** the route now fetches every `productId` up front with a single `inArray` query and builds a lookup map, then validates the whole request before any insert so a missing product still rolls the batch (and the per-company reference counter) back exactly as before. The same file's `GET /api/factory/pressing-batches` list endpoint was also de-N+1'd: it previously issued one bales query per pressing batch and now issues one `inArray` query for all batch IDs, grouped in memory.
 
 ---
 

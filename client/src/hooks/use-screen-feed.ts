@@ -24,7 +24,7 @@ const POINTER_INTERVAL_MS = 250;
 const BACKGROUND_MUTATION_MIN_GAP_MS = 4000;
 const INTERACTION_ACTIVE_WINDOW_MS = 2500;
 
-export interface ClickEvent extends ScreenFeedClickEvent {}
+export type ClickEvent = ScreenFeedClickEvent;
 
 function trimLabel(el: HTMLElement): string {
   const txt =

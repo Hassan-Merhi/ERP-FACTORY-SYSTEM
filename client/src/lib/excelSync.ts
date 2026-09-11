@@ -277,7 +277,9 @@ export async function syncFortuneToXlsx(rawXlsx: string, sheets: FortuneSheet[])
 
     // ── Merged cells: unmerge all, then re-apply Fortune Sheet merges ─────
     // Collect existing merge addresses before modifying
-    const existingMergeAddrs = Object.keys((ws as unknown as ExcelJS.Worksheet & { _merges: {} })._merges || {});
+    const existingMergeAddrs = Object.keys(
+      (ws as unknown as ExcelJS.Worksheet & { _merges: Record<string, unknown> })._merges || {}
+    );
     for (const addr of existingMergeAddrs) {
       try {
         ws.unMergeCells(addr);
