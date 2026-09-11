@@ -2,12 +2,29 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { adjustInventory } from "../server/inventoryHelper";
+import { firstRow, resultRows } from "../server/lib/queryResult";
 import { reverseOriginalSaleInventory } from "../server/services/pos/edit/reverseOriginalSaleInventory";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "invvalreg";
 let ctx: TestContext;
+
+const inventoryConnection = db as unknown as Parameters<typeof adjustInventory>[0];
+const reversalConnection = db as unknown as Parameters<typeof reverseOriginalSaleInventory>[0];
+
+type InventorySnapshot = {
+  quantity: string | number;
+  average_rate: string | number;
+  total_value: string | number;
+};
+
+type NegativeLayerSnapshot = {
+  qty: string | number;
+  provisional_rate: string | number;
+  source_voucher_type: string | null;
+  source_voucher_id: number | null;
+};
 
 async function resetInventory(locationId: number, stockItemId: number): Promise<void> {
   await db.execute(
@@ -33,20 +50,22 @@ async function createSaleVoucher(label: string): Promise<number> {
 }
 
 async function readInventory(locationId: number, stockItemId: number) {
-  const inv: any = await db.execute(sql`
+  const inv = await db.execute(sql`
     SELECT quantity, average_rate, total_value
     FROM inventory
     WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}
   `);
-  const layers: any = await db.execute(sql`
+  const layers = await db.execute(sql`
     SELECT qty, provisional_rate, source_voucher_type, source_voucher_id
     FROM inventory_negative_layers
     WHERE location_id = ${locationId} AND stock_item_id = ${stockItemId}
     ORDER BY id
   `);
+  const inventory = firstRow<InventorySnapshot>(inv);
+  if (!inventory) throw new Error(`Inventory row missing for location ${locationId}, stock item ${stockItemId}`);
   return {
-    inventory: (inv.rows ?? inv)[0],
-    layers: layers.rows ?? layers,
+    inventory,
+    layers: resultRows<NegativeLayerSnapshot>(layers),
   };
 }
 
@@ -89,7 +108,7 @@ describe("inventory valuation regression guards", () => {
     `);
 
     await reverseOriginalSaleInventory(
-      db as any,
+      reversalConnection,
       { id: voucherId, companyId: ctx.companyId, locationId: ctx.locationId },
       [{ id: 800001, stockItemId, quantity: "5", costPrice: "66.65" }]
     );
@@ -125,9 +144,9 @@ describe("inventory valuation regression guards", () => {
     const saleLine = { id: 800002, stockItemId, quantity: "7", costPrice: "66.65" };
 
     for (let i = 0; i < 2; i += 1) {
-      await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+      await reverseOriginalSaleInventory(reversalConnection, voucher, [saleLine]);
       await adjustInventory(
-        db as any,
+        inventoryConnection,
         ctx.locationId,
         stockItemId,
         -7,
@@ -167,7 +186,7 @@ describe("inventory valuation regression guards", () => {
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 3, 66.65, 'pos-sale', ${voucher.id})
     `);
 
-    await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+    await reverseOriginalSaleInventory(reversalConnection, voucher, [saleLine]);
 
     let state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(2);
@@ -175,7 +194,16 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(state.layers).toHaveLength(0);
 
-    await adjustInventory(db as any, ctx.locationId, stockItemId, -5, ctx.companyId, undefined, "pos-sale", voucher.id);
+    await adjustInventory(
+      inventoryConnection,
+      ctx.locationId,
+      stockItemId,
+      -5,
+      ctx.companyId,
+      undefined,
+      "pos-sale",
+      voucher.id
+    );
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-3);
@@ -208,12 +236,21 @@ describe("inventory valuation regression guards", () => {
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 3, 66.65, 'pos-sale', ${voucher.id})
     `);
 
-    await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+    await reverseOriginalSaleInventory(reversalConnection, voucher, [saleLine]);
     let state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-5);
     expect(totalLayerQty(state.layers)).toBe(5);
 
-    await adjustInventory(db as any, ctx.locationId, stockItemId, -5, ctx.companyId, undefined, "pos-sale", voucher.id);
+    await adjustInventory(
+      inventoryConnection,
+      ctx.locationId,
+      stockItemId,
+      -5,
+      ctx.companyId,
+      undefined,
+      "pos-sale",
+      voucher.id
+    );
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-10);
@@ -242,12 +279,21 @@ describe("inventory valuation regression guards", () => {
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
-    await adjustInventory(db as any, ctx.locationId, stockItemId, -7, ctx.companyId, undefined, "pos-sale", voucher.id);
+    await adjustInventory(
+      inventoryConnection,
+      ctx.locationId,
+      stockItemId,
+      -7,
+      ctx.companyId,
+      undefined,
+      "pos-sale",
+      voucher.id
+    );
 
     for (let i = 0; i < 2; i += 1) {
-      await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+      await reverseOriginalSaleInventory(reversalConnection, voucher, [saleLine]);
       await adjustInventory(
-        db as any,
+        inventoryConnection,
         ctx.locationId,
         stockItemId,
         -7,
@@ -258,7 +304,7 @@ describe("inventory valuation regression guards", () => {
       );
     }
 
-    await adjustInventory(db as any, ctx.locationId, stockItemId, 7, ctx.companyId, 66.65);
+    await adjustInventory(inventoryConnection, ctx.locationId, stockItemId, 7, ctx.companyId, 66.65);
 
     const state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(20);
@@ -289,8 +335,17 @@ describe("inventory valuation regression guards", () => {
         (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 5, 60.47, 'legacy-shortage', NULL)
     `);
 
-    await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
-    await adjustInventory(db as any, ctx.locationId, stockItemId, -1, ctx.companyId, undefined, "pos-sale", voucher.id);
+    await reverseOriginalSaleInventory(reversalConnection, voucher, [saleLine]);
+    await adjustInventory(
+      inventoryConnection,
+      ctx.locationId,
+      stockItemId,
+      -1,
+      ctx.companyId,
+      undefined,
+      "pos-sale",
+      voucher.id
+    );
 
     const state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(18);
