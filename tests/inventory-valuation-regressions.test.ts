@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
+import { adjustInventory } from "../server/inventoryHelper";
 import { reverseOriginalSaleInventory } from "../server/services/pos/edit/reverseOriginalSaleInventory";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -72,9 +73,9 @@ describe("inventory valuation regression guards", () => {
 
     const state = await readInventory(ctx.locationId, stockItemId);
 
-    // Reversing an already-issued POS line should restore exactly 5 units at the
-    // historical issue cost. It must not run receipt settlement against unrelated
-    // negative layers, because that silently destroys positive-stock valuation.
+    // Reversing an already-issued POS line restores quantity at the current live
+    // cost basis. It must not run receipt settlement against unrelated negative
+    // layers, because that silently destroys positive-stock valuation.
     expect(Number(state.inventory.quantity)).toBe(21);
     expect(Number(state.inventory.total_value)).toBeCloseTo(1399.65, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
@@ -102,11 +103,10 @@ describe("inventory valuation regression guards", () => {
     const voucher = { id: 700002, companyId: ctx.companyId, locationId: ctx.locationId };
 
     // Reverse/re-issue cycle, twice. A real no-op edit rebuilds the sale after this
-    // reversal; we emulate that issue with the same historical cost and then repeat.
+    // reversal; we emulate that issue with the same inventory footprint and repeat.
     for (let i = 0; i < 2; i += 1) {
       await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
-      const { adjustInventory } = await import("../server/inventoryHelper");
-      await adjustInventory(db as any, ctx.locationId, stockItemId, -7, ctx.companyId);
+      await adjustInventory(db as any, ctx.locationId, stockItemId, -7, ctx.companyId, undefined, "pos-sale", voucher.id);
     }
 
     const state = await readInventory(ctx.locationId, stockItemId);
@@ -115,5 +115,42 @@ describe("inventory valuation regression guards", () => {
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(state.layers).toHaveLength(1);
     expect(Number(state.layers[0].qty)).toBe(7);
+    expect(state.layers[0].source_voucher_type).toBe("legacy-shortage");
+  });
+
+  it("POS edit reversal releases only shortage layers attributed to that sale", async () => {
+    const stockItemId = ctx.stockItemIds[2];
+    const voucher = { id: 700003, companyId: ctx.companyId, locationId: ctx.locationId };
+    const saleLine = { id: 800003, stockItemId, quantity: "5", costPrice: "66.65" };
+
+    await db.execute(sql`
+      INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
+      VALUES (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, -3, 66.65, 0, NOW())
+    `);
+    await db.execute(sql`
+      INSERT INTO inventory_negative_layers
+        (company_id, location_id, stock_item_id, qty, provisional_rate, source_voucher_type, source_voucher_id)
+      VALUES
+        (${ctx.companyId}, ${ctx.locationId}, ${stockItemId}, 3, 66.65, 'pos-sale', ${voucher.id})
+    `);
+
+    await reverseOriginalSaleInventory(db as any, voucher, [saleLine]);
+
+    let state = await readInventory(ctx.locationId, stockItemId);
+    expect(Number(state.inventory.quantity)).toBe(2);
+    expect(Number(state.inventory.total_value)).toBeCloseTo(133.3, 2);
+    expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
+    expect(state.layers).toHaveLength(0);
+
+    await adjustInventory(db as any, ctx.locationId, stockItemId, -5, ctx.companyId, undefined, "pos-sale", voucher.id);
+
+    state = await readInventory(ctx.locationId, stockItemId);
+    expect(Number(state.inventory.quantity)).toBe(-3);
+    expect(Number(state.inventory.total_value)).toBe(0);
+    expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
+    expect(state.layers).toHaveLength(1);
+    expect(Number(state.layers[0].qty)).toBe(3);
+    expect(state.layers[0].source_voucher_type).toBe("pos-sale");
+    expect(Number(state.layers[0].source_voucher_id)).toBe(voucher.id);
   });
 });
