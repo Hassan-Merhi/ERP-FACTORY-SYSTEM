@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatNumber";
+import type { LedgerAccount } from "@shared/schema";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +32,7 @@ export function ZeroBalancesDialog({ open, onOpenChange, companyId }: ZeroBalanc
   const { toast } = useToast();
   const [selected, setSelected] = useState<number[]>([]);
 
-  const { data: accounts = [] } = useQuery<any[]>({
+  const { data: accounts = [] } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", companyId],
     enabled: !!companyId && open,
   });
@@ -63,9 +64,7 @@ export function ZeroBalancesDialog({ open, onOpenChange, companyId }: ZeroBalanc
     },
   });
 
-  const nonZeroAccounts = accounts.filter(
-    (a) => !a.deletedAt && a.active && parseFloat(a.openingBalance || "0") !== 0
-  );
+  const nonZeroAccounts = accounts.filter((a) => !a.deletedAt && a.active && parseFloat(a.openingBalance || "0") !== 0);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -109,9 +108,7 @@ export function ZeroBalancesDialog({ open, onOpenChange, companyId }: ZeroBalanc
                   <TableBody>
                     {accounts
                       .filter((account) => !account.deletedAt && account.active)
-                      .sort(
-                        (a, b) => a.accountType.localeCompare(b.accountType) || a.name.localeCompare(b.name)
-                      )
+                      .sort((a, b) => a.accountType.localeCompare(b.accountType) || a.name.localeCompare(b.name))
                       .map((account) => {
                         const balance = parseFloat(account.openingBalance || "0");
                         const hasBalance = balance !== 0;
@@ -161,9 +158,30 @@ interface InitializeBalancesDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type BalanceComponent = {
+  name: string;
+  value: number | string | null;
+};
+
+type CompanyBalanceResult = {
+  companyId: number;
+  companyName: string;
+  imbalance?: number | string | null;
+  message?: string;
+  components?: {
+    assets?: BalanceComponent[];
+    liabilities?: BalanceComponent[];
+  };
+};
+
+type InitializeBalancesResult = {
+  message: string;
+  results?: CompanyBalanceResult[];
+};
+
 export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalancesDialogProps) {
   const { toast } = useToast();
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<InitializeBalancesResult | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const mutation = useMutation({
@@ -206,10 +224,10 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
               ) : (
                 <div className="space-y-4 mt-4">
                   <div className="font-medium">{result.message}</div>
-                  {result.results?.map((r: any) => (
+                  {result.results?.map((r: CompanyBalanceResult) => (
                     <div key={r.companyId} className="p-3 border rounded-md space-y-2">
                       <div className="font-medium">{r.companyName}</div>
-                      <div className="text-sm">Imbalance: ${formatNumber(r.imbalance || 0)}</div>
+                      <div className="text-sm">Imbalance: ${formatNumber(Number(r.imbalance || 0))}</div>
                       <div className="text-sm">{r.message}</div>
 
                       {r.components && (
@@ -234,10 +252,10 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
                                 <div className="font-medium text-green-600 dark:text-green-400 mb-1">
                                   Assets (Debit)
                                 </div>
-                                {r.components.assets?.map((c: any, i: number) => (
+                                {r.components.assets?.map((c: BalanceComponent, i: number) => (
                                   <div key={i} className="flex justify-between text-xs">
                                     <span>{c.name}</span>
-                                    <span>${formatNumber(c.value)}</span>
+                                    <span>${formatNumber(Number(c.value ?? 0))}</span>
                                   </div>
                                 ))}
                               </div>
@@ -245,10 +263,10 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
                                 <div className="font-medium text-red-600 dark:text-red-400 mb-1">
                                   Liabilities (Credit)
                                 </div>
-                                {r.components.liabilities?.map((c: any, i: number) => (
+                                {r.components.liabilities?.map((c: BalanceComponent, i: number) => (
                                   <div key={i} className="flex justify-between text-xs">
                                     <span>{c.name}</span>
-                                    <span>${formatNumber(c.value)}</span>
+                                    <span>${formatNumber(Number(c.value ?? 0))}</span>
                                   </div>
                                 ))}
                               </div>

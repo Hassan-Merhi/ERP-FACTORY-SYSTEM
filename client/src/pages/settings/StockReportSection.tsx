@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import type { SettingsMessageResult } from "./settingsTypes";
 import { Package, Send, ChevronDown, ChevronRight, Loader2, Users, Clock, Calendar } from "lucide-react";
 
 interface Company {
@@ -127,8 +128,9 @@ export function StockReportSection() {
         companyId: rCompanyId,
         recipientId: rRecipientId,
       }),
-    onSuccess: (data: any) => {
-      toast({ title: "Reports sent", description: data?.message || "Done" });
+    onSuccess: (data: unknown) => {
+      const message = (data as SettingsMessageResult | null)?.message;
+      toast({ title: "Reports sent", description: message || "Done" });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
   });

@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown, AlertTriangle, Loader2, Info } from "lucide-react";
 import { type FeatureKey } from "@shared/schema";
+import type { SettingsRolePermissionRow } from "./settingsTypes";
 
 const CONFIGURABLE_ROLES = ["Owner", "Manager"];
 
@@ -208,7 +209,7 @@ export function PageVisibilityTree({ appMode }: { appMode?: string }) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
 
-  const { data: rolePermissions = [], isLoading } = useQuery<any[]>({
+  const { data: rolePermissions = [], isLoading } = useQuery<SettingsRolePermissionRow[]>({
     queryKey: ["/api/settings/role-permissions", selectedCompany?.id],
     enabled: !!selectedCompany?.id,
   });

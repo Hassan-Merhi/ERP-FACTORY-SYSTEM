@@ -89,14 +89,14 @@ export function BulkRenameTab() {
       if (!regex) return;
       const matches = allItems
         .filter((item: { name: string }) => regex.test(item.name))
-        .map((item: any) => ({
+        .map((item: { id: number; code?: string | null; name: string }) => ({
           id: item.id,
           code: item.code || "",
           name: item.name,
         }));
       regex.lastIndex = 0;
       setMatchingItems(matches);
-      setSelectedIds(new Set(matches.map((m: any) => m.id)));
+      setSelectedIds(new Set(matches.map((m: { id: number }) => m.id)));
       if (matches.length === 0) {
         toast({ title: "No matches", description: "No stock items matched the search text" });
       }

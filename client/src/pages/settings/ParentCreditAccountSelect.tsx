@@ -12,7 +12,13 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { Plus, Trash2, Loader2 } from "lucide-react";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
+import {
+  insertUserSchema,
+  insertCompanySchema,
+  insertUserCompanyRoleSchema,
+  type Company,
+  type LedgerAccount,
+} from "@shared/schema";
 
 const _userFormSchema = insertUserSchema;
 const _companyFormSchema = insertCompanySchema;
@@ -34,7 +40,7 @@ type _UserFormData = z.infer<typeof _userFormSchema>;
 type _CompanyFormData = z.infer<typeof _companyFormSchema>;
 type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
-export function ParentCreditAccountSelect({ company }: { company: Record<string, unknown> }) {
+export function ParentCreditAccountSelect({ company }: { company: Pick<Company, "id"> }) {
   const { toast } = useToast();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
@@ -55,7 +61,7 @@ export function ParentCreditAccountSelect({ company }: { company: Record<string,
     },
   });
 
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", company.id],
     queryFn: async () => {
       try {

@@ -8,9 +8,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { UserRolesCard } from "./UserRolesCard";
 import { AdvancedRestrictions } from "./AdvancedRestrictions";
+import type { SettingsUserRow } from "../settingsTypes";
+import type { Company } from "@shared/schema";
 
 interface UserManagementFormProps {
-  user: any;
+  user: SettingsUserRow;
   username: string;
   setUsername: (v: string) => void;
   displayName: string;
@@ -24,7 +26,7 @@ interface UserManagementFormProps {
   isPrivileged: boolean;
   isViewOnly: boolean;
   accessLabel: string;
-  companies: unknown[];
+  companies: Company[];
   setConfirmDelete: (v: boolean) => void;
   pageAccess: Set<string>;
   hiddenCostFields: string[];

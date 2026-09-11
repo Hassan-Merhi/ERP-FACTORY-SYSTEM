@@ -16,18 +16,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import type { Company } from "@shared/schema";
+import type { SettingsMessageResult } from "./settingsTypes";
 
 interface FixPOCreditsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  companies: any[];
+  companies: Company[];
 }
 
 export function FixPOCreditsDialog({ open, onOpenChange, companies }: FixPOCreditsDialogProps) {
   const { toast } = useToast();
   const [selectedSub, setSelectedSub] = useState("");
   const [selectedParent, setSelectedParent] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<SettingsMessageResult | null>(null);
 
   const fixMutation = useMutation({
     mutationFn: async (data: { companyId: number; parentCompanyId: number }) => {
@@ -147,13 +149,13 @@ export function FixPOCreditsDialog({ open, onOpenChange, companies }: FixPOCredi
 interface ResetCompanyDataDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  companies: any[];
+  companies: Company[];
 }
 
 export function ResetCompanyDataDialog({ open, onOpenChange, companies }: ResetCompanyDataDialogProps) {
   const { toast } = useToast();
   const [selected, setSelected] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<SettingsMessageResult | null>(null);
 
   const mutation = useMutation({
     mutationFn: async (id: number) => {

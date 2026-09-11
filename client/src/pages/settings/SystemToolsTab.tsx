@@ -26,12 +26,13 @@ import { CleanEmptyAccountsDialog } from "./CleanEmptyAccountsDialog";
 import { ResetCompanyDataDialog } from "./SystemMaintenanceDialogs";
 import { GroupNetPositionPage } from "./GroupNetPositionPage";
 import { useLocation } from "wouter";
+import type { Company } from "@shared/schema";
 
 interface SystemToolsTabProps {
   appMode: string;
-  currentUser: any;
-  selectedCompany: any;
-  companies: any[];
+  currentUser?: { role?: string };
+  selectedCompany?: { id: number; name: string } | null;
+  companies: Company[];
 }
 
 interface ToolCard {
@@ -183,7 +184,8 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
             icon: <Layers3 className="h-6 w-6 text-blue-500" />,
             iconBg: "bg-blue-500/10",
             title: "Group Net Position",
-            description: "Combine What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.",
+            description:
+              "Combine What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.",
             actionLabel: "View Group",
             onAction: () => setGroupNetPositionOpen(true),
             testId: "card-group-net-position",

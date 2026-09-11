@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "@/lib/formatNumber";
+import { getErrorDetails } from "@shared/errorUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AlertTriangle, CheckCircle2, Download, Loader2 } from "lucide-react";
 import type { useDataToolsModel } from "./useDataToolsModel";
@@ -165,8 +166,8 @@ export function SilentTransferDialog({ model }: Props) {
                     setSilentErrorLines(data.errorLines || []);
                     setSilentIncludeWarnings(false);
                     setSilentStep("validation");
-                  } catch (error: any) {
-                    setSilentParseError(error.message);
+                  } catch (error) {
+                    setSilentParseError(getErrorDetails(error).message);
                   } finally {
                     setIsSilentParsing(false);
                   }
@@ -370,8 +371,8 @@ export function SilentTransferDialog({ model }: Props) {
                         queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
                         setSilentAppliedCount(applyItems.length);
                         setSilentStep("done");
-                      } catch (error: any) {
-                        setSilentParseError(error.message);
+                      } catch (error) {
+                        setSilentParseError(getErrorDetails(error).message);
                         setSilentStep("setup");
                       } finally {
                         setIsSilentApplying(false);

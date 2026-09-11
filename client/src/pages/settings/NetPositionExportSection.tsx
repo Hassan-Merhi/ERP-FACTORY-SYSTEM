@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import type { SettingsMessageResult } from "./settingsTypes";
 import {
   TrendingUp,
   Send,
@@ -140,8 +141,9 @@ export function NetPositionExportSection() {
 
   const sendNow = useMutation({
     mutationFn: () => apiRequest("POST", "/api/whatsapp/send-np-all-now", { recipientId: eff.recipientId }),
-    onSuccess: (data: any) => {
-      toast({ title: "Net Position Export Sent", description: data?.message || "Done" });
+    onSuccess: (data: unknown) => {
+      const message = (data as SettingsMessageResult | null)?.message;
+      toast({ title: "Net Position Export Sent", description: message || "Done" });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
   });

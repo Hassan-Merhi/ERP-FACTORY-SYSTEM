@@ -5,7 +5,13 @@ import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { insertUserCompanyRoleSchema } from "@shared/schema";
+import {
+  insertUserCompanyRoleSchema,
+  type Company,
+  type LedgerAccount,
+  type Location,
+  type UserCompanyRole,
+} from "@shared/schema";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,8 +32,8 @@ interface UserRoleDialogProps {
   open: boolean;
   onClose: () => void;
   userId: string;
-  companies: any[];
-  editingRole?: any | null;
+  companies: Company[];
+  editingRole?: UserCompanyRole | null;
 }
 
 export function UserRoleDialog({ open, onClose, userId, companies, editingRole }: UserRoleDialogProps) {
@@ -51,7 +57,7 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
         form.reset({
           userId: editingRole.userId,
           companyId: editingRole.companyId,
-          role: editingRole.role,
+          role: editingRole.role as RoleAssignmentData["role"],
           assignedLocationId: editingRole.assignedLocationId,
           posStation: editingRole.posStation,
           canSellNegativeStock: editingRole.canSellNegativeStock ?? false,
@@ -93,9 +99,9 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
         setLocationCashAccounts({});
       }
     }
-  }, [open, editingRole.id, editingRole, form, userId, companies]);
+  }, [open, editingRole?.id, editingRole, form, userId, companies]);
 
-  const { data: locations = [] } = useQuery({
+  const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations", { companyId: selectedCompanyId }],
     queryFn: async () => {
       if (!selectedCompanyId) return [];
@@ -106,7 +112,7 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
     enabled: !!selectedCompanyId && open && isPOSRole,
   });
 
-  const { data: roleDialogLedgerAccounts = [] } = useQuery<any[]>({
+  const { data: roleDialogLedgerAccounts = [] } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", { companyId: selectedCompanyId }],
     queryFn: async () => {
       if (!selectedCompanyId) return [];
@@ -125,7 +131,7 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
         const missing = selectedLocationIds.filter((id) => !locationCashAccounts[id]);
         if (missing.length > 0) {
           const locNames = missing.map((id) => {
-            const loc = (locations as any[]).find((l) => l.id === id);
+            const loc = locations.find((l) => l.id === id);
             return loc?.name || `Location #${id}`;
           });
           throw new Error(`Cash account required for: ${locNames.join(", ")}`);
@@ -247,7 +253,7 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
                         className="border rounded-md p-3 space-y-3 max-h-56 overflow-y-auto"
                         data-testid="select-locations"
                       >
-                        {(locations as any[]).map((loc) => {
+                        {locations.map((loc) => {
                           const isChecked = selectedLocationIds.includes(loc.id);
                           return (
                             <div key={loc.id} className="space-y-1.5">

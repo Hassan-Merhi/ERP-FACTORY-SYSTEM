@@ -5,24 +5,26 @@ import { UserPlus, Users } from "lucide-react";
 import { UserListTable } from "./UserListTable";
 import { UserManagementDrawer } from "./UserManagementDrawer";
 import { AddUserDialog } from "./AddUserDialog";
+import type { SettingsUserRow } from "../settingsTypes";
+import type { Company } from "@shared/schema";
 
 export function UsersSection() {
-  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedUser, setSelectedUser] = useState<SettingsUserRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const { data: rawUsers = [], isLoading } = useQuery<any[]>({
+  const { data: rawUsers = [], isLoading } = useQuery<SettingsUserRow[]>({
     queryKey: ["/api/users"],
   });
   const users = [...rawUsers].sort((a, b) =>
     (a.displayName || a.username || "").localeCompare(b.displayName || b.username || "")
   );
 
-  const { data: companies = [] } = useQuery<any[]>({
+  const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
-  const openDrawer = (user: unknown) => {
+  const openDrawer = (user: SettingsUserRow) => {
     setSelectedUser(user);
     setDrawerOpen(true);
   };
@@ -51,7 +53,9 @@ export function UsersSection() {
       <UserListTable users={users} isLoading={isLoading} selectedUserId={selectedUser?.id} onSelectUser={openDrawer} />
 
       <UserManagementDrawer
-        user={selectedUser}
+        // The drawer renders nothing until a user is selected; the assertion only
+        // satisfies the prop type while it is closed.
+        user={selectedUser!}
         open={drawerOpen}
         onClose={closeDrawer}
         companies={companies}

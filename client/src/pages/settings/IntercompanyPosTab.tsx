@@ -13,7 +13,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Loader2, ArrowLeftRight } from "lucide-react";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
+import {
+  insertUserSchema,
+  insertCompanySchema,
+  insertUserCompanyRoleSchema,
+  type Company,
+  type LedgerAccount,
+} from "@shared/schema";
+import type { SettingsIntercompanyPosConfig } from "./settingsTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 
 const _userFormSchema = insertUserSchema;
@@ -60,17 +67,17 @@ export function IntercompanyPosTab() {
   const { selectedCompany } = useCompany();
 
   // Current config
-  const { data: config, isLoading: configLoading } = useQuery<any>({
+  const { data: config, isLoading: configLoading } = useQuery<SettingsIntercompanyPosConfig>({
     queryKey: ["/api/intercompany-pos-config", selectedCompany?.id],
   });
 
   // All companies (for dest company dropdown)
-  const { data: allCompanies = [] } = useQuery<any[]>({
+  const { data: allCompanies = [] } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
   // Current company accounts (source interco account)
-  const { data: srcAccounts = [] } = useQuery<any[]>({
+  const { data: srcAccounts = [] } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", selectedCompany?.id],
   });
 
@@ -82,7 +89,7 @@ export function IntercompanyPosTab() {
   const [initialized, setInitialized] = useState(false);
 
   // Dest company accounts
-  const { data: destAccounts = [], isLoading: destAccountsLoading } = useQuery<any[]>({
+  const { data: destAccounts = [], isLoading: destAccountsLoading } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/intercompany-pos-config/dest-accounts", destCompanyId],
     queryFn: async () => {
       if (!destCompanyId) return [];

@@ -2,9 +2,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2, Key } from "lucide-react";
+import type { SettingsUserRow } from "./settingsTypes";
 
 interface UsersTableProps {
-  users: any[];
+  users: SettingsUserRow[];
   onEdit: (user: Record<string, unknown>) => void;
   onDelete: (user: Record<string, unknown>) => void;
   onResetPassword: (user: Record<string, unknown>) => void;

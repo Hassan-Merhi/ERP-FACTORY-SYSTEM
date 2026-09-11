@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import type { SettingsMessageResult } from "./settingsTypes";
 import { Archive, ChevronDown, ChevronRight, Users, Info, Loader2, Send } from "lucide-react";
 
 interface WaSettings {
@@ -51,8 +52,9 @@ export function DailyAutoSendSection() {
 
   const sendNow = useMutation({
     mutationFn: () => apiRequest("POST", "/api/daily-export/trigger-whatsapp"),
-    onSuccess: (data: any) => {
-      toast({ title: "Daily export sent", description: data?.message || "ZIP sent to WhatsApp group" });
+    onSuccess: (data: unknown) => {
+      const message = (data as SettingsMessageResult | null)?.message;
+      toast({ title: "Daily export sent", description: message || "ZIP sent to WhatsApp group" });
     },
     onError: (e: ClientErrorLike) => toast({ title: "Send failed", description: e.message, variant: "destructive" }),
   });
