@@ -3,7 +3,40 @@
  *
  * Extracted from VoucherDetailsDialog.tsx during the Phase 4 god-file split.
  */
+import type { AuthMe } from "@shared/apiTypes";
 import { Voucher, ViewVoucherEntry, Employee, LedgerAccount, BankAccount } from ".././types";
+
+export type VoucherRevisionItem = {
+  stockItemName?: string;
+  originalQuantity?: string | number;
+  newQuantity?: string | number;
+  delta?: string | number;
+};
+
+export type VoucherRevision = {
+  id: number;
+  revisionNumber?: number;
+  optional?: boolean;
+  _mergedCount?: number;
+  createdAt?: string;
+  note?: string | null;
+  items?: VoucherRevisionItem[];
+};
+
+export type PurchaseOrderDialogData = {
+  id?: number;
+  supplierName?: string | null;
+  supplierId?: number;
+  containerNumber?: string | null;
+  containerId?: number;
+  itemsTotal?: string | number;
+  freight?: string | number;
+  fumigation?: string | number;
+  surcharge?: string | number;
+  documentCharges?: string | number;
+  otherCharges?: string | number;
+  discount?: string | number;
+};
 
 export interface VoucherDetailsDialogProps {
   open: boolean;
@@ -12,17 +45,17 @@ export interface VoucherDetailsDialogProps {
   viewEntriesLoading: boolean;
   viewVoucherEntries: ViewVoucherEntry[];
   isStockTransferVoucher: boolean;
-  voucherRevisions: any[];
+  voucherRevisions: VoucherRevision[];
   revisionsLoading: boolean;
   revisionsError: boolean;
   revisionsErrorMessage?: string;
   retryVoucherRevisions: () => void;
-  formatAmount: (amt: any) => string;
-  formatDisplayDate: (date: any) => string;
+  formatAmount: (amt: string | number | null | undefined) => string;
+  formatDisplayDate: (date: string | Date) => string;
   formatDisplayTime: (date: string) => string;
   cashAccountBalance: string;
   entryBalances: Record<number, string>;
-  purchaseOrderData: any;
+  purchaseOrderData: PurchaseOrderDialogData | null;
   poSupplierBalance: string | null;
   selectedDialogRow: number | null;
   setSelectedDialogRow: (n: number | null) => void;
@@ -31,7 +64,7 @@ export interface VoucherDetailsDialogProps {
   bankAccounts?: BankAccount[];
   viewProfitFilter: "all" | "gain" | "loss" | "even";
   setViewProfitFilter: (v: "all" | "gain" | "loss" | "even") => void;
-  user: any;
+  user?: AuthMe | null;
   handleEdit: (v: Voucher) => void;
   canEdit: (v: Voucher) => boolean;
   navigate: (path: string) => void;

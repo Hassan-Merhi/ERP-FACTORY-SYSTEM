@@ -6,7 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Textarea } from "@/components/ui/textarea";
 import { User, ChevronDown, Check, Save } from "lucide-react";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type { BankAccountRow, LedgerPickerAccount, PosMutationPending, SaleRow } from "./posTypes";
 
 export interface CheckoutSidebarProps {
   posUser?: AuthMe;
@@ -20,12 +21,12 @@ export interface CheckoutSidebarProps {
   setSelectedCustomerId: (id: string) => void;
   customerComboOpen: boolean;
   setCustomerComboOpen: (open: boolean) => void;
-  customerAccounts: any[];
-  selectedCustomer: any;
+  customerAccounts: LedgerPickerAccount[];
+  selectedCustomer?: LedgerPickerAccount | null;
   formatAmountRaw: (amount: string | number) => string;
-  bankAccounts: any[];
-  cashLedgerAccounts: any[];
-  saveMutation: any;
+  bankAccounts: BankAccountRow[];
+  cashLedgerAccounts: LedgerPickerAccount[];
+  saveMutation: PosMutationPending;
   hasValidItems: boolean;
   editVoucherId?: string;
   handleSaveSale: () => void;
@@ -35,11 +36,11 @@ export interface CheckoutSidebarProps {
   setSaleDate: (date: string) => void;
   total: number;
   totalQty: number;
-  rows: any[];
+  rows: SaleRow[];
   activeCurrency: string;
   exchangeRate: number;
   formatDisplayAmount: (amount: number) => string;
-  cn: (...args: any[]) => string;
+  cn: (...args: Array<string | false | null | undefined>) => string;
 }
 
 export function CheckoutSidebar({
@@ -245,7 +246,7 @@ export function CheckoutSidebar({
                         {customerAccounts.map((acc) => (
                           <CommandItem
                             key={acc.id}
-                            value={acc.name}
+                            value={acc.name ?? ""}
                             onSelect={() => {
                               setSelectedCustomerId(String(acc.id));
                               setCustomerComboOpen(false);
@@ -274,7 +275,7 @@ export function CheckoutSidebar({
                           : "text-green-600 dark:text-green-400 font-semibold"
                       }
                     >
-                      {formatAmountRaw(selectedCustomer.balance)}{" "}
+                      {formatAmountRaw(selectedCustomer.balance ?? 0)}{" "}
                       {selectedCustomer.balanceSide === "Dr" ? "owed" : "credit"}
                     </span>
                   </p>

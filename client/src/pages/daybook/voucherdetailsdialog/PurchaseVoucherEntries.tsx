@@ -7,6 +7,7 @@
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ViewVoucherEntry } from ".././types";
+import type { PurchaseOrderDialogData } from "./types";
 
 export function PurchaseVoucherEntries({
   viewVoucherEntries,
@@ -18,7 +19,7 @@ export function PurchaseVoucherEntries({
   navigate,
 }: {
   viewVoucherEntries: ViewVoucherEntry[];
-  purchaseOrderData: any;
+  purchaseOrderData: PurchaseOrderDialogData | null;
   poSupplierBalance: string | null;
   isPOSUser: boolean;
   formatAmount: (amt: number | string | null | undefined) => string;

@@ -1,5 +1,17 @@
 import { getErrorDetails } from "@shared/errorUtils";
-import type { SaleRow, InventoryItem, Location } from "../pos-components/posTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type { InvoiceSale } from "../pos-components/InvoiceTemplate";
+import type {
+  InventoryItem,
+  Location,
+  PosDraftItem,
+  PosDraftSummary,
+  PosEditVoucher,
+  PosMutationPending,
+  PosSalePayload,
+  PosShift,
+  SaleRow,
+} from "../pos-components/posTypes";
 
 interface PosCheckoutParams {
   rows: SaleRow[];
@@ -19,7 +31,7 @@ interface PosCheckoutParams {
   setCurrentDraftId: React.Dispatch<React.SetStateAction<number | null>>;
   setShowDraftDialog: React.Dispatch<React.SetStateAction<boolean>>;
   setShowPrintDialog: React.Dispatch<React.SetStateAction<boolean>>;
-  setSavedSale: (sale: any) => void;
+  setSavedSale: (sale: InvoiceSale | null) => void;
   setSaleJustCompleted: React.Dispatch<React.SetStateAction<boolean>>;
   setLastAutosaved: React.Dispatch<React.SetStateAction<Date | null>>;
   setMobileTab: React.Dispatch<React.SetStateAction<"items" | "cart">>;
@@ -33,16 +45,16 @@ interface PosCheckoutParams {
   dailyExchangeRate: number | null;
   activeLocation: Location | null;
   editVoucherId?: string;
-  editVoucher: any;
+  editVoucher?: PosEditVoucher | null;
   isSpCompany?: boolean;
   isGoldenCoastPhase6?: boolean;
   goldenCoastReadinessLoading?: boolean;
   goldenCoastReadinessBlocked?: boolean;
   goldenCoastReadinessBlockers?: readonly string[];
   inventory: InventoryItem[];
-  currentShift: any;
-  posUser: any;
-  saveMutation: any;
+  currentShift?: PosShift | null;
+  posUser?: AuthMe | null;
+  saveMutation: PosMutationPending;
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
   focusCell: (row: number, col: number) => void;
 }
@@ -183,7 +195,7 @@ export function usePosCheckout({
       }),
     };
 
-    saveMutation.mutate(saleData);
+    saveMutation.mutate(saleData as PosSalePayload);
   };
 
   const handleNewSale = () => {
@@ -209,7 +221,7 @@ export function usePosCheckout({
     try {
       const res = await fetch(`/api/pos/drafts/${draftId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load draft");
-      const draft = await res.json();
+      const draft = (await res.json()) as PosDraftSummary;
 
       if (draft.paymentAccountType) setPaymentAccountType(draft.paymentAccountType);
       if (draft.paymentAccountId) setPaymentAccountId(String(draft.paymentAccountId));
@@ -219,22 +231,32 @@ export function usePosCheckout({
       }
       setNotes(draft.notes || "");
 
-      const draftRows = (Array.isArray(draft.items) ? draft.items : []).map((item: any, index: number) => {
-        const rate = parseFloat(item.rate);
+      const draftRows = (Array.isArray(draft.items) ? draft.items : []).map((item: PosDraftItem, index: number) => {
+        const rate = parseFloat(String(item.rate ?? 0));
         const inventoryItem = inventory.find((i) => i.stockItemId === item.stockItemId);
         return {
           id: String(index + 1),
-          itemName: item.stockItemName,
+          itemName: item.stockItemName ?? "",
           stockItemCode: item.stockItemCode || "",
           stockItemId: item.stockItemId,
-          quantity: parseFloat(item.quantity),
+          quantity: parseFloat(String(item.quantity ?? 0)),
           rate,
           rateUSD: rate,
-          amount: parseFloat(item.amount),
+          amount: parseFloat(String(item.amount ?? 0)),
           configuredPrice: inventoryItem?.configuredPrice,
         };
       });
-      draftRows.push({ id: String(draftRows.length + 1), itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 });
+      draftRows.push({
+        id: String(draftRows.length + 1),
+        itemName: "",
+        stockItemCode: "",
+        stockItemId: undefined,
+        quantity: 0,
+        rate: 0,
+        rateUSD: 0,
+        amount: 0,
+        configuredPrice: undefined,
+      });
       setRows(draftRows);
       setCurrentDraftId(draftId);
       setShowDraftDialog(false);

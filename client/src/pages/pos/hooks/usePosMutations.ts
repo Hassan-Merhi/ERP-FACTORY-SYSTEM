@@ -3,7 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, invalidateCustomerBalances, keyStartsWith } from "@/lib/queryClient";
 import { invalidateLocationInventoryQueries } from "@/api/inventoryApi";
 import { removePosDraftSummary, upsertPosDraftSummary } from "@/api/posApi";
-import type { SaleRow, Location } from "../pos-components/posTypes";
+import type { InvoiceSale } from "../pos-components/InvoiceTemplate";
+import type { Location, PosEditVoucher, PosSaleItemPayload, PosSalePayload, SaleRow } from "../pos-components/posTypes";
 
 const GOLDEN_COAST_PHASE6_READINESS = "/api/sp/golden-coast/phase6/pos-sale/readiness";
 const GOLDEN_COAST_PHASE6_SALE = "/api/sp/golden-coast/phase6/pos-sale";
@@ -13,12 +14,6 @@ interface GoldenCoastPhase6ReadinessResponse {
   automaticHadiPair?: { hadiCompanyId?: number | string | null } | null;
   code?: string;
   message?: string;
-}
-
-interface PosSaleItemPayload {
-  stockItemId: number;
-  quantity: string | number;
-  rate: string | number;
 }
 
 interface GoldenCoastPhase6Posting {
@@ -42,7 +37,7 @@ interface Phase6PosSaleData {
 interface UsePosMutationsParams {
   activeLocation: Location | null;
   editVoucherId?: string;
-  editVoucher: any;
+  editVoucher?: PosEditVoucher | null;
   isSpCompany?: boolean;
   isGoldenCoastPhase6?: boolean;
   goldenCoastParentCompanyId?: number | null;
@@ -55,7 +50,7 @@ interface UsePosMutationsParams {
   currentDraftId: number | null;
   notes: string;
   lastSavedFingerprintRef: React.MutableRefObject<string>;
-  setSavedSale: (sale: any) => void;
+  setSavedSale: (sale: InvoiceSale | null) => void;
   setSaleJustCompleted: (v: boolean) => void;
   setShowPrintDialog: (v: boolean) => void;
   setCurrentDraftId: (id: number | null) => void;
@@ -140,7 +135,7 @@ export function usePosMutations({
   toast,
 }: UsePosMutationsParams) {
   const saveMutation = useMutation({
-    mutationFn: async (saleData: any) => {
+    mutationFn: async (saleData: PosSalePayload) => {
       if (editVoucherId) {
         const updateData = {
           description: saleData.notes,
@@ -150,7 +145,7 @@ export function usePosMutations({
           isCreditSale: saleData.isCreditSale,
           voucherDate: saleData.voucherDate,
           currency: saleData.currency,
-          items: saleData.items.map((item: any) => ({
+          items: saleData.items.map((item: PosSaleItemPayload) => ({
             id: item.salesItemId,
             stockItemId: item.stockItemId,
             quantity: String(item.quantity),
@@ -208,7 +203,7 @@ export function usePosMutations({
             phase6Body
           );
           const raw = (await res.json()) as GoldenCoastPhase6SaleResponse;
-          return phase6PosResult(raw, saleData, activeLocation, rows);
+          return phase6PosResult(raw, saleData as Phase6PosSaleData, activeLocation, rows);
         }
 
         // A 409 with this exact code means the Supplier Partner is not Golden
@@ -225,20 +220,34 @@ export function usePosMutations({
           paymentAccountType: saleData.paymentAccountType,
           paymentAccountId: saleData.paymentAccountId,
           notes: saleData.notes || undefined,
-          saleLines: saleData.items.map((item: any) => ({
+          saleLines: saleData.items.map((item: PosSaleItemPayload) => ({
             stockItemId: item.stockItemId,
             qtySold: String(item.quantity),
             salePricePerUnit: String(item.rate),
           })),
         };
         const res = await apiRequest("POST", "/api/sp/sales", spBody);
-        const raw = await res.json();
+        const raw = (await res.json()) as {
+          id?: number;
+          voucherId?: number;
+          totalSalePriceUsd?: string;
+          saleDate?: string;
+          customerName?: string;
+          lines?: Array<{
+            stockItemId?: number;
+            description?: string;
+            articleCode?: string;
+            qtySold?: string;
+            salePricePerUnit?: string;
+            saleTotal?: string;
+          }>;
+        };
         const grandTotal = parseFloat(raw.totalSalePriceUsd || "0");
         const voucherNumber = `SP-SALE-${raw.id}`;
         return {
           voucher: { id: raw.voucherId, voucherNumber, customerId: undefined },
           location: activeLocation,
-          items: (raw.lines || []).map((l: any) => ({
+          items: (raw.lines || []).map((l) => ({
             stockItemId: l.stockItemId,
             stockItemName: l.description || l.articleCode,
             stockItemCode: l.articleCode,
@@ -262,7 +271,7 @@ export function usePosMutations({
     },
     onSuccess: async (data) => {
       clientSaleIdRef.current = crypto.randomUUID();
-      setSavedSale(data);
+      setSavedSale(data as InvoiceSale);
       if (!editVoucherId) setSaleJustCompleted(true);
 
       const locationId = activeLocation?.id || data.location?.id || editVoucher?.locationId;

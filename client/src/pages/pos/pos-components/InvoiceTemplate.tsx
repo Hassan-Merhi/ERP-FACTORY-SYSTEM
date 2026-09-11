@@ -13,7 +13,14 @@ export type InvoiceSale = {
   isCreditSale?: boolean;
   customer?: { name?: string } | null;
   items?: InvoiceSaleItem[];
-  voucher?: { exchangeRate?: string | number; description?: string | null };
+  location?: { id?: number; whatsappGroupChatId?: unknown };
+  voucher?: {
+    id?: number;
+    voucherNumber?: string;
+    customerId?: number;
+    exchangeRate?: string | number;
+    description?: string | null;
+  };
 };
 
 export interface InvoiceTemplateProps {

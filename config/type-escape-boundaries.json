@@ -304,21 +304,6 @@
         1,
         0
       ],
-      "client/src/pages/daybook/voucherdetailsdialog/PurchaseVoucherEntries.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/voucherdetailsdialog/VoucherRevisionHistory.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/voucherdetailsdialog/types.ts": [
-        5,
-        0,
-        0
-      ],
       "client/src/pages/factory/CustomerLogosSettings.tsx": [
         2,
         0,
@@ -759,11 +744,6 @@
         0,
         0
       ],
-      "client/src/pages/pos/POS.tsx": [
-        2,
-        0,
-        0
-      ],
       "client/src/pages/pos/POSDashboard.tsx": [
         1,
         0,
@@ -774,53 +754,8 @@
         0,
         0
       ],
-      "client/src/pages/pos/hooks/usePosCheckout.ts": [
-        6,
-        0,
-        0
-      ],
-      "client/src/pages/pos/hooks/usePosMutations.ts": [
-        6,
-        0,
-        0
-      ],
       "client/src/pages/pos/hooks/usePosQueries.ts": [
-        9,
-        0,
-        0
-      ],
-      "client/src/pages/pos/hooks/usePosRowCalculations.ts": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/pos/hooks/usePosWhatsApp.ts": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/CheckoutSidebar.tsx": [
-        7,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/POSDialogs.tsx": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/POSHeader.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/PosCheckoutStrip.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/PosMobileLayout.tsx": [
-        7,
         0,
         0
       ],
@@ -1285,11 +1220,6 @@
         0
       ],
       "client/src/pages/vouchers/useVoucherHandlers.ts": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/vouchers/voucherActions.ts": [
         5,
         0,
         0
@@ -2057,6 +1987,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 981
+    "typeEscapeCeiling": 913
   }
 }

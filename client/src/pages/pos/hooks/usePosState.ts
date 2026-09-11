@@ -1,12 +1,11 @@
 import { useState, useRef } from "react";
+import type { InvoiceSale } from "../pos-components/InvoiceTemplate";
 import type { SaleRow, Location, PosAutoSaveState } from "../pos-components/posTypes";
 import { getAppDate } from "@/lib/queryClient";
 
 export function usePosState() {
   const [posSelectedLocation, setPosSelectedLocation] = useState<Location | null>(null);
-  const [rows, setRows] = useState<SaleRow[]>([
-    { id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 },
-  ]);
+  const [rows, setRows] = useState<SaleRow[]>([{ id: "1", itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 }]);
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number }>({ row: 0, col: 0 });
   const [paymentAccountType, setPaymentAccountType] = useState<"bank" | "cash" | "credit">("cash");
   const [paymentAccountId, setPaymentAccountId] = useState<string | null>(null);
@@ -19,7 +18,7 @@ export function usePosState() {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [zeroStockAlert, setZeroStockAlert] = useState(false);
   const [zeroStockItem, setZeroStockItem] = useState("");
-  const [savedSale, setSavedSale] = useState<unknown>(null);
+  const [savedSale, setSavedSale] = useState<InvoiceSale | null>(null);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [showDraftDialog, setShowDraftDialog] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<number | null>(null);
@@ -28,9 +27,7 @@ export function usePosState() {
   const [saleJustCompleted, setSaleJustCompleted] = useState(false);
   const [showStockPrompt, setShowStockPrompt] = useState(false);
   const [invoiceWaStatus, setInvoiceWaStatus] = useState<"idle" | "sending" | "sent" | "failed">("idle");
-  const [stockWaStatus, setStockWaStatus] = useState<
-    "idle" | "sending" | "sent" | "failed" | "not_configured"
-  >("idle");
+  const [stockWaStatus, setStockWaStatus] = useState<"idle" | "sending" | "sent" | "failed" | "not_configured">("idle");
   const [sendingInvoiceWhatsApp, setSendingInvoiceWhatsApp] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [lastAutosaved, setLastAutosaved] = useState<Date | null>(null);
