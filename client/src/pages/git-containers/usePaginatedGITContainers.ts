@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -9,7 +9,11 @@ import {
   type CompanyIdentity,
   type QueryParams,
 } from "@/lib/frontendDataArchitecture";
-import { fetchContinuousJson, withContinuousCursor } from "@/lib/continuousListClient";
+import {
+  ContinuousListHttpError,
+  fetchContinuousJson,
+  withContinuousCursor,
+} from "@/lib/continuousListClient";
 import type { EnrichedContainerRow, EtaFilterValue, GitContainersResponse } from "./gitContainerTypes";
 
 interface PaginatedContainerFilters {
@@ -48,13 +52,20 @@ interface GitContinuousResponse {
   facets?: GitContainersResponse["facets"];
 }
 
+const GIT_SNAPSHOT_EXPIRED = "GIT_CONTINUOUS_SNAPSHOT_EXPIRED";
+
 const compactSet = (values: readonly string[]): string | undefined => {
   const normalized = canonicalSetValues(values);
   return normalized.length > 0 ? normalized.join(",") : undefined;
 };
 
+function isExpiredSnapshotError(error: unknown): boolean {
+  return error instanceof ContinuousListHttpError && error.code === GIT_SNAPSHOT_EXPIRED;
+}
+
 export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
   const debouncedSearch = useDebouncedValue(filters.search, 300);
+  const handledSnapshotError = useRef<unknown>(null);
   const queryUrl = useMemo(() => {
     const etaDates = filters.etaFilter === "ALL" ? undefined : compactSet(filters.etaFilter.selectedDates);
     const params: QueryParams = {
@@ -98,6 +109,9 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
     enabled: filters.enabled,
     ...frontendQueryPolicies.operational,
     staleTime: 45_000,
+    // An expired process-local snapshot cannot succeed by retrying the same
+    // cursor. Fail it immediately so the recovery effect can restart at page 1.
+    retry: (failureCount, error) => !isExpiredSnapshotError(error) && failureCount < 3,
   });
 
   // Once the first chunk paints, continue through the finite cursor chain automatically.
@@ -107,6 +121,21 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
     if (!filters.enabled || !query.hasNextPage || query.isFetchingNextPage || query.isError) return;
     void query.fetchNextPage();
   }, [filters.enabled, query.hasNextPage, query.isFetchingNextPage, query.isError, query.fetchNextPage]);
+
+  // Tracking snapshots live in one server process and are intentionally bounded.
+  // If a deploy, idle timeout, or process change invalidates the cursor mid-chain,
+  // refetch the infinite query from its first page. TanStack then rebuilds existing
+  // pages sequentially with fresh cursors, and the auto-advance effect resumes.
+  useEffect(() => {
+    const error = query.error;
+    if (!isExpiredSnapshotError(error)) {
+      handledSnapshotError.current = null;
+      return;
+    }
+    if (!filters.enabled || query.isFetching || handledSnapshotError.current === error) return;
+    handledSnapshotError.current = error;
+    void query.refetch({ cancelRefetch: true });
+  }, [filters.enabled, query.error, query.isFetching, query.refetch]);
 
   const containers = useMemo(
     () => query.data?.pages.flatMap((page) => page.containers) ?? [],
