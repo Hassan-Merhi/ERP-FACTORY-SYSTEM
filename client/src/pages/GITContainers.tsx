@@ -24,7 +24,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { PaginationBar } from "@/components/PaginationBar";
 import { cn } from "@/lib/utils";
 import { isBlockingQueryError } from "@/lib/abortError";
 import { useToast } from "@/hooks/use-toast";
@@ -83,8 +82,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     importId: string | null;
   } | null>(null);
   const [waSending, setWaSending] = useState(false);
-  const CONTAINER_PAGE_SIZE = 50;
-  const [page, setPage] = useState(1);
+  const CONTAINER_CHUNK_SIZE = 50;
 
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
   const [showProgressBanner, setShowProgressBanner] = useState(false);
@@ -124,8 +122,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const { data, isLoading, isError, error, refetch, loadContainerDetail } = usePaginatedGITContainers({
     companyIdentity: allCompanies ? `all:${user?.id ?? "unknown"}` : (selectedCompany?.id ?? "no-company"),
     allCompanies,
-    page,
-    pageSize: CONTAINER_PAGE_SIZE,
+    pageSize: CONTAINER_CHUNK_SIZE,
     companyFilter,
     containerFilters,
     supplierFilters,
@@ -207,34 +204,6 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
       });
     }
   }
-
-  const containerFiltersKey = containerFilters.join(",");
-  const supplierFiltersKey = supplierFilters.join(",");
-  const transporterFiltersKey = transporterFilters.join(",");
-  const agentFiltersKey = agentFilters.join(",");
-  const truckFiltersKey = truckFilters.join(",");
-  const locationFiltersKey = locationFilters.join(",");
-  const etaFilterKey = etaFilter === "ALL" ? "ALL" : JSON.stringify(etaFilter);
-
-  useEffect(() => {
-    setPage(1);
-  }, [
-    allCompanies,
-    companyFilter,
-    containerFiltersKey,
-    supplierFiltersKey,
-    transporterFiltersKey,
-    agentFiltersKey,
-    truckFiltersKey,
-    locationFiltersKey,
-    docsFilter,
-    delayedFilter,
-    freightFilter,
-    etaFilterKey,
-    notesFilter,
-    sortOrder,
-    search,
-  ]);
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -577,14 +546,6 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             printRef={printRef}
           />
         </div>
-        <PaginationBar
-          page={data?.page ?? page}
-          totalPages={data?.totalPages ?? 0}
-          total={data?.total ?? 0}
-          pageSize={data?.pageSize ?? CONTAINER_PAGE_SIZE}
-          onPageChange={setPage}
-          noun="containers"
-        />
       </div>
 
       <ContainerDrawer
