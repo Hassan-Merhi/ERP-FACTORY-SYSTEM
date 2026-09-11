@@ -224,7 +224,10 @@ describe("Wave 1 inventory valuation regression locks", () => {
   });
 
   it.fails("does not hard-force live current-year inventory into December", () => {
-    const source = readFileSync(resolve(process.cwd(), "server/routes/stock-summary-location/monthly-summary.ts"), "utf8");
+    const source = readFileSync(
+      resolve(process.cwd(), "server/routes/stock-summary-location/monthly-summary.ts"),
+      "utf8"
+    );
 
     expect(source).not.toMatch(/monthlyData\s*\[\s*11\s*\]\.closingQty\s*=/);
     expect(source).not.toMatch(/monthlyData\s*\[\s*11\s*\]\.closingValue\s*=/);
