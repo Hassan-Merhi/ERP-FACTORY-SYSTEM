@@ -7,7 +7,7 @@ describe("factory loading proforma quantity alignment", () => {
   it("manual scanning delegates membership and overload decisions to the authoritative capacity engine", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
     expect(source).toContain("getProformaCapacitySnapshot(tx");
-    expect(source).toContain("evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1)");
+    expect(source).toContain('evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading")');
     expect(source).toContain("decision.consumedQty");
     expect(source).toContain("decision.requestedQty");
   });
