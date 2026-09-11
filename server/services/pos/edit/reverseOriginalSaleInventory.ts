@@ -32,6 +32,14 @@ type NegativeLayerRow = {
   qty: string | number | null;
 };
 
+export interface PosSaleInventoryRestoreResult {
+  previousQuantity: number;
+  newQuantity: number;
+  previousTotalValue: number;
+  newTotalValue: number;
+  averageRate: number;
+}
+
 function decimal(value: string | number | null | undefined): Decimal {
   if (value === null || value === undefined || value === "") return ZERO;
   const parsed = new Decimal(value);
@@ -42,7 +50,7 @@ function decimal(value: string | number | null | undefined): Decimal {
  * Release only the shortage quantity that the reversal actually resolves.
  *
  * If live stock is already positive, any open layer is historical/anomalous and
- * an edit must leave it alone. If live stock is negative, restoring an old sale
+ * a reversal must leave it alone. If live stock is negative, restoring a sale
  * reduces the aggregate shortage. Layers owned by that voucher are removed
  * first; any remainder is removed FIFO from other layers so layer quantity stays
  * equal to the remaining negative balance.
@@ -95,13 +103,14 @@ async function releaseResolvedNegativeLayers(
 }
 
 /**
- * Restore inventory for an old POS sale line while preserving the live cost
- * basis and leaving unrelated positive-stock anomalies untouched.
+ * Restore inventory previously issued by a POS sale without treating the
+ * reversal as a new receipt. Used by edit, single-delete and bulk-delete flows.
  *
- * This deliberately does not use adjustInventory(): that helper's positive
- * branch is a real receipt and therefore settles all negative layers FIFO.
+ * The regular adjustInventory positive branch settles all negative layers FIFO;
+ * that is correct for genuinely new stock but corrupts valuation when used to
+ * undo a historical sale while unrelated shortage layers exist.
  */
-async function restorePosSaleInventoryForEdit(
+export async function restorePosSaleInventoryForReversal(
   tx: DbTransaction,
   params: {
     companyId: number;
@@ -110,10 +119,12 @@ async function restorePosSaleInventoryForEdit(
     quantity: number;
     voucherId: number;
   }
-): Promise<void> {
+): Promise<PosSaleInventoryRestoreResult> {
   const { companyId, locationId, stockItemId, quantity, voucherId } = params;
   const restoreQty = decimal(quantity);
-  if (restoreQty.lte(ZERO)) return;
+  if (restoreQty.lte(ZERO)) {
+    throw Object.assign(new Error(), { code: "POS_SALE_REVERSAL_QUANTITY_INVALID" });
+  }
 
   const lockResult = await tx.execute(sql`
     SELECT id, quantity, average_rate, total_value
@@ -160,6 +171,14 @@ async function restorePosSaleInventoryForEdit(
         last_updated = NOW()
     WHERE id = ${existing.id}
   `);
+
+  return {
+    previousQuantity: currentQty.toNumber(),
+    newQuantity: newQty.toNumber(),
+    previousTotalValue: currentValue.toNumber(),
+    newTotalValue: newValue.toNumber(),
+    averageRate: Decimal.max(newRate, ZERO).toNumber(),
+  };
 }
 
 /**
@@ -177,7 +196,7 @@ export async function reverseOriginalSaleInventory(
 ): Promise<void> {
   for (const oldItem of oldSalesItems) {
     const oldQuantity = toInventoryDecimal(oldItem.quantity);
-    await restorePosSaleInventoryForEdit(tx, {
+    await restorePosSaleInventoryForReversal(tx, {
       companyId: existingVoucher.companyId,
       locationId: existingVoucher.locationId!,
       stockItemId: oldItem.stockItemId,
