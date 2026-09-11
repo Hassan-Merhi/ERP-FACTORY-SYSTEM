@@ -40,7 +40,10 @@ describe("tracking continuous-list cleanup", () => {
       totals: { typeEscapeCeiling: number };
     };
 
-    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(1058);
-    expect(qualityProgram).toContain("| Type escapes (AST) | 1,058 total |");
+    // #1384 lowered the ceiling again after this test was written. Both numbers
+    // track config/type-escape-boundaries.json, which audit:doc-index treats as
+    // the source of truth for the figure the quality reference quotes.
+    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(1040);
+    expect(qualityProgram).toContain("| Type escapes (AST) | 1,040 total |");
   });
 });
