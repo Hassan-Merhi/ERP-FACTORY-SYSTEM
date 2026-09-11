@@ -140,58 +140,63 @@ export async function insertInfrastructureVoucherTx(
       .from(vouchers)
       .where(and(eq(vouchers.id, Number(marker.voucherId)), eq(vouchers.companyId, companyId)))
       .limit(1);
-    if (!existing) {
-      throw new PostingValidationError(
-        "POSTING_IDEMPOTENCY_CORRUPT",
-        `Idempotency marker ${source.idempotencyKey} references a missing voucher`
-      );
-    }
 
-    // Historical failed infrastructure writes can leave a voucher shell and
-    // durable idempotency marker behind with zero voucher entries. A corrected
-    // retry then has a different fingerprint and would otherwise be blocked
-    // forever. Self-heal only that provably orphaned state: same deterministic
-    // source identity, changed fingerprint, and no posted entry rows. Real
-    // posted vouchers keep strict conflict protection.
-    if (
-      marker.sourceType === source.sourceType &&
-      marker.sourceId === source.sourceId &&
-      marker.requestFingerprint !== requestFingerprint
-    ) {
-      const [entry] = await tx
-        .select({ id: voucherEntries.id })
-        .from(voucherEntries)
-        .where(eq(voucherEntries.voucherId, existing.id))
-        .limit(1);
+    // A reversal/correction may intentionally retire the old voucher while an
+    // older code path leaves the durable idempotency marker behind. Replaying
+    // that marker must never attach fresh entries to a soft-deleted voucher or
+    // permanently block because the old voucher was hard-deleted. Retire only
+    // the stale marker here; the caller then creates a fresh active voucher and
+    // marker in the same transaction. Active vouchers keep strict replay and
+    // payload-conflict protection below.
+    if (!existing || existing.deletedAt) {
+      await tx.delete(accountingPostingRequests).where(eq(accountingPostingRequests.id, marker.id));
+    } else {
+      // Historical failed infrastructure writes can leave a voucher shell and
+      // durable idempotency marker behind with zero voucher entries. A corrected
+      // retry then has a different fingerprint and would otherwise be blocked
+      // forever. Self-heal only that provably orphaned state: same deterministic
+      // source identity, changed fingerprint, and no posted entry rows. Real
+      // posted vouchers keep strict conflict protection.
+      if (
+        marker.sourceType === source.sourceType &&
+        marker.sourceId === source.sourceId &&
+        marker.requestFingerprint !== requestFingerprint
+      ) {
+        const [entry] = await tx
+          .select({ id: voucherEntries.id })
+          .from(voucherEntries)
+          .where(eq(voucherEntries.voucherId, existing.id))
+          .limit(1);
 
-      if (!entry) {
-        const { id: _id, ...replacement } = voucher as VoucherInsert & { id?: unknown };
-        const [repaired] = await tx
-          .update(vouchers)
-          .set(replacement)
-          .where(and(eq(vouchers.id, existing.id), eq(vouchers.companyId, companyId)))
-          .returning();
+        if (!entry) {
+          const { id: _id, ...replacement } = voucher as VoucherInsert & { id?: unknown };
+          const [repaired] = await tx
+            .update(vouchers)
+            .set(replacement)
+            .where(and(eq(vouchers.id, existing.id), eq(vouchers.companyId, companyId)))
+            .returning();
 
-        await tx
-          .update(accountingPostingRequests)
-          .set({ requestFingerprint })
-          .where(eq(accountingPostingRequests.id, marker.id));
+          await tx
+            .update(accountingPostingRequests)
+            .set({ requestFingerprint })
+            .where(eq(accountingPostingRequests.id, marker.id));
 
-        if (!repaired) {
-          throw new PostingValidationError(
-            "POSTING_IDEMPOTENCY_CORRUPT",
-            `Idempotency marker ${source.idempotencyKey} could not repair its empty voucher shell`
-          );
+          if (!repaired) {
+            throw new PostingValidationError(
+              "POSTING_IDEMPOTENCY_CORRUPT",
+              `Idempotency marker ${source.idempotencyKey} could not repair its empty voucher shell`
+            );
+          }
+          return { voucher: repaired, replayed: true };
         }
-        return { voucher: repaired, replayed: true };
       }
-    }
 
-    assertStoredIdentityMatches({ source, requestFingerprint, stored: marker });
-    if (options.replaceEntriesOnReplay !== false) {
-      await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
+      assertStoredIdentityMatches({ source, requestFingerprint, stored: marker });
+      if (options.replaceEntriesOnReplay !== false) {
+        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
+      }
+      return { voucher: existing, replayed: true };
     }
-    return { voucher: existing, replayed: true };
   }
 
   const [created] = await tx.insert(vouchers).values(voucher).returning();
