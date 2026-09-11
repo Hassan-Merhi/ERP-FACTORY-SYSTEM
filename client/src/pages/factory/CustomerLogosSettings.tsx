@@ -9,6 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, Pencil, Trash2, Image } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 
+interface CustomerOption {
+  id: number;
+  active: boolean;
+  legalName: string;
+}
+
+interface CustomerLogo {
+  id: number;
+  name: string;
+}
+
 export default function CustomerLogosSettings() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,12 +27,12 @@ export default function CustomerLogosSettings() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const { data: allCustomers = [] } = useQuery<any[]>({
+  const { data: allCustomers = [] } = useQuery<CustomerOption[]>({
     queryKey: ["/api/factory/customers"],
     queryFn: () => fetch("/api/factory/customers", { credentials: "include" }).then((r) => r.json()),
   });
 
-  const { data: logos = [], isLoading } = useQuery<any[]>({
+  const { data: logos = [], isLoading } = useQuery<CustomerLogo[]>({
     queryKey: ["/api/factory/customers", selectedCustomerId, "logos"],
     queryFn: () =>
       fetch(`/api/factory/customers/${selectedCustomerId}/logos`, { credentials: "include" }).then((r) => r.json()),

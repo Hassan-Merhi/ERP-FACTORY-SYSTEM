@@ -119,7 +119,7 @@ function parseReplayWriteScope(value: unknown): ReplayWriteScope | null {
 
 function parseExactUndoEnvelope(value: unknown): ExactReplayUndoEnvelope | null {
   if (!value || typeof value !== "object") return null;
-  const input = value as Record<string, any>;
+  const input = value as Record<string, unknown>;
   if (input.kind !== EXACT_UNDO_KIND) return null;
   const scope = parseReplayWriteScope(input.scope);
   const baleIds = numberArray(input.baleIds);

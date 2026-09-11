@@ -97,8 +97,8 @@ export function registerBalesCrudRoutes(app: Express) {
           : Promise.resolve(null as null),
       ]);
 
-      const productIds: number[] = Array.from(new Set(bales.map((b: any) => b.productId).filter(Boolean)));
-      const batchIds: number[] = Array.from(new Set(bales.map((b: any) => b.mixBatchId).filter(Boolean)));
+      const productIds: number[] = Array.from(new Set(bales.map((b) => b.productId).filter((id): id is number => id !== null)));
+      const batchIds: number[] = Array.from(new Set(bales.map((b) => b.mixBatchId).filter((id): id is number => id !== null)));
 
       const products =
         productIds.length > 0

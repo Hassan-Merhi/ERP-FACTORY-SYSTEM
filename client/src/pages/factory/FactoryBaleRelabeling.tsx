@@ -38,7 +38,7 @@ import {
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 
-import type { ApplyItem, ParsedRow, Step, ValidationResult } from "./factorybalerelabeling/types";
+import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
 
@@ -79,7 +79,7 @@ export default function FactoryBaleRelabeling() {
   const validRows = validationResults.filter((r) => r.valid);
   const invalidRows = validationResults.filter((r) => !r.valid);
 
-  const { data: sessions = [] } = useQuery<any[]>({
+  const { data: sessions = [] } = useQuery<RelabelSession[]>({
     queryKey: ["/api/factory/bales/relabel/sessions"],
     queryFn: async () => {
       const res = await factoryApiRequest("GET", "/api/factory/bales/relabel/sessions");

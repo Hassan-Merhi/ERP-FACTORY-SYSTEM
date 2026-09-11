@@ -14,16 +14,19 @@ import { registerRawStockRecalcRoutes as registerPreservedRawStockRecalcRoutes }
  * The patch exists for one call stack only; normal pool.query is restored before
  * the event loop can process any other work.
  */
+type PoolQuery = typeof pool.query;
+
 function registerLegacyRawStockRecalcRoutes(app: Express): void {
-  const mutablePool = pool as any;
-  const originalQuery = mutablePool.query;
-  mutablePool.query = function guardedRegistrationQuery(...args: Record<string, unknown>[]) {
-    const sqlText = typeof args[0] === "string" ? args[0] : args[0]?.text;
+  const mutablePool = pool as unknown as { query: PoolQuery };
+  const originalQuery = pool.query.bind(pool) as PoolQuery;
+  mutablePool.query = ((...args: Parameters<PoolQuery>) => {
+    const first: unknown = args[0];
+    const sqlText = typeof first === "string" ? first : (first as { text?: string } | undefined)?.text;
     if (typeof sqlText === "string" && /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+factory_recalc_undo_log/i.test(sqlText)) {
-      return Promise.resolve({ rows: [], rowCount: 0 });
+      return Promise.resolve({ rows: [], rowCount: 0 }) as unknown as ReturnType<PoolQuery>;
     }
-    return originalQuery.apply(this, args);
-  };
+    return originalQuery(...args);
+  }) as PoolQuery;
   try {
     registerPreservedRawStockRecalcRoutes(app);
   } finally {

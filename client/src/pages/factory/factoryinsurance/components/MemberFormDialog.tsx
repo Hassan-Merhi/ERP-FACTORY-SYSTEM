@@ -37,7 +37,16 @@ function MemberFormDialog({
   const [notes, setNotes] = useState(existing?.notes ?? "");
 
   const saveMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: {
+      name: string;
+      nationality: string | null;
+      positionWorking: string | null;
+      insuranceNumber: string | null;
+      startDate: string;
+      amount: string;
+      dob: string | null;
+      notes: string | null;
+    }) => {
       if (existing) {
         return apiRequest("PATCH", `/api/insurance/members/${existing.id}`, data);
       } else {

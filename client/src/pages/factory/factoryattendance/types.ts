@@ -18,6 +18,14 @@ export interface WorkerRow {
   active?: boolean;
 }
 
+export interface AttendanceBulkRecord {
+  workerId: number;
+  attendanceDate: string;
+  shift?: string;
+  status: AttendanceStatus;
+  notes?: string;
+}
+
 export interface AttendanceRecord {
   id: number;
   workerId: number;

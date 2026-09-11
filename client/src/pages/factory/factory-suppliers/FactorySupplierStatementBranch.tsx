@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { SupplierStatement } from "./SupplierStatement";
 import { FactorySuppliersMoveContainerDialog } from "./FactorySuppliersMoveContainerDialog";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
+import type { StatementDisplayRow } from "./factorySupplierTypes";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
@@ -16,21 +17,6 @@ interface VoucherPayment {
   optional?: boolean | null;
 }
 
-interface StatementDisplayRow {
-  key: string;
-  date: string;
-  type: "purchase" | "payment" | "fx" | "commission";
-  ref: string;
-  detail?: string;
-  amount: string;
-  amountVal: number;
-  rowCc: string;
-  status?: string;
-  optional?: boolean;
-  onMove?: () => void;
-  onDelete?: () => void;
-  onEdit?: () => void;
-}
 
 function isVoucherPayment(value: unknown): value is VoucherPayment {
   return (

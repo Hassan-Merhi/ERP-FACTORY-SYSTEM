@@ -33,6 +33,12 @@ interface BaleProductWeight {
   weightPerBaleKg: string | null;
 }
 
+interface RawBaleProduct {
+  articleCode?: string | null;
+  code?: string | null;
+  weightPerBaleKg?: string | null;
+}
+
 interface ProformaLine {
   id: number;
   articleCode: string;
@@ -91,10 +97,10 @@ export default function ProformaAddLine() {
     refetchOnReconnect: false,
   });
 
-  const { data: baleProducts = [] } = useQuery<BaleProductWeight[]>({
+  const { data: baleProducts = [] } = useQuery<RawBaleProduct[], Error, BaleProductWeight[]>({
     queryKey: ["/api/factory/bale-products"],
-    select: (data: any[]) =>
-      data.map((p) => ({ articleCode: p.articleCode || p.code, weightPerBaleKg: p.weightPerBaleKg ?? null })),
+    select: (data) =>
+      data.map((p) => ({ articleCode: p.articleCode || p.code || "", weightPerBaleKg: p.weightPerBaleKg ?? null })),
   });
 
   const baleWeightMap = useMemo(() => {

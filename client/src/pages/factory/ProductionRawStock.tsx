@@ -13,11 +13,15 @@ import type { FactoryMixBatch } from "@shared/schema";
 
 import { SupplierCategoriesDialog } from "./production-raw-stock/ProductionRawStockHelpers";
 import { RawStockTable, type RawStockRow } from "./production-raw-stock/RawStockTable";
-import { MixBatchList, type MixBatchRow } from "./production-raw-stock/MixBatchList";
+import { MixBatchList, type MixBatchPrintRow, type MixBatchRow } from "./production-raw-stock/MixBatchList";
 import { KpiCards } from "./production-raw-stock/KpiCards";
 import { OffloadDialog, type OffloadContainer, type OffloadLedgerAccount, type OffloadPayload, type OffloadSupplierOption } from "./production-raw-stock/OffloadDialog";
-import { StockAdjustmentDialog } from "./production-raw-stock/StockAdjustmentDialog";
-import { DeductStockDialog } from "./production-raw-stock/DeductStockDialog";
+import {
+  StockAdjustmentDialog,
+  type StockAdjustmentPayload,
+  type UpdateCostPayload,
+} from "./production-raw-stock/StockAdjustmentDialog";
+import { DeductStockDialog, type DeductStockPayload } from "./production-raw-stock/DeductStockDialog";
 import { AddToBatchDialog, type AddToBatchSource } from "./production-raw-stock/AddToBatchDialog";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
 import { EditMixBatchDialog } from "@/components/EditMixBatchDialog";
@@ -74,7 +78,7 @@ export default function ProductionRawStock() {
   });
   const availableContainers = availableContainersRaw.filter((c) => c.status !== "PARTIALLY_RECEIVED");
 
-  const { data: mixBatchesByDate = [], isLoading: mixBatchesByDateLoading } = useQuery<unknown[]>({
+  const { data: mixBatchesByDate = [], isLoading: mixBatchesByDateLoading } = useQuery<MixBatchPrintRow[]>({
     queryKey: [`/api/factory/mix-batches-by-date?date=${encodeURIComponent(mixBatchDate)}`],
     enabled: !!mixBatchDate,
   });
@@ -102,7 +106,7 @@ export default function ProductionRawStock() {
   });
 
   const createAdjustmentMutation = useMutation({
-    mutationFn: async (payload) => {
+    mutationFn: async (payload: StockAdjustmentPayload) => {
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/adjustment", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to save adjustment");
       return res.json();
@@ -115,7 +119,7 @@ export default function ProductionRawStock() {
   });
 
   const deductReceivedMutation = useMutation({
-    mutationFn: async (payload) => {
+    mutationFn: async (payload: DeductStockPayload) => {
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/deduct-received", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to deduct");
       return res.json();
@@ -128,7 +132,7 @@ export default function ProductionRawStock() {
   });
 
   const updateCostMutation = useMutation({
-    mutationFn: async (payload) => {
+    mutationFn: async (payload: UpdateCostPayload) => {
       const res = await modeApiRequest("POST", "/api/factory/raw-stock/update-cost", payload);
       if (!res.ok) throw new Error((await res.json()).message || "Failed to update cost");
       return res.json();

@@ -35,7 +35,13 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import type { AttendanceRecord, AttendanceStatus, ViewMode, WorkerRow } from "./factoryattendance/types";
+import type {
+  AttendanceBulkRecord,
+  AttendanceRecord,
+  AttendanceStatus,
+  ViewMode,
+  WorkerRow,
+} from "./factoryattendance/types";
 import {
   STATUS_COLORS,
   STATUS_OPTIONS,
@@ -99,7 +105,8 @@ export default function FactoryAttendance() {
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: (records: any[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
+    mutationFn: (records: AttendanceBulkRecord[]) =>
+      apiRequest("POST", "/api/factory/attendance/bulk", { records }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/attendance", selectedDate] });
       toast({ title: "Attendance saved", description: `Saved for ${selectedDate}` });

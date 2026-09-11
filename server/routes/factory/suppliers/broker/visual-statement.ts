@@ -47,6 +47,8 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       const allSupplierIds = [broker.id, ...linked.map((s) => s.id)];
       const nameMap: Record<number, string> = {};
       for (const s of [broker, ...linked]) nameMap[s.id] = s.name;
+      const nameOf = (supplierId: number | null): string =>
+        supplierId != null ? nameMap[supplierId] || "Unknown" : "Unknown";
 
       // Containers (filtered by arrival date if provided)
       let containerQuery = db
@@ -59,12 +61,12 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       const containers = await containerQuery.orderBy(factoryContainers.arrivalDate, factoryContainers.createdAt);
 
       // Build container rows
-      const containerRows = (containers as any[]).map((c) => {
+      const containerRows = containers.map((c) => {
         const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
         const rate = parseFloat(c.ratePerKg || "0");
         return {
           id: c.id,
-          supplierName: nameMap[c.supplierId] || "Unknown",
+          supplierName: nameOf(c.supplierId),
           containerNumber: c.containerNumber,
           weight: kg,
           ratePerKg: rate,
@@ -110,7 +112,17 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       const fxTransfers = await fxQuery.orderBy(factorySupplierFxTransfers.date);
 
       // Voucher payments (non-optional only)
-      let vpayRows: any[] = [];
+      type VoucherPaymentRow = {
+        id: number;
+        debitAmount: string | null;
+        supplierId: number | null;
+        voucherDate: string;
+        description: string | null;
+        voucherNumber: string;
+        currency: string;
+        optional: boolean;
+      };
+      let vpayRows: VoucherPaymentRow[] = [];
       if (allSupplierIds.length > 0) {
         let vpayQ = db
           .select({
@@ -186,7 +198,7 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
           fxRate: null,
           usdAmount: amt,
           notes: v.voucherNumber || v.description || null,
-          supplierName: nameMap[v.supplierId],
+          supplierName: v.supplierId === null ? undefined : nameMap[v.supplierId],
         });
       }
 

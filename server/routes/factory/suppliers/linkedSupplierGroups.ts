@@ -23,7 +23,11 @@ import { resolveStoredFxRate } from "../../../services/factory/currencyConversio
  *
  * config/report-characterization.json pins the endpoint's output across the move.
  */
-export async function buildLinkedSupplierGroups(supplierId: number, companyId: number, commissions: any[]) {
+export async function buildLinkedSupplierGroups(
+  supplierId: number,
+  companyId: number,
+  commissions: { containerId: number; commissionTotal: string }[]
+) {
   // Phase 2: Broker statement — aggregate linked suppliers if this is a broker
   const linkedSuppliers = await db
     .select({ id: factorySuppliers.id, name: factorySuppliers.name })

@@ -159,7 +159,12 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
           (prevAllocByContainer[a.containerId] || 0) + parseFloat(a.allocatedAmount || "0");
 
       // Build per-supplier data: available balance + their containers
-      const supplierData: Array<{ supplierId: number; name: string; available: number; containers: any[] }> = [];
+      const supplierData: Array<{
+        supplierId: number;
+        name: string;
+        available: number;
+        containers: (typeof allContainers)[number][];
+      }> = [];
       for (const sup of linkedSuppliers) {
         const supContainers = allContainers.filter((c) => c.supplierId === sup.id);
         const totalValue = supContainers.reduce((s: number, c) => {
@@ -193,8 +198,8 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
       // Sort suppliers by their oldest (or newest) container date
       supplierData.sort((a, b) => {
         const dateOf = (sd: typeof a) =>
-          sd.containers.reduce((best: string | null, c) => {
-            const d = c.arrivalDate || c.createdAt;
+          sd.containers.reduce<string | null>((best, c) => {
+            const d: string = c.arrivalDate || c.createdAt.toISOString();
             if (!best) return d;
             return order === "newest"
               ? new Date(d) > new Date(best)
@@ -221,7 +226,7 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
         allocated: number;
         toAmountUsd: number;
         overpayment: number;
-        containers: any[];
+        containers: (typeof allContainers)[number][];
       }> = [];
       for (const sd of supplierData) {
         if (rem <= 0.001) break;

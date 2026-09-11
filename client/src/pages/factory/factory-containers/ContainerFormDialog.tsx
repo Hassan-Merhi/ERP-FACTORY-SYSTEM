@@ -18,6 +18,7 @@ import { useAdminOverride } from "@/hooks/use-admin-override";
 import type { FactorySupplier } from "@shared/schema";
 import type { ContainerWithSupplier } from "./otwHelpers";
 import { ContainerFormBody } from "./ContainerFormBody";
+import type { ApiListRow } from "@shared/apiTypes";
 
 /**
  * Strip unnecessary trailing decimal zeros without scientific notation.
@@ -90,7 +91,7 @@ interface ContainerFormDialogProps {
   open: boolean;
   editingContainer: ContainerWithSupplier | null;
   suppliers: FactorySupplier[] | undefined;
-  ledgerAccounts: unknown[];
+  ledgerAccounts: ApiListRow[];
   onClose: () => void;
 }
 
@@ -176,10 +177,10 @@ export function ContainerFormDialog({
       setOtherChargeLines([]);
       return;
     }
-    const containerCcy = (editingContainer as { currencyCode: unknown }).currencyCode || "USD";
+    const containerCcy = (editingContainer as { currencyCode?: string | null }).currencyCode || "USD";
     factoryApiRequest("GET", `/api/factory/containers/${editingContainer.id}/other-charges`)
       .then((res) => (res.ok ? res.json() : []))
-      .then((charges: any[]) => {
+      .then((charges: { amount?: string | null; currencyCode?: string | null; ledgerAccountId?: number | null; description?: string | null }[]) => {
         setOtherChargeLines(
           charges.map((c) => ({
             amount: stripTrailingZeros(c.amount),
@@ -357,7 +358,7 @@ export function ContainerFormDialog({
           currencyCode: l.currencyCode || currency,
           ledgerAccountId: l.ledgerAccountId ? parseInt(l.ledgerAccountId) : null,
         }));
-      let container: any;
+      let container: unknown;
       try {
         const res = await factoryApiRequest("PATCH", `/api/factory/containers/${id}`, payload);
         if (!res.ok) {

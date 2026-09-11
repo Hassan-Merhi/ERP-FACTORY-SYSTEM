@@ -44,7 +44,17 @@ function ItemFormDialog({
   const totalValue = useMemo(() => totalPcs * (parseFloat(unitPrice) || 0), [totalPcs, unitPrice]);
 
   const saveMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: {
+      type: string;
+      name: string;
+      size: string | null;
+      quantity: number;
+      packQty: number | null;
+      pcsPerPack: number | null;
+      unitPrice: number;
+      rowColor: string | null;
+      notes: string | null;
+    }) => {
       if (existing) return apiRequest("PATCH", `/api/factory/sheets-sacks/${existing.id}`, data);
       return apiRequest("POST", "/api/factory/sheets-sacks", data);
     },

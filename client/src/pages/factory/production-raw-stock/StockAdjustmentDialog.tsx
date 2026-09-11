@@ -6,15 +6,43 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, PlusCircle } from "lucide-react";
+import type { RawStockRow } from "./RawStockTable";
+
+interface SupplierOption {
+  id: number;
+  name: string;
+}
+
+export interface StockAdjustmentPayload {
+  type: string;
+  kg: string;
+  costPerKg: string;
+  currencyCode: string;
+  supplierId: number | null;
+  materialLabel: string | null | undefined;
+  notes: string;
+  reference: string;
+  date: string;
+}
+
+export interface UpdateCostPayload {
+  supplierId: number | null;
+  newCostPerKg: string;
+}
+
+interface MutationLike<TVars> {
+  isPending: boolean;
+  mutate: (vars: TVars) => void;
+}
 
 interface StockAdjustmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  adjustingRow: any;
+  adjustingRow: RawStockRow | null;
   isNewMaterial: boolean;
-  factorySuppliers: any[];
-  createAdjustmentMutation: any;
-  updateCostMutation: any;
+  factorySuppliers: SupplierOption[];
+  createAdjustmentMutation: MutationLike<StockAdjustmentPayload>;
+  updateCostMutation: MutationLike<UpdateCostPayload>;
   wrapAdminAction: (action: () => void, title: string) => void;
 }
 
@@ -42,7 +70,7 @@ export function StockAdjustmentDialog({
     if (adjType === "COST") {
       if (!adjCostPerKg || parseFloat(adjCostPerKg) <= 0) return;
       updateCostMutation.mutate({
-        supplierId: adjustingRow.supplierId,
+        supplierId: adjustingRow?.supplierId ?? null,
         newCostPerKg: adjCostPerKg,
       });
     } else {
@@ -51,7 +79,7 @@ export function StockAdjustmentDialog({
         kg: adjKg,
         costPerKg: adjCostPerKg || "0",
         currencyCode: adjCurrency,
-        supplierId: isNewMaterial ? (adjSupplierId ? parseInt(adjSupplierId) : null) : adjustingRow?.supplierId,
+        supplierId: isNewMaterial ? (adjSupplierId ? parseInt(adjSupplierId) : null) : (adjustingRow?.supplierId ?? null),
         materialLabel: isNewMaterial ? adjMaterialLabel : adjustingRow?.supplierName,
         notes: adjNotes,
         reference: adjReference,
@@ -78,7 +106,12 @@ export function StockAdjustmentDialog({
           {!isNewMaterial && (
             <div className="space-y-1">
               <Label>Adjustment Type</Label>
-              <Select value={adjType} onValueChange={(v: any) => setAdjType(v)}>
+              <Select
+                value={adjType}
+                onValueChange={(v) => {
+                  if (v === "ADD" || v === "REMOVE" || v === "COST") setAdjType(v);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

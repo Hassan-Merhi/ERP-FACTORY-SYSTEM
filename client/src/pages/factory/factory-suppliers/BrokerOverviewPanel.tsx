@@ -26,11 +26,21 @@ const STATUS_COLORS: Record<string, string> = {
   OFFLOADED:  "bg-muted text-muted-foreground",
 };
 
+interface BrokerOverviewLedgerSection {
+  currencyCode: string;
+  netBalance?: string | null;
+  isBrokerPool?: boolean | null;
+}
+
+interface BrokerOverviewStatement {
+  currencyLedgers?: BrokerOverviewLedgerSection[];
+}
+
 interface BrokerOverviewPanelProps {
   parentViewSupplierId: number;
   allSuppliers: SupplierWithBalance[];
   subAccountsByParent: Record<number, SupplierWithBalance[]>;
-  brokerOverviewStatement: any;
+  brokerOverviewStatement: unknown;
   brokerOverviewLoading: boolean;
   brokerIncludeOtw: boolean;
   setBrokerIncludeOtw: (val: boolean) => void;
@@ -72,10 +82,11 @@ export function BrokerOverviewPanel({
   const children = subAccountsByParent[parentViewSupplierId] || [];
 
   // Pool balances from broker activity ledger (all currencies, net balance per currency section)
+  const brokerStatement = brokerOverviewStatement as BrokerOverviewStatement | undefined;
   const brokerOwnBalances: { currencyCode: string; balance: number; isBrokerPool: boolean }[] = (
-    brokerOverviewStatement?.currencyLedgers || []
+    brokerStatement?.currencyLedgers || []
   )
-    .map((section: any) => ({
+    .map((section) => ({
       currencyCode: section.currencyCode,
       balance: parseFloat(section.netBalance || "0"),
       isBrokerPool: !!section.isBrokerPool,

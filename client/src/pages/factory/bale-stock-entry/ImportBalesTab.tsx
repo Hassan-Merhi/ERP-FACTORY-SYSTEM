@@ -59,11 +59,11 @@ export function ImportBalesTab() {
         const data = new Uint8Array(evt.target?.result as ArrayBuffer);
         const workbook = await XLSX.read(data, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json<unknown>(sheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
         let headerRowIdx = -1;
         for (let i = 0; i < Math.min(jsonData.length, 10); i++) {
-          const row = jsonData[i] as any[];
+          const row = jsonData[i];
           if (row && row.some((cell) => String(cell).toUpperCase().includes("ITEM NAME"))) {
             headerRowIdx = i;
             break;
@@ -79,7 +79,7 @@ export function ImportBalesTab() {
           return;
         }
 
-        const headers = (jsonData[headerRowIdx] as any[]).map((h) => String(h).toUpperCase().trim());
+        const headers = jsonData[headerRowIdx].map((h) => String(h).toUpperCase().trim());
         const nameIdx = headers.findIndex((h) => h.includes("ITEM NAME"));
         const weightIdx = headers.findIndex((h) => h.includes("WEIGHT"));
         const barcodeIdx = headers.findIndex((h) => h.includes("BARCODE"));
@@ -113,7 +113,7 @@ export function ImportBalesTab() {
 
         const rows: ImportBaleRow[] = [];
         for (let i = headerRowIdx + 1; i < jsonData.length; i++) {
-          const row = jsonData[i] as any[];
+          const row = jsonData[i];
           if (!row || !row[nameIdx]) continue;
           const itemName = String(row[nameIdx] || "").trim();
           if (!itemName) continue;

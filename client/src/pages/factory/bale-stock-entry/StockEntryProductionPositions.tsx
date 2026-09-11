@@ -1,6 +1,7 @@
 import { Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { WorkerOption } from "./types";
 
 export interface StockEntryProductionPosition {
   id: number;
@@ -34,7 +35,7 @@ export function StockEntryProductionPositions({
   onSelect,
 }: {
   cart: StockEntryProductionItem[];
-  workers: any[];
+  workers: WorkerOption[];
   positions: StockEntryProductionPosition[];
   selectedByProduct: Record<number, number | null>;
   onSelect: (productId: number, positionId: number | null) => void;

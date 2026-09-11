@@ -17,21 +17,22 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
+import type { WorkerCategoryRow, WorkerOption } from "./types";
 
 export function WorkerCategoriesManager({ compact = false }: { compact?: boolean }) {
   const { toast } = useToast();
   const appMode = useAppMode();
   const catApiRequest = getApiRequest(appMode);
   const [catDialogOpen, setCatDialogOpen] = useState(false);
-  const [editingCat, setEditingCat] = useState<any>(null);
+  const [editingCat, setEditingCat] = useState<WorkerCategoryRow | null>(null);
   const [catName, setCatName] = useState("");
   const [catWorkerIds, setCatWorkerIds] = useState<number[]>([]);
 
-  const { data: catWorkers = [] } = useQuery<any[]>({
+  const { data: catWorkers = [] } = useQuery<WorkerOption[]>({
     queryKey: ["/api/factory/workers"],
     queryFn: () => fetch("/api/factory/workers", { credentials: "include" }).then((r) => r.json()),
   });
-  const { data: workerCategories = [], isLoading: catsLoading } = useQuery<any[]>({
+  const { data: workerCategories = [], isLoading: catsLoading } = useQuery<WorkerCategoryRow[]>({
     queryKey: ["/api/factory/worker-categories"],
     queryFn: () => fetch("/api/factory/worker-categories", { credentials: "include" }).then((r) => r.json()),
   });
@@ -74,7 +75,7 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
     setCatWorkerIds([]);
     setCatDialogOpen(true);
   };
-  const openEditCat = (cat: any) => {
+  const openEditCat = (cat: WorkerCategoryRow) => {
     setEditingCat(cat);
     setCatName(cat.name);
     setCatWorkerIds(Array.isArray(cat.workerIds) ? cat.workerIds : []);

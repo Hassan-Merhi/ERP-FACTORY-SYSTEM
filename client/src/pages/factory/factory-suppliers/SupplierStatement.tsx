@@ -22,28 +22,12 @@ import {
   Users,
   Package,
 } from "lucide-react";
-import { StatementResponse, SupplierWithBalance } from "./factorySupplierTypes";
+import { StatementResponse, SupplierWithBalance, type StatementDisplayRow } from "./factorySupplierTypes";
 import { LinkedSupplierExposure } from "./LinkedSupplierExposure";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 
 type SuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
 
-interface StatementDisplayRow {
-  key: string;
-  date: string;
-  type: "purchase" | "payment" | "fx" | "commission";
-  ref: string;
-  detail?: string;
-  amount: string;
-  amountVal: number;
-  rowCc: string;
-  status?: string;
-  optional?: boolean;
-  amountIsNeg?: boolean;
-  onMove?: () => void;
-  onDelete?: () => void;
-  onEdit?: () => void;
-}
 import { CurrencyPools } from "./CurrencyPools";
 import { SupplierStatementRows } from "./SupplierStatementRows";
 

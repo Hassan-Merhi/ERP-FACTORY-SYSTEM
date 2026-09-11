@@ -2,8 +2,6 @@ import type { ComponentProps } from "react";
 
 import type { Badge } from "@/components/ui/badge";
 
-import type { DaybookEntry } from "../types";
-
 export type { DaybookEntry } from "../types";
 
 /** Values returned by JSON APIs for numeric database columns. */

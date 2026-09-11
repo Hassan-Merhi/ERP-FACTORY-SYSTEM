@@ -136,7 +136,19 @@ export function AccountCombobox({
 export function AdjustmentsHistoryCard({ onDeleteRequest }: { onDeleteRequest: (id: number) => void }) {
   const { formatDisplayDate } = useDateFormat();
   const [open, setOpen] = useState(false);
-  const { data: adjustments, isLoading } = useQuery<any[]>({
+  interface RawStockAdjustmentRow {
+    id: number;
+    date: string;
+    type: string;
+    kg: string;
+    costPerKg: string | null;
+    currencyCode: string | null;
+    supplierId: number | null;
+    supplierName: string | null;
+    materialLabel: string | null;
+    notes: string | null;
+  }
+  const { data: adjustments, isLoading } = useQuery<RawStockAdjustmentRow[]>({
     queryKey: ["/api/factory/raw-stock/adjustments"],
     enabled: open,
   });
@@ -208,8 +220,8 @@ export function AdjustmentsHistoryCard({ onDeleteRequest }: { onDeleteRequest: (
                       {parseFloat(adj.kg).toFixed(3)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
-                      {(adj.type === "ADD" || adj.type === "DEDUCT") && parseFloat(adj.costPerKg) > 0
-                        ? `${adj.currencyCode} ${parseFloat(adj.costPerKg).toFixed(4)}`
+                      {(adj.type === "ADD" || adj.type === "DEDUCT") && parseFloat(adj.costPerKg || "0") > 0
+                        ? `${adj.currencyCode} ${parseFloat(adj.costPerKg || "0").toFixed(4)}`
                         : "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">

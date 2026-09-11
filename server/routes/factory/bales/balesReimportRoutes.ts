@@ -74,7 +74,22 @@ export function registerBalesReimportRoutes(app: Express) {
             .json({ message: "Excel must have at least: Reference Number, Product Name, Weight (kg) columns" });
         }
 
-        const rows: any[] = [];
+        type BaleImportRow = {
+          referenceNumber: string;
+          articleCode: string;
+          productName: string;
+          category: string;
+          weightKg: string;
+          costPerKg: string;
+          totalCost: string;
+          erpLocationId: number | null;
+          status: string;
+          mixBatchId: number | null;
+          baleCode: string;
+          grade: string;
+          finalizedAt: string;
+        };
+        const rows: BaleImportRow[] = [];
         const fileRefSet = new Set<string>();
         const fileDuplicates: string[] = [];
 
@@ -172,7 +187,10 @@ export function registerBalesReimportRoutes(app: Express) {
             allCategories.map((c: ImportedBaleCategory) => [c.name?.toLowerCase(), c] as const)
           );
 
-          const createdBales: any[] = [];
+          type ReimportBaleRow = (typeof factoryBales.$inferSelect) & {
+            _product?: typeof factoryBaleProducts.$inferSelect;
+          };
+          const createdBales: ReimportBaleRow[] = [];
           let totalWeight = 0;
 
           for (const row of rows) {
@@ -448,14 +466,14 @@ export function registerBalesReimportRoutes(app: Express) {
         const { read: readXlsx, utils } = await import("xlsx-js-style");
         const wb = readXlsx(req.file.buffer, { type: "buffer" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[] = utils.sheet_to_json(sheet, { defval: "" });
+        const rows = utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
 
         let updated = 0;
         let skipped = 0;
         const errors: string[] = [];
 
         for (const row of rows) {
-          const id = parseInt(row["ID (do not edit)"] ?? row["id"] ?? row["ID"]);
+          const id = parseInt(String(row["ID (do not edit)"] ?? row["id"] ?? row["ID"] ?? ""), 10);
           const productName = String(row["Product Name"] ?? row["productName"] ?? "").trim();
 
           if (!id || isNaN(id)) {

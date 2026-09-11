@@ -141,8 +141,7 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
           logger.warn("Shipping container doc disk cache write failed (non-fatal):", { error: e });
         }
 
-        const username: string =
-          (req.session as any).username || (req.session).email || (req.session).name || null;
+        const username: string | null = req.session.username || req.session.email || req.session.name || null;
 
         const [doc] = await db
           .insert(factoryShippingContainerDocuments)

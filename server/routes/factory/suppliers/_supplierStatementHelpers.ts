@@ -57,6 +57,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   const allSupplierIds = allSuppliers.map((s) => s.id);
   const supplierNameMap: Record<number, string> = {};
   for (const s of allSuppliers) supplierNameMap[s.id] = s.name;
+  const supplierNameOf = (supplierId: number | null): string =>
+    supplierId != null ? supplierNameMap[supplierId] || "Unknown" : "Unknown";
 
   // Containers — exclude OTW unless caller opts in; always exclude soft-deleted
   const containersWhereClause = includeOtw
@@ -210,8 +212,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   // Container rows
   // Always use totalKg (declared/agreed weight) — weight differences at offload affect inventory
   // only, not what is owed to the supplier. This matches computeBalance and computeStats.
-  for (const c of allContainers as any[]) {
-    const supplierName = supplierNameMap[c.supplierId] || "Unknown";
+  for (const c of allContainers) {
+    const supplierName = supplierNameOf(c.supplierId);
     const cc = c.currencyCode || "USD";
     const kg = parseFloat(c.totalKg || "0");
     const rate = parseFloat(c.ratePerKg || "0");
@@ -381,10 +383,10 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   // to a supplier via supplierId (already filtered at query level), so they belong on that
   // supplier's statement regardless of which supplier owns the container.
   // Post-offload charges can only be added to OFFLOADED containers, so OTW-toggle is irrelevant.
-  for (const oc of allOffloadCharges as any[]) {
+  for (const oc of allOffloadCharges) {
     const cc = oc.currencyCode || "USD";
     const amt = parseFloat(oc.amount || "0");
-    const supplierName = supplierNameMap[oc.supplierId] || "Unknown";
+    const supplierName = supplierNameOf(oc.supplierId);
     const dateVal = oc.createdAt ? new Date(oc.createdAt).toISOString().split("T")[0] : null;
     addRow(cc, {
       date: dateVal,
@@ -442,13 +444,13 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           )
       : [];
 
-  for (const c of containerColOtherCharges as any[]) {
+  for (const c of containerColOtherCharges) {
     // Skip charges tied to OTW containers when toggle is off
     if (!filteredContainerIdSet.has(c.id)) continue;
     const cc = c.otherChargesCurrencyCode || "USD";
     const amt = parseFloat(c.otherCharges || "0");
-    const chargeSupplierName = supplierNameMap[c.otherChargesSupplierId] || "Unknown";
-    const containerSupplierName = supplierNameMap[c.supplierId] || "Unknown";
+    const chargeSupplierName = supplierNameOf(c.otherChargesSupplierId);
+    const containerSupplierName = supplierNameOf(c.supplierId);
     const dateVal = c.arrivalDate
       ? String(c.arrivalDate)
       : c.createdAt

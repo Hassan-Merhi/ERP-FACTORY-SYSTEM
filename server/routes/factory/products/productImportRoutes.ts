@@ -36,7 +36,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
           } = await import("xlsx-js-style");
           const workbook = readExcel(req.file.buffer, { type: "buffer" });
           const sheetName = workbook.SheetNames[0];
-          const rows: any[] = sheetToJson(workbook.Sheets[sheetName]);
+          const rows = sheetToJson<Record<string, unknown>>(workbook.Sheets[sheetName]);
 
           let created = 0;
           let updated = 0;
@@ -238,9 +238,9 @@ export function registerFactoryProductImportRoutes(app: Express) {
           const XLSX = await import("xlsx-js-style");
           const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
           const sheetName = workbook.SheetNames[0];
-          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName]);
 
-          const getVal = (row: any, ...keys: string[]) => {
+          const getVal = (row: Record<string, unknown>, ...keys: string[]) => {
             const rowKeys = Object.keys(row);
             for (const k of keys) {
               const found = rowKeys.find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
@@ -381,9 +381,9 @@ export function registerFactoryProductImportRoutes(app: Express) {
           const XLSX = await import("xlsx-js-style");
           const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
           const sheetName = workbook.SheetNames[0];
-          const rows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName]);
 
-          const getVal = (row: any, ...keys: string[]) => {
+          const getVal = (row: Record<string, unknown>, ...keys: string[]) => {
             const rowKeys = Object.keys(row);
             for (const k of keys) {
               const found = rowKeys.find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
@@ -406,7 +406,8 @@ export function registerFactoryProductImportRoutes(app: Express) {
           let skippedRows = 0;
           const skippedDetails: string[] = [];
 
-          const rowGroups: { product: any; qty: number; weight: number; prodDate: Date }[] = [];
+          type ImportedProduct = (typeof allProducts)[number];
+          const rowGroups: { product: ImportedProduct; qty: number; weight: number; prodDate: Date }[] = [];
           let totalBalesNeeded = 0;
 
           logger.info(`Bale import: processing ${rows.length} rows`, {

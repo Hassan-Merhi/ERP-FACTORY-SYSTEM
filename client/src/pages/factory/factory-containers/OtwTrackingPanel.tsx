@@ -14,6 +14,13 @@ import type { ContainerWithSupplier } from "./otwHelpers";
 import { ContainerStatusBadge } from "./ContainerBadges";
 import { trackingStatusBadge, TrackNowProgressLog, EventTimelineSheet, TrackingSettingsSheet } from "./TrackingSheets";
 
+interface TrackNowResult {
+  success: boolean;
+  containerNumber?: string | null;
+  lastStatus?: string | null;
+  error?: string | null;
+}
+
 const OTW_FILTER_LABELS: Record<string, string> = {
   all: "All",
   PENDING: "Pending",
@@ -51,7 +58,7 @@ export function OtwTrackingPanel({ containers, isLoading, trackingNowId, setTrac
   const trackNowMutation = useMutation({
     mutationFn: async (containerId: number) => {
       const res = await factoryApiRequest("POST", `/api/factory/container-tracking/${containerId}/track-now`, {});
-      return res as any;
+      return (await res.json()) as TrackNowResult;
     },
     onMutate: (id) => {
       setTrackingNowId(id);
@@ -169,7 +176,7 @@ export function OtwTrackingPanel({ containers, isLoading, trackingNowId, setTrac
             </TableHeader>
             <TableBody>
               {filteredPanelContainers.map((c) => {
-                const fc = c as any;
+                const fc = c;
                 const lastChecked: Date | null = fc.trackingLastCheckedAt ? new Date(fc.trackingLastCheckedAt) : null;
                 const isTracking = trackingNowId === c.id;
                 const hasError = !!fc.trackingError;
@@ -212,7 +219,7 @@ export function OtwTrackingPanel({ containers, isLoading, trackingNowId, setTrac
                           <span className="text-xs text-destructive flex items-center gap-1">
                             <XCircle className="h-3 w-3" />
                             {fc.trackingError?.slice(0, 60)}
-                            {fc.trackingError?.length > 60 ? "…" : ""}
+                            {(fc.trackingError?.length ?? 0) > 60 ? "…" : ""}
                           </span>
                         </div>
                       ) : (

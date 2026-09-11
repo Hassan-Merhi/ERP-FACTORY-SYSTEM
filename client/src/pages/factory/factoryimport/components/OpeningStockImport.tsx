@@ -21,7 +21,11 @@ import { ImportModeChooser } from "./ImportModeChooser";
 export function OpeningStockImport() {
   const [mode, setMode] = useState<"choose" | "csv">("choose");
   const [csvData, setCsvData] = useState<OpeningStockRow[]>([]);
-  const [result, setResult] = useState<{ imported: number; errors: string[]; recalcStats?: any } | null>(null);
+  const [result, setResult] = useState<{
+    imported: number;
+    errors: string[];
+    recalcStats?: { totalAllocatedKg: number };
+  } | null>(null);
   const { toast } = useToast();
 
   const importMutation = useMutation({
@@ -44,7 +48,7 @@ export function OpeningStockImport() {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase();
 
-    const parse = (rows: any[]) => {
+    const parse = (rows: Record<string, unknown>[]) => {
       const parsed: OpeningStockRow[] = rows
         .map((row) => ({
           supplier: String(row.supplier || row.Supplier || "").trim(),
@@ -68,7 +72,7 @@ export function OpeningStockImport() {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => parse(results.data),
+        complete: (results) => parse(results.data as Record<string, unknown>[]),
       });
     } else if (ext === "xlsx" || ext === "xls") {
       const reader = new FileReader();

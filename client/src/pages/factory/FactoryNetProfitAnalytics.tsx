@@ -125,6 +125,14 @@ function fmt(n: number): string {
   );
 }
 
+interface BreakdownAccount {
+  id?: number;
+  name: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
 function AccountBreakdown({
   title,
   accounts,
@@ -133,7 +141,7 @@ function AccountBreakdown({
   badgeClass,
 }: {
   title: string;
-  accounts: any[];
+  accounts: BreakdownAccount[];
   total: number;
   type: "income" | "expense";
   badgeClass: string;

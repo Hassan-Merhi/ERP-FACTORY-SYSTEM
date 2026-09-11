@@ -170,11 +170,12 @@ async function sendProductDetail(req: import("express").Request, res: import("ex
 
 async function applyDeferredProductArabic(
   req: import("express").Request,
-  payload: any,
+  payload: unknown,
   deferred: { nameAr?: string | null; descriptionAr?: string | null },
   suppressFallbacks: boolean
 ) {
-  const current = payload?.product ?? payload;
+  const payloadObject = (payload ?? {}) as { product?: { id?: unknown } | null } & Record<string, unknown>;
+  const current = payloadObject.product ?? payloadObject;
   const productId = Number(current?.id);
   const companyId = getFactoryCompanyId(req);
   if (!companyId || !Number.isSafeInteger(productId) || productId <= 0) return payload;
@@ -197,7 +198,7 @@ async function applyDeferredProductArabic(
       )
     )
     .returning();
-  return product ? (payload?.product ? { ...payload, product } : product) : payload;
+  return product ? (payloadObject.product ? { ...payloadObject, product } : product) : payload;
 }
 
 function prepareMutation(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {

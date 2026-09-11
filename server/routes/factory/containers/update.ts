@@ -43,13 +43,13 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       const b = req.body;
 
       // Helper: coerce empty-string / undefined to null for numeric/integer columns
-      const dec = (v: any) => (v === "" || v === undefined || v === null ? null : String(v));
-      const int = (v: any) => {
+      const dec = (v: unknown) => (v === "" || v === undefined || v === null ? null : String(v));
+      const int = (v: unknown) => {
         if (v === "" || v === undefined || v === null) return null;
-        const n = parseInt(v);
+        const n = parseInt(String(v), 10);
         return isNaN(n) ? null : n;
       };
-      const str = (v: any) => (v === "" || v === undefined ? null : String(v));
+      const str = (v: unknown) => (v === "" || v === undefined ? null : String(v));
 
       // Build a strict whitelist — only valid factoryContainers columns
       const updateData: Partial<typeof factoryContainers.$inferInsert> & { updatedAt: Date } = {

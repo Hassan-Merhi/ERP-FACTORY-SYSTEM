@@ -199,7 +199,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
       } = costing;
 
       // ── Single atomic transaction: all DB writes happen here or not at all ────
-      let rawStock: any;
+      let rawStock: typeof factoryRawStock.$inferSelect | undefined;
 
       await db.transaction(async (tx) => {
         // ── SUBSEQUENT RECEIPT PATH ───────────────────────────────────────────────
@@ -428,7 +428,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
           companyId,
           txDate: offloadDate,
           txType: "OFFLOAD_RAW_STOCK",
-          referenceId: rawStock.id,
+          referenceId: rawStock!.id,
           referenceTable: "factory_raw_stock",
           description: `Offloaded container ${container.containerNumber}: ${dReceivedKg.toDecimalPlaces(3).toFixed(3)} kg at ${dInclusiveCostPerKg.toDecimalPlaces(6).toFixed(6)}/kg (inclusive)`,
           currencyCode,

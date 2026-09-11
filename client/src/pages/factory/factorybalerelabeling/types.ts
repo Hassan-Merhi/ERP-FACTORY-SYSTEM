@@ -30,6 +30,16 @@ export interface ApplyItem {
   weightKg: string;
 }
 
+export interface RelabelSession {
+  id: number;
+  createdAt: string | null;
+  uploadedFilename: string | null;
+  printFormat: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+}
+
 export interface LabelPreviewCardProps {
   item: ApplyItem;
   designColor: A4DesignColor;

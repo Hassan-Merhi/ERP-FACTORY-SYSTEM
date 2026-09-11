@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactorySupplier } from "@shared/schema";
+import type { ApiListRow } from "@shared/apiTypes";
 
 type FormData = {
   containerNumber: string;
@@ -48,7 +49,7 @@ interface ContainerFormBodyProps {
   filteredSupplierList: FactorySupplier[];
   selectedSupplier: FactorySupplier | null;
   brokerMismatch: boolean | null | undefined;
-  ledgerAccounts: any[];
+  ledgerAccounts: ApiListRow[];
 }
 
 export function ContainerFormBody({

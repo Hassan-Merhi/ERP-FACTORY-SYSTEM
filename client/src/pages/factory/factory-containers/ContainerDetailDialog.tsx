@@ -15,11 +15,20 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 import { getContainerStatusLabel } from "./otwHelpers";
 import type { ContainerWithSupplier } from "./otwHelpers";
+import type { ApiListRow } from "@shared/apiTypes";
+
+interface ContainerOtherChargeRow {
+  id: number;
+  amount: string | null;
+  currencyCode: string | null;
+  ledgerAccountId: number | null;
+  description: string | null;
+}
 
 interface ContainerDetailDialogProps {
   container: ContainerWithSupplier | null;
   suppliers: NoInfer<{ address: string | null; id: number; name: string; email: string | null; createdAt: Date; companyId: number; phone: string | null; notes: string | null; updatedAt: Date; parentId: number | null; openingBalance: string; isActive: boolean; contactPerson: string | null; linkedSupplierId: number | null; supplierCategoryId: number | null; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; }[]> | undefined;
-  ledgerAccounts: any[];
+  ledgerAccounts: ApiListRow[];
   onClose: () => void;
   onEdit: (c: ContainerWithSupplier) => void;
 }
@@ -31,7 +40,7 @@ export function ContainerDetailDialog({
   onClose,
   onEdit,
 }: ContainerDetailDialogProps) {
-  const { data: viewContainerCharges = [] } = useQuery<any[]>({
+  const { data: viewContainerCharges = [] } = useQuery<ContainerOtherChargeRow[]>({
     queryKey: ["/api/factory/containers", container?.id, "other-charges"],
     queryFn: async () => {
       if (!container) return [];

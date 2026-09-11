@@ -11,6 +11,7 @@
 import { CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { ProformaProgressLine } from "@/lib/proformaCapacity";
 import type { ProformaLineStatus } from "./useFactoryContainerLoadingScanModel";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
@@ -60,7 +61,13 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
   );
 }
 
-function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; line: any }) {
+function StockCell({
+  model,
+  line,
+}: {
+  model: FactoryContainerLoadingScanModel;
+  line: ProformaProgressLine;
+}) {
   const inStock = model.stockCounts[line.articleCode] ?? null;
   if (inStock === null) return <span className="text-muted-foreground">—</span>;
   const needsMore = line.status === "short" || line.status === "none";

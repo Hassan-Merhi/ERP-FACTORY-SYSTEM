@@ -69,7 +69,7 @@ interface UnresolvedRow {
   supplierId: number | null;
   supplierName: string | null;
   status: string | null;
-  currencyCode: string;
+  currencyCode: string | null;
   storedFxRateToUsd: string | null;
   fxRateConfirmed: boolean;
   amountNative: string | null;
@@ -153,7 +153,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
           }
         }
 
-        for (const oc of offloadCharges as any[]) {
+        for (const oc of offloadCharges) {
           chargesScanned++;
           const { looksSet } = resolveStoredFxRate(oc.currencyCode, oc.fxRateToUsd, oc.fxRateConfirmed);
           if (!looksSet) {
@@ -214,7 +214,8 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
             bySupplier[supKey] = { supplierId: row.supplierId, supplierName: row.supplierName, count: 0 };
           bySupplier[supKey].count++;
 
-          byCurrency[row.currencyCode] = (byCurrency[row.currencyCode] || 0) + 1;
+          const currencyKey = row.currencyCode ?? "UNKNOWN";
+          byCurrency[currencyKey] = (byCurrency[currencyKey] || 0) + 1;
 
           const statusKey = row.status || "UNKNOWN";
           byStatus[statusKey] = (byStatus[statusKey] || 0) + 1;
