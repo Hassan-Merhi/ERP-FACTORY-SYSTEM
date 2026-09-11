@@ -81,15 +81,15 @@ export async function collectContinuousChunks<T, TChunk extends ContinuousChunk<
     options.onChunk?.(chunk, rows);
 
     if (!chunk.hasMore) {
-      if (!first) throw new Error("Continuous list returned no first chunk");
+      if (!first) throw new Error("continuous-list-empty-first-chunk");
       return { rows, first };
     }
     if (!chunk.nextCursor || seenCursors.has(chunk.nextCursor)) {
-      throw new Error("Continuous list cursor did not advance");
+      throw new Error("continuous-list-cursor-stalled");
     }
     seenCursors.add(chunk.nextCursor);
     cursor = chunk.nextCursor;
   }
 
-  throw new Error(`Continuous list exceeded the ${maxChunks}-chunk safety limit`);
+  throw new Error("continuous-list-chunk-limit");
 }
