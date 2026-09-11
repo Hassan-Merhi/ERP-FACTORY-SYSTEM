@@ -52,9 +52,22 @@ export function normalizeProformaArticleCode(value: unknown): string {
     .toLowerCase();
 }
 
+/**
+ * Capacity snapshots arrive straight from `res.json()`, so `articles` is only
+ * guaranteed by the declared type, not by anything checked at runtime. A body
+ * that omits it — an older server, a JSON error payload — would otherwise throw
+ * while a loading page renders and take the whole page down, so every consumer
+ * reads the bucket list through here.
+ */
+export function proformaCapacityArticles(
+  snapshot: ProformaCapacitySnapshot | null | undefined
+): ProformaCapacityArticle[] {
+  return Array.isArray(snapshot?.articles) ? snapshot.articles : [];
+}
+
 export function buildProformaProgress(snapshot: ProformaCapacitySnapshot | null | undefined): ProformaProgressLine[] {
   if (!snapshot) return [];
-  return snapshot.articles
+  return proformaCapacityArticles(snapshot)
     .filter((article) => article.isOnProforma)
     .map((article) => {
       const status: ProformaLineStatus = article.isOverloaded

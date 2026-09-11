@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildProformaProgress, type ProformaCapacitySnapshot } from "./proformaCapacity";
+import { buildProformaProgress, proformaCapacityArticles, type ProformaCapacitySnapshot } from "./proformaCapacity";
 
 function snapshot(overrides: Partial<ProformaCapacitySnapshot> = {}): ProformaCapacitySnapshot {
   return {
@@ -72,5 +72,30 @@ describe("buildProformaProgress", () => {
     expect(buildProformaProgress(value)[0]).toEqual(
       expect.objectContaining({ status: "overloaded", remaining: 0, excess: 65 })
     );
+  });
+});
+
+describe("proformaCapacityArticles", () => {
+  it("returns the buckets of a well-formed snapshot", () => {
+    const snap = snapshot();
+    expect(proformaCapacityArticles(snap)).toBe(snap.articles);
+  });
+
+  it("absorbs payloads that omit the bucket list instead of throwing", () => {
+    // The snapshot comes straight from res.json(), so `articles` is only
+    // guaranteed by the declared type. A body without it used to crash the
+    // loading pages while they rendered.
+    const malformed = { ...snapshot(), articles: undefined } as unknown as ProformaCapacitySnapshot;
+    expect(proformaCapacityArticles(malformed)).toEqual([]);
+    expect(buildProformaProgress(malformed)).toEqual([]);
+
+    const notAnArray = { ...snapshot(), articles: "nope" } as unknown as ProformaCapacitySnapshot;
+    expect(proformaCapacityArticles(notAnArray)).toEqual([]);
+    expect(buildProformaProgress(notAnArray)).toEqual([]);
+  });
+
+  it("treats a missing snapshot as no buckets", () => {
+    expect(proformaCapacityArticles(null)).toEqual([]);
+    expect(proformaCapacityArticles(undefined)).toEqual([]);
   });
 });

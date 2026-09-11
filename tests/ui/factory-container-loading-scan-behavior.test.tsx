@@ -20,11 +20,48 @@ const orderDetail = {
   bales: [{ id: 10, baleReference: "REF-1", baleName: "Shirts", articleCode: "A1", weight: "50" }],
 };
 
+const capacitySnapshot = {
+  proformaId: 5,
+  companyId: 1,
+  customerId: 1,
+  proformaName: "PF-5",
+  proformaActive: true,
+  currentOrderId: 77,
+  requestedTotalQty: 2,
+  currentOrderLoadedTotalQty: 1,
+  siblingLoadedTotalQty: 0,
+  totalConsumedQty: 1,
+  remainingTotalQty: 1,
+  excessTotalQty: 0,
+  articles: [
+    {
+      articleCode: "A1",
+      normalizedArticleCode: "a1",
+      isOnProforma: true,
+      requestedQty: 2,
+      currentOrderLoadedQty: 1,
+      siblingLoadedQty: 0,
+      totalConsumedQty: 1,
+      remainingQty: 1,
+      excessQty: 0,
+      isFulfilled: false,
+      isOverloaded: false,
+      productName: "Shirts",
+    },
+  ],
+};
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
     if (root === "/api/factory/customers") return { data: [{ id: 1, legalName: "Buyer One" }] };
     if (root === "/api/locations") return { data: [{ id: 11, name: "Dock" }] };
+    if (root === "/api/factory/customer-proformas/capacity") {
+      // Phase 4 reads loading progress from the authoritative capacity
+      // snapshot rather than recomputing it from the proforma lines, so the
+      // resumed order's one scanned A1 bale is reported here.
+      return { data: capacitySnapshot, isLoading: false, isFetching: false };
+    }
     if (typeof root === "string" && root.startsWith("/api/factory/customer-proformas")) {
       return {
         data: [
