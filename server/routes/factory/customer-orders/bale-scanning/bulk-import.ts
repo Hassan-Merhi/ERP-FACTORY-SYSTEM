@@ -152,7 +152,7 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 proformaId: order.proformaIdUsed,
                 currentOrderId: orderId,
               });
-              if (!capacity || !evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1).allowed) {
+              if (!capacity || !evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading").allowed) {
                 return { kind: "notFound" as const };
               }
             }
@@ -371,7 +371,12 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
             if (capacity) {
               const normalized = normalizeLoadingArticleCode(effectiveArticleCode);
               const proposedForThisArticle = (pendingByArticle.get(normalized) || 0) + 1;
-              const decision = evaluateProformaArticleCapacity(capacity, effectiveArticleCode, proposedForThisArticle);
+              const decision = evaluateProformaArticleCapacity(
+                capacity,
+                effectiveArticleCode,
+                proposedForThisArticle,
+                "per_loading"
+              );
               if (!decision.allowed) continue;
               pendingByArticle.set(normalized, proposedForThisArticle);
             }
