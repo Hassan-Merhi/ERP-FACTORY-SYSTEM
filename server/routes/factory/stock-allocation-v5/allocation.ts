@@ -54,9 +54,9 @@ export function registerV5StockAllocationRoutes(app: Express) {
         [companyId]
       );
       const excludedCodes = new Set<string>(
-        resultRows(excludedCodesRaw)
-          .map((r: any) => r.articleCode)
-          .filter(Boolean)
+        resultRows<{ articleCode: string | null }>(excludedCodesRaw)
+          .map((r) => r.articleCode)
+          .filter((c): c is string => Boolean(c))
       );
 
       // 1. stockAvailable — IN_STOCK bales
@@ -67,7 +67,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
             GROUP BY article_code`
       );
       const inStockMap = new Map<string, number>(
-        resultRows(inStockRaw).map((r: any) => [r.articleCode, Number(r.count)])
+        resultRows<{ articleCode: string; count: number }>(inStockRaw).map((r) => [r.articleCode, Number(r.count)])
       );
 
       // 2. totalLoaded — bales physically scanned into LOADING orders ONLY.
@@ -85,7 +85,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
             GROUP BY fb.article_code`
       );
       const inLoadingMap = new Map<string, number>(
-        resultRows(inLoadingRaw).map((r: any) => [r.articleCode, Number(r.count)])
+        resultRows<{ articleCode: string; count: number }>(inLoadingRaw).map((r) => [r.articleCode, Number(r.count)])
       );
 
       // 3. Active proformas + lines (with optional date range filter on createdAt)
@@ -154,7 +154,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
                 AND status = ANY(${sqlArray(ACTIVE_ORDER_STATUSES as unknown as string[])})
               ORDER BY id`
         );
-        ordersByProforma = resultRows(ordersRaw).map((r: any) => ({
+        ordersByProforma = resultRows<OrderRow>(ordersRaw).map((r) => ({
           id: Number(r.id),
           proformaId: Number(r.proformaId),
           containerNumber: r.containerNumber ?? null,
@@ -175,7 +175,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
               WHERE cob.order_id = ANY(${sqlArray(allOrderIds)})
               GROUP BY cob.order_id, fb.article_code`
         );
-        loadedBalesByOrder = resultRows(balesRaw).map((r: any) => ({
+        loadedBalesByOrder = resultRows<BalesByOrder>(balesRaw).map((r) => ({
           orderId: Number(r.orderId),
           articleCode: r.articleCode,
           count: Number(r.count),
@@ -231,7 +231,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
               FROM customer_order_expected_lines
               WHERE order_id = ANY(${sqlArray(allOrderIds)})`
         );
-        allExpectedLines = resultRows(expRaw).map((r: any) => ({
+        allExpectedLines = resultRows<ExpectedLine>(expRaw).map((r) => ({
           orderId: Number(r.orderId),
           articleCode: r.articleCode,
           expectedQty: Number(r.expectedQty),
@@ -276,7 +276,12 @@ export function registerV5StockAllocationRoutes(app: Express) {
       const allProductsMap = new Map<string, string>();
       const weightMap = new Map<string, number>();
       const categoryMap = new Map<string, string>();
-      resultRows(allProductsRaw).forEach((r: any) => {
+      resultRows<{
+        articleCode: string | null;
+        name: string | null;
+        weightKg: string | null;
+        categoryName: string | null;
+      }>(allProductsRaw).forEach((r) => {
         if (r.name && r.articleCode) {
           // Use only the canonical articleCode (COALESCE(article_code, code)) as the map key.
           // Adding the raw `code` separately would create phantom zero-stock rows for products
@@ -320,8 +325,8 @@ export function registerV5StockAllocationRoutes(app: Express) {
               WHERE matched_code IS NOT NULL
               ORDER BY matched_code`
         );
-        resultRows(prodRaw).forEach((r: any) => {
-          if (r.name) productNamesMap[r.articleCode] = r.name;
+        resultRows<{ articleCode: string | null; name: string | null }>(prodRaw).forEach((r) => {
+          if (r.name && r.articleCode) productNamesMap[r.articleCode] = r.name;
         });
       }
 
@@ -346,7 +351,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
                 AND product_name != ''
               ORDER BY article_code, created_at DESC`
         );
-        resultRows(baleNamesRaw).forEach((r: any) => {
+        resultRows<{ articleCode: string | null; productName: string | null }>(baleNamesRaw).forEach((r) => {
           if (r.articleCode && r.productName && !productNamesMap[r.articleCode]) {
             productNamesMap[r.articleCode] = r.productName;
           }

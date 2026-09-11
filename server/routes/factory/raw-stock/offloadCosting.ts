@@ -200,19 +200,20 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     commissionAmount: "0",
   };
 
-  // The four values below are the only type escapes in this file, and they are
-  // all the same escape: computeContainerLandedCost declares its parameters as
-  // whole `$inferSelect` rows, but nothing here has one. The container is a
-  // synthesised snapshot with charge fields zeroed so they are not counted
-  // twice, and the charge/commission arguments are three- and four-field
-  // literals holding just the amount, currency and FX state the helper reads.
-  // Naming them honestly means widening the helper's parameters to `Pick<...>`,
-  // which is a change to a service shared with the recalc tool and
-  // rawStockContainerRoutes — out of scope for a file split, and worth doing on
-  // its own so the pins move separately from the boundary.
+  // The charge/commission arguments here are three- and four-field literals
+  // holding just the amount, currency and FX state, passed against the helper's
+  // structural `ChargeMoneyFields` parameter type (full $inferSelect rows also
+  // satisfy it). The container itself is still a synthesised snapshot with
+  // charge fields zeroed so they are not counted twice — hence the one
+  // remaining `as unknown as` conversion on the first argument.
   //
   // OC as a single per-row entry so the helper uses the confirmed-FX code path.
-  const ocRowsForHelper: any[] =
+  const ocRowsForHelper: {
+    amount: string;
+    currencyCode: string;
+    fxRateToUsd: string;
+    fxRateConfirmed: boolean;
+  }[] =
     otherChargesVal > 0
       ? [
           {
@@ -226,15 +227,21 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
 
   // Additional charges: confirmed when an explicit rate was supplied for a
   // non-container-currency charge; same-ccy charges need no separate rate.
-  const addlForHelper: any[] = additionalChargesArr.map((c) => ({
-    amount: c.amount || "0",
-    currencyCode: c.currencyCode || currencyCode,
-    fxRateToUsd: c.fxRateToUsd || (c.currencyCode === "USD" ? "1" : String(fxRate)),
-    fxRateConfirmed: !!(c.fxRateToUsd && parseFloat(c.fxRateToUsd) > 0),
-  }));
+  const addlForHelper: { amount: string; currencyCode: string; fxRateToUsd: string; fxRateConfirmed: boolean }[] =
+    additionalChargesArr.map((c) => ({
+      amount: c.amount || "0",
+      currencyCode: c.currencyCode || currencyCode,
+      fxRateToUsd: c.fxRateToUsd || (c.currencyCode === "USD" ? "1" : String(fxRate)),
+      fxRateConfirmed: !!(c.fxRateToUsd && parseFloat(c.fxRateToUsd) > 0),
+    }));
 
   // Commission record: confirmed (rate was resolved above or is 1 for USD).
-  const commissionForHelper: any = commInsertValues
+  const commissionForHelper: {
+    commissionTotal: string;
+    currencyCode: string | undefined;
+    fxRateToUsd: string;
+    fxRateConfirmed: boolean;
+  } | null = commInsertValues
     ? {
         commissionTotal: String(commTotalVal),
         currencyCode: commInsertValues.currencyCode,

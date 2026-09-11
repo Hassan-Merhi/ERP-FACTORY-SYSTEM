@@ -43,7 +43,7 @@ export function registerProductionBaleRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const filters: any = {};
+      const filters: { mixBatchId?: number; status?: string; category?: string; grade?: string } = {};
       if (req.query.mixBatchId) filters.mixBatchId = parseInt(req.query.mixBatchId as string);
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.category) filters.category = req.query.category as string;

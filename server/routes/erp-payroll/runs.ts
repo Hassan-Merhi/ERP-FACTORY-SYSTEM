@@ -250,7 +250,7 @@ export function registerPayrollRunRoutes(app: Express) {
       if (action === "update" || !action) {
         // Update items/notes while still DRAFT
         if (run.status === "PAID") return res.status(400).json({ message: "Cannot edit a paid run" });
-        const updates: any = {};
+        const updates: Partial<typeof erpPayrollRuns.$inferInsert> = {};
         if (notes !== undefined) updates.notes = notes;
         if (date) updates.date = date;
         if (Object.keys(updates).length)

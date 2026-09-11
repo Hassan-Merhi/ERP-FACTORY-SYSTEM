@@ -50,12 +50,12 @@ export function SupplierImport() {
     const ext = file.name.split(".").pop()?.toLowerCase();
 
     if (ext === "csv" || ext === "txt") {
-      Papa.parse(file, {
+      Papa.parse<Record<string, string>>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
           const parsed: SupplierRow[] = results.data
-            .map((row: any) => ({
+            .map((row) => ({
               name: (row.name || "").trim(),
               openingBalance: (row.openingBalance || row.opening_balance || "0").trim(),
               contactPerson: (row.contactPerson || row.contact_person || "").trim(),

@@ -18,12 +18,12 @@ export async function updateVoucherRecord(
   tx: DbTransaction,
   params: {
     voucherId: number;
-    description: any;
+    description: string | null;
     grandTotal: number;
     locationChanged: boolean;
     targetLocationId: number;
     oldLocationId: number;
-    voucherDate: any;
+    voucherDate?: string;
     isCreditSale: boolean;
   }
 ): Promise<void> {
@@ -38,7 +38,7 @@ export async function updateVoucherRecord(
     isCreditSale,
   } = params;
 
-  const voucherUpdate: any = {
+  const voucherUpdate: Partial<typeof vouchers.$inferInsert> = {
     description: description || null,
     totalAmount: grandTotal.toString(),
     isCreditSale,
@@ -48,7 +48,7 @@ export async function updateVoucherRecord(
     logger.info(`[POS Sales Edit] Updated voucher ${voucherId} location from ${oldLocationId} to ${targetLocationId}`);
   }
   if (voucherDate) {
-    voucherUpdate.voucherDate = new Date(voucherDate);
+    voucherUpdate.voucherDate = voucherDate;
   }
   await tx.update(vouchers).set(voucherUpdate).where(eq(vouchers.id, voucherId));
 }

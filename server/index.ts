@@ -575,7 +575,7 @@ let migrationsDone = false;
     });
   };
 
-  server.on("error", (err: any) => {
+  server.on("error", (err: Error & { code?: string }) => {
     if (err.code === "EADDRINUSE") {
       logger.warn(`Port ${port} in use — killing zombie process and retrying...`);
       try {

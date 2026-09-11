@@ -152,8 +152,7 @@ export function useVoucherQueries({
 
   const { data: supplierSearchResults = [] } = useQuery<Supplier[]>({
     queryKey: ["/api/suppliers", "live-search", debouncedAccountSearch, selectedCompany?.id],
-    enabled:
-      loadVoucherAccountData && debouncedAccountSearch.length >= 2 && !!selectedCompany && !isPropertiesCompany,
+    enabled: loadVoucherAccountData && debouncedAccountSearch.length >= 2 && !!selectedCompany && !isPropertiesCompany,
     staleTime: 30 * 1000,
     queryFn: async () => {
       const res = await fetch(`/api/suppliers?search=${encodeURIComponent(debouncedAccountSearch)}&limit=50`, {
@@ -230,7 +229,7 @@ export function useVoucherQueries({
         code: f.code,
         openingBalance: f.openingBalance,
       })),
-      ...customers.map((c: any) => ({
+      ...customers.map((c: Customer) => ({
         type: "customer" as const,
         id: c.id,
         name: c.legalName,
@@ -239,7 +238,7 @@ export function useVoucherQueries({
       })),
       ...customerSearchResults
         .filter((c) => !customers.find((p) => p.id === c.id))
-        .map((c: any) => ({
+        .map((c: Customer) => ({
           type: "customer" as const,
           id: c.id,
           name: c.legalName,

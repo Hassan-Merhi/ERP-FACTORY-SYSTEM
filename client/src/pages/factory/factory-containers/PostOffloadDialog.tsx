@@ -80,7 +80,13 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
       txDate: d,
     }: {
       containerId: number;
-      charges: { description: string; amount: string; currencyCode: string; ledgerAccountId: number | null; supplierId: number | null; }[];
+      charges: {
+        description: string;
+        amount: string;
+        currencyCode: string;
+        ledgerAccountId: number | null;
+        supplierId: number | null;
+      }[];
       txDate: string;
     }) => {
       const res = await factoryApiRequest("POST", `/api/factory/containers/${containerId}/post-offload-charges`, {
@@ -217,7 +223,15 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
   const handleSaveEdit = () => {
     if (!container || !editingCharge) return;
     const isLegacy = editingCharge.supplierLockedRateBefore === null;
-    const body: any = {
+    const body: {
+      description: string;
+      amount: string;
+      currencyCode: string;
+      ledgerAccountId: number | null;
+      txDate: string;
+      expectedVersion: number;
+      legacyBaselineRate?: number;
+    } = {
       description: editDesc || "Post-offload charge",
       amount: editAmount,
       currencyCode: editCcy,
@@ -267,7 +281,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
       });
       return;
     }
-    const body: any = {
+    const body: { undoDate: string; expectedVersion: number; legacyBaselineRate?: number } = {
       undoDate,
       expectedVersion: undoCharge.version,
     };

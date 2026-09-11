@@ -13,7 +13,13 @@ const MAX_BARCODE_CACHE_ENTRIES = 512;
 const barcodeImageCache = new Map<string, BarcodeImage>();
 const BWIP_MODULE_NAME: string = "bwip-js";
 
-let bwipjsPromise: Promise<any> | null = null;
+/** Subset of the bwip-js API this service uses (the package ships no usable declarations). */
+interface BwipJsRenderer {
+  toSVG(options: Record<string, unknown>): string;
+  toBuffer(options: Record<string, unknown>): Promise<Buffer>;
+}
+
+let bwipjsPromise: Promise<BwipJsRenderer> | null = null;
 
 function getBwipjs() {
   if (!bwipjsPromise) {

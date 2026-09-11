@@ -172,13 +172,29 @@ export default function FactoryDispatchBatches() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const payload: any = {
+      const payload: {
+        customerId: number;
+        batchDate: string;
+        currency: string;
+        priceMode: string;
+        destination: string | undefined;
+        notes: string | undefined;
+        proformaId?: number;
+      } = {
         customerId: parseInt(form.customerId),
         batchDate: form.batchDate,
         currency: form.currency,
         priceMode: form.priceMode,
         destination: form.destination || undefined,
         notes: form.notes || undefined,
+      } as {
+        customerId: number;
+        batchDate: string;
+        currency: string;
+        priceMode: string;
+        destination: string | undefined;
+        notes: string | undefined;
+        proformaId?: number;
       };
       if (form.proformaId && form.proformaId !== "_none") payload.proformaId = parseInt(form.proformaId);
       const res = await apiRequest("POST", "/api/factory/dispatch-batches", payload);

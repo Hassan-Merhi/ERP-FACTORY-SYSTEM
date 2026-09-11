@@ -61,11 +61,7 @@ export async function applyPosSaleUpdateTx(
   spContext: SpEditAccountingContext
 ): Promise<PosSaleUpdateTransactionResult> {
   const { voucherId, currentCompanyId, userId, username, userRole, canSellNegativeStock, body } = params;
-  const {
-    isSpCompanyEdit,
-    editSpPayableAccountId,
-    editSpDeductionClrAccountId,
-  } = spContext;
+  const { isSpCompanyEdit, editSpPayableAccountId, editSpDeductionClrAccountId } = spContext;
   const {
     description,
     items,
@@ -165,12 +161,12 @@ export async function applyPosSaleUpdateTx(
 
   await updateVoucherRecord(tx, {
     voucherId,
-    description,
+    description: typeof description === "string" ? description : null,
     grandTotal: rebuildResult.grandTotal,
     locationChanged,
     targetLocationId,
     oldLocationId,
-    voucherDate,
+    voucherDate: typeof voucherDate === "string" ? voucherDate : undefined,
     isCreditSale: Boolean(isCreditSale),
   });
 

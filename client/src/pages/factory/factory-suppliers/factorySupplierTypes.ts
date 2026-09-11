@@ -15,9 +15,12 @@ export interface CurrencyGroup {
   totalCommission: string;
   remainingCommission: string;
   totalDirectCommission: string;
+  totalPaid: string;
   netPayable: string;
   totalOwed: string;
   totalFreight?: string;
+  totalOtherCharges?: string;
+  autoSettledFreight?: string;
 }
 
 export interface SupplierWithBalance extends FactorySupplier {

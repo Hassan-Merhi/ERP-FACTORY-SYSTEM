@@ -215,7 +215,15 @@ export function StockEntryTab() {
 
   const quickCreateMutation = useMutation({
     mutationFn: async () => {
-      const body: any = { name: quickCreateName };
+      const body: {
+        name: string;
+        categoryId?: number;
+        weightPerBaleKg?: string;
+        grade?: string;
+        adminAuth?: { username: string; password: string };
+      } = {
+        name: quickCreateName,
+      };
       if (quickCreateCategoryId) body.categoryId = parseInt(quickCreateCategoryId);
       if (quickCreateWeight) body.weightPerBaleKg = quickCreateWeight;
       if (quickCreateGrade) body.grade = quickCreateGrade;

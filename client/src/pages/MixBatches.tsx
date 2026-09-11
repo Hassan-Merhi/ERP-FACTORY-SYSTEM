@@ -174,7 +174,7 @@ export default function MixBatches() {
     // Build row data
     const totals: Record<string, number> = {};
     const rows = dates.map((date) => {
-      const row: any = { DATE: date };
+      const row: Record<string, string | number> = { DATE: date };
       for (const name of batchNames) {
         const val = matrix[date]?.[name] || 0;
         row[name] = val > 0 ? val : "";
@@ -184,7 +184,7 @@ export default function MixBatches() {
     });
 
     // Total row
-    const totalRow: any = { DATE: "TOTAL" };
+    const totalRow: Record<string, string | number> = { DATE: "TOTAL" };
     for (const name of batchNames) {
       totalRow[name] = totals[name] || "";
     }

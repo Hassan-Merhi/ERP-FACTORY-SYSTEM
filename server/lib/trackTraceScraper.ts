@@ -12,7 +12,7 @@
  * Never throws — always returns a typed result.
  */
 
-import type { HTTPResponse } from "puppeteer";
+import type { Browser, HTTPResponse, Target } from "puppeteer";
 import { existsSync } from "fs";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "./logger";
@@ -119,7 +119,7 @@ export async function scrapeTrackTrace(containerNumber: string): Promise<TrackTr
     return { success: false, shipment: null, blocked: false, error: "Puppeteer not available" };
   }
 
-  let browser: any = null;
+  let browser: Browser | null = null;
   const hardStop = setTimeout(() => {
     try {
       browser?.close();
@@ -134,7 +134,7 @@ export async function scrapeTrackTrace(containerNumber: string): Promise<TrackTr
     puppeteerExtra.use(StealthPlugin());
 
     const chromePath = getChromiumPath();
-    browser = await puppeteerExtra.launch({
+    browser = (await puppeteerExtra.launch({
       headless: true,
       ...(chromePath ? { executablePath: chromePath } : {}),
       args: [
@@ -158,7 +158,7 @@ export async function scrapeTrackTrace(containerNumber: string): Promise<TrackTr
         "--metrics-recording-only",
         "--password-store=basic",
       ],
-    });
+    })) as Browser;
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
@@ -223,23 +223,24 @@ export async function scrapeTrackTrace(containerNumber: string): Promise<TrackTr
     await new Promise((r) => setTimeout(r, 4_000));
 
     // Set up new-tab listener BEFORE clicking — "Track direct" opens a popup/tab
+    const activeBrowser = browser;
     let newTabUrl: string | null = null;
     const newTabPromise = new Promise<string | null>((resolve) => {
-      const handler = (target: any) => {
+      const handler = (target: Target) => {
         try {
           const url: string = target.url?.() ?? "";
           if (url && url.startsWith("http") && !url.includes("track-trace.com")) {
-            browser.off("targetcreated", handler);
+            activeBrowser.off("targetcreated", handler);
             resolve(url);
           }
         } catch {
           /* ignore */
         }
       };
-      browser.on("targetcreated", handler);
+      activeBrowser.on("targetcreated", handler);
       // Auto-resolve after 12 s if no new tab opens
       setTimeout(() => {
-        browser.off("targetcreated", handler);
+        activeBrowser.off("targetcreated", handler);
         resolve(null);
       }, 12_000);
     });
