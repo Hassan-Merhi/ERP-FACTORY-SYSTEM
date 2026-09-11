@@ -55,8 +55,11 @@ export function useBoundedTableRows({
     const safeRowHeight = Math.max(1, rowHeight);
     const viewportStart = Math.max(0, scroller.scrollTop);
     const viewportEnd = viewportStart + Math.max(scroller.clientHeight, safeRowHeight * minimumRows);
-    const startIndex = Math.max(0, Math.floor(viewportStart / safeRowHeight) - overscan);
-    const endIndex = Math.min(rowCount, Math.ceil(viewportEnd / safeRowHeight) + overscan);
+    const requestedStart = Math.max(0, Math.floor(viewportStart / safeRowHeight) - overscan);
+    const maxStart = Math.max(0, rowCount - minimumRows);
+    const startIndex = Math.min(requestedStart, maxStart);
+    const requestedEnd = Math.ceil(viewportEnd / safeRowHeight) + overscan;
+    const endIndex = Math.min(rowCount, Math.max(requestedEnd, startIndex + minimumRows));
 
     setRange((current) =>
       current.startIndex === startIndex && current.endIndex === endIndex
