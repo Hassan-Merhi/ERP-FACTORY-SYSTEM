@@ -24,4 +24,13 @@ describe("tracking continuous-list cleanup", () => {
     expect(hook).toContain("fetchNextPage");
     expect(hook).toContain("AbortSignal");
   });
+
+  it("keeps cursor invariant failures as internal technical identifiers", () => {
+    const route = source("server/routes/accountTransactionPaginationRoutes.ts");
+
+    expect(route).toContain("account-statement-cursor-row-invalid");
+    expect(route).toContain("customer-statement-cursor-row-invalid");
+    expect(route).toContain("factory-customer-cursor-row-invalid");
+    expect(route).not.toContain("Unable to build account statement cursor");
+  });
 });
