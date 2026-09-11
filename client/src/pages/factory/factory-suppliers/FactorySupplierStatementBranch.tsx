@@ -17,7 +17,6 @@ interface VoucherPayment {
   optional?: boolean | null;
 }
 
-
 function isVoucherPayment(value: unknown): value is VoucherPayment {
   return (
     typeof value === "object" && value !== null && "id" in value && "voucherDate" in value && "voucherNumber" in value

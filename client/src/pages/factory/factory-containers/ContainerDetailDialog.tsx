@@ -27,7 +27,29 @@ interface ContainerOtherChargeRow {
 
 interface ContainerDetailDialogProps {
   container: ContainerWithSupplier | null;
-  suppliers: NoInfer<{ address: string | null; id: number; name: string; email: string | null; createdAt: Date; companyId: number; phone: string | null; notes: string | null; updatedAt: Date; parentId: number | null; openingBalance: string; isActive: boolean; contactPerson: string | null; linkedSupplierId: number | null; supplierCategoryId: number | null; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; }[]> | undefined;
+  suppliers:
+    | NoInfer<
+        {
+          address: string | null;
+          id: number;
+          name: string;
+          email: string | null;
+          createdAt: Date;
+          companyId: number;
+          phone: string | null;
+          notes: string | null;
+          updatedAt: Date;
+          parentId: number | null;
+          openingBalance: string;
+          isActive: boolean;
+          contactPerson: string | null;
+          linkedSupplierId: number | null;
+          supplierCategoryId: number | null;
+          isBroker: boolean;
+          currentRawMaterialCostPerKgUsd: string | null;
+        }[]
+      >
+    | undefined;
   ledgerAccounts: ApiListRow[];
   onClose: () => void;
   onEdit: (c: ContainerWithSupplier) => void;

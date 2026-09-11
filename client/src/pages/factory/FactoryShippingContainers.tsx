@@ -389,9 +389,12 @@ export default function FactoryShippingContainers() {
           <div className="flex flex-wrap gap-3 items-center p-3 rounded-md border bg-muted/30">
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Documents</p>
-              <Select value={filterDocs} onValueChange={(v) => {
+              <Select
+                value={filterDocs}
+                onValueChange={(v) => {
                   if (v === "all" || v === "has" || v === "missing") setFilterDocs(v);
-                }}>
+                }}
+              >
                 <SelectTrigger className="h-8 text-xs w-36" data-testid="select-filter-docs">
                   <SelectValue />
                 </SelectTrigger>

@@ -69,10 +69,10 @@ export function OpeningStockImport() {
     };
 
     if (ext === "csv" || ext === "txt") {
-      Papa.parse(file, {
+      Papa.parse<Record<string, unknown>>(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => parse(results.data as Record<string, unknown>[]),
+        complete: (results) => parse(results.data),
       });
     } else if (ext === "xlsx" || ext === "xls") {
       const reader = new FileReader();

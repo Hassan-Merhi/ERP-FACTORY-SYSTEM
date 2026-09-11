@@ -224,7 +224,12 @@ export default function FactoryBaleRelabeling() {
             />
           </div>
           {step !== "upload" && (
-            <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto" data-testid="button-start-over">
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              className="w-full sm:w-auto"
+              data-testid="button-start-over"
+            >
               <RefreshCw className="h-4 w-4 mr-2" /> Start Over
             </Button>
           )}
@@ -680,7 +685,9 @@ export default function FactoryBaleRelabeling() {
                     <TableBody>
                       {sessions.map((s) => (
                         <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
-                          <TableCell className="text-sm">{formatDisplayDate(s.createdAt?.split("T")[0] || "")}</TableCell>
+                          <TableCell className="text-sm">
+                            {formatDisplayDate(s.createdAt?.split("T")[0] || "")}
+                          </TableCell>
                           <TableCell className="text-sm text-muted-foreground truncate max-w-40">
                             {s.uploadedFilename || "—"}
                           </TableCell>

@@ -3,7 +3,7 @@
  *
  * Extracted from FactoryBaleRelabeling.tsx during the Phase 4 god-file split.
  */
-import {type A4DesignColor} from "@/lib/labelHtml";
+import { type A4DesignColor } from "@/lib/labelHtml";
 
 export type Step = "upload" | "validate" | "done";
 

@@ -417,7 +417,10 @@ export function MixBatchList({
                         >
                           {batch.batchCode}
                         </TableCell>
-                        <TableCell className="text-sm cursor-pointer hover:underline" onClick={() => onViewDetail(batch)}>
+                        <TableCell
+                          className="text-sm cursor-pointer hover:underline"
+                          onClick={() => onViewDetail(batch)}
+                        >
                           {batch.name || <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">

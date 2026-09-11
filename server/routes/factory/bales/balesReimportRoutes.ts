@@ -187,7 +187,7 @@ export function registerBalesReimportRoutes(app: Express) {
             allCategories.map((c: ImportedBaleCategory) => [c.name?.toLowerCase(), c] as const)
           );
 
-          type ReimportBaleRow = (typeof factoryBales.$inferSelect) & {
+          type ReimportBaleRow = typeof factoryBales.$inferSelect & {
             _product?: typeof factoryBaleProducts.$inferSelect;
           };
           const createdBales: ReimportBaleRow[] = [];

@@ -107,7 +107,7 @@ async function deriveBaleStockEntryAmounts(rows: BaleStockDaybookRow[], companyI
 
   const priceByProductId = new Map<number, number>();
   const priceByArticleCode = new Map<string, number>();
-  for (const product of (products)) {
+  for (const product of products) {
     const price = Number.parseFloat(product.productionPrice || "0") || 0;
     priceByProductId.set(product.id, price);
     if (product.articleCode) priceByArticleCode.set(product.articleCode, price);

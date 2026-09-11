@@ -331,10 +331,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         };
       });
 
-      const totalMixWeightKg = correctedBatchRows.reduce(
-        (s: number, r) => s + parseFloat(r.totalWeightKg || "0"),
-        0
-      );
+      const totalMixWeightKg = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
       const totalMixCost = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalCost || "0"), 0);
 
       // Material from period batches that is still on the pressing table (not yet turned into bales).
@@ -458,7 +455,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       type SupDay = { date: string; supplierName: string; totalKg: number; totalCost: number };
       const supDayMap = new Map<string, SupDay>();
 
-      for (const batch of (mixBatchRows)) {
+      for (const batch of mixBatchRows) {
         const batchDate: string = batch.batchDate
           ? String(batch.batchDate).slice(0, 10)
           : String(batch.createdAt).slice(0, 10);

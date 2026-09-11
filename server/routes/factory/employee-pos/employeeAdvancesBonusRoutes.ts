@@ -244,8 +244,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         sql`SELECT * FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
       );
       const bonus = bonusResult.rows[0] as
-        | { employee_id: number; amount: string; voucher_id: number | null }
-        | undefined;
+        { employee_id: number; amount: string; voucher_id: number | null } | undefined;
       if (!bonus) return res.status(404).json({ message: "Bonus not found" });
 
       // Reversing a bonus touches four rows, and all four have to move or none

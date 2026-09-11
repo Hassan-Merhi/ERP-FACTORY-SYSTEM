@@ -25,14 +25,7 @@ import {
 import { useLocation } from "wouter";
 
 type Period =
-  | "today"
-  | "yesterday"
-  | "this_week"
-  | "this_month"
-  | "this_year"
-  | "all_time"
-  | "specific_month"
-  | "custom_range";
+  "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
 
 const PERIODS: { value: Period; label: string }[] = [
   { value: "today", label: "Today" },

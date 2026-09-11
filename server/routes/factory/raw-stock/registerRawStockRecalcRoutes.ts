@@ -25,9 +25,12 @@ export function registerRawStockRecalcRoutes(app: Express): void {
     const first: unknown = args[0];
     const sqlText = typeof first === "string" ? first : (first as { text?: string } | undefined)?.text;
     if (typeof sqlText === "string" && UNDO_LOG_CREATE_TABLE_PATTERN.test(sqlText)) {
-      return Promise.resolve({ rows: [], rowCount: 0, command: "SKIPPED_RUNTIME_DDL", fields: [] }) as unknown as ReturnType<
-        PoolQuery
-      >;
+      return Promise.resolve({
+        rows: [],
+        rowCount: 0,
+        command: "SKIPPED_RUNTIME_DDL",
+        fields: [],
+      }) as unknown as ReturnType<PoolQuery>;
     }
     return originalQuery(...args);
   }) as PoolQuery;

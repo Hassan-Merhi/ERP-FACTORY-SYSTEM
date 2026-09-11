@@ -180,16 +180,25 @@ export function ContainerFormDialog({
     const containerCcy = (editingContainer as { currencyCode?: string | null }).currencyCode || "USD";
     factoryApiRequest("GET", `/api/factory/containers/${editingContainer.id}/other-charges`)
       .then((res) => (res.ok ? res.json() : []))
-      .then((charges: { amount?: string | null; currencyCode?: string | null; ledgerAccountId?: number | null; description?: string | null }[]) => {
-        setOtherChargeLines(
-          charges.map((c) => ({
-            amount: stripTrailingZeros(c.amount),
-            currencyCode: c.currencyCode || containerCcy,
-            ledgerAccountId: c.ledgerAccountId ? String(c.ledgerAccountId) : "",
-            narration: c.description || "",
-          }))
-        );
-      })
+      .then(
+        (
+          charges: {
+            amount?: string | null;
+            currencyCode?: string | null;
+            ledgerAccountId?: number | null;
+            description?: string | null;
+          }[]
+        ) => {
+          setOtherChargeLines(
+            charges.map((c) => ({
+              amount: stripTrailingZeros(c.amount),
+              currencyCode: c.currencyCode || containerCcy,
+              ledgerAccountId: c.ledgerAccountId ? String(c.ledgerAccountId) : "",
+              narration: c.description || "",
+            }))
+          );
+        }
+      )
       .catch(() => setOtherChargeLines([]));
   }, [editingContainer]);
 

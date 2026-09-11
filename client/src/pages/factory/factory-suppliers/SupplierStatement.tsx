@@ -162,10 +162,7 @@ export function SupplierStatement({
 
   const activeSt = (statementData.statement || []).filter((c) => c.status !== "OFFLOADED");
   const activeContainerCount = activeSt.length;
-  const activeKg = activeSt.reduce(
-    (sum: number, c) => sum + parseFloat(c.actualReceivedKg || c.totalKg || "0"),
-    0
-  );
+  const activeKg = activeSt.reduce((sum: number, c) => sum + parseFloat(c.actualReceivedKg || c.totalKg || "0"), 0);
   const currencyGroups = statementData.currencyGroups || [];
 
   const ownMap: Record<string, { own: number; totalFreight: number }> = {};

@@ -3,8 +3,8 @@
  *
  * Extracted from PostOffloadDialog.tsx during the Phase 4 god-file split.
  */
-import type {ContainerWithSupplier} from ".././otwHelpers";
-import type {ApiListRow} from "@shared/apiTypes";
+import type { ContainerWithSupplier } from ".././otwHelpers";
+import type { ApiListRow } from "@shared/apiTypes";
 
 export type PostOffloadCharge = {
   id: string;

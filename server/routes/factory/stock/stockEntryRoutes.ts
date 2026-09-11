@@ -135,9 +135,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         // ── Build all bale rows in memory, track per-bale metadata for later ──
         const baleValues: (typeof factoryBales.$inferInsert)[] = [];
         const baleProductRefs: (typeof factoryBaleProducts.$inferSelect)[] = [];
-        const baleAttributionRefs: Awaited<
-          ReturnType<typeof resolveStockEntryProductionAttributions>
-        >[number][] = [];
+        const baleAttributionRefs: Awaited<ReturnType<typeof resolveStockEntryProductionAttributions>>[number][] = [];
 
         for (const [itemIndex, item] of items.entries()) {
           const qty = parseInt(item.quantity || item.qty || "1");

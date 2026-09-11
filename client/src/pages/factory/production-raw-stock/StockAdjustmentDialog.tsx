@@ -79,7 +79,11 @@ export function StockAdjustmentDialog({
         kg: adjKg,
         costPerKg: adjCostPerKg || "0",
         currencyCode: adjCurrency,
-        supplierId: isNewMaterial ? (adjSupplierId ? parseInt(adjSupplierId) : null) : (adjustingRow?.supplierId ?? null),
+        supplierId: isNewMaterial
+          ? adjSupplierId
+            ? parseInt(adjSupplierId)
+            : null
+          : (adjustingRow?.supplierId ?? null),
         materialLabel: isNewMaterial ? adjMaterialLabel : adjustingRow?.supplierName,
         notes: adjNotes,
         reference: adjReference,

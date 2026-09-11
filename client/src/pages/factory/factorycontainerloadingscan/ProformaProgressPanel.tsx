@@ -61,13 +61,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
   );
 }
 
-function StockCell({
-  model,
-  line,
-}: {
-  model: FactoryContainerLoadingScanModel;
-  line: ProformaProgressLine;
-}) {
+function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; line: ProformaProgressLine }) {
   const inStock = model.stockCounts[line.articleCode] ?? null;
   if (inStock === null) return <span className="text-muted-foreground">—</span>;
   const needsMore = line.status === "short" || line.status === "none";

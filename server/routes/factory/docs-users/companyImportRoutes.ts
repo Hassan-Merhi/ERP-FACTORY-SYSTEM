@@ -364,7 +364,10 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 delete rec.id;
                 rec.companyId = targetCompanyId;
                 rec.code = await makeUniqueCode(tx, locations, locations.code, String(rec.code));
-                const [inserted] = await tx.insert(locations).values(asDynamicInsert(rec)).returning({ id: locations.id });
+                const [inserted] = await tx
+                  .insert(locations)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: locations.id });
                 if (inserted && oldId != null) remap["locations"].set(oldId, inserted.id);
               }
               summary["locations"] = t.locations.length;
@@ -383,7 +386,10 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 rec.companyId = targetCompanyId;
                 rec.linkedLedgerId = r("ledger_accounts", rec.linkedLedgerId as number | null | undefined);
                 rec.code = await makeUniqueCode(tx, bankAccounts, bankAccounts.code, String(rec.code));
-                const [inserted] = await tx.insert(bankAccounts).values(asDynamicInsert(rec)).returning({ id: bankAccounts.id });
+                const [inserted] = await tx
+                  .insert(bankAccounts)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: bankAccounts.id });
                 if (inserted && oldId != null) remap["bank_accounts"].set(oldId, inserted.id);
               }
               summary["bank_accounts"] = t.bank_accounts.length;
@@ -719,8 +725,16 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 delete rec.id;
                 rec.companyId = targetCompanyId;
                 rec.locationId = r("locations", rec.locationId as number | null | undefined);
-                rec.voucherNumber = await makeUniqueCode(tx, vouchers, vouchers.voucherNumber, String(rec.voucherNumber));
-                const [inserted] = await tx.insert(vouchers).values(asDynamicInsert(rec)).returning({ id: vouchers.id });
+                rec.voucherNumber = await makeUniqueCode(
+                  tx,
+                  vouchers,
+                  vouchers.voucherNumber,
+                  String(rec.voucherNumber)
+                );
+                const [inserted] = await tx
+                  .insert(vouchers)
+                  .values(asDynamicInsert(rec))
+                  .returning({ id: vouchers.id });
                 if (inserted && oldId != null) remap["vouchers"].set(oldId, inserted.id);
               }
               summary["vouchers"] = t.vouchers.length;

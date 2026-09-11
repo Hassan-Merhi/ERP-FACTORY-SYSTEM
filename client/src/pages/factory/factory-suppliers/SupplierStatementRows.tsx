@@ -19,7 +19,9 @@ interface SupplierStatementRowsProps {
   formatDate: (val: string) => string;
   formatNum: (val: string) => string;
   typeBadge: (type: string) => React.ReactNode;
-  statusColor: (status: string) => "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info" | "muted";
+  statusColor: (
+    status: string
+  ) => "default" | "destructive" | "outline" | "secondary" | "success" | "warning" | "info" | "muted";
   statusDisplayLabel: (status: string) => string;
   onEditPayment: (p: Record<string, unknown>) => void;
   onDeletePayment: (id: number) => void;
