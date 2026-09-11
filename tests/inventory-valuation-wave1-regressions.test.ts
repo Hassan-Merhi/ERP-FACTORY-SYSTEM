@@ -172,56 +172,59 @@ describe("Wave 1 inventory valuation regression locks", () => {
     expect(afterSecondEdit).toEqual(baseline);
   });
 
-  it.fails("keeps current inventory unchanged when an old production adjustment is saved without changes", async () => {
-    const stockItemId = ctx.stockItemIds[0];
-    const currentRate = 68.02;
-    await setInventoryState(stockItemId, ITEM_QTY, currentRate);
-    const before = await readInventoryState(stockItemId);
+  it.fails(
+    "keeps current inventory unchanged when an old production adjustment is saved without changes",
+    async () => {
+      const stockItemId = ctx.stockItemIds[0];
+      const currentRate = 68.02;
+      await setInventoryState(stockItemId, ITEM_QTY, currentRate);
+      const before = await readInventoryState(stockItemId);
 
-    const [voucher] = await db
-      .insert(schema.vouchers)
-      .values({
-        companyId: ctx.companyId,
-        locationId: ctx.locationId,
-        voucherNumber: `${TEST_PREFIX}-ADJ-${Date.now()}-${stockItemId}`,
-        voucherType: "Production",
-        voucherDate: new Date().toISOString().slice(0, 10),
-        description: "Wave 1 unchanged historical adjustment regression",
-        totalAmount: ITEM_RATE.toFixed(2),
-        currency: "USD",
-        optional: false,
-        sourceModule: "ERP",
-      })
-      .returning();
+      const [voucher] = await db
+        .insert(schema.vouchers)
+        .values({
+          companyId: ctx.companyId,
+          locationId: ctx.locationId,
+          voucherNumber: `${TEST_PREFIX}-ADJ-${Date.now()}-${stockItemId}`,
+          voucherType: "Production",
+          voucherDate: new Date().toISOString().slice(0, 10),
+          description: "Wave 1 unchanged historical adjustment regression",
+          totalAmount: ITEM_RATE.toFixed(2),
+          currency: "USD",
+          optional: false,
+          sourceModule: "ERP",
+        })
+        .returning();
 
-    const [adjustment] = await db
-      .insert(schema.stockAdjustmentVouchers)
-      .values({
-        voucherId: voucher.id,
-        locationId: ctx.locationId,
-        adjustmentType: "Production",
-        notes: "Wave 1 fixture",
-      })
-      .returning();
+      const [adjustment] = await db
+        .insert(schema.stockAdjustmentVouchers)
+        .values({
+          voucherId: voucher.id,
+          locationId: ctx.locationId,
+          adjustmentType: "Production",
+          notes: "Wave 1 fixture",
+        })
+        .returning();
 
-    await db.insert(schema.stockAdjustmentItems).values({
-      adjustmentId: adjustment.id,
-      stockItemId,
-      quantity: "1.000",
-      rate: ITEM_RATE.toFixed(2),
-      totalAmount: ITEM_RATE.toFixed(2),
-    });
-
-    await storage.updateStockAdjustment(adjustment.id, ctx.locationId, "Production", "Wave 1 fixture", [
-      {
+      await db.insert(schema.stockAdjustmentItems).values({
+        adjustmentId: adjustment.id,
         stockItemId,
         quantity: "1.000",
         rate: ITEM_RATE.toFixed(2),
-      },
-    ]);
+        totalAmount: ITEM_RATE.toFixed(2),
+      });
 
-    expect(await readInventoryState(stockItemId)).toEqual(before);
-  });
+      await storage.updateStockAdjustment(adjustment.id, ctx.locationId, "Production", "Wave 1 fixture", [
+        {
+          stockItemId,
+          quantity: "1.000",
+          rate: ITEM_RATE.toFixed(2),
+        },
+      ]);
+
+      expect(await readInventoryState(stockItemId)).toEqual(before);
+    }
+  );
 
   it.fails("does not hard-force live current-year inventory into December", () => {
     const source = readFileSync(
