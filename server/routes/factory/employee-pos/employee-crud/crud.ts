@@ -123,7 +123,7 @@ export function registerFactoryEmployeeCrudRoutes(app: Express) {
       if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
 
       const { firstName, lastName, department, phone, monthlySalary, active } = req.body;
-      const updates: any = {};
+      const updates: Partial<typeof employees.$inferInsert> = {};
       if (firstName !== undefined) updates.firstName = firstName;
       if (lastName !== undefined) updates.lastName = lastName;
       if (department !== undefined) updates.department = department;

@@ -101,8 +101,9 @@ export type AuditChangePair = { old?: unknown; new?: unknown };
  *  2. security events:     { field: value }
  * Normalize both so every screen can render actual values instead of blank rows.
  */
-export function normalizeAuditChanges(source: any): Record<string, AuditChangePair> {
-  const raw = source?.changes ?? source?.diff ?? source;
+export function normalizeAuditChanges(source: unknown): Record<string, AuditChangePair> {
+  const sourceRecord = (source && typeof source === "object" ? source : {}) as Record<string, unknown>;
+  const raw = sourceRecord.changes ?? sourceRecord.diff ?? source;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
 
   const normalized: Record<string, AuditChangePair> = {};
@@ -127,13 +128,16 @@ function changeValue(changes: Record<string, AuditChangePair>, key: string) {
   return pair.new !== undefined ? pair.new : pair.old;
 }
 
-function securityParts(logOrAction: any): {
+function securityParts(logOrAction: unknown): {
   category: string;
   check: string;
   outcome: string;
   changes: Record<string, AuditChangePair>;
 } | null {
-  const action = typeof logOrAction === "string" ? logOrAction : String(logOrAction?.action || "");
+  const action =
+    typeof logOrAction === "string"
+      ? logOrAction
+      : String(((logOrAction ?? {}) as Record<string, unknown>).action || "");
   if (!action.toUpperCase().startsWith("SECURITY:")) return null;
 
   const changes = normalizeAuditChanges(typeof logOrAction === "string" ? {} : logOrAction);
@@ -146,7 +150,7 @@ function securityParts(logOrAction: any): {
   };
 }
 
-export function securityActionSummary(logOrAction: any): string {
+export function securityActionSummary(logOrAction: unknown): string {
   const parsed = securityParts(logOrAction);
   if (!parsed) return "Security event recorded";
 
@@ -170,13 +174,13 @@ export function securityActionSummary(logOrAction: any): string {
   return `${subject} ${outcomeWord}`;
 }
 
-function formatPlainNumber(value: any, maximumFractionDigits = 6): string | null {
+function formatPlainNumber(value: unknown, maximumFractionDigits = 6): string | null {
   const n = typeof value === "number" ? value : Number(String(value));
   if (!Number.isFinite(n)) return null;
   return n.toLocaleString(undefined, { maximumFractionDigits });
 }
 
-export function fmtBusinessValue(field: string, value: any): string {
+export function fmtBusinessValue(field: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (field === "optional") return value ? "Optional" : "Active";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -192,7 +196,7 @@ export function fmtBusinessValue(field: string, value: any): string {
     lowerField.endsWith("at") ||
     (typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:[T\s]|$)/.test(value))
   ) {
-    const date = new Date(value);
+    const date = new Date(String(value));
     if (!Number.isNaN(date.getTime())) {
       return /[T\s]\d{2}:\d{2}/.test(String(value)) || lowerField.endsWith("at")
         ? fmtDate(date)
@@ -390,7 +394,7 @@ export function isItemDiffKey(field: string): boolean {
   return /^item_(added|removed|changed)_/.test(field);
 }
 
-export function getRecordLabel(log: any): string {
+export function getRecordLabel(log: Record<string, unknown> | null | undefined): string {
   if (
     log?.tableName === "security_events" ||
     String(log?.action || "")
@@ -411,8 +415,8 @@ export function getRecordLabel(log: any): string {
     if (id.length <= 60) return id;
     return id.slice(0, 58) + "…";
   }
-  if (log?.recordId) return `${tableShortName(log.tableName)} #${log.recordId}`;
-  return tableShortName(log?.tableName);
+  if (log?.recordId) return `${tableShortName(String(log.tableName ?? ""))} #${log.recordId}`;
+  return tableShortName(String(log?.tableName ?? ""));
 }
 
 function fallbackDetails(action: string): string {
@@ -443,7 +447,7 @@ function fallbackDetails(action: string): string {
   return messages[key] || `${actionLabel(action)} activity recorded`;
 }
 
-export function getDetailsSentence(log: any): string {
+export function getDetailsSentence(log: Record<string, unknown> | null | undefined): string {
   if (
     log?.tableName === "security_events" ||
     String(log?.action || "")
@@ -459,7 +463,7 @@ export function getDetailsSentence(log: any): string {
 
   const changes = normalizeAuditChanges(log);
   const allKeys = Object.keys(changes);
-  if (allKeys.length === 0) return fallbackDetails(log?.action);
+  if (allKeys.length === 0) return fallbackDetails(String(log?.action ?? ""));
 
   const scalarKeys = allKeys.filter((key) => key !== "entries" && !isItemDiffKey(key));
   const itemKeys = allKeys.filter((key) => isItemDiffKey(key));
@@ -492,5 +496,5 @@ export function getDetailsSentence(log: any): string {
       : 0;
   if (entryCount > 0) parts.push(`${entryCount} accounting entr${entryCount === 1 ? "y" : "ies"}`);
 
-  return parts.length > 0 ? parts.join(" — ") : fallbackDetails(log?.action);
+  return parts.length > 0 ? parts.join(" — ") : fallbackDetails(String(log?.action ?? ""));
 }

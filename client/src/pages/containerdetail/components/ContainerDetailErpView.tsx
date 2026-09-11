@@ -60,7 +60,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
   const totalBales = pos.reduce((total: number, po) => {
     return (
       total +
-      po.items.reduce((sum: number, item: any) => {
+      po.items.reduce((sum, item) => {
         return sum + parseFloat(item.quantity || "0");
       }, 0)
     );
@@ -373,7 +373,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {po.items.map((item: any) => (
+                    {po.items.map((item) => (
                       <TableRow key={item.id} data-testid={`row-item-${item.id}`} className="text-sm">
                         <TableCell className="font-medium py-2">{item.itemName}</TableCell>
                         <TableCell className="text-right tabular-nums py-2 text-muted-foreground">
@@ -393,7 +393,7 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
 
               {/* Items — mobile */}
               <div className="md:hidden divide-y">
-                {po.items.map((item: any) => (
+                {po.items.map((item) => (
                   <div key={item.id} className="px-4 py-3 text-sm" data-testid={`row-item-${item.id}`}>
                     <p className="font-medium mb-1.5">{item.itemName}</p>
                     <div className="grid grid-cols-3 gap-2 text-muted-foreground text-xs">

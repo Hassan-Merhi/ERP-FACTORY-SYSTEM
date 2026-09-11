@@ -68,7 +68,7 @@ export function registerStockGradeRoutes(app: Express) {
         .from(stockGrades)
         .where(and(eq(stockGrades.id, id), eq(stockGrades.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Stock grade not found" });
-      const updates: any = {};
+      const updates: Partial<typeof stockGrades.$inferInsert> = {};
       if (req.body.name !== undefined) {
         const n = String(req.body.name).trim();
         if (!n) return res.status(400).json({ message: "Name is required" });

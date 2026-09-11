@@ -54,7 +54,7 @@ async function flushBatch(key: string, companyId: number | undefined, batch: Pen
   }
 
   try {
-    const params: any[] = [supplierIds];
+    const params: unknown[] = [supplierIds];
     let companyFilter = "";
     if (companyId) {
       params.push(companyId);

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Loader2, Eye } from "lucide-react";
-import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
+import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema, userPresence } from "@shared/schema";
 
 const _userFormSchema = insertUserSchema;
 const _companyFormSchema = insertCompanySchema;
@@ -39,16 +39,18 @@ export function ActiveUsersSection() {
   const { data: currentUser } = useQuery<any>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
 
-  const { data: presenceData, isLoading } = useQuery({
+  type PresenceRow = typeof userPresence.$inferSelect;
+
+  const { data: presenceData, isLoading } = useQuery<PresenceRow[]>({
     queryKey: ["/api/user-presence"],
     refetchInterval: 30000,
   });
 
-  const { data: companies } = useQuery<any[]>({
+  const { data: companies } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/companies"],
   });
 
-  const formatTimeAgo = (dateStr: string) => {
+  const formatTimeAgo = (dateStr: string | Date) => {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -70,15 +72,14 @@ export function ActiveUsersSection() {
 
   // Group users by company
   const safePresenceData = Array.isArray(presenceData) ? presenceData : [];
-  const groupedUsers =
-    safePresenceData.reduce((acc, presence) => {
-      const companyId = presence.companyId || "unassigned";
-      if (!acc[companyId]) {
-        acc[companyId] = [];
-      }
-      acc[companyId].push(presence);
-      return acc;
-    }, {}) || {};
+  const groupedUsers = safePresenceData.reduce<Record<string, PresenceRow[]>>((acc, presence) => {
+    const companyId = presence.companyId || "unassigned";
+    if (!acc[companyId]) {
+      acc[companyId] = [];
+    }
+    acc[companyId].push(presence);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-4">
@@ -101,7 +102,7 @@ export function ActiveUsersSection() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {Object.entries(groupedUsers).map(([companyId, users]: [string, any]) => (
+          {Object.entries(groupedUsers).map(([companyId, users]) => (
             <Card key={companyId} className="overflow-hidden">
               <div className="px-4 py-3 bg-muted/50 border-b">
                 <div className="flex items-center gap-2">
@@ -127,7 +128,7 @@ export function ActiveUsersSection() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((presence: any) => (
+                    {users.map((presence) => (
                       <TableRow key={presence.id} data-testid={`row-presence-${presence.id}`}>
                         <TableCell className="font-medium">{presence.username}</TableCell>
                         <TableCell>
@@ -159,7 +160,7 @@ export function ActiveUsersSection() {
               </div>
               {/* Mobile card list */}
               <div className="sm:hidden divide-y">
-                {users.map((presence: any) => (
+                {users.map((presence) => (
                   <div key={presence.id} data-testid={`row-presence-${presence.id}`} className="p-3 space-y-1">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="font-medium text-sm">{presence.username}</span>

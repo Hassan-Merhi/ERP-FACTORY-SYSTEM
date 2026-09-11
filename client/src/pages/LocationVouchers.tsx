@@ -36,6 +36,9 @@ interface Transaction {
   posSellingValue?: number;
 }
 
+/** A transaction row in the ledger, or a month-separator marker row. */
+type DisplayRow = Transaction & { _isSeparator?: boolean; _separatorLabel?: string };
+
 interface LocationVouchersData {
   stockItem: { id: number; code: string; name: string; uom: string };
   location: { id: number; code: string; name: string };
@@ -147,7 +150,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
     return t === "stock transfer" || t === "stocktransfer" || t === "st";
   };
 
-  const allTransactions: Transaction[] = useMemo(() => (data?.transactions || []), [data?.transactions]);
+  const allTransactions: Transaction[] = useMemo(() => data?.transactions || [], [data?.transactions]);
 
   const filteredTransactions = useMemo(() => {
     return allTransactions.filter((txn) => {
@@ -174,7 +177,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
       "November",
       "December",
     ];
-    const rows: (Transaction & { _isSeparator?: boolean; _separatorLabel?: string })[] = [];
+    const rows: DisplayRow[] = [];
     let lastMonth = -1;
     for (const txn of filteredTransactions) {
       if (!txn.isOpeningBalance) {
@@ -228,30 +231,33 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
 
   const navigableRows = useMemo(() => filteredTransactions.filter((t) => !t.isOpeningBalance), [filteredTransactions]);
 
-  const handleTableKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      if (hasAnyOpenDialog()) return;
-      e.preventDefault();
-      navigate(`/locations/${locationId}/stock-items/${stockItemId}/history`);
-      return;
-    }
-    if (hasAnyOpenDialog()) return;
-    if (navigableRows.length === 0) return;
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedRowIndex((prev) => Math.max(-1, prev - 1));
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (selectedRowIndex === -1) setSelectedRowIndex(0);
-      else if (selectedRowIndex < navigableRows.length - 1) setSelectedRowIndex((prev) => prev + 1);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (selectedRowIndex >= 0 && selectedRowIndex < navigableRows.length) {
-        const url = getTransactionEditUrl(navigableRows[selectedRowIndex]);
-        if (url) navigate(url);
+  const handleTableKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (hasAnyOpenDialog()) return;
+        e.preventDefault();
+        navigate(`/locations/${locationId}/stock-items/${stockItemId}/history`);
+        return;
       }
-    }
-  }, [locationId, navigableRows, navigate, selectedRowIndex, stockItemId]);
+      if (hasAnyOpenDialog()) return;
+      if (navigableRows.length === 0) return;
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedRowIndex((prev) => Math.max(-1, prev - 1));
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (selectedRowIndex === -1) setSelectedRowIndex(0);
+        else if (selectedRowIndex < navigableRows.length - 1) setSelectedRowIndex((prev) => prev + 1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (selectedRowIndex >= 0 && selectedRowIndex < navigableRows.length) {
+          const url = getTransactionEditUrl(navigableRows[selectedRowIndex]);
+          if (url) navigate(url);
+        }
+      }
+    },
+    [locationId, navigableRows, navigate, selectedRowIndex, stockItemId]
+  );
 
   useEffect(() => {
     window.addEventListener("keydown", handleTableKeyDown, { capture: true });
@@ -502,7 +508,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
               </tr>
             </thead>
             <tbody>
-              {displayRows.map((txn: any, idx: number) => {
+              {displayRows.map((txn: DisplayRow, idx: number) => {
                 // Month separator row
                 if (txn._isSeparator) {
                   return (
@@ -592,7 +598,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
                 );
               })}
 
-              {displayRows.filter((r: any) => !r._isSeparator).length === 0 && (
+              {displayRows.filter((r: DisplayRow) => !r._isSeparator).length === 0 && (
                 <tr>
                   <td colSpan={colSpanFull} className="text-center text-muted-foreground py-8">
                     No transactions found

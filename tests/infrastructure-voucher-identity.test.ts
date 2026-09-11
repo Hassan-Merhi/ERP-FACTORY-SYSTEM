@@ -19,7 +19,7 @@ function identity() {
 function voucher(amount = "30.00") {
   return {
     companyId: ctx.companyId,
-    voucherNumber: `INFRA-IDEM-${ctx.companyId}`,
+    voucherNumber: `INFRA-IDEM-${ctx.companyId}-${Date.now()}`,
     voucherType: "Journal",
     voucherDate: "2026-08-17",
     totalAmount: amount,
@@ -66,7 +66,12 @@ async function clearPosting() {
   const rows = await db
     .select({ id: vouchers.id })
     .from(vouchers)
-    .where(and(eq(vouchers.companyId, ctx.companyId), eq(vouchers.voucherNumber, `INFRA-IDEM-${ctx.companyId}`)));
+    .where(
+      and(
+        eq(vouchers.companyId, ctx.companyId),
+        eq(vouchers.description, "Phase 3 infrastructure writer idempotency proof")
+      )
+    );
   for (const row of rows) {
     await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, row.id));
     await db.delete(vouchers).where(eq(vouchers.id, row.id));
@@ -119,7 +124,12 @@ describe("infrastructure voucher identity", () => {
     const persistedVouchers = await db
       .select({ id: vouchers.id })
       .from(vouchers)
-      .where(and(eq(vouchers.companyId, ctx.companyId), eq(vouchers.voucherNumber, `INFRA-IDEM-${ctx.companyId}`)));
+      .where(
+        and(
+          eq(vouchers.companyId, ctx.companyId),
+          eq(vouchers.description, "Phase 3 infrastructure writer idempotency proof")
+        )
+      );
     expect(persistedVouchers).toHaveLength(1);
 
     const persistedEntries = await db
@@ -134,5 +144,48 @@ describe("infrastructure voucher identity", () => {
       name: "PostingValidationError",
       code: "POSTING_IDEMPOTENCY_CONFLICT",
     });
+  });
+
+  it("creates a fresh active voucher after the previous posting was reversed and soft-deleted", async () => {
+    const [beforeMarker] = await db
+      .select()
+      .from(accountingPostingRequests)
+      .where(
+        and(
+          eq(accountingPostingRequests.companyId, ctx.companyId),
+          eq(accountingPostingRequests.idempotencyKey, identity().idempotencyKey)
+        )
+      )
+      .limit(1);
+    expect(beforeMarker).toBeTruthy();
+    const oldVoucherId = Number(beforeMarker.voucherId);
+
+    await db.transaction(async (tx) => {
+      await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, oldVoucherId));
+      await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, oldVoucherId));
+    });
+
+    const reposted = await postInfrastructureVoucher();
+    expect(reposted.replayed).toBe(false);
+    expect(reposted.voucher.id).not.toBe(oldVoucherId);
+    expect(reposted.voucher.deletedAt).toBeNull();
+
+    const [afterMarker] = await db
+      .select()
+      .from(accountingPostingRequests)
+      .where(
+        and(
+          eq(accountingPostingRequests.companyId, ctx.companyId),
+          eq(accountingPostingRequests.idempotencyKey, identity().idempotencyKey)
+        )
+      )
+      .limit(1);
+    expect(afterMarker?.voucherId).toBe(reposted.voucher.id);
+
+    const newEntries = await db
+      .select({ id: voucherEntries.id })
+      .from(voucherEntries)
+      .where(eq(voucherEntries.voucherId, reposted.voucher.id));
+    expect(newEntries).toHaveLength(2);
   });
 });

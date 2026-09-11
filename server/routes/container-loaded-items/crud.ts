@@ -76,7 +76,7 @@ export function registerContainerLoadedItemCrudRoutes(app: Express, requireAuth:
       if (!item) return res.status(404).json({ message: "Item not found" });
       if (!(await verifyContainerOwnership(item.containerId, companyId)))
         return res.status(403).json({ message: "Access denied" });
-      const updates: any = {};
+      const updates: Partial<typeof supplierContainerLoadedItems.$inferInsert> = {};
       if (req.body.barcode !== undefined) updates.barcode = req.body.barcode;
       if (req.body.itemName !== undefined) updates.itemName = req.body.itemName;
       if (req.body.qty !== undefined) updates.qty = parseInt(req.body.qty) || 0;

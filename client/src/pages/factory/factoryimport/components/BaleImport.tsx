@@ -65,12 +65,12 @@ export function BaleImport() {
     setUploadedFileName(file.name);
 
     if (ext === "csv" || ext === "txt") {
-      Papa.parse(file, {
+      Papa.parse<Record<string, string>>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
           const parsed: BaleRow[] = results.data
-            .map((row: any) => ({
+            .map((row) => ({
               baleCode: (row.baleCode || row.bale_code || "").trim(),
               articleCode: (row.articleCode || row.article_code || "").trim(),
               productName: (row.productName || row.product_name || "").trim(),

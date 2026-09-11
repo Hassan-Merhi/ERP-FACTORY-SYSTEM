@@ -151,16 +151,18 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   }, [locationPricedList]);
 
   const isItemUnpriced = useCallback(
-    (item: any): boolean => {
+    (item: PriceListItem | MasterItem): boolean => {
       if (isAllMode) {
         const hasBase = item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0;
         if (hasBase) return false; // base price covers all locations
-        const allMasterPrices = item.masterPrices ? Object.values(item.masterPrices) : [];
+        const masterPrices = "masterPrices" in item ? item.masterPrices : undefined;
+        const allMasterPrices = masterPrices ? Object.values(masterPrices) : [];
         if (allMasterPrices.length === 0) return true;
-        const allHavePrice = allMasterPrices.every((p: any) => p && parseFloat(p) > 0);
+        const allHavePrice = allMasterPrices.every((p) => p && parseFloat(p) > 0);
         return !allHavePrice; // unpriced until every location has a price
       }
-      return !item.sellingPrice || parseFloat(item.sellingPrice) === 0;
+      const sellingPrice = "sellingPrice" in item ? item.sellingPrice : undefined;
+      return !sellingPrice || parseFloat(sellingPrice) === 0;
     },
     [isAllMode]
   );

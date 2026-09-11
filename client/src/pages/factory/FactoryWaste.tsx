@@ -130,7 +130,15 @@ export default function FactoryWaste() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const payload: any = {
+    const payload: {
+      date: string;
+      kgWaste: number;
+      wasteType?: string;
+      reason?: string;
+      mixBatchId?: number;
+      supplierId?: number;
+      containerId?: number;
+    } = {
       date: formDate,
       kgWaste: parseFloat(formKg),
     };

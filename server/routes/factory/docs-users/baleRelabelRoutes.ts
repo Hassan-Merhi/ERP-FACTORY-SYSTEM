@@ -241,7 +241,7 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
 
       // attach items counts
       const sessionIds = sessions.map((s) => s.id);
-      const itemsBySession: Record<number, any[]> = {};
+      const itemsBySession: Record<number, (typeof baleRecodeItems.$inferSelect)[]> = {};
       if (sessionIds.length > 0) {
         const items = await db.select().from(baleRecodeItems).where(inArray(baleRecodeItems.sessionId, sessionIds));
         for (const item of items) {

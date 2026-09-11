@@ -114,7 +114,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       const updated = await db.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
 
       try {
-        const _purChanges: Record<string, any> = {};
+        const _purChanges: Record<string, { old: unknown; new: unknown }> = {};
         if (existingVoucher.voucherDate !== updated[0].voucherDate)
           _purChanges.date = { old: existingVoucher.voucherDate, new: updated[0].voucherDate };
         if (existingVoucher.totalAmount !== updated[0].totalAmount)
@@ -330,7 +330,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       });
 
       try {
-        const _adjChanges: Record<string, any> = {};
+        const _adjChanges: Record<string, { old: unknown; new: unknown }> = {};
         if (existingVoucher.voucherDate !== updated.voucherDate)
           _adjChanges.date = { old: existingVoucher.voucherDate, new: updated.voucherDate };
         if (existingVoucher.totalAmount !== updated.totalAmount)

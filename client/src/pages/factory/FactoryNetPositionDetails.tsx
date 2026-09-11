@@ -320,7 +320,7 @@ function CustomNetPositionView({
     staleTime: 30_000,
   });
 
-  const payrollEmployees = useMemo(() => (payrollData?.employees ?? []), [payrollData?.employees]);
+  const payrollEmployees = useMemo(() => payrollData?.employees ?? [], [payrollData?.employees]);
 
   const toggleKey = useCallback((key: string) => {
     setHiddenKeys((prev) => {
@@ -559,7 +559,7 @@ export default function FactoryNetPositionDetails() {
       if (!res.ok) {
         const text = await res.text();
         // Attach the parsed code so the retry handler can inspect it
-        const err: any = new Error(text);
+        const err: Error & { code?: string } = new Error(text);
         try {
           err.code = JSON.parse(text)?.code;
         } catch {

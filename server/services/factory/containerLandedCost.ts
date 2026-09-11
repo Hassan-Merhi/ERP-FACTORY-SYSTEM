@@ -8,12 +8,7 @@
  * the container's total value.
  */
 import Decimal from "decimal.js";
-import {
-  factoryContainers,
-  factoryOffloadAdditionalCharges,
-  factoryContainerCommissions,
-  factoryContainerOtherCharges,
-} from "@shared/schema";
+import { factoryContainers } from "@shared/schema";
 import { resolveFactoryOffloadValuationKg } from "@shared/factoryOffloadValuation";
 import { resolveStoredFxRate } from "./currencyConversion";
 import { FACTORY_COST_PRECISION, calculateCostLine, factoryCostDecimal } from "./factoryCostingEngine";
@@ -31,11 +26,19 @@ export interface ContainerLandedCostResult {
   fxUnresolved: boolean;
 }
 
+/** The four fields the helper actually reads from any charge/commission-like row. */
+type ChargeMoneyFields = {
+  amount?: string | null;
+  currencyCode?: string | null;
+  fxRateToUsd?: string | null;
+  fxRateConfirmed?: boolean | null;
+};
+
 export function computeContainerLandedCost(
   container: typeof factoryContainers.$inferSelect,
-  additionalCharges: (typeof factoryOffloadAdditionalCharges.$inferSelect)[],
-  commissionRecord: typeof factoryContainerCommissions.$inferSelect | null,
-  otherChargesRows?: (typeof factoryContainerOtherCharges.$inferSelect)[]
+  additionalCharges: ChargeMoneyFields[],
+  commissionRecord: (ChargeMoneyFields & { commissionTotal?: string | null }) | null,
+  otherChargesRows?: ChargeMoneyFields[]
 ): ContainerLandedCostResult {
   const containerCcy = container.currencyCode || "USD";
   const { fxRate, looksSet: fxLooksSet } = resolveStoredFxRate(

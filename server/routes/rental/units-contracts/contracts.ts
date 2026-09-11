@@ -179,7 +179,7 @@ export function registerRentalContractRoutes(app: Express, ctx: RentalRoutesCont
           )
         );
       if (!contract) return res.status(404).json({ message: "Contract not found" });
-      const contractUpdates: any = { tenantName, startDate: startDate };
+      const contractUpdates: Partial<typeof propertyContracts.$inferInsert> = { tenantName, startDate };
       if (guaranteeAmount !== undefined) contractUpdates.guaranteeAmount = guaranteeAmount;
       if (guaranteePeriod !== undefined) contractUpdates.guaranteePeriod = guaranteePeriod;
       if (isInternal !== undefined) contractUpdates.isInternal = isInternal;

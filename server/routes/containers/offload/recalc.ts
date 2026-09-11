@@ -12,8 +12,9 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
 import { containers, containerOffloads, containerOffloadItems, vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
+import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 
@@ -153,13 +154,16 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             }
           }
 
+          // Include already-soft-deleted voucher shells. Older reverse-offload
+          // runs removed their entries and hid the voucher but left the durable
+          // accounting posting identity behind. Cleaning both active and stale
+          // shells here makes the next offload a genuinely new posting cycle.
           const containerVouchers = await tx
             .select()
             .from(vouchers)
             .where(
               and(
                 eq(vouchers.companyId, req.session.currentCompanyId!),
-                isNull(vouchers.deletedAt),
                 sql`(
                   (
                     LOWER(${vouchers.description}) LIKE LOWER(${"%container " + (container.containerNumber || "") + "%"})
@@ -180,6 +184,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
 
           const reversedAt = new Date();
           for (const voucher of containerVouchers) {
+            await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucher.id);
             await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
             await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, voucher.id));
           }
@@ -190,11 +195,11 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             .where(
               and(
                 eq(vouchers.companyId, 1),
-                isNull(vouchers.deletedAt),
                 sql`${vouchers.voucherNumber} LIKE ${"SP-AGENT-ERP-" + containerId + "-%"}`
               )
             );
           for (const v of hadiSpVouchers) {
+            await deleteInfrastructurePostingIdentityForVoucherTx(tx, v.id);
             await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
             await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, v.id));
           }

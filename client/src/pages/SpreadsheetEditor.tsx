@@ -4,7 +4,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Workbook } from "@fortune-sheet/react";
 import { PageHeader } from "@/components/PageHeader";
 import "@fortune-sheet/react/dist/index.css";
-import type { Sheet as FortuneSheet } from "@fortune-sheet/core";
+import type { Sheet as FortuneSheet, Cell as FortuneCell, CellWithRowAndCol } from "@fortune-sheet/core";
+import type { CellObject as XlsxCellObject, ColInfo, RowInfo, WorkSheet as XlsxWorkSheet } from "xlsx-js-style";
+import type { WorkbookInstance } from "@fortune-sheet/react";
 import { excelToFortune } from "@/lib/excelImport";
 import { isExcelMode, type SpreadsheetData, arrayBufferToBase64, syncFortuneToXlsx } from "@/lib/excelSync";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -54,10 +56,10 @@ const FS_VT: Record<string, string> = { "0": "center", "1": "top", "2": "bottom"
 // Fortune Sheet's onChange delivers sheets in dense `data` format.
 // When re-opening a saved sheet, convert back to sparse `celldata` so
 // Fortune Sheet's initSheetData() correctly populates the grid.
-function ensureCelldata(sheet: any) {
+function ensureCelldata(sheet: FortuneSheet): FortuneSheet {
   if (sheet.celldata !== undefined) return sheet; // already sparse
   if (!Array.isArray(sheet.data)) return sheet;
-  const celldata: any[] = [];
+  const celldata: CellWithRowAndCol[] = [];
   for (let r = 0; r < sheet.data.length; r++) {
     const row = sheet.data[r];
     if (!Array.isArray(row)) continue;
@@ -72,22 +74,56 @@ function ensureCelldata(sheet: any) {
   return { ...rest, celldata };
 }
 
+/** One spreadsheet entry in the /api/spreadsheets list. */
+interface SpreadsheetListItem {
+  id: number;
+  name: string;
+  updatedAt: string;
+  createdBy?: string | null;
+}
+
+/** Border record Fortune Sheet stores on a cell (not part of its public Cell type). */
+type FortuneCellBorder = Partial<Record<"l" | "r" | "t" | "b", { style?: string | number; color?: string }>>;
+
+/** Cell shape this editor reads, including the app-written border record. */
+type EditorCell = FortuneCell & { b?: FortuneCellBorder };
+
+/** xlsx-js-style cell, extended with this editor's formula sentinel type. */
+type XlCell = Omit<XlsxCellObject, "t"> & { t: XlsxCellObject["t"] | "f" };
+
+interface XlsxFontStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  sz?: number;
+  color?: { rgb: string };
+  name?: string;
+}
+
+interface XlsxCellStyleParts {
+  font?: XlsxFontStyle;
+  fill?: { patternType: string; fgColor: { rgb: string } };
+  alignment?: { horizontal?: string; vertical?: string; wrapText?: boolean };
+  border?: Record<string, { style: string; color: { rgb: string } }>;
+}
+
 function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-style")) {
   const wb = XLSX.utils.book_new();
 
   for (const sheet of sheets) {
-    const ws: any = {};
+    const ws: XlsxWorkSheet = {};
     let maxR = 0;
     let maxC = 0;
 
-    const writeCell = (r: number, c: number, v: any) => {
+    const writeCell = (r: number, c: number, v: EditorCell | null) => {
       if (!v) return;
       const hasValue = v.v !== undefined || v.m !== undefined || v.f;
       if (!hasValue) return;
 
       const addr = XLSX.utils.encode_cell({ r, c });
       const val = v.v ?? v.m;
-      const xlCell: any = {
+      const xlCell: XlCell = {
         v: val,
         t: v.f ? "f" : typeof val === "number" ? "n" : typeof val === "boolean" ? "b" : "s",
         w: v.m !== undefined ? String(v.m) : val !== undefined ? String(val) : "",
@@ -101,7 +137,7 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
       if (fa && fa !== "General" && fa !== "@") xlCell.z = fa;
 
       // Style object
-      const s: any = {};
+      const s: XlsxCellStyleParts = {};
 
       // Font
       if (v.bl || v.it || v.un || v.cl || v.fs || v.fc || v.ff) {
@@ -112,7 +148,7 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
         if (v.cl) s.font.strike = true;
         if (v.fs) s.font.sz = Number(v.fs);
         if (v.fc) s.font.color = { rgb: v.fc.replace("#", "").toUpperCase() };
-        if (v.ff) s.font.name = v.ff;
+        if (v.ff) s.font.name = String(v.ff);
       }
 
       // Fill / background
@@ -123,7 +159,7 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
       // Alignment
       const ht = FS_HT[String(v.ht)];
       const vt = FS_VT[String(v.vt)];
-      const wrap = v.tb === "2" || v.tb === 2;
+      const wrap = String(v.tb) === "2";
       if (ht || vt || wrap) {
         s.alignment = {};
         if (ht) s.alignment.horizontal = ht;
@@ -134,9 +170,9 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
       // Borders
       if (v.b) {
         const sides: Record<string, string> = { l: "left", r: "right", t: "top", b: "bottom" };
-        const border: any = {};
+        const border: Record<string, { style: string; color: { rgb: string } }> = {};
         for (const [fs, xl] of Object.entries(sides)) {
-          const bd = v.b[fs];
+          const bd = v.b[fs as keyof FortuneCellBorder];
           if (bd?.style) {
             border[xl] = {
               style: FS_BORDER[String(bd.style)] || "thin",
@@ -183,10 +219,10 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
         ...Object.keys(cfg.colhidden || {}).map(Number),
         maxC
       );
-      const xlCols: any[] = Array.from({ length: cMax + 1 }, () => ({}));
+      const xlCols: ColInfo[] = Array.from({ length: cMax + 1 }, () => ({}));
       for (const [ci, w] of Object.entries(cfg.columnlen || {})) {
         xlCols[Number(ci)].wpx = w;
-        xlCols[Number(ci)].wch = Math.round(((w as number) / 7) * 100) / 100;
+        xlCols[Number(ci)].wch = Math.round((w / 7) * 100) / 100;
       }
       for (const ci of Object.keys(cfg.colhidden || {})) xlCols[Number(ci)].hidden = true;
       ws["!cols"] = xlCols;
@@ -199,10 +235,10 @@ function fortuneToXlsx(sheets: FortuneSheet[], XLSX: typeof import("xlsx-js-styl
         ...Object.keys(cfg.rowhidden || {}).map(Number),
         maxR
       );
-      const xlRows: any[] = Array.from({ length: rMax + 1 }, () => ({}));
+      const xlRows: RowInfo[] = Array.from({ length: rMax + 1 }, () => ({}));
       for (const [ri, h] of Object.entries(cfg.rowlen || {})) {
         xlRows[Number(ri)].hpx = h;
-        xlRows[Number(ri)].hpt = Math.round(((h as number) / 1.333) * 100) / 100;
+        xlRows[Number(ri)].hpt = Math.round((h / 1.333) * 100) / 100;
       }
       for (const ri of Object.keys(cfg.rowhidden || {})) xlRows[Number(ri)].hidden = true;
       ws["!rows"] = xlRows;
@@ -317,7 +353,7 @@ export default function SpreadsheetEditor() {
   const hasInteractedRef = useRef<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const workbookRef = useRef<any>(null);
+  const workbookRef = useRef<WorkbookInstance | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Caches the base64 rawXlsx for Excel-mode sheets so autosave and download can use it
   const rawXlsxRef = useRef<string>("");
@@ -325,7 +361,7 @@ export default function SpreadsheetEditor() {
   const seqRef = useRef<string>("");
   const seqTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: library = [], isLoading: libraryLoading } = useQuery({
+  const { data: library = [], isLoading: libraryLoading } = useQuery<SpreadsheetListItem[]>({
     queryKey: ["/api/spreadsheets"],
   });
 
@@ -811,7 +847,7 @@ export default function SpreadsheetEditor() {
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
           Loading…
         </div>
-      ) : (library as any[]).length === 0 ? (
+      ) : library.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <FileSpreadsheet className="h-12 w-12 text-muted-foreground/40 mb-4" />
           <p className="text-sm font-medium text-muted-foreground">No spreadsheets yet</p>
@@ -831,7 +867,7 @@ export default function SpreadsheetEditor() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {(library as any[]).map((sheet) => (
+          {library.map((sheet) => (
             <Card
               key={sheet.id}
               className="hover-elevate cursor-pointer group"

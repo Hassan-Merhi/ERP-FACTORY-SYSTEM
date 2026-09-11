@@ -8,7 +8,31 @@ import { cn } from "@/lib/utils";
 
 type RevisionStatus = "pending" | "approved" | "rejected" | "cancelled" | "superseded";
 
-function revisionStatus(revision: any): RevisionStatus {
+/** One changed line inside a stock transfer revision. */
+interface TransferRevisionItem {
+  stockItemName?: string | null;
+  sourceLocationName?: string | null;
+  originalQuantity?: string | number | null;
+  newQuantity?: string | number | null;
+  delta: string | number;
+}
+
+/** A revision of a stock transfer, as returned by the revisions API. */
+interface TransferRevision {
+  id: number;
+  revisionNumber?: number | null;
+  status?: RevisionStatus;
+  optional?: boolean;
+  revisionDate?: string | null;
+  reviewedAt?: string | null;
+  note?: string | null;
+  rejectionReason?: string | null;
+  sourceLocationName?: string | null;
+  destinationLocationName?: string | null;
+  items?: TransferRevisionItem[];
+}
+
+function revisionStatus(revision: TransferRevision): RevisionStatus {
   return revision.status ?? (revision.optional ? "pending" : "approved");
 }
 
@@ -34,7 +58,7 @@ function revisionStatusVariant(status: RevisionStatus): "default" | "secondary" 
 interface StockTransferRevisionHistoryProps {
   voucherIdToEdit: number | null;
   stableTransferId: number | null;
-  transferRevisions: unknown[];
+  transferRevisions: TransferRevision[];
   transferRevisionsExpanded: boolean;
   setTransferRevisionsExpanded: (val: boolean | ((v: boolean) => boolean)) => void;
   setApproveRevisionTarget: (rev: any) => void;
@@ -89,7 +113,7 @@ export function StockTransferRevisionHistory({
               description='Use "Save as Revision" to record tracked changes to this transfer.'
             />
           ) : (
-            transferRevisions.map((rev: any) => (
+            transferRevisions.map((rev) => (
               <div key={rev.id} className="border rounded-md overflow-hidden">
                 {revisionStatus(rev) === "pending" && (
                   <div className="flex items-center justify-between gap-3 px-3 py-2 status-warning border-b">
@@ -143,9 +167,9 @@ export function StockTransferRevisionHistory({
                       </thead>
                       <tbody>
                         {rev.items
-                          .filter((item: any) => parseFloat(item.delta) !== 0)
-                          .map((item: any, idx: number) => {
-                            const delta = parseFloat(item.delta);
+                          .filter((item) => parseFloat(String(item.delta)) !== 0)
+                          .map((item, idx: number) => {
+                            const delta = parseFloat(String(item.delta));
                             return (
                               <tr key={idx} className="border-t">
                                 <td className="p-2 font-medium">{item.stockItemName}</td>
@@ -153,7 +177,7 @@ export function StockTransferRevisionHistory({
                                   {item.sourceLocationName}
                                 </td>
                                 <td className="p-2 text-right font-mono text-muted-foreground">
-                                  {formatNumber(parseFloat(item.originalQuantity), 0)}
+                                  {formatNumber(parseFloat(String(item.originalQuantity)), 0)}
                                 </td>
                                 <td
                                   className={cn(
@@ -165,7 +189,7 @@ export function StockTransferRevisionHistory({
                                   {formatNumber(delta, 0)}
                                 </td>
                                 <td className="p-2 text-right font-mono font-semibold">
-                                  {formatNumber(parseFloat(item.newQuantity), 0)}
+                                  {formatNumber(parseFloat(String(item.newQuantity)), 0)}
                                 </td>
                               </tr>
                             );

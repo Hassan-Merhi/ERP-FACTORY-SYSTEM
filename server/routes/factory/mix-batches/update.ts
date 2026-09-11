@@ -45,7 +45,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           .from(factoryMixBatches)
           .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)));
         if (!batch) return res.status(404).json({ message: "Mix batch not found" });
-        const updates: any = {};
+        const updates: Partial<typeof factoryMixBatches.$inferInsert> = {};
         if (name !== undefined) updates.name = name?.trim() || null;
         if (notes !== undefined) updates.notes = notes?.trim() || null;
         if (batchDate !== undefined) updates.batchDate = batchDate || null;
@@ -263,7 +263,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           : 0;
 
         // ── 5. Update batch totals ──
-        const batchUpdates: any = {
+        const batchUpdates: Partial<typeof factoryMixBatches.$inferInsert> = {
           totalWeightKg: dTotalWeightKg.toDecimalPlaces(6).toFixed(6),
           costPerKg: new Decimal(blendedCostPerKg).toFixed(6),
           totalCost: dTotalCost.toDecimalPlaces(6).toFixed(6),

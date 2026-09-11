@@ -770,7 +770,7 @@ export function registerOrderCrudRoutes(app: Express) {
         .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
       if (!order) return res.status(404).json({ message: "Order not found" });
 
-      const updateData: any = { updatedAt: new Date() };
+      const updateData: Partial<typeof customerOrders.$inferInsert> = { updatedAt: new Date() };
       if (containerNumber !== undefined) updateData.containerNumber = containerNumber;
       if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
       if (containerNotes !== undefined) updateData.containerNotes = containerNotes;

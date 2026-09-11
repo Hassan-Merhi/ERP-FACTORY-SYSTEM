@@ -93,7 +93,7 @@ export function registerDispatchTruckRideRoutes(app: Express) {
       if (ride.status === "CANCELLED") return res.status(400).json({ message: "Ride is cancelled" });
 
       const { truckPlate, driverName, destination, notes } = req.body;
-      const updates: any = { updatedAt: new Date() };
+      const updates: Partial<typeof customerDispatchTruckRides.$inferInsert> = { updatedAt: new Date() };
       if (truckPlate !== undefined) updates.truckPlate = truckPlate;
       if (driverName !== undefined) updates.driverName = driverName;
       if (destination !== undefined) updates.destination = destination;

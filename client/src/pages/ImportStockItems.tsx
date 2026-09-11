@@ -138,7 +138,14 @@ function NewItemsTab() {
       const stockGroupsData: any[] = await fetch("/api/stock-groups", { credentials: "include" }).then((r) => r.json());
       const stockGroupMap = new Map(stockGroupsData.map((sg) => [sg.code, sg.id]));
       const itemsToImport = previewData.map((row) => {
-        const item: any = {
+        const item: {
+          companyId: number;
+          code: string;
+          name: string;
+          uom: string;
+          active: boolean;
+          stockGroupId?: number;
+        } = {
           companyId: selectedCompany.id,
           code: row.code,
           name: row.name,

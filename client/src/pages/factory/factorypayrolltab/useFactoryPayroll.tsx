@@ -171,7 +171,13 @@ export default function useFactoryPayroll() {
 
   const previewMutation = useMutation({
     mutationFn: async () => {
-      const body: any = {
+      const body: {
+        periodStart: string;
+        periodEnd: string;
+        bonusPerWorker: string;
+        workerIds?: number[];
+        daysCount?: string;
+      } = {
         periodStart: runForm.periodStart,
         periodEnd: runForm.periodEnd,
         bonusPerWorker: runForm.bonusPerWorker,

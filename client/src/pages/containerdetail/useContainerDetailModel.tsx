@@ -13,12 +13,23 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Supplier, Customer, ContainerSale } from "@shared/schema";
+import {
+  type PurchaseOrder,
+  type POLineItem,
+  type ContainerCharge,
+  containers as containersTable,
+  containerDocuments as containerDocumentsTable,
+  containerDocumentTypes as containerDocumentTypesTable,
+  containerFreight as containerFreightTable,
+  ledgerAccounts as ledgerAccountsTable,
+} from "@shared/schema";
+
 import { utils, writeFile, read as readExcel, ExcelJS } from "@/lib/excelHelper";
 
 interface ContainerDetailData {
-  container: any;
-  pos: any[];
-  charges: any[];
+  container: typeof containersTable.$inferSelect;
+  pos: (PurchaseOrder & { items: POLineItem[] })[];
+  charges: ContainerCharge[];
   offloadId?: number | null;
 }
 
@@ -87,7 +98,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     enabled: !!companyId,
   });
 
-  const { data: allLedgerAccounts = [] } = useQuery<any[]>({
+  const { data: allLedgerAccounts = [] } = useQuery<(typeof ledgerAccountsTable.$inferSelect)[]>({
     queryKey: ["/api/ledger-accounts", companyId],
     enabled: !!companyId,
   });
@@ -103,8 +114,8 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const containerSale = containerSales.find((sale: ContainerSale) => sale.containerId === parseInt(containerId!));
 
   const { data: docsData, isLoading: _docsLoading } = useQuery<{
-    documents: any[];
-    docTypes: any[];
+    documents: ((typeof containerDocumentsTable.$inferSelect) & { isGhost: boolean })[];
+    docTypes: (typeof containerDocumentTypesTable.$inferSelect)[];
     completeness: { total: number; uploaded: number; complete: boolean };
   }>({
     queryKey: ["/api/factory/containers", containerId, "documents"],
@@ -116,7 +127,13 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     enabled: !!containerId,
   });
 
-  const { data: _freightData = [], isLoading: _freightLoading } = useQuery<any[]>({
+  const { data: _freightData = [], isLoading: _freightLoading } = useQuery<
+    ((typeof containerFreightTable.$inferSelect) & {
+      payments?: unknown[];
+      totalPaid?: number;
+      computedStatus?: string;
+    })[]
+  >({
     queryKey: ["/api/factory/containers", containerId, "freight"],
     queryFn: async () => {
       const res = await fetch(`/api/factory/containers/${containerId}/freight`);
@@ -183,7 +200,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
       let headerRow = -1;
 
       sheet.eachRow((row, rowNumber: number) => {
-        const vals = row.values as any[];
+        const vals = row.values as unknown[];
         if (headerRow === -1) {
           vals.forEach((cell, colIdx: number) => {
             const v = String(cell || "")
@@ -216,7 +233,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
           "unit price",
         ];
         sheet.eachRow((row) => {
-          const vals = row.values as any[];
+          const vals = row.values as unknown[];
           const firstCell = String(vals[1] ?? "")
             .toLowerCase()
             .trim();
@@ -314,12 +331,15 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     }
   }
 
-  const freightForm = useForm({
+  type FreightFormValues = { vendorName: string; freightAmount: string; currency: string; dueDate: string; notes: string };
+  type PaymentFormValues = { paymentDate: string; amount: string; method: string; reference: string };
+
+  const freightForm = useForm<FreightFormValues>({
     defaultValues: { vendorName: "", freightAmount: "", currency: "USD", dueDate: "", notes: "" },
   });
 
   const addFreightMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: FreightFormValues) => {
       const res = await apiRequest("POST", `/api/factory/containers/${containerId}/freight`, data);
       return res.json();
     },
@@ -349,12 +369,12 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     },
   });
 
-  const paymentForm = useForm({
+  const paymentForm = useForm<PaymentFormValues>({
     defaultValues: { paymentDate: new Date().toLocaleDateString("en-CA"), amount: "", method: "", reference: "" },
   });
 
   const addPaymentMutation = useMutation({
-    mutationFn: async ({ freightId, data }: { freightId: number; data: any }) => {
+    mutationFn: async ({ freightId, data }: { freightId: number; data: PaymentFormValues }) => {
       const res = await apiRequest("POST", `/api/factory/freight/${freightId}/payments`, data);
       return res.json();
     },

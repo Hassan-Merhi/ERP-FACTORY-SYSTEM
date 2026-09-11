@@ -284,7 +284,7 @@ export function registerDispatchBatchCrudRoutes(app: Express) {
       if (batch.status === "CANCELLED") return res.status(400).json({ message: "Cannot edit a cancelled batch" });
 
       const { notes, destination, batchDate } = req.body;
-      const updates: any = { updatedAt: new Date() };
+      const updates: Partial<typeof customerDispatchBatches.$inferInsert> = { updatedAt: new Date() };
       if (notes !== undefined) updates.notes = notes;
       if (destination !== undefined) updates.destination = destination;
       if (batchDate !== undefined) updates.batchDate = batchDate;

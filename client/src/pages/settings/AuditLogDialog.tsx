@@ -15,17 +15,27 @@ import {
   tableShortName,
 } from "./AuditLogUtils";
 
-function fmtEntryAmount(v: string | number | null | undefined): string {
+function fmtEntryAmount(v: unknown): string {
   const n = parseFloat(String(v ?? 0));
   return isNaN(n) ? "—" : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function compareEntries(oldArr: any[], newArr: any[]) {
+type AuditJson = unknown;
+
+type AuditEntry = {
+  account?: unknown;
+  debit?: unknown;
+  credit?: unknown;
+  narration?: unknown;
+  [key: string]: unknown;
+};
+
+function compareEntries(oldArr: AuditEntry[], newArr: AuditEntry[]) {
   const oldMap = new Map(oldArr.map((entry) => [String(entry.account || "Unknown account"), entry]));
   const newMap = new Map(newArr.map((entry) => [String(entry.account || "Unknown account"), entry]));
   const added = [];
   const removed = [];
-  const changed: Array<{ account: string; old: any; new: any }> = [];
+  const changed: Array<{ account: string; old: AuditEntry; new: AuditEntry }> = [];
 
   for (const [account, entry] of newMap) {
     if (!oldMap.has(account)) {
@@ -34,9 +44,9 @@ function compareEntries(oldArr: any[], newArr: any[]) {
     }
     const old = oldMap.get(account)!;
     if (
-      parseFloat(old.debit || "0") !== parseFloat(entry.debit || "0") ||
-      parseFloat(old.credit || "0") !== parseFloat(entry.credit || "0") ||
-      (old.narration ?? "") !== (entry.narration ?? "")
+      parseFloat(String(old.debit || "0")) !== parseFloat(String(entry.debit || "0")) ||
+      parseFloat(String(old.credit || "0")) !== parseFloat(String(entry.credit || "0")) ||
+      String(old.narration ?? "") !== String(entry.narration ?? "")
     ) {
       changed.push({ account, old, new: entry });
     }
@@ -73,7 +83,7 @@ const ACTION_VERBS: Record<string, string> = {
   settings_change: "changed settings for",
 };
 
-function getHeaderSentence(log: any): string {
+function getHeaderSentence(log: Record<string, unknown>): string {
   const user =
     log.username && log.username !== "unknown"
       ? log.username
@@ -87,22 +97,23 @@ function getHeaderSentence(log: any): string {
       .toUpperCase()
       .startsWith("SECURITY:")
   ) {
-    return `${user}: ${securityActionSummary(log)} on ${fmtDate(log.createdAt)}.`;
+    return `${String(user)}: ${securityActionSummary(log)} on ${fmtDate(String(log.createdAt ?? ""))}.`;
   }
 
   const changes = normalizeAuditChanges(log);
-  const actionKey = String(log.action || "").toLowerCase();
+  const actionKey = String(log.action ?? "").toLowerCase();
   const verb = ACTION_VERBS[actionKey] || "recorded activity for";
-  const voucherType =
+  const voucherTypeRaw =
     changes.voucherType?.new ?? changes.voucherType?.old ?? changes.type?.new ?? changes.type?.old ?? "";
-  const moduleName = tableShortName(log.tableName).replace(/s$/, "");
+  const voucherType = typeof voucherTypeRaw === "string" ? voucherTypeRaw : String(voucherTypeRaw ?? "");
+  const moduleName = tableShortName(String(log.tableName ?? "")).replace(/s$/, "");
   const subject = voucherType ? `${voucherType} ${moduleName.toLowerCase()}` : moduleName.toLowerCase();
   const record = getRecordLabel(log);
-  const recordPart = record && record !== tableShortName(log.tableName) ? ` ${record}` : "";
-  return `${user} ${verb} ${subject}${recordPart} on ${fmtDate(log.createdAt)}.`;
+  const recordPart = record && record !== tableShortName(String(log.tableName ?? "")) ? ` ${record}` : "";
+  return `${String(user)} ${verb} ${subject}${recordPart} on ${fmtDate(String(log.createdAt ?? ""))}.`;
 }
 
-function isChangePair(value: any): boolean {
+function isChangePair(value: AuditJson): boolean {
   return Boolean(
     value &&
     typeof value === "object" &&
@@ -111,11 +122,11 @@ function isChangePair(value: any): boolean {
   );
 }
 
-function valuesEqual(a: any, b: any): boolean {
+function valuesEqual(a: AuditJson, b: AuditJson): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function StructuredValue({ field, value, depth = 0 }: { field: string; value: any; depth?: number }): ReactNode {
+function StructuredValue({ field, value, depth = 0 }: { field: string; value: AuditJson; depth?: number }): ReactNode {
   if (value === null || value === undefined || value === "") {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -166,7 +177,7 @@ function StructuredValue({ field, value, depth = 0 }: { field: string; value: an
   return <span className="break-words whitespace-pre-wrap">{fmtBusinessValue(field, value)}</span>;
 }
 
-function EntryTable({ entries, label }: { entries: any[]; label?: string }) {
+function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string }) {
   if (entries.length === 0) return null;
   return (
     <div className="space-y-1.5">
@@ -183,10 +194,10 @@ function EntryTable({ entries, label }: { entries: any[]; label?: string }) {
             key={`${entry.account || "account"}-${index}`}
             className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 border-t text-xs items-start"
           >
-            <span className="font-medium break-words">{entry.account || "Unknown account"}</span>
+            <span className="font-medium break-words">{String(entry.account ?? "Unknown account")}</span>
             <span className="text-right tabular-nums">{fmtEntryAmount(entry.debit)}</span>
             <span className="text-right tabular-nums">{fmtEntryAmount(entry.credit)}</span>
-            <span className="text-muted-foreground break-words whitespace-pre-wrap">{entry.narration || "—"}</span>
+            <span className="text-muted-foreground break-words whitespace-pre-wrap">{String(entry.narration ?? "—")}</span>
           </div>
         ))}
       </div>
@@ -194,22 +205,23 @@ function EntryTable({ entries, label }: { entries: any[]; label?: string }) {
   );
 }
 
-export function AuditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
+export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>; onClose: () => void }) {
   const changes = normalizeAuditChanges(log);
-  const actionKey = String(log.action || "").toLowerCase();
+  const actionKey = String(log.action ?? "").toLowerCase();
   const isDelete = actionKey === "delete";
   const isCreate = actionKey === "create";
   const isSecurity = log.tableName === "security_events" || actionKey.startsWith("security:");
 
   const entriesChange = changes.entries;
   const scalarChanges = Object.fromEntries(Object.entries(changes).filter(([key]) => key !== "entries"));
-  const oldEntries = Array.isArray(entriesChange?.old) ? entriesChange.old : [];
-  const newEntries = Array.isArray(entriesChange?.new) ? entriesChange.new : [];
+  const oldEntries: AuditEntry[] = Array.isArray(entriesChange?.old) ? (entriesChange.old as AuditEntry[]) : [];
+  const newEntries: AuditEntry[] = Array.isArray(entriesChange?.new) ? (entriesChange.new as AuditEntry[]) : [];
   const hasEntries = oldEntries.length > 0 || newEntries.length > 0;
   const entryDiff = compareEntries(oldEntries, newEntries);
 
-  const voucherType =
+  const voucherTypeRaw =
     changes.voucherType?.new ?? changes.voucherType?.old ?? changes.type?.new ?? changes.type?.old ?? "";
+  const voucherType = typeof voucherTypeRaw === "string" ? voucherTypeRaw : String(voucherTypeRaw ?? "");
 
   const fieldPriority = [
     "status",
@@ -240,11 +252,12 @@ export function AuditLogDialog({ log, onClose }: { log: any; onClose: () => void
     return ai - bi;
   });
 
-  const renderRow = (field: string, rawPair: any) => {
+  type ChangePairLike = { old?: unknown; new?: unknown };
+  const renderRow = (field: string, rawPair: AuditJson) => {
     if (isItemDiffKey(field)) {
       const isAdded = field.startsWith("item_added_");
       const isRemoved = field.startsWith("item_removed_");
-      const pair = isChangePair(rawPair) ? rawPair : { new: rawPair };
+      const pair: ChangePairLike = isChangePair(rawPair) ? (rawPair as ChangePairLike) : { new: rawPair };
       const text = pair.new ?? pair.old ?? "";
       if (!text) return null;
       return (
@@ -267,7 +280,7 @@ export function AuditLogDialog({ log, onClose }: { log: any; onClose: () => void
       );
     }
 
-    const pair = isChangePair(rawPair) ? rawPair : { new: rawPair };
+    const pair: ChangePairLike = isChangePair(rawPair) ? (rawPair as ChangePairLike) : { new: rawPair };
     const hasOld = pair.old !== undefined;
     const hasNew = pair.new !== undefined;
     const hasActualChange = hasOld && hasNew && !valuesEqual(pair.old, pair.new);
@@ -327,25 +340,26 @@ export function AuditLogDialog({ log, onClose }: { log: any; onClose: () => void
 
         <div className="grid grid-cols-[minmax(110px,160px)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm rounded-md border p-3 bg-muted/30 min-w-0">
           <span className="text-muted-foreground">User</span>
-          <span className="font-medium break-words">{log.username || "Unknown"}</span>
+          <span className="font-medium break-words">{String(log.username ?? "Unknown")}</span>
           <span className="text-muted-foreground">Date & Time</span>
-          <span>{fmtDate(log.createdAt)}</span>
+          <span>{fmtDate(String(log.createdAt ?? ""))}</span>
           <span className="text-muted-foreground">Company</span>
           <span className="font-medium break-words">
-            {log.companyName || (log.companyId ? `Company #${log.companyId}` : "Unknown company")}
-            {log.companyCode ? ` (${log.companyCode})` : ""}
+            {String(log.companyName ?? "") ||
+              (log.companyId ? `Company #${String(log.companyId)}` : "Unknown company")}
+            {log.companyCode ? ` (${String(log.companyCode)})` : ""}
           </span>
           <span className="text-muted-foreground">Action</span>
           <div className="min-w-0">
             <Badge
-              variant={actionBadgeVariant(log.action)}
+              variant={actionBadgeVariant(String(log.action ?? ""))}
               className="text-xs max-w-full whitespace-normal break-words leading-snug"
             >
-              {actionLabel(log.action)}
+              {actionLabel(String(log.action ?? ""))}
             </Badge>
           </div>
           <span className="text-muted-foreground">Module</span>
-          <span className="break-words">{tableShortName(log.tableName)}</span>
+          <span className="break-words">{tableShortName(String(log.tableName ?? ""))}</span>
           <span className="text-muted-foreground">Record</span>
           <span className="break-words whitespace-pre-wrap">{getRecordLabel(log)}</span>
           {voucherType && (

@@ -12,7 +12,8 @@
  * Rate-limited: max 1 attempt per container per 60 minutes (in-process).
  */
 
-import type { CarrierTrackResult, TrackingEvent } from "./types";
+import { asRawEventLocationObject, rawStr } from "./types";
+import type { CarrierRawEvent, CarrierTrackResult, TrackingEvent } from "./types";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 
@@ -131,16 +132,20 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
 
   const rawEvents: unknown[] = shipment?.events ?? shipment?.milestones ?? shipment?.containerEvents ?? d.events ?? [];
 
-  const events: TrackingEvent[] = (Array.isArray(rawEvents) ? rawEvents : [])
-    .map(
-      (e: any): TrackingEvent => ({
+  const events: TrackingEvent[] = (Array.isArray(rawEvents) ? (rawEvents as CarrierRawEvent[]) : [])
+    .map((e): TrackingEvent => {
+      const locObj = asRawEventLocationObject(e.location);
+      return {
         date: parseDate(e.eventDateTime ?? e.actualDate ?? e.timestamp ?? e.date ?? null),
-        status: e.typeCode ?? e.eventCode ?? e.activityCode ?? e.status ?? null,
+        status: rawStr(e.typeCode) ?? rawStr(e.eventCode) ?? rawStr(e.activityCode) ?? rawStr(e.status),
         location:
-          e.location?.portName ?? e.locationName ?? e.portName ?? (typeof e.location === "string" ? e.location : null),
-        description: e.description ?? e.eventCode ?? e.typeCode ?? null,
-      })
-    )
+          rawStr(locObj?.portName) ??
+          rawStr(e.locationName) ??
+          rawStr(e.portName) ??
+          (typeof e.location === "string" ? e.location : null),
+        description: rawStr(e.description) ?? rawStr(e.eventCode) ?? rawStr(e.typeCode),
+      };
+    })
     .filter((e) => e.date !== null || e.status !== null)
     .sort((a, b) => {
       if (!a.date) return 1;

@@ -165,7 +165,7 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const updates: any = {};
+      const updates: Partial<typeof factoryWorkerAdvances.$inferInsert> = {};
       if (req.body.notes !== undefined) updates.notes = req.body.notes;
       if (req.body.advanceDate) updates.advanceDate = req.body.advanceDate;
 

@@ -11,8 +11,17 @@ import type { UseFormReturn } from "react-hook-form";
 import { queryClient } from "@/lib/queryClient";
 import { locationInventoryLightUrl } from "@/api/inventoryApi";
 
+/** Row of the `/api/locations/:id/inventory` payload used by the transfer sidebar. */
+export interface TransferInventoryItem {
+  stockItemId: number;
+  stockItemName: string;
+  stockItemCode?: string;
+  quantity?: string;
+  averageRate?: string;
+}
+
 /** Source-location inventory, filtered by the sidebar search and sorted by name. */
-export function useFilteredTransferInventory(transferInventory: any[], transferSearchTerm: string) {
+export function useFilteredTransferInventory(transferInventory: TransferInventoryItem[], transferSearchTerm: string) {
   return useMemo(() => {
     const term = transferSearchTerm.trim().toLowerCase();
     const filtered = term
@@ -29,7 +38,7 @@ export function useFilteredTransferInventory(transferInventory: any[], transferS
  * Revisions still awaiting review. Approving one applies all of them, so the
  * approve dialog previews the whole set rather than just the clicked row.
  */
-export function usePendingTransferRevisions(transferRevisions: any[]) {
+export function usePendingTransferRevisions<T extends { optional?: boolean }>(transferRevisions: T[]): T[] {
   return useMemo(() => transferRevisions.filter((rev) => rev.optional), [transferRevisions]);
 }
 

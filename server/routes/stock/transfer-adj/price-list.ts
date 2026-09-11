@@ -282,7 +282,16 @@ export function registerPosPriceListRoutes(app: Express) {
           const custom = priceMap.get(item.stockItemId)?.get(mloc.id);
           itemPrices[mloc.id] = custom ?? item.baseSellingPrice ?? "0";
         }
-        const base: any = { ...item, masterPrices: itemPrices };
+        const base: {
+          masterPrices: Record<number, string>;
+          stockItemId: number;
+          code: string;
+          name: string;
+          stockGroupName: string;
+          baseSellingPrice: string | null;
+          costPrice?: string | null;
+          offloadingCost?: string | null;
+        } = { ...item, masterPrices: itemPrices };
         if (isPrivileged) {
           base.costPrice = dubaiMap.get(item.stockItemId) ?? null;
           base.offloadingCost = offloadMap.get(item.stockItemId) ?? null;

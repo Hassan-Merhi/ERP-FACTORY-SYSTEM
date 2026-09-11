@@ -169,13 +169,13 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
           titleFont: "FFFFFF",
           summaryBg: "F5F5F5",
         };
-        const sThin = {
+        const sThin: Partial<import("exceljs").Borders> = {
           top: { style: "thin", color: { argb: "BDBDBD" } },
           left: { style: "thin", color: { argb: "BDBDBD" } },
           bottom: { style: "thin", color: { argb: "BDBDBD" } },
           right: { style: "thin", color: { argb: "BDBDBD" } },
         };
-        const dblBorder = {
+        const dblBorder: Partial<import("exceljs").Borders> = {
           top: { style: "double", color: { argb: "424242" } },
           bottom: { style: "double", color: { argb: "424242" } },
           left: sThin.left,
@@ -218,7 +218,7 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
           const headerRowNum = sheet.rowCount + 1;
           const headerRow = sheet.addRow(columns.map((c) => c.header));
           headerRow.height = 24;
-          headerRow.eachCell((cell: any) => {
+          headerRow.eachCell((cell: ExcelJS.Cell) => {
             cell.font = { bold: true, size: 10, color: { argb: sc.headerFont } };
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sectionColor } };
             cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
@@ -242,7 +242,7 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
               const values = columns.map((c) => item[c.key]);
               const dataRow = sheet.addRow(values);
               const rowBg = statusColorFn ? statusColorFn(item) : i % 2 !== 0 ? sc.summaryBg : null;
-              dataRow.eachCell((cell: any) => {
+              dataRow.eachCell((cell: ExcelJS.Cell) => {
                 cell.border = sThin;
                 cell.alignment = { vertical: "middle" };
                 if (rowBg) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: rowBg } };
@@ -257,7 +257,7 @@ export function registerContainerLoadedItemSummaryRoutes(app: Express, requireAu
             });
             const totalRow = sheet.addRow(totalValues);
             totalRow.font = { bold: true, size: 10 };
-            totalRow.eachCell((cell: any, colN: number) => {
+            totalRow.eachCell((cell: ExcelJS.Cell, colN: number) => {
               cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sc.summaryBg } };
               cell.border = dblBorder;
               const col = columns[colN - 1];
