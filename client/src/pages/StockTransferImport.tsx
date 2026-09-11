@@ -15,6 +15,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, FileSpreadsheet, CheckCircle, XCircle, Download, ArrowRightLeft } from "lucide-react";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface Location {
   id: number;
@@ -22,7 +23,7 @@ interface Location {
 }
 
 interface StockTransferImportProps {
-  posUser?: any;
+  posUser?: AuthMe;
 }
 
 export default function StockTransferImport({ posUser }: StockTransferImportProps) {

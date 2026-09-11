@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
 import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export // ──────────────────────────────────────────────────────────
 // LEDGER VIEW / STATEMENT
@@ -44,7 +45,7 @@ function LedgerView({
   const [draftNote, setDraftNote] = useState(contract.statementNote ?? "");
   const noteChanged = draftNote !== (contract.statementNote ?? "");
 
-  const { data: me } = useQuery<any>({ queryKey: ["/api/auth/me"], staleTime: 30 * 60 * 1000 });
+  const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 30 * 60 * 1000 });
   const isAdmin = me?.role === "Admin" || me?.role === "Developer";
 
   const saveNote = useMutation({

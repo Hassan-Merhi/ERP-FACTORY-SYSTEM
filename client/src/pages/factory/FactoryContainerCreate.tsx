@@ -15,6 +15,7 @@ import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactorySupplier } from "@shared/schema";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type OtherChargeLine = { amount: string; currencyCode: string; ledgerAccountId: string };
 
@@ -116,7 +117,7 @@ export default function FactoryContainerCreate() {
     queryKey: ["/api/factory/suppliers"],
   });
 
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,

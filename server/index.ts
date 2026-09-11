@@ -353,16 +353,22 @@ let migrationsDone = false;
     logger.info("[Schedulers] Disabled via ENABLE_SCHEDULERS=false");
   }
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const error = err as {
+      cause?: { message?: string };
+      message?: string;
+      status?: number;
+      statusCode?: number;
+    };
     // DB unavailable errors — return 503 immediately instead of a generic 500.
     const isPoolTimeout =
-      err?.cause?.message?.includes("timeout exceeded when trying to connect") ||
-      err?.message?.includes("timeout exceeded when trying to connect");
+      error?.cause?.message?.includes("timeout exceeded when trying to connect") ||
+      error?.message?.includes("timeout exceeded when trying to connect");
     const isLockTimeout =
-      err?.cause?.message?.includes("lock timeout") ||
-      err?.message?.includes("lock timeout") ||
-      err?.cause?.message?.includes("canceling statement due to lock timeout") ||
-      err?.message?.includes("canceling statement due to lock timeout");
+      error?.cause?.message?.includes("lock timeout") ||
+      error?.message?.includes("lock timeout") ||
+      error?.cause?.message?.includes("canceling statement due to lock timeout") ||
+      error?.message?.includes("canceling statement due to lock timeout");
     if (isPoolTimeout || isLockTimeout) {
       logger.error("DB connection/lock timeout — pool exhausted or DDL lock contention", {
         module: "db",
@@ -372,7 +378,7 @@ let migrationsDone = false;
       return res.status(503).json({ message: "Service temporarily unavailable — please retry." });
     }
 
-    const status = err.status || err.statusCode || 500;
+    const status = error.status || error.statusCode || 500;
     const isProduction = process.env.NODE_ENV === "production";
 
     if (status >= 500) {
@@ -382,7 +388,7 @@ let migrationsDone = false;
     const message =
       isProduction && status >= 500
         ? "An unexpected error occurred. Please try again."
-        : err.message || "Internal Server Error";
+        : error.message || "Internal Server Error";
 
     res.status(status).json({ message });
   });

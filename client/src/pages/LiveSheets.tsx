@@ -28,6 +28,7 @@ import { ExternalLink, Plus, Pencil, Trash2, Sheet } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface LiveSpreadsheet {
   id: number;
@@ -189,7 +190,7 @@ export default function LiveSheets() {
   const [editTarget, setEditTarget] = useState<LiveSpreadsheet | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LiveSpreadsheet | null>(null);
 
-  const { data: me } = useQuery<any>({ queryKey: ["/api/auth/me"] });
+  const { data: me } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = me?.role === "Admin" || me?.role === "Owner" || me?.role === "Developer";
 
   const { data: sheets = [], isLoading } = useQuery<LiveSpreadsheet[]>({

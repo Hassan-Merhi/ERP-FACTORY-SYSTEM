@@ -1,13 +1,29 @@
 import { formatNumber } from "@/lib/formatNumber";
 
+type InvoiceSaleItem = {
+  stockItemName?: string;
+  quantity?: string | number;
+  rate?: string | number;
+  rateUSD?: string | number;
+  configuredPrice?: string | number;
+};
+
+export type InvoiceSale = {
+  saleDate?: string;
+  isCreditSale?: boolean;
+  customer?: { name?: string } | null;
+  items?: InvoiceSaleItem[];
+  voucher?: { exchangeRate?: string | number; description?: string | null };
+};
+
 export interface InvoiceTemplateProps {
   printRef: React.RefObject<HTMLDivElement | null>;
-  savedSale: any;
+  savedSale: InvoiceSale | null | undefined;
   printUserName: string;
-  selectedCompany: any;
+  selectedCompany: { name?: string | null } | null | undefined;
   exchangeRate: number | null;
-  fmtPrint: (val: any, prefix?: string) => string;
-  fmtPrintCurrency: (val: any) => string;
+  fmtPrint: (val: number | string | null | undefined, prefix?: string) => string;
+  fmtPrintCurrency: (val: number | string | null | undefined) => string;
 }
 
 export function InvoiceTemplate({
@@ -88,7 +104,7 @@ export function InvoiceTemplate({
               }}
             >
               <span style={{ fontWeight: "900" }}>Daily Rate:</span> $1 ={" "}
-              {formatNumber(parseFloat(savedSale?.voucher?.exchangeRate) || exchangeRate || 0)} CFA
+              {formatNumber(parseFloat(String(savedSale?.voucher?.exchangeRate ?? "")) || exchangeRate || 0)} CFA
             </div>
           )}
 
@@ -209,12 +225,12 @@ export function InvoiceTemplate({
             </tr>
           </thead>
           <tbody>
-            {(savedSale?.items ?? []).map((item: any, idx: number) => {
-              const itemRateUSD = parseFloat(item.rateUSD || item.rate);
-              const itemAmountUSD = parseFloat(item.quantity) * itemRateUSD;
-              const configuredPrice = parseFloat(item.configuredPrice || "0");
+            {(savedSale?.items ?? []).map((item: InvoiceSaleItem, idx: number) => {
+              const itemRateUSD = parseFloat(String(item.rateUSD ?? item.rate ?? 0));
+              const itemAmountUSD = parseFloat(String(item.quantity ?? 0)) * itemRateUSD;
+              const configuredPrice = parseFloat(String(item.configuredPrice || "0"));
               const plPerBale = itemRateUSD - configuredPrice;
-              const totalPL = plPerBale * parseFloat(item.quantity);
+              const totalPL = plPerBale * parseFloat(String(item.quantity ?? 0));
               const plBaleColor = plPerBale > 0 ? "#0a7e1f" : plPerBale < 0 ? "#c2272d" : undefined;
               const totalPLColor = totalPL > 0 ? "#0a7e1f" : totalPL < 0 ? "#c2272d" : undefined;
               return (
@@ -239,7 +255,7 @@ export function InvoiceTemplate({
                       border: "1px solid #bbb",
                     }}
                   >
-                    {fmtPrint(parseFloat(item.quantity))}
+                    {fmtPrint(parseFloat(String(item.quantity ?? 0)))}
                   </td>
                   <td
                     style={{
@@ -317,7 +333,10 @@ export function InvoiceTemplate({
                 }}
               >
                 {fmtPrint(
-                  (savedSale?.items ?? []).reduce((sum: number, item: any) => sum + parseFloat(item.quantity || 0), 0)
+                  (savedSale?.items ?? []).reduce(
+                    (sum: number, item: InvoiceSaleItem) => sum + parseFloat(String(item.quantity || 0)),
+                    0
+                  )
                 )}
               </td>
               <td style={{ border: "1px solid #999" }}></td>
@@ -332,7 +351,8 @@ export function InvoiceTemplate({
               >
                 {fmtPrintCurrency(
                   (savedSale?.items ?? []).reduce(
-                    (sum: number, item: any) => sum + parseFloat(item.quantity) * parseFloat(item.rateUSD || item.rate),
+                    (sum: number, item: InvoiceSaleItem) =>
+                      sum + parseFloat(String(item.quantity)) * parseFloat(String(item.rateUSD || item.rate)),
                     0
                   )
                 )}
@@ -348,10 +368,10 @@ export function InvoiceTemplate({
                   verticalAlign: "middle",
                   color: (() => {
                     const t = (savedSale?.items ?? []).reduce(
-                      (s: number, i: any) =>
+                      (s: number, i: InvoiceSaleItem) =>
                         s +
-                        (parseFloat(i.rateUSD || i.rate) - parseFloat(i.configuredPrice || "0")) *
-                          parseFloat(i.quantity),
+                        (parseFloat(String(i.rateUSD || i.rate)) - parseFloat(String(i.configuredPrice || "0"))) *
+                          parseFloat(String(i.quantity)),
                       0
                     );
                     return t > 0 ? "#0a7e1f" : t < 0 ? "#c2272d" : undefined;
@@ -360,9 +380,10 @@ export function InvoiceTemplate({
               >
                 {(() => {
                   const t = (savedSale?.items ?? []).reduce(
-                    (s: number, i: any) =>
+                    (s: number, i: InvoiceSaleItem) =>
                       s +
-                      (parseFloat(i.rateUSD || i.rate) - parseFloat(i.configuredPrice || "0")) * parseFloat(i.quantity),
+                      (parseFloat(String(i.rateUSD || i.rate)) - parseFloat(String(i.configuredPrice || "0"))) *
+                        parseFloat(String(i.quantity)),
                     0
                   );
                   return fmtPrint(t, "$");
@@ -387,9 +408,9 @@ export function InvoiceTemplate({
           <span>TOTAL PAID:</span>
           <span>
             {fmtPrintCurrency(
-              (savedSale?.items ?? []).reduce((sum: number, item: any) => {
-                const rateUSD = parseFloat(item.rateUSD || item.rate);
-                return sum + parseFloat(item.quantity) * rateUSD;
+              (savedSale?.items ?? []).reduce((sum: number, item: InvoiceSaleItem) => {
+                const rateUSD = parseFloat(String(item.rateUSD ?? item.rate ?? 0));
+                return sum + parseFloat(String(item.quantity ?? 0)) * rateUSD;
               }, 0)
             )}
           </span>

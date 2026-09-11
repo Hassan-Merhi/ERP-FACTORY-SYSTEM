@@ -44,6 +44,7 @@ import { ErrorState } from "@/components/ui/page-state";
 import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";
 import { useSalesReportDateKeyboard } from "./salesreportlegacy/useSalesReportDateKeyboard";
 import { exportSalesReportExcel } from "./salesreportlegacy/exportExcel";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 export default function SalesReport() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
   useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
@@ -64,12 +65,12 @@ export default function SalesReport() {
   const { formatAmount } = useCurrencyContext();
 
   // Fetch locations
-  const { data: locations = [] } = useQuery<any[]>({
+  const { data: locations = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/locations"],
   });
 
   // Fetch stock items (lightweight — only needs id/name/code for filter dropdown)
-  const { data: stockItems = [] } = useQuery<any[]>({
+  const { data: stockItems = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -78,7 +79,7 @@ export default function SalesReport() {
   });
 
   // Fetch stock groups
-  const { data: stockGroups = [] } = useQuery<any[]>({
+  const { data: stockGroups = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/stock-groups"],
   });
 

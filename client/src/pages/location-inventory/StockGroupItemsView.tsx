@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InventoryTable } from "./InventoryTable";
 import type { InventoryItem, StockGroupSummary } from "./locationInventoryTypes";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface StockGroupItemsViewProps {
   selectedGroup: StockGroupSummary;
-  posUser?: any;
+  posUser?: AuthMe;
   canViewCost: boolean;
   formatAmount: (v: number) => string;
   setArchiveDialogOpen: (v: boolean) => void;

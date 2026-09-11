@@ -18,3 +18,54 @@ export type Serialized<T> = T extends Date
     : T extends object
       ? { [K in keyof T]: Serialized<T[K]> }
       : T;
+
+/** GET /api/factory/my-access */
+export type FactoryMyAccess = {
+  fullAccess: boolean;
+  pageKeys: string[];
+  hasErpAccess: boolean;
+  hasFactoryAccess: boolean;
+  hiddenCostFields: string[];
+  hideAllCosts: boolean;
+  companyId: number;
+  companyName: string;
+};
+
+/** GET /api/auth/me — user row minus password, plus session fields. */
+export type AuthMe = {
+  id: string;
+  username?: string | null;
+  fullName?: string | null;
+  active?: boolean;
+  chatbotEnabled?: boolean;
+  hiddenErpCostFields?: string[];
+  createdAt?: string;
+  currentRole?: string | null;
+  role?: string | null;
+  currentCompanyId?: number | null;
+  currentLocationId?: number | null;
+  currentPOSStation?: number | null;
+  assignedLocationId?: number | null;
+  posStation?: number | null;
+  cashAccountId?: number | null;
+  canSellNegativeStock?: boolean;
+  posViewOnly?: boolean;
+  daybookEditDays?: number | null;
+  canAccessCustomers?: boolean;
+  canDeleteRecords?: boolean;
+};
+
+/**
+ * List-row shape for client queries that historically used `any[]`.
+ * Extra API fields remain accessible without reintroducing `any`.
+ */
+export type ApiListRow = {
+  id?: number | string | null;
+  name?: string | null;
+  code?: string | null;
+  type?: string | null;
+  status?: string | null;
+  active?: boolean | null;
+  companyId?: number | null;
+  [key: string]: unknown;
+};

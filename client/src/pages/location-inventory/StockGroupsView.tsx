@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface StockGroupSummary {
   groupId: number | null;
@@ -39,7 +40,7 @@ interface StockGroupSummary {
 
 interface StockGroupsViewProps {
   selectedLocationLocal: Location;
-  posUser?: any;
+  posUser?: AuthMe;
   canViewCost: boolean;
   canManageWhatsapp: boolean;
   openRenameDialog: (loc: Location, e?: { stopPropagation: () => void; }) => void;

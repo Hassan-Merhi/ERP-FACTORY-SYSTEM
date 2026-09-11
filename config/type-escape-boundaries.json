@@ -39,11 +39,6 @@
         0,
         0
       ],
-      "client/src/pages/Agents.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/AiValidationPage.tsx": [
         1,
         0,
@@ -90,7 +85,7 @@
         0
       ],
       "client/src/pages/EditSupplier.tsx": [
-        2,
+        1,
         0,
         0
       ],
@@ -109,18 +104,8 @@
         0,
         0
       ],
-      "client/src/pages/LiveSheets.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/LocationInventory.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/LocationMonthlySummary.tsx": [
-        3,
+        2,
         0,
         0
       ],
@@ -130,7 +115,7 @@
         0
       ],
       "client/src/pages/NetProfitReport.tsx": [
-        4,
+        2,
         0,
         0
       ],
@@ -159,18 +144,8 @@
         0,
         0
       ],
-      "client/src/pages/SalesReportLegacy.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/SalesToolsHub.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/Settings.tsx": [
-        3,
+        2,
         0,
         0
       ],
@@ -180,7 +155,7 @@
         0
       ],
       "client/src/pages/StockTransferImport.tsx": [
-        9,
+        8,
         0,
         0
       ],
@@ -255,16 +230,11 @@
         0
       ],
       "client/src/pages/baleproducts/useBaleProductsModel.tsx": [
-        3,
+        2,
         0,
         0
       ],
       "client/src/pages/bales/BaleFormDialog.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/bales/useBales.ts": [
         1,
         0,
         0
@@ -349,22 +319,12 @@
         0,
         0
       ],
-      "client/src/pages/factory/BaleStockEntry.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/factory/CustomerLogosSettings.tsx": [
         2,
         0,
         0
       ],
       "client/src/pages/factory/EditProformaV5Drawer.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryAdvancesTab.tsx": [
         1,
         0,
         0
@@ -379,23 +339,13 @@
         0,
         0
       ],
-      "client/src/pages/factory/FactoryBalesHub.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/factory/FactoryBrokerVisualStatement.tsx": [
         5,
         0,
         0
       ],
-      "client/src/pages/factory/FactoryContainerCreate.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/factory/FactoryContainers.tsx": [
-        4,
+        3,
         0,
         0
       ],
@@ -410,26 +360,6 @@
         0
       ],
       "client/src/pages/factory/FactoryInsurance.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryInvoices.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryInvoicing.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryKpis.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryLoadingsHub.tsx": [
         1,
         0,
         0
@@ -449,26 +379,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/FactoryOtwTrackingTab.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryPayrollHub.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryPendingInvoices.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryProfitability.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/factory/FactoryShippingContainers.tsx": [
         3,
         0,
@@ -476,16 +386,6 @@
       ],
       "client/src/pages/factory/FactorySupplierReport.tsx": [
         2,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactorySupplierStatement.tsx": [
-        3,
-        0,
-        0
-      ],
-      "client/src/pages/factory/FactoryWorkersHub.tsx": [
-        1,
         0,
         0
       ],
@@ -724,11 +624,6 @@
         0,
         0
       ],
-      "client/src/pages/factory/factorystockallocationv3/components/ScanningPanel.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/factory/factorystockallocationv5/useFactoryStockAllocationV5Model.tsx": [
         2,
         0,
@@ -774,13 +669,8 @@
         0,
         0
       ],
-      "client/src/pages/factory/wipersreentry/utils.ts": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/git-containers/ContainerDrawer.tsx": [
-        2,
+        1,
         0,
         0
       ],
@@ -805,7 +695,7 @@
         0
       ],
       "client/src/pages/location-inventory/CombinedStockView.tsx": [
-        7,
+        6,
         0,
         0
       ],
@@ -819,28 +709,13 @@
         0,
         0
       ],
-      "client/src/pages/location-inventory/LocationGrid.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/location-inventory/LocationInventoryDialogs.tsx": [
         1,
         0,
         0
       ],
-      "client/src/pages/location-inventory/LocationInventoryHeader.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/StockGroupItemsView.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/location-inventory/StockGroupsView.tsx": [
-        2,
+        1,
         0,
         0
       ],
@@ -860,11 +735,6 @@
         0
       ],
       "client/src/pages/location-inventory/useLocationInventoryMutations.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryQueries.ts": [
         1,
         0,
         0
@@ -890,7 +760,7 @@
         0
       ],
       "client/src/pages/pos/POS.tsx": [
-        3,
+        2,
         0,
         0
       ],
@@ -930,12 +800,7 @@
         0
       ],
       "client/src/pages/pos/pos-components/CheckoutSidebar.tsx": [
-        8,
-        0,
-        0
-      ],
-      "client/src/pages/pos/pos-components/InvoiceTemplate.tsx": [
-        10,
+        7,
         0,
         0
       ],
@@ -1005,7 +870,7 @@
         0
       ],
       "client/src/pages/properties/property-rental/components/LedgerView.tsx": [
-        2,
+        1,
         0,
         0
       ],
@@ -1016,11 +881,6 @@
       ],
       "client/src/pages/settings/AccountingRepairDialogs.tsx": [
         5,
-        0,
-        0
-      ],
-      "client/src/pages/settings/ActiveUsersSection.tsx": [
-        1,
         0,
         0
       ],
@@ -1159,11 +1019,6 @@
         0,
         0
       ],
-      "client/src/pages/settings/datatoolstab/SilentProductionDialog.tsx": [
-        1,
-        0,
-        0
-      ],
       "client/src/pages/settings/datatoolstab/SilentTransferDialog.tsx": [
         2,
         0,
@@ -1236,11 +1091,6 @@
       ],
       "client/src/pages/sp/SpReports.tsx": [
         3,
-        0,
-        0
-      ],
-      "client/src/pages/sp/SpSetup.tsx": [
-        1,
         0,
         0
       ],
@@ -1484,11 +1334,6 @@
         0,
         0
       ],
-      "server/index.ts": [
-        1,
-        0,
-        0
-      ],
       "server/lib/accountStatementPdfGenerator.ts": [
         5,
         0,
@@ -1550,11 +1395,6 @@
         0
       ],
       "server/routes/auth/sessionRepository.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/routes/balance-repair/_helpers.ts": [
         1,
         0,
         0
@@ -2217,6 +2057,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1040
+    "typeEscapeCeiling": 981
   }
 }

@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
-import { InvoiceTemplate } from "./pos-components/InvoiceTemplate";
+import type { AuthMe } from "@shared/apiTypes";
+import { InvoiceTemplate, type InvoiceSale } from "./pos-components/InvoiceTemplate";
 import { POSDialogs } from "./pos-components/POSDialogs";
 import { POSHeader } from "./pos-components/POSHeader";
 import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
@@ -27,7 +28,7 @@ import { POS_COLUMNS, formatDisplayAmount } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
 
-export default function POS({ posUser, editVoucherId }: { posUser?: any; editVoucherId?: string } = {}) {
+export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
   const { selectedCompany } = useCompany();
   const [_location, navigate] = useLocation();
@@ -788,7 +789,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: any; editVou
 
       <InvoiceTemplate
         printRef={printRef}
-        savedSale={savedSale}
+        savedSale={savedSale as InvoiceSale}
         printUserName={posUser?.fullName || authUser?.fullName || "User"}
         selectedCompany={selectedCompany}
         exchangeRate={exchangeRate}

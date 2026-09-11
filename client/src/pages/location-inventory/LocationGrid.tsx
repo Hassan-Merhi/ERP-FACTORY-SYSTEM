@@ -1,6 +1,7 @@
 import { Warehouse, Pencil, MessageCircle, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 interface LocationGridProps {
   locations: Location[];
@@ -9,7 +10,7 @@ interface LocationGridProps {
   setSelectedLocationLocal: (loc: Location | null) => void;
   locationSearchTerm: string;
   setLocationSearchTerm: (s: string) => void;
-  posUser?: any;
+  posUser?: AuthMe;
   canManageWhatsapp?: boolean;
   openRenameDialog?: (loc: Location, e?: { stopPropagation: () => void }) => void;
   openWaGroupDialog?: (loc: Location, e?: { stopPropagation: () => void }) => void;

@@ -3,20 +3,29 @@
  *
  * Extracted from FactoryStockAllocationV3.tsx during the Phase 4 god-file split.
  */
-import {useState, useRef, useCallback} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {queryClient} from "@/lib/queryClient";
-import {Button} from "@/components/ui/button";
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Input} from "@/components/ui/input";
-import {useToast} from "@/hooks/use-toast";
-import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "@/components/ui/alert-dialog";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {ScanLine, CheckCircle, Trash2, AlertTriangle, Loader2, ArrowLeft} from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScanLine, CheckCircle, Trash2, AlertTriangle, Loader2, ArrowLeft } from "lucide-react";
 
-import type {LoadDetail, V3Load} from "../types";
-import {fmtKg} from "../utils";
-import {StatusBadge} from "./StatusBadge";
+import type { LoadDetail, V3Load } from "../types";
+import { fmtKg } from "../utils";
+import { StatusBadge } from "./StatusBadge";
 
 export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => void }) {
   const { toast } = useToast();
@@ -58,15 +67,16 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
       queryClient.invalidateQueries({ queryKey: ["/api/factory/v3/stock-overview"] });
       scannerRef.current?.focus();
     },
-    onError: (err: any) => {
-      if (err.code === "RESERVED_WARNING" || err.code === "OTHER_V3_LOAD_WARNING") {
-        setPendingBypass({ code: scanCode, message: err.message });
+    onError: (err: unknown) => {
+      const scanErr = err as { code?: string; message?: string };
+      if (scanErr.code === "RESERVED_WARNING" || scanErr.code === "OTHER_V3_LOAD_WARNING") {
+        setPendingBypass({ code: scanCode, message: scanErr.message ?? "Scan warning" });
         setScanCode("");
         return;
       }
       setScanFlash("error");
       setTimeout(() => setScanFlash(null), 800);
-      toast({ title: "Scan failed", description: err.message, variant: "destructive" });
+      toast({ title: "Scan failed", description: scanErr.message, variant: "destructive" });
       setScanCode("");
       scannerRef.current?.focus();
     },

@@ -6,9 +6,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Textarea } from "@/components/ui/textarea";
 import { User, ChevronDown, Check, Save } from "lucide-react";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export interface CheckoutSidebarProps {
-  posUser?: any;
+  posUser?: AuthMe;
   paymentAccountType: "bank" | "cash" | "credit";
   setPaymentAccountType: (value: "bank" | "cash") => void;
   paymentAccountId: string | null;

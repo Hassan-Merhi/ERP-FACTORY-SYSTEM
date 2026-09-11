@@ -14,6 +14,7 @@ import DailyScan from "./DailyScan";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export default function BaleStockEntry() {
   const todayStr = new Date().toLocaleDateString("en-CA");
@@ -33,7 +34,7 @@ export default function BaleStockEntry() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const showEntry = settings?.stockEntryTabEntryEnabled !== false && !hiddenTabs.includes("hide_tab_stockentry_entry");
