@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/PageHeader";
+import type { CurrencyGroup } from "./factory-suppliers/factorySupplierTypes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -32,7 +33,28 @@ const _CURRENCIES = ["USD", "EUR", "GBP", "AUD", "LBP", "XOF", "XAF"];
  * (totalValue − effectiveCommission − paid) which correctly excludes the
  * commission from what this supplier receives.
  */
-function getRowTotalOwed(c: any): number {
+/** A row inside the supplier statement — base entry plus the extra fields the
+ * broker-container view and commission display read. */
+interface StatementRow {
+  id: number;
+  name?: string;
+  containerNumber?: string | null;
+  status?: string;
+  date?: string;
+  arrivalDate?: string | null;
+  origin?: string | null;
+  supplierName?: string;
+  value: string;
+  totalKg?: string | null;
+  ratePerKg?: string | null;
+  actualReceivedKg?: string | null;
+  finalPayableAmount?: string | null;
+  commissionAmount?: string | null;
+  commissionCurrencyCode?: string | null;
+  totalCommission?: string;
+}
+
+function getRowTotalOwed(c: StatementRow): number {
   const fp = parseFloat(c.finalPayableAmount ?? "");
   if (!isNaN(fp) && fp > 0) return fp;
   // Pre-offload: goods value only (no commission — that goes to the broker)
@@ -40,7 +62,7 @@ function getRowTotalOwed(c: any): number {
 }
 
 /** True when the row is using the backend canonical total (post-offload). */
-function rowUsesCanonical(c: any): boolean {
+function rowUsesCanonical(c: StatementRow): boolean {
   const fp = parseFloat(c.finalPayableAmount ?? "");
   return !isNaN(fp) && fp > 0;
 }
@@ -50,7 +72,7 @@ function rowUsesCanonical(c: any): boolean {
  * Post-offload: use totalCommission (canonical factoryContainerCommissions sum).
  * Pre-offload: use commissionAmount (container-level estimate).
  */
-function rowCommissionDisplay(c: any): { amount: number; currency: string } {
+function rowCommissionDisplay(c: StatementRow): { amount: number; currency: string } {
   if (rowUsesCanonical(c)) {
     const tc = parseFloat(c.totalCommission ?? "0");
     if (tc > 0) return { amount: tc, currency: c.commissionCurrencyCode || "USD" };
@@ -106,7 +128,7 @@ export default function FactorySupplierStatement() {
    * This gives a more accurate picture of what the company still owes each supplier.
    */
   const estimatedUsdTotal = statement?.currencyGroups
-    ? statement.currencyGroups.reduce((sum: number, g: any) => {
+    ? statement.currencyGroups.reduce((sum: number, g: CurrencyGroup) => {
         const rate = getRate(g.currencyCode);
         // netPayable is what we still owe this supplier after deducting commission and payments.
         const outstanding = parseFloat(g.netPayable || "0");
@@ -116,7 +138,7 @@ export default function FactorySupplierStatement() {
     : 0;
 
   const currenciesInStatement: string[] = statement?.currencyGroups
-    ? [...new Set<string>(statement.currencyGroups.map((g: any) => g.currencyCode as string))].filter(
+    ? [...new Set<string>(statement.currencyGroups.map((g: CurrencyGroup) => g.currencyCode as string))].filter(
         (c) => c !== "USD"
       )
     : [];
@@ -190,7 +212,7 @@ export default function FactorySupplierStatement() {
 
       {statement && !statementLoading && (
         <>
-          {statement.currencyGroups?.map((group: any) => {
+          {statement.currencyGroups?.map((group: CurrencyGroup) => {
             // Goods value owed to this supplier (before commission deduction)
             const groupTotalValue = parseFloat(group.totalValue || "0");
             // Effective commission — what goes to the BROKER, deducted from supplier payment
@@ -249,7 +271,7 @@ export default function FactorySupplierStatement() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {group.containers.map((c: any) => {
+                        {group.containers.map((c: StatementRow) => {
                           const rowTotal = getRowTotalOwed(c);
                           const isCanonical = rowUsesCanonical(c);
                           const { amount: commAmt, currency: commCcy } = rowCommissionDisplay(c);
@@ -416,7 +438,7 @@ export default function FactorySupplierStatement() {
                 )}
 
                 <div className="space-y-2 text-sm">
-                  {statement.currencyGroups.map((g: any) => {
+                  {statement.currencyGroups.map((g: CurrencyGroup) => {
                     const rate = getRate(g.currencyCode);
                     // Use netPayable = outstanding balance owed to this goods supplier
                     const outstanding = parseFloat(g.netPayable || "0");
@@ -483,7 +505,7 @@ export default function FactorySupplierStatement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {statement.brokerContainers.map((c: any) => (
+                      {statement.brokerContainers.map((c: StatementRow) => (
                         <TableRow key={c.id} data-testid={`row-broker-container-${c.id}`}>
                           <TableCell className="font-mono font-medium">{c.containerNumber}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">{c.supplierName || "—"}</TableCell>

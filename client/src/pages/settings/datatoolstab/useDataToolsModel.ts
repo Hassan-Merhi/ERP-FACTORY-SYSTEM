@@ -8,6 +8,26 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, readFile, utils, writeFile } from "@/lib/excelHelper";
 import type { SilentImportRow } from "./types";
 
+/** One parsed line from /api/inventory/silent-transfer/parse. */
+export type SilentTransferItem = {
+  rowNum: number;
+  barcode: string;
+  stockItemId: number;
+  stockItemName: string;
+  uom: string;
+  quantity: number;
+  currentStock: number;
+  averageRate: number;
+  afterTransfer: number;
+};
+
+export type SilentTransferWarnItem = SilentTransferItem & { warnReason: string };
+
+export type SilentTransferErrorLine = { rowNum: number; barcode: string; reason: string };
+
+type StockItemLight = { id: number; code: string; name: string; [key: string]: unknown };
+type LocationRow = { id: number; name: string; [key: string]: unknown };
+
 export function useDataToolsModel() {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -54,9 +74,9 @@ export function useDataToolsModel() {
   const [silentSrcId, setSilentSrcId] = useState("");
   const [silentDstId, setSilentDstId] = useState("");
   const [silentFile, setSilentFile] = useState<File | null>(null);
-  const [silentValidItems, setSilentValidItems] = useState<any[]>([]);
-  const [silentWarnItems, setSilentWarnItems] = useState<any[]>([]);
-  const [silentErrorLines, setSilentErrorLines] = useState<any[]>([]);
+  const [silentValidItems, setSilentValidItems] = useState<SilentTransferItem[]>([]);
+  const [silentWarnItems, setSilentWarnItems] = useState<SilentTransferWarnItem[]>([]);
+  const [silentErrorLines, setSilentErrorLines] = useState<SilentTransferErrorLine[]>([]);
   const [silentIncludeWarnings, setSilentIncludeWarnings] = useState(false);
   const [silentParseError, setSilentParseError] = useState("");
   const [silentStep, setSilentStep] = useState<"setup" | "validation" | "done">("setup");
@@ -66,12 +86,12 @@ export function useDataToolsModel() {
 
   const [bulkRenameOpen, setBulkRenameOpen] = useState(false);
 
-  const { data: locations = [] } = useQuery<any[]>({
+  const { data: locations = [] } = useQuery<LocationRow[]>({
     queryKey: ["/api/locations", selectedCompany?.id],
     enabled: !!selectedCompany,
   });
 
-  const { data: allStockItems = [] } = useQuery<any[]>({
+  const { data: allStockItems = [] } = useQuery<StockItemLight[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
     enabled: !!selectedCompany && dtCurrentUser?.role === "Developer",
     staleTime: 10 * 60 * 1000,
@@ -99,8 +119,12 @@ export function useDataToolsModel() {
   });
 
   const recalculateCostsMutation = useMutation({
-    mutationFn: async () => apiRequest("POST", "/api/sales-report/recalculate-costs", {}),
-    onSuccess: (data: any) => {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/sales-report/recalculate-costs", {});
+      const summary: { updatedCount?: number; totalChecked?: number } = await res.json();
+      return summary;
+    },
+    onSuccess: (data: { updatedCount?: number; totalChecked?: number }) => {
       toast({
         title: "Cost Prices Updated",
         description: `Updated ${data.updatedCount} of ${data.totalChecked} sales items`,
@@ -138,7 +162,7 @@ export function useDataToolsModel() {
       const data = await selectedFile.arrayBuffer();
       const workbook = await read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = utils.sheet_to_json<any>(worksheet);
+      const jsonData = utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
       if (jsonData.length === 0) {
         toast({ title: "Empty File", description: "The Excel file is empty.", variant: "destructive" });
@@ -167,7 +191,7 @@ export function useDataToolsModel() {
           errors.push(`Row ${rowNumber}: Barcode is required`);
           return;
         }
-        const costPrice = parseFloat(row.costPrice || "0");
+        const costPrice = parseFloat(String(row.costPrice ?? "0"));
         if (isNaN(costPrice) || costPrice <= 0) {
           errors.push(`Row ${rowNumber}: Cost price must be > 0`);
           return;
@@ -201,8 +225,12 @@ export function useDataToolsModel() {
       queryClient.invalidateQueries({ queryKey: [`/api/locations/${costPriceLocationId}/inventory`] });
       setCostPriceImportComplete(true);
       toast({ title: "Import Successful", description: `Updated ${response.updated} cost prices.` });
-    } catch (error: any) {
-      toast({ title: "Import Failed", description: error.message || "Failed to import", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({
+        title: "Import Failed",
+        description: error instanceof Error ? error.message : "Failed to import",
+        variant: "destructive",
+      });
     } finally {
       setIsImportingCostPrice(false);
     }
@@ -241,7 +269,7 @@ export function useDataToolsModel() {
       const data = await selectedFile.arrayBuffer();
       const workbook = await read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = utils.sheet_to_json<any>(worksheet);
+      const jsonData = utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
       if (jsonData.length === 0) {
         toast({ title: "Empty File", description: "The Excel file is empty.", variant: "destructive" });
@@ -275,9 +303,9 @@ export function useDataToolsModel() {
           errors.push(`Row ${rowNumber}: Item_barcode is required`);
           return;
         }
-        const quantity = parseFloat(row.quantity || "0");
-        const rate = parseFloat(row.rate || "0");
-        const value = parseFloat(row.value || "0");
+        const quantity = parseFloat(String(row.quantity ?? "0"));
+        const rate = parseFloat(String(row.rate ?? "0"));
+        const value = parseFloat(String(row.value ?? "0"));
         if (isNaN(quantity) || quantity === 0) {
           errors.push(`Row ${rowNumber}: Quantity must be a non-zero number (negative quantities are allowed)`);
           return;
@@ -324,8 +352,12 @@ export function useDataToolsModel() {
         title: "Import Successful",
         description: `Imported ${response.imported || stockPreview.length} inventory items`,
       });
-    } catch (error: any) {
-      toast({ title: "Import Failed", description: error.message || "Failed to import", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({
+        title: "Import Failed",
+        description: error instanceof Error ? error.message : "Failed to import",
+        variant: "destructive",
+      });
     } finally {
       setIsImportingStock(false);
     }
@@ -387,11 +419,9 @@ export function useDataToolsModel() {
           const change = parseFloat(String(row["Qty Change"] ?? row.Change ?? "0")) || 0;
           const rate = parseFloat(String(row.Rate ?? "0")) || 0;
 
-          let matched = code
-            ? (allStockItems as any[]).find((item) => item.code?.toLowerCase() === code.toLowerCase())
-            : undefined;
+          let matched = code ? allStockItems.find((item) => item.code?.toLowerCase() === code.toLowerCase()) : undefined;
           if (!matched && name) {
-            matched = (allStockItems as any[]).find((item) => item.name.toLowerCase() === name.toLowerCase());
+            matched = allStockItems.find((item) => item.name.toLowerCase() === name.toLowerCase());
           }
 
           if (!matched) {
@@ -424,8 +454,12 @@ export function useDataToolsModel() {
           };
         });
       setSilentImportPreview(preview);
-    } catch (error: any) {
-      toast({ title: "Parse Error", description: error.message || "Failed to read file", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({
+        title: "Parse Error",
+        description: error instanceof Error ? error.message : "Failed to read file",
+        variant: "destructive",
+      });
     } finally {
       setSilentImportLoading(false);
     }
@@ -452,7 +486,7 @@ export function useDataToolsModel() {
     document.text("Silent Adjustment Preview", 14, 18);
     document.setFontSize(10);
     document.text(
-      `Location: ${(locations as any[]).find((location) => String(location.id) === silentProdLocId)?.name || ""}   Date: ${new Date().toLocaleDateString()}`,
+      `Location: ${locations.find((location) => String(location.id) === silentProdLocId)?.name || ""}   Date: ${new Date().toLocaleDateString()}`,
       14,
       25
     );
@@ -509,8 +543,8 @@ export function useDataToolsModel() {
       setSilentImportMode(false);
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-by-location"] });
       queryClient.invalidateQueries({ queryKey: ["/api/location-summary"] });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setSilentProdApplying(false);
     }

@@ -154,11 +154,6 @@
         0,
         0
       ],
-      "client/src/pages/ProductionBales.tsx": [
-        17,
-        0,
-        0
-      ],
       "client/src/pages/PurchaseOrderEdit.tsx": [
         1,
         0,
@@ -279,18 +274,13 @@
         0,
         0
       ],
-      "client/src/pages/containerdetail/components/ContainerDetailErpView.tsx": [
-        3,
-        0,
-        0
-      ],
       "client/src/pages/containerdetail/components/ContainerDetailSpView.tsx": [
         5,
         0,
         0
       ],
       "client/src/pages/containerdetail/useContainerDetailModel.tsx": [
-        12,
+        1,
         0,
         0
       ],
@@ -490,7 +480,7 @@
         0
       ],
       "client/src/pages/factory/FactorySupplierStatement.tsx": [
-        12,
+        3,
         0,
         0
       ],
@@ -1039,16 +1029,6 @@
         0,
         0
       ],
-      "client/src/pages/settings/AuditLogDialog.tsx": [
-        12,
-        0,
-        0
-      ],
-      "client/src/pages/settings/AuditLogUtils.tsx": [
-        7,
-        0,
-        0
-      ],
       "client/src/pages/settings/BulkRenameTab.tsx": [
         2,
         0,
@@ -1186,11 +1166,6 @@
       ],
       "client/src/pages/settings/datatoolstab/SilentTransferDialog.tsx": [
         2,
-        0,
-        0
-      ],
-      "client/src/pages/settings/datatoolstab/useDataToolsModel.ts": [
-        15,
         0,
         0
       ],
@@ -1450,12 +1425,12 @@
         0
       ],
       "client/src/pages/vouchers/stock-transfer-form/useStockTransferFormModel.ts": [
-        12,
+        1,
         0,
         0
       ],
       "client/src/pages/vouchers/stock-transfer-form/useTransferFormDerived.ts": [
-        3,
+        1,
         0,
         0
       ],
@@ -2252,6 +2227,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 1146
+    "typeEscapeCeiling": 1059
   }
 }
