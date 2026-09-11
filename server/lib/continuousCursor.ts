@@ -6,7 +6,7 @@ const TEST_SECRET = "erp-continuous-cursor-test-secret";
 export class ContinuousCursorError extends Error {
   readonly code = "INVALID_CONTINUOUS_CURSOR";
 
-  constructor(message = "Invalid or expired cursor") {
+  constructor(message = "invalid-continuous-cursor") {
     super(message);
     this.name = "ContinuousCursorError";
   }
@@ -16,9 +16,7 @@ function cursorSecret(): string {
   const configured = process.env.CONTINUOUS_CURSOR_SECRET || process.env.SESSION_SECRET;
   if (configured && configured.length >= 16) return configured;
   if (process.env.NODE_ENV === "test") return TEST_SECRET;
-  throw new Error(
-    "Continuous-list cursors require CONTINUOUS_CURSOR_SECRET or SESSION_SECRET with at least 16 characters",
-  );
+  throw new Error("continuous-cursor-secret-missing");
 }
 
 function signature(body: string): Buffer {
