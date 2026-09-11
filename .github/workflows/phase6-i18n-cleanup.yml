@@ -1,0 +1,75 @@
+name: Phase 6 i18n cleanup
+
+on:
+  push:
+    branches:
+      - perf/full-list-wave1-audit-architecture
+    paths:
+      - .github/workflows/phase6-i18n-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/full-list-wave1-audit-architecture
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - name: Replace internal cursor errors with technical identifiers
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = 'server/routes/accountTransactionPaginationRoutes.ts';
+          let s = fs.readFileSync(p, 'utf8');
+          const replacements = new Map([
+            ['Unable to build account statement cursor from the last chunk row', 'account-statement-cursor-row-invalid'],
+            ['Unable to build customer statement cursor', 'customer-statement-cursor-row-invalid'],
+            ['Unable to build factory customer statement cursor', 'factory-customer-cursor-row-invalid'],
+          ]);
+          for (const [from, to] of replacements) {
+            if (!s.includes(from)) throw new Error(`missing expected cursor error: ${from}`);
+            s = s.split(from).join(to);
+          }
+          fs.writeFileSync(p, s);
+          NODE
+          npx prettier --write server/routes/accountTransactionPaginationRoutes.ts
+      - name: Verify focused gates
+        run: |
+          npm run audit:i18n
+          npm run audit:type-escapes
+          npx prettier --check \
+            client/src/hooks/useBoundedTableRows.ts \
+            client/src/lib/accountStatementPaginationClient.ts \
+            client/src/lib/continuousListClient.ts \
+            client/src/lib/erpDaybookPaginationClient.ts \
+            client/src/pages/accounts/AccountTransactionRows.tsx \
+            client/src/pages/git-containers/ContainerTable.tsx \
+            client/src/pages/git-containers/usePaginatedGITContainers.ts \
+            server/lib/continuousCursor.test.ts \
+            server/routes/accountTransactionPaginationRoutes.ts \
+            server/routes/daybookPaginationRoutes.ts \
+            server/routes/git/gitContinuousSnapshots.test.ts \
+            server/routes/git/gitContinuousSnapshots.ts \
+            server/routes/git/gitReportRoutes.ts \
+            tests/account-transaction-continuous-route.test.ts \
+            tests/ui/bounded-table-rows.test.tsx \
+            tests/ui/continuous-list-client.test.ts \
+            tests/ui/data-tools-page-behavior.test.tsx \
+            tests/ui/git-continuous-containers-hook.test.tsx
+          npx vitest run --config vitest.config.frontend.ts tests/ui/data-tools-page-behavior.test.tsx tests/ui/git-continuous-containers-hook.test.tsx tests/ui/bounded-table-rows.test.tsx tests/ui/continuous-list-client.test.ts tests/ui/account-statement-pagination-client.test.ts
+      - name: Commit cleanup and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/phase6-i18n-cleanup.yml
+          git add -A
+          git commit -m "fix: classify continuous cursor errors as technical"
+          git push origin HEAD:perf/full-list-wave1-audit-architecture
