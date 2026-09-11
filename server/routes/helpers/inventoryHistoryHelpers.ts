@@ -42,12 +42,28 @@ function refreshHistoricalRate(data: { quantity: number; totalValue: number; rat
   }
 }
 
+export type HistoricalLocationInventoryRow = {
+  stockItemId: number;
+  quantity: string;
+  averageRate: string;
+  totalValue: string;
+  stockItemCode: string;
+  stockItemName: string;
+  stockItemUom: string;
+  stockGroupId: number | null;
+  stockGroupName: string;
+  stockGroupCode: string;
+  categoryId: number | null;
+  categoryName: string | null;
+  stockItemActive: boolean;
+};
+
 // ─── Historical inventory ─────────────────────────────────────────────────────
 export async function calculateHistoricalLocationInventory(
   locationId: number,
   companyId: number,
   asOfDate: string
-): Promise<any[]> {
+): Promise<HistoricalLocationInventoryRow[]> {
   const cutoffDateStr = asOfDate;
   const cutoffTimestamp = new Date(asOfDate + "T23:59:59.999");
 
@@ -419,7 +435,7 @@ export async function calculateHistoricalLocationInventory(
 
   const detailMap = new Map(itemDetails.map((d) => [d.id, d]));
 
-  const results = [];
+  const results: HistoricalLocationInventoryRow[] = [];
   for (const [stockItemId, data] of Array.from(inventoryMap.entries())) {
     const detail = detailMap.get(stockItemId);
     results.push({
