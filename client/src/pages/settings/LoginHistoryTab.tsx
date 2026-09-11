@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
+import type { SettingsLoginHistoryRow } from "./settingsTypes";
 
 const _userFormSchema = insertUserSchema;
 const _companyFormSchema = insertCompanySchema;
@@ -30,7 +31,7 @@ type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 export function LoginHistoryTab() {
   const { formatDisplayDate } = useDateFormat();
-  const { data: history, isLoading } = useQuery<any[]>({
+  const { data: history, isLoading } = useQuery<SettingsLoginHistoryRow[]>({
     queryKey: ["/api/login-history"],
   });
 

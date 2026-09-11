@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash2, MapPin, Monitor, Calendar, PackageMinus, ShieldCheck, Users } from "lucide-react";
 import { AdvancedRestrictionsPanel } from "@/components/AdvancedRestrictionsPanel";
+import type { UserCompanyRole } from "@shared/schema";
 
 interface RoleSummaryRowProps {
-  role: any;
+  role: UserCompanyRole;
   companyName: string;
   locationNames: string[];
   isEditing: boolean;

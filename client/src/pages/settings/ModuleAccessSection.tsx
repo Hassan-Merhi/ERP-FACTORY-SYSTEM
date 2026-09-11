@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Info } from "lucide-react";
 import { FEATURE_PAGE_INFO, FEATURE_KEYS, type FeatureKey } from "@shared/schema";
+import type { SettingsRolePermissionRow } from "./settingsTypes";
 
 const CONFIGURABLE_ROLES = ["Owner", "Manager", "POS", "Normal User"];
 
@@ -14,7 +15,7 @@ export function ModuleAccessSection() {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
 
-  const { data: rolePermissions = [], isLoading } = useQuery<any[]>({
+  const { data: rolePermissions = [], isLoading } = useQuery<SettingsRolePermissionRow[]>({
     queryKey: ["/api/settings/role-permissions", selectedCompany?.id],
     enabled: !!selectedCompany?.id,
   });

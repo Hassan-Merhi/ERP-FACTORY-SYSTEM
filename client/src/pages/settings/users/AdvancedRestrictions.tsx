@@ -15,9 +15,10 @@ import {
   FACTORY_COST_FIELDS,
   ERP_COST_FIELDS,
 } from "./UserManagementConstants";
+import type { SettingsUserRow } from "../settingsTypes";
 
 interface AdvancedRestrictionsProps {
-  user: any;
+  user: SettingsUserRow;
   isPrivileged: boolean;
   hasFactoryAccess: boolean;
   hasErpAccess: boolean;
@@ -50,7 +51,8 @@ export function AdvancedRestrictions({
   const togglePage = (key: string) => {
     setPageAccess((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };

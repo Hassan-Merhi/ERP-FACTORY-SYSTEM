@@ -24,18 +24,18 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { insertCompanySchema } from "@shared/schema";
+import { insertCompanySchema, type Company } from "@shared/schema";
 
 type CompanyFormValues = z.infer<typeof insertCompanySchema>;
 
 export function CompaniesTab() {
   const { toast } = useToast();
   const [isCompanyDialogOpen, setIsCompanyDialogOpen] = useState(false);
-  const [editingCompany, setEditingCompany] = useState<any>(null);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [companySearch, setCompanySearch] = useState("");
-  const [companyToDelete, setCompanyToDelete] = useState<any>(null);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
 
-  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<any[]>({
+  const { data: companies = [], isLoading: isLoadingCompanies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
   });
 
@@ -98,12 +98,12 @@ export function CompaniesTab() {
     },
   });
 
-  function handleEditCompany(company: any) {
+  function handleEditCompany(company: Company) {
     setEditingCompany(company);
     companyForm.reset({
       name: company.name,
       code: company.code,
-      companyType: company.companyType || "erp",
+      companyType: (company.companyType || "erp") as CompanyFormValues["companyType"],
       active: company.active ?? true,
       baseCurrency: company.baseCurrency || "USD",
       displayCurrency: company.displayCurrency || "none",

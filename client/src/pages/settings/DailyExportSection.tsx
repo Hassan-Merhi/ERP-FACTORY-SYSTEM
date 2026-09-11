@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Recipient, ExportSettings, Company, BackupStatus } from "./ExportCenterTypes";
+import type { SettingsMessageResult } from "./settingsTypes";
 import { fmt12h, tzLabel } from "./ExportCenterHelpers";
 import { TIMEZONES } from "./ExportCenterConstants";
 import { BackupStatusCard } from "./BackupStatusCard";
@@ -203,8 +204,11 @@ export function DailyExportSection() {
 
   const sendNpToWa = useMutation({
     mutationFn: () => apiRequest("POST", "/api/whatsapp/send-net-position", { startDate: npStart, endDate: npEnd }),
-    onSuccess: (data: any) =>
-      toast({ title: "Sent via WhatsApp", description: data?.message || "Net position report sent" }),
+    onSuccess: (data: unknown) =>
+      toast({
+        title: "Sent via WhatsApp",
+        description: (data as SettingsMessageResult | null)?.message || "Net position report sent",
+      }),
     onError: (e: ClientErrorLike) => toast({ variant: "destructive", title: "Send failed", description: e.message }),
   });
 

@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { LedgerAccount } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Search, Eraser } from "lucide-react";
@@ -32,7 +33,7 @@ export function CleanEmptyAccountsDialog({ open, onOpenChange, companyId }: Clea
     data: emptyAccounts = [],
     isLoading,
     refetch: _refetch,
-  } = useQuery<any[]>({
+  } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts/empty", companyId],
     enabled: open && !!companyId,
   });

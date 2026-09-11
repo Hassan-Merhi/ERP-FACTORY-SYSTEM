@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { useEffect } from "react";
+import type { SettingsUserRow } from "./settingsTypes";
 
 const userFormSchema = insertUserSchema;
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -15,7 +16,7 @@ type UserFormData = z.infer<typeof userFormSchema>;
 interface UserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editingUser: any;
+  editingUser: SettingsUserRow | null;
   onSubmit: (data: UserFormData) => void;
   isPending: boolean;
 }
@@ -35,7 +36,7 @@ export function UserDialog({ open, onOpenChange, editingUser, onSubmit, isPendin
       form.reset({
         username: editingUser.username,
         password: "", // Don't show old password
-        active: editingUser.active,
+        active: editingUser.active ?? true,
       });
     } else {
       form.reset({

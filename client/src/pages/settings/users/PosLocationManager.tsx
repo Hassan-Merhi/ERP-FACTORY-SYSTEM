@@ -3,9 +3,10 @@ import { MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import type { LedgerAccount, Location } from "@shared/schema";
 
 interface PosLocationManagerProps {
-  locations: any[];
+  locations: Location[];
   selectedLocationIds: number[];
   setSelectedLocationIds: (v: number[] | ((prev: number[]) => number[])) => void;
   setAssignedLocationId: (v: number | undefined) => void;
@@ -16,7 +17,7 @@ interface PosLocationManagerProps {
       | ((prev: Record<number, number | undefined>) => Record<number, number | undefined>)
   ) => void;
   posViewOnly: boolean;
-  cashAccounts: any[];
+  cashAccounts: LedgerAccount[];
 }
 
 export function PosLocationManager({

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Check, X, Zap } from "lucide-react";
 import { ConfirmPasswordDialog, PermissionSummaryCard } from "./InlineRoleEditorSections";
 import { PosLocationManager } from "./PosLocationManager";
+import type { Company, LedgerAccount, Location, UserCompanyRole } from "@shared/schema";
 
 const ROLE_OPTIONS = ["Admin", "Owner", "Manager", "POS", "Normal User", "View Only"];
 
@@ -40,8 +41,8 @@ const ROLE_PRESETS: Record<string, RolePreset[]> = {
 
 interface InlineRoleEditorProps {
   userId: string;
-  companies: any[];
-  editingRole: any | null;
+  companies: Company[];
+  editingRole: UserCompanyRole | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -87,7 +88,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
     if (editingRole) {
       setCompanyId(editingRole.companyId);
       setRole(editingRole.role);
-      setAssignedLocationId(editingRole.assignedLocationId);
+      setAssignedLocationId(editingRole.assignedLocationId ?? undefined);
       setPosStation(editingRole.posStation ?? undefined);
       setDaybookEditDays(editingRole.daybookEditDays ?? 0);
       setCanSellNegativeStock(editingRole.canSellNegativeStock ?? false);
@@ -140,7 +141,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
     }
   }, [companies, editingRole, editingRole?.id]);
 
-  const { data: locations = [] } = useQuery<any[]>({
+  const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ["/api/locations", { companyId }],
     queryFn: async () => {
       if (!companyId) return [];
@@ -151,7 +152,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
     enabled: !!companyId && isPOS,
   });
 
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", { companyId }],
     queryFn: async () => {
       if (!companyId) return [];

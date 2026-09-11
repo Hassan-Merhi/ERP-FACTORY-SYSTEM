@@ -8,14 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Loader2, Download, Upload } from "lucide-react";
+import type { Company } from "@shared/schema";
 
-export function ExportImportSection({ companies }: { companies: any[] }) {
+type CompanyImportResult = {
+  vouchers?: number;
+  accounts?: number;
+};
+
+export function ExportImportSection({ companies }: { companies: Company[] }) {
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedExport, setSelectedExport] = useState("");
   const [selectedImport, setSelectedImport] = useState("");
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<CompanyImportResult | null>(null);
 
   const handleExport = async () => {
     if (!selectedExport) return;

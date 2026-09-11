@@ -19,19 +19,20 @@ import { Building2, Plus } from "lucide-react";
 import { RoleSummaryRow } from "./RoleSummaryRow";
 import { InlineRoleEditor } from "./InlineRoleEditor";
 import { PosInventoryCostAccessToggle } from "./PosInventoryCostAccessToggle";
+import type { Company, Location, UserCompanyRole } from "@shared/schema";
 
 interface UserRolesCardProps {
   userId: string;
-  companies: any[];
+  companies: Company[];
 }
 
 export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const [activeEditorRoleId, setActiveEditorRoleId] = useState<number | "new" | null>(null);
-  const [roleToDelete, setRoleToDelete] = useState<any>(null);
+  const [roleToDelete, setRoleToDelete] = useState<UserCompanyRole | null>(null);
 
-  const { data: companyRoles = [] } = useQuery<any[]>({
+  const { data: companyRoles = [] } = useQuery<UserCompanyRole[]>({
     queryKey: [`/api/users/${userId}/company-roles`],
     enabled: !!userId,
   });
@@ -52,8 +53,8 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
       const results = await Promise.all(
         posCompanyIds.map(async (cid) => {
           const res = await fetch(`/api/locations?companyId=${cid}`, { credentials: "include" });
-          if (!res.ok) return ([]);
-          return res.json() as Promise<any[]>;
+          if (!res.ok) return [];
+          return res.json() as Promise<Location[]>;
         })
       );
       const map: Record<number, string> = {};
@@ -114,7 +115,7 @@ export function UserRolesCard({ userId, companies }: UserRolesCardProps) {
 
   const showEditor = activeEditorRoleId !== null;
 
-  const getLocationNames = (role: any): string[] => {
+  const getLocationNames = (role: UserCompanyRole): string[] => {
     if (role.role !== "POS") return [];
     const assignedIds = userLocationsMap[role.id] ?? [];
     if (assignedIds.length > 0) {

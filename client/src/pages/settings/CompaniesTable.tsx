@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Edit, Trash2, Search } from "lucide-react";
+import type { Company } from "@shared/schema";
 
 interface CompaniesTableProps {
-  companies: any[];
-  onEdit: (company: Record<string, unknown>) => void;
-  onDelete: (company: Record<string, unknown>) => void;
+  companies: Company[];
+  onEdit: (company: Company) => void;
+  onDelete: (company: Company) => void;
 }
 
 export function CompaniesTable({ companies, onEdit, onDelete }: CompaniesTableProps) {
