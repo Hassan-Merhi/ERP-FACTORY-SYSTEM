@@ -13,9 +13,30 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Package, Eye, Search, X, Ban, Loader2 } from "lucide-react";
 import { AddContainerDialog } from "../../components/AddContainerDialog";
 import type { Container, Supplier } from "@shared/schema";
+import type { SpContainerWithLines } from "./types";
+
+/**
+ * Common display shape the SP list and the ERP (PO Import) containers are
+ * normalized to. Also the shape held by the cancel-dialog selection state.
+ */
+interface SpContainerRowView {
+  _key: string;
+  id: number;
+  _source: "sp" | "erp";
+  displayName: string;
+  subName: string | null;
+  supplierName: string;
+  status: string;
+  statusLabel: string;
+  statusOffloaded: boolean;
+  statusCancelled: boolean;
+  date: string;
+  dateLabel: string;
+  totalUsd: number;
+}
 
 interface ContainerSpViewProps {
-  spContainersList: any[];
+  spContainersList: SpContainerWithLines[];
   allContainers: Container[];
   suppliers: Supplier[];
   searchTerm: string;
@@ -41,7 +62,7 @@ export function ContainerSpView({
 }: ContainerSpViewProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedContainer, setSelectedContainer] = useState<any | null>(null);
+  const [selectedContainer, setSelectedContainer] = useState<SpContainerRowView | null>(null);
   const [reason, setReason] = useState("");
 
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
@@ -76,7 +97,7 @@ export function ContainerSpView({
   });
 
   // Normalize sp_containers rows to a common display shape
-  const spNative = (Array.isArray(spContainersList) ? spContainersList : []).map((c) => {
+  const spNative: SpContainerRowView[] = (Array.isArray(spContainersList) ? spContainersList : []).map((c) => {
     const statusCancelled = c.status === "cancelled";
     const statusOffloaded = c.status === "offloaded";
     return {
@@ -97,7 +118,7 @@ export function ContainerSpView({
   });
 
   // Normalize regular containers (from PO Import) to same shape
-  const erpNormalized = allContainers.map((c) => {
+  const erpNormalized: SpContainerRowView[] = allContainers.map((c) => {
     const sup = suppliers.find((s) => s.id === c.supplierId);
     const isOffloaded = c.status === "OFFLOADED";
     return {

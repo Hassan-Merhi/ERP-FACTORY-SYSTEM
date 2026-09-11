@@ -7,6 +7,7 @@
  * rules, the same profit colouring and the same footer colspan arithmetic.
  */
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { JournalViewEntry } from "../../types";
 import type { DetailPanelFormatters } from "./panelTypes";
 
 const POSITIVE = "text-green-600 dark:text-green-400";
@@ -23,8 +24,8 @@ export function SalesPanel({
   fmt,
   fmtNum,
 }: {
-  stockRows: any[];
-  ledgerRows: any[];
+  stockRows: JournalViewEntry[];
+  ledgerRows: JournalViewEntry[];
   entryBalances: Record<number, string>;
 } & DetailPanelFormatters) {
   const grandTotal = stockRows.reduce((s, r) => s + parseFloat(r.totalSales || r.totalAmount || "0"), 0);

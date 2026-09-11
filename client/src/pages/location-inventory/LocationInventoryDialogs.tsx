@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Search } from "lucide-react";
-import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { InventoryLocation as Location, NegativeInventoryRow } from "./locationInventoryTypes";
 
 interface LocationInventoryDialogsProps {
   // Create Location dialog
@@ -21,7 +21,7 @@ interface LocationInventoryDialogsProps {
   setShowNegativeStock: (v: boolean) => void;
   selectedLocationLocal: Location | null;
   negativeStockLoading: boolean;
-  allNegativeStock: any[];
+  allNegativeStock: NegativeInventoryRow[];
   negativeSearchTerm: string;
   setNegativeSearchTerm: (s: string) => void;
 }
@@ -79,7 +79,12 @@ export function LocationInventoryDialogs({
       </Dialog>
 
       {/* Negative stock across all locations dialog */}
-      <Dialog open={showNegativeStock && !selectedLocationLocal} onOpenChange={(open) => { if (!open) setShowNegativeStock(false); }}>
+      <Dialog
+        open={showNegativeStock && !selectedLocationLocal}
+        onOpenChange={(open) => {
+          if (!open) setShowNegativeStock(false);
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -122,7 +127,10 @@ export function LocationInventoryDialogs({
                       );
                     })
                     .map((item) => (
-                      <tr key={`${item.stockItemId}-${item.locationId}`} className="border-b border-muted/30 hover:bg-muted/20">
+                      <tr
+                        key={`${item.stockItemId}-${item.locationId}`}
+                        className="border-b border-muted/30 hover:bg-muted/20"
+                      >
                         <td className="py-2 px-3 font-medium">
                           <div>{item.name}</div>
                           <div className="text-[11px] text-muted-foreground font-mono">{item.code}</div>

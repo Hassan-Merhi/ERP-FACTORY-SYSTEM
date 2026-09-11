@@ -19,13 +19,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, Truck, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import ContainerDetailERP from "./ContainerDetail";
+import type { SpContainerDetailResponse } from "./containers/types";
 
-function fmt2(v: number) {
+function fmt2(v: number | string | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
   return isNaN(n) ? "$0.00" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function fmt4(v: number) {
+function fmt4(v: number | string | null | undefined) {
   const n = parseFloat(String(v ?? "0"));
   return isNaN(n) ? "$0.0000" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
 }
@@ -66,7 +67,7 @@ function SpContainerDetailView() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const { toast } = useToast();
 
-  const { data: spc, isLoading } = useQuery({
+  const { data: spc, isLoading } = useQuery<SpContainerDetailResponse>({
     queryKey: [`/api/sp/containers/${id}`],
     queryFn: () => fetch(`/api/sp/containers/${id}`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!id,
@@ -117,7 +118,7 @@ function SpContainerDetailView() {
   });
 
   const openEdit = () => {
-    if (!spc) return;
+    if (!spc || "message" in spc) return;
     editForm.reset({
       supplierId: spc.supplierId ?? undefined,
       supplierName: spc.supplierName ?? "",
@@ -146,12 +147,15 @@ function SpContainerDetailView() {
     );
   }
 
-  if (!isLoading && (!spc || spc.message)) {
+  // The skeleton return above guarantees loading has finished here, so a
+  // missing body or `{ message }` error body means the container is not an SP
+  // container — fall back to the ERP detail page.
+  if (!spc || "message" in spc) {
     return <ContainerDetailERP />;
   }
 
   const discountFactor = 1 - parseFloat(spc.discountPct ?? "0") / 100;
-  const baseCostAfterDiscount = (spc.lines ?? []).reduce((sum: number, l: any) => {
+  const baseCostAfterDiscount = (spc.lines ?? []).reduce((sum: number, l) => {
     return sum + parseFloat(l.qty ?? "0") * parseFloat(l.unitRateUsd ?? "0") * discountFactor;
   }, 0);
 
@@ -264,7 +268,7 @@ function SpContainerDetailView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(spc.lines ?? []).map((line: any) => {
+                {(spc.lines ?? []).map((line) => {
                   const qty = parseFloat(line.qty ?? "0");
                   const unitRate = parseFloat(line.unitRateUsd ?? "0");
                   const discRate = unitRate * discountFactor;
@@ -309,7 +313,7 @@ function SpContainerDetailView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(spc.prepaid ?? []).map((charge: any) => (
+                  {(spc.prepaid ?? []).map((charge) => (
                     <TableRow key={charge.id}>
                       <TableCell className="text-sm capitalize">
                         {charge.chargeType?.replace(/_/g, " ") ?? "—"}
@@ -349,7 +353,7 @@ function SpContainerDetailView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(spc.offloadCharges ?? []).map((charge: any) => (
+                    {(spc.offloadCharges ?? []).map((charge) => (
                       <TableRow key={charge.id}>
                         <TableCell className="text-sm capitalize">
                           {charge.chargeType?.replace(/_/g, " ") ?? "—"}

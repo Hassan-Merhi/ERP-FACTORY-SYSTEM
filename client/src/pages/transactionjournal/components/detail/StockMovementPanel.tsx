@@ -8,9 +8,16 @@
  */
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { JournalViewEntry } from "../../types";
 import type { DetailPanelFormatters } from "./panelTypes";
 
-export function StockTransferPanel({ stockRows, fmt, fmtNum }: { stockRows: any[] } & DetailPanelFormatters) {
+export function StockTransferPanel({
+  stockRows,
+  fmt,
+  fmtNum,
+}: {
+  stockRows: JournalViewEntry[];
+} & DetailPanelFormatters) {
   const grandTotal = stockRows.reduce((s, r) => s + parseFloat(r.totalAmount || "0"), 0);
   const grandQty = stockRows.reduce((s, r) => s + parseFloat(r.quantity || "0"), 0);
   return (
@@ -58,7 +65,7 @@ export function StockAdjustmentPanel({
   stockRows,
   fmt,
   fmtNum,
-}: { vtype: string; stockRows: any[] } & DetailPanelFormatters) {
+}: { vtype: string; stockRows: JournalViewEntry[] } & DetailPanelFormatters) {
   const isMixed = vtype === "Mixed";
   const grandTotal = isMixed
     ? stockRows.reduce((s, r) => {

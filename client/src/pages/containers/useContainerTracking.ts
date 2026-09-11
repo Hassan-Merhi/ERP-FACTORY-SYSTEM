@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Container } from "@shared/schema";
-import type { TrackingEdit } from "./types";
+import type { TrackingEdit, TrackingFieldEdits } from "./types";
 
 export const trackingFields = [
   "shopName",
@@ -40,7 +40,7 @@ export function useContainerTracking(filteredOtwContainers: Container[]) {
   const [savingAll, setSavingAll] = useState(false);
 
   const updateTrackingMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Container> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: TrackingFieldEdits }) => {
       const res = await apiRequest("PATCH", `/api/containers/${id}/tracking`, data);
       return res.json() as Promise<Container>;
     },
@@ -83,23 +83,29 @@ export function useContainerTracking(filteredOtwContainers: Container[]) {
     return container[field];
   };
 
-  const setEditValue = async (containerId: number, field: keyof Container, value: any) => {
+  const setEditValue = async (containerId: number, field: keyof Container, value: unknown) => {
     setTrackingEdits((prev) => ({
       ...prev,
       [containerId]: { ...prev[containerId], [field]: value },
     }));
   };
 
-  const hasChanges = useCallback((containerId: number) => {
-    return trackingEdits[containerId] && Object.keys(trackingEdits[containerId]).length > 0;
-  }, [trackingEdits]);
+  const hasChanges = useCallback(
+    (containerId: number) => {
+      return trackingEdits[containerId] && Object.keys(trackingEdits[containerId]).length > 0;
+    },
+    [trackingEdits]
+  );
 
-  const saveTracking = useCallback(async (containerId: number) => {
-    const data = trackingEdits[containerId];
-    if (!data) return;
-    setSavingIds((prev) => new Set(prev).add(containerId));
-    updateTrackingMutation.mutate({ id: containerId, data });
-  }, [trackingEdits, updateTrackingMutation]);
+  const saveTracking = useCallback(
+    async (containerId: number) => {
+      const data = trackingEdits[containerId];
+      if (!data) return;
+      setSavingIds((prev) => new Set(prev).add(containerId));
+      updateTrackingMutation.mutate({ id: containerId, data });
+    },
+    [trackingEdits, updateTrackingMutation]
+  );
 
   const hasAnyChanges = Object.keys(trackingEdits).length > 0;
 

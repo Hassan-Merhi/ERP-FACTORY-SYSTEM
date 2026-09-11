@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import type { StockGroupSummary } from "./locationInventoryTypes";
 
 interface InventoryItem {
   inventoryId: number | null;
@@ -31,7 +32,7 @@ interface InventoryTableProps {
   canViewCost: boolean;
   itemSearchTerm: string;
   inventory: InventoryItem[];
-  selectedGroup: any;
+  selectedGroup: StockGroupSummary | null;
 }
 
 export function InventoryTable({
