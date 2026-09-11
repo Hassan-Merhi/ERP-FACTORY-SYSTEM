@@ -19,9 +19,13 @@ vi.mock("../server/db", () => ({
   pool: { query: harness.poolQuery },
 }));
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: () => "2026-09-10" }));
-vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({ authorizeCompanyIdParam: async (_req: unknown, id: number) => id }));
+vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
+  authorizeCompanyIdParam: async (_req: unknown, id: number) => id,
+}));
 vi.mock("../server/lib/factoryCustomerLedger", () => ({ getCustomerByLedgerId: async () => null }));
-vi.mock("../server/services/accounting/accountStatementCurrency", () => ({ summarizeAccountStatementCurrency: () => [] }));
+vi.mock("../server/services/accounting/accountStatementCurrency", () => ({
+  summarizeAccountStatementCurrency: () => [],
+}));
 vi.mock("@shared/schema", () => ({
   bankAccounts: { id: "bank.id", companyId: "bank.companyId" },
   companies: { id: "companies.id", companyType: "companies.companyType" },

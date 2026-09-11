@@ -7,10 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
-import {
-  ContinuousCursorError,
-  continuousCursorScope,
-} from "../../lib/continuousCursor";
+import { ContinuousCursorError, continuousCursorScope } from "../../lib/continuousCursor";
 import {
   resolveGitCompanyScope,
   fetchActiveContainers,
@@ -156,7 +153,11 @@ export function registerGitReportRoutes(app: Express) {
       });
 
       if (continuous && typeof req.query.cursor === "string" && req.query.cursor.trim()) {
-        const chunk = readGitContinuousSnapshot<ReturnType<typeof toGitCompactRow> | EnrichedContainer, unknown, unknown>({
+        const chunk = readGitContinuousSnapshot<
+          ReturnType<typeof toGitCompactRow> | EnrichedContainer,
+          unknown,
+          unknown
+        >({
           scope: continuousScope,
           cursor: req.query.cursor.trim(),
           limit: chunkSize,

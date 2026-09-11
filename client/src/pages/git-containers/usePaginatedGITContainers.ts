@@ -9,11 +9,7 @@ import {
   type CompanyIdentity,
   type QueryParams,
 } from "@/lib/frontendDataArchitecture";
-import {
-  ContinuousListHttpError,
-  fetchContinuousJson,
-  withContinuousCursor,
-} from "@/lib/continuousListClient";
+import { ContinuousListHttpError, fetchContinuousJson, withContinuousCursor } from "@/lib/continuousListClient";
 import type { EnrichedContainerRow, EtaFilterValue, GitContainersResponse } from "./gitContainerTypes";
 
 interface PaginatedContainerFilters {
@@ -161,10 +157,7 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
     void refetch({ cancelRefetch: true });
   }, [filters.enabled, isFetching, queryError, refetch]);
 
-  const containers = useMemo(
-    () => infiniteData?.pages.flatMap((page) => page.containers) ?? [],
-    [infiniteData?.pages]
-  );
+  const containers = useMemo(() => infiniteData?.pages.flatMap((page) => page.containers) ?? [], [infiniteData?.pages]);
   const firstPage = infiniteData?.pages[0];
   const data: GitContainersResponse | undefined = firstPage
     ? {

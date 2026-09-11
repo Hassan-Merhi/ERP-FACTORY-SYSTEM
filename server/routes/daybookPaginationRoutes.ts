@@ -247,7 +247,10 @@ export function registerDaybookPaginationRoutes(app: Express): void {
         )`;
 
       if (wantsContinuousChunk(req)) {
-        const limit = Math.min(MAX_PAGE_SIZE, parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE));
+        const limit = Math.min(
+          MAX_PAGE_SIZE,
+          parsePositiveInt(req.query.limit ?? req.query.pageSize, DEFAULT_PAGE_SIZE)
+        );
         const scope = continuousCursorScope("erp-daybook", {
           companyId,
           startDate,

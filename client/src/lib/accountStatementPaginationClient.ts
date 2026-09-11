@@ -1,6 +1,5 @@
 const ACCOUNT_ROUTE_SUFFIX = "/accounts";
-const ENDPOINT_PATTERN =
-  /^\/api\/accounts\/(ledger|bank|fixed-asset|supplier|employee|customer)\/\d+\/transactions$/;
+const ENDPOINT_PATTERN = /^\/api\/accounts\/(ledger|bank|fixed-asset|supplier|employee|customer)\/\d+\/transactions$/;
 const LEGACY_LIMIT = 100;
 
 interface StatementPage {
@@ -117,8 +116,12 @@ if (typeof window !== "undefined" && !window.__erpAccountStatementPaginationInst
         limit: Number(payload.limit || LEGACY_LIMIT) || LEGACY_LIMIT,
         totalPages: Number(payload.totalPages || 0),
         periodDebitTotal: Number.isFinite(Number(payload.periodDebitTotal)) ? Number(payload.periodDebitTotal) : null,
-        periodCreditTotal: Number.isFinite(Number(payload.periodCreditTotal)) ? Number(payload.periodCreditTotal) : null,
-        closingNetBalance: Number.isFinite(Number(payload.closingNetBalance)) ? Number(payload.closingNetBalance) : null,
+        periodCreditTotal: Number.isFinite(Number(payload.periodCreditTotal))
+          ? Number(payload.periodCreditTotal)
+          : null,
+        closingNetBalance: Number.isFinite(Number(payload.closingNetBalance))
+          ? Number(payload.closingNetBalance)
+          : null,
       });
     } catch {
       // Preserve the original response when a legacy payload cannot be inspected.

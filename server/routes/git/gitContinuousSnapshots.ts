@@ -1,9 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  ContinuousCursorError,
-  decodeContinuousCursor,
-  encodeContinuousCursor,
-} from "../../lib/continuousCursor";
+import { ContinuousCursorError, decodeContinuousCursor, encodeContinuousCursor } from "../../lib/continuousCursor";
 
 const DEFAULT_TTL_MS = 2 * 60_000;
 const DEFAULT_MAX_SNAPSHOTS = 32;
@@ -59,7 +55,12 @@ function prune(now = Date.now()): void {
 function isSnapshotCursor(value: unknown): value is SnapshotCursor {
   if (!value || typeof value !== "object") return false;
   const cursor = value as Partial<SnapshotCursor>;
-  return typeof cursor.snapshotId === "string" && cursor.snapshotId.length > 0 && Number.isInteger(cursor.offset) && Number(cursor.offset) >= 0;
+  return (
+    typeof cursor.snapshotId === "string" &&
+    cursor.snapshotId.length > 0 &&
+    Number.isInteger(cursor.offset) &&
+    Number(cursor.offset) >= 0
+  );
 }
 
 function chunkFromSnapshot<T, TFacets, TSummary>(

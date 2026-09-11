@@ -6,8 +6,7 @@ import {
 } from "./continuousListClient";
 
 export type ErpDaybookRow =
-  | { _type: "voucher"; data: Record<string, unknown> }
-  | { _type: "offload"; data: Record<string, unknown> };
+  { _type: "voucher"; data: Record<string, unknown> } | { _type: "offload"; data: Record<string, unknown> };
 
 export interface ErpDaybookPage {
   items: ErpDaybookRow[];

@@ -12,7 +12,7 @@ function Harness({ count = 500 }: { count?: number }) {
   });
   const rows = Array.from(
     { length: windowed.endIndex - windowed.startIndex },
-    (_, offset) => windowed.startIndex + offset,
+    (_, offset) => windowed.startIndex + offset
   );
 
   return (

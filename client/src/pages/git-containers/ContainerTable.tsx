@@ -89,7 +89,11 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                 <>
                   {virtualRows.topSpacerHeight > 0 && (
                     <TableRow aria-hidden="true" data-testid="tracking-virtual-spacer-top">
-                      <TableCell colSpan={25} className="p-0 border-0" style={{ height: virtualRows.topSpacerHeight }} />
+                      <TableCell
+                        colSpan={25}
+                        className="p-0 border-0"
+                        style={{ height: virtualRows.topSpacerHeight }}
+                      />
                     </TableRow>
                   )}
                   {visibleContainers.map((c, visibleIndex) => {
@@ -322,7 +326,11 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                   })}
                   {virtualRows.bottomSpacerHeight > 0 && (
                     <TableRow aria-hidden="true" data-testid="tracking-virtual-spacer-bottom">
-                      <TableCell colSpan={25} className="p-0 border-0" style={{ height: virtualRows.bottomSpacerHeight }} />
+                      <TableCell
+                        colSpan={25}
+                        className="p-0 border-0"
+                        style={{ height: virtualRows.bottomSpacerHeight }}
+                      />
                     </TableRow>
                   )}
                 </>

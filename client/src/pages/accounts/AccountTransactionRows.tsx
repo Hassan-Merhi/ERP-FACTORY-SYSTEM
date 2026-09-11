@@ -162,7 +162,11 @@ export function AccountTransactionRows({
 
           {virtualRows.topSpacerHeight > 0 && (
             <TableRow aria-hidden="true" data-testid="account-virtual-spacer-top">
-              <TableCell colSpan={totalColumns} className="p-0 border-0" style={{ height: virtualRows.topSpacerHeight }} />
+              <TableCell
+                colSpan={totalColumns}
+                className="p-0 border-0"
+                style={{ height: virtualRows.topSpacerHeight }}
+              />
             </TableRow>
           )}
 
@@ -177,7 +181,9 @@ export function AccountTransactionRows({
                     : "group hover:bg-muted/30 cursor-pointer border-b border-border/40 last:border-0"
                 }
                 onClick={isReference ? undefined : () => handleOpenVoucher(v)}
-                data-testid={isReference ? `row-historical-reference-${Math.abs(v.voucherId)}` : `row-voucher-${v.voucherId}`}
+                data-testid={
+                  isReference ? `row-historical-reference-${Math.abs(v.voucherId)}` : `row-voucher-${v.voucherId}`
+                }
               >
                 <TableCell className="py-3 print:hidden" onClick={(e) => e.stopPropagation()}>
                   {isReference ? null : (
@@ -251,7 +257,11 @@ export function AccountTransactionRows({
 
           {virtualRows.bottomSpacerHeight > 0 && (
             <TableRow aria-hidden="true" data-testid="account-virtual-spacer-bottom">
-              <TableCell colSpan={totalColumns} className="p-0 border-0" style={{ height: virtualRows.bottomSpacerHeight }} />
+              <TableCell
+                colSpan={totalColumns}
+                className="p-0 border-0"
+                style={{ height: virtualRows.bottomSpacerHeight }}
+              />
             </TableRow>
           )}
 

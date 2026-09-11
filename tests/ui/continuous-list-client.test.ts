@@ -46,11 +46,12 @@ describe("continuous list client", () => {
 
   it("surfaces server status and error code for retry decisions", async () => {
     const previousFetch = window.fetch;
-    window.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ message: "Snapshot expired", code: "SNAPSHOT_EXPIRED" }), {
-        status: 409,
-        headers: { "content-type": "application/json" },
-      })
+    window.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: "Snapshot expired", code: "SNAPSHOT_EXPIRED" }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        })
     ) as typeof window.fetch;
     try {
       await expect(

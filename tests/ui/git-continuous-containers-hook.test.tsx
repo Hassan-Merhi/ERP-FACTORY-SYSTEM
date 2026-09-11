@@ -107,20 +107,13 @@ describe("usePaginatedGITContainers continuous loading", () => {
     window.fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        jsonResponse(
-          trackingChunk({ id: 1, containerNumber: "OLD-A", hasMore: true, nextCursor: "expired-cursor" })
-        )
+        jsonResponse(trackingChunk({ id: 1, containerNumber: "OLD-A", hasMore: true, nextCursor: "expired-cursor" }))
       )
       .mockResolvedValueOnce(
-        jsonResponse(
-          { message: "git-continuous-snapshot-expired", code: "GIT_CONTINUOUS_SNAPSHOT_EXPIRED" },
-          409
-        )
+        jsonResponse({ message: "git-continuous-snapshot-expired", code: "GIT_CONTINUOUS_SNAPSHOT_EXPIRED" }, 409)
       )
       .mockResolvedValueOnce(
-        jsonResponse(
-          trackingChunk({ id: 10, containerNumber: "FRESH-A", hasMore: true, nextCursor: "fresh-cursor" })
-        )
+        jsonResponse(trackingChunk({ id: 10, containerNumber: "FRESH-A", hasMore: true, nextCursor: "fresh-cursor" }))
       )
       .mockResolvedValueOnce(
         jsonResponse(trackingChunk({ id: 20, containerNumber: "FRESH-B", hasMore: false, nextCursor: null }))

@@ -46,10 +46,7 @@ export async function fetchContinuousJson<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
-export function withContinuousCursor(
-  baseUrl: string,
-  options: { cursor?: string | null; limit: number }
-): string {
+export function withContinuousCursor(baseUrl: string, options: { cursor?: string | null; limit: number }): string {
   const url = new URL(baseUrl, window.location.origin);
   url.searchParams.delete("pagination");
   url.searchParams.delete("page");

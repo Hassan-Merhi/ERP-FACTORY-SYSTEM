@@ -1172,7 +1172,9 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
       const requestedCompanyId =
-        typeof req.query.companyId === "string" ? Number.parseInt(req.query.companyId, 10) : req.session.currentCompanyId;
+        typeof req.query.companyId === "string"
+          ? Number.parseInt(req.query.companyId, 10)
+          : req.session.currentCompanyId;
       const companyId = await authorizeCompanyIdParam(req, requestedCompanyId);
       if (companyId === null) {
         return res.status(403).json({ message: "No access to this company" });

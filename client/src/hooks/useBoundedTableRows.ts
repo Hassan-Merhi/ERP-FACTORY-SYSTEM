@@ -45,9 +45,7 @@ export function useBoundedTableRows({
     const scroller = scrollRef.current;
     if (!scroller || !shouldVirtualize) {
       setRange((current) =>
-        current.startIndex === 0 && current.endIndex === rowCount
-          ? current
-          : { startIndex: 0, endIndex: rowCount }
+        current.startIndex === 0 && current.endIndex === rowCount ? current : { startIndex: 0, endIndex: rowCount }
       );
       return;
     }
@@ -62,9 +60,7 @@ export function useBoundedTableRows({
     const endIndex = Math.min(rowCount, Math.max(requestedEnd, startIndex + minimumRows));
 
     setRange((current) =>
-      current.startIndex === startIndex && current.endIndex === endIndex
-        ? current
-        : { startIndex, endIndex }
+      current.startIndex === startIndex && current.endIndex === endIndex ? current : { startIndex, endIndex }
     );
   }, [minimumRows, overscan, rowCount, rowHeight, shouldVirtualize]);
 

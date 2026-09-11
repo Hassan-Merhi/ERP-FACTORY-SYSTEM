@@ -29,7 +29,11 @@ describe("continuousCursor", () => {
     const scope = continuousCursorScope("daybook", { companyId: 4, search: "riverside" });
     const token = encodeContinuousCursor(scope, { sortDate: "2026-09-10", typeRank: 2, sortId: 99 });
 
-    expect(decodeContinuousCursor<typeof token extends string ? { sortDate: string; typeRank: number; sortId: number } : never>(scope, token)).toEqual({
+    expect(
+      decodeContinuousCursor<
+        typeof token extends string ? { sortDate: string; typeRank: number; sortId: number } : never
+      >(scope, token)
+    ).toEqual({
       sortDate: "2026-09-10",
       typeRank: 2,
       sortId: 99,
