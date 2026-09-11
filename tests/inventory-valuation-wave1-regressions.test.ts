@@ -12,7 +12,6 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 const TEST_PREFIX = "invvalw1";
 const ITEM_RATE = 66.65;
 const ITEM_QTY = 18;
-const ITEM_VALUE = ITEM_QTY * ITEM_RATE;
 const EDIT_QTY = 5;
 
 let ctx: TestContext;
