@@ -11,7 +11,7 @@ import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
 import type { Cell as ExcelCell, FillPattern } from "exceljs";
 import type { GroupedProduct, ImportPreviewRow } from "./types";
 import { hmdLogoPath } from "./utils";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 export function useBaleProductsModel() {
   const { colors: designColors } = useLabelDesignColors();

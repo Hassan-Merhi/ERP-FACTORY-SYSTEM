@@ -9,7 +9,7 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 type Section = "workers" | "employees" | "production-targets" | "attendance-register" | "insurance";
 

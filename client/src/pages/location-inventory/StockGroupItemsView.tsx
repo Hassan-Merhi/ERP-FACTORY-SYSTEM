@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InventoryTable } from "./InventoryTable";
 import type { InventoryItem, StockGroupSummary } from "./locationInventoryTypes";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { AuthMe } from "@shared/apiTypes";
 
 interface StockGroupItemsViewProps {
   selectedGroup: StockGroupSummary;
@@ -16,7 +16,7 @@ interface StockGroupItemsViewProps {
   setItemSearchTerm: (v: string) => void;
   itemCategoryFilter: string[];
   setItemCategoryFilter: (v: string[]) => void;
-  categoriesList: { id: number; name: string; active: boolean; }[];
+  categoriesList: { id: number; name: string; active: boolean }[];
   filteredStockItems: InventoryItem[];
   showMovement: boolean;
   openingInventoryMap: Map<number, number>;
@@ -66,10 +66,8 @@ export function StockGroupItemsView({
             </span>
             {canViewCost && (
               <span>
-                <span className="font-semibold text-foreground">
-                  {formatAmount(selectedGroup.totalValue)}
-                </span>{" "}
-                total value
+                <span className="font-semibold text-foreground">{formatAmount(selectedGroup.totalValue)}</span> total
+                value
               </span>
             )}
           </div>

@@ -40,10 +40,12 @@ describe("tracking continuous-list cleanup", () => {
       totals: { typeEscapeCeiling: number };
     };
 
-    // #1384 lowered the ceiling again after this test was written. Both numbers
-    // track config/type-escape-boundaries.json, which audit:doc-index treats as
-    // the source of truth for the figure the quality reference quotes.
-    expect(typeEscapeBoundaries.totals.typeEscapeCeiling).toBe(1040);
-    expect(qualityProgram).toContain("| Type escapes (AST) | 1,040 total |");
+    // Derived, not hard-coded: this test pins the *synchronisation*, and the
+    // ceiling ratchets down often enough (1,341 -> 1,058 -> 1,040 -> 913 in a
+    // day) that a literal here just goes stale and contradicts audit:doc-index,
+    // which treats the config as the source of truth for this figure.
+    const ceiling = typeEscapeBoundaries.totals.typeEscapeCeiling;
+    expect(ceiling).toBeGreaterThan(0);
+    expect(qualityProgram).toContain(`| Type escapes (AST) | ${ceiling.toLocaleString("en-US")} total |`);
   });
 });

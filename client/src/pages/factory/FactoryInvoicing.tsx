@@ -5,7 +5,7 @@ import FactoryInvoices from "@/pages/factory/FactoryInvoices";
 import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
 import { FileText } from "lucide-react";
-import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending";
 
@@ -39,9 +39,7 @@ export default function FactoryInvoicing() {
     enabled: hasLoadingsAccess,
   });
   const showPending =
-    hasLoadingsAccess &&
-    settings?.loadingsTabPendingEnabled !== false &&
-    !hidden.includes("hide_tab_loadings_pending");
+    hasLoadingsAccess && settings?.loadingsTabPendingEnabled !== false && !hidden.includes("hide_tab_loadings_pending");
 
   // ── Active tab from URL ?tab= param ─────────────────────────────────────
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
@@ -63,15 +61,15 @@ export default function FactoryInvoicing() {
   // ── Build visible tab list ────────────────────────────────────────────────
   type TabDef = { key: InvoicingTab; label: string };
   const allTabs: TabDef[] = [
-    { key: "proformas",  label: "Proformas" },
-    { key: "invoices",   label: "Invoices" },
-    { key: "loadings",   label: "Container Loadings" },
-    { key: "pending",    label: "Pending Loadings" },
+    { key: "proformas", label: "Proformas" },
+    { key: "invoices", label: "Invoices" },
+    { key: "loadings", label: "Container Loadings" },
+    { key: "pending", label: "Pending Loadings" },
   ];
   const tabs = allTabs.filter((t) => {
     if (t.key === "proformas") return !hideProformasTab;
-    if (t.key === "loadings")  return hasLoadingsAccess;
-    if (t.key === "pending")   return showPending;
+    if (t.key === "loadings") return hasLoadingsAccess;
+    if (t.key === "pending") return showPending;
     return true; // invoices always visible
   });
 
@@ -117,9 +115,9 @@ export default function FactoryInvoicing() {
       {/* Content */}
       <div className="flex-1 overflow-auto min-h-0">
         {activeTab === "proformas" && !hideProformasTab && <FactoryProformas />}
-        {activeTab === "invoices"  && <FactoryInvoices />}
-        {activeTab === "loadings"  && hasLoadingsAccess && <FactoryContainerLoadingScan />}
-        {activeTab === "pending"   && showPending        && <FactoryPendingLoadings />}
+        {activeTab === "invoices" && <FactoryInvoices />}
+        {activeTab === "loadings" && hasLoadingsAccess && <FactoryContainerLoadingScan />}
+        {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
       </div>
     </div>
   );
