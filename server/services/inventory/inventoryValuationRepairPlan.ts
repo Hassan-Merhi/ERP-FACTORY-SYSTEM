@@ -32,8 +32,7 @@ export interface InventoryValuationRepairEvidence {
   lastUpdated: string | null;
 }
 
-export interface InventoryValuationRepairPlan
-  extends InventoryValuationRepairEvidence {
+export interface InventoryValuationRepairPlan extends InventoryValuationRepairEvidence {
   classification: InventoryValuationRepairClassification;
   baselineQuantityEstimate: number;
   expectedRate: number | null;
@@ -63,20 +62,14 @@ function roundMoney(value: number): number {
 export function buildInventoryValuationRepairPlan(
   evidence: InventoryValuationRepairEvidence
 ): InventoryValuationRepairPlan {
-  const baselineQuantityEstimate =
-    evidence.currentQuantity - evidence.netDeltaSinceEdit;
-  const expectedRate =
-    evidence.baselineRate && evidence.baselineRate > 0
-      ? evidence.baselineRate
-      : null;
+  const baselineQuantityEstimate = evidence.currentQuantity - evidence.netDeltaSinceEdit;
+  const expectedRate = evidence.baselineRate && evidence.baselineRate > 0 ? evidence.baselineRate : null;
   const expectedValueEstimate =
     expectedRate !== null && evidence.currentQuantity > 0
       ? roundMoney(evidence.currentQuantity * expectedRate)
       : null;
   const repairValueDeltaEstimate =
-    expectedValueEstimate === null
-      ? null
-      : roundMoney(expectedValueEstimate - evidence.currentValue);
+    expectedValueEstimate === null ? null : roundMoney(expectedValueEstimate - evidence.currentValue);
 
   let classification: InventoryValuationRepairClassification;
 
