@@ -19,7 +19,6 @@ import type { EnrichedContainerRow, EtaFilterValue, GitContainersResponse } from
 interface PaginatedContainerFilters {
   companyIdentity: CompanyIdentity;
   allCompanies: boolean;
-  page: number;
   pageSize: number;
   companyFilter: string;
   containerFilters: string[];
@@ -85,11 +84,26 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
       sort: filters.sortOrder !== "DEFAULT" ? filters.sortOrder : undefined,
       search: debouncedSearch.trim() || undefined,
       etaDates,
-      includeNoEta:
-        filters.etaFilter !== "ALL" && filters.etaFilter.includeNoEta ? true : undefined,
+      includeNoEta: filters.etaFilter !== "ALL" && filters.etaFilter.includeNoEta ? true : undefined,
     };
     return canonicalApiUrl("/api/git/containers", params);
-  }, [filters.etaFilter, filters.allCompanies, filters.companyFilter, filters.containerFilters, filters.supplierFilters, filters.transporterFilters, filters.agentFilters, filters.truckFilters, filters.locationFilters, filters.docsFilter, filters.delayedFilter, filters.freightFilter, filters.notesFilter, filters.sortOrder, debouncedSearch]);
+  }, [
+    filters.etaFilter,
+    filters.allCompanies,
+    filters.companyFilter,
+    filters.containerFilters,
+    filters.supplierFilters,
+    filters.transporterFilters,
+    filters.agentFilters,
+    filters.truckFilters,
+    filters.locationFilters,
+    filters.docsFilter,
+    filters.delayedFilter,
+    filters.freightFilter,
+    filters.notesFilter,
+    filters.sortOrder,
+    debouncedSearch,
+  ]);
 
   const query = useInfiniteQuery({
     queryKey: companyDataKey(
@@ -97,7 +111,7 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
       filters.companyIdentity,
       "git-containers",
       "continuous",
-      filters.allCompanies ? "all-accessible" : "active-company",
+      filters.allCompanies ? "all-accessible" : "active-company"
     ),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
@@ -114,34 +128,44 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
     retry: (failureCount, error) => !isExpiredSnapshotError(error) && failureCount < 3,
   });
 
+  const {
+    data: infiniteData,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetching,
+    isFetchingNextPage,
+    refetch,
+  } = query;
+
   // Once the first chunk paints, continue through the finite cursor chain automatically.
   // React Query passes an AbortSignal to every request, so changing scope/filters cancels
   // obsolete work instead of letting an old list keep downloading in the background.
   useEffect(() => {
-    if (!filters.enabled || !query.hasNextPage || query.isFetchingNextPage || query.isError) return;
-    void query.fetchNextPage();
-  }, [filters.enabled, query.hasNextPage, query.isFetchingNextPage, query.isError, query.fetchNextPage]);
+    if (!filters.enabled || !hasNextPage || isFetchingNextPage || isError) return;
+    void fetchNextPage();
+  }, [filters.enabled, fetchNextPage, hasNextPage, isError, isFetchingNextPage]);
 
   // Tracking snapshots live in one server process and are intentionally bounded.
   // If a deploy, idle timeout, or process change invalidates the cursor mid-chain,
   // refetch the infinite query from its first page. TanStack then rebuilds existing
   // pages sequentially with fresh cursors, and the auto-advance effect resumes.
   useEffect(() => {
-    const error = query.error;
-    if (!isExpiredSnapshotError(error)) {
+    if (!isExpiredSnapshotError(queryError)) {
       handledSnapshotError.current = null;
       return;
     }
-    if (!filters.enabled || query.isFetching || handledSnapshotError.current === error) return;
-    handledSnapshotError.current = error;
-    void query.refetch({ cancelRefetch: true });
-  }, [filters.enabled, query.error, query.isFetching, query.refetch]);
+    if (!filters.enabled || isFetching || handledSnapshotError.current === queryError) return;
+    handledSnapshotError.current = queryError;
+    void refetch({ cancelRefetch: true });
+  }, [filters.enabled, isFetching, queryError, refetch]);
 
   const containers = useMemo(
-    () => query.data?.pages.flatMap((page) => page.containers) ?? [],
-    [query.data?.pages]
+    () => infiniteData?.pages.flatMap((page) => page.containers) ?? [],
+    [infiniteData?.pages]
   );
-  const firstPage = query.data?.pages[0];
+  const firstPage = infiniteData?.pages[0];
   const data: GitContainersResponse | undefined = firstPage
     ? {
         containers,
@@ -152,7 +176,7 @@ export function usePaginatedGITContainers(filters: PaginatedContainerFilters) {
         page: 1,
         pageSize: Math.max(containers.length, 1),
         totalPages: firstPage.total > 0 ? 1 : 0,
-        hasMore: Boolean(query.hasNextPage),
+        hasMore: Boolean(hasNextPage),
         summary: firstPage.summary,
         facets: firstPage.facets,
       }
