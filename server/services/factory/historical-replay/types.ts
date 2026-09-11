@@ -1,10 +1,11 @@
+import type { QueryResultRow } from "pg";
 import { factoryContainers, factoryRawStock } from "@shared/schema";
 
 export interface ReplayQueryExecutor {
-  query<T = any>(
-    text: string,
-    params?: any[]
-  ): Promise<{ rows: T[]; rowCount?: number | null }>;
+  // Default row type is pg's own QueryResultRow — a dynamic SQL row whose
+  // columns are declared by the query text at each call site via the explicit
+  // generic (executor.query<{ ... }>).
+  query<T = QueryResultRow>(text: string, params?: unknown[]): Promise<{ rows: T[]; rowCount?: number | null }>;
 }
 
 /** Backwards-compatible alias used by existing callers and tests. */
@@ -268,12 +269,7 @@ export interface ReplayApplyResult {
 }
 
 export interface SupplierEvent {
-  kind:
-    | "RECEIPT"
-    | "ADD_ADJUSTMENT"
-    | "REMOVE_ADJUSTMENT"
-    | "DEDUCT_ADJUSTMENT"
-    | "BATCH_CONSUMPTION";
+  kind: "RECEIPT" | "ADD_ADJUSTMENT" | "REMOVE_ADJUSTMENT" | "DEDUCT_ADJUSTMENT" | "BATCH_CONSUMPTION";
   effectiveDate: string;
   createdAt: number;
   stableId: number;

@@ -38,21 +38,16 @@ function decimalEquals(left: unknown, right: unknown, tolerance = "0.0000001"): 
 }
 
 function invariantError(message: string): Error & { code: string } {
-  return Object.assign(
-    new Error(`HISTORICAL_REPLAY_INVARIANT_VIOLATION: ${message}. Rolling back.`),
-    { code: "HISTORICAL_REPLAY_INVARIANT_VIOLATION" }
-  );
+  return Object.assign(new Error(`HISTORICAL_REPLAY_INVARIANT_VIOLATION: ${message}. Rolling back.`), {
+    code: "HISTORICAL_REPLAY_INVARIANT_VIOLATION",
+  });
 }
 
-function rowsById(rows: Array<{ id: number }>): Map<number, any> {
+function rowsById<T extends { id: number }>(rows: T[]): Map<number, T> {
   return new Map(rows.map((row) => [Number(row.id), row]));
 }
 
-function assertSameIds(
-  beforeRows: Array<{ id: number }>,
-  afterRows: Array<{ id: number }>,
-  label: string
-): void {
+function assertSameIds(beforeRows: Array<{ id: number }>, afterRows: Array<{ id: number }>, label: string): void {
   const before = [...rowsById(beforeRows).keys()].sort((a, b) => a - b);
   const after = [...rowsById(afterRows).keys()].sort((a, b) => a - b);
   if (JSON.stringify(before) !== JSON.stringify(after)) {
@@ -68,7 +63,8 @@ function assertCompleteNonCostStateUnchanged(
   assertSameIds(beforeRows, afterRows, label);
   const afterById = rowsById(afterRows);
   for (const before of beforeRows) {
-    const after = afterById.get(Number(before.id));
+    // assertSameIds proved the id sets match, so the row is present.
+    const after = afterById.get(Number(before.id))!;
     if (stableJson(before.nonCostState) !== stableJson(after.nonCostState)) {
       throw invariantError(`${label} ${before.id} changed a non-cost column`);
     }
@@ -80,16 +76,44 @@ function assertCompleteNonCostStateUnchanged(
  * JSONB nonCostState image contains every other persisted column, including
  * signed quantities, ownership, lifecycle state and dependency relationships.
  */
-export function assertExactReplayNonCostInvariants(
-  before: ExactReplaySnapshot,
-  after: ExactReplaySnapshot
-): void {
+export function assertExactReplayNonCostInvariants(before: ExactReplaySnapshot, after: ExactReplaySnapshot): void {
   assertCompleteNonCostStateUnchanged(before.containers, after.containers, "container");
   assertCompleteNonCostStateUnchanged(before.rawStockRows, after.rawStockRows, "raw-stock");
   assertCompleteNonCostStateUnchanged(before.mixBatchSources, after.mixBatchSources, "source");
   assertCompleteNonCostStateUnchanged(before.mixBatches, after.mixBatches, "batch");
   assertCompleteNonCostStateUnchanged(before.bales, after.bales, "bale");
   assertCompleteNonCostStateUnchanged(before.suppliers, after.suppliers, "supplier");
+}
+
+/**
+ * One cost-field check: the applied snapshot's rows must still carry exactly
+ * the same values in `fields` as the current persisted rows, or undo is stale.
+ */
+function assertCostFieldsUnchanged<T extends { id: number }>(check: {
+  label: string;
+  appliedRows: T[];
+  currentRows: T[];
+  fields: Array<keyof T & string>;
+}): void {
+  assertSameIds(check.appliedRows, check.currentRows, check.label);
+  const currentById = rowsById(check.currentRows);
+  for (const row of check.appliedRows) {
+    // assertSameIds proved the id sets match, so the row is present.
+    const currentRow = currentById.get(Number(row.id))!;
+    for (const field of check.fields) {
+      if (!decimalEquals(row[field], currentRow[field])) {
+        // The message keeps its historical raw template text (`check.label`)
+        // so the i18n compatibility inventory still covers it.
+        throw Object.assign(
+          new Error(
+            `Historical replay undo blocked: ${check.label} ${row.id} ${field} changed after replay. ` +
+              "Re-run review instead of overwriting the newer value."
+          ),
+          { code: "HISTORICAL_REPLAY_UNDO_STALE" }
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -100,68 +124,42 @@ export function assertExactReplayCurrentCostsMatchApplied(
   applied: ExactReplaySnapshot,
   current: ExactReplaySnapshot
 ): void {
-  const checks: Array<{
-    label: string;
-    appliedRows: Array<{ id: number }>;
-    currentRows: Array<{ id: number }>;
-    fields: string[];
-  }> = [
-    {
-      label: "container",
-      appliedRows: applied.containers,
-      currentRows: current.containers,
-      fields: ["ratePerKgUsd", "finalPayableAmountUsd"],
-    },
-    {
-      label: "raw-stock",
-      appliedRows: applied.rawStockRows,
-      currentRows: current.rawStockRows,
-      fields: ["costPerKgUsd"],
-    },
-    {
-      label: "source",
-      appliedRows: applied.mixBatchSources,
-      currentRows: current.mixBatchSources,
-      fields: ["costPerKg", "totalCost"],
-    },
-    {
-      label: "batch",
-      appliedRows: applied.mixBatches,
-      currentRows: current.mixBatches,
-      fields: ["costPerKg", "totalCost"],
-    },
-    {
-      label: "bale",
-      appliedRows: applied.bales,
-      currentRows: current.bales,
-      fields: ["costPerKg", "totalCost"],
-    },
-    {
-      label: "supplier",
-      appliedRows: applied.suppliers,
-      currentRows: current.suppliers,
-      fields: ["currentRawMaterialCostPerKgUsd"],
-    },
-  ];
-
-  for (const check of checks) {
-    assertSameIds(check.appliedRows, check.currentRows, check.label);
-    const currentById = rowsById(check.currentRows);
-    for (const row of check.appliedRows as any[]) {
-      const currentRow = currentById.get(Number(row.id));
-      for (const field of check.fields) {
-        if (!decimalEquals(row[field], currentRow[field])) {
-          throw Object.assign(
-            new Error(
-              `Historical replay undo blocked: ${check.label} ${row.id} ${field} changed after replay. `
-              + "Re-run review instead of overwriting the newer value."
-            ),
-            { code: "HISTORICAL_REPLAY_UNDO_STALE" }
-          );
-        }
-      }
-    }
-  }
+  assertCostFieldsUnchanged({
+    label: "container",
+    appliedRows: applied.containers,
+    currentRows: current.containers,
+    fields: ["ratePerKgUsd", "finalPayableAmountUsd"],
+  });
+  assertCostFieldsUnchanged({
+    label: "raw-stock",
+    appliedRows: applied.rawStockRows,
+    currentRows: current.rawStockRows,
+    fields: ["costPerKgUsd"],
+  });
+  assertCostFieldsUnchanged({
+    label: "source",
+    appliedRows: applied.mixBatchSources,
+    currentRows: current.mixBatchSources,
+    fields: ["costPerKg", "totalCost"],
+  });
+  assertCostFieldsUnchanged({
+    label: "batch",
+    appliedRows: applied.mixBatches,
+    currentRows: current.mixBatches,
+    fields: ["costPerKg", "totalCost"],
+  });
+  assertCostFieldsUnchanged({
+    label: "bale",
+    appliedRows: applied.bales,
+    currentRows: current.bales,
+    fields: ["costPerKg", "totalCost"],
+  });
+  assertCostFieldsUnchanged({
+    label: "supplier",
+    appliedRows: applied.suppliers,
+    currentRows: current.suppliers,
+    fields: ["currentRawMaterialCostPerKgUsd"],
+  });
 }
 
 /**

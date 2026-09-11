@@ -12,7 +12,7 @@ export async function resolveLegacyPostOffloadAccountingLinks(
   tx: DbTransaction,
   companyId: number,
   containerId: number,
-  chargeRow: any
+  chargeRow: typeof factoryOffloadAdditionalCharges.$inferSelect
 ) {
   let { daybookEntryId, voucherId } = chargeRow;
 
@@ -123,8 +123,15 @@ export async function assertNoLaterSupplierCostEvents(
   }
 }
 
+/** The landed-cost figures updateContainerCost persists on the container. */
+export interface ContainerLandedCostUpdate {
+  totalCost: number;
+  costPerKgUsd: number;
+  totalUsd: number;
+}
+
 /** Update container landed totals (never touches purchase rate). */
-export async function updateContainerCost(tx: DbTransaction, containerId: number, next: any) {
+export async function updateContainerCost(tx: DbTransaction, containerId: number, next: ContainerLandedCostUpdate) {
   await tx
     .update(factoryContainers)
     .set({

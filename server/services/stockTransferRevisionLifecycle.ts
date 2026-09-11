@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { adjustInventory } from "../inventoryHelper";
+import { firstRow } from "../lib/queryResult";
 import {
   inventory,
   locations,
@@ -12,14 +13,9 @@ import {
   vouchers,
 } from "@shared/schema";
 
-/**
- * Return the first row from a `.execute()` result, supporting both possible
- * shapes: a node-postgres `QueryResult` (`{ rows: [...] }`) and a bare row
- * array. Keeps the both-shapes runtime behaviour while remaining type-safe.
- */
-function firstRow<T = Record<string, unknown>>(res: any): T | undefined {
-  return (res?.rows ?? res)?.[0];
-}
+// First-row access to `.execute()` results (both the node-postgres
+// `{ rows: [...] }` shape and a bare row array) comes from the shared typed
+// helper in lib/queryResult, matching the rest of the codebase.
 
 export interface PendingRevisionItemInput {
   stockItemId: number;
@@ -131,7 +127,7 @@ async function lockTransferScope(tx: Parameters<Parameters<typeof db.transaction
   return firstRow(result);
 }
 
-function assertLockedTransfer(locked: any, companyId: number): asserts locked {
+function assertLockedTransfer(locked: Record<string, unknown> | undefined, companyId: number): asserts locked {
   if (!locked) throw new Error("Stock transfer not found");
   if (Number(locked.company_id) !== companyId) throw new Error("Stock transfer belongs to a different company");
   if (

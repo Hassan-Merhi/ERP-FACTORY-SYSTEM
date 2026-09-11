@@ -69,7 +69,16 @@ export async function getConversationHistoryForAI(
   return messages.reverse().map((m) => ({ role: m.role || "", content: m.content || "" }));
 }
 
-export async function getAllChatHistory(companyId: number, limit: number = 100): Promise<any[]> {
+export interface ChatHistoryRow {
+  id: number;
+  userId: string | null;
+  role: string | null;
+  content: string | null;
+  sessionId: string | null;
+  createdAt: Date;
+}
+
+export async function getAllChatHistory(companyId: number, limit: number = 100): Promise<ChatHistoryRow[]> {
   const messages = await db
     .select({
       id: schema.chatMessages.id,

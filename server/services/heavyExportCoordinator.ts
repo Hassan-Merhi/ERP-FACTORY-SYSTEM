@@ -25,13 +25,18 @@ interface SlotContext {
   label: string;
 }
 
-const state: CoordinatorState = ((globalThis as any)[STATE_KEY] ??= {
+// The coordinator state must survive module reloads, so it lives on globalThis
+// under a Symbol.for key. typeof globalThis has no symbol index, so the slot
+// bag is read through a symbol-keyed view instead of casting to any.
+const globalSlots = globalThis as unknown as Record<symbol, unknown>;
+
+const state: CoordinatorState = (globalSlots[STATE_KEY] ??= {
   active: 0,
   queue: [],
-});
+}) as CoordinatorState;
 
-const slotContext: AsyncLocalStorage<SlotContext> = ((globalThis as any)[CONTEXT_KEY] ??=
-  new AsyncLocalStorage<SlotContext>());
+const slotContext: AsyncLocalStorage<SlotContext> = (globalSlots[CONTEXT_KEY] ??=
+  new AsyncLocalStorage<SlotContext>()) as AsyncLocalStorage<SlotContext>;
 
 function readPositiveInt(name: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[name] || "", 10);

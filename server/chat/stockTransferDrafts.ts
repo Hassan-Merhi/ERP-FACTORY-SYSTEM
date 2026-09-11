@@ -273,7 +273,9 @@ If this is not this kind of quantity-target multi-source transfer request, respo
             const parsedMulti = JSON.parse(rawMulti);
             destinationName = parsedMulti.destinationLocationName || "";
             sourceNames = Array.isArray(parsedMulti.sourceLocationNames)
-              ? parsedMulti.sourceLocationNames.filter((n: any) => typeof n === "string" && n.trim())
+              ? parsedMulti.sourceLocationNames.filter(
+                  (n: unknown): n is string => typeof n === "string" && n.trim().length > 0
+                )
               : [];
             targetQty =
               Number.isFinite(Number(parsedMulti.targetQty)) && Number(parsedMulti.targetQty) > 0

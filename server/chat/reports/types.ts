@@ -1,6 +1,13 @@
 export interface ReportQueryParams {
   queryType?: string;
-  [key: string]: any;
+  entityName?: string;
+  locationName?: string;
+  containerNumber?: string;
+  containerStatus?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  [key: string]: unknown;
 }
 
 export interface DataQueryContext {

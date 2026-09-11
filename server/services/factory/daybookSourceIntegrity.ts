@@ -233,7 +233,10 @@ export function buildPaginationIntegrityConditions(companyParam: string): string
  * Does NOT handle voucher-backed rows — those use their own live-data fetch with
  * description/amount enrichment in the legacy daybook route.
  */
-export async function buildLegacyValidSourceIds(rows: any[], companyId: number): Promise<Map<string, Set<number>>> {
+export async function buildLegacyValidSourceIds(
+  rows: Array<{ txType: string; referenceId: number | null }>,
+  companyId: number
+): Promise<Map<string, Set<number>>> {
   // Collect referenceIds grouped by source table
   const tableIds = new Map<string, Set<number>>();
   for (const row of rows) {
@@ -246,7 +249,7 @@ export async function buildLegacyValidSourceIds(rows: any[], companyId: number):
       bucket = new Set();
       tableIds.set(group.sourceTable, bucket);
     }
-    bucket.add(referenceId as number);
+    bucket.add(referenceId);
   }
 
   // Batch-fetch per source table

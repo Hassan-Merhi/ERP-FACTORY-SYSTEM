@@ -224,11 +224,13 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
         ne(factoryOffloadAdditionalCharges.currencyCode, "USD")
       )
     );
-  for (const oc of nonUsdCharges as any[]) {
+  for (const oc of nonUsdCharges) {
     const { looksSet } = resolveStoredFxRate(oc.currencyCode, oc.fxRateToUsd, oc.fxRateConfirmed);
     const container = allContainersById.get(oc.containerId);
     const supplierId = oc.supplierId ?? container?.supplierId ?? null;
-    bumpExposure(supplierId, oc.currencyCode, parseFloat(oc.amount || "0") || 0, looksSet);
+    // The currency_code <> 'USD' filter above also excludes NULL currencies,
+    // so every row here carries a currency code.
+    bumpExposure(supplierId, oc.currencyCode!, parseFloat(oc.amount || "0") || 0, looksSet);
   }
 
   const nonUsdCommissions = await db
@@ -296,8 +298,13 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     parentCompanyId = null; // ambiguous/unconfigured — skip opening balances rather than guess.
   }
   if (parentCompanyId === companyId) {
-    for (const s of suppliers as any[]) {
-      const ob = parseFloat(s.openingBalance || "0") || 0;
+    for (const s of suppliers) {
+      // NOTE — behaviour preserved verbatim: the supplier projection above
+      // selects only id/name, so openingBalance reads as undefined and ob is
+      // always 0, meaning this branch adds nothing today. Adding the real
+      // column to the projection would change reported balances and needs its
+      // own reviewed change.
+      const ob = parseFloat((s as { openingBalance?: string | null }).openingBalance || "0") || 0;
       if (ob !== 0) addGross(s.id, "USD", ob, ob);
     }
   }
@@ -426,9 +433,15 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     .select()
     .from(factoryContainerCommissions)
     .where(eq(factoryContainerCommissions.companyId, companyId));
-  for (const cm of allCommissions as any[]) {
+  for (const cm of allCommissions) {
     const container = allContainersById.get(cm.containerId);
-    const recipientId = cm.commissionSupplierId ?? container?.supplierId ?? null;
+    // NOTE — behaviour preserved verbatim: factoryContainerCommissions has no
+    // commissionSupplierId column, so this read resolves to undefined and the
+    // recipient is always the container's supplier. Reading the container's
+    // commissionSupplierId instead would move commission balances and needs
+    // its own reviewed change.
+    const recipientId =
+      (cm as { commissionSupplierId?: number | null }).commissionSupplierId ?? container?.supplierId ?? null;
     if (!recipientId) continue;
     const cc = cm.currencyCode || "USD";
     const amt = parseFloat(cm.commissionTotal || "0") || 0;

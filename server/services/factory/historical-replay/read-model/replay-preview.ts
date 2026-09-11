@@ -46,7 +46,11 @@ export async function previewHistoricalCostReplayWithExecutor(
 
   let supplierRows: Array<{ id: number; name: string; currentRawMaterialCostPerKgUsd: string | null }> = [];
   if (supplierIds.size > 0) {
-    const supplierResult = await executor.query(
+    const supplierResult = await executor.query<{
+      id: number;
+      name: string;
+      currentRawMaterialCostPerKgUsd: string | null;
+    }>(
       `SELECT id, name,
               current_raw_material_cost_per_kg_usd AS "currentRawMaterialCostPerKgUsd"
        FROM factory_suppliers

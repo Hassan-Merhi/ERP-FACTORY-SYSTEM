@@ -9,9 +9,9 @@
 // Consolidated here to eliminate the duplication; behaviour is identical.
 // ---------------------------------------------------------------------------
 
-const _statCache = new Map();
+const _statCache = new Map<string, { data: unknown; expiresAt: number }>();
 
-export function _getCached(key: string): any | null {
+export function _getCached(key: string): unknown | null {
   const e = _statCache.get(key);
   if (!e) return null;
   if (Date.now() > e.expiresAt) {
@@ -21,7 +21,7 @@ export function _getCached(key: string): any | null {
   return e.data;
 }
 
-export function _setCached(key: string, data: any, ttlMs = 30_000): void {
+export function _setCached(key: string, data: unknown, ttlMs = 30_000): void {
   _statCache.set(key, { data, expiresAt: Date.now() + ttlMs });
   // Prune stale entries to prevent unbounded growth (> 500 entries is unusual)
   if (_statCache.size > 500) {

@@ -5,6 +5,7 @@
  * sale rows before an edited sale is rebuilt.
  */
 import type { DbTransaction } from "../../../db";
+import type { SalesItemRow, VoucherRow } from "./posEditSaleTypes";
 import { salesItems, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -20,8 +21,8 @@ const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
  */
 export async function reverseOriginalSaleInventory(
   tx: DbTransaction,
-  existingVoucher: any,
-  oldSalesItems: any[],
+  existingVoucher: VoucherRow,
+  oldSalesItems: SalesItemRow[],
   canonicalRevision?: number
 ): Promise<void> {
   for (const oldItem of oldSalesItems) {

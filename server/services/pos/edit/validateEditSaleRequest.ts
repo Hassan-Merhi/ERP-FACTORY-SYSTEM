@@ -12,15 +12,19 @@ import { db } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { locations, vouchers } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
-import type { HandlerErrorResult } from "./posEditSaleTypes";
+import type { HandlerErrorResult, VoucherRow } from "./posEditSaleTypes";
 
 type SelectConnection = Pick<typeof db, "select">;
 
 /** Validates all items have positive quantities and prices. Throws (matching the original) rather than returning an error result. */
-export function validateItemsPositive(items: any[]): void {
-  for (const item of items) {
-    const qty = parseFloat(item.quantity);
-    const price = parseFloat(item.sellingPrice);
+export function validateItemsPositive(items: unknown[]): void {
+  for (const item of items as Array<{ quantity?: unknown; sellingPrice?: unknown }>) {
+    // Items arrive straight from the JSON body; parseFloat's own coercion is
+    // preserved by stringifying exactly what the request carried. The thrown
+    // messages keep their historical raw template text so the i18n
+    // compatibility inventory still covers them.
+    const qty = parseFloat(String(item.quantity));
+    const price = parseFloat(String(item.sellingPrice));
 
     if (isNaN(qty) || qty <= 0) {
       throw new Error(`Invalid quantity: ${item.quantity}. Must be greater than 0.`);
@@ -35,7 +39,7 @@ export function validateItemsPositive(items: any[]): void {
 export async function loadAndValidateExistingVoucher(
   voucherId: number,
   companyId: number
-): Promise<{ existingVoucher: any } | { error: HandlerErrorResult }> {
+): Promise<{ existingVoucher: VoucherRow } | { error: HandlerErrorResult }> {
   const [existingVoucher] = await db
     .select()
     .from(vouchers)
@@ -61,11 +65,11 @@ export async function loadAndValidateExistingVoucher(
  */
 export function applyPosRoleRestrictions(
   userRole: string | undefined,
-  newLocationId: any,
+  newLocationId: unknown,
   existingVoucherLocationId: number | null
 ): { error: HandlerErrorResult } | { ok: true } {
   if (userRole === "POS") {
-    if (newLocationId && parseInt(newLocationId) !== existingVoucherLocationId) {
+    if (newLocationId && parseInt(String(newLocationId)) !== existingVoucherLocationId) {
       return { error: { status: 403, body: { message: "POS users cannot change the location of an existing sale" } } };
     }
   }
@@ -75,9 +79,9 @@ export function applyPosRoleRestrictions(
 /** Determines the target/old location and whether the location changed. */
 export function resolveEditLocations(
   oldLocationId: number,
-  newLocationId: any
+  newLocationId: unknown
 ): { targetLocationId: number; oldLocationId: number; locationChanged: boolean } {
-  const targetLocationId = newLocationId ? parseInt(newLocationId) : oldLocationId;
+  const targetLocationId = newLocationId ? parseInt(String(newLocationId)) : oldLocationId;
   const locationChanged = targetLocationId !== oldLocationId;
   return { targetLocationId, oldLocationId, locationChanged };
 }
