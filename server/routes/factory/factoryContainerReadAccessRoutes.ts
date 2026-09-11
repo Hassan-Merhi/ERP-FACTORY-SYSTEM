@@ -111,7 +111,7 @@ export function registerFactoryContainerReadAccessRoutes(app: Express) {
           )
         );
 
-      const paymentsByFreight = new Map<number, unknown[]>();
+      const paymentsByFreight = new Map<number, (typeof payments)[number][]>();
       for (const payment of payments) {
         const existing = paymentsByFreight.get(payment.containerFreightId) ?? [];
         existing.push(payment);
@@ -121,7 +121,7 @@ export function registerFactoryContainerReadAccessRoutes(app: Express) {
       return res.json(
         freightRows.map((freight) => {
           const freightPayments = paymentsByFreight.get(freight.id) ?? [];
-          const totalPaid = freightPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+          const totalPaid = freightPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
           const freightAmount = Number(freight.freightAmount);
           const computedStatus = totalPaid >= freightAmount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
           return { ...freight, payments: freightPayments, totalPaid, computedStatus };

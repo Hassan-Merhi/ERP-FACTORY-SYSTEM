@@ -625,7 +625,7 @@ export function registerCreditNoteRoutes(app: Express) {
       });
 
       try {
-        const changes: Record<string, any> = {};
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
         if (voucherDate && voucher.voucherDate !== voucherDate)
           changes.date = { old: voucher.voucherDate, new: voucherDate };
         if (cashAccountId !== undefined)

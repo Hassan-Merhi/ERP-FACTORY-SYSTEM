@@ -137,7 +137,7 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           .select({ id: customerOrderCharges.id, voucherId: customerOrderCharges.voucherId })
           .from(customerOrderCharges)
           .where(and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.voucherId} IS NOT NULL`));
-        const linkedVoucherIds = linkedChargeRows.map((r: any) => r.voucherId).filter(Boolean);
+        const linkedVoucherIds = linkedChargeRows.map((r) => r.voucherId).filter((v): v is number => v != null);
 
         if (linkedVoucherIds.length > 0) {
           await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, linkedVoucherIds));

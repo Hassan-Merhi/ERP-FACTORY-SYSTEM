@@ -150,7 +150,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
       const dutyStatus = reqDutyStatus || "NONE";
 
       // ── Commission computation (DB insert deferred into the transaction) ──────
-      let commissionRecord: any = null;
+      let commissionRecord: typeof factoryContainerCommissions.$inferSelect | null = null;
       const costing = await computeOffloadCosting({
         companyId,
         containerId,

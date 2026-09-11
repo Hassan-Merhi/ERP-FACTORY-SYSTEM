@@ -112,7 +112,7 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
         hideAvgCost,
       } = req.body;
 
-      const updateData: any = { updatedAt: new Date() };
+      const updateData: Partial<typeof factorySettings.$inferInsert> & { updatedAt: Date } = { updatedAt: new Date() };
       if (dashboardEnabled !== undefined) updateData.dashboardEnabled = dashboardEnabled;
       if (kpisEnabled !== undefined) updateData.kpisEnabled = kpisEnabled;
       if (profitabilityEnabled !== undefined) updateData.profitabilityEnabled = profitabilityEnabled;

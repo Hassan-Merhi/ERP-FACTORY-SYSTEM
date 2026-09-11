@@ -55,8 +55,8 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const allowed = ["unitNumber", "size", "dimensions", "locationGroup", "notes", "sortOrder", "active"];
-      const updates: any = {};
-      for (const k of allowed) if (k in req.body) updates[k] = req.body[k];
+      const updates: Partial<typeof propertyUnits.$inferInsert> = {};
+      for (const k of allowed) if (k in req.body) Object.assign(updates, { [k]: req.body[k] });
 
       const [existing] = await db
         .select()
@@ -73,7 +73,10 @@ export function registerRentalUnitsWriteRoutes(app: Express, ctx: RentalRoutesCo
       try {
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         for (const k of Object.keys(updates)) {
-          changes[k] = { old: (existing as { [key: string]: unknown })[k] ?? null, new: updates[k] };
+          changes[k] = {
+            old: (existing as Record<string, unknown>)[k] ?? null,
+            new: (updates as Record<string, unknown>)[k],
+          };
         }
         await logAudit({
           userId: req.session.userId!,

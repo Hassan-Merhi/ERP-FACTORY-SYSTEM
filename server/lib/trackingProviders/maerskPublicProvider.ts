@@ -10,7 +10,8 @@
  * Rate-limited: max 20 minutes per container (in-process).
  */
 
-import type { CarrierTrackResult, TrackingEvent } from "./types";
+import { asFirst, asRawEventLocationObject, asRecord, asArray, rawStr } from "./types";
+import type { CarrierRawEvent, CarrierTrackResult, TrackingEvent } from "./types";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 
@@ -190,29 +191,37 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
     return { ...base, noData: true, error: "empty_response" };
   }
 
-  const d = data as Record<string, any>;
+  const d = asRecord(data);
 
   // Maersk may wrap in various shapes
-  const entry = (Array.isArray(d) ? d[0] : null) ?? d.containers?.[0] ?? d.shipment ?? d.trackingData ?? d;
+  const entry = asRecord(
+    (Array.isArray(data) ? asFirst(data) : null) ?? asFirst(d.containers) ?? d.shipment ?? d.trackingData ?? d
+  );
 
   if (!entry) return { ...base, noData: true, error: "no_entry" };
 
-  const rawEvents: unknown[] = entry.events ?? entry.containers?.[0]?.events ?? entry.milestones ?? d.events ?? [];
+  const rawEvents: unknown[] =
+    (entry.events as unknown[] | undefined) ??
+    (asRecord(asFirst(entry.containers)).events as unknown[] | undefined) ??
+    (entry.milestones as unknown[] | undefined) ??
+    (d.events as unknown[] | undefined) ??
+    [];
 
-  const events: TrackingEvent[] = (Array.isArray(rawEvents) ? rawEvents : [])
-    .map(
-      (e: any): TrackingEvent => ({
+  const events: TrackingEvent[] = (Array.isArray(rawEvents) ? (rawEvents as CarrierRawEvent[]) : [])
+    .map((e): TrackingEvent => {
+      const locObj = asRawEventLocationObject(e.location);
+      return {
         date: parseDate(e.eventDateTime ?? e.eventDate ?? e.timestamp ?? e.date ?? null),
-        status: e.transportEventTypeCode ?? e.activityName ?? e.eventCode ?? e.status ?? null,
+        status: rawStr(e.transportEventTypeCode) ?? rawStr(e.activityName) ?? rawStr(e.eventCode) ?? rawStr(e.status),
         location:
-          e.location?.portName ??
-          e.location?.locationName ??
-          e.portName ??
-          e.locationName ??
+          rawStr(locObj?.portName) ??
+          rawStr(locObj?.locationName) ??
+          rawStr(e.portName) ??
+          rawStr(e.locationName) ??
           (typeof e.location === "string" ? e.location : null),
-        description: e.description ?? e.eventDescription ?? e.activityName ?? null,
-      })
-    )
+        description: rawStr(e.description) ?? rawStr(e.eventDescription) ?? rawStr(e.activityName),
+      };
+    })
     .filter((e) => e.date !== null || e.status !== null)
     .sort((a, b) => {
       if (!a.date) return 1;
@@ -224,10 +233,15 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
 
   // For portCalls, the destination is the last entry or the one flagged isDestination.
   // portCalls[0] is the ORIGIN — never use index 0 for ETA.
-  const portCalls: any[] = Array.isArray(entry.portCalls) ? entry.portCalls : [];
+  const portCalls = asArray(entry.portCalls).map(asRecord);
   const destPortCall =
     portCalls.find((p) => p.isDestination === true || p.isDestination === "true") ??
     (portCalls.length > 0 ? portCalls[portCalls.length - 1] : null);
+
+  const portOfDischarge = asRecord(entry.portOfDischarge);
+  const portCallLegs = asArray(entry.legs);
+  const lastLeg = portCallLegs.length > 0 ? asRecord(portCallLegs[portCallLegs.length - 1]) : null;
+  const firstContainer = asRecord(asFirst(entry.containers));
 
   // Destination port call fields have highest priority — they represent the
   // actual arrival ETA at the final destination, not a transit movement.
@@ -235,9 +249,9 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
     destPortCall?.eta ??
     destPortCall?.estimatedArrival ??
     destPortCall?.estimatedTimeOfArrival ??
-    entry.portOfDischarge?.eta ??
-    entry.portOfDischarge?.estimatedArrival ??
-    entry.portOfDischarge?.estimatedTimeOfArrival ??
+    portOfDischarge.eta ??
+    portOfDischarge.estimatedArrival ??
+    portOfDischarge.estimatedTimeOfArrival ??
     entry.eta ??
     entry.estimatedTimeOfArrival ??
     entry.estimatedArrival ??
@@ -245,9 +259,9 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
     entry.predictedETA ??
     entry.latestEstimatedArrival ??
     entry.scheduledArrival ??
-    entry.legs?.[entry.legs?.length - 1]?.eta ??
-    entry.legs?.[entry.legs?.length - 1]?.estimatedArrival ??
-    entry.containers?.[0]?.eta ??
+    lastLeg?.eta ??
+    lastLeg?.estimatedArrival ??
+    firstContainer.eta ??
     d.eta ??
     d.estimatedTimeOfArrival ??
     null;
@@ -282,7 +296,7 @@ function parseResponse(containerNumber: string, data: unknown, base: CarrierTrac
   return {
     ...base,
     success: true,
-    latestStatus: latest?.status ?? entry.status ?? entry.latestStatus ?? null,
+    latestStatus: latest?.status ?? rawStr(entry.status) ?? rawStr(entry.latestStatus),
     latestLocation: latest?.location ?? null,
     latestEventDate: latest?.date ?? null,
     latestDescription: latest?.description ?? null,

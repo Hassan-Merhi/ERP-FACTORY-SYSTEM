@@ -151,7 +151,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const proformaId = parseId(req.params.proformaId);
       if (proformaId === null) return res.status(400).json({ message: "Invalid id" });
       const { reference, notes } = req.body;
-      const updates: any = { updatedAt: new Date() };
+      const updates: Partial<typeof supplierProformas.$inferInsert> = { updatedAt: new Date() };
       if (reference !== undefined) updates.reference = reference;
       if (notes !== undefined) updates.notes = notes;
       const [updated] = await db
@@ -239,7 +239,7 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
         .from(supplierProformas)
         .where(and(eq(supplierProformas.id, line.proformaId), eq(supplierProformas.companyId, companyId)));
       if (!proforma) return res.status(403).json({ message: "Access denied" });
-      const updates: any = {};
+      const updates: Partial<typeof supplierProformaLines.$inferInsert> = {};
       if (req.body.barcode !== undefined) updates.barcode = req.body.barcode;
       if (req.body.itemName !== undefined) updates.itemName = req.body.itemName;
       if (req.body.qty !== undefined) updates.qty = parseInt(req.body.qty) || 0;

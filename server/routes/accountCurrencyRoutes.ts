@@ -140,7 +140,7 @@ export const normalizeAccountOpeningBalance: RequestHandler = async (req, res, n
     if (!companyId) return res.status(400).json({ message: "No company selected" });
     const baseCurrency = await getBaseCurrency(companyId);
 
-    let existing: Record<string, any> | null = null;
+    let existing: typeof ledgerAccounts.$inferSelect | typeof bankAccounts.$inferSelect | null = null;
     const idMatch = req.path.match(/\/(\d+)$/);
     if (idMatch) {
       const id = Number.parseInt(idMatch[1], 10);

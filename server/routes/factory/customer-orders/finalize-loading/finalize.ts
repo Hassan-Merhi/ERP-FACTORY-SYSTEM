@@ -351,14 +351,23 @@ export function registerOrderFinalizeRoutes(app: Express) {
       res.json({
         baleCount: availableBales.length,
         totalBalesInOrder: orderBales.length,
-        bales: availableBales.map((b: any) => ({
-          id: b.id,
-          baleReference: b.referenceNumber,
-          productName: b.productName,
-          weightKg: parseFloat(b.weightKg || "0"),
-          locationName: locationMap.get(b.erpLocationId) || "Unknown",
-          status: b.status,
-        })),
+        bales: availableBales.map(
+          (b: {
+            id: number;
+            referenceNumber: string;
+            productName: string | null;
+            weightKg: string;
+            status: string;
+            erpLocationId: number | null;
+          }) => ({
+            id: b.id,
+            baleReference: b.referenceNumber,
+            productName: b.productName,
+            weightKg: parseFloat(b.weightKg || "0"),
+            locationName: (b.erpLocationId != null ? locationMap.get(b.erpLocationId) : undefined) || "Unknown",
+            status: b.status,
+          })
+        ),
       });
     } catch (error: unknown) {
       logger.error("Error fetching finalize preview:", { error: error });

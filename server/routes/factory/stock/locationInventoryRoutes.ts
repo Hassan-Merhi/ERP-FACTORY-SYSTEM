@@ -493,7 +493,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
             totalCost += tc;
             totalSell += ts;
 
-            const rd: any = {
+            const rd: Record<string, string | number> = {
               articleCode: row.articleCode,
               productName: row.productName,
               category: row.category,
@@ -526,7 +526,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
           });
 
           ws.addRow({});
-          const td: any = {
+          const td: Record<string, string | number> = {
             articleCode: "",
             productName: `TOTAL — ${rows.length} ${label}`,
             category: "",
@@ -589,7 +589,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
 
         mainBales.forEach((b, idx) => {
           const pid = b.productId ?? 0;
-          const rd: any = {
+          const rd: Record<string, string | number> = {
             referenceNumber: b.referenceNumber,
             articleCode: b.articleCode || "",
             productName: b.productName || "",
@@ -645,7 +645,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
           const pid = b.productId ?? 0;
           const w = parseFloat(String(b.weightKg || "0"));
           gbTotalKg += w;
-          const rd: any = {
+          const rd: Record<string, string | number> = {
             referenceNumber: b.referenceNumber,
             baleCode: b.baleCode || "",
             articleCode: b.articleCode || "",
@@ -670,7 +670,7 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
         // Totals row for garbage sheet
         if (garbageBales.length > 0) {
           garbageDetailSheet.addRow({});
-          const gtd: any = {
+          const gtd: Record<string, string | number> = {
             referenceNumber: "",
             baleCode: "",
             articleCode: "",

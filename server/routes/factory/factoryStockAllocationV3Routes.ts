@@ -3,6 +3,7 @@ import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { and, eq, sql } from "drizzle-orm";
 import { sqlArray } from "../../lib/sqlArray";
+import { resultRows } from "../../lib/queryResult";
 import { db } from "../../db";
 import { factoryV3Loads, factoryV3LoadBales } from "@shared/schema";
 import { requireAuth } from "../../auth";
@@ -470,7 +471,9 @@ export function registerFactoryStockAllocationV3Routes(app: Express) {
         SELECT bale_id FROM factory_v3_load_bales
         WHERE load_id = ${id} AND removed_at IS NULL
       `);
-      const baleIds: number[] = baleRows.rows.map((r: any) => r.bale_id ?? r.baleId);
+      const baleIds: number[] = resultRows<{ bale_id?: number; baleId?: number }>(baleRows).map(
+        (r) => (r.bale_id ?? r.baleId) as number
+      );
 
       // Mark each bale as SOLD in factory_bales (same end-state as existing finalization)
       if (baleIds.length > 0) {

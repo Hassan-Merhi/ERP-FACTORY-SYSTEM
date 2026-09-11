@@ -289,7 +289,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
         .where(and(eq(factoryShippingContainerRows.id, id), eq(factoryShippingContainerRows.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Row not found" });
 
-      const patch: any = { updatedAt: new Date() };
+      const patch: Partial<typeof factoryShippingContainerRows.$inferInsert> = { updatedAt: new Date() };
       if (req.body.eta !== undefined) patch.eta = req.body.eta || null;
       if (req.body.containerArrivedDate !== undefined)
         patch.containerArrivedDate = req.body.containerArrivedDate || null;
@@ -325,7 +325,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
         .where(and(eq(factoryShippingContainerRows.id, id), eq(factoryShippingContainerRows.companyId, companyId)));
       if (!row) return res.status(404).json({ message: "Row not found" });
 
-      const patch: any = { updatedAt: new Date() };
+      const patch: Partial<typeof customerOrders.$inferInsert> = { updatedAt: new Date() };
       if (req.body.containerNumber !== undefined) patch.containerNumber = req.body.containerNumber || null;
       if (req.body.shippingCompany !== undefined) patch.shippingCompany = req.body.shippingCompany || null;
       if (req.body.destination !== undefined) patch.destination = req.body.destination || null;
@@ -361,7 +361,12 @@ export function registerShippingContainerRowRoutes(app: Express) {
       const username: string = req.session.username || req.session.email || req.session.name || "Unknown";
       const now = new Date();
 
-      const patch: any = { isDone: true, doneAt: now, doneBy: username, updatedAt: now };
+      const patch: Partial<typeof factoryShippingContainerRows.$inferInsert> = {
+        isDone: true,
+        doneAt: now,
+        doneBy: username,
+        updatedAt: now,
+      };
       if (req.body.markWhatsappSent) patch.whatsappSentAt = now;
 
       const [updated] = await db

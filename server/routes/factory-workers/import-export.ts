@@ -193,7 +193,7 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
         // Parse xlsx
         const workbook = XLSX.readFile(req.file.path);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
         fs.unlinkSync(req.file.path);
 
         // Case-insensitive column mapping
@@ -267,7 +267,7 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
         const byPassport = indexBy("passportNumber");
         const byNationalId = indexBy("nationalId");
 
-        const parseDate = (v: number): string | null => {
+        const parseDate = (v: unknown): string | null => {
           if (!v) return null;
           if (typeof v === "number") {
             // Excel serial date
@@ -284,7 +284,7 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
           const raw = rows[i];
           try {
             // Map raw keys to field names
-            const mapped: any = {};
+            const mapped: Record<string, unknown> = {};
             for (const [rawKey, rawVal] of Object.entries(raw)) {
               const key = colMap[normalize(rawKey)];
               if (key) mapped[key] = rawVal;
@@ -315,24 +315,27 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
               "weeklySalary",
               "biWeeklySalary",
             ]) {
-              if (mapped[f] !== undefined && mapped[f] !== "") mapped[f] = String(parseFloat(mapped[f]) || 0);
+              if (mapped[f] !== undefined && mapped[f] !== "") mapped[f] = String(parseFloat(String(mapped[f])) || 0);
             }
 
             // Find existing worker
             const existing =
-              byCode.get(mapped.employeeCode) ||
-              byPassport.get(mapped.passportNumber) ||
-              byNationalId.get(mapped.nationalId);
+              (typeof mapped.employeeCode === "string" ? byCode.get(mapped.employeeCode) : undefined) ||
+              (typeof mapped.passportNumber === "string" ? byPassport.get(mapped.passportNumber) : undefined) ||
+              (typeof mapped.nationalId === "string" ? byNationalId.get(mapped.nationalId) : undefined);
             if (existing) {
               await db
                 .update(factoryWorkers)
-                .set({ ...mapped, updatedAt: new Date() })
+                .set({ ...(mapped as Partial<typeof factoryWorkers.$inferInsert>), updatedAt: new Date() })
                 .where(and(eq(factoryWorkers.id, existing.id), eq(factoryWorkers.companyId, companyId)));
               updated++;
             } else {
               const [newWorker] = await db
                 .insert(factoryWorkers)
-                .values({ ...mapped, companyId })
+                .values({
+                  ...(mapped as Partial<typeof factoryWorkers.$inferInsert>),
+                  companyId,
+                } as typeof factoryWorkers.$inferInsert)
                 .returning();
               if (!newWorker.employeeCode) {
                 nextHmdNum++;

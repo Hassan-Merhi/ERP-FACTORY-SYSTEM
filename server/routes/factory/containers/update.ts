@@ -52,7 +52,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       const str = (v: any) => (v === "" || v === undefined ? null : String(v));
 
       // Build a strict whitelist — only valid factoryContainers columns
-      const updateData: Record<string, any> = {
+      const updateData: Partial<typeof factoryContainers.$inferInsert> & { updatedAt: Date } = {
         updatedAt: new Date(),
       };
 
@@ -67,7 +67,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       if (b.status !== undefined) updateData.status = String(b.status || "PENDING");
       if (b.currencyCode !== undefined) updateData.currencyCode = String(b.currencyCode || "USD");
       if (b.fxRateSource !== undefined) updateData.fxRateSource = String(b.fxRateSource || "auto");
-      if (b.fxRateToUsd !== undefined) updateData.fxRateToUsd = dec(b.fxRateToUsd);
+      if (b.fxRateToUsd !== undefined) {
+        const fx = dec(b.fxRateToUsd);
+        // fx_rate_to_usd is NOT NULL — a blank payload cannot be stored
+        if (fx !== null) updateData.fxRateToUsd = fx;
+      }
       // Freight
       if (b.freight !== undefined) updateData.freight = dec(b.freight) ?? "0";
       if (b.freightCurrencyCode !== undefined) updateData.freightCurrencyCode = str(b.freightCurrencyCode);
@@ -211,7 +215,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // treating an absent field as "zero" or "supplier".
       const effectiveFreight = updateData.freight !== undefined ? updateData.freight : existing.freight;
       const effectiveFreightPaidBy: string =
-        updateData.freightPaidBy !== undefined ? updateData.freightPaidBy : existing.freightPaidBy || "supplier";
+        typeof updateData.freightPaidBy === "string" ? updateData.freightPaidBy : existing.freightPaidBy || "supplier";
       const effectiveFreightOwnAccountId =
         updateData.freightOwnAccountId !== undefined ? updateData.freightOwnAccountId : existing.freightOwnAccountId;
       const effectiveSupplierId = updateData.supplierId !== undefined ? updateData.supplierId : existing.supplierId;
@@ -454,7 +458,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         const syncDesc = syncDescParts.join(" · ");
         const syncAmount = rateForSync * kgForSync;
         const syncFxRate = parseFloat(updated.fxRateToUsd || "1") || 1;
-        const daybookUpdateSet: Record<string, any> = { description: syncDesc };
+        const daybookUpdateSet: Partial<typeof factoryDaybookEntries.$inferInsert> = { description: syncDesc };
         if (syncAmount > 0) {
           daybookUpdateSet.amountCurrency = String(syncAmount);
           daybookUpdateSet.amountUsd = String(syncAmount * syncFxRate);

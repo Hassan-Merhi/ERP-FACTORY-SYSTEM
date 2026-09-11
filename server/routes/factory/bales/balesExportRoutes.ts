@@ -27,10 +27,7 @@ export function registerBalesExportRoutes(app: Express) {
       const { date } = req.query;
       if (!date) return res.status(400).json({ message: "date query parameter is required (YYYY-MM-DD)" });
 
-      const conditions = [
-        eq(factoryBales.companyId, companyId),
-        sql`${factoryBales.finalizedAt}::date = ${date}`,
-      ];
+      const conditions = [eq(factoryBales.companyId, companyId), sql`${factoryBales.finalizedAt}::date = ${date}`];
 
       const bales = await db
         .select()
@@ -88,7 +85,7 @@ export function registerBalesExportRoutes(app: Express) {
 
       for (const bale of bales) {
         const loc = locMap.get(bale.erpLocationId);
-        const baleRowData: any = {
+        const baleRowData: Record<string, string | number> = {
           referenceNumber: bale.referenceNumber,
           articleCode: bale.articleCode ?? "",
           productName: bale.productName ?? "",
