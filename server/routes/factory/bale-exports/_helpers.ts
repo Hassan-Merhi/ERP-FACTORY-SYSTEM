@@ -44,6 +44,17 @@ export function _wrFmtDate(dateStr: string): string {
   return `${dd}/${mm}`;
 }
 
+/**
+ * Normalizes an adjustment date column to a `YYYY-MM-DD` string.
+ *
+ * The column is a `varchar` today, so the value is normally already a string;
+ * the `Date` branch is kept because callers may hand over a driver-parsed date
+ * and `String(date)` would not produce an ISO date.
+ */
+export function _wrDateOnly(value: string | Date): string {
+  return (typeof value === "string" ? value : value.toISOString()).slice(0, 10);
+}
+
 export async function buildWeeklyReportExcelBuffer(companyId: number, period: string = "all"): Promise<Buffer> {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -105,7 +116,7 @@ export async function buildWeeklyReportExcelBuffer(companyId: number, period: st
     const isAdd = adj.type === "ADD";
     if (catBalMap.has(ck)) catBalMap.get(ck)!.currentBalance += isAdd ? kg : -kg;
     else catBalMap.set(ck, { name: getCN(adj.catId as number | null), currentBalance: isAdd ? kg : -kg });
-    const ds = typeof adj.date === "string" ? adj.date.slice(0, 10) : (adj.date as any).toISOString().slice(0, 10);
+    const ds = _wrDateOnly(adj.date);
     if (isAdd) {
       if (!stockInByDate.has(ds)) stockInByDate.set(ds, new Map());
       stockInByDate.get(ds)!.set(ck, (stockInByDate.get(ds)!.get(ck) || 0) + kg);

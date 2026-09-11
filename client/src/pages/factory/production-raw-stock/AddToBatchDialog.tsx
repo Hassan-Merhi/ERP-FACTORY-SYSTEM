@@ -5,6 +5,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from "@/lib/formatNumber";
+import type { MixBatchRow } from "./MixBatchList";
+import type { RawStockRow } from "./RawStockTable";
+
+interface AddToBatchPayload {
+  batchId: number;
+  supplierId: number;
+  weightKg: string;
+  costPerKg: string;
+}
+
+interface MutationLike<TVars> {
+  isPending: boolean;
+  mutate: (vars: TVars) => void;
+}
 
 export interface AddToBatchSource {
   supplierId: number;
@@ -18,9 +32,9 @@ interface AddToBatchDialogProps {
   onOpenChange: (open: boolean) => void;
   addToBatchSource: AddToBatchSource | null;
   setAddToBatchSource: (source: AddToBatchSource) => void;
-  mixBatches: any[];
-  rawStock: any[];
-  addToBatchMutation: any;
+  mixBatches: MixBatchRow[];
+  rawStock: RawStockRow[];
+  addToBatchMutation: MutationLike<AddToBatchPayload>;
   wrapAdminAction: (action: () => void, title: string) => void;
 }
 
@@ -50,10 +64,10 @@ export function AddToBatchDialog({
       setAddToBatchSource({
         supplierId: found.supplierId,
         supplierName: found.supplierName,
-        costPerKg: String(parseFloat(found.costPerKgUsd) || parseFloat(found.costPerKg) || 0),
+        costPerKg: String(parseFloat(found.costPerKgUsd ?? "0") || parseFloat(found.costPerKg) || 0),
         remainingKg: found.freeKg || found.remainingKg || "0",
       });
-      setAddToBatchCost(String(parseFloat(found.costPerKgUsd) || parseFloat(found.costPerKg) || 0));
+      setAddToBatchCost(String(parseFloat(found.costPerKgUsd ?? "0") || parseFloat(found.costPerKg) || 0));
     }
   };
 

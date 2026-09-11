@@ -5,6 +5,7 @@
  */
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { LucideIcon } from "lucide-react";
 
 export function KpiCard({
   icon: Icon,
@@ -14,7 +15,7 @@ export function KpiCard({
   color = "default",
   loading = false,
 }: {
-  icon: any;
+  icon: LucideIcon;
   title: string;
   value: string;
   sub?: string;

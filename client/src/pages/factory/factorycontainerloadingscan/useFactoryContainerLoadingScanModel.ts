@@ -421,7 +421,8 @@ export function useFactoryContainerLoadingScanModel() {
       setImportPreview([]);
       setImportRefNumbers([]);
       const notFoundMsgs = (data.notFound || []).map(
-        (n: any) => `${n.articleCode}: requested ${n.requestedQty}, found ${n.foundQty}`
+        (n: { articleCode: string; requestedQty: number; foundQty: number }) =>
+          `${n.articleCode}: requested ${n.requestedQty}, found ${n.foundQty}`
       );
       const notFoundRefMsgs =
         (data.notFoundRefs || []).length > 0 ? `Not found: ${(data.notFoundRefs as string[]).join(", ")}` : undefined;

@@ -220,7 +220,7 @@ export default function useFactoryPayroll() {
       for (const [wid, amt] of Object.entries(transportOverrides)) {
         numericTransportOverrides[wid] = parseFloat(amt) || 0;
       }
-      const body: any = {
+      const body: Record<string, unknown> = {
         periodStart: runForm.periodStart,
         periodEnd: runForm.periodEnd,
         bonusPerWorker: runForm.bonusPerWorker,

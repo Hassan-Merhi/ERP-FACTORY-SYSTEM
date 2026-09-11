@@ -40,7 +40,15 @@ function normalizeDateFilter(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-async function deriveBaleStockEntryAmounts(rows: any[], companyId: number): Promise<void> {
+type BaleStockDaybookRow = {
+  id: number;
+  txType: string | null;
+  metaJson: string | null;
+  amountCurrency: string | null;
+  amountUsd: string | null;
+};
+
+async function deriveBaleStockEntryAmounts(rows: BaleStockDaybookRow[], companyId: number): Promise<void> {
   const baleRows = rows.filter((row) => row.txType === "BALE_STOCK_ENTRY" && row.metaJson);
   if (baleRows.length === 0) return;
 
@@ -99,7 +107,7 @@ async function deriveBaleStockEntryAmounts(rows: any[], companyId: number): Prom
 
   const priceByProductId = new Map<number, number>();
   const priceByArticleCode = new Map<string, number>();
-  for (const product of (products)) {
+  for (const product of products) {
     const price = Number.parseFloat(product.productionPrice || "0") || 0;
     priceByProductId.set(product.id, price);
     if (product.articleCode) priceByArticleCode.set(product.articleCode, price);
@@ -365,7 +373,7 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
       const result = await pool.query(query, values);
       const total = Number(result.rows[0]?.total || 0);
       const items = Array.isArray(result.rows[0]?.items) ? result.rows[0].items : [];
-      await deriveBaleStockEntryAmounts(items, companyId);
+      await deriveBaleStockEntryAmounts(items as BaleStockDaybookRow[], companyId);
 
       const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
       res.setHeader("X-Total-Count", String(total));

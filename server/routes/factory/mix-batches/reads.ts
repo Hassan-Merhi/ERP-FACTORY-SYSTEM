@@ -29,7 +29,14 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
 
       // ── Display-blend calculation (read-only, no DB writes) ──
       const batchIds = results.map((b) => b.id);
-      let sourceRows: any[] = [];
+      type MixBatchSourceRow = {
+        mixBatchId: number;
+        sourceBatchId: number | null;
+        supplierId: number | null;
+        weightKg: string;
+        costPerKg: string;
+      };
+      let sourceRows: MixBatchSourceRow[] = [];
       if (batchIds.length > 0) {
         // Only read the fields needed to compute list display totals. The old
         // select() materialized every source column even though none of the

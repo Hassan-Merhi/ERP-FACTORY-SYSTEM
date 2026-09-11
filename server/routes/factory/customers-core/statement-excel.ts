@@ -16,6 +16,19 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 
+type StatementVoucherRow = {
+  transactionDate: string;
+  transactionType: string;
+  referenceType: string;
+  referenceNumber: string;
+  description: string | null;
+  debitAmount: string;
+  creditAmount: string;
+  referenceId?: number | null;
+  rowNote?: string | null;
+  _fromVoucher: boolean;
+};
+
 export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
   // ── Customer Statement: Excel Export ────────────────────────────────────
   app.get("/api/factory/customers/:id/statement/export-excel", requireAuth, async (req: Request, res: Response) => {
@@ -40,7 +53,7 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
         .orderBy(customerBalances.transactionDate, customerBalances.id);
 
       // Pull voucher entries (same logic as statement endpoint)
-      const voucherRowsXlsx: any[] = [];
+      const voucherRowsXlsx: StatementVoucherRow[] = [];
       const ledgerAccountIdXlsx = customer.ledgerAccountId;
       const voucherCondXlsx = ledgerAccountIdXlsx
         ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountIdXlsx} OR ${voucherEntries.customerId} = ${customerId})`

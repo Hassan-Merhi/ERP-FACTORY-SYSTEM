@@ -106,7 +106,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
             line: ScannedArticleTotalsPatch["line"];
             totals: ScannedArticleTotalsPatch["totals"];
           }
-        | { ok: false; httpStatus: number; body: any };
+        | { ok: false; httpStatus: number; body: Record<string, unknown> };
 
       const result: PickResult = await db.transaction(async (tx) => {
         // Proforma lock first, then the order row, then the bale row. Every

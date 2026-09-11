@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImagePlus } from "lucide-react";
+import type { CustomerLogoRow, CustomerOption } from "./types";
 
 export function BaleLogoPickerPopover({
   productId,
@@ -15,13 +16,13 @@ export function BaleLogoPickerPopover({
 }: {
   productId: number;
   overrideLogoId: number | null;
-  allCustomers: any[];
+  allCustomers: CustomerOption[];
   onSelect: (logoId: number | null) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [pickerCustomerId, setPickerCustomerId] = useState("none");
-  const { data: logos = [] } = useQuery<any[]>({
+  const { data: logos = [] } = useQuery<CustomerLogoRow[]>({
     queryKey: ["/api/factory/customers", pickerCustomerId, "logos"],
     queryFn: () =>
       fetch(`/api/factory/customers/${pickerCustomerId}/logos`, { credentials: "include" }).then((r) => r.json()),

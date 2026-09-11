@@ -143,7 +143,7 @@ export function registerBalesReportRoutes(app: Express) {
           ${groupByClause}
         ) AS grp`;
 
-      function buildPaginatedResponse(items: any[], total: number, totalBales = 0, totalWeight = 0) {
+      function buildPaginatedResponse(items: unknown[], total: number, totalBales = 0, totalWeight = 0) {
         const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
         return {
           items,

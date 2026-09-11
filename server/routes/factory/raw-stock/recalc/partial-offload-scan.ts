@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
 import { getRawStockRecalcPreview, applyRawStockRecalc } from "../../../../services/factory/raw-stock-recalc";
+import type { RecalcRow } from "../../../../services/factory/raw-stock-recalc/preview";
 import {
   signRepairToken,
   verifyRepairToken,
@@ -43,7 +44,7 @@ export function registerRawStockPartialOffloadScanRoutes(app: Express) {
         // Include partial receipts (received < declared) AND fully-consumed containers
         // (remaining = 0). Old records may have null totalKg/declaredKg so wasPartialReceipt
         // can be false even when the container was a short delivery — fullyUsed catches those.
-        const isTarget = (r: any) => r.wasPartialReceipt || r.fullyUsed;
+        const isTarget = (r: RecalcRow) => r.wasPartialReceipt || r.fullyUsed;
         const affected = rows.filter((r) => isTarget(r) && r.changed && !r.fxUnresolved);
         const skippedFx = rows.filter((r) => isTarget(r) && r.fxUnresolved);
         res.json({ affected, skippedFx, totalScanned: rows.length });
@@ -67,7 +68,7 @@ export function registerRawStockPartialOffloadScanRoutes(app: Express) {
         if (!confirm) {
           // ── Dry-run: identify containers, build token ──────────────────────
           const rows = await getRawStockRecalcPreview(companyId);
-          const isTarget = (r: any) => r.wasPartialReceipt || r.fullyUsed;
+          const isTarget = (r: RecalcRow) => r.wasPartialReceipt || r.fullyUsed;
           const affected = rows.filter((r) => isTarget(r) && r.changed && !r.fxUnresolved);
           if (affected.length === 0) {
             return res.json({ dryRun: true, count: 0, confirmationToken: null, affected: [] });
@@ -87,9 +88,10 @@ export function registerRawStockPartialOffloadScanRoutes(app: Express) {
         if (!confirmationToken || typeof confirmationToken !== "string") {
           return res.status(400).json({ code: "MISSING_TOKEN", message: "confirmationToken required" });
         }
-        let tokenPayload: any;
+        type PartialOffloadTokenPayload = { companyId: number; kind: string; containerIds: number[] };
+        let tokenPayload: PartialOffloadTokenPayload;
         try {
-          tokenPayload = verifyRepairToken(confirmationToken);
+          tokenPayload = verifyRepairToken<PartialOffloadTokenPayload>(confirmationToken);
         } catch (err: unknown) {
           if (err instanceof ExpiredRepairTokenError) {
             return res.status(400).json({ code: "TOKEN_EXPIRED", message: err.message });

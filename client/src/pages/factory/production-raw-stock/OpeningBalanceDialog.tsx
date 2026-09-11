@@ -12,11 +12,35 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatNumber";
 
+interface SupplierOption {
+  id: number;
+  name: string;
+}
+
+interface OpeningBalancePayload {
+  supplierName: string;
+  supplierId?: number;
+  receivedKg: string;
+  costPerKg: string;
+  currencyCode: string;
+  fxRateToUsd: string;
+  notes?: string;
+  txDate?: string;
+  commissionAmount?: string;
+  commissionCurrencyCode?: string;
+  commissionFxRateToUsd?: string;
+}
+
+interface MutationLike<TVars> {
+  isPending: boolean;
+  mutate: (vars: TVars) => void;
+}
+
 interface OpeningBalanceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  factorySuppliers: any[];
-  openingBalanceMutation: any;
+  factorySuppliers: SupplierOption[];
+  openingBalanceMutation: MutationLike<OpeningBalancePayload>;
   wrapAdminAction: (action: () => void, title: string) => void;
 }
 

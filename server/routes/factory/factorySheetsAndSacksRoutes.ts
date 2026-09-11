@@ -37,7 +37,7 @@ const LOG_COLS = `
 `;
 
 async function insertLog(
-  client: any,
+  client: import("pg").PoolClient,
   companyId: number,
   itemId: number,
   itemName: string,

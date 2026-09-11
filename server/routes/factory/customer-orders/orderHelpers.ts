@@ -74,10 +74,10 @@ export async function buildOrderExcelBuffer(
   }
 
   const helperLines = rawLines
-    .map((l: any) => ({
+    .map((l) => ({
       articleCode: l.articleCode || "",
       productName: productNameMap.get(l.articleCode) || l.baleName || l.articleCode || "",
-      qty: parseInt(l.qty || "0"),
+      qty: parseInt(String(l.qty || "0"), 10),
       wtPerBale: wtPerBaleMap.get(l.articleCode) || parseFloat(l.weightPerBale || "0"),
       totalWt: parseFloat(l.totalWeight || "0"),
       pricePerBale: parseFloat(l.pricePerBale || "0"),

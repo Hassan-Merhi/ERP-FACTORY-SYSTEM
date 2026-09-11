@@ -112,7 +112,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
 
   // ── Edit mutation ────────────────────────────────────────────────────────
   const editMutation = useMutation({
-    mutationFn: async ({ containerId, chargeId, body }: { containerId: number; chargeId: number; body: any }) => {
+    mutationFn: async ({ containerId, chargeId, body }: { containerId: number; chargeId: number; body: unknown }) => {
       const res = await factoryApiRequest(
         "PATCH",
         `/api/factory/containers/${containerId}/post-offload-charges/${chargeId}`,
@@ -170,7 +170,7 @@ export function PostOffloadDialog({ container, ledgerAccounts, onClose }: PostOf
 
   // ── Undo mutation ────────────────────────────────────────────────────────
   const undoMutation = useMutation({
-    mutationFn: async ({ containerId, chargeId, body }: { containerId: number; chargeId: number; body: any }) => {
+    mutationFn: async ({ containerId, chargeId, body }: { containerId: number; chargeId: number; body: unknown }) => {
       const res = await factoryApiRequest(
         "DELETE",
         `/api/factory/containers/${containerId}/post-offload-charges/${chargeId}`,

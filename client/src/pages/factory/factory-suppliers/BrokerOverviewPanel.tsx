@@ -20,17 +20,27 @@ import { CurrencyBalance, SupplierWithBalance } from "./factorySupplierTypes";
 import { DirectContainer } from "./AssignContainersDialog";
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING:    "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   IN_TRANSIT: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  ARRIVED:    "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  OFFLOADED:  "bg-muted text-muted-foreground",
+  ARRIVED: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  OFFLOADED: "bg-muted text-muted-foreground",
 };
+
+interface BrokerOverviewLedgerSection {
+  currencyCode: string;
+  netBalance?: string | null;
+  isBrokerPool?: boolean | null;
+}
+
+interface BrokerOverviewStatement {
+  currencyLedgers?: BrokerOverviewLedgerSection[];
+}
 
 interface BrokerOverviewPanelProps {
   parentViewSupplierId: number;
   allSuppliers: SupplierWithBalance[];
   subAccountsByParent: Record<number, SupplierWithBalance[]>;
-  brokerOverviewStatement: any;
+  brokerOverviewStatement: unknown;
   brokerOverviewLoading: boolean;
   brokerIncludeOtw: boolean;
   setBrokerIncludeOtw: (val: boolean) => void;
@@ -72,10 +82,11 @@ export function BrokerOverviewPanel({
   const children = subAccountsByParent[parentViewSupplierId] || [];
 
   // Pool balances from broker activity ledger (all currencies, net balance per currency section)
+  const brokerStatement = brokerOverviewStatement as BrokerOverviewStatement | undefined;
   const brokerOwnBalances: { currencyCode: string; balance: number; isBrokerPool: boolean }[] = (
-    brokerOverviewStatement?.currencyLedgers || []
+    brokerStatement?.currencyLedgers || []
   )
-    .map((section: any) => ({
+    .map((section) => ({
       currencyCode: section.currencyCode,
       balance: parseFloat(section.netBalance || "0"),
       isBrokerPool: !!section.isBrokerPool,
@@ -126,12 +137,7 @@ export function BrokerOverviewPanel({
           <span className="text-xs font-normal text-muted-foreground">Include OTW containers</span>
         </label>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onAddLinkedSupplier}
-          data-testid="button-add-linked-supplier"
-        >
+        <Button variant="outline" size="sm" onClick={onAddLinkedSupplier} data-testid="button-add-linked-supplier">
           <Plus className="h-3.5 w-3.5 mr-1.5" />
           Add Linked Supplier
         </Button>
@@ -303,9 +309,7 @@ export function BrokerOverviewPanel({
                       })}
                     </span>
                   )}
-                  {c.arrivalDate && (
-                    <span className="text-xs text-muted-foreground ml-auto">{c.arrivalDate}</span>
-                  )}
+                  {c.arrivalDate && <span className="text-xs text-muted-foreground ml-auto">{c.arrivalDate}</span>}
                 </div>
               ))}
             </div>
@@ -387,23 +391,24 @@ export function BrokerOverviewPanel({
                         Assign Containers
                       </Button>
                     )}
-                    {child.isActive && (() => {
-                      const childNonUsd = (child.currencyBalances || []).filter(
-                        (c: CurrencyBalance) => c.currencyCode !== "USD" && c.balance > 0.005
-                      );
-                      return childNonUsd.map((cb: CurrencyBalance) => (
-                        <Button
-                          key={cb.currencyCode}
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openFxConversionDialog(child, cb.currencyCode, cb.balance)}
-                          title={`FX Settlement: settle ${cb.currencyCode} → USD`}
-                          data-testid={`button-fx-child-${child.id}-${cb.currencyCode}`}
-                        >
-                          <ArrowRightLeft className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-                        </Button>
-                      ));
-                    })()}
+                    {child.isActive &&
+                      (() => {
+                        const childNonUsd = (child.currencyBalances || []).filter(
+                          (c: CurrencyBalance) => c.currencyCode !== "USD" && c.balance > 0.005
+                        );
+                        return childNonUsd.map((cb: CurrencyBalance) => (
+                          <Button
+                            key={cb.currencyCode}
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openFxConversionDialog(child, cb.currencyCode, cb.balance)}
+                            title={`FX Settlement: settle ${cb.currencyCode} → USD`}
+                            data-testid={`button-fx-child-${child.id}-${cb.currencyCode}`}
+                          >
+                            <ArrowRightLeft className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+                          </Button>
+                        ));
+                      })()}
                     {child.isActive && (
                       <Button
                         variant="ghost"

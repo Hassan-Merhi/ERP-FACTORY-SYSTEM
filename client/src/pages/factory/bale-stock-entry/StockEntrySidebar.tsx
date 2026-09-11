@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Location } from "@shared/schema";
+import type { CustomerOption, WorkerCategoryRow } from "./types";
 
 interface StockEntrySidebarProps {
   selectedLocationId: string;
@@ -14,10 +15,10 @@ interface StockEntrySidebarProps {
   onEntryDateChange: (val: string) => void;
   workerCategoryFilter: string;
   onWorkerCategoryFilterChange: (val: string) => void;
-  workerCategoryGroups: any[];
+  workerCategoryGroups: WorkerCategoryRow[];
   selectedCustomerId: string;
   onCustomerIdChange: (val: string) => void;
-  allCustomers: any[];
+  allCustomers: CustomerOption[];
   totalQty: number;
   totalKg: number;
   isPending: boolean;

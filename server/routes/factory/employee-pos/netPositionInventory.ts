@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
+import { factoryContainers } from "@shared/schema";
 
 /**
  * The four inventory valuations in the factory net-position report: finished
@@ -20,7 +21,7 @@ export interface NetPositionInventoryContext {
   getConfigFx: (cc: string) => number;
   configFxRates: Record<string, number>;
   supplierLockedRateMapNp: Map<number, number>;
-  allContainersF: unknown[];
+  allContainersF: (typeof factoryContainers.$inferSelect)[];
 }
 
 export interface NetPositionInventory {
@@ -282,12 +283,12 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   const otwAdd = (cc: string, amt: number) => {
     if (amt > 0 && cc) otwCurrBuckets[cc] = (otwCurrBuckets[cc] || 0) + amt;
   };
-  for (const c of ctx.allContainersF as any[]) {
-    if (!otwStatuses.has(c.status)) continue;
+  for (const c of ctx.allContainersF) {
+    if (!c.status || !otwStatuses.has(c.status)) continue;
     const containerCcy = c.currencyCode || "USD";
     const goods =
       parseFloat(c.finalPayableAmount || "0") > 0
-        ? parseFloat(c.finalPayableAmount)
+        ? parseFloat(c.finalPayableAmount || "0")
         : parseFloat(c.ratePerKg || "0") * parseFloat(c.totalKg || "0");
     otwAdd(containerCcy, goods);
     const freightCcy = c.freightCurrencyCode || containerCcy;

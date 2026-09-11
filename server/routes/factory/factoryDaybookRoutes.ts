@@ -195,7 +195,25 @@ export function registerFactoryDaybookRoutes(app: Express) {
       };
       const shouldFetchVouchers = !txType || txType in voucherTypesReversed;
 
-      let syntheticRows: any[] = [];
+      type SyntheticDaybookRow = {
+        id: number;
+        companyId: number;
+        txDate: string;
+        txType: string;
+        referenceId: number;
+        referenceTable: string;
+        description: string;
+        currencyCode: string;
+        amountCurrency: string;
+        fxRateToUsd: string;
+        amountUsd: string;
+        optional: boolean;
+        createdAt: Date;
+        createdBy: null;
+        voucherNumber: string;
+        effectiveDate: string | null;
+      };
+      let syntheticRows: SyntheticDaybookRow[] = [];
       if (shouldFetchVouchers) {
         // Build the set of voucher IDs already captured in factory_daybook_entries.
         // IMPORTANT: query ALL entries for the company (no date filter) so that when a
@@ -377,12 +395,12 @@ export function registerFactoryDaybookRoutes(app: Express) {
             orderTotals.set(o.id, parseFloat(o.grandTotal || "0"));
           }
 
-          for (const row of filteredDaybookRows as any[]) {
+          for (const row of filteredDaybookRows) {
             if (
               ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(row.txType) &&
               parseFloat(row.amountCurrency || "0") === 0
             ) {
-              const total = orderTotals.get(row.referenceId);
+              const total = row.referenceId == null ? undefined : orderTotals.get(row.referenceId);
               if (total && total > 0) {
                 row.amountCurrency = String(total.toFixed(2));
                 row.amountUsd = String(total.toFixed(2));

@@ -572,8 +572,9 @@ export default function FactoryNetPositionDetails() {
     staleTime: isToday ? 60_000 : Infinity,
     refetchOnWindowFocus: false,
     // Auto-retry when the concurrency guard fires (max 3 attempts, 6 s apart)
-    retry: (failureCount, err: any) => (err?.code === "ENDPOINT_BUSY" ? failureCount < 3 : false),
-    retryDelay: (_, err: any) => (err?.code === "ENDPOINT_BUSY" ? 6_000 : 0),
+    retry: (failureCount, err: unknown) =>
+      (err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? failureCount < 3 : false,
+    retryDelay: (_, err: unknown) => ((err as { code?: string } | null)?.code === "ENDPOINT_BUSY" ? 6_000 : 0),
   });
 
   if (isLoading) {

@@ -266,7 +266,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // Mirrors GET /api/factory/mix-batches and EditMixBatchDialog: never uses the stored
       // batch cost fields directly; supplier-source rows always use the current locked USD rate.
       const reportBatchIds = mixBatchRows.map((r) => r.id);
-      let mixSourceRows: any[] = [];
+      let mixSourceRows: (typeof factoryMixBatchSources.$inferSelect)[] = [];
       if (reportBatchIds.length > 0) {
         mixSourceRows = await db
           .select()
@@ -331,10 +331,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         };
       });
 
-      const totalMixWeightKg = correctedBatchRows.reduce(
-        (s: number, r) => s + parseFloat(r.totalWeightKg || "0"),
-        0
-      );
+      const totalMixWeightKg = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
       const totalMixCost = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalCost || "0"), 0);
 
       // Material from period batches that is still on the pressing table (not yet turned into bales).
@@ -433,7 +430,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }
 
       // Resolve supplier name for one source row
-      function resolveSupplierName(src: any): string {
+      function resolveSupplierName(src: {
+        inventorySupplierId?: number | null;
+        supplierId?: number | null;
+        containerId?: number | null;
+      }): string {
         // 1. inventorySupplierId — most authoritative
         if (src.inventorySupplierId != null) {
           return supplierNameById.get(src.inventorySupplierId) ?? `Supplier #${src.inventorySupplierId}`;
@@ -454,7 +455,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       type SupDay = { date: string; supplierName: string; totalKg: number; totalCost: number };
       const supDayMap = new Map<string, SupDay>();
 
-      for (const batch of (mixBatchRows)) {
+      for (const batch of mixBatchRows) {
         const batchDate: string = batch.batchDate
           ? String(batch.batchDate).slice(0, 10)
           : String(batch.createdAt).slice(0, 10);

@@ -22,6 +22,7 @@ import type { FactoryBaleProduct, Location, FactoryCategory } from "@shared/sche
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 
 import { StockEntryCart } from "./StockEntryCart";
+import type { WorkerCategoryRow, WorkerOption } from "./types";
 import {
   ConfirmStockEntryDialog,
   QuickCreateProductDialog,
@@ -111,11 +112,11 @@ export function StockEntryTab() {
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
 
-  const { data: workers = [] } = useQuery<any[]>({
+  const { data: workers = [] } = useQuery<WorkerOption[]>({
     queryKey: ["/api/factory/workers"],
     enabled: cart.length > 0,
   });
-  const { data: workerCategoryGroups = [] } = useQuery<any[]>({
+  const { data: workerCategoryGroups = [] } = useQuery<WorkerCategoryRow[]>({
     queryKey: ["/api/factory/worker-categories"],
     queryFn: () => fetch("/api/factory/worker-categories", { credentials: "include" }).then((r) => r.json()),
     enabled: cart.length > 0,
@@ -145,7 +146,7 @@ export function StockEntryTab() {
 
   useEffect(() => {
     if (workerCategoryGroups.length > 0 && !workerCategoryFilterManual) {
-      const pressing = workerCategoryGroups.find((c) => (c.name as string)?.toLowerCase().includes("pressing"));
+      const pressing = workerCategoryGroups.find((c) => c.name?.toLowerCase().includes("pressing"));
       if (pressing) {
         setWorkerCategoryFilter(String(pressing.id));
       }
@@ -158,7 +159,7 @@ export function StockEntryTab() {
       : (() => {
           const cat = workerCategoryGroups.find((c) => String(c.id) === workerCategoryFilter);
           if (!cat) return workers.filter((w) => w.active !== false);
-          const ids = Array.isArray(cat.workerIds) ? (cat.workerIds as number[]) : [];
+          const ids = Array.isArray(cat.workerIds) ? cat.workerIds : [];
           return workers.filter((w) => w.active !== false && ids.includes(w.id));
         })();
 
@@ -530,7 +531,7 @@ export function StockEntryTab() {
                     onRestore={() => {
                       const draftData = cartDraft?.data as
                         | {
-                            cart?: any[];
+                            cart?: CartItem[];
                             productionPositionByProduct?: Record<number, number | null>;
                             selectedLocationId?: string;
                             entryDate?: string;
@@ -549,7 +550,7 @@ export function StockEntryTab() {
                               product: p,
                             };
                           })
-                          .filter((i) => i.product);
+                          .filter((i): i is CartItem => !!i.product);
                         setCart(restored);
                       }
                       if (draftData?.productionPositionByProduct) {

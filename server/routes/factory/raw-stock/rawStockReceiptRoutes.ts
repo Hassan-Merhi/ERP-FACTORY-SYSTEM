@@ -432,21 +432,22 @@ export function registerRawStockReceiptRoutes(app: Express) {
       // never remaining-value-basis or received-weighted derivations. This keeps
       // the Raw Materials table, category totals, KPIs, and the mix-batch dialog
       // (which reads this same endpoint) numerically consistent by construction.
-      for (const row of aggregated as any[]) {
-        if (row._isLockedRateSupplier) {
-          const freeKg = parseFloat(row.freeKg) || 0;
-          const value = freeKg * (row._lockedRateUsd || 0);
-          row.valueRemaining = value.toFixed(2);
-          row.valueRemainingUsd = value.toFixed(2);
-        }
+      const responseRows = aggregated.map((row) => {
+        const freeKg = parseFloat(row.freeKg) || 0;
+        const lockedValue = (freeKg * (row._lockedRateUsd || 0)).toFixed(2);
         // Total consumed value at each source's own recorded (locked-at-creation) rate —
         // NOT a blended-rate × total-used-kg guess. See usedValueRows above.
-        row.usedValueUsd = (row.supplierId ? usedValueBySupplierId.get(row.supplierId) || 0 : 0).toFixed(2);
-        delete row._isLockedRateSupplier;
-        delete row._lockedRateUsd;
-      }
+        const usedValueUsd = (row.supplierId ? usedValueBySupplierId.get(row.supplierId) || 0 : 0).toFixed(2);
+        const { _isLockedRateSupplier: _locked, _lockedRateUsd: _rate, ...rest } = row;
+        return {
+          ...rest,
+          valueRemaining: _locked ? lockedValue : row.valueRemaining,
+          valueRemainingUsd: _locked ? lockedValue : row.valueRemainingUsd,
+          usedValueUsd,
+        };
+      });
 
-      res.json(aggregated);
+      res.json(responseRows);
     } catch (error: unknown) {
       logger.error("Error fetching factory raw stock:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

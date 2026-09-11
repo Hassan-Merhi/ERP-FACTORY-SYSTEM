@@ -99,12 +99,12 @@ export function registerOrderPdfRoutes(app: Express) {
         R = PAGE_W - 40; // left / right margin x
       const USABLE = R - L; // 515
 
-      const fmtN = (val: any) => {
-        const n = parseFloat(val);
-        if (isNaN(n)) return val ?? "";
+      const fmtN = (val: unknown) => {
+        const n = parseFloat(String(val));
+        if (isNaN(n)) return val == null ? "" : String(val);
         return n % 1 === 0 ? n.toLocaleString("en-US") : n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       };
-      const fmtM = (val: any) => `$${fmtN(val)}`;
+      const fmtM = (val: unknown) => `$${fmtN(val)}`;
 
       // ── Logo (centred, fixed height so title lands below it) ─────────────────
       const logoPath = path.join(process.cwd(), "server", "hmd-logo.png");
@@ -192,10 +192,14 @@ export function registerOrderPdfRoutes(app: Express) {
         totalAmt = 0;
 
       for (let idx = 0; idx < sortedLines.length; idx++) {
-        const line = sortedLines[idx] as unknown as { qty: string } & { weightPerBale: string } & {
+        const line = sortedLines[idx] as unknown as {
+          qty: string;
+          weightPerBale: string;
           totalWeight: string;
-        } & { pricePerBale: string } & { totalPrice: string } & { articleCode: string } & { baleName: unknown } & {
-          articleCode: unknown;
+          pricePerBale: string;
+          totalPrice: string;
+          articleCode: string;
+          baleName: string;
         };
         const qty = parseFloat(line.qty || "0");
         const wtBale = parseFloat(line.weightPerBale || "0");
@@ -215,7 +219,7 @@ export function registerOrderPdfRoutes(app: Express) {
           doc.fillColor("#000000");
         }
         const productName = invNameMap.get(line.articleCode) || line.baleName || "";
-        const vals = hideSellingPdf
+        const vals: string[] = hideSellingPdf
           ? [String(idx + 1), line.articleCode || "", productName, fmtN(qty), fmtN(wtBale), fmtN(totWt)]
           : [
               String(idx + 1),

@@ -15,6 +15,77 @@ import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
 
+// Raw-row contracts for the SELECT * queries in this route. The columns are
+// snake_case because they come straight from PostgreSQL, and every field is
+// optional-or-nullable because the query is deliberately schema-drift tolerant.
+type RawOrderRow = {
+  id: number;
+  company_id: number;
+  customer_id: number | null;
+  invoice_number: string | null;
+  order_date: string | null;
+  proforma_id_used: number | null;
+  status: string | null;
+  subtotal_bales: string | null;
+  freight_amount: string | null;
+  other_charges_total: string | null;
+  grand_total: string | null;
+  total_qty_bales: number | null;
+  container_number: string | null;
+  shipping_company: string | null;
+  container_notes: string | null;
+  destination: string | null;
+  verified_by_user_id: number | null;
+  verified_at: Date | null;
+  loading_started_at: Date | null;
+  loading_finalized_at: Date | null;
+  location_id: number | null;
+  deleted_at: Date | null;
+  created_at: Date | null;
+  updated_at: Date | null;
+};
+
+type RawOrderLineRow = {
+  qty?: number | null;
+  article_code?: string | null;
+  articleCode?: string | null;
+  total_weight?: string | number | null;
+  totalWeight?: string | number | null;
+  total_price?: string | number | null;
+  totalPrice?: string | number | null;
+  bale_name?: string | null;
+  baleName?: string | null;
+};
+
+type RawProformaLineRow = {
+  article_code?: string | null;
+  articleCode?: string | null;
+  pricing_mode?: string | null;
+  pricingMode?: string | null;
+  price_per_kg?: string | number | null;
+  pricePerKg?: string | number | null;
+  product_name?: string | null;
+  productName?: string | null;
+  quantity?: number | null;
+  price_per_bale?: string | null;
+  pricePerBale?: string | null;
+};
+
+type OrderComparisonRow = {
+  articleCode: string;
+  productName: string;
+  loadedQty: number;
+  expectedQty: number;
+  diff: number;
+  totalWeight: number;
+  totalPrice: number;
+  pricePerBale: string;
+  inProforma: boolean;
+  status: string;
+  stockQty: number;
+  stockTotalWeight: number;
+};
+
 export function registerOrderVerificationSummaryRoutes(app: Express) {
   app.get("/api/factory/customer-orders/:id/verification-summary", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -36,7 +107,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
       const rawOrderResult = await db.execute(
         sql`SELECT * FROM customer_orders WHERE id = ${orderId} AND company_id = ${companyId} LIMIT 1`
       );
-      const rawOrderRows: any[] = resultRows(rawOrderResult);
+      const rawOrderRows = resultRows<RawOrderRow>(rawOrderResult);
       if (!rawOrderRows.length) return res.status(404).json({ message: "Order not found" });
       const orderRow = rawOrderRows[0];
       // Normalise the raw row into a typed object with JS-side defaults.
@@ -101,7 +172,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
 
       if (orderBales.length === 0 && order.totalQtyBales > 0) {
         const rawLinesResult = await db.execute(sql`SELECT * FROM customer_order_lines WHERE order_id = ${orderId}`);
-        const linesRows: any[] = resultRows(rawLinesResult);
+        const linesRows = resultRows<RawOrderLineRow>(rawLinesResult);
         const hasLines = linesRows.some((r) => (r.qty ?? 0) > 0);
 
         if (hasLines) {
@@ -177,7 +248,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
         loadedByArticle[code].totalPrice += parseFloat(priceUsed) || 0;
       }
 
-      let proformaLines: any[] = [];
+      let proformaLines: RawProformaLineRow[] = [];
       const proformaByArticle: Record<
         string,
         {
@@ -196,7 +267,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
         const rawProformaResult = await db.execute(
           sql`SELECT * FROM customer_proforma_lines WHERE proforma_id = ${order.proformaIdUsed}`
         );
-        proformaLines = resultRows(rawProformaResult);
+        proformaLines = resultRows<RawProformaLineRow>(rawProformaResult);
 
         for (const pl of proformaLines) {
           const articleCode = pl.article_code ?? pl.articleCode ?? "";
@@ -317,7 +388,7 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
       }
 
       const allArticles = new Set([...Object.keys(loadedByArticle), ...Object.keys(proformaByArticle)]);
-      const comparison: any[] = [];
+      const comparison: OrderComparisonRow[] = [];
 
       for (const code of allArticles) {
         const loaded = loadedByArticle[code] || null;

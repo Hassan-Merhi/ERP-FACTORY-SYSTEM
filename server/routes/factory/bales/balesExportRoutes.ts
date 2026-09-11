@@ -39,9 +39,9 @@ export function registerBalesExportRoutes(app: Express) {
         return res.status(404).json({ message: `No bales found for date ${date}` });
       }
 
-      const locIds = [...new Set(bales.map((b: any) => b.erpLocationId).filter(Boolean))];
+      const locIds = [...new Set(bales.map((b) => b.erpLocationId).filter((id): id is number => id !== null))];
       const locs = locIds.length > 0 ? await db.select().from(locations).where(inArray(locations.id, locIds)) : [];
-      const locMap = new Map(locs.map((l: any) => [l.id, l]));
+      const locMap = new Map(locs.map((l) => [l.id, l] as const));
 
       const [fCfgBale] = await db
         .select({ hideAvgCost: factorySettings.hideAvgCost })
@@ -84,7 +84,7 @@ export function registerBalesExportRoutes(app: Express) {
       });
 
       for (const bale of bales) {
-        const loc = locMap.get(bale.erpLocationId);
+        const loc = bale.erpLocationId === null ? undefined : locMap.get(bale.erpLocationId);
         const baleRowData: Record<string, string | number> = {
           referenceNumber: bale.referenceNumber,
           articleCode: bale.articleCode ?? "",
