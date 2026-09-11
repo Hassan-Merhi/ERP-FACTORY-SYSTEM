@@ -1,0 +1,87 @@
+name: Temporary Inventory Wave Formatter
+
+on:
+  push:
+    branches:
+      - fix/inventory-valuation-wave1-regression-audit
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-inventory-wave-formatter
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/inventory-valuation-wave1-regression-audit
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format inventory valuation wave files
+        run: >-
+          npx prettier --write
+          scripts/audit-write-evidence.mjs
+          scripts/inventory-valuation-wave5-dry-run.ts
+          server/inventoryHelper.ts
+          server/inventoryValuationWave6RepairBridge.mjs
+          server/routes/helpers/inventoryHistoryHelpers.ts
+          server/routes/stock-summary-location/monthly-summary.ts
+          server/services/inventory/exactValueInventory.ts
+          server/services/inventory/inventoryValuationRepairPlan.ts
+          server/services/inventory/inventoryValuationSnapshot.ts
+          server/services/pos/deductSaleInventory.ts
+          server/services/pos/edit/rebuildSaleItems.ts
+          server/services/pos/edit/reverseOriginalSaleInventory.ts
+          server/storage/stock-ops/transfers-update.ts
+          server/workerBonusExpenseRepairBridge.mjs
+          tests/inventory-valuation-regressions.test.ts
+          tests/inventory-valuation-wave3-stock-edits.test.ts
+          tests/inventory-valuation-wave4-monthly-summary.test.ts
+          tests/inventory-valuation-wave5-dry-run.test.ts
+          tests/inventory-valuation-wave6-repair.test.ts
+
+      - name: Commit formatting when needed
+        shell: bash
+        run: |
+          git add -- \
+            scripts/audit-write-evidence.mjs \
+            scripts/inventory-valuation-wave5-dry-run.ts \
+            server/inventoryHelper.ts \
+            server/inventoryValuationWave6RepairBridge.mjs \
+            server/routes/helpers/inventoryHistoryHelpers.ts \
+            server/routes/stock-summary-location/monthly-summary.ts \
+            server/services/inventory/exactValueInventory.ts \
+            server/services/inventory/inventoryValuationRepairPlan.ts \
+            server/services/inventory/inventoryValuationSnapshot.ts \
+            server/services/pos/deductSaleInventory.ts \
+            server/services/pos/edit/rebuildSaleItems.ts \
+            server/services/pos/edit/reverseOriginalSaleInventory.ts \
+            server/storage/stock-ops/transfers-update.ts \
+            server/workerBonusExpenseRepairBridge.mjs \
+            tests/inventory-valuation-regressions.test.ts \
+            tests/inventory-valuation-wave3-stock-edits.test.ts \
+            tests/inventory-valuation-wave4-monthly-summary.test.ts \
+            tests/inventory-valuation-wave5-dry-run.test.ts \
+            tests/inventory-valuation-wave6-repair.test.ts
+          if git diff --cached --quiet; then
+            echo "Inventory valuation files already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: format inventory valuation wave"
+          git push origin HEAD:fix/inventory-valuation-wave1-regression-audit
