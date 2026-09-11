@@ -32,6 +32,8 @@ describe("inventory valuation source contracts", () => {
 
     // Wave 2/3 will replace this with an exact reversal primitive. The old path
     // derives reversal value from current inventory and therefore changes cost basis.
-    expect(adjustmentSource).not.toContain("weightedAverageInventoryCost(currentQty, currentRate, absoluteQuantity, rate)");
+    expect(adjustmentSource).not.toContain(
+      "weightedAverageInventoryCost(currentQty, currentRate, absoluteQuantity, rate)"
+    );
   });
 });
