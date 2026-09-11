@@ -102,7 +102,7 @@ describe("ERP Daybook pagination route", () => {
     );
   });
 
-  it("returns deterministic keyset chunks without deep OFFSET paging", async () => {
+  it("returns deterministic keyset chunks and reuses the first-chunk total", async () => {
     process.env.CONTINUOUS_CURSOR_SECRET = "daybook-wave-two-secret-1234";
     harness.poolQuery.mockResolvedValueOnce({
       rows: [
@@ -138,6 +138,7 @@ describe("ERP Daybook pagination route", () => {
     expect(firstPayload.nextCursor).toEqual(expect.any(String));
     const firstSql = String(harness.poolQuery.mock.calls[0][0]);
     expect(firstSql).toContain("chunk_rows AS");
+    expect(firstSql).toContain("COUNT(*)::int FROM combined");
     expect(firstSql).toContain("ORDER BY sort_date ASC, type_rank ASC, sort_id ASC");
 
     harness.poolQuery.mockResolvedValueOnce({
@@ -156,7 +157,8 @@ describe("ERP Daybook pagination route", () => {
     expect(secondSql).toContain("sort_date >");
     expect(secondSql).toContain("type_rank >");
     expect(secondSql).toContain("sort_id >");
-    expect(secondValues).toEqual(expect.arrayContaining(["2026-08-11", 2, 11]));
+    expect(secondSql).not.toContain("COUNT(*)::int FROM combined");
+    expect(secondValues).toEqual(expect.arrayContaining(["2026-08-11", 2, 11, 3]));
     expect(secondRes.json).toHaveBeenCalledWith(
       expect.objectContaining({ total: 3, hasMore: false, nextCursor: null })
     );
