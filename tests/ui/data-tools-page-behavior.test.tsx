@@ -150,7 +150,9 @@ describe("ERP data tools behavior", () => {
     await waitFor(() =>
       expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/sales-report/recalculate-costs", {})
     );
-    expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/sales-report"] });
+    await waitFor(() =>
+      expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/sales-report"] })
+    );
     expect(harness.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Cost Prices Updated", description: "Updated 4 of 5 sales items" })
     );
