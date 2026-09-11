@@ -9,6 +9,7 @@ import FactoryAdvancesTab from "@/pages/factory/FactoryAdvancesTab";
 import FactoryWorkerBonusesTab from "@/pages/factory/FactoryWorkerBonusesTab";
 import FactoryWorkerAttendanceReport from "@/pages/factory/FactoryWorkerAttendanceReport";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type TabValue = "workers" | "payroll" | "attendance" | "report" | "advances" | "bonuses";
 
@@ -37,7 +38,7 @@ export default function FactoryWorkersHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const visibleOptions = ALL_TAB_OPTIONS.filter(({ settingKey, hiddenKey }) => {

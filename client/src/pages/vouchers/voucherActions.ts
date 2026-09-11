@@ -1,10 +1,25 @@
 import { format } from "date-fns";
 import { utils, writeFile } from "@/lib/excelHelper";
 
+type VoucherExportEntry = {
+  accountId: number;
+  amount: string;
+  accountName?: string;
+  accountType?: string;
+};
+
+type VoucherExportForm = {
+  voucherDate?: Date;
+  entries: VoucherExportEntry[];
+  paymentAccountName?: string;
+  notes?: string;
+  optional?: boolean;
+};
+
 interface ExportParams {
-  formData: any;
+  formData: VoucherExportForm;
   activeTab: string;
-  toast: (opts: any) => void;
+  toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
   detailed: boolean;
 }
 
@@ -13,7 +28,7 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
   const voucherDate = formData.voucherDate
     ? format(formData.voucherDate, "yyyy-MM-dd")
     : format(new Date(), "yyyy-MM-dd");
-  const validEntries = formData.entries.filter((e: any) => e.accountId > 0 && parseFloat(e.amount) > 0);
+  const validEntries = formData.entries.filter((e) => e.accountId > 0 && parseFloat(e.amount) > 0);
 
   if (validEntries.length === 0) {
     toast({
@@ -24,10 +39,10 @@ export async function exportVoucherHelper({ formData, activeTab, toast, detailed
     return;
   }
 
-  const total = validEntries.reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0);
+  const total = validEntries.reduce((sum: number, e) => sum + (parseFloat(e.amount) || 0), 0);
 
   if (detailed) {
-    const exportData = validEntries.map((entry: any) => ({
+    const exportData = validEntries.map((entry) => ({
       "Voucher Type": voucherType,
       Date: voucherDate,
       "Pay From/Receive In": formData.paymentAccountName || "",

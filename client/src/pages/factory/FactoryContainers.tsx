@@ -40,6 +40,7 @@ import {
   ReverseOffloadDialog,
   downloadContainerTemplate,
 } from "./factory-containers/ContainerDialogs";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export default function FactoryContainers() {
   const { selectedCompany } = useCompany();
@@ -74,7 +75,7 @@ export default function FactoryContainers() {
 
   const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] });
   const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: ["/api/factory/suppliers"] });
-  const { data: ledgerAccounts = [] } = useQuery<any[]>({
+  const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/ledger-accounts?includeHidden=true"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,

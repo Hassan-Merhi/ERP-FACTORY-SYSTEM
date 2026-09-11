@@ -11,7 +11,7 @@ interface PosKeyboardNavigationParams {
   setRows: React.Dispatch<React.SetStateAction<SaleRow[]>>;
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
   focusCell: (row: number, col: number) => void;
-  selectItem: (item: unknown, targetRowOverride?: number) => void;
+  selectItem: (item: InventoryItem, targetRowOverride?: number) => void;
 }
 
 /**
@@ -32,141 +32,148 @@ export function usePosKeyboardNavigation({
   selectItem,
 }: PosKeyboardNavigationParams) {
   // ISSUE 9: Real keyboard navigation — returns a handler bound to current searchTerm
-  const makeHandleKeyDown =
-    (searchTerm: string) =>
-    (e: React.KeyboardEvent, rowIndex: number, colIndex: number) => {
-      const maxCol = POS_COLUMNS.length - 4; // Exclude plBale, totalPL, delete
-      const isItemNameField = POS_COLUMNS[colIndex]?.key === "itemName";
-      const filteredItems = getFilteredInventory(inventory, searchTerm);
+  const makeHandleKeyDown = (searchTerm: string) => (e: React.KeyboardEvent, rowIndex: number, colIndex: number) => {
+    const maxCol = POS_COLUMNS.length - 4; // Exclude plBale, totalPL, delete
+    const isItemNameField = POS_COLUMNS[colIndex]?.key === "itemName";
+    const filteredItems = getFilteredInventory(inventory, searchTerm);
 
-      if (isItemNameField && filteredItems.length > 0) {
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          setHighlightedIndex((prev) => Math.min(prev + 1, filteredItems.length - 1));
-          return;
-        }
-        if (e.key === "ArrowUp" && highlightedIndex > 0) {
-          e.preventDefault();
-          setHighlightedIndex((prev) => Math.max(prev - 1, 0));
-          return;
-        }
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
-          return;
-        }
+    if (isItemNameField && filteredItems.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.min(prev + 1, filteredItems.length - 1));
+        return;
       }
+      if (e.key === "ArrowUp" && highlightedIndex > 0) {
+        e.preventDefault();
+        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
+        return;
+      }
+    }
 
-      const currentRow = rows[rowIndex];
-      const hasUnselectedItem = isItemNameField && currentRow?.itemName?.trim() && !currentRow?.stockItemId;
+    const currentRow = rows[rowIndex];
+    const hasUnselectedItem = isItemNameField && currentRow?.itemName?.trim() && !currentRow?.stockItemId;
 
-      switch (e.key) {
-        case "ArrowUp":
-          if (!isItemNameField || filteredItems.length === 0) {
-            if (hasUnselectedItem) {
-              e.preventDefault();
-              toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
-              return;
-            }
-            e.preventDefault();
-            if (rowIndex > 0) {
-              setSelectedCell({ row: rowIndex - 1, col: colIndex });
-              focusCell(rowIndex - 1, colIndex);
-            }
-          }
-          break;
-        case "ArrowDown":
-          if (!isItemNameField || filteredItems.length === 0) {
-            if (hasUnselectedItem) {
-              e.preventDefault();
-              toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
-              return;
-            }
-            e.preventDefault();
-            if (rowIndex < rows.length - 1) {
-              setSelectedCell({ row: rowIndex + 1, col: colIndex });
-              focusCell(rowIndex + 1, colIndex);
-            }
-          }
-          break;
-        case "Enter":
-          if (!isItemNameField || filteredItems.length === 0) {
-            if (hasUnselectedItem) {
-              e.preventDefault();
-              toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
-              return;
-            }
-            e.preventDefault();
-            if (POS_COLUMNS[colIndex]?.key === "quantity") {
-              setSelectedCell({ row: rowIndex, col: colIndex + 1 });
-              focusCell(rowIndex, colIndex + 1);
-            } else if (POS_COLUMNS[colIndex]?.key === "rate") {
-              if (!rows[rowIndex + 1]) {
-                setRows((prev) => [
-                  ...prev,
-                  { id: String(Date.now()), itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 },
-                ]);
-                setTimeout(() => focusCell(rows.length, 0), 50);
-              } else {
-                setSelectedCell({ row: rowIndex + 1, col: 0 });
-                focusCell(rowIndex + 1, 0);
-              }
-            } else if (rowIndex < rows.length - 1) {
-              setSelectedCell({ row: rowIndex + 1, col: colIndex });
-              focusCell(rowIndex + 1, colIndex);
-            }
-          }
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          if (colIndex > 0) {
-            setSelectedCell({ row: rowIndex, col: colIndex - 1 });
-            focusCell(rowIndex, colIndex - 1);
-          }
-          break;
-        case "ArrowRight":
+    switch (e.key) {
+      case "ArrowUp":
+        if (!isItemNameField || filteredItems.length === 0) {
           if (hasUnselectedItem) {
             e.preventDefault();
-            toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
+            toast({
+              title: "Invalid item",
+              description: "Please select an item from the list.",
+              variant: "destructive",
+            });
             return;
           }
           e.preventDefault();
-          if (colIndex < maxCol) {
-            setSelectedCell({ row: rowIndex, col: colIndex + 1 });
-            focusCell(rowIndex, colIndex + 1);
+          if (rowIndex > 0) {
+            setSelectedCell({ row: rowIndex - 1, col: colIndex });
+            focusCell(rowIndex - 1, colIndex);
           }
-          break;
-        case "Tab":
-          if (isItemNameField && activeRow === rowIndex && filteredItems.length > 0 && !e.shiftKey) {
-            e.preventDefault();
-            if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex]);
-            return;
-          }
+        }
+        break;
+      case "ArrowDown":
+        if (!isItemNameField || filteredItems.length === 0) {
           if (hasUnselectedItem) {
             e.preventDefault();
-            toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
+            toast({
+              title: "Invalid item",
+              description: "Please select an item from the list.",
+              variant: "destructive",
+            });
             return;
           }
-          if (!e.shiftKey && colIndex < maxCol) {
+          e.preventDefault();
+          if (rowIndex < rows.length - 1) {
+            setSelectedCell({ row: rowIndex + 1, col: colIndex });
+            focusCell(rowIndex + 1, colIndex);
+          }
+        }
+        break;
+      case "Enter":
+        if (!isItemNameField || filteredItems.length === 0) {
+          if (hasUnselectedItem) {
             e.preventDefault();
+            toast({
+              title: "Invalid item",
+              description: "Please select an item from the list.",
+              variant: "destructive",
+            });
+            return;
+          }
+          e.preventDefault();
+          if (POS_COLUMNS[colIndex]?.key === "quantity") {
             setSelectedCell({ row: rowIndex, col: colIndex + 1 });
             focusCell(rowIndex, colIndex + 1);
+          } else if (POS_COLUMNS[colIndex]?.key === "rate") {
+            if (!rows[rowIndex + 1]) {
+              setRows((prev) => [
+                ...prev,
+                { id: String(Date.now()), itemName: "", quantity: 0, rate: 0, rateUSD: 0, amount: 0 },
+              ]);
+              setTimeout(() => focusCell(rows.length, 0), 50);
+            } else {
+              setSelectedCell({ row: rowIndex + 1, col: 0 });
+              focusCell(rowIndex + 1, 0);
+            }
+          } else if (rowIndex < rows.length - 1) {
+            setSelectedCell({ row: rowIndex + 1, col: colIndex });
+            focusCell(rowIndex + 1, colIndex);
           }
-          break;
-        case "Backspace": {
-          const inputVal = (e.target as HTMLInputElement).value;
-          if (
-            inputVal === "" &&
-            (POS_COLUMNS[colIndex]?.key === "quantity" || POS_COLUMNS[colIndex]?.key === "rate")
-          ) {
-            e.preventDefault();
-            setSelectedCell({ row: rowIndex, col: colIndex - 1 });
-            focusCell(rowIndex, colIndex - 1);
-          }
-          break;
         }
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        if (colIndex > 0) {
+          setSelectedCell({ row: rowIndex, col: colIndex - 1 });
+          focusCell(rowIndex, colIndex - 1);
+        }
+        break;
+      case "ArrowRight":
+        if (hasUnselectedItem) {
+          e.preventDefault();
+          toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
+          return;
+        }
+        e.preventDefault();
+        if (colIndex < maxCol) {
+          setSelectedCell({ row: rowIndex, col: colIndex + 1 });
+          focusCell(rowIndex, colIndex + 1);
+        }
+        break;
+      case "Tab":
+        if (isItemNameField && activeRow === rowIndex && filteredItems.length > 0 && !e.shiftKey) {
+          e.preventDefault();
+          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex]);
+          return;
+        }
+        if (hasUnselectedItem) {
+          e.preventDefault();
+          toast({ title: "Invalid item", description: "Please select an item from the list.", variant: "destructive" });
+          return;
+        }
+        if (!e.shiftKey && colIndex < maxCol) {
+          e.preventDefault();
+          setSelectedCell({ row: rowIndex, col: colIndex + 1 });
+          focusCell(rowIndex, colIndex + 1);
+        }
+        break;
+      case "Backspace": {
+        const inputVal = (e.target as HTMLInputElement).value;
+        if (inputVal === "" && (POS_COLUMNS[colIndex]?.key === "quantity" || POS_COLUMNS[colIndex]?.key === "rate")) {
+          e.preventDefault();
+          setSelectedCell({ row: rowIndex, col: colIndex - 1 });
+          focusCell(rowIndex, colIndex - 1);
+        }
+        break;
       }
-    };
+    }
+  };
 
   return { makeHandleKeyDown };
 }

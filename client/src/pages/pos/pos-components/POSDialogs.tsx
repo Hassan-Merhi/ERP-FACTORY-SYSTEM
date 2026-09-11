@@ -9,35 +9,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Trash2, Check, Send, Plus } from "lucide-react";
 
+import type { Location, PosDraftSummary, PosStockPrintRow } from "./posTypes";
+
 export interface POSDialogsProps {
   zeroStockAlert: boolean;
   setZeroStockAlert: (open: boolean) => void;
   zeroStockItem: string;
   showDraftDialog: boolean;
   setShowDraftDialog: (open: boolean) => void;
-  drafts: any[];
+  drafts: PosDraftSummary[];
   handleLoadDraft: (id: number) => void;
-  deleteDraftMutation: any;
+  deleteDraftMutation: { isPending?: boolean; mutate: (id: number) => void };
   showPrintDialog: boolean;
   setShowPrintDialog: (open: boolean) => void;
   editVoucherId?: string;
   handleNewSale: () => void;
   navigate: (path: string) => void;
-  activeLocation: any;
+  activeLocation: Location | null;
   invoiceWaStatus: string;
   handleSendInvoiceWhatsApp: () => void;
   sendingInvoiceWhatsApp: boolean;
   stockWaStatus: string;
   handleSendStockWhatsApp: () => void;
   sendingWhatsApp: boolean;
-  handlePrint: any;
+  handlePrint: () => void;
   isCreditSale: boolean;
   showStockPrompt: boolean;
   setShowStockPrompt: (open: boolean) => void;
   stockInventoryLoading: boolean;
   handleStockPrint: () => void;
   handleSendWhatsAppReport: () => void;
-  stockInventory: any[];
+  stockInventory: PosStockPrintRow[];
   stockPrintRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -112,9 +114,9 @@ export function POSDialogs({
               >
                 <div className="flex-1 min-w-0 mr-4 cursor-pointer" onClick={() => handleLoadDraft(draft.id)}>
                   {(() => {
-                    const count = parseInt(draft.item_count ?? draft.itemCount ?? 0);
-                    const totalQty = parseFloat(draft.total_qty ?? draft.totalQty ?? 0);
-                    const totalAmount = parseFloat(draft.total_amount ?? draft.totalAmount ?? 0);
+                    const count = parseInt(String(draft.item_count ?? draft.itemCount ?? 0), 10);
+                    const totalQty = parseFloat(String(draft.total_qty ?? draft.totalQty ?? 0));
+                    const totalAmount = parseFloat(String(draft.total_amount ?? draft.totalAmount ?? 0));
                     return (
                       <>
                         <p className="text-sm font-medium">
@@ -133,7 +135,7 @@ export function POSDialogs({
                         )}
                         <p className="text-xs text-muted-foreground">
                           {new Date(
-                            draft.updated_at || draft.updatedAt || draft.created_at || draft.createdAt
+                            String(draft.updated_at || draft.updatedAt || draft.created_at || draft.createdAt || "")
                           ).toLocaleString()}
                         </p>
                       </>
@@ -417,7 +419,7 @@ export function POSDialogs({
                   TOTAL UNITS:
                 </td>
                 <td className="py-2 text-right font-bold">
-                  {stockInventory.reduce((sum, item) => sum + (parseFloat(item.stock) || 0), 0)}
+                  {stockInventory.reduce((sum, item) => sum + (Number(item.stock) || 0), 0)}
                 </td>
               </tr>
             </tfoot>

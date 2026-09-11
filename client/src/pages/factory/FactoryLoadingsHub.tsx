@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import FactoryContainerLoadingScan from "./FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "./FactoryPendingLoadings";
 import { Truck } from "lucide-react";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type LoadingsTab = "loadings" | "pending";
 
@@ -18,7 +19,7 @@ export default function FactoryLoadingsHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess, isSuccess: accessLoaded } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess, isSuccess: accessLoaded } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const showPending =

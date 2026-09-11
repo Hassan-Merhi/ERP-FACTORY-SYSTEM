@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { VoucherRevision, VoucherRevisionItem } from "./types";
 
 function deltaClass(delta: number): string {
   if (delta > 0) return "text-green-600 dark:text-green-400";
@@ -23,7 +24,7 @@ export function VoucherRevisionHistory({
   revisionsErrorMessage,
   retryVoucherRevisions,
 }: {
-  voucherRevisions: any[];
+  voucherRevisions: VoucherRevision[];
   revisionsLoading: boolean;
   revisionsError: boolean;
   revisionsErrorMessage?: string;
@@ -59,7 +60,7 @@ export function VoucherRevisionHistory({
                   <span className="text-sm font-medium">Rev #{rev.revisionNumber}</span>
                   {rev.optional && (
                     <Badge variant="outline" className="text-xs">
-                      POS Adjustment{rev._mergedCount > 1 ? ` (${rev._mergedCount} submissions)` : ""}
+                      POS Adjustment{(rev._mergedCount ?? 0) > 1 ? ` (${rev._mergedCount} submissions)` : ""}
                     </Badge>
                   )}
                 </div>
@@ -81,17 +82,17 @@ export function VoucherRevisionHistory({
                     </TableHeader>
                     <TableBody>
                       {rev.items
-                        .filter((item: any) => parseFloat(item.delta ?? "0") !== 0)
-                        .map((item: any, idx: number) => {
-                          const delta = parseFloat(item.delta ?? "0");
+                        .filter((item: VoucherRevisionItem) => parseFloat(String(item.delta ?? "0")) !== 0)
+                        .map((item: VoucherRevisionItem, idx: number) => {
+                          const delta = parseFloat(String(item.delta ?? "0"));
                           return (
                             <TableRow key={idx}>
                               <TableCell className="py-1.5 text-sm">{item.stockItemName}</TableCell>
                               <TableCell className="py-1.5 text-right font-mono text-sm text-muted-foreground">
-                                {parseFloat(item.originalQuantity)}
+                                {parseFloat(String(item.originalQuantity ?? 0))}
                               </TableCell>
                               <TableCell className="py-1.5 text-right font-mono text-sm font-semibold">
-                                {parseFloat(item.newQuantity)}
+                                {parseFloat(String(item.newQuantity ?? 0))}
                               </TableCell>
                               <TableCell
                                 className={`py-1.5 text-right font-mono text-sm font-semibold ${deltaClass(delta)}`}

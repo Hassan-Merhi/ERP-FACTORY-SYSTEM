@@ -1,11 +1,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { locationInventoryLightUrl } from "@/api/inventoryApi";
-import type { APIInventoryItem, Location } from "../pos-components/posTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type {
+  APIInventoryItem,
+  BankAccountRow,
+  CompanySettingsRow,
+  LedgerPickerAccount,
+  Location,
+  PosDraftSummary,
+  PosEditVoucher,
+  PosShift,
+  PosViewEntry,
+} from "../pos-components/posTypes";
 import { buildPosInventory, type SpMovement } from "./posInventory";
 
 interface PosQueriesParams {
-  posUser: unknown;
+  posUser?: AuthMe | null;
   activeLocation: Location | null;
   companyId?: number;
   isCreditSale: boolean;
@@ -69,7 +80,7 @@ export function usePosQueries({
     enabled: !posUser,
   });
 
-  const { data: companySettings } = useQuery<any>({
+  const { data: companySettings } = useQuery<CompanySettingsRow>({
     queryKey: ["/api/company-settings"],
     enabled: !!posUser,
   });
@@ -114,12 +125,12 @@ export function usePosQueries({
     [apiInventory, spStock, isSpCompany, activeLocation]
   );
 
-  const { data: bankAccounts = [] } = useQuery<any[]>({
+  const { data: bankAccounts = [] } = useQuery<BankAccountRow[]>({
     queryKey: ["/api/bank-accounts"],
     enabled: !!activeLocation,
   });
 
-  const { data: allLedgerAccounts = [] } = useQuery<any[]>({
+  const { data: allLedgerAccounts = [] } = useQuery<LedgerPickerAccount[]>({
     queryKey: ["/api/ledger-accounts?profile=picker"],
     enabled: !!activeLocation,
   });
@@ -133,12 +144,12 @@ export function usePosQueries({
     [allLedgerAccounts]
   );
 
-  const { data: drafts = [], refetch: refetchDrafts } = useQuery<any[]>({
+  const { data: drafts = [], refetch: refetchDrafts } = useQuery<PosDraftSummary[]>({
     queryKey: activeLocation ? [`/api/pos/drafts?locationId=${activeLocation.id}`] : [],
     enabled: !!activeLocation,
   });
 
-  const { data: currentShift } = useQuery<any>({
+  const { data: currentShift } = useQuery<PosShift | null>({
     queryKey: posUser && activeLocation ? ["/api/pos/shifts/current", { locationId: activeLocation.id }] : [],
     queryFn: async () => {
       if (!activeLocation) return null;
@@ -150,7 +161,7 @@ export function usePosQueries({
     refetchInterval: 60_000,
   });
 
-  const { data: authUser } = useQuery<any>({ queryKey: ["/api/auth/me"] });
+  const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
 
   const { data: lastSoldPrices = {} } = useQuery<Record<number, string>>({
     queryKey: activeLocation ? ["/api/pos/last-sold-prices", { locationId: activeLocation.id }] : [],
@@ -164,12 +175,12 @@ export function usePosQueries({
     staleTime: 60_000,
   });
 
-  const { data: posCustomers = [] } = useQuery<any[]>({
+  const { data: posCustomers = [] } = useQuery<LedgerPickerAccount[]>({
     queryKey: ["/api/pos/customers"],
     enabled: isCreditSale && authUser?.canAccessCustomers === true,
   });
 
-  const { data: editVoucher, isLoading: editVoucherLoading } = useQuery<any>({
+  const { data: editVoucher, isLoading: editVoucherLoading } = useQuery<PosEditVoucher>({
     queryKey: editVoucherId ? [`/api/vouchers/${editVoucherId}`] : [],
     enabled: !!editVoucherId,
   });

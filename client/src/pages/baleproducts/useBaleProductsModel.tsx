@@ -11,6 +11,7 @@ import type { FactoryBaleProduct, FactoryCategory } from "@shared/schema";
 import type { Cell as ExcelCell, FillPattern } from "exceljs";
 import type { GroupedProduct, ImportPreviewRow } from "./types";
 import { hmdLogoPath } from "./utils";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export function useBaleProductsModel() {
   const { colors: designColors } = useLabelDesignColors();
@@ -75,7 +76,7 @@ export function useBaleProductsModel() {
     }
   }, [editingProduct]);
 
-  const { data: currentUser } = useQuery<any>({ queryKey: ["/api/auth/me"] });
+  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isAdmin = ["Admin", "Owner", "Developer"].includes(currentUser?.role || "");
 
   const { data: myAccess } = useQuery<{ hiddenCostFields: string[] }>({

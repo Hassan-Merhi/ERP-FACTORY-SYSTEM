@@ -9,8 +9,8 @@ import { eq, and, isNull } from "drizzle-orm";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-export function parseNum(v: any): number {
-  return parseFloat(v ?? "0") || 0;
+export function parseNum(v: unknown): number {
+  return parseFloat(String(v ?? "0")) || 0;
 }
 
 export async function findOrCreateLedgerAccount(

@@ -19,6 +19,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { insertSupplierSchema } from "@shared/schema";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export default function EditSupplier() {
   const params = useParams();
@@ -35,7 +36,7 @@ export default function EditSupplier() {
     enabled: !!supplierId,
   });
 
-  const { data: stockGroups = [] } = useQuery<any[]>({
+  const { data: stockGroups = [] } = useQuery<ApiListRow[]>({
     queryKey: ["/api/stock-groups", selectedCompany?.id],
     enabled: !!selectedCompany?.id,
     queryFn: async () => {

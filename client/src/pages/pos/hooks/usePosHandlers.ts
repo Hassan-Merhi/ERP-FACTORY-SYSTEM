@@ -1,4 +1,14 @@
-import type { SaleRow, InventoryItem, APIInventoryItem, Location } from "../pos-components/posTypes";
+import type { AuthMe } from "@shared/apiTypes";
+import type { InvoiceSale } from "../pos-components/InvoiceTemplate";
+import type {
+  SaleRow,
+  InventoryItem,
+  APIInventoryItem,
+  Location,
+  PosEditVoucher,
+  PosMutationPending,
+  PosShift,
+} from "../pos-components/posTypes";
 import { makeFocusCell } from "../utils/posKeyboardHelpers";
 import { usePosRowCalculations } from "./usePosRowCalculations";
 import { usePosCheckout } from "./usePosCheckout";
@@ -28,7 +38,7 @@ interface PosHandlersParams {
   setCurrentDraftId: React.Dispatch<React.SetStateAction<number | null>>;
   setShowDraftDialog: React.Dispatch<React.SetStateAction<boolean>>;
   setShowPrintDialog: React.Dispatch<React.SetStateAction<boolean>>;
-  setSavedSale: (sale: unknown) => void;
+  setSavedSale: (sale: InvoiceSale | null) => void;
   setSaleJustCompleted: React.Dispatch<React.SetStateAction<boolean>>;
   setLastAutosaved: React.Dispatch<React.SetStateAction<Date | null>>;
   setMobileTab: React.Dispatch<React.SetStateAction<"items" | "cart">>;
@@ -51,7 +61,7 @@ interface PosHandlersParams {
   dailyExchangeRate: number | null;
   activeLocation: Location | null;
   editVoucherId?: string;
-  editVoucher: unknown;
+  editVoucher?: PosEditVoucher | null;
   isSpCompany?: boolean;
   isGoldenCoastPhase6?: boolean;
   goldenCoastReadinessLoading?: boolean;
@@ -60,11 +70,11 @@ interface PosHandlersParams {
   inventory: InventoryItem[];
   apiInventory: APIInventoryItem[];
   lastSoldPrices: Record<number, string>;
-  currentShift: unknown;
-  authUser: unknown;
-  posUser: unknown;
+  currentShift?: PosShift | null;
+  authUser?: AuthMe | null;
+  posUser?: AuthMe | null;
   // Mutations
-  saveMutation: unknown;
+  saveMutation: PosMutationPending;
   // Misc
   toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
 }

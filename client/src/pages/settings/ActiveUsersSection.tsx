@@ -32,11 +32,12 @@ type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 import { getPageLabel } from "./WatchUserDialog";
 import { RemoteSupportWatchDialog } from "./RemoteSupportWatchDialog";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 export function ActiveUsersSection() {
   const [watchingUser, setWatchingUser] = useState<{ userId: string; username: string } | null>(null);
 
-  const { data: currentUser } = useQuery<any>({ queryKey: ["/api/auth/me"] });
+  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = currentUser?.role === "Developer";
 
   type PresenceRow = typeof userPresence.$inferSelect;

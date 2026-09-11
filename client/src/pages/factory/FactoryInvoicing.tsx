@@ -5,6 +5,7 @@ import FactoryInvoices from "@/pages/factory/FactoryInvoices";
 import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
 import { FileText } from "lucide-react";
+import type { AuthMe, FactoryMyAccess, ApiListRow } from "@shared/apiTypes";
 
 type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending";
 
@@ -12,7 +13,7 @@ export default function FactoryInvoicing() {
   const [, navigate] = useLocation();
   const search = useSearch();
 
-  const { data: myAccess } = useQuery<any>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
+  const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
 
   // ── Proformas tab access (existing restriction) ──────────────────────────

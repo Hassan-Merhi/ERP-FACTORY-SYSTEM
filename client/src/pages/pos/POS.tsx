@@ -10,7 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 
 import { SaleGrid } from "./pos-components/SaleGrid";
 import { InventoryPicker } from "./pos-components/InventoryPicker";
-import { InvoiceTemplate } from "./pos-components/InvoiceTemplate";
+import type { AuthMe } from "@shared/apiTypes";
+import { InvoiceTemplate, type InvoiceSale } from "./pos-components/InvoiceTemplate";
+import type { PosEditSalesItem } from "./pos-components/posTypes";
 import { POSDialogs } from "./pos-components/POSDialogs";
 import { POSHeader } from "./pos-components/POSHeader";
 import { PosCheckoutStrip } from "./pos-components/PosCheckoutStrip";
@@ -27,7 +29,7 @@ import { POS_COLUMNS, formatDisplayAmount } from "./utils/posCalculations";
 import { ErrorState } from "@/components/ui/page-state";
 import { GoldenCoastPosReadinessAlert } from "./pos-components/GoldenCoastPosReadinessAlert";
 
-export default function POS({ posUser, editVoucherId }: { posUser?: any; editVoucherId?: string } = {}) {
+export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; editVoucherId?: string } = {}) {
   const { selectedLocation, setSelectedLocation } = useLocationContext();
   const { selectedCompany } = useCompany();
   const [_location, navigate] = useLocation();
@@ -249,18 +251,18 @@ export default function POS({ posUser, editVoucherId }: { posUser?: any; editVou
 
     if (!editVoucher || resolvedItems.length === 0) return;
 
-    const newRows = resolvedItems.map((item: any, index: number) => ({
+    const newRows = resolvedItems.map((item: PosEditSalesItem, index: number) => ({
       id: String(index + 1),
       itemName: item.stockItemName || "",
       stockItemCode: item.stockItemCode || "",
       // Ensure stockItemId is always a number (guard against 0/null from old data)
       stockItemId: item.stockItemId ? Number(item.stockItemId) : undefined,
       salesItemId: item.id,
-      quantity: parseFloat(item.quantity),
-      rate: parseFloat(item.sellingPrice),
-      rateUSD: parseFloat(item.sellingPrice),
-      amount: parseFloat(item.totalSales),
-      configuredPrice: parseFloat(item.configuredPrice || "0") || undefined,
+      quantity: parseFloat(String(item.quantity)),
+      rate: parseFloat(String(item.sellingPrice)),
+      rateUSD: parseFloat(String(item.sellingPrice)),
+      amount: parseFloat(String(item.totalSales)),
+      configuredPrice: parseFloat(String(item.configuredPrice || "0")) || undefined,
     }));
     newRows.push({
       id: String(newRows.length + 1),
@@ -287,7 +289,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: any; editVou
   useEffect(() => {
     if (!editVoucher || !editVoucher.entries || editVoucher.entries.length === 0) return;
 
-    const debitEntry = editVoucher.entries.find((e: any) => parseFloat(e.debitAmount || "0") > 0);
+    const debitEntry = editVoucher.entries.find((e) => parseFloat(String(e.debitAmount || "0")) > 0);
     if (!debitEntry) return;
 
     if (debitEntry.bankAccountId) {
@@ -605,7 +607,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: any; editVou
         posUser={posUser}
         editVoucherId={editVoucherId}
         activeLocation={activeLocation}
-        showPosImport={!posUser || companySettings?.posExcelImportEnabled}
+        showPosImport={!posUser || Boolean(companySettings?.posExcelImportEnabled)}
         onExportInventory={handleExportInventory}
         onImportClick={() => navigate("/pos-import")}
         onShowStockReport={() => setShowStockPrompt(true)}
@@ -788,7 +790,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: any; editVou
 
       <InvoiceTemplate
         printRef={printRef}
-        savedSale={savedSale}
+        savedSale={savedSale as InvoiceSale}
         printUserName={posUser?.fullName || authUser?.fullName || "User"}
         selectedCompany={selectedCompany}
         exchangeRate={exchangeRate}
