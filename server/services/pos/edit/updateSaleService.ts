@@ -14,7 +14,14 @@ import { storage } from "../../../storage";
 import { logAudit, recalculateIntercompanyForDate } from "../../../routes/_helpers";
 import { salesItems, voucherEntries, stockItems, vouchers } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
-import type { HandlerErrorResult, SpEditAccountingContext, UpdatePosSaleParams } from "./posEditSaleTypes";
+import type {
+  HandlerErrorResult,
+  PosEditSaleItemInput,
+  PosSaleUpdateResponseBody,
+  SpEditAccountingContext,
+  UpdatePosSaleParams,
+  VoucherRow,
+} from "./posEditSaleTypes";
 import { fetchSpEditAccountingContext, fetchSpEditDeductionPerQty } from "./posEditSaleHelpers";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import {
@@ -35,13 +42,15 @@ import {
   reverseGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
 
-function err(result: HandlerErrorResult) {
-  return { status: result.status, body: result.body };
+function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
+  // HandlerErrorResult bodies are plain JSON message objects; the response
+  // body type keeps arbitrary fields indexable for res.json().
+  return { status: result.status, body: result.body as PosSaleUpdateResponseBody };
 }
 
 export interface PosSaleUpdateTransactionResult {
   error?: HandlerErrorResult;
-  existingVoucher?: any;
+  existingVoucher?: VoucherRow;
   targetLocationId?: number;
   grandTotal?: number;
   totalQtySoldEdit?: number;
@@ -152,7 +161,9 @@ export async function applyPosSaleUpdateTx(
   const rebuildResult = await rebuildSaleItems(tx, {
     voucherId,
     targetLocationId,
-    items,
+    // Shape-checked by validateItemsPositive above; the symbol override can
+    // only be present on trusted in-process payloads.
+    items: items as PosEditSaleItemInput[],
     oldItemsMap,
     canSellNegativeStock,
     companyId: lockedVoucher.companyId,
@@ -228,7 +239,9 @@ export async function applyPosSaleUpdateTx(
   };
 }
 
-export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ status: number; body: any }> {
+export async function updatePosSale(
+  params: UpdatePosSaleParams
+): Promise<{ status: number; body: PosSaleUpdateResponseBody }> {
   const { voucherId, currentCompanyId, userId, username, userRole, body } = params;
 
   const spContextResult = await fetchSpEditAccountingContext(currentCompanyId);
@@ -292,7 +305,9 @@ export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ stat
   }
 
   const oldDate = existingVoucher.voucherDate;
-  const newDate = voucherDate || oldDate;
+  // The request's voucherDate is untyped JSON; the string form is what the
+  // recalculation set and the comparison below have always received.
+  const newDate = voucherDate ? String(voucherDate) : oldDate;
   const datesToRecalc = new Set<string>([oldDate]);
   if (newDate !== oldDate) datesToRecalc.add(newDate);
   if (!transactionResult.isGoldenCoastEdit) {
@@ -304,7 +319,7 @@ export async function updatePosSale(params: UpdatePosSaleParams): Promise<{ stat
   }
 
   try {
-    const changes: Record<string, { old?: any; new?: any }> = {};
+    const changes: Record<string, { old?: unknown; new?: unknown }> = {};
     if (existingVoucher.totalAmount !== updatedVoucher.totalAmount)
       changes.totalAmount = { old: existingVoucher.totalAmount, new: updatedVoucher.totalAmount };
     if (existingVoucher.voucherDate !== updatedVoucher.voucherDate)

@@ -19,6 +19,7 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   buildFactoryCustomerLedgerEntries,
   getCustomerByLedgerId,
@@ -33,6 +34,23 @@ export interface StatementPdfOptions {
   startDate?: string;
   endDate?: string;
   lang?: string;
+}
+
+/**
+ * The common shape of every source feeding the statement table: voucher-entry
+ * statement rows, factory customer ledger entries, and customer-balance rows
+ * mapped in this module. Amount columns are numeric-as-text; nullable text
+ * columns fall back to "" at render time exactly as they did before.
+ */
+interface StatementSourceEntry {
+  voucherId: number;
+  voucherNumber: string | null;
+  voucherType: string | null;
+  voucherDate: string | null;
+  voucherDescription: string | null;
+  narration: string | null;
+  debitAmount: string | null;
+  creditAmount: string | null;
 }
 
 export async function generateAccountStatementPdf(opts: StatementPdfOptions): Promise<Buffer> {
@@ -119,7 +137,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   const isSupplier = accountType === "supplier";
 
   // ── 1. Fetch raw entries ──
-  let rawEntries: any[];
+  let rawEntries: StatementSourceEntry[];
   let accountName: string;
   let rawOB: number;
   let obSide: string;
@@ -232,7 +250,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       }
     }
 
-    const typeToColumn: Record<string, any> = {
+    const typeToColumn: Record<string, AnyPgColumn | undefined> = {
       bank: voucherEntries.bankAccountId,
       "fixed-asset": voucherEntries.fixedAssetId,
       supplier: voucherEntries.supplierId,
@@ -344,7 +362,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     const formatted = abs % 1 === 0 ? abs.toLocaleString("en") : abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return currSym + formatted;
   };
-  const fmtDate = (s: any) => {
+  const fmtDate = (s: unknown) => {
     if (!s) return "";
     const str = typeof s === "string" ? s : s instanceof Date ? s.toISOString() : String(s);
     const d = new Date(str.split("T")[0] + "T00:00:00");
@@ -376,14 +394,17 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   const normalFont = isRTL && hasArabicFont ? "Arabic" : "Helvetica";
 
   let convertArabic: ((t: string) => string) | null = null;
-  let bidiInst: {
-    getEmbeddingLevels: (t: string, d: string) => any;
-    getReorderedString: (t: string, l: any) => string;
-  } | null = null;
+  // bidi-js ships no types; the embedding-levels value is opaque and is only
+  // ever passed straight back into getReorderedString.
+  interface BidiInstance {
+    getEmbeddingLevels: (text: string, direction: string) => unknown;
+    getReorderedString: (text: string, levels: unknown) => string;
+  }
+  let bidiInst: BidiInstance | null = null;
   try {
     const reshaperMod = require("arabic-reshaper") as { convertArabic: (t: string) => string };
     convertArabic = reshaperMod.convertArabic;
-    const bidiFactory = require("bidi-js") as () => typeof bidiInst;
+    const bidiFactory = require("bidi-js") as () => BidiInstance;
     bidiInst = bidiFactory();
   } catch {
     // Failure here is non-fatal and the surrounding flow continues deliberately.

@@ -133,8 +133,9 @@ export function registerChatbotMessageRoutes(app: Express) {
 
       const history = await getAllChatHistory(companyId, 200);
 
-      // Enrich with username and role
-      const userIds = Array.from(new Set(history.map((h) => h.userId)));
+      // Enrich with username and role. NULL authors never match the IN lists
+      // below, so dropping them here cannot change which users are fetched.
+      const userIds = Array.from(new Set(history.map((h) => h.userId).filter((id): id is string => id !== null)));
       const usersList =
         userIds.length > 0
           ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, userIds))
@@ -164,7 +165,7 @@ export function registerChatbotMessageRoutes(app: Express) {
 
       const enrichedHistory = filteredHistory.map((h) => ({
         ...h,
-        username: userMap.get(h.userId) || "Unknown",
+        username: userMap.get(h.userId ?? "") || "Unknown",
       }));
 
       res.json(enrichedHistory);

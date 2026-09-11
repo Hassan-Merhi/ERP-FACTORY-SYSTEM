@@ -81,7 +81,7 @@ function hmac(payload: string): string {
  * Throws RepairTokenConfigurationError in production without a real
  * SESSION_SECRET — callers must catch this and refuse the request, never
  * fall back to issuing a token anyway. */
-export function signRepairToken(payload: Record<string, any>): string {
+export function signRepairToken(payload: object): string {
   const json = JSON.stringify(payload);
   const encoded = Buffer.from(json, "utf8").toString("base64url");
   const signature = hmac(encoded);
@@ -90,7 +90,7 @@ export function signRepairToken(payload: Record<string, any>): string {
 
 /** Verifies signature + expiry and returns the embedded payload. Throws
  * InvalidRepairTokenError (malformed/tampered) or ExpiredRepairTokenError. */
-export function verifyRepairToken<T = Record<string, any>>(token: string): T {
+export function verifyRepairToken<T = Record<string, unknown>>(token: string): T {
   if (typeof token !== "string" || !token.includes(".")) {
     throw new InvalidRepairTokenError("malformed token");
   }

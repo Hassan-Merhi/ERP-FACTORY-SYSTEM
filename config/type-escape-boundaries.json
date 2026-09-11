@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup.",
   "scan": {
     "roots": [
       "server",
@@ -574,154 +574,14 @@
         0,
         0
       ],
-      "server/chat/persistence.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/reports/types.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/stockTransferDrafts.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/voucherAndStockDrafts.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/lib/accountStatementPdfGenerator.ts": [
-        5,
-        0,
-        0
-      ],
-      "server/lib/trackingProviders/maerskProvider.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/lib/workerBalesBilingualPdfGenerator.ts": [
-        0,
-        2,
-        0
-      ],
       "server/seedDev.ts": [
         0,
         1,
-        0
-      ],
-      "server/services/export-excel/sheet-helpers.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/daybookSourceIntegrity.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/historical-replay/exactInvariants.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/historical-replay/types.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/post-offload-charge/legacy-links.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/postOffloadImpactPreview.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/rawMaterialReconciliation.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/services/factory/rawStockLockedRate.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/repairToken.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/heavyExportCoordinator.ts": [
-        0,
-        2,
-        0
-      ],
-      "server/services/pos/edit/rebuildSaleAccounting.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/pos/edit/rebuildSaleItems.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/pos/edit/reverseOriginalSaleInventory.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/pos/edit/updateSaleService.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/pos/edit/validateEditSaleRequest.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/scheduler/daily-export.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/shared/ttlCache.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/smartTransferFeedback.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/sp/spInventoryIntegrity.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/stockTransferRevisionLifecycle.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/whatsappService.ts": [
-        1,
-        0,
         0
       ]
     }
   },
   "totals": {
-    "typeEscapeCeiling": 263
+    "typeEscapeCeiling": 207
   }
 }

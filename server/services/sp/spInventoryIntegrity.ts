@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
 import { adjustInventory, type AdjustInventoryResult } from "../../inventoryHelper";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { firstRow } from "../../lib/queryResult";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
 
@@ -30,10 +31,6 @@ export class SpInventoryIntegrityError extends Error {
 function positiveInteger(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function firstRow(result: any): unknown | null {
-  return result?.rows?.[0] ?? result?.[0] ?? null;
 }
 
 export async function requireSpInventoryMapping(

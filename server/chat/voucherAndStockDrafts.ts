@@ -158,7 +158,7 @@ If intent is unclear, respond with exactly: null`;
         const parsedAdj = JSON.parse(rawAdj);
         if (parsedAdj && parsedAdj.locationId && parsedAdj.items && parsedAdj.items.length > 0) {
           // Auto-fill rates from inventory averageRate
-          const itemIds = parsedAdj.items.map((i: any) => i.stockItemId).filter(Boolean);
+          const itemIds = parsedAdj.items.map((i: { stockItemId?: number }) => i.stockItemId).filter(Boolean);
           if (itemIds.length > 0) {
             const invRows = await db
               .select({ stockItemId: schema.inventory.stockItemId, averageRate: schema.inventory.averageRate })

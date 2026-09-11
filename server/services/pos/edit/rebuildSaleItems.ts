@@ -10,6 +10,7 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
 import { POS_INTERNAL_TOTAL_SALES_OVERRIDE } from "./posEditInternalSymbols";
+import type { PosEditSaleItemInput, SalesItemRow } from "./posEditSaleTypes";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 import {
@@ -33,8 +34,8 @@ export async function rebuildSaleItems(
   params: {
     voucherId: number;
     targetLocationId: number;
-    items: any[];
-    oldItemsMap: Map<number, any>;
+    items: PosEditSaleItemInput[];
+    oldItemsMap: Map<number, SalesItemRow>;
     canSellNegativeStock: boolean;
     companyId: number;
     canonicalRevision?: number;

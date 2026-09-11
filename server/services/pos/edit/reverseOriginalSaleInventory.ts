@@ -6,6 +6,7 @@
  */
 import Decimal from "decimal.js";
 import type { DbTransaction } from "../../../db";
+import type { SalesItemRow, VoucherRow } from "./posEditSaleTypes";
 import { salesItems, voucherEntries } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { firstRow, resultRows } from "../../../lib/queryResult";
@@ -190,8 +191,8 @@ export async function restorePosSaleInventoryForReversal(
  */
 export async function reverseOriginalSaleInventory(
   tx: DbTransaction,
-  existingVoucher: any,
-  oldSalesItems: any[],
+  existingVoucher: VoucherRow,
+  oldSalesItems: SalesItemRow[],
   canonicalRevision?: number
 ): Promise<void> {
   for (const oldItem of oldSalesItems) {
