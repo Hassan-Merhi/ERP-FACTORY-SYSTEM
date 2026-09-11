@@ -1,5 +1,6 @@
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { inventorySnapshotFromStoredValues } from "../../services/inventory/inventoryValuationSnapshot";
 import {
   inventory,
   salesItems,
@@ -16,12 +17,30 @@ import {
   stockGroups as stockGroupsTable,
   stockCategories as stockCategoriesTable,
 } from "@shared/schema";
-import { eq, and, sql, gt, inArray } from "drizzle-orm";
+import { eq, and, sql, gt, inArray, isNull } from "drizzle-orm";
 
 // TEMP DEBUG (historical opening-stock audit): gate behind an explicit env
 // flag so routine exports/inventory reads stay quiet by default. Enable with
 // DEBUG_HISTORICAL_INVENTORY=1 when auditing an opening-stock discrepancy.
 const DEBUG_HISTORICAL_INVENTORY = process.env.DEBUG_HISTORICAL_INVENTORY === "1";
+
+function exactMovementValue(
+  exactTotal: string | number | null | undefined,
+  quantity: number,
+  fallbackRate: number
+): number {
+  if (exactTotal !== null && exactTotal !== undefined && exactTotal !== "") {
+    const parsed = typeof exactTotal === "number" ? exactTotal : Number.parseFloat(exactTotal);
+    if (Number.isFinite(parsed)) return Math.abs(parsed);
+  }
+  return Math.abs(quantity * fallbackRate);
+}
+
+function refreshHistoricalRate(data: { quantity: number; totalValue: number; rate: number }): void {
+  if (data.quantity > 0) {
+    data.rate = data.totalValue > 0 ? data.totalValue / data.quantity : data.rate;
+  }
+}
 
 // ─── Historical inventory ─────────────────────────────────────────────────────
 export async function calculateHistoricalLocationInventory(
@@ -39,6 +58,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: inventory.stockItemId,
       quantity: inventory.quantity,
       averageRate: inventory.averageRate,
+      totalValue: inventory.totalValue,
     })
     .from(inventory)
     .where(and(eq(inventory.locationId, locationId), eq(inventory.companyId, companyId)))
@@ -50,7 +70,7 @@ export async function calculateHistoricalLocationInventory(
     .selectDistinct({ stockItemId: salesItems.stockItemId })
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.locationId, locationId)))
+    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.locationId, locationId), isNull(vouchers.deletedAt)))
     .execute();
   for (const item of salesStockItems) seedStockItemIds.add(item.stockItemId);
 
@@ -68,7 +88,13 @@ export async function calculateHistoricalLocationInventory(
     .from(stockAdjustmentItems)
     .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
     .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(stockAdjustmentVouchers.locationId, locationId)))
+    .where(
+      and(
+        eq(vouchers.companyId, companyId),
+        eq(stockAdjustmentVouchers.locationId, locationId),
+        isNull(vouchers.deletedAt)
+      )
+    )
     .execute();
   for (const item of adjustmentStockItems) seedStockItemIds.add(item.stockItemId);
 
@@ -77,7 +103,13 @@ export async function calculateHistoricalLocationInventory(
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
     .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(stockTransferVouchers.destinationLocationId, locationId)))
+    .where(
+      and(
+        eq(vouchers.companyId, companyId),
+        eq(stockTransferVouchers.destinationLocationId, locationId),
+        isNull(vouchers.deletedAt)
+      )
+    )
     .execute();
   for (const item of transfersInStockItems) seedStockItemIds.add(item.stockItemId);
 
@@ -86,7 +118,13 @@ export async function calculateHistoricalLocationInventory(
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
     .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(stockTransferItems.sourceLocationId, locationId)))
+    .where(
+      and(
+        eq(vouchers.companyId, companyId),
+        eq(stockTransferItems.sourceLocationId, locationId),
+        isNull(vouchers.deletedAt)
+      )
+    )
     .execute();
   for (const item of transfersOutStockItems) seedStockItemIds.add(item.stockItemId);
 
@@ -97,7 +135,9 @@ export async function calculateHistoricalLocationInventory(
     .selectDistinct({ stockItemId: creditNoteItems.stockItemId })
     .from(creditNoteItems)
     .innerJoin(vouchers, eq(creditNoteItems.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(creditNoteItems.locationId, locationId)))
+    .where(
+      and(eq(vouchers.companyId, companyId), eq(creditNoteItems.locationId, locationId), isNull(vouchers.deletedAt))
+    )
     .execute();
   for (const item of creditDebitNoteStockItems) seedStockItemIds.add(item.stockItemId);
 
@@ -108,13 +148,14 @@ export async function calculateHistoricalLocationInventory(
     inventoryMap.set(stockItemId, { quantity: 0, totalValue: 0, rate: 0 });
   }
 
+  // Seed the backward reconstruction from the exact stored asset value. The
+  // rounded average_rate remains cost memory only and must not regenerate value.
   for (const inv of currentInventory) {
-    const qty = parseFloat(inv.quantity) || 0;
-    const rate = parseFloat(inv.averageRate) || 0;
+    const snapshot = inventorySnapshotFromStoredValues(inv.quantity, inv.totalValue, inv.averageRate);
     inventoryMap.set(inv.stockItemId, {
-      quantity: qty,
-      totalValue: qty * rate,
-      rate,
+      quantity: snapshot.quantity,
+      totalValue: snapshot.totalValue,
+      rate: snapshot.rate,
     });
   }
 
@@ -123,6 +164,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: salesItems.stockItemId,
       quantity: salesItems.quantity,
       costPrice: salesItems.costPrice,
+      totalCost: salesItems.totalCost,
     })
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
@@ -131,6 +173,7 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.companyId, companyId),
         eq(vouchers.locationId, locationId),
         eq(vouchers.optional, false),
+        isNull(vouchers.deletedAt),
         sql`${vouchers.voucherDate} > ${cutoffDateStr}`
       )
     )
@@ -139,14 +182,15 @@ export async function calculateHistoricalLocationInventory(
   for (const sale of salesAfterDate) {
     const qty = parseFloat(sale.quantity) || 0;
     const cost = parseFloat(sale.costPrice) || 0;
+    const value = exactMovementValue(sale.totalCost, qty, cost);
     const existing = inventoryMap.get(sale.stockItemId) || {
       quantity: 0,
       totalValue: 0,
       rate: 0,
     };
     existing.quantity += qty;
-    existing.totalValue += qty * cost;
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    existing.totalValue += value;
+    refreshHistoricalRate(existing);
     inventoryMap.set(sale.stockItemId, existing);
   }
 
@@ -155,6 +199,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: stockAdjustmentItems.stockItemId,
       quantity: stockAdjustmentItems.quantity,
       rate: stockAdjustmentItems.rate,
+      totalAmount: stockAdjustmentItems.totalAmount,
       adjustmentType: stockAdjustmentVouchers.adjustmentType,
     })
     .from(stockAdjustmentItems)
@@ -165,34 +210,28 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.companyId, companyId),
         eq(stockAdjustmentVouchers.locationId, locationId),
         eq(vouchers.optional, false),
+        isNull(vouchers.deletedAt),
         sql`${vouchers.voucherDate} > ${cutoffDateStr}`
       )
     )
     .execute();
 
   for (const adj of adjustmentsAfterDate) {
-    // stock_adjustment_items.quantity is stored SIGNED at creation time
-    // (see client StockAdjustmentForm.tsx + server storage/stockOps.ts):
-    //   PRODUCE items -> positive quantity (increases inventory)
-    //   CONSUME items -> negative quantity (decreases inventory)
-    // This holds true for "Production", "Consumption", AND "Mixed" adjustment
-    // vouchers alike — the sign lives on the item, not just the voucher type.
-    // To reverse an after-cutoff adjustment we simply undo its signed effect:
-    //   historicalQty = currentQty - signedQty
-    // (Do NOT branch on adjustmentType here — a prior version treated
-    // non-"Production" rows as "always subtract further", which is correct
-    // for the qty>0 case but doubles the error for negative (Consumption/
-    // Mixed-consumption) quantities instead of adding them back.)
+    // stock_adjustment_items.quantity is stored signed. Reverse both quantity
+    // and the exact stored line value with the same sign so historical value is
+    // not reconstructed from the rounded rate.
     const qty = parseFloat(adj.quantity) || 0;
     const rate = parseFloat(adj.rate) || 0;
+    const absoluteValue = exactMovementValue(adj.totalAmount, qty, rate);
+    const signedValue = qty < 0 ? -absoluteValue : absoluteValue;
     const existing = inventoryMap.get(adj.stockItemId) || {
       quantity: 0,
       totalValue: 0,
       rate: 0,
     };
     existing.quantity -= qty;
-    existing.totalValue -= qty * rate;
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    existing.totalValue -= signedValue;
+    refreshHistoricalRate(existing);
     inventoryMap.set(adj.stockItemId, existing);
   }
 
@@ -218,6 +257,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: stockTransferItems.stockItemId,
       quantity: stockTransferItems.quantity,
       rate: stockTransferItems.rate,
+      totalAmount: stockTransferItems.totalAmount,
     })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -227,6 +267,7 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.companyId, companyId),
         eq(stockTransferVouchers.destinationLocationId, locationId),
         eq(vouchers.optional, false),
+        isNull(vouchers.deletedAt),
         sql`${vouchers.voucherDate} > ${cutoffDateStr}`
       )
     )
@@ -235,14 +276,15 @@ export async function calculateHistoricalLocationInventory(
   for (const transfer of transfersInAfterDate) {
     const qty = parseFloat(transfer.quantity) || 0;
     const rate = parseFloat(transfer.rate) || 0;
+    const value = exactMovementValue(transfer.totalAmount, qty, rate);
     const existing = inventoryMap.get(transfer.stockItemId) || {
       quantity: 0,
       totalValue: 0,
       rate: 0,
     };
     existing.quantity -= qty;
-    existing.totalValue -= qty * rate;
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    existing.totalValue -= value;
+    refreshHistoricalRate(existing);
     inventoryMap.set(transfer.stockItemId, existing);
   }
 
@@ -251,6 +293,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: stockTransferItems.stockItemId,
       quantity: stockTransferItems.quantity,
       rate: stockTransferItems.rate,
+      totalAmount: stockTransferItems.totalAmount,
     })
     .from(stockTransferItems)
     .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
@@ -260,6 +303,7 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.companyId, companyId),
         eq(stockTransferItems.sourceLocationId, locationId),
         eq(vouchers.optional, false),
+        isNull(vouchers.deletedAt),
         sql`${vouchers.voucherDate} > ${cutoffDateStr}`
       )
     )
@@ -268,14 +312,15 @@ export async function calculateHistoricalLocationInventory(
   for (const transfer of transfersOutAfterDate) {
     const qty = parseFloat(transfer.quantity) || 0;
     const rate = parseFloat(transfer.rate) || 0;
+    const value = exactMovementValue(transfer.totalAmount, qty, rate);
     const existing = inventoryMap.get(transfer.stockItemId) || {
       quantity: 0,
       totalValue: 0,
       rate: 0,
     };
     existing.quantity += qty;
-    existing.totalValue += qty * rate;
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    existing.totalValue += value;
+    refreshHistoricalRate(existing);
     inventoryMap.set(transfer.stockItemId, existing);
   }
 
@@ -284,6 +329,7 @@ export async function calculateHistoricalLocationInventory(
       stockItemId: containerOffloadItems.stockItemId,
       quantity: containerOffloadItems.quantity,
       rate: containerOffloadItems.rate,
+      totalValue: containerOffloadItems.totalValue,
     })
     .from(containerOffloadItems)
     .innerJoin(containerOffloads, eq(containerOffloadItems.offloadId, containerOffloads.id))
@@ -300,14 +346,15 @@ export async function calculateHistoricalLocationInventory(
   for (const offload of offloadsAfterDate) {
     const qty = parseFloat(offload.quantity) || 0;
     const cost = parseFloat(offload.rate) || 0;
+    const value = exactMovementValue(offload.totalValue, qty, cost);
     const existing = inventoryMap.get(offload.stockItemId) || {
       quantity: 0,
       totalValue: 0,
       rate: 0,
     };
     existing.quantity -= qty;
-    existing.totalValue -= qty * cost;
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    existing.totalValue -= value;
+    refreshHistoricalRate(existing);
     inventoryMap.set(offload.stockItemId, existing);
   }
 
@@ -328,6 +375,7 @@ export async function calculateHistoricalLocationInventory(
       and(
         eq(vouchers.companyId, companyId),
         eq(creditNoteItems.locationId, locationId),
+        isNull(vouchers.deletedAt),
         sql`${vouchers.voucherDate} > ${cutoffDateStr}`
       )
     )
@@ -344,7 +392,7 @@ export async function calculateHistoricalLocationInventory(
       existing.quantity += qty;
       existing.totalValue += qty * cost;
     }
-    if (existing.quantity > 0) existing.rate = existing.totalValue / existing.quantity;
+    refreshHistoricalRate(existing);
     inventoryMap.set(note.stockItemId, existing);
   }
 
