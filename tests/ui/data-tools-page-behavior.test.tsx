@@ -117,7 +117,10 @@ describe("ERP data tools behavior", () => {
     vi.clearAllMocks();
     harness.apiRequest.mockImplementation(async (_method: string, url: string) => {
       if (url === "/api/sales-report/recalculate-costs") {
-        return { updatedCount: 4, totalChecked: 5 };
+        return {
+          ok: true,
+          json: async () => ({ updatedCount: 4, totalChecked: 5 }),
+        };
       }
       return {
         ok: true,
@@ -150,12 +153,12 @@ describe("ERP data tools behavior", () => {
     await waitFor(() =>
       expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/sales-report/recalculate-costs", {})
     );
-    await waitFor(() =>
-      expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/sales-report"] })
-    );
-    expect(harness.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Cost Prices Updated", description: "Updated 4 of 5 sales items" })
-    );
+    await waitFor(() => {
+      expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/sales-report"] });
+      expect(harness.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Cost Prices Updated", description: "Updated 4 of 5 sales items" })
+      );
+    });
   });
 
   it("builds and applies a silent production adjustment from live location stock", async () => {
