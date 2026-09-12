@@ -1,11 +1,11 @@
 /**
- * Phase 1 backend coverage — read-only export/report sweep.
+ * Phase 2 backend coverage — import/upload validation sweep.
  *
- * The normal API smoke intentionally skips download/export surfaces. Those
- * handlers contain a large amount of workbook/PDF/report generation code and
- * represent one of the largest remaining backend coverage gaps. This suite
- * executes safe parameterless GET report/export endpoints in isolated tenants,
- * using the correct company mode, and proves the requests are read-only.
+ * Import handlers were deliberately excluded from Phase 1 because they can be
+ * expensive and mutation-heavy with real workbooks. Phase 2 executes their
+ * authenticated validation edges with empty multipart/body payloads. A missing
+ * file or empty batch must be rejected cleanly without creating financial or
+ * inventory state, while still exercising upload middleware and parser guards.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -18,7 +18,7 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 
 type CompanyMode = "erp" | "factory" | "properties" | "supplier_partner";
 type Manifest = { routes: string[] };
-type SweptRoute = { mode: CompanyMode; path: string };
+type RouteCase = { mode: CompanyMode; path: string; multipart: boolean };
 type Fingerprint = {
   vouchers: string;
   entries: string;
@@ -27,25 +27,30 @@ type Fingerprint = {
   rawStockRows: string;
   baleRows: string;
 };
-type Failure = { route: string; status: number; detail: string };
 
-const TEST_PREFIX = "covexp";
+const TEST_PREFIX = "phase2imp";
 const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
-const REQUEST_TIMEOUT_MS = 30000;
-const CONCURRENCY = 3;
-
-const REPORT_PATTERN = /(export|download|report|statement|pdf|xlsx|excel|csv|print)/i;
-const UNSAFE_OR_EXTERNAL: RegExp[] = [
-  /(whatsapp|email|send-|send\/|tracking|carrier|ai-|openai|backup|restore)/i,
-  /(repair|recalc|migration|migrate|cutover|reset|seed|rebuild|purge|backfill)/i,
-  /(^|\/)(run|apply|execute|trigger|sync)(\/|$)/i,
+const REQUEST_TIMEOUT_MS = 20000;
+// Import handlers share parser/database state and some abort early while
+// rejecting malformed payloads. Serial execution keeps this failure-path sweep
+// deterministic and avoids ECONNRESET noise from overlapping parser teardown.
+const CONCURRENCY = 1;
+const IMPORT_PATTERN = /(import|upload|preview|validate)/i;
+// Route names containing "import" are not necessarily multipart endpoints.
+// Only explicit upload paths are exercised as fileless multipart requests;
+// import/validate/preview routes otherwise receive an empty JSON-shaped body.
+const MULTIPART_PATTERN = /\/upload(?:\/|$)/i;
+const EXCLUDED: RegExp[] = [
+  /(whatsapp|email|openai|ai-|carrier|tracking)/i,
+  /(repair|recalc|migration|migrate|cutover|backup|restore|reset|seed|rebuild|purge|backfill)/i,
+  /(^|\/)(run|apply|execute|trigger|sync|refresh)(\/|$)/i,
 ];
 
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
 let companies: Record<CompanyMode, number>;
+let routes: RouteCase[] = [];
 let before: Record<CompanyMode, Fingerprint>;
-let routes: SweptRoute[] = [];
 let sequence = 0;
 
 function modeForPath(routePath: string): CompanyMode {
@@ -65,35 +70,32 @@ function modeForPath(routePath: string): CompanyMode {
   return "erp";
 }
 
-export function selectExportReportRoutes(manifest: Manifest): SweptRoute[] {
+export function selectPhase2ImportValidationRoutes(manifest: Manifest): RouteCase[] {
+  const selected: RouteCase[] = [];
   const seen = new Set<string>();
-  const selected: SweptRoute[] = [];
 
   for (const entry of manifest.routes) {
     const [method, routePath] = entry.split(" ");
-    if (method !== "GET" || !routePath?.startsWith("/api/")) continue;
+    if (method !== "POST" || !routePath?.startsWith("/api/")) continue;
     if (routePath.includes(":") || routePath.includes("*")) continue;
-    if (!REPORT_PATTERN.test(routePath)) continue;
-    if (UNSAFE_OR_EXTERNAL.some((pattern) => pattern.test(routePath))) continue;
+    if (!IMPORT_PATTERN.test(routePath) || EXCLUDED.some((pattern) => pattern.test(routePath))) continue;
 
     const mode = modeForPath(routePath);
     const key = `${mode} ${routePath}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    selected.push({ mode, path: routePath });
+    selected.push({ mode, path: routePath, multipart: MULTIPART_PATTERN.test(routePath) });
   }
 
   return selected;
 }
 
-async function createCompany(mode: CompanyMode): Promise<number> {
+async function createCompany(mode: Exclude<CompanyMode, "erp">): Promise<number> {
   sequence += 1;
-  if (mode === "erp") return ctx.companyId;
-
   const result = await pool.query<{ id: number }>(
     `INSERT INTO companies (code, name, company_type, parent_company_id, active, base_currency)
      VALUES ($1, $2, $3, $4, true, 'USD') RETURNING id`,
-    [`${TEST_PREFIX}-${mode}-${sequence}`.slice(0, 50), `${TEST_PREFIX}_${mode}_${sequence}`, mode, ctx.companyId]
+    [`P2I${sequence}${mode.slice(0, 2)}`.slice(0, 50), `${TEST_PREFIX}_${mode}_${sequence}`, mode, ctx.companyId]
   );
   const companyId = result.rows[0].id;
 
@@ -128,17 +130,27 @@ async function fingerprint(companyId: number): Promise<Fingerprint> {
   return result.rows[0];
 }
 
-async function exercise(route: SweptRoute): Promise<Failure | null> {
+async function exercise(route: RouteCase): Promise<{ route: string; status: number; detail: string } | null> {
   try {
-    const response = await agent
-      .get(route.path)
-      .set("x-client-date", "2026-08-08")
-      .query({ startDate: "2026-08-01", endDate: "2026-08-08", date: "2026-08-08" })
-      .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
+    let pending: request.Test;
+    if (route.multipart) {
+      pending = agent.post(route.path).field("phase2Validation", "true").field("mode", "preview");
+    } else {
+      pending = agent.post(route.path).send({
+        rows: [],
+        items: [],
+        data: [],
+        records: [],
+        preview: true,
+        dryRun: true,
+      });
+    }
+
+    const response = await pending.timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
     if (response.status >= 500 || response.status === 401) {
       const body = response.body as { message?: string; error?: string } | undefined;
       return {
-        route: `${route.mode} GET ${route.path}`,
+        route: `${route.mode} POST ${route.path}`,
         status: response.status,
         detail: body?.message || body?.error || response.text?.slice(0, 200) || "",
       };
@@ -147,7 +159,7 @@ async function exercise(route: SweptRoute): Promise<Failure | null> {
   } catch (error) {
     const timedOut = Boolean((error as { timeout?: unknown } | undefined)?.timeout);
     return {
-      route: `${route.mode} GET ${route.path}`,
+      route: `${route.mode} POST ${route.path}`,
       status: timedOut ? 598 : 599,
       detail: error instanceof Error ? error.message : String(error),
     };
@@ -159,7 +171,8 @@ beforeAll(async () => {
   agent = request.agent(ctx.app);
 
   await pool.query(
-    `UPDATE user_company_roles SET role = 'Developer', can_delete_records = true, can_sell_negative_stock = true
+    `UPDATE user_company_roles
+        SET role = 'Developer', can_delete_records = true, can_sell_negative_stock = true
       WHERE user_id = $1 AND company_id = $2`,
     [ctx.userId, ctx.companyId]
   );
@@ -176,7 +189,7 @@ beforeAll(async () => {
     properties: await createCompany("properties"),
     supplier_partner: await createCompany("supplier_partner"),
   };
-  routes = selectExportReportRoutes(JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest);
+  routes = selectPhase2ImportValidationRoutes(JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest);
   before = {
     erp: await fingerprint(companies.erp),
     factory: await fingerprint(companies.factory),
@@ -190,31 +203,35 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 read-only export/report sweep", () => {
-  it("executes safe report and export generators without unhandled server errors", async () => {
-    expect(routes.length).toBeGreaterThan(10);
-    const failures: Failure[] = [];
+describe.sequential("Phase 2 import/upload validation sweep", () => {
+  it("rejects empty imports cleanly across every company mode", async () => {
+    expect(routes.length).toBeGreaterThan(15);
+    const failures: Array<{ route: string; status: number; detail: string }> = [];
 
     for (const mode of ["erp", "factory", "properties", "supplier_partner"] as CompanyMode[]) {
       const switched = await agent.post("/api/auth/set-company").send({ companyId: companies[mode] });
       expect(switched.status, `set-company ${mode}`).toBe(200);
-      const modeRoutes = routes.filter((route) => route.mode === mode);
 
+      const modeRoutes = routes.filter((route) => route.mode === mode);
       for (let offset = 0; offset < modeRoutes.length; offset += CONCURRENCY) {
         const outcomes = await Promise.all(modeRoutes.slice(offset, offset + CONCURRENCY).map(exercise));
-        failures.push(...outcomes.filter((outcome): outcome is Failure => outcome !== null));
+        failures.push(
+          ...outcomes.filter(
+            (outcome): outcome is { route: string; status: number; detail: string } => outcome !== null
+          )
+        );
       }
     }
 
     const report = failures
       .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
       .join("\n");
-    expect(failures, `${failures.length} export/report route(s) failed:\n${report}`).toEqual([]);
+    expect(failures, `${failures.length} import validation route(s) failed:\n${report}`).toEqual([]);
   }, 300000);
 
-  it("keeps report/export generation read-only", async () => {
+  it("does not create accounting or inventory state from rejected imports", async () => {
     for (const [mode, companyId] of Object.entries(companies) as [CompanyMode, number][]) {
-      expect(await fingerprint(companyId), `${mode} changed during report/export sweep`).toEqual(before[mode]);
+      expect(await fingerprint(companyId), `${mode} changed during rejected import sweep`).toEqual(before[mode]);
     }
   });
 });

@@ -23,6 +23,12 @@ export function registerStockItemEditRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
+      const hasEditableField =
+        req.body.quantity !== undefined || req.body.rate !== undefined || req.body.stockItemId !== undefined;
+      if (!hasEditableField) {
+        return res.status(400).json({ message: "No stock transfer item fields to update" });
+      }
+
       // Validate numeric fields if provided
       if (req.body.quantity !== undefined) {
         const qty = parseFloat(req.body.quantity);
@@ -64,7 +70,11 @@ export function registerStockItemEditRoutes(app: Express) {
       }
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message === "Stock transfer item not found") {
+        return res.status(404).json({ message });
+      }
+      res.status(500).json({ message });
     }
   });
 
@@ -78,6 +88,12 @@ export function registerStockItemEditRoutes(app: Express) {
 
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
+      }
+
+      const hasEditableField =
+        req.body.quantity !== undefined || req.body.rate !== undefined || req.body.stockItemId !== undefined;
+      if (!hasEditableField) {
+        return res.status(400).json({ message: "No stock adjustment item fields to update" });
       }
 
       // Validate numeric fields if provided
@@ -103,7 +119,11 @@ export function registerStockItemEditRoutes(app: Express) {
       const updated = await storage.updateStockAdjustmentItem(itemId, req.body);
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message === "Stock adjustment item not found") {
+        return res.status(404).json({ message });
+      }
+      res.status(500).json({ message });
     }
   });
 }

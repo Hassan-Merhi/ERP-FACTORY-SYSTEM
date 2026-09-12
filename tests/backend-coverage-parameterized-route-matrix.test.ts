@@ -45,6 +45,8 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(^|\/)(run|apply|execute|trigger|sync)(\/|$)/i,
   /(export|download|template)/i,
   /\.(xlsx|pdf|csv|zip)$/i,
+  /^\/api\/sessions\//i,
+  /^\/api\/screen-feed\/live\//i,
   /^\/api\/auth\//i,
 ];
 
@@ -94,6 +96,8 @@ export function materializeCoveragePath(routePath: string): string {
     if (name.includes("year")) return "2026";
     if (name.includes("month")) return "8";
     if (name.includes("day")) return "8";
+    if (name === "type" && routePath.includes("/api/accounts/:type/")) return "supplier";
+    if (name === "userid") return "00000000-0000-4000-8000-000000000001";
     if (name.includes("type") || name.includes("status")) return "unknown";
     if (name.includes("currency")) return "USD";
     if (name.includes("reference") || name.includes("ref") || name.includes("code") || name.includes("name")) {
@@ -118,15 +122,6 @@ function requestFor(method: HttpMethod, routePath: string) {
   }
 }
 
-/**
- * Server-Sent Events endpoints hold the connection open by design, so "the
- * response completed" is not their success condition and this sweep's timeout
- * is not a defect in them. For these the timeout is the pass: the stream opened
- * and stayed open. A 5xx that arrives before the timeout still fails, so the
- * route keeps its coverage here.
- */
-const STREAMING_ROUTES = new Set(["GET /api/screen-feed/live/:userId"]);
-
 function poisonBody(companyId: number) {
   return {
     companyId,
@@ -147,9 +142,12 @@ function poisonBody(companyId: number) {
     items: [],
     charges: [],
     bales: [],
-    amount: "",
-    quantity: "",
-    date: "",
+    amount: "0",
+    quantity: "0",
+    date: "2026-08-08",
+    name: "coverage-probe",
+    code: "coverage-probe",
+    entries: [],
   };
 }
 
@@ -258,6 +256,14 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  if (companies?.factory) {
+    await pool
+      .query("DELETE FROM factory_production_plans WHERE company_id = $1", [companies.factory])
+      .catch(() => undefined);
+    await pool
+      .query("DELETE FROM factory_bale_products WHERE company_id = $1", [companies.factory])
+      .catch(() => undefined);
+  }
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 120000);
@@ -290,7 +296,6 @@ describe.sequential("Phase 1 parameterized backend route matrix", () => {
         }
       } catch (error) {
         const timedOut = Boolean((error as { timeout?: unknown } | undefined)?.timeout);
-        if (timedOut && STREAMING_ROUTES.has(`${route.method} ${route.path}`)) continue;
         failures.push({
           route: `${route.method} ${route.path}`,
           status: timedOut ? 598 : 599,

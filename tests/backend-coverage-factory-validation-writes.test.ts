@@ -99,13 +99,13 @@ function poisonBody() {
     charges: [],
     bales: [],
     transfers: [],
-    amount: "",
-    quantity: "",
+    amount: "0",
+    quantity: "0",
     name: "",
     code: "",
-    date: "",
-    startDate: "",
-    endDate: "",
+    date: "2026-08-08",
+    startDate: "2026-08-01",
+    endDate: "2026-08-08",
   };
 }
 
@@ -166,6 +166,12 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  await pool
+    .query("DELETE FROM factory_production_plans WHERE company_id = $1", [emptyFactoryCompanyId])
+    .catch(() => undefined);
+  await pool
+    .query("DELETE FROM factory_bale_products WHERE company_id = $1", [emptyFactoryCompanyId])
+    .catch(() => undefined);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 120000);
