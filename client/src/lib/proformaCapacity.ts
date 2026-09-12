@@ -1,4 +1,4 @@
-export type ProformaLineStatus = "fulfilled" | "overloaded" | "short" | "none";
+export type ProformaLineStatus = "fulfilled" | "overloaded" | "short" | "none" | "reference";
 
 export interface ProformaCapacityArticle {
   articleCode: string;
@@ -66,16 +66,38 @@ export function proformaCapacityArticles(
 }
 
 /**
- * Loading progress is intentionally per-loading. The capacity snapshot keeps
- * sibling/global totals for reporting, but another loading that reused the same
- * proforma must never make this loading look fulfilled or overloaded.
+ * Once a loading exists, its linked proforma is reference-only. Show the master
+ * proforma quantity next to what this loading actually scanned, but never call
+ * the live loading overloaded/short/missing because the same proforma may be
+ * reused for several independently composed loadings.
+ *
+ * A snapshot without currentOrderId is still a template/global preview, so the
+ * historical status calculation remains available there.
  */
 export function buildProformaProgress(snapshot: ProformaCapacitySnapshot | null | undefined): ProformaProgressLine[] {
   if (!snapshot) return [];
+  const referenceOnly = snapshot.currentOrderId !== null;
   return proformaCapacityArticles(snapshot)
     .filter((article) => article.isOnProforma)
     .map((article) => {
       const loaded = article.currentOrderLoadedQty;
+      if (referenceOnly) {
+        return {
+          id: `${snapshot.proformaId}:${article.normalizedArticleCode}`,
+          articleCode: article.articleCode,
+          normalizedArticleCode: article.normalizedArticleCode,
+          productName: article.productName || article.articleCode,
+          quantity: article.requestedQty,
+          loaded,
+          siblingLoaded: article.siblingLoadedQty,
+          totalLoaded: loaded,
+          remaining: 0,
+          fulfilled: false,
+          status: "reference" as const,
+          excess: 0,
+        };
+      }
+
       const remaining = Math.max(0, article.requestedQty - loaded);
       const excess = Math.max(0, loaded - article.requestedQty);
       const status: ProformaLineStatus =
