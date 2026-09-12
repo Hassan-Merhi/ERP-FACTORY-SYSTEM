@@ -60,7 +60,8 @@ function LedgerView({
 
   const fixAllocation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/properties/repair/reallocate-payments/${contract.id}`, {}),
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { message?: string; fixed?: number };
       toast({
         title: "Allocation fixed",
         description: data?.message ?? `${data?.fixed ?? 0} payment(s) reallocated to the correct months.`,

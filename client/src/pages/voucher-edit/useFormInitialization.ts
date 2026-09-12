@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { parseISO } from "date-fns";
 import { UseFormReturn } from "react-hook-form";
 import { VoucherData, LedgerAccount, BankAccount, Supplier } from "./VoucherEditHelpers";
+import type { AccountWithBalance } from "./VoucherAccountHelpers";
 import {
   VoucherFormData,
   JournalFormData,
@@ -19,7 +20,7 @@ export const useFormInitialization = (
   ledgerAccounts: LedgerAccount[],
   bankAccounts: BankAccount[],
   suppliers: Supplier[],
-  allAccountsData: any[],
+  allAccountsData: AccountWithBalance[],
   selectedCurrency: "USD" | "CFA",
   paymentForm: UseFormReturn<VoucherFormData>,
   journalForm: UseFormReturn<JournalFormData>,

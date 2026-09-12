@@ -5,11 +5,12 @@ import { LedgerAccount, BankAccount, Supplier } from "./VoucherEditHelpers";
 
 export interface AccountWithBalance {
   type: string;
-  id: string;
-  accountId: number;
+  id: string | number;
+  accountId?: number;
   name: string;
-  balance: string;
+  balance: string | number;
   balanceSide?: string;
+  code?: string;
 }
 
 export const useAccountsWithBalances = (
@@ -23,7 +24,7 @@ export const useAccountsWithBalances = (
     const accounts: CombinedAccount[] = [];
     ledgerAccounts.forEach((ledger) => {
       const accountData = allAccountsData.find((a) => a.id === `ledger-${ledger.id}`);
-      const baseBalance = parseFloat(accountData?.balance || "0");
+      const baseBalance = Number(accountData?.balance ?? 0);
       const adjustment = balanceAdjustments[`ledger-${ledger.id}`] || 0;
       const adjustedBalance = baseBalance + adjustment;
       accounts.push({
@@ -37,7 +38,7 @@ export const useAccountsWithBalances = (
 
     bankAccounts.forEach((bank) => {
       const accountData = allAccountsData.find((a) => a.id === `bank-${bank.id}`);
-      const baseBalance = parseFloat(accountData?.balance || bank.balance || "0");
+      const baseBalance = Number(accountData?.balance ?? bank.balance ?? 0);
       const adjustment = balanceAdjustments[`bank-${bank.id}`] || 0;
       const adjustedBalance = baseBalance + adjustment;
       accounts.push({
@@ -51,7 +52,7 @@ export const useAccountsWithBalances = (
 
     suppliers.forEach((supplier) => {
       const accountData = allAccountsData.find((a) => a.id === `supplier-${supplier.id}`);
-      const baseBalance = parseFloat(accountData?.balance || "0");
+      const baseBalance = Number(accountData?.balance ?? 0);
       const adjustment = balanceAdjustments[`supplier-${supplier.id}`] || 0;
       const adjustedBalance = baseBalance + adjustment;
       accounts.push({
@@ -63,7 +64,7 @@ export const useAccountsWithBalances = (
       });
     });
 
-    (allAccountsData as any[])
+    allAccountsData
       .filter((a) => a.type === "factorySupplier")
       .forEach((fs) => {
         const adjustment = balanceAdjustments[`factorySupplier-${fs.id}`] || 0;

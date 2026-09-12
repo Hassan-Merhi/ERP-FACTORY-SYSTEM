@@ -25,6 +25,14 @@ import { useEscapeBack } from "@/hooks/use-escape-back";
 
 const BatchDetail = lazy(() => import("./BatchDetail"));
 
+interface UnlinkedBale {
+  id: number;
+  weightKg?: string;
+  baleCode?: string;
+  productName?: string;
+  status?: string;
+}
+
 export default function MixBatches() {
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
@@ -52,7 +60,7 @@ export default function MixBatches() {
 
   const deleteBatch = deleteId ? (batches?.find((b) => b.id === deleteId) ?? null) : null;
 
-  const { data: unlinkedBales } = useQuery<any[]>({
+  const { data: unlinkedBales } = useQuery<UnlinkedBale[]>({
     queryKey: ["/api/factory/bales/unlinked"],
     enabled: assignDialogOpen,
   });
@@ -604,7 +612,7 @@ export default function MixBatches() {
                             <TableCell className="font-mono text-sm">{bale.baleCode}</TableCell>
                             <TableCell className="text-sm">{bale.productName || "—"}</TableCell>
                             <TableCell className="text-right font-mono text-sm">
-                              {formatNumber(parseFloat(bale.weightKg))}
+                              {formatNumber(parseFloat(bale.weightKg || "0"))}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">

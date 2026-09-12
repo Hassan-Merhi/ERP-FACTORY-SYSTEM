@@ -165,7 +165,11 @@ export default function PressingBales() {
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
   const totalKgToConsume = cart.reduce((sum, item) => sum + item.qty * item.weightPerBaleKg, 0);
 
-  const printBaleLabels = async (bales: any[], products: FactoryBaleProduct[], weights: string[]) => {
+  const printBaleLabels = async (
+    bales: { id: number; productId?: number; weightKg?: string }[],
+    products: FactoryBaleProduct[],
+    weights: string[]
+  ) => {
     try {
       const labelData = bales.map((bale, idx: number) => ({
         productionBaleId: bale.id,
@@ -184,9 +188,16 @@ export default function PressingBales() {
         throw new Error(err.message || "Failed to create label print records");
       }
 
-      const { labelPrints } = await labelPrintResponse.json();
+      const { labelPrints } = (await labelPrintResponse.json()) as {
+        labelPrints: Array<{
+          referenceNumber: string;
+          articleCode: string;
+          pieces: number;
+          approxWeightKg: string;
+        }>;
+      };
 
-      const labels = labelPrints.map((lp: any, idx: number) => ({
+      const labels = labelPrints.map((lp, idx: number) => ({
         referenceNumber: lp.referenceNumber,
         articleCode: lp.articleCode,
         pieces: lp.pieces,

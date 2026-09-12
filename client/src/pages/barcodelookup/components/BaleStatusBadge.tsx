@@ -3,13 +3,13 @@
  *
  * Extracted from BarcodeLookup.tsx during the Phase 4 god-file split.
  */
-import { CheckCircle2, AlertCircle, XCircle, ArchiveX } from "lucide-react";
+import { CheckCircle2, AlertCircle, XCircle, ArchiveX, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function BaleStatusBadge({ status }: { status: string }) {
   const map: Record<
     string,
-    { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any }
+    { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: LucideIcon }
   > = {
     IN_STOCK: { label: "In Stock", variant: "default", icon: CheckCircle2 },
     SOLD: { label: "Sold", variant: "secondary", icon: ArchiveX },

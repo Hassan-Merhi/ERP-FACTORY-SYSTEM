@@ -66,7 +66,8 @@ export default function CompanyDataReset() {
         companyId: parseInt(selectedCompanyId),
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { vouchersRestored?: number };
       toast({
         title: "Undo Complete",
         description: `Restored ${data.vouchersRestored || 0} vouchers successfully`,

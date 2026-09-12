@@ -66,9 +66,7 @@ export default function AccountGroups() {
   const { data: allAccounts = [], isLoading } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/ledger-accounts", selectedCompany?.id],
     queryFn: async () => {
-      const url = selectedCompany?.id
-        ? `/api/ledger-accounts?companyId=${selectedCompany.id}`
-        : "/api/ledger-accounts";
+      const url = selectedCompany?.id ? `/api/ledger-accounts?companyId=${selectedCompany.id}` : "/api/ledger-accounts";
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch accounts");
       return res.json();
@@ -130,14 +128,15 @@ export default function AccountGroups() {
   const createGroupMutation = useMutation({
     mutationFn: async ({ name, accountType }: { name: string; accountType: string }) => {
       if (!selectedCompany?.id) throw new Error("No company selected");
-      return accountsApi.createLedgerAccount({
+      const res = await accountsApi.createLedgerAccount({
         name,
         accountType,
         subType: "Group",
         companyId: selectedCompany.id,
       });
+      return (await res.json()) as LedgerAccount;
     },
-    onSuccess: async (data: any) => {
+    onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       setCreateOpen(false);
       setNewGroupName("");
@@ -187,8 +186,7 @@ export default function AccountGroups() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: async (accountId: number) =>
-      accountsApi.bulkAssignParent([accountId], null),
+    mutationFn: async (accountId: number) => accountsApi.bulkAssignParent([accountId], null),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       toast({ title: "Account removed from group" });
@@ -309,7 +307,10 @@ export default function AccountGroups() {
                       <div className="font-medium text-sm truncate">{group.name}</div>
                       <div className="text-xs text-muted-foreground truncate">{group.accountType}</div>
                     </div>
-                    <Badge variant="secondary" className="shrink-0 text-xs no-default-hover-elevate no-default-active-elevate">
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 text-xs no-default-hover-elevate no-default-active-elevate"
+                    >
                       {childCount(group.id)}
                     </Badge>
                   </div>
@@ -376,9 +377,7 @@ export default function AccountGroups() {
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">
-                    Member Accounts ({childrenOfSelected.length})
-                  </CardTitle>
+                  <CardTitle className="text-sm font-medium">Member Accounts ({childrenOfSelected.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {childrenOfSelected.length === 0 ? (
@@ -398,7 +397,10 @@ export default function AccountGroups() {
                             <span className="text-xs text-muted-foreground ml-2">{child.code}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs shrink-0 no-default-hover-elevate no-default-active-elevate">
+                            <Badge
+                              variant="outline"
+                              className="text-xs shrink-0 no-default-hover-elevate no-default-active-elevate"
+                            >
                               {child.accountType}
                             </Badge>
                             <Button
@@ -497,9 +499,7 @@ export default function AccountGroups() {
               Cancel
             </Button>
             <Button
-              onClick={() =>
-                selectedGroup && renameMutation.mutate({ id: selectedGroup.id, name: renameName.trim() })
-              }
+              onClick={() => selectedGroup && renameMutation.mutate({ id: selectedGroup.id, name: renameName.trim() })}
               disabled={!renameName.trim() || renameMutation.isPending}
               data-testid="button-confirm-rename"
             >
@@ -550,7 +550,10 @@ export default function AccountGroups() {
                       </div>
                     </div>
                     {acc.parentId && acc.parentId !== selectedGroupId && (
-                      <Badge variant="outline" className="text-xs shrink-0 no-default-hover-elevate no-default-active-elevate">
+                      <Badge
+                        variant="outline"
+                        className="text-xs shrink-0 no-default-hover-elevate no-default-active-elevate"
+                      >
                         In another group
                       </Badge>
                     )}
@@ -587,10 +590,9 @@ export default function AccountGroups() {
           <AlertDialogHeader>
             <AlertDialogTitle>Dissolve this group?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the group and unlink all{" "}
-              {dissolveConfirmId ? childCount(dissolveConfirmId) : 0} account
-              {(dissolveConfirmId ? childCount(dissolveConfirmId) : 0) !== 1 ? "s" : ""} from it. The
-              accounts themselves are not deleted — they just won't be grouped anymore.
+              This will remove the group and unlink all {dissolveConfirmId ? childCount(dissolveConfirmId) : 0} account
+              {(dissolveConfirmId ? childCount(dissolveConfirmId) : 0) !== 1 ? "s" : ""} from it. The accounts
+              themselves are not deleted — they just won't be grouped anymore.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

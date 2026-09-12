@@ -448,7 +448,11 @@ export function useBaleProductsModel() {
         /* logo fetch failed — skip */
       }
 
-      const addHeaderRow = (text: string, height: number, font: any) => {
+      const addHeaderRow = (
+        text: string,
+        height: number,
+        font: { bold?: boolean; size?: number; color?: { argb: string } }
+      ) => {
         const r = ws.addRow(["", "", text, "", "", "", "", ""]);
         r.height = height;
         const cell = r.getCell(3);
@@ -640,7 +644,11 @@ export function useBaleProductsModel() {
         /* logo fetch failed — skip */
       }
 
-      const addHeaderRow = (text: string, height: number, font: any) => {
+      const addHeaderRow = (
+        text: string,
+        height: number,
+        font: { bold?: boolean; size?: number; color?: { argb: string } }
+      ) => {
         const r = ws.addRow(["", "", text, "", "", ""]);
         r.height = height;
         const cell = r.getCell(3);

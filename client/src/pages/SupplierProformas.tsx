@@ -143,7 +143,13 @@ export default function SupplierProformas() {
   });
 
   const addLineMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: {
+      barcode: string;
+      itemName: string;
+      qty: string;
+      weightPerBale: string;
+      pricePerBale: string;
+    }) => {
       const res = await apiRequest("POST", `/api/suppliers/${supplierId}/proformas/${selectedProformaId}/lines`, data);
       return res.json();
     },
@@ -264,7 +270,7 @@ export default function SupplierProformas() {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws);
         /** Parse a human-entered decimal from Excel into a plain number, 0 on failure. */
-        const parseExcelNum = (v: any): number => {
+        const parseExcelNum = (v: unknown): number => {
           const raw = String(v ?? "").trim();
           const stripped = raw.replace(/^[^0-9\-(]+/, "").replace(/[^0-9.]+$/, "");
           const noCommas = stripped.replace(/,(?=\d{3}(?:[,.]|$))/g, "");

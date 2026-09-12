@@ -135,7 +135,9 @@ function NewItemsTab() {
     }
     setIsProcessing(true);
     try {
-      const stockGroupsData: any[] = await fetch("/api/stock-groups", { credentials: "include" }).then((r) => r.json());
+      const stockGroupsData: { id: number; code: string }[] = await fetch("/api/stock-groups", {
+        credentials: "include",
+      }).then((r) => r.json());
       const stockGroupMap = new Map(stockGroupsData.map((sg) => [sg.code, sg.id]));
       const itemsToImport = previewData.map((row) => {
         const item: {
@@ -397,9 +399,15 @@ function BarcodesTab() {
     }
     setIsProcessing(true);
     try {
-      const res = (await apiRequest("POST", "/api/stock-items/import-barcodes", {
+      const response = await apiRequest("POST", "/api/stock-items/import-barcodes", {
         rows: validRows.map((r) => ({ itemCode: r.itemCode, barcode: r.barcode })),
-      })) as any;
+      });
+      const res = (await response.json()) as {
+        imported: number;
+        skipped: number;
+        notFound: number;
+        notFoundCodes: string[];
+      };
       setResult(res);
       toast({
         title: "Import Complete",

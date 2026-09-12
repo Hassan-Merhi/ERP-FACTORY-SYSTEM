@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { GitBranch } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { formatNumber } from "@/lib/formatNumber";
+import type { StockTransferRevision } from "../../stocktransferorder/types";
 
 export function RevisionDialog({
   computeRevisionItems,
@@ -21,12 +22,20 @@ export function RevisionDialog({
   setRevisionDialogOpen,
   setRevisionNote,
 }: {
-  computeRevisionItems: () => { stockItemId: number; stockItemName: string; sourceLocationId: number | null; sourceLocationName: string; originalQuantity: number; delta: number; newQuantity: number; }[];
+  computeRevisionItems: () => {
+    stockItemId: number;
+    stockItemName: string;
+    sourceLocationId: number | null;
+    sourceLocationName: string;
+    originalQuantity: number;
+    delta: number;
+    newQuantity: number;
+  }[];
   confirmSaveAsRevision: () => Promise<void>;
   isSavingRevision: boolean;
   revisionDialogOpen: boolean;
   revisionNote: string;
-  revisions: any;
+  revisions: StockTransferRevision[];
   setRevisionDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setRevisionNote: React.Dispatch<React.SetStateAction<string>>;
 }) {
