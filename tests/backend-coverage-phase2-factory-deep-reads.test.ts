@@ -266,8 +266,12 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
-  await pool.query("DELETE FROM factory_bale_products WHERE company_id = $1", [factoryCompanyId]).catch(() => undefined);
-  await pool.query("DELETE FROM factory_production_plans WHERE company_id = $1", [factoryCompanyId]).catch(() => undefined);
+  await pool
+    .query("DELETE FROM factory_bale_products WHERE company_id = $1", [factoryCompanyId])
+    .catch(() => undefined);
+  await pool
+    .query("DELETE FROM factory_production_plans WHERE company_id = $1", [factoryCompanyId])
+    .catch(() => undefined);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 120000);
