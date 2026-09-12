@@ -140,6 +140,14 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const { templateId, name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } =
         req.body;
+      // template_id and name are both NOT NULL and neither was validated, so a
+      // body without them failed the insert as a 500 instead of a 400.
+      if (!Number.isInteger(templateId)) {
+        return res.status(400).json({ error: "templateId is required and must be an integer" });
+      }
+      if (typeof name !== "string" || name.trim() === "") {
+        return res.status(400).json({ error: "name is required" });
+      }
       const [metric] = await db
         .insert(statusMetrics)
         .values({
@@ -165,11 +173,22 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const { name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } = req.body;
-      const [updated] = await db
-        .update(statusMetrics)
-        .set({ name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder })
-        .where(eq(statusMetrics.id, id))
-        .returning();
+      // A body carrying none of these fields left every value undefined, so the
+      // update reached drizzle as .set({}) — "No values to set", a 500.
+      const updates = {
+        ...(name !== undefined && { name }),
+        ...(beforeSourceType !== undefined && { beforeSourceType }),
+        ...(sourceType !== undefined && { sourceType }),
+        ...(sourceField !== undefined && { sourceField }),
+        ...(operation !== undefined && { operation }),
+        ...(filtersJson !== undefined && { filtersJson }),
+        ...(sortOrder !== undefined && { sortOrder }),
+      };
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
+      const [updated] = await db.update(statusMetrics).set(updates).where(eq(statusMetrics.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "Metric not found" });
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: getErrorMessage(err) });
@@ -327,6 +346,14 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       const { entries } = req.body as {
         entries: { metricId: number; manualAdjustment: number; beforeValue: number }[];
       };
+      // A body without an entries array reached the for..of as undefined and
+      // threw "entries is not iterable", which surfaced as a 500.
+      if (!Array.isArray(entries)) {
+        return res.status(400).json({ message: "entries must be an array" });
+      }
+      if (entries.some((entry) => !Number.isInteger(entry?.metricId))) {
+        return res.status(400).json({ message: "each entry requires an integer metricId" });
+      }
       const now = new Date();
 
       for (const entry of entries) {

@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
@@ -196,6 +196,22 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
 
       const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
 
+      // The text fields above normalize blanks to null so COALESCE keeps the
+      // stored value. The numeric ones used `?? null`, which let a blank
+      // string through to a numeric column — "invalid input syntax for type
+      // numeric" as a 500. Treat blank as absent like the text fields, and
+      // reject a value that is present but not a number.
+      const numericParam = (value: unknown, field: string): number | null => {
+        if (value === undefined || value === null || value === "") return null;
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) throw new HttpError(400, `${field} must be a number`);
+        return parsed;
+      };
+      const quantityParam = numericParam(quantity, "quantity");
+      const unitPriceParam = numericParam(unitPrice, "unitPrice");
+      const packQtyParam = numericParam(packQty, "packQty");
+      const pcsPerPackParam = numericParam(pcsPerPack, "pcsPerPack");
+
       const { rows } = await pool.query(
         `UPDATE factory_sheets_sacks
          SET type         = COALESCE($1, type),
@@ -213,10 +229,10 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
           type || null,
           name || null,
           size || null,
-          quantity ?? null,
-          unitPrice ?? null,
-          packQty != null ? parseInt(packQty) : null,
-          pcsPerPack != null ? parseInt(pcsPerPack) : null,
+          quantityParam,
+          unitPriceParam,
+          packQtyParam,
+          pcsPerPackParam,
           rowColor || null,
           notes || null,
           id,
@@ -227,7 +243,7 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
       res.json(rows[0]);
     } catch (err: unknown) {
       logger.error("PATCH /api/factory/sheets-sacks/:id error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to update item" });
+      sendHttpError(res, err);
     }
   });
 

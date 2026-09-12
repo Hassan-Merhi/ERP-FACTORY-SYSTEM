@@ -113,6 +113,17 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
 
       const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;
 
+      // date and kg_waste are both NOT NULL, and neither was validated: a
+      // blank date reached the date column and String("") reached the numeric
+      // column, so the insert failed as a 500 rather than a 400.
+      if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
+        return res.status(400).json({ message: "date is required and must be a valid date" });
+      }
+      const kgWasteValue = Number(kgWaste);
+      if (kgWaste === undefined || kgWaste === null || kgWaste === "" || !Number.isFinite(kgWasteValue)) {
+        return res.status(400).json({ message: "kgWaste is required and must be a number" });
+      }
+
       const [entry] = await db
         .insert(factoryWasteEntries)
         .values({
@@ -122,7 +133,7 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
           supplierId: supplierId || null,
           containerId: containerId || null,
           wasteType: wasteType || null,
-          kgWaste: String(kgWaste),
+          kgWaste: String(kgWasteValue),
           reason: reason || null,
           // factory_waste_entries.created_by is an integer column; session ids are
           // numeric strings, matching how the POS routes coerce them.

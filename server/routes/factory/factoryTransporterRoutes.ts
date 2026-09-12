@@ -167,12 +167,24 @@ export function registerFactoryTransporterRoutes(app: Express) {
         })
         .parse(req.body);
 
+      // Every field is optional, so a body with none of them reached drizzle as
+      // .set({}) — which throws "No values to set" and surfaced as a 500.
+      const updates = {
+        ...(name !== undefined && { name }),
+        ...(phone !== undefined && { phone }),
+        ...(notes !== undefined && { notes }),
+      };
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
+
       const [updated] = await db
         .update(factoryTransporters)
-        .set({ ...(name && { name }), phone, notes })
+        .set(updates)
         .where(and(eq(factoryTransporters.id, id), eq(factoryTransporters.companyId, companyId)))
         .returning();
 
+      if (!updated) return res.status(404).json({ message: "Transporter not found" });
       res.json(updated);
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });
