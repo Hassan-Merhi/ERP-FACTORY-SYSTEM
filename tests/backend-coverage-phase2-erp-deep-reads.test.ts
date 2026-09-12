@@ -90,7 +90,8 @@ function resolveErpRoute(routePath: string, resources: ResourceIds): string | nu
     else if (/\/vouchers\/:id\b/.test(routePath)) concrete = concrete.replace(/:id\b/g, String(resources.voucherId));
     else if (/\/accounts\/:id\b/.test(routePath)) concrete = concrete.replace(/:id\b/g, String(resources.accountId));
     else if (/\/locations\/:id\b/.test(routePath)) concrete = concrete.replace(/:id\b/g, String(resources.locationId));
-    else if (/\/stock-items\/:id\b/.test(routePath)) concrete = concrete.replace(/:id\b/g, String(resources.stockItemId));
+    else if (/\/stock-items\/:id\b/.test(routePath))
+      concrete = concrete.replace(/:id\b/g, String(resources.stockItemId));
     else if (/\/stock-groups\/:id\b/.test(routePath)) {
       concrete = concrete.replace(/:id\b/g, String(resources.stockGroupId));
     }

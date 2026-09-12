@@ -128,10 +128,7 @@ async function exercise(route: RouteCase): Promise<{ route: string; status: numb
   try {
     let pending: request.Test;
     if (route.multipart) {
-      pending = agent
-        .post(route.path)
-        .field("phase2Validation", "true")
-        .field("mode", "preview");
+      pending = agent.post(route.path).field("phase2Validation", "true").field("mode", "preview");
     } else {
       pending = agent.post(route.path).send({
         rows: [],
