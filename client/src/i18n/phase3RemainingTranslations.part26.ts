@@ -293,4 +293,49 @@ export const phase3RemainingTranslationsPart26: readonly Phase3SharedUiEntry[] =
     ar: "تعذّر حذف الشركة.",
     fr: "La société n’a pas pu être supprimée.",
   },
+  {
+    en: "Reference",
+    ar: "مرجع",
+    fr: "Référence",
+  },
+  {
+    en: "Reference only — this proforma does not cap this loading",
+    ar: "للمرجع فقط — هذه الفاتورة الأولية لا تفرض حداً على هذا التحميل",
+    fr: "Référence uniquement — cette facture proforma ne limite pas ce chargement",
+  },
+  {
+    en: "Proforma",
+    ar: "فاتورة أولية",
+    fr: "Proforma",
+  },
+  {
+    en: "Proforma Qty",
+    ar: "كمية الفاتورة الأولية",
+    fr: "Qté proforma",
+  },
+  {
+    en: "Loaded Here",
+    ar: "المحمّل هنا",
+    fr: "Chargé ici",
+  },
+  {
+    en: "Outside proforma reference",
+    ar: "خارج مرجع الفاتورة الأولية",
+    fr: "Hors référence proforma",
+  },
+  {
+    en: "Outside reference",
+    ar: "خارج المرجع",
+    fr: "Hors référence",
+  },
+  {
+    en: "Proforma is shown for reference only",
+    ar: "تُعرض الفاتورة الأولية للمرجع فقط",
+    fr: "La proforma est affichée à titre de référence uniquement",
+  },
+  {
+    en: "Review this loading beside the reusable proforma reference. Quantities are not capped across loadings.",
+    ar: "راجع هذا التحميل إلى جانب مرجع الفاتورة الأولية القابل لإعادة الاستخدام. لا تُفرض حدود للكميات عبر التحميلات.",
+    fr: "Examinez ce chargement avec la référence proforma réutilisable. Les quantités ne sont pas plafonnées entre les chargements.",
+  },
 ];
