@@ -23,15 +23,22 @@ import { stockAdjustmentFormSchema } from "../stockadjustmentform/utils";
 
 interface LocationInventoryRow {
   stockItemId: number;
-  quantity?: string;
-  averageRate?: string;
+  quantity?: string | null;
+  averageRate?: string | null;
 }
 
-interface StockAdjustmentRecord {
+interface StockAdjustmentItemResponse {
+  stockItemId: number;
+  quantity: string;
+  rate?: string;
+}
+
+interface StockAdjustmentResponse {
   id?: number;
   locationId?: number;
-  notes?: string;
-  items?: { stockItemId?: number; quantity?: string; rate?: string }[];
+  adjustmentType?: string;
+  notes?: string | null;
+  items?: StockAdjustmentItemResponse[];
 }
 
 export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustmentFormProps) {
@@ -64,7 +71,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
     },
   });
 
-  const { data: stockAdjustmentToEdit } = useQuery<StockAdjustmentRecord>({
+  const { data: stockAdjustmentToEdit } = useQuery<StockAdjustmentResponse>({
     queryKey: ["/api/stock-adjustments", voucherIdToEdit],
     enabled: !!voucherIdToEdit,
     queryFn: async () => {
@@ -166,7 +173,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
       const formEntries = stockAdjustmentToEdit.items.map((item) => {
         const stockItem = stockItems.find((s) => s.id === item.stockItemId);
         const quantity = parseFloat(item.quantity || "0");
-        const type: "CONSUME" | "PRODUCE" = quantity < 0 ? "CONSUME" : "PRODUCE";
+        const type: StockAdjustmentFormData["entries"][number]["type"] = quantity < 0 ? "CONSUME" : "PRODUCE";
         const absQuantity = Math.abs(quantity).toString();
         return {
           type,

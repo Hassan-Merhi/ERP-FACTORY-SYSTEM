@@ -33,7 +33,7 @@ describe("Phase 2 proforma write guards", () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
-  it("allows creation only while the selected customer has remaining active capacity", async () => {
+  it("allows creation for the selected customer while the proforma is active", async () => {
     const { executor } = executorWith(
       [proforma],
       [{ articleCode: "A", quantity: 4 }],
@@ -45,61 +45,23 @@ describe("Phase 2 proforma write guards", () => {
     ).resolves.toEqual({ allowed: true });
   });
 
-  it("blocks creation when the target proforma is already fully consumed", async () => {
+  it("allows a new loading even when sibling loadings already consumed the full proforma quantity", async () => {
     const { executor } = executorWith(
       [proforma],
       [{ articleCode: "A", quantity: 2 }],
       [{ normalizedArticleCode: "a", orderId: 154, orderStatus: "VERIFIED", loadedQty: 2 }]
     );
 
-    const result = await guardProformaOrderCreation(executor, {
-      companyId: 12,
-      proformaId: 71,
-      customerId: 23,
-    });
-    expect(result).toEqual(
-      expect.objectContaining({
-        allowed: false,
-        status: 400,
-        body: expect.objectContaining({ message: "Proforma has no remaining loading capacity" }),
-      })
-    );
+    await expect(
+      guardProformaOrderCreation(executor, { companyId: 12, proformaId: 71, customerId: 23 })
+    ).resolves.toEqual({ allowed: true });
   });
 
-  it("rejects linking an existing loading when one loaded article is outside the proforma", async () => {
+  it("allows linking an already-scanned loading even when it contains an article outside the proforma", async () => {
     const { executor, execute } = executorWith(
       [proforma],
       [{ articleCode: "A", quantity: 3 }],
-      [],
-      [{ articleCode: "EXTRA", quantity: 1 }]
-    );
-
-    const result = await guardExistingOrderProformaLink(executor, {
-      companyId: 12,
-      proformaId: 71,
-      customerId: 23,
-      orderId: 170,
-    });
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        allowed: false,
-        status: 400,
-        body: expect.objectContaining({
-          message: "Existing loaded bales exceed or do not match the selected proforma capacity",
-          capacityIssues: [expect.objectContaining({ reason: "not_in_proforma", normalizedArticleCode: "extra" })],
-        }),
-      })
-    );
-    expect(execute).toHaveBeenCalledTimes(4);
-  });
-
-  it("permits linking existing bales that fit the target proforma's remaining global capacity", async () => {
-    const { executor } = executorWith(
-      [proforma],
-      [{ articleCode: "A", quantity: 5 }],
-      [{ normalizedArticleCode: "a", orderId: 154, orderStatus: "LOADING", loadedQty: 2 }],
-      [{ articleCode: "A", quantity: 3 }]
+      []
     );
 
     await expect(
@@ -110,5 +72,66 @@ describe("Phase 2 proforma write guards", () => {
         orderId: 170,
       })
     ).resolves.toEqual({ allowed: true });
+
+    // Linking no longer re-reads the order's bales just to hard-reject existing
+    // soft scan differences. The snapshot's three reads are sufficient.
+    expect(execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("permits linking existing bales even when sibling loadings already filled the same proforma", async () => {
+    const { executor } = executorWith(
+      [proforma],
+      [{ articleCode: "A", quantity: 5 }],
+      [{ normalizedArticleCode: "a", orderId: 154, orderStatus: "LOADING", loadedQty: 5 }]
+    );
+
+    await expect(
+      guardExistingOrderProformaLink(executor, {
+        companyId: 12,
+        proformaId: 71,
+        customerId: 23,
+        orderId: 170,
+      })
+    ).resolves.toEqual({ allowed: true });
+  });
+
+  it("allows linking an already-scanned loading whose own quantities exceed a proforma line", async () => {
+    const { executor } = executorWith(
+      [proforma],
+      [{ articleCode: "A", quantity: 5 }],
+      [{ normalizedArticleCode: "a", orderId: 154, orderStatus: "LOADING", loadedQty: 100 }]
+    );
+
+    await expect(
+      guardExistingOrderProformaLink(executor, {
+        companyId: 12,
+        proformaId: 71,
+        customerId: 23,
+        orderId: 170,
+      })
+    ).resolves.toEqual({ allowed: true });
+  });
+
+  it("still rejects linking a proforma that belongs to a different customer", async () => {
+    const { executor } = executorWith(
+      [proforma],
+      [{ articleCode: "A", quantity: 5 }],
+      []
+    );
+
+    const result = await guardExistingOrderProformaLink(executor, {
+      companyId: 12,
+      proformaId: 71,
+      customerId: 999,
+      orderId: 170,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        status: 400,
+        body: expect.objectContaining({ message: "Customer does not match the selected proforma" }),
+      })
+    );
   });
 });

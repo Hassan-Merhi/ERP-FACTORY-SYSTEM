@@ -58,14 +58,15 @@ export function CreateTransferDialog({
     return sourceInventory
       .filter((i) => {
         const id = i.stockItemId ?? i.id;
-        return id != null && !addedIds.has(id) && (i.stockItemName ?? i.name ?? "").toLowerCase().includes(s);
+        const name = i.stockItemName ?? i.name ?? "";
+        return id !== undefined && !addedIds.has(id) && name.toLowerCase().includes(s);
       })
       .slice(0, 40);
   }, [itemSearch, sourceInventory, addedIds]);
 
   const addItem = (inv: InventoryItem) => {
     const id = inv.stockItemId ?? inv.id;
-    if (id == null) return;
+    if (id === undefined) return;
     const name = inv.stockItemName ?? inv.name ?? "";
     setItems((p) => [...p, { stockItemId: id, stockItemName: name, quantity: "" }]);
     setItemSearch("");
@@ -204,14 +205,15 @@ export function CreateTransferDialog({
               {itemSearch && searchMatches.length > 0 && (
                 <div className="border rounded-md overflow-hidden max-h-48 overflow-y-auto">
                   {searchMatches.map((inv) => {
-                    const qty = parseFloat(String(inv.quantity ?? "0")) || 0;
+                    const qty = Number(inv.quantity ?? 0) || 0;
+                    const itemId = inv.stockItemId ?? inv.id;
                     return (
                       <button
-                        key={inv.stockItemId ?? inv.id}
+                        key={itemId}
                         type="button"
                         onClick={() => addItem(inv)}
                         className="w-full text-left px-3 py-2 text-sm border-b last:border-b-0 flex items-center justify-between gap-2 hover-elevate"
-                        data-testid={`button-add-item-${inv.stockItemId ?? inv.id}`}
+                        data-testid={`button-add-item-${itemId}`}
                       >
                         <span className="font-medium truncate">{inv.stockItemName ?? inv.name}</span>
                         <span className="text-xs text-muted-foreground shrink-0 font-mono">

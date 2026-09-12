@@ -31,8 +31,8 @@ function snapshot(options?: { active?: boolean; consumed?: number }) {
 }
 
 describe("Phase 2 proforma capacity enforcement", () => {
-  it("accepts case/whitespace variants and enforces the aggregated article target", () => {
-    const decision = evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), " HmD12630 ", 1);
+  it("keeps explicit global capacity available for aggregate historical checks", () => {
+    const decision = evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), " HmD12630 ", 1, "global");
 
     expect(decision).toEqual(
       expect.objectContaining({
@@ -59,8 +59,8 @@ describe("Phase 2 proforma capacity enforcement", () => {
     );
   });
 
-  it("rejects additions beyond the remaining quantity with projected totals", () => {
-    expect(evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), "HMD12630", 2)).toEqual(
+  it("keeps explicit global quantity-exceeded checks available", () => {
+    expect(evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), "HMD12630", 2, "global")).toEqual(
       expect.objectContaining({
         allowed: false,
         reason: "quantity_exceeded",
@@ -73,12 +73,16 @@ describe("Phase 2 proforma capacity enforcement", () => {
     );
   });
 
-  it("groups duplicate/case-variant additions before checking capacity", () => {
-    const validation = validateProformaCapacityAdditions(snapshot({ consumed: 3 }), [
-      { articleCode: "HMD12630", quantity: 1 },
-      { articleCode: " hmd12630 ", quantity: 2 },
-      { articleCode: "HMD11001", quantity: 1 },
-    ]);
+  it("groups duplicate/case-variant additions before an explicit global check", () => {
+    const validation = validateProformaCapacityAdditions(
+      snapshot({ consumed: 3 }),
+      [
+        { articleCode: "HMD12630", quantity: 1 },
+        { articleCode: " hmd12630 ", quantity: 2 },
+        { articleCode: "HMD11001", quantity: 1 },
+      ],
+      "global"
+    );
 
     expect(validation.allowed).toBe(false);
     expect(validation.issues).toHaveLength(1);
@@ -93,32 +97,32 @@ describe("Phase 2 proforma capacity enforcement", () => {
     );
   });
 
-  it("permits new loadings only for the same customer while active capacity remains", () => {
+  it("permits an independent new loading for the same customer while the proforma is active", () => {
     expect(evaluateProformaLoadingAvailability(snapshot({ consumed: 4 }), 23)).toEqual({
       allowed: true,
       reason: null,
-      remainingTotalQty: 3,
+      remainingTotalQty: 7,
     });
     expect(evaluateProformaLoadingAvailability(snapshot({ consumed: 4 }), 999).reason).toBe("customer_mismatch");
     expect(evaluateProformaLoadingAvailability(snapshot({ active: false }), 23).reason).toBe("inactive");
   });
 
-  it("blocks creation when every proforma quantity is already consumed", () => {
-    const exhausted = buildProformaCapacitySnapshot(
+  it("does not let sibling loadings exhaust a new loading", () => {
+    const siblingExhausted = buildProformaCapacitySnapshot(
       { companyId: 12, proformaId: 71 },
       proforma,
       [{ articleCode: "A", quantity: 2 }],
       [{ normalizedArticleCode: "a", orderId: 154, orderStatus: "VERIFIED", loadedQty: 2 }]
     );
 
-    expect(evaluateProformaLoadingAvailability(exhausted, 23)).toEqual({
-      allowed: false,
-      reason: "fully_consumed",
-      remainingTotalQty: 0,
+    expect(evaluateProformaLoadingAvailability(siblingExhausted, 23)).toEqual({
+      allowed: true,
+      reason: null,
+      remainingTotalQty: 2,
     });
   });
 
-  it("allocates aggregate consumption once across duplicate source lines", () => {
+  it("still supports aggregate remaining-line allocation when explicitly requested", () => {
     const capacity = buildProformaCapacitySnapshot(
       { companyId: 12, proformaId: 71 },
       proforma,
@@ -133,7 +137,7 @@ describe("Phase 2 proforma capacity enforcement", () => {
       { articleCode: " a ", quantity: 3, pricePerBale: "20" },
     ];
 
-    const allocation = allocateRemainingProformaLines(lines, capacity);
+    const allocation = allocateRemainingProformaLines(lines, capacity, "global");
 
     expect(allocation.map((entry) => entry.remainingQty)).toEqual([0, 1]);
     expect(allocation.reduce((sum, entry) => sum + entry.remainingQty, 0)).toBe(capacity.remainingTotalQty);
@@ -155,11 +159,10 @@ describe("Phase 2 per-loading capacity scope", () => {
       }))
     );
 
-  it("ignores sibling containers so a fresh loading can load the full proforma quantity", () => {
-    // Sibling order 154 already consumed the whole line (2 of 2).
+  it("defaults to ignoring sibling containers so a fresh loading can load the full proforma quantity", () => {
     const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
 
-    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "per_loading");
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
 
     expect(decision).toEqual(
       expect.objectContaining({
@@ -174,13 +177,12 @@ describe("Phase 2 per-loading capacity scope", () => {
   });
 
   it("still blocks when the current loading alone exceeds the proforma quantity", () => {
-    // Current order 170 already loaded 2 of 2; sibling 154 loaded 5 (over-consumed).
     const capacity = buildScoped([
       { orderId: 154, loadedQty: 5 },
       { orderId: 170, loadedQty: 2 },
     ]);
 
-    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "per_loading");
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
 
     expect(decision).toEqual(
       expect.objectContaining({
@@ -194,10 +196,33 @@ describe("Phase 2 per-loading capacity scope", () => {
     );
   });
 
-  it("keeps the historical global default counting sibling consumption", () => {
+  it("validates grouped additions per loading by default", () => {
+    const capacity = buildScoped([{ orderId: 154, loadedQty: 20 }]);
+
+    expect(
+      validateProformaCapacityAdditions(capacity, [
+        { articleCode: "HMD12630", quantity: 1 },
+        { articleCode: " hmd12630 ", quantity: 1 },
+      ])
+    ).toEqual({ allowed: true, issues: [] });
+  });
+
+  it("allocates remaining lines from the current loading only by default", () => {
+    const capacity = buildScoped([
+      { orderId: 154, loadedQty: 20 },
+      { orderId: 170, loadedQty: 1 },
+    ]);
+    const lines = [{ articleCode: "HMD12630", quantity: 2, pricePerBale: "10" }];
+
+    expect(allocateRemainingProformaLines(lines, capacity)[0]).toEqual(
+      expect.objectContaining({ consumedQty: 1, remainingQty: 1 })
+    );
+  });
+
+  it("keeps explicit global scope available for historical reporting", () => {
     const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
 
-    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
+    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "global");
 
     expect(decision).toEqual(
       expect.objectContaining({

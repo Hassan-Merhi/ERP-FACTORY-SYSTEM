@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
-import { SaleRow, type PosToast } from "./posTypes";
+import type { PosToast, SaleRow } from "./posTypes";
 import type { POSColumn } from "../utils/posCalculations";
 
 export interface SaleGridProps {

@@ -1,9 +1,9 @@
+import type { AccountingForm, AccountingFormSubmit, AccountingFormValues, LedgerAccountOption } from "../types";
 /**
  * LedgerAccountForm — extracted sub-component.
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
-import type { AccountingForm, AccountingFormSubmit, AccountingFormValues, LedgerAccountOption } from "../types";
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

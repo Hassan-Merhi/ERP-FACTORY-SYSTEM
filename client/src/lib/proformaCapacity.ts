@@ -65,31 +65,40 @@ export function proformaCapacityArticles(
   return Array.isArray(snapshot?.articles) ? snapshot.articles : [];
 }
 
+/**
+ * Loading progress is intentionally per-loading. The capacity snapshot keeps
+ * sibling/global totals for reporting, but another loading that reused the same
+ * proforma must never make this loading look fulfilled or overloaded.
+ */
 export function buildProformaProgress(snapshot: ProformaCapacitySnapshot | null | undefined): ProformaProgressLine[] {
   if (!snapshot) return [];
   return proformaCapacityArticles(snapshot)
     .filter((article) => article.isOnProforma)
     .map((article) => {
-      const status: ProformaLineStatus = article.isOverloaded
-        ? "overloaded"
-        : article.requestedQty > 0 && article.totalConsumedQty === article.requestedQty
-          ? "fulfilled"
-          : article.totalConsumedQty === 0
-            ? "none"
-            : "short";
+      const loaded = article.currentOrderLoadedQty;
+      const remaining = Math.max(0, article.requestedQty - loaded);
+      const excess = Math.max(0, loaded - article.requestedQty);
+      const status: ProformaLineStatus =
+        excess > 0
+          ? "overloaded"
+          : article.requestedQty > 0 && loaded === article.requestedQty
+            ? "fulfilled"
+            : loaded === 0
+              ? "none"
+              : "short";
       return {
         id: `${snapshot.proformaId}:${article.normalizedArticleCode}`,
         articleCode: article.articleCode,
         normalizedArticleCode: article.normalizedArticleCode,
         productName: article.productName || article.articleCode,
         quantity: article.requestedQty,
-        loaded: article.currentOrderLoadedQty,
+        loaded,
         siblingLoaded: article.siblingLoadedQty,
-        totalLoaded: article.totalConsumedQty,
-        remaining: article.remainingQty,
-        fulfilled: article.isFulfilled,
+        totalLoaded: loaded,
+        remaining,
+        fulfilled: article.requestedQty > 0 && loaded >= article.requestedQty,
         status,
-        excess: article.excessQty,
+        excess,
       };
     });
 }

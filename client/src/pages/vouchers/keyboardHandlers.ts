@@ -1,12 +1,13 @@
 import type React from "react";
 import { focusScopedTestId } from "@/lib/scopedFocus";
+import type { VoucherFormData } from "./voucherTypes";
 
 export function handlePaymentKeyDown(
   e: React.KeyboardEvent,
   rowIndex: number,
   fieldName: "account" | "amount",
   fieldsLength: number,
-  append: (v: { accountType: "ledger"; accountId: number; accountName: string; amount: string }) => void
+  append: (value: VoucherFormData["entries"][number]) => void
 ): void {
   const isLastRow = rowIndex === fieldsLength - 1;
   const anchor = e.currentTarget as Element;

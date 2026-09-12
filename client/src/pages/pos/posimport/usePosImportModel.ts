@@ -101,7 +101,7 @@ export function usePosImportModel() {
   }, [displayCurrency]);
 
   /** Excel rates arrive in the sale currency; the backend always stores USD. */
-  const toUsdItems = (items: PosImportItem[]) =>
+  const toUsdItems = (items: PosImportItem[]): PosImportItem[] =>
     saleCurrency === "CFA" && exchangeRate
       ? items.map((item) => ({ ...item, rate: (parseFloat(String(item.rate)) / exchangeRate).toFixed(2) }))
       : items;
@@ -324,7 +324,8 @@ export function usePosImportModel() {
   };
 
   const doImport = () => {
-    if (!validationResult?.validatedItems) return;
+    if (!validationResult) return;
+
     // Convert CFA rates to USD if needed
     const itemsToImport = toUsdItems(validationResult.validatedItems);
     const requestIdentity = {
