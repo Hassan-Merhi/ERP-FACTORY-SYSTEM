@@ -1,12 +1,9 @@
 /**
- * Validate & Finalize dialog for the container loading scan page.
- *
- * Split out of FactoryContainerLoadingScan.tsx unchanged: with a linked
- * proforma it reviews every line plus the not-on-proforma extras before
- * finalizing; without one it just confirms the bale and weight totals. The
- * loading date defaults to today and is sent as the posting txDate.
+ * Validate & Finalize dialog for the container loading scan page. During a live
+ * loading the proforma is a reusable reference, so the review is informational
+ * and does not create an artificial "remaining proforma" carryover.
  */
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,8 +18,8 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
         <TableHeader>
           <TableRow>
             <TableHead>Article / Product</TableHead>
-            <TableHead className="text-right">Expected</TableHead>
-            <TableHead className="text-right">Loaded</TableHead>
+            <TableHead className="text-right">Proforma</TableHead>
+            <TableHead className="text-right">Loaded Here</TableHead>
             <TableHead className="text-right">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -31,11 +28,13 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
             <TableRow
               key={line.id}
               className={
-                line.status === "fulfilled"
-                  ? "bg-green-50 dark:bg-green-950/40"
-                  : line.status === "overloaded"
-                    ? "bg-orange-50 dark:bg-orange-950/30"
-                    : ""
+                line.status === "reference"
+                  ? ""
+                  : line.status === "fulfilled"
+                    ? "bg-green-50 dark:bg-green-950/40"
+                    : line.status === "overloaded"
+                      ? "bg-orange-50 dark:bg-orange-950/30"
+                      : ""
               }
             >
               <TableCell className="text-sm">
@@ -45,6 +44,12 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
               <TableCell className="text-right font-mono text-sm">{line.quantity}</TableCell>
               <TableCell className="text-right font-mono text-sm">{line.totalLoaded}</TableCell>
               <TableCell className="text-right text-sm">
+                {line.status === "reference" && (
+                  <span className="text-muted-foreground font-medium flex items-center justify-end gap-1">
+                    <Info className="h-3 w-3" />
+                    Reference
+                  </span>
+                )}
                 {line.status === "fulfilled" && (
                   <span className="text-green-600 dark:text-green-400 font-semibold">✓ Done</span>
                 )}
@@ -64,23 +69,21 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
             </TableRow>
           ))}
           {extraArticles.map((code) => (
-            <TableRow key={code} className="bg-red-50 dark:bg-red-950/30">
+            <TableRow key={code} className="bg-muted/20">
               <TableCell className="text-sm">
-                <div className="font-mono text-xs text-red-700 dark:text-red-400">{code}</div>
+                <div className="font-mono text-xs">{code}</div>
                 {groupedBalesMap[code]?.baleName && (
-                  <div className="text-red-700 dark:text-red-400 text-xs font-sans font-normal">
+                  <div className="text-muted-foreground text-xs font-sans font-normal">
                     {groupedBalesMap[code].baleName}
                   </div>
                 )}
-                <div className="text-red-500 text-xs">Not on proforma</div>
+                <div className="text-muted-foreground text-xs">Outside proforma reference</div>
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
-              <TableCell className="text-right font-mono text-sm text-red-600 dark:text-red-400 font-semibold">
-                {loadedByArticle[code]}
-              </TableCell>
+              <TableCell className="text-right font-mono text-sm font-semibold">{loadedByArticle[code]}</TableCell>
               <TableCell className="text-right text-sm">
-                <Badge variant="destructive" className="text-xs no-default-hover-elevate no-default-active-elevate">
-                  Not on proforma
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Reference
                 </Badge>
               </TableCell>
             </TableRow>
@@ -93,19 +96,26 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
 
 function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { proformaProgress, extraArticles, bales, totalWeight } = model;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
   const fulfilled = proformaProgress.filter((l) => l.status === "fulfilled").length;
   const overloaded = proformaProgress.filter((l) => l.status === "overloaded").length;
   const short = proformaProgress.filter((l) => l.status === "short" || l.status === "none").length;
   return (
     <div className="flex items-center justify-between gap-2 text-sm border-t pt-2 flex-wrap gap-y-1">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-green-600 dark:text-green-400 font-medium">{fulfilled} fulfilled</span>
-        {overloaded > 0 && (
-          <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} overloaded</span>
+        {referenceOnly ? (
+          <span className="text-muted-foreground font-medium">Proforma is shown for reference only</span>
+        ) : (
+          <>
+            <span className="text-green-600 dark:text-green-400 font-medium">{fulfilled} fulfilled</span>
+            {overloaded > 0 && (
+              <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} overloaded</span>
+            )}
+            {short > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{short} short</span>}
+          </>
         )}
-        {short > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{short} short</span>}
         {extraArticles.length > 0 && (
-          <span className="text-red-600 dark:text-red-400 font-medium">{extraArticles.length} not on proforma</span>
+          <span className="text-muted-foreground font-medium">{extraArticles.length} outside reference</span>
         )}
       </div>
       <span className="text-muted-foreground">
@@ -118,7 +128,8 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
 export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { linkedProforma, proformaProgress, bales, totalWeight, finalizeMutation, remainingProformaBales } = model;
   const hasProformaReview = !!linkedProforma && proformaProgress.length > 0;
-  const hasRemaining = !!linkedProforma && remainingProformaBales > 0;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
+  const hasRemaining = !referenceOnly && !!linkedProforma && remainingProformaBales > 0;
   return (
     <Dialog open={model.showFinalizeDialog} onOpenChange={model.setShowFinalizeDialog}>
       <DialogContent className="max-w-lg">
@@ -128,7 +139,11 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
         <div className="space-y-4">
           {hasProformaReview ? (
             <>
-              <p className="text-sm text-muted-foreground">Review what was loaded vs the proforma before finalizing.</p>
+              <p className="text-sm text-muted-foreground">
+                {referenceOnly
+                  ? "Review this loading beside the reusable proforma reference. Quantities are not capped across loadings."
+                  : "Review what was loaded vs the proforma before finalizing."}
+              </p>
               <ReviewTable model={model} />
               <ReviewTotals model={model} />
             </>
