@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { AlertTriangle, CheckCircle, ChevronDown, FileDown, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +19,7 @@ type Model = ReturnType<typeof useJournalFormModel>;
 
 function focusInput(selector: string, select = false, delay = 50) {
   setTimeout(() => {
+    if (typeof document === "undefined") return;
     const element = document.querySelector(selector) as HTMLInputElement | null;
     element?.focus();
     if (select) element?.select();
@@ -52,6 +54,27 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
     handleExportJournalVoucher,
     journalMutation,
   } = model;
+
+  const pendingBlurTimeouts = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  useEffect(
+    () => () => {
+      for (const timeout of pendingBlurTimeouts.current) clearTimeout(timeout);
+      pendingBlurTimeouts.current.clear();
+    },
+    []
+  );
+
+  const scheduleAccountBlur = (index: number) => {
+    const timeout = setTimeout(() => {
+      pendingBlurTimeouts.current.delete(timeout);
+      if (activeJournalRow === index) {
+        setJournalAccountSearchTerm("");
+        setActiveJournalRow(null);
+      }
+    }, 200);
+    pendingBlurTimeouts.current.add(timeout);
+  };
 
   return (
     <>
@@ -102,14 +125,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                       setShowAccountSidebar(true);
                       setJournalAccountSearchTerm("");
                     }}
-                    onBlur={() => {
-                      setTimeout(() => {
-                        if (activeJournalRow === index) {
-                          setJournalAccountSearchTerm("");
-                          setActiveJournalRow(null);
-                        }
-                      }, 200);
-                    }}
+                    onBlur={() => scheduleAccountBlur(index)}
                     placeholder="Type to search account..."
                     data-testid={`input-journal-account-mobile-${index}`}
                     className="text-sm"
@@ -345,14 +361,7 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                                   setShowAccountSidebar(true);
                                   setJournalAccountSearchTerm("");
                                 }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    if (activeJournalRow === index) {
-                                      setJournalAccountSearchTerm("");
-                                      setActiveJournalRow(null);
-                                    }
-                                  }, 200);
-                                }}
+                                onBlur={() => scheduleAccountBlur(index)}
                                 placeholder="Type to search..."
                                 data-testid={`input-journal-account-${index}`}
                                 onKeyDown={(event) => {
