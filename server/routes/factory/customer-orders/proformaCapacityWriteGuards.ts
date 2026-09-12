@@ -27,7 +27,7 @@ interface ProformaOrderGuardOptions {
 }
 
 function unavailableResult(snapshot: ProformaCapacitySnapshot, customerId: number): ProformaWriteGuardResult | null {
-  const capacity = evaluateProformaLoadingAvailability(snapshot, customerId);
+  const capacity = evaluateProformaLoadingAvailability(snapshot, customerId, "per_loading");
   if (capacity.allowed) return null;
 
   const message =
@@ -70,8 +70,9 @@ export async function guardProformaOrderCreation(
 
 /**
  * Guard linking an already-populated loading to a proforma. Existing loaded
- * bales must all be on the target proforma and fit inside its remaining global
- * capacity before the association can be written.
+ * bales must all be on the target proforma and fit the proforma quantities for
+ * this loading. Bales on sibling loadings that reuse the same proforma do not
+ * consume this loading's capacity.
  */
 export async function guardExistingOrderProformaLink(
   executor: ProformaCapacityExecutor,
@@ -108,7 +109,7 @@ export async function guardExistingOrderProformaLink(
     `)
   ).filter((row) => !!row.articleCode && Number(row.quantity) > 0);
 
-  const validation = validateProformaCapacityAdditions(snapshot, loadedArticleRows);
+  const validation = validateProformaCapacityAdditions(snapshot, loadedArticleRows, "per_loading");
   if (!validation.allowed) {
     return {
       allowed: false,
