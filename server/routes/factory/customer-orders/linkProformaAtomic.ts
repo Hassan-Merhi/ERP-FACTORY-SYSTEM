@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../../db";
-import { customerOrders, customerProformas, customerProformaLines } from "@shared/schema";
+import { customerOrders, customerProformas } from "@shared/schema";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { guardExistingOrderProformaLink } from "./proformaCapacityWriteGuards";
 
@@ -22,10 +22,16 @@ export interface LinkOrderProformaInput {
 }
 
 /**
- * Link/unlink a LOADING order and its expected-line snapshot atomically.
- * Linking takes the target proforma advisory lock before the order row lock so
- * concurrent scanners/imports cannot consume the same capacity between the
- * validation read and the association write.
+ * Link/unlink a LOADING order atomically.
+ *
+ * A link added after an order is already in LOADING state is a reusable
+ * pricing/reference association. It must not manufacture a per-container
+ * quantity plan from the master proforma. Explicit container plans are created
+ * earlier by the V5 DRAFT allocation flows in customer_order_expected_lines.
+ *
+ * Re-linking to the exact same proforma is a no-op so an existing planned
+ * container never loses its customized expected quantities just because the
+ * user saves the same link again.
  */
 export async function linkOrderProformaAtomically(input: LinkOrderProformaInput) {
   return db.transaction(async (tx) => {
@@ -52,6 +58,15 @@ export async function linkOrderProformaAtomically(input: LinkOrderProformaInput)
       return { success: true, linked: { orderId: input.orderId, proformaId: null, linesBackfilled: 0 } };
     }
 
+    // Saving the same association must not replace a customized per-container
+    // expected plan with the master proforma quantities.
+    if (order.proformaIdUsed === input.proformaId) {
+      return {
+        success: true,
+        linked: { orderId: input.orderId, proformaId: input.proformaId, linesBackfilled: 0, unchanged: true },
+      };
+    }
+
     const [proforma] = await tx
       .select()
       .from(customerProformas)
@@ -65,44 +80,26 @@ export async function linkOrderProformaAtomically(input: LinkOrderProformaInput)
       );
     }
 
-    if (order.proformaIdUsed !== input.proformaId) {
-      const guard = await guardExistingOrderProformaLink(tx, {
-        companyId: input.companyId,
-        proformaId: input.proformaId,
-        orderId: input.orderId,
-        customerId: order.customerId,
-      });
-      if (!guard.allowed) throw new LinkOrderProformaError(guard.body.message, guard.status, guard.body);
-    }
+    const guard = await guardExistingOrderProformaLink(tx, {
+      companyId: input.companyId,
+      proformaId: input.proformaId,
+      orderId: input.orderId,
+      customerId: order.customerId,
+    });
+    if (!guard.allowed) throw new LinkOrderProformaError(guard.body.message, guard.status, guard.body);
 
-    const proformaLines = await tx
-      .select()
-      .from(customerProformaLines)
-      .where(eq(customerProformaLines.proformaId, input.proformaId));
-
-    // Validation is complete; now replace the expected-line snapshot and link
-    // together. A failed validation never wipes the existing expected lines.
+    // Any plan tied to a different proforma is stale. Clear it, then create the
+    // new association as reference-only. If a strict container plan is wanted,
+    // it must be allocated explicitly before loading starts.
     await tx.execute(sql`DELETE FROM customer_order_expected_lines WHERE order_id = ${input.orderId}`);
     await tx
       .update(customerOrders)
       .set({ proformaIdUsed: input.proformaId })
       .where(eq(customerOrders.id, input.orderId));
 
-    if (proformaLines.length > 0) {
-      await tx.execute(sql`
-        INSERT INTO customer_order_expected_lines
-          (company_id, order_id, proforma_id, proforma_line_id, article_code, product_name, expected_qty)
-        SELECT ${input.companyId}, ${input.orderId}, cpl.proforma_id, cpl.id,
-               cpl.article_code, cpl.product_name, cpl.quantity
-        FROM customer_proforma_lines cpl
-        WHERE cpl.proforma_id = ${input.proformaId}
-        ON CONFLICT (order_id, article_code) DO NOTHING
-      `);
-    }
-
     return {
       success: true,
-      linked: { orderId: input.orderId, proformaId: input.proformaId, linesBackfilled: proformaLines.length },
+      linked: { orderId: input.orderId, proformaId: input.proformaId, linesBackfilled: 0 },
     };
   });
 }

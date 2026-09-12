@@ -4,20 +4,22 @@ import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy"
 export type ProformaCapacityRejectionReason = "not_in_proforma" | "quantity_exceeded";
 
 /**
- * Which loaded quantity the capacity check is measured against.
+ * Loading-time semantics are intentionally different from aggregate reporting.
+ * A proforma can be reused on many independent loadings and is a pricing/item
+ * reference while a loading is live. It must not reject a scan because another
+ * loading used the same item, or because this loading's actual mix differs from
+ * the master proforma quantities.
  *
- * - `"per_loading"` — the normal loading rule. Each loading/container is an
- *   independent unit, so sibling containers that reuse the same proforma do
- *   not consume this loading's quantity allowance.
- * - `"global"` — aggregate historical/reporting view across every loading that
- *   references the proforma. Use this only when the caller explicitly needs a
- *   cross-loading total rather than a loading-time validation decision.
+ * `global` remains available for reports/reservations that intentionally need
+ * the aggregate historical picture.
  */
 export type ProformaCapacityScope = "global" | "per_loading";
+export type ProformaLoadingValidationMode = "global" | "reference" | "template";
 
 export interface ProformaArticleCapacityDecision {
   allowed: boolean;
   reason: ProformaCapacityRejectionReason | null;
+  validationMode: ProformaLoadingValidationMode;
   articleCode: string;
   normalizedArticleCode: string;
   requestedAdditionalQty: number;
@@ -56,17 +58,28 @@ function nonNegativeQuantity(value: unknown): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function validationModeForScope(
+  snapshot: ProformaCapacitySnapshot,
+  scope: ProformaCapacityScope
+): ProformaLoadingValidationMode {
+  if (scope === "global") return "global";
+  return snapshot.currentOrderId === null ? "template" : "reference";
+}
+
 function remainingTotalForScope(snapshot: ProformaCapacitySnapshot, scope: ProformaCapacityScope): number {
   if (scope === "global") return snapshot.remainingTotalQty;
+  // Creation/template checks are independent of sibling loadings. A live order
+  // is reference-only, so this value is informational and must never block it.
   return snapshot.articles
     .filter((article) => article.isOnProforma)
     .reduce((sum, article) => sum + Math.max(0, article.requestedQty - article.currentOrderLoadedQty), 0);
 }
 
 /**
- * Evaluate one proposed quantity increase against the authoritative snapshot.
- * Loading-time decisions default to per-loading semantics: another loading that
- * uses the same proforma never consumes this loading's quantity allowance.
+ * Evaluate one proposed quantity increase. Live loading scans are reference-only
+ * and therefore never fail proforma membership/quantity checks. Physical bale
+ * duplicate, stock/location, order-status and other safety checks still run in
+ * their normal routes.
  */
 export function evaluateProformaArticleCapacity(
   snapshot: ProformaCapacitySnapshot,
@@ -77,16 +90,34 @@ export function evaluateProformaArticleCapacity(
   const normalizedArticleCode = normalizeLoadingArticleCode(articleCode);
   const additionalQty = nonNegativeQuantity(requestedAdditionalQty);
   const article = findProformaCapacityArticle(snapshot, normalizedArticleCode);
+  const validationMode = validationModeForScope(snapshot, scope);
   const consumedQty = article
-    ? scope === "per_loading"
-      ? article.currentOrderLoadedQty
-      : article.totalConsumedQty
+    ? scope === "global"
+      ? article.totalConsumedQty
+      : article.currentOrderLoadedQty
     : 0;
+  const requestedQty = article?.requestedQty ?? 0;
 
-  if (!article || !article.isOnProforma) {
+  if (validationMode === "reference") {
+    return {
+      allowed: true,
+      reason: null,
+      validationMode,
+      articleCode: article?.articleCode ?? String(articleCode ?? "").trim(),
+      normalizedArticleCode,
+      requestedAdditionalQty: additionalQty,
+      requestedQty,
+      consumedQty,
+      remainingQty: Math.max(0, requestedQty - consumedQty),
+      projectedConsumedQty: consumedQty + additionalQty,
+    };
+  }
+
+  if (!article?.isOnProforma) {
     return {
       allowed: false,
       reason: "not_in_proforma",
+      validationMode,
       articleCode: String(articleCode ?? "").trim(),
       normalizedArticleCode,
       requestedAdditionalQty: additionalQty,
@@ -98,15 +129,16 @@ export function evaluateProformaArticleCapacity(
   }
 
   const projectedConsumedQty = consumedQty + additionalQty;
-  const allowed = projectedConsumedQty <= article.requestedQty;
-  const remainingQty = scope === "per_loading" ? Math.max(0, article.requestedQty - consumedQty) : article.remainingQty;
+  const allowed = projectedConsumedQty <= requestedQty;
+  const remainingQty = Math.max(0, requestedQty - consumedQty);
   return {
     allowed,
     reason: allowed ? null : "quantity_exceeded",
+    validationMode,
     articleCode: article.articleCode,
     normalizedArticleCode,
     requestedAdditionalQty: additionalQty,
-    requestedQty: article.requestedQty,
+    requestedQty,
     consumedQty,
     remainingQty,
     projectedConsumedQty,
@@ -137,8 +169,8 @@ export function validateProformaCapacityAdditions(
 }
 
 /**
- * Creation-time guard. An active proforma can be reused by multiple independent
- * loadings for the same customer. Sibling loadings do not exhaust a new one.
+ * Creation-time guard. Empty loadings for an active proforma remain independent
+ * from sibling loadings; only active/customer validity matters in normal use.
  */
 export function evaluateProformaLoadingAvailability(
   snapshot: ProformaCapacitySnapshot,
@@ -153,16 +185,15 @@ export function evaluateProformaLoadingAvailability(
   if (!Number.isSafeInteger(parsedCustomerId) || parsedCustomerId <= 0 || snapshot.customerId !== parsedCustomerId) {
     return { allowed: false, reason: "customer_mismatch", remainingTotalQty };
   }
-  if (remainingTotalQty <= 0) {
+  if (scope === "global" && remainingTotalQty <= 0) {
     return { allowed: false, reason: "fully_consumed", remainingTotalQty: 0 };
   }
   return { allowed: true, reason: null, remainingTotalQty };
 }
 
 /**
- * Allocate consumption across duplicate/case-variant source lines in source
- * order. Loading-time callers default to the current loading only; callers that
- * intentionally need aggregate historical remaining capacity can pass global.
+ * Allocate source lines for recovery/reporting helpers. This is intentionally a
+ * per-order view by default and never subtracts sibling loading consumption.
  */
 export function allocateRemainingProformaLines<T extends { articleCode: unknown; quantity: unknown }>(
   lines: T[],
@@ -172,10 +203,13 @@ export function allocateRemainingProformaLines<T extends { articleCode: unknown;
   const unallocatedConsumed = new Map(
     snapshot.articles
       .filter((article) => article.isOnProforma)
-      .map((article) => [
-        article.normalizedArticleCode,
-        scope === "per_loading" ? article.currentOrderLoadedQty : article.totalConsumedQty,
-      ] as const)
+      .map(
+        (article) =>
+          [
+            article.normalizedArticleCode,
+            scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty,
+          ] as const
+      )
   );
 
   return lines.map((line) => {
