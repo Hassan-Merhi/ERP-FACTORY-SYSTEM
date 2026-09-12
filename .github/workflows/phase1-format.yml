@@ -48,3 +48,5 @@ jobs:
           git add tests/backend-coverage-*.test.ts
           git commit -m "style: format Phase 1 coverage tests"
           git push
+
+# Temporary workflow: remove after the formatter commit lands.
