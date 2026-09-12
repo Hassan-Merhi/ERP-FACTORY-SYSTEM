@@ -4,11 +4,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GitBranch } from "lucide-react";
 
+type RevisionChange = {
+  stockItemName: string;
+  originalQuantity: number;
+  delta: number;
+  newQuantity: number;
+};
+
 interface SaveRevisionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transferRevisionsCount: number;
-  revisionItems: any[];
+  revisionItems: RevisionChange[];
   revisionNote: string;
   setRevisionNote: (note: string) => void;
   isSaving: boolean;

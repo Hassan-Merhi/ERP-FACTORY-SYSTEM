@@ -1,3 +1,4 @@
+import type { AccountingForm, AccountingFormSubmit, AccountingFormValues, LedgerAccountOption } from "../types";
 /**
  * LedgerAccountForm — extracted sub-component.
  *
@@ -28,8 +29,8 @@ function LedgerAccountForm({
   onCancel,
   isPending,
 }: {
-  form: any;
-  onSubmit: (data: false, saveAndNew?: boolean) => void;
+  form: AccountingForm;
+  onSubmit: AccountingFormSubmit;
   onCancel: () => void;
   isPending: boolean;
 }) {
@@ -58,7 +59,7 @@ function LedgerAccountForm({
   const subTypes = getSubTypes();
 
   // Fetch Group accounts for the Parent Group combobox
-  const { data: allLedgerAccounts = [] } = useQuery<any[]>({
+  const { data: allLedgerAccounts = [] } = useQuery<LedgerAccountOption[]>({
     queryKey: ["/api/ledger-accounts", selectedCompany?.id],
     queryFn: async () => {
       const url = selectedCompany?.id ? `/api/ledger-accounts?companyId=${selectedCompany.id}` : "/api/ledger-accounts";
@@ -75,7 +76,11 @@ function LedgerAccountForm({
   return (
     <Card className="p-4 md:p-6">
       <Form {...form}>
-        <form noValidate onSubmit={form.handleSubmit((data: any) => onSubmit(data, false))} className="space-y-6">
+        <form
+          noValidate
+          onSubmit={form.handleSubmit((data: AccountingFormValues) => onSubmit(data, false))}
+          className="space-y-6"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}

@@ -86,11 +86,12 @@ export interface TransferDetail {
 }
 
 export interface InventoryItem {
-  stockItemId: number;
-  name: string;
+  id?: number;
+  stockItemId?: number;
+  name?: string;
   stockItemName?: string;
-  locationId: number;
-  quantity?: string;
+  locationId?: number;
+  quantity?: string | number;
 }
 
 export interface ExtraItem {

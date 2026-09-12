@@ -20,7 +20,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
-import type { Location, MasterItem, MasterPriceListResponse, POSPriceListProps, PriceListItem } from "./types";
+import type {
+  Location,
+  MasterItem,
+  MasterPriceListResponse,
+  POSPriceListProps,
+  PriceListItem,
+  PriceListRow,
+} from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
@@ -134,8 +141,8 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     return masters.filter((m) => !hiddenLocations.has(m.id));
   }, [isAllMode, masters, hiddenLocations]);
 
-  const locationPricedList = useMemo(() => {
-    if (isAllMode) return masterItems as any[];
+  const locationPricedList = useMemo<PriceListRow[]>(() => {
+    if (isAllMode) return masterItems;
     if (!posUser) return priceList;
     return priceList.filter(
       (item) => item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0
@@ -151,7 +158,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   }, [locationPricedList]);
 
   const isItemUnpriced = useCallback(
-    (item: PriceListItem | MasterItem): boolean => {
+    (item: PriceListRow): boolean => {
       if (isAllMode) {
         const hasBase = item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0;
         if (hasBase) return false; // base price covers all locations
@@ -248,7 +255,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     },
   });
 
-  const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null) => {
+  const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
     if (posUser) return;
     lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
     const hasValue = currentPrice && parseFloat(currentPrice) > 0;
@@ -256,10 +263,10 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   /** Price shown for an item in a given master column (falls back to the base price). */
-  const masterPriceFor = (item: any, locationId: number): string | null =>
+  const masterPriceFor = (item: PriceListRow, locationId: number): string | null =>
     item.masterPrices?.[locationId] ?? item.baseSellingPrice ?? null;
 
-  const editCell = (stockItemId: number, locationId: number, price: string | null) => {
+  const editCell = (stockItemId: number, locationId: number, price: string | null | undefined) => {
     const hasValue = price && parseFloat(price) > 0;
     setEditingItem({ stockItemId, locationId, value: hasValue ? price : "" });
   };

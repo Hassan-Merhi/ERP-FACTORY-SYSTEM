@@ -61,7 +61,7 @@ interface StockTransferRevisionHistoryProps {
   transferRevisions: TransferRevision[];
   transferRevisionsExpanded: boolean;
   setTransferRevisionsExpanded: (val: boolean | ((v: boolean) => boolean)) => void;
-  setApproveRevisionTarget: (rev: any) => void;
+  setApproveRevisionTarget: (rev: TransferRevision) => void;
   modeApiRequest: unknown;
   queryClient: unknown;
   lastKnownTransferIdRef: unknown;

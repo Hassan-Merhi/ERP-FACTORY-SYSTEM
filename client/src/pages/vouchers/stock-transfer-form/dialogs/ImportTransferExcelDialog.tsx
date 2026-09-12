@@ -215,7 +215,7 @@ export function ImportTransferExcelDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {importPreview.items.map((item: any, index: number) => {
+                    {importPreview.items.map((item, index: number) => {
                       const validation = importValidationResult?.validatedItems?.[index];
                       const hasError = validation?.error;
                       return (
@@ -259,7 +259,7 @@ export function ImportTransferExcelDialog({
                 </Table>
               </div>
               <div className="sm:hidden max-h-60 overflow-y-auto p-2 space-y-2">
-                {importPreview.items.map((item: any, index: number) => {
+                {importPreview.items.map((item, index: number) => {
                   const validation = importValidationResult?.validatedItems?.[index];
                   const hasError = validation?.error;
                   return (

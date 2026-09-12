@@ -21,6 +21,26 @@ import type {
 } from "../stockadjustmentform/types";
 import { stockAdjustmentFormSchema } from "../stockadjustmentform/utils";
 
+interface LocationInventoryRow {
+  stockItemId: number;
+  quantity?: string | null;
+  averageRate?: string | null;
+}
+
+interface StockAdjustmentItemResponse {
+  stockItemId: number;
+  quantity: string;
+  rate?: string;
+}
+
+interface StockAdjustmentResponse {
+  id?: number;
+  locationId?: number;
+  adjustmentType?: string;
+  notes?: string | null;
+  items?: StockAdjustmentItemResponse[];
+}
+
 export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustmentFormProps) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
@@ -51,7 +71,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
     },
   });
 
-  const { data: stockAdjustmentToEdit } = useQuery({
+  const { data: stockAdjustmentToEdit } = useQuery<StockAdjustmentResponse>({
     queryKey: ["/api/stock-adjustments", voucherIdToEdit],
     enabled: !!voucherIdToEdit,
     queryFn: async () => {
@@ -98,7 +118,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
   const displayAdjustmentTotal =
     currentAdjustmentType === "Mixed" ? productionTotal - consumptionTotal : consumptionTotal + productionTotal;
 
-  const { data: locationInventory = [] } = useQuery({
+  const { data: locationInventory = [] } = useQuery<LocationInventoryRow[]>({
     queryKey: ["/api/adjustment-location-inventory", adjustmentLocationId],
     enabled: adjustmentLocationId > 0,
     queryFn: async () => {
@@ -119,7 +139,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
     if (!stockItems.length) return [];
     return stockItems
       .map((item) => {
-        const inv = locationInventory.find((i: any) => i.stockItemId === item.id);
+        const inv = locationInventory.find((i) => i.stockItemId === item.id);
         return {
           stockItemId: item.id,
           stockItemCode: item.code,
@@ -150,10 +170,10 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
   useEffect(() => {
     if (stockAdjustmentToEdit && stockAdjustmentToEdit.items && voucherToEdit && stockItems.length > 0) {
       if (hydratedVoucherIdRef.current === voucherIdToEdit) return;
-      const formEntries = stockAdjustmentToEdit.items.map((item: any) => {
+      const formEntries = stockAdjustmentToEdit.items.map((item) => {
         const stockItem = stockItems.find((s) => s.id === item.stockItemId);
         const quantity = parseFloat(item.quantity || "0");
-        const type = quantity < 0 ? "CONSUME" : "PRODUCE";
+        const type: StockAdjustmentFormData["entries"][number]["type"] = quantity < 0 ? "CONSUME" : "PRODUCE";
         const absQuantity = Math.abs(quantity).toString();
         return {
           type,

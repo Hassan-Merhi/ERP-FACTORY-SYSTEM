@@ -11,28 +11,28 @@ export interface Location {
   active?: boolean;
 }
 
-export interface PriceListItem {
+export interface PriceListRow {
   stockItemId: number;
   code: string;
   name: string;
   stockGroupName: string;
   baseSellingPrice: string | null;
-  hasCustomPrice: boolean;
-  sellingPrice: string | null;
-  quantity: string;
+  sellingPrice?: string | null;
+  hasCustomPrice?: boolean;
+  quantity?: string;
+  masterPrices?: Record<number, string>;
   costPrice?: string | null;
   offloadingCost?: string | null;
 }
 
-export interface MasterItem {
-  stockItemId: number;
-  code: string;
-  name: string;
-  stockGroupName: string;
-  baseSellingPrice: string | null;
+export interface PriceListItem extends PriceListRow {
+  hasCustomPrice: boolean;
+  sellingPrice: string | null;
+  quantity: string;
+}
+
+export interface MasterItem extends PriceListRow {
   masterPrices: Record<number, string>;
-  costPrice?: string | null;
-  offloadingCost?: string | null;
 }
 
 export interface MasterPriceListResponse {

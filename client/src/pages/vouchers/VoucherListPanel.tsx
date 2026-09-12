@@ -6,13 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil } from "lucide-react";
 
+interface VoucherListItem {
+  id: number;
+  voucherDate: string;
+  voucherType: string;
+  description: string | null;
+  totalAmount: string | null;
+  optional?: boolean;
+}
+
 interface VoucherListPanelProps {
   onEdit: (id: number) => void;
   formatAmount: (amount: number) => string;
 }
 
 export function VoucherListPanel({ onEdit, formatAmount }: VoucherListPanelProps) {
-  const { data: vouchers = [], isLoading } = useQuery<any[]>({
+  const { data: vouchers = [], isLoading } = useQuery<VoucherListItem[]>({
     queryKey: ["/api/vouchers"],
   });
 

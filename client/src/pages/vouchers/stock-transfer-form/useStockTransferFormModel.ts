@@ -150,7 +150,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
   const [transferRevisionNote, setTransferRevisionNote] = useState("");
   const [isTransferSavingRevision, setIsTransferSavingRevision] = useState(false);
   const [transferRevisionsExpanded, setTransferRevisionsExpanded] = useState(false);
-  const [approveRevisionTarget, setApproveRevisionTarget] = useState<any | null>(null);
+  const [approveRevisionTarget, setApproveRevisionTarget] = useState<TransferRevision | null>(null);
   const [transferQtyDraft, setTransferQtyDraft] = useState<Record<number | string, string>>({});
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);

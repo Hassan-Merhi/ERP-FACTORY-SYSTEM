@@ -12,7 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
 import { useCompany } from "@/contexts/CompanyContext";
-import type { EntityType } from "../types";
+import type { AccountingFormValues, EntityType } from "../types";
 import { entityConfig, getDefaultValues } from "../utils";
 import { LocationForm } from "./LocationForm";
 import { LedgerAccountForm } from "./LedgerAccountForm";
@@ -38,13 +38,13 @@ function EntityFormWrapper({
 
   const defaultValues = getDefaultValues(entityType);
 
-  const form = useForm({
+  const form = useForm<AccountingFormValues>({
     resolver: zodResolver(config.schema),
-    defaultValues: defaultValues as any,
+    defaultValues,
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: AccountingFormValues) => {
       // Only add companyId if not already provided by the form
       const payload = data.companyId
         ? data
@@ -90,7 +90,7 @@ function EntityFormWrapper({
     },
   });
 
-  const onSubmit = (data: any) => {
+  const onSubmit = (data: AccountingFormValues) => {
     createMutation.mutate(data);
   };
 

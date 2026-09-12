@@ -11,6 +11,7 @@ import type {
   PosDraftSummary,
   PosEditVoucher,
   PosShift,
+  PosViewEntry,
 } from "../pos-components/posTypes";
 import { buildPosInventory, type SpMovement } from "./posInventory";
 
@@ -188,7 +189,7 @@ export function usePosQueries({
   // fetch from view-entries which always includes stock items for Sales type.
   const editVoucherHasSalesItems =
     editVoucher && Array.isArray(editVoucher.salesItems) && editVoucher.salesItems.length > 0;
-  const { data: editVoucherViewEntries = [] } = useQuery<any[]>({
+  const { data: editVoucherViewEntries = [] } = useQuery<PosViewEntry[]>({
     queryKey:
       editVoucherId && editVoucher && !editVoucherHasSalesItems ? [`/api/vouchers/${editVoucherId}/view-entries`] : [],
     enabled: !!editVoucherId && !!editVoucher && !editVoucherHasSalesItems,
