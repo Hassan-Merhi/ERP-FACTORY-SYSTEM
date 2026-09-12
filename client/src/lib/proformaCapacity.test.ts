@@ -36,20 +36,22 @@ function snapshot(overrides: Partial<ProformaCapacitySnapshot> = {}): ProformaCa
 }
 
 describe("buildProformaProgress", () => {
-  it("shows progress for the current loading without counting sibling loadings", () => {
+  it("treats a linked proforma as reference-only for a live loading", () => {
     expect(buildProformaProgress(snapshot())).toEqual([
       expect.objectContaining({
         quantity: 42,
         loaded: 5,
         siblingLoaded: 10,
         totalLoaded: 5,
-        remaining: 37,
-        status: "short",
+        remaining: 0,
+        excess: 0,
+        fulfilled: false,
+        status: "reference",
       }),
     ]);
   });
 
-  it("does not mark the current loading overloaded because sibling loadings exceeded the proforma", () => {
+  it("does not let sibling loading totals classify the live loading as overloaded", () => {
     const value = snapshot({
       remainingTotalQty: 0,
       excessTotalQty: 65,
@@ -70,11 +72,11 @@ describe("buildProformaProgress", () => {
       ],
     });
     expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "short", totalLoaded: 5, remaining: 37, excess: 0 })
+      expect.objectContaining({ status: "reference", totalLoaded: 5, remaining: 0, excess: 0 })
     );
   });
 
-  it("still marks a loading overloaded when that loading itself exceeds the line quantity", () => {
+  it("keeps a master-quantity overage informational on a reusable live loading", () => {
     const value = snapshot({
       articles: [
         {
@@ -93,7 +95,14 @@ describe("buildProformaProgress", () => {
       ],
     });
     expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "overloaded", totalLoaded: 3, remaining: 0, excess: 1 })
+      expect.objectContaining({ status: "reference", totalLoaded: 3, remaining: 0, excess: 0, fulfilled: false })
+    );
+  });
+
+  it("retains quantity status calculations for a template/global preview", () => {
+    const value = snapshot({ currentOrderId: null });
+    expect(buildProformaProgress(value)[0]).toEqual(
+      expect.objectContaining({ status: "short", totalLoaded: 5, remaining: 37, excess: 0 })
     );
   });
 });
