@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { broadcast } from "../wsServer";
-import { classifyRealtimeWrite } from "../../shared/realtimeInvalidation";
+import { classifyRealtimeWrite, shouldEmitWriteInvalidation } from "../../shared/realtimeInvalidation";
 import { registerAccountRoutes } from "./accounts";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerApprovalRoutes } from "./approvalRoutes";
@@ -88,20 +88,10 @@ import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 
-function usesDedicatedRealtimeEvents(url: string): boolean {
-  const path = url.split("?", 1)[0];
-  return (
-    path === "/api/chat" ||
-    path.startsWith("/api/chat/") ||
-    path === "/api/user-presence" ||
-    path.startsWith("/api/user-presence/")
-  );
-}
-
 function registerWriteInvalidationSignal(app: Express): void {
   app.use((req, res, next) => {
     const url = req.originalUrl || req.url;
-    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method) && !usesDedicatedRealtimeEvents(url)) {
+    if (shouldEmitWriteInvalidation(req.method, url)) {
       const companyId = resolveActiveCompanyId(req);
       const invalidation = classifyRealtimeWrite(url, req.body);
       res.on("finish", () => {

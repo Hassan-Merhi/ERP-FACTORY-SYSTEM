@@ -9,9 +9,11 @@ describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
     // 644 frozen Phase 7 phrases plus the three bale-scanning and proforma-capacity
     // messages part12 gained with the scan-again-to-bypass flow, plus the global
-    // API rate-limit message.
-    expect(backendMessagesPhase7Translations).toHaveLength(648);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(648);
+    // API rate-limit message, plus the ten route-sweep validation messages the
+    // restored backend-coverage suites require the API to answer with (400s
+    // instead of 500s for unvalidated input).
+    expect(backendMessagesPhase7Translations).toHaveLength(658);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(658);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -87,6 +89,20 @@ describe("Phase 7 backend-message translations", () => {
   it("switches directly between Arabic and French", () => {
     expect(translatePhase7BackendMessageText("تم رفض الوصول", "fr")).toBe("Accès refusé");
     expect(translatePhase7BackendMessageText("Compte introuvable", "ar")).toBe("لم يتم العثور على الحساب");
+  });
+
+  it("translates the route-sweep validation messages", () => {
+    expect(translatePhase7BackendMessageText("enabled must be a boolean", "ar")).toBe(
+      "يجب أن تكون enabled قيمة منطقية (true أو false)"
+    );
+    expect(translatePhase7BackendMessageText("date is required and must be a valid date", "fr")).toBe(
+      "La date est requise et doit être une date valide"
+    );
+    expect(translatePhase7BackendMessageText("Metric not found", "ar")).toBe("لم يتم العثور على المقياس");
+    expect(translatePhase7BackendMessageText("Invalid archive ID", "fr")).toBe("Identifiant d’archive non valide");
+    expect(translatePhase7BackendMessageText("voucherType is required", "ar")).toBe("الحقل voucherType مطلوب");
+    expect(translatePhase7BackendMessageText("totalAmount is required", "fr")).toBe("Le champ totalAmount est requis");
+    expect(isPhase7BackendMessageText("each entry requires an integer metricId")).toBe(true);
   });
 
   it("recognizes reviewed messages without translating stored business values", () => {

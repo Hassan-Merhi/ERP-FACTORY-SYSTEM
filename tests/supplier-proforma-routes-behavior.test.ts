@@ -4,6 +4,7 @@ const harness = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
   const insertResults: unknown[][] = [];
   const updateResults: unknown[][] = [];
+  const executeResults: Array<{ rows: unknown[] }> = [];
   const transactionInserted: unknown[] = [];
   const insertedValues: unknown[] = [];
   const updatedValues: unknown[] = [];
@@ -57,11 +58,19 @@ const harness = vi.hoisted(() => {
     return builder;
   });
 
+  // Raw company-scope ownership checks (suppliers.company_id lives outside the
+  // drizzle table). Queued per test; by default the supplier resolves in scope
+  // so pre-existing create flows exercise the insert path.
+  const execute = vi.fn(async () => {
+    return executeResults.shift() ?? { rows: [{ id: 2 }] };
+  });
+
   const db: any = {
     select,
     insert,
     update,
     delete: del,
+    execute,
     transaction: vi.fn(async (callback: (tx: any) => unknown) =>
       callback({
         insert: vi.fn((table: unknown) => ({
@@ -79,6 +88,7 @@ const harness = vi.hoisted(() => {
     selectResults,
     insertResults,
     updateResults,
+    executeResults,
     transactionInserted,
     insertedValues,
     updatedValues,
@@ -109,6 +119,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (column: unknown, value: unknown) => ({ type: "eq", column, value }),
   and: (...conditions: unknown[]) => ({ type: "and", conditions }),
   ne: (column: unknown, value: unknown) => ({ type: "ne", column, value }),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ type: "sql", strings, values }),
 }));
 vi.mock("@shared/schema", () => ({
   supplierProformas: {
@@ -182,6 +193,7 @@ describe("supplier proforma route behavior", () => {
     harness.selectResults.splice(0);
     harness.insertResults.splice(0);
     harness.updateResults.splice(0);
+    harness.executeResults.splice(0);
     harness.transactionInserted.splice(0);
     harness.insertedValues.splice(0);
     harness.updatedValues.splice(0);
@@ -275,6 +287,21 @@ describe("supplier proforma route behavior", () => {
       expect.objectContaining({ companyId: 4, action: "create", tableName: "supplier_proformas", recordId: 10 })
     );
     expect(res.body).toMatchObject({ id: 10, reference: "PF-NEW", lines: expect.any(Array) });
+  });
+
+  it("reports a missing parent instead of failing the foreign key on create", async () => {
+    harness.executeResults.push({ rows: [] });
+    const res = resHarness();
+    await routes.get("POST /api/suppliers/:supplierId/proformas")!(
+      req({ params: { supplierId: "999" }, body: { reference: "PF-GHOST", lines: [] } }),
+      res
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ message: "Supplier not found" });
+    expect(harness.db.insert).not.toHaveBeenCalled();
+    // The ownership probe stays scoped to the active company: the supplier id
+    // from the URL and the session company travel in the same check.
+    expect(harness.db.execute).toHaveBeenCalledWith(expect.objectContaining({ type: "sql", values: [999, 4] }));
   });
 
   it("prevents adding lines to a proforma owned by another company", async () => {
