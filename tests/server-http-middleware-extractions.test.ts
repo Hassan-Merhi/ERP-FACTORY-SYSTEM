@@ -93,14 +93,39 @@ describe("registerCsrfProtection", () => {
     expect(res.status).toBe(200);
   });
 
-  it("blocks state-changing requests with a mismatched token (enforced by default)", async () => {
-    const agent = request.agent(buildApp());
-    await agent.get("/api/csrf-token");
+  it("blocks state-changing requests with a mismatched token when enforcing", async () => {
+    // CI runs the backend suite with CSRF_ENFORCE=0 (warn-only); pin the
+    // enforcing mode for this test and restore the environment afterwards.
+    const previous = process.env.CSRF_ENFORCE;
+    process.env.CSRF_ENFORCE = "1";
+    try {
+      const agent = request.agent(buildApp());
+      await agent.get("/api/csrf-token");
 
-    const res = await agent.post("/api/secure").set("X-CSRF-Token", "wrong-token").send({});
+      const res = await agent.post("/api/secure").set("X-CSRF-Token", "wrong-token").send({});
 
-    expect(res.status).toBe(403);
-    expect(res.body).toEqual({ message: "CSRF token missing or invalid.", code: "CSRF_TOKEN_MISMATCH" });
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({ message: "CSRF token missing or invalid.", code: "CSRF_TOKEN_MISMATCH" });
+    } finally {
+      if (previous === undefined) delete process.env.CSRF_ENFORCE;
+      else process.env.CSRF_ENFORCE = previous;
+    }
+  });
+
+  it("lets mismatched tokens through when CSRF_ENFORCE=0 (warn-only)", async () => {
+    const previous = process.env.CSRF_ENFORCE;
+    process.env.CSRF_ENFORCE = "0";
+    try {
+      const agent = request.agent(buildApp());
+      await agent.get("/api/csrf-token");
+
+      const res = await agent.post("/api/secure").set("X-CSRF-Token", "wrong-token").send({});
+
+      expect(res.status).toBe(200);
+    } finally {
+      if (previous === undefined) delete process.env.CSRF_ENFORCE;
+      else process.env.CSRF_ENFORCE = previous;
+    }
   });
 
   it("does not gate requests when no token exists in the session yet", async () => {
