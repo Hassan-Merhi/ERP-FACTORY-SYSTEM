@@ -31,7 +31,10 @@ type Fingerprint = {
 const TEST_PREFIX = "phase2imp";
 const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
 const REQUEST_TIMEOUT_MS = 20000;
-const CONCURRENCY = 6;
+// Import handlers share parser/database state and some abort early while
+// rejecting malformed payloads. Serial execution keeps this failure-path sweep
+// deterministic and avoids ECONNRESET noise from overlapping parser teardown.
+const CONCURRENCY = 1;
 const IMPORT_PATTERN = /(import|upload|preview|validate)/i;
 // Route names containing "import" are not necessarily multipart endpoints.
 // Only explicit upload paths are exercised as fileless multipart requests;
