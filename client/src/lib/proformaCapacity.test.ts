@@ -117,7 +117,14 @@ describe("buildProformaProgress", () => {
       articles: [article("LOADED", 4, 4), article("LESS", 4, 2), article("MISSING", 4, 0), article("OVER", 4, 6)],
     });
 
-    expect(buildProformaProgress(value).map(({ articleCode, status, remaining, excess }) => ({ articleCode, status, remaining, excess }))).toEqual([
+    expect(
+      buildProformaProgress(value).map(({ articleCode, status, remaining, excess }) => ({
+        articleCode,
+        status,
+        remaining,
+        excess,
+      }))
+    ).toEqual([
       { articleCode: "LOADED", status: "fulfilled", remaining: 0, excess: 0 },
       { articleCode: "LESS", status: "short", remaining: 2, excess: 0 },
       { articleCode: "MISSING", status: "none", remaining: 4, excess: 0 },
