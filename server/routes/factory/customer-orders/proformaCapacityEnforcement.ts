@@ -6,18 +6,21 @@ export type ProformaCapacityRejectionReason = "not_in_proforma" | "quantity_exce
 /**
  * Which loaded quantity the capacity check is measured against.
  *
- * - `"per_loading"` — the normal loading rule. Each loading/container is an
- *   independent unit, so sibling containers that reuse the same proforma do
- *   not consume this loading's quantity allowance.
+ * - `"per_loading"` — the normal loading rule. A loading with locked
+ *   customer_order_expected_lines is validated against that plan only. A live
+ *   loading without expected lines is reference-only: the linked proforma can
+ *   supply pricing/product context but does not cap or reject scans.
  * - `"global"` — aggregate historical/reporting view across every loading that
  *   references the proforma. Use this only when the caller explicitly needs a
  *   cross-loading total rather than a loading-time validation decision.
  */
 export type ProformaCapacityScope = "global" | "per_loading";
+export type ProformaLoadingValidationMode = "global" | "planned" | "reference" | "template";
 
 export interface ProformaArticleCapacityDecision {
   allowed: boolean;
   reason: ProformaCapacityRejectionReason | null;
+  validationMode: ProformaLoadingValidationMode;
   articleCode: string;
   normalizedArticleCode: string;
   requestedAdditionalQty: number;
@@ -56,8 +59,25 @@ function nonNegativeQuantity(value: unknown): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function validationModeForScope(
+  snapshot: ProformaCapacitySnapshot,
+  scope: ProformaCapacityScope
+): ProformaLoadingValidationMode {
+  if (scope === "global") return "global";
+  if (snapshot.currentOrderId === null) return "template";
+  return snapshot.currentOrderHasExpectedPlan ? "planned" : "reference";
+}
+
 function remainingTotalForScope(snapshot: ProformaCapacitySnapshot, scope: ProformaCapacityScope): number {
   if (scope === "global") return snapshot.remainingTotalQty;
+  if (snapshot.currentOrderId !== null) {
+    if (!snapshot.currentOrderHasExpectedPlan) {
+      // A reference-only loading is never "consumed" by quantity. Keep a
+      // positive availability signal while the proforma itself is active.
+      return snapshot.requestedTotalQty;
+    }
+    return snapshot.currentOrderRemainingTotalQty ?? 0;
+  }
   return snapshot.articles
     .filter((article) => article.isOnProforma)
     .reduce((sum, article) => sum + Math.max(0, article.requestedQty - article.currentOrderLoadedQty), 0);
@@ -65,8 +85,8 @@ function remainingTotalForScope(snapshot: ProformaCapacitySnapshot, scope: Profo
 
 /**
  * Evaluate one proposed quantity increase against the authoritative snapshot.
- * Loading-time decisions default to per-loading semantics: another loading that
- * uses the same proforma never consumes this loading's quantity allowance.
+ * A current loading's strict limits come only from its locked expected lines.
+ * The master proforma is reusable and therefore is not a per-container cap.
  */
 export function evaluateProformaArticleCapacity(
   snapshot: ProformaCapacitySnapshot,
@@ -77,16 +97,43 @@ export function evaluateProformaArticleCapacity(
   const normalizedArticleCode = normalizeLoadingArticleCode(articleCode);
   const additionalQty = nonNegativeQuantity(requestedAdditionalQty);
   const article = findProformaCapacityArticle(snapshot, normalizedArticleCode);
+  const validationMode = validationModeForScope(snapshot, scope);
+
+  if (validationMode === "reference") {
+    const consumedQty = article?.currentOrderLoadedQty ?? 0;
+    const requestedQty = article?.requestedQty ?? 0;
+    return {
+      allowed: true,
+      reason: null,
+      validationMode,
+      articleCode: article?.articleCode ?? String(articleCode ?? "").trim(),
+      normalizedArticleCode,
+      requestedAdditionalQty: additionalQty,
+      requestedQty,
+      consumedQty,
+      remainingQty: Math.max(0, requestedQty - consumedQty),
+      projectedConsumedQty: consumedQty + additionalQty,
+    };
+  }
+
+  const usesExpectedPlan = validationMode === "planned";
+  const isAllowedArticle = article && (usesExpectedPlan ? article.isExpectedOnCurrentOrder : article.isOnProforma);
+  const requestedQty = article
+    ? usesExpectedPlan
+      ? (article.currentOrderExpectedQty ?? 0)
+      : article.requestedQty
+    : 0;
   const consumedQty = article
-    ? scope === "per_loading"
-      ? article.currentOrderLoadedQty
-      : article.totalConsumedQty
+    ? scope === "global"
+      ? article.totalConsumedQty
+      : article.currentOrderLoadedQty
     : 0;
 
-  if (!article || !article.isOnProforma) {
+  if (!isAllowedArticle) {
     return {
       allowed: false,
       reason: "not_in_proforma",
+      validationMode,
       articleCode: String(articleCode ?? "").trim(),
       normalizedArticleCode,
       requestedAdditionalQty: additionalQty,
@@ -98,15 +145,16 @@ export function evaluateProformaArticleCapacity(
   }
 
   const projectedConsumedQty = consumedQty + additionalQty;
-  const allowed = projectedConsumedQty <= article.requestedQty;
-  const remainingQty = scope === "per_loading" ? Math.max(0, article.requestedQty - consumedQty) : article.remainingQty;
+  const allowed = projectedConsumedQty <= requestedQty;
+  const remainingQty = Math.max(0, requestedQty - consumedQty);
   return {
     allowed,
     reason: allowed ? null : "quantity_exceeded",
+    validationMode,
     articleCode: article.articleCode,
     normalizedArticleCode,
     requestedAdditionalQty: additionalQty,
-    requestedQty: article.requestedQty,
+    requestedQty,
     consumedQty,
     remainingQty,
     projectedConsumedQty,
@@ -161,26 +209,42 @@ export function evaluateProformaLoadingAvailability(
 
 /**
  * Allocate consumption across duplicate/case-variant source lines in source
- * order. Loading-time callers default to the current loading only; callers that
- * intentionally need aggregate historical remaining capacity can pass global.
+ * order. Planned loadings use their per-container expected totals; reference
+ * loadings fall back to the master line quantities for optional recovery tools,
+ * but scan validation itself remains non-blocking in reference mode.
  */
 export function allocateRemainingProformaLines<T extends { articleCode: unknown; quantity: unknown }>(
   lines: T[],
   snapshot: ProformaCapacitySnapshot,
   scope: ProformaCapacityScope = "per_loading"
 ): RemainingProformaLineAllocation<T>[] {
+  const mode = validationModeForScope(snapshot, scope);
   const unallocatedConsumed = new Map(
     snapshot.articles
-      .filter((article) => article.isOnProforma)
+      .filter((article) => (mode === "planned" ? article.isExpectedOnCurrentOrder : article.isOnProforma))
       .map((article) => [
         article.normalizedArticleCode,
-        scope === "per_loading" ? article.currentOrderLoadedQty : article.totalConsumedQty,
+        scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty,
       ] as const)
   );
+  const unallocatedExpected =
+    mode === "planned"
+      ? new Map(
+          snapshot.articles
+            .filter((article) => article.isExpectedOnCurrentOrder)
+            .map((article) => [article.normalizedArticleCode, article.currentOrderExpectedQty ?? 0] as const)
+        )
+      : null;
 
   return lines.map((line) => {
     const normalizedArticleCode = normalizeLoadingArticleCode(line.articleCode);
-    const requestedQty = nonNegativeQuantity(line.quantity);
+    const sourceRequestedQty = nonNegativeQuantity(line.quantity);
+    const expectedAvailable = unallocatedExpected?.get(normalizedArticleCode);
+    const requestedQty =
+      expectedAvailable === undefined ? sourceRequestedQty : Math.min(sourceRequestedQty, Math.max(0, expectedAvailable));
+    if (unallocatedExpected) {
+      unallocatedExpected.set(normalizedArticleCode, Math.max(0, (expectedAvailable ?? 0) - requestedQty));
+    }
     const availableConsumed = unallocatedConsumed.get(normalizedArticleCode) ?? 0;
     const consumedQty = Math.min(requestedQty, availableConsumed);
     unallocatedConsumed.set(normalizedArticleCode, Math.max(0, availableConsumed - consumedQty));
