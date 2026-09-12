@@ -8,6 +8,7 @@
  */
 import type { RefObject } from "react";
 import type { CartRow } from "./types";
+import { SafeStyle } from "@/components/SafeStyle";
 
 const CELL_BORDER = "1px solid #c8c8c8";
 const HEAD_BORDER = "1px solid #999";
@@ -245,15 +246,18 @@ export function FactoryPosPrintTemplate({ printRef, savedSale, printUserName, fm
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-                @media print {
-                  body { font-family: Arial, Helvetica, sans-serif !important; }
-                  * { font-family: Arial, Helvetica, sans-serif !important; font-variant-numeric: tabular-nums !important; }
-                }
-              `,
-          }}
+        <SafeStyle
+          css={`
+            @media print {
+              body {
+                font-family: Arial, Helvetica, sans-serif !important;
+              }
+              * {
+                font-family: Arial, Helvetica, sans-serif !important;
+                font-variant-numeric: tabular-nums !important;
+              }
+            }
+          `}
         />
 
         {/* Title */}

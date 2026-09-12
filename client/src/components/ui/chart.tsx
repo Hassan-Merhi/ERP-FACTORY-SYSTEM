@@ -4,6 +4,7 @@ import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
+import { SafeStyle } from "@/components/SafeStyle";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -40,7 +41,9 @@ type ChartContainerProps = React.ComponentProps<"div"> & {
 const ChartContainer = React.forwardRef<HTMLDivElement, ChartContainerProps>(
   ({ id, className, children, config, chartLabel = "Data visualization", ...props }, ref) => {
     const uniqueId = React.useId();
-    const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
+    // The id flows into a CSS attribute selector, so it is allowlisted once
+    // here and the sanitized value drives both the data attribute and the CSS.
+    const chartId = sanitizeChartCssToken(`chart-${id || uniqueId.replace(/:/g, "")}`);
 
     return (
       <ChartContext.Provider value={{ config }}>
@@ -73,6 +76,37 @@ const ChartContainer = React.forwardRef<HTMLDivElement, ChartContainerProps>(
 );
 ChartContainer.displayName = "Chart";
 
+/**
+ * Allowlist for the dynamic fragments interpolated into chart CSS (the chart
+ * id and config keys). Anything outside `[A-Za-z0-9_-]` collapses to `-` so a
+ * hostile key can neither break out of the declaration nor smuggle in extra
+ * rules or exfiltration selectors.
+ */
+function sanitizeChartCssToken(value: string): string {
+  const cleaned = value.replace(/[^A-Za-z0-9_-]/g, "-");
+  return cleaned === "" ? "chart" : cleaned;
+}
+
+const SAFE_CSS_COLOR_PATTERNS = [
+  /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, // #rgb / #rgba / #rrggbb / #rrggbbaa
+  /^[a-zA-Z]+$/, // named colors: red, transparent, currentColor, …
+  /^(?:rgb|rgba|hsl|hsla)\(\s*[\d\s.,%/]+\s*\)$/, // numeric functional notation (incl. space syntax)
+  /^(?:rgb|rgba|hsl|hsla)\(\s*var\(--[A-Za-z0-9-]+\)\s*\)$/, // shadcn-style hsl(var(--chart-1))
+];
+
+/**
+ * Chart colors come from developer-authored configs, but the value lands in
+ * generated CSS — validate the shape and fall back to `transparent` rather
+ * than injecting an arbitrary string into a stylesheet.
+ */
+function sanitizeChartColor(color: string): string {
+  if (SAFE_CSS_COLOR_PATTERNS.some((pattern) => pattern.test(color))) return color;
+  if (import.meta.env.DEV) {
+    console.warn(`[ChartStyle] Rejected unsafe chart color value; falling back to transparent.`);
+  }
+  return "transparent";
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(([, config]) => config.theme || config.color);
 
@@ -80,26 +114,24 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null;
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
+  const css = Object.entries(THEMES)
+    .map(
+      ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    return color ? `  --color-${sanitizeChartCssToken(key)}: ${sanitizeChartColor(color)};` : null;
   })
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
-      }}
-    />
-  );
+    )
+    .join("\n");
+
+  // Rendered as text children (SafeStyle), never parsed as HTML, so config
+  // values cannot break out of the <style> element.
+  return <SafeStyle css={css} />;
 };
 
 const ChartTooltip = RechartsPrimitive.Tooltip;

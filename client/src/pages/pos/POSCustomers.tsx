@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
+import { SafeStyle } from "@/components/SafeStyle";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -480,18 +481,32 @@ export default function POSCustomers() {
             color: "black",
           }}
         >
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-            @media print {
-              body { font-family: Arial, Helvetica, sans-serif !important; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 9pt; }
-              th { background-color: #f0f0f0; font-weight: bold; text-align: left; }
-              .text-right { text-align: right; }
-            }
-          `,
-            }}
+          <SafeStyle
+            css={`
+              @media print {
+                body {
+                  font-family: Arial, Helvetica, sans-serif !important;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                }
+                th,
+                td {
+                  border: 1px solid #ccc;
+                  padding: 4px 8px;
+                  font-size: 9pt;
+                }
+                th {
+                  background-color: #f0f0f0;
+                  font-weight: bold;
+                  text-align: left;
+                }
+                .text-right {
+                  text-align: right;
+                }
+              }
+            `}
           />
           <div style={{ textAlign: "center", marginBottom: "12px" }}>
             <div style={{ fontSize: "14pt", fontWeight: "900" }}>Customer Statement</div>

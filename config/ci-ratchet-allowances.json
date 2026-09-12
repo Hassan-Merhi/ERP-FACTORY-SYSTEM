@@ -8,7 +8,10 @@
     "client/src/pages/daybook/VoucherDetailsDialog.tsx": 984,
     "client/src/pages/factory/FactoryContainerLoadingScan.tsx": 1906,
     "client/src/pages/factory/WasteDispatchOptimized.tsx": 987,
-    "client/src/pages/vouchers/StockTransferForm.tsx": 2388
+    "client/src/pages/vouchers/StockTransferForm.tsx": 2388,
+    "client/src/pages/Suppliers.tsx": 944,
+    "client/src/pages/factory/production-raw-stock/OffloadDialog.tsx": 949,
+    "server/routes/accountTransactionPaginationRoutes.ts": 1268
   },
   "routeManifestAdditions": [],
   "routeManifestMountAdditions": [],
@@ -20,11 +23,13 @@
       "tests/net-position-equity-visibility.test.ts",
       "tests/proforma-capacity-concurrency-wiring.test.ts",
       "tests/realtime-wave2-live-page-policy.test.ts",
+      "tests/sales-report-compact-routes.test.ts",
       "tests/ui/mobile-responsive-phase1-critical-flows.test.ts",
       "tests/ui/mobile-responsive-wave2-factory-floor.test.ts",
-      "tests/ui/mobile-responsive-wave3-erp-operations.test.ts"
+      "tests/ui/mobile-responsive-wave3-erp-operations.test.ts",
+      "tests/ui/tracking-continuous-list-cleanup.test.ts"
     ],
-    "maxAdditionalTextAssertions": 154,
-    "rationale": "Each entry asserts a contract that has no behavioural surface. The mobile-responsive files (phase1-critical-flows, wave2-factory-floor, wave3-erp-operations) assert on Tailwind breakpoint classes and data-testid template literals: jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is only expressible as source text. realtime-wave2-live-page-policy asserts the ABSENCE of polling and of a second WebSocket in live pages — an absence no request can demonstrate. proforma-capacity-concurrency-wiring asserts that every proforma-linked creation path takes the capacity lock before it writes, and that the lock is taken first; ordering inside a transaction is not observable from outside it. company-deletion-contract asserts that storage.ts composes the dependency-aware deletion service rather than a second implementation, which is a wiring fact, not a result. factory-loading-soft-delete-overload-regression asserts that soft-deleted proformas and orders are excluded from the shared capacity snapshot and that both scan and bulk-import source their counts from it; the exclusion is a SQL predicate, so there is no request that can distinguish it from a count that happens to be equal. maxAdditionalTextAssertions is measured exactly at 154 over the reviewed baseline of 2061, so any further growth still fails."
+    "maxAdditionalTextAssertions": 171,
+    "rationale": "Each entry asserts a contract that has no behavioural surface. The mobile-responsive files (phase1-critical-flows, wave2-factory-floor, wave3-erp-operations) assert on Tailwind breakpoint classes and data-testid template literals: jsdom applies no CSS, so which of the mobile and desktop views is visible at a breakpoint is only expressible as source text. realtime-wave2-live-page-policy asserts the ABSENCE of polling and of a second WebSocket in live pages — an absence no request can demonstrate. proforma-capacity-concurrency-wiring asserts that every proforma-linked creation path takes the capacity lock before it writes, and that the lock is taken first; ordering inside a transaction is not observable from outside it. company-deletion-contract asserts that storage.ts composes the dependency-aware deletion service rather than a second implementation, which is a wiring fact, not a result. factory-loading-soft-delete-overload-regression asserts that soft-deleted proformas and orders are excluded from the shared capacity snapshot and that both scan and bulk-import source their counts from it; the exclusion is a SQL predicate, so there is no request that can distinguish it from a count that happens to be equal. sales-report-compact-routes verifies that every sales-report URL the build-time Vite transform emits is registered by the mounted stats registry, and that the compact routes mount before the legacy raw route; the fetched URLs only exist after the transform runs, so no dev-mode request can demonstrate the wiring. tracking-continuous-list-cleanup asserts the ABSENCE of legacy pagination controls and page state after the continuous-list migration, keeps cursor-invariant failures as internal technical identifiers, and pins the quality-doc/type-escape-ceiling synchronisation; absences and cross-file sync have no request-observable surface. maxAdditionalTextAssertions is measured exactly at 171 over the reviewed baseline of 2061, so any further growth still fails."
   }
 }

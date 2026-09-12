@@ -5,14 +5,13 @@ import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-li
 import { useLocation, Redirect } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useWsInvalidation } from "@/hooks/use-ws-invalidation";
-import { LanguageOnboardingDialog } from "@/components/LanguageOnboardingDialog";
-import { RemoteSupportRuntime } from "@/components/RemoteSupportRuntime";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import { useAppNavigation } from "./useAppNavigation";
 import { useAuthenticatedAppData } from "./useAuthenticatedAppData";
 import { resolveAuthenticatedAppRoute } from "./authenticatedAppRouteGuard";
 import { AppLeaveConfirmDialog } from "./AppLeaveConfirmDialog";
 import { AppLoadingState } from "./AppLoadingState";
+import { AuthenticatedAppOverlays } from "./AuthenticatedAppOverlays";
 import { useErpScrollRestoration } from "./useErpScrollRestoration";
 
 const PosShell = lazy(() => import("./PosShell").then((module) => ({ default: module.PosShell })));
@@ -66,13 +65,6 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   const leaveConfirmDialog = (
     <AppLeaveConfirmDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm} onConfirm={handleConfirmLeave} />
   );
-  const languageOnboarding = user.id === undefined ? null : <LanguageOnboardingDialog userId={user.id} />;
-  const appOverlays = (
-    <>
-      {languageOnboarding}
-      <RemoteSupportRuntime />
-    </>
-  );
 
   // The company switch is intentionally SPA-native, but company-owned pages can
   // still hold local component state and active query observers that were
@@ -97,7 +89,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -114,7 +106,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -132,7 +124,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -148,7 +140,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
           leaveConfirmDialog={leaveConfirmDialog}
         />
       </Suspense>
-      {appOverlays}
+      <AuthenticatedAppOverlays userId={user.id} />
     </>
   );
 }

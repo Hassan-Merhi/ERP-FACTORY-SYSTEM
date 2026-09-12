@@ -16,6 +16,7 @@ import {
 import { companies, loginHistory, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword, logAudit, verifyPassword } from "../_helpers";
+import { isMasterPasswordWindowActive } from "../helpers/masterPasswordPolicy";
 
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD;
 const MASTER_PASSWORD_HASH: Promise<string> | null = MASTER_PASSWORD ? bcrypt.hash(MASTER_PASSWORD, 12) : null;
@@ -41,8 +42,13 @@ export function registerCoreAuthRoutes(app: Express) {
       if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
       const { valid: passwordValid, needsMigration } = await verifyPassword(password, user.password);
+      // The expiry window is re-checked on every attempt so a long-lived
+      // server stops honoring the emergency password the moment it lapses.
       const usedMasterPassword =
-        !passwordValid && !!MASTER_PASSWORD_HASH && (await bcrypt.compare(password, await MASTER_PASSWORD_HASH));
+        !passwordValid &&
+        isMasterPasswordWindowActive() &&
+        !!MASTER_PASSWORD_HASH &&
+        (await bcrypt.compare(password, await MASTER_PASSWORD_HASH));
 
       if (!passwordValid && !usedMasterPassword) return res.status(401).json({ message: "Invalid credentials" });
 
@@ -234,9 +240,10 @@ export function registerCoreAuthRoutes(app: Express) {
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: "User not found" });
       const { valid } = await verifyPassword(password, user.password);
-      const usedMasterPassword =
-        !valid && !!MASTER_PASSWORD_HASH && (await bcrypt.compare(password, await MASTER_PASSWORD_HASH));
-      if (!valid && !usedMasterPassword) return res.status(403).json({ message: "Incorrect password" });
+      // Step-up re-authentication never accepts the emergency master password:
+      // knowledge of the shared secret must not unlock sensitive or destructive
+      // operations guarded by confirm-password on another user's behalf.
+      if (!valid) return res.status(403).json({ message: "Incorrect password" });
       req.session.passwordConfirmedAt = Date.now();
       await new Promise<void>((resolve, reject) => req.session.save((error) => (error ? reject(error) : resolve())));
       res.json({ ok: true });
