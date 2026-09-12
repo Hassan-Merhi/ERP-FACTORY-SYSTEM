@@ -36,22 +36,22 @@ function snapshot(overrides: Partial<ProformaCapacitySnapshot> = {}): ProformaCa
 }
 
 describe("buildProformaProgress", () => {
-  it("treats a linked proforma as reference-only for a live loading", () => {
+  it("shows live loading remaining quantity from this loading only", () => {
     expect(buildProformaProgress(snapshot())).toEqual([
       expect.objectContaining({
         quantity: 42,
         loaded: 5,
         siblingLoaded: 10,
         totalLoaded: 5,
-        remaining: 0,
+        remaining: 37,
         excess: 0,
         fulfilled: false,
-        status: "reference",
+        status: "short",
       }),
     ]);
   });
 
-  it("does not let sibling loading totals classify the live loading as overloaded", () => {
+  it("does not let sibling loading totals classify this loading as overloaded", () => {
     const value = snapshot({
       remainingTotalQty: 0,
       excessTotalQty: 65,
@@ -72,11 +72,11 @@ describe("buildProformaProgress", () => {
       ],
     });
     expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "reference", totalLoaded: 5, remaining: 0, excess: 0 })
+      expect.objectContaining({ status: "short", totalLoaded: 5, remaining: 37, excess: 0 })
     );
   });
 
-  it("keeps a master-quantity overage informational on a reusable live loading", () => {
+  it("shows a current-loading overage as informational overloaded status", () => {
     const value = snapshot({
       articles: [
         {
@@ -95,15 +95,34 @@ describe("buildProformaProgress", () => {
       ],
     });
     expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "reference", totalLoaded: 3, remaining: 0, excess: 0, fulfilled: false })
+      expect.objectContaining({ status: "overloaded", totalLoaded: 3, remaining: 0, excess: 1, fulfilled: true })
     );
   });
 
-  it("retains quantity status calculations for a template/global preview", () => {
-    const value = snapshot({ currentOrderId: null });
-    expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "short", totalLoaded: 5, remaining: 37, excess: 0 })
-    );
+  it("classifies loaded, less loaded, missing, and overloaded from current loading quantities", () => {
+    const article = (code: string, requestedQty: number, currentOrderLoadedQty: number) => ({
+      articleCode: code,
+      normalizedArticleCode: code.toLowerCase(),
+      isOnProforma: true,
+      requestedQty,
+      currentOrderLoadedQty,
+      siblingLoadedQty: 99,
+      totalConsumedQty: currentOrderLoadedQty + 99,
+      remainingQty: 0,
+      excessQty: 0,
+      isFulfilled: false,
+      isOverloaded: false,
+    });
+    const value = snapshot({
+      articles: [article("LOADED", 4, 4), article("LESS", 4, 2), article("MISSING", 4, 0), article("OVER", 4, 6)],
+    });
+
+    expect(buildProformaProgress(value).map(({ articleCode, status, remaining, excess }) => ({ articleCode, status, remaining, excess }))).toEqual([
+      { articleCode: "LOADED", status: "fulfilled", remaining: 0, excess: 0 },
+      { articleCode: "LESS", status: "short", remaining: 2, excess: 0 },
+      { articleCode: "MISSING", status: "none", remaining: 4, excess: 0 },
+      { articleCode: "OVER", status: "overloaded", remaining: 0, excess: 2 },
+    ]);
   });
 });
 
@@ -114,9 +133,6 @@ describe("proformaCapacityArticles", () => {
   });
 
   it("absorbs payloads that omit the bucket list instead of throwing", () => {
-    // The snapshot comes straight from res.json(), so `articles` is only
-    // guaranteed by the declared type. A body without it used to crash both
-    // loading scan pages while they rendered.
     const malformed = { ...snapshot(), articles: undefined } as unknown as ProformaCapacitySnapshot;
     expect(proformaCapacityArticles(malformed)).toEqual([]);
     expect(buildProformaProgress(malformed)).toEqual([]);
