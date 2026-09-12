@@ -53,7 +53,7 @@ export function ensureSpSupplierVoucherSyncSchema(): Promise<void> {
              FROM information_schema.tables
             WHERE table_schema = 'public'
               AND table_name = ANY($1::text[])`,
-          [[...REQUIRED_TABLES]]
+          [[...REQUIRED_TABLES]],
         );
         const found = new Set(tableResult.rows.map((row) => row.table_name));
         const missingTables = REQUIRED_TABLES.filter((table) => !found.has(table));
@@ -70,7 +70,7 @@ export function ensureSpSupplierVoucherSyncSchema(): Promise<void> {
                   AND table_name = $1
                   AND column_name = $2
              ) AS exists`,
-            [spec.table, spec.column]
+            [spec.table, spec.column],
           );
           if (!columnResult.rows[0]?.exists) {
             await client.query(spec.ddl);
@@ -195,7 +195,7 @@ export async function repairSpSupplierVoucherLinks(companyId?: number): Promise<
                  AND ve.supplier_id IS DISTINCT FROM c.supplier_id
             )
           )`,
-      params
+      params,
     );
 
     await client.query(
@@ -207,7 +207,7 @@ export async function repairSpSupplierVoucherLinks(companyId?: number): Promise<
           AND c.goods_otw_voucher_id IS NOT NULL
           ${companyFilter}
           AND v.supplier_id IS DISTINCT FROM c.supplier_id`,
-      params
+      params,
     );
 
     await client.query(
@@ -221,7 +221,7 @@ export async function repairSpSupplierVoucherLinks(companyId?: number): Promise<
           AND c.goods_otw_voucher_id IS NOT NULL
           ${companyFilter}
           AND ve.supplier_id IS DISTINCT FROM c.supplier_id`,
-      params
+      params,
     );
 
     await client.query("COMMIT");
@@ -257,7 +257,7 @@ export async function getSpSupplierVoucherLinkGapCount(companyId: number): Promi
                AND ve.supplier_id IS DISTINCT FROM c.supplier_id
           )
         )`,
-    [companyId]
+    [companyId],
   );
 
   return Number(result.rows[0]?.count ?? 0);

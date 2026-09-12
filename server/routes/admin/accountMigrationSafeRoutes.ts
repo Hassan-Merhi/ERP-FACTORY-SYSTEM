@@ -328,9 +328,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
     requireRole("Admin", "Developer"),
     async (req, res, next) => {
       const accountIds = idArray(
-        Array.isArray(req.body?.accounts)
-          ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId)
-          : null
+        Array.isArray(req.body?.accounts) ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId) : null
       );
       const movedVoucherIds = idArray(req.body?.movedVoucherIds, true);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);

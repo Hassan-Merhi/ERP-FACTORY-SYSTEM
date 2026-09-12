@@ -81,22 +81,7 @@ function summarizeChanges(changes: unknown): string | null {
   return `${labels.join(", ")}${fields.length > labels.length ? ` and ${fields.length - labels.length} more` : ""}`;
 }
 
-function formatAuditRow(row: {
-  id: number;
-  userId: string;
-  storedUsername: string;
-  companyId: number | null;
-  action: string;
-  tableName: string;
-  recordId: number | null;
-  recordIdentifier: string | null;
-  changes: unknown;
-  createdAt: Date;
-  resolvedUsername: string | null;
-  displayName: string | null;
-  companyName: string | null;
-  companyCode: string | null;
-}) {
+function formatAuditRow(row: { id: number; userId: string; storedUsername: string; companyId: number | null; action: string; tableName: string; recordId: number | null; recordIdentifier: string | null; changes: unknown; createdAt: Date; resolvedUsername: string | null; displayName: string | null; companyName: string | null; companyCode: string | null; }) {
   const { storedUsername, resolvedUsername, displayName, companyName, companyCode, ...rest } = row;
   const actionLower = String(rest.action || "").toLowerCase();
   return {

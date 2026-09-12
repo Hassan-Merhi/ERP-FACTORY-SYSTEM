@@ -70,7 +70,9 @@ export type SpProductionClosureStatus =
       completionRecord: Record<string, unknown> | null;
     };
 
-export async function buildSpProductionClosureStatus(companyId: number): Promise<SpProductionClosureStatus> {
+export async function buildSpProductionClosureStatus(
+  companyId: number
+): Promise<SpProductionClosureStatus> {
   const cutover = await latestActiveCutover(companyId);
   if (!cutover) {
     return {

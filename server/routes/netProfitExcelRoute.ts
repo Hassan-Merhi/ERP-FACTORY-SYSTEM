@@ -308,25 +308,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         "deposit",
         "caution",
       ];
-      const isExcludedFromNp = (acc: {
-        code: string;
-        id: number;
-        name: string;
-        active: boolean;
-        createdAt: Date;
-        companyId: number;
-        deletedAt: Date | null;
-        accountType: string;
-        subType: string | null;
-        parentId: number | null;
-        openingBalance: string | null;
-        openingBalanceSide: string | null;
-        openingBalanceNativeAmount: string | null;
-        openingBalanceCurrency: string | null;
-        openingBalanceHistoricalRate: string | null;
-        openingBalanceBaseAmount: string | null;
-        isHidden: boolean;
-      }) => {
+      const isExcludedFromNp = (acc: { code: string; id: number; name: string; active: boolean; createdAt: Date; companyId: number; deletedAt: Date | null; accountType: string; subType: string | null; parentId: number | null; openingBalance: string | null; openingBalanceSide: string | null; openingBalanceNativeAmount: string | null; openingBalanceCurrency: string | null; openingBalanceHistoricalRate: string | null; openingBalanceBaseAmount: string | null; isHidden: boolean; }) => {
         if (npExcludedTypes.includes(acc.accountType || "")) return true;
         if (acc.code === "PRODUCTION_ADJUSTMENT" || acc.code === "CONSUMPTION_EXPENSE") return true;
         const nameLower = (acc.name || "").toLowerCase();

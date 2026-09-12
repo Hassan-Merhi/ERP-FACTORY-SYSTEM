@@ -17,7 +17,7 @@ export function registerSessionRoutes(app: Express) {
           userId: req.session.userId,
           role: req.session.currentRole,
           currentSid: req.sessionID,
-        })
+        }),
       );
     } catch (error: unknown) {
       return sendSessionError(res, error);
@@ -31,7 +31,7 @@ export function registerSessionRoutes(app: Express) {
           sid: req.params.sid,
           userId: req.session.userId,
           role: req.session.currentRole,
-        })
+        }),
       );
     } catch (error: unknown) {
       return sendSessionError(res, error);
@@ -48,7 +48,9 @@ export function registerSessionRoutes(app: Express) {
 
   app.get("/api/login-history", requireAuth, async (req, res) => {
     try {
-      return res.json(await sessionService.loginHistory(req.session.currentRole, req.session.currentCompanyId));
+      return res.json(
+        await sessionService.loginHistory(req.session.currentRole, req.session.currentCompanyId),
+      );
     } catch (error: unknown) {
       return sendSessionError(res, error);
     }

@@ -1,11 +1,19 @@
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../../../db";
-import { customerOrderBales, customerOrders, customerProformaLines, factoryBales } from "@shared/schema";
+import {
+  customerOrderBales,
+  customerOrders,
+  customerProformaLines,
+  factoryBales,
+} from "@shared/schema";
 import { recalculateOrderTotals } from "../../_helpers";
 import { firstRow } from "../../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
-import { allocateRemainingProformaLines, evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
+import {
+  allocateRemainingProformaLines,
+  evaluateProformaArticleCapacity,
+} from "../proformaCapacityEnforcement";
 import { normalizeLoadingArticleCode } from "../bale-scanning/proformaScanPolicy";
 
 const RECOVERABLE_STATUSES = ["LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"];

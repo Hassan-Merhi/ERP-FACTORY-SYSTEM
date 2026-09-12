@@ -236,7 +236,10 @@ export function installCutoverWriteGuard(app: Express): void {
   logger.info("[SP Cutover Guard] Global source/target write protection installed");
 }
 
-export async function getLiveCutover(sourceId: number, targetId: number): Promise<Record<string, unknown> | null> {
+export async function getLiveCutover(
+  sourceId: number,
+  targetId: number
+): Promise<Record<string, unknown> | null> {
   await ensureCutoverSchema();
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutovers

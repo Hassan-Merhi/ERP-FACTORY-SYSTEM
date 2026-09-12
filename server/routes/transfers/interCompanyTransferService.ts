@@ -16,25 +16,7 @@ async function getOrCreateInterCompanyAccount(params: {
   code: string;
   name: string;
   accountType: "Asset" | "Liability";
-  accounts: {
-    code: string;
-    id: number;
-    name: string;
-    active: boolean;
-    createdAt: Date;
-    companyId: number;
-    deletedAt: Date | null;
-    accountType: string;
-    subType: string | null;
-    parentId: number | null;
-    openingBalance: string | null;
-    openingBalanceSide: string | null;
-    openingBalanceNativeAmount: string | null;
-    openingBalanceCurrency: string | null;
-    openingBalanceHistoricalRate: string | null;
-    openingBalanceBaseAmount: string | null;
-    isHidden: boolean;
-  }[];
+  accounts: { code: string; id: number; name: string; active: boolean; createdAt: Date; companyId: number; deletedAt: Date | null; accountType: string; subType: string | null; parentId: number | null; openingBalance: string | null; openingBalanceSide: string | null; openingBalanceNativeAmount: string | null; openingBalanceCurrency: string | null; openingBalanceHistoricalRate: string | null; openingBalanceBaseAmount: string | null; isHidden: boolean; }[];
 }) {
   const existing = params.accounts.find((account) => account.code === params.code);
   if (existing) return existing;

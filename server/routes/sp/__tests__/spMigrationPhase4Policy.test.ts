@@ -22,9 +22,7 @@ describe("Supplier Partner Phase 4 policy", () => {
 
   it("requires exact cutover text and company name", () => {
     expect(exactCutoverConfirmation("FINALIZE CUTOVER", "FINALIZE CUTOVER", "GC Lshi", "GC Lshi")).toBeNull();
-    expect(exactCutoverConfirmation("finalize", "FINALIZE CUTOVER", "GC Lshi", "GC Lshi")).toContain(
-      "FINALIZE CUTOVER"
-    );
+    expect(exactCutoverConfirmation("finalize", "FINALIZE CUTOVER", "GC Lshi", "GC Lshi")).toContain("FINALIZE CUTOVER");
     expect(exactCutoverConfirmation("FINALIZE CUTOVER", "FINALIZE CUTOVER", "GC", "GC Lshi")).toContain("GC Lshi");
   });
 
@@ -42,29 +40,15 @@ describe("Supplier Partner Phase 4 policy", () => {
   });
 
   it("locks the source while prepared or active", () => {
-    expect(
-      latestCutoverBlocksCompany({ companyId: 1, sourceCompanyId: 1, targetCompanyId: 2, status: "prepared" }).blocked
-    ).toBe(true);
-    expect(
-      latestCutoverBlocksCompany({ companyId: 1, sourceCompanyId: 1, targetCompanyId: 2, status: "active" }).blocked
-    ).toBe(true);
+    expect(latestCutoverBlocksCompany({ companyId: 1, sourceCompanyId: 1, targetCompanyId: 2, status: "prepared" }).blocked).toBe(true);
+    expect(latestCutoverBlocksCompany({ companyId: 1, sourceCompanyId: 1, targetCompanyId: 2, status: "active" }).blocked).toBe(true);
   });
 
   it("locks the target while prepared", () => {
-    expect(
-      latestCutoverBlocksCompany({ companyId: 2, sourceCompanyId: 1, targetCompanyId: 2, status: "prepared" }).code
-    ).toBe("SP_TARGET_CUTOVER_LOCKED");
+    expect(latestCutoverBlocksCompany({ companyId: 2, sourceCompanyId: 1, targetCompanyId: 2, status: "prepared" }).code).toBe("SP_TARGET_CUTOVER_LOCKED");
   });
 
   it("holds the target read-only after rollback", () => {
-    expect(
-      latestCutoverBlocksCompany({
-        companyId: 2,
-        sourceCompanyId: 1,
-        targetCompanyId: 2,
-        status: "rolled_back",
-        targetWriteHold: true,
-      }).code
-    ).toBe("SP_TARGET_POST_ROLLBACK_HOLD");
+    expect(latestCutoverBlocksCompany({ companyId: 2, sourceCompanyId: 1, targetCompanyId: 2, status: "rolled_back", targetWriteHold: true }).code).toBe("SP_TARGET_POST_ROLLBACK_HOLD");
   });
 });

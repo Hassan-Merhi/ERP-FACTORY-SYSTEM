@@ -8,5 +8,4 @@
  */
 export const PAYABLE_CONTAINER_STATUSES = new Set(["OFFLOADED", "RECEIVED", "PARTIALLY_RECEIVED"]);
 
-export const isPayableContainer = (c: Record<string, unknown>) =>
-  PAYABLE_CONTAINER_STATUSES.has(String(c.status || "").toUpperCase());
+export const isPayableContainer = (c: Record<string, unknown>) => PAYABLE_CONTAINER_STATUSES.has(String(c.status || "").toUpperCase());

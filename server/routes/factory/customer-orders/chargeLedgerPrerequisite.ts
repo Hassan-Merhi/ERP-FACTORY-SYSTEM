@@ -63,6 +63,14 @@ async function ensureCustomerLedgerForChargeWrite(req: Request, res: Response, n
  * handlers so VERIFIED/PENDING charges can never be saved without their voucher.
  */
 export function registerChargeLedgerPrerequisite(app: Express) {
-  app.post("/api/factory/customer-orders/:id/charges", requireAuth, ensureCustomerLedgerForChargeWrite);
-  app.patch("/api/factory/customer-orders/:id/charges/:chargeId", requireAuth, ensureCustomerLedgerForChargeWrite);
+  app.post(
+    "/api/factory/customer-orders/:id/charges",
+    requireAuth,
+    ensureCustomerLedgerForChargeWrite
+  );
+  app.patch(
+    "/api/factory/customer-orders/:id/charges/:chargeId",
+    requireAuth,
+    ensureCustomerLedgerForChargeWrite
+  );
 }

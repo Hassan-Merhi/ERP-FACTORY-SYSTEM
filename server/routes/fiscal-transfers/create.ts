@@ -74,8 +74,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Branch: Create new transfer from scratch (sourceLocationId provided, no voucherId)
       if (
         !voucherId &&
-        (sourceLocationId ||
-          (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
+        (sourceLocationId || (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
       ) {
         if (!companyId) {
           return res.status(400).json({ message: "No company selected" });

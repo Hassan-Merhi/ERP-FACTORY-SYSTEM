@@ -44,11 +44,7 @@ export const transferRepository = {
     return transfer;
   },
 
-  async findTransferByVoucherIdsTx(
-    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    fromVoucherId: number,
-    toVoucherId: number
-  ) {
+  async findTransferByVoucherIdsTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], fromVoucherId: number, toVoucherId: number) {
     const [transfer] = await tx
       .select()
       .from(interCompanyTransfers)
@@ -86,11 +82,7 @@ export const transferRepository = {
     return transfer ?? null;
   },
 
-  async getVoucherSnapshotTx(
-    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    companyId: number,
-    voucherId: number
-  ) {
+  async getVoucherSnapshotTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], companyId: number, voucherId: number) {
     const [voucher] = await tx
       .select()
       .from(vouchers)
@@ -117,7 +109,7 @@ export const transferRepository = {
       storage.getAllCompanies(),
       accountIds.length > 0
         ? db.select().from(ledgerAccounts).where(inArray(ledgerAccounts.id, accountIds))
-        : Promise.resolve([]),
+        : Promise.resolve(([])),
     ]);
     const companyMap = new Map(companies.map((company) => [company.id, company]));
     const accountMap = new Map(accounts.map((account) => [account.id, account]));
@@ -131,10 +123,7 @@ export const transferRepository = {
     }));
   },
 
-  async deleteSimpleTransferTx(
-    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
-    transferId: number
-  ): Promise<void> {
+  async deleteSimpleTransferTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], transferId: number): Promise<void> {
     await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transferId));
   },
 };

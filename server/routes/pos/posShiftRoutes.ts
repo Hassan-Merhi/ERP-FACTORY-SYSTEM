@@ -118,9 +118,7 @@ export function registerPosShiftRoutes(app: Express): void {
         const assignedLocs = await db
           .select({ locationId: userLocations.locationId })
           .from(userLocations)
-          .where(
-            and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, req.session.currentCompanyId!))
-          );
+          .where(and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, req.session.currentCompanyId!)));
         const allowedIds = assignedLocs.map((l) => l.locationId);
         if (!allowedIds.includes(locationId)) {
           return res.status(403).json({ message: "You can only open shifts at your assigned location" });

@@ -3,7 +3,10 @@ import {
   type ProformaCapacityExecutor,
   type ProformaCapacitySnapshot,
 } from "./proformaCapacity";
-import { evaluateProformaLoadingAvailability, type ProformaCapacityValidation } from "./proformaCapacityEnforcement";
+import {
+  evaluateProformaLoadingAvailability,
+  type ProformaCapacityValidation,
+} from "./proformaCapacityEnforcement";
 
 export type ProformaWriteGuardResult =
   | { allowed: true }

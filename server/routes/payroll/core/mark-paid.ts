@@ -114,90 +114,79 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
         ? await findOrCreateLedger(companyId, "Payroll Payable", "Liability")
         : null;
 
-      const operationKey = resolveFinancialOperationKey(req);
-      const operation = await withDurableFinancialOperation(
-        {
-          companyId: Number(companyId),
-          operationName: "factory.payroll.mark-paid",
-          idempotencyKey: operationKey,
-          requestFingerprint: financialOperationFingerprint({
-            method: req.method,
-            path: req.path,
-            companyId: Number(companyId),
-            body: financialOperationRequestPayload(req.body),
-            payrollId: id,
-          }),
-        },
-        async (tx) => {
-          const [payroll] = await tx
-            .update(factoryPayrolls)
-            .set({ status: "PAID", paidAt: new Date(paymentDate), cashAccountId })
-            .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
+       const operationKey = resolveFinancialOperationKey(req);
+       const operation = await withDurableFinancialOperation(
+         {
+           companyId: Number(companyId),
+           operationName: "factory.payroll.mark-paid",
+           idempotencyKey: operationKey,
+           requestFingerprint: financialOperationFingerprint({
+             method: req.method,
+             path: req.path,
+             companyId: Number(companyId),
+             body: financialOperationRequestPayload(req.body),
+             payrollId: id,
+           }),
+         },
+         async (tx) => {
+        const [payroll] = await tx
+          .update(factoryPayrolls)
+          .set({ status: "PAID", paidAt: new Date(paymentDate), cashAccountId })
+          .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)))
+          .returning();
+        if (!payroll) throw new Error("Payroll record not found");
+
+        const [prWorker] = await tx
+          .select({ fullName: factoryWorkers.fullName })
+          .from(factoryWorkers)
+          .where(eq(factoryWorkers.id, payroll.workerId));
+        const workerName = prWorker?.fullName?.trim() || `Worker #${payroll.workerId}`;
+        const prToday = paymentDate;
+
+        if (cashAccountId) {
+          const payableAcc = payableAccSingle!;
+          const netAmt = parseFloat(payroll.netSalary || "0");
+          const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
+          const [pVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
+              voucherType: "Payment",
+              voucherDate: prToday,
+              description: narration,
+              totalAmount: netAmt.toFixed(2),
+              currency: "USD",
+              sourceModule: "FACTORY",
+            })
             .returning();
-          if (!payroll) throw new Error("Payroll record not found");
-
-          const [prWorker] = await tx
-            .select({ fullName: factoryWorkers.fullName })
-            .from(factoryWorkers)
-            .where(eq(factoryWorkers.id, payroll.workerId));
-          const workerName = prWorker?.fullName?.trim() || `Worker #${payroll.workerId}`;
-          const prToday = paymentDate;
-
-          if (cashAccountId) {
-            const payableAcc = payableAccSingle!;
-            const netAmt = parseFloat(payroll.netSalary || "0");
-            const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
-            const [pVoucher] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
-                voucherType: "Payment",
-                voucherDate: prToday,
-                description: narration,
-                totalAmount: netAmt.toFixed(2),
-                currency: "USD",
-                sourceModule: "FACTORY",
-              })
-              .returning();
-            if (netAmt > 0) {
-              await tx.insert(voucherEntries).values([
-                {
-                  voucherId: pVoucher.id,
-                  ledgerAccountId: payableAcc.id,
-                  ...normUsd(netAmt.toFixed(2), "0"),
-                  narration,
-                },
-                {
-                  voucherId: pVoucher.id,
-                  ledgerAccountId: cashAccountId,
-                  ...normUsd("0", netAmt.toFixed(2)),
-                  narration,
-                },
-              ]);
-            }
+          if (netAmt > 0) {
+            await tx.insert(voucherEntries).values([
+              { voucherId: pVoucher.id, ledgerAccountId: payableAcc.id, ...normUsd(netAmt.toFixed(2), "0"), narration },
+              { voucherId: pVoucher.id, ledgerAccountId: cashAccountId, ...normUsd("0", netAmt.toFixed(2)), narration },
+            ]);
           }
-
-          await writeDaybookEntry(tx, {
-            companyId,
-            txDate: prToday,
-            txType: "PAYROLL_PAYMENT",
-            referenceId: payroll.id,
-            referenceTable: "factory_payrolls",
-            description: `Payroll paid: ${workerName} – ${parseFloat(payroll.netSalary || "0").toFixed(2)} (${payroll.periodStart} – ${payroll.periodEnd})`,
-            amountCurrency: parseFloat(payroll.netSalary || "0"),
-            amountUsd: parseFloat(payroll.netSalary || "0"),
-          });
-          return { value: payroll, resultReference: payroll.id };
         }
-      );
 
-      res.json(operation.value);
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: prToday,
+          txType: "PAYROLL_PAYMENT",
+          referenceId: payroll.id,
+          referenceTable: "factory_payrolls",
+          description: `Payroll paid: ${workerName} – ${parseFloat(payroll.netSalary || "0").toFixed(2)} (${payroll.periodStart} – ${payroll.periodEnd})`,
+          amountCurrency: parseFloat(payroll.netSalary || "0"),
+          amountUsd: parseFloat(payroll.netSalary || "0"),
+        });
+         return { value: payroll, resultReference: payroll.id };
+       });
+
+       res.json(operation.value);
     } catch (error: unknown) {
       if (getErrorMessage(error) === "Payroll record not found")
         return res.status(404).json({ message: getErrorMessage(error) });
-      const status = financialOperationErrorStatus(error);
-      res.status(status).json({ message: getErrorMessage(error) });
+       const status = financialOperationErrorStatus(error);
+       res.status(status).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -279,83 +268,82 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
       if (!pendingGuard.ok) return res.status(pendingGuard.status).json(pendingGuard);
 
       const payableAccBulk = cashId ? await findOrCreateLedger(companyId, "Payroll Payable", "Liability") : null;
-      const operationKey = resolveFinancialOperationKey(req);
-      const operation = await withDurableFinancialOperation(
-        {
-          companyId: Number(companyId),
-          operationName: "factory.payroll.mark-paid-bulk",
-          idempotencyKey: operationKey,
-          requestFingerprint: financialOperationFingerprint({
-            method: req.method,
-            path: req.path,
-            companyId: Number(companyId),
-            body: financialOperationRequestPayload(req.body),
-            payrollIds: normalizedIds,
-          }),
-        },
-        async (tx) => {
-          const payrollsToMark = await tx
-            .select()
-            .from(factoryPayrolls)
-            .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
+       const operationKey = resolveFinancialOperationKey(req);
+       const operation = await withDurableFinancialOperation(
+         {
+           companyId: Number(companyId),
+           operationName: "factory.payroll.mark-paid-bulk",
+           idempotencyKey: operationKey,
+           requestFingerprint: financialOperationFingerprint({
+             method: req.method,
+             path: req.path,
+             companyId: Number(companyId),
+             body: financialOperationRequestPayload(req.body),
+             payrollIds: normalizedIds,
+           }),
+         },
+         async (tx) => {
+        const payrollsToMark = await tx
+          .select()
+          .from(factoryPayrolls)
+          .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
 
-          await tx
-            .update(factoryPayrolls)
-            .set({ status: "PAID", paidAt: new Date(bulkPrToday), cashAccountId: cashId })
-            .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
+        await tx
+          .update(factoryPayrolls)
+          .set({ status: "PAID", paidAt: new Date(bulkPrToday), cashAccountId: cashId })
+          .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
 
-          const workerIds = Array.from(new Set<number>(payrollsToMark.map((payroll) => payroll.workerId)));
-          const workerRows = await tx
-            .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
-            .from(factoryWorkers)
-            .where(inArray(factoryWorkers.id, workerIds));
-          const workerMap = new Map(workerRows.map((worker) => [worker.id, worker.fullName]));
+        const workerIds = Array.from(new Set<number>(payrollsToMark.map((payroll) => payroll.workerId)));
+        const workerRows = await tx
+          .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
+          .from(factoryWorkers)
+          .where(inArray(factoryWorkers.id, workerIds));
+        const workerMap = new Map(workerRows.map((worker) => [worker.id, worker.fullName]));
 
-          for (const payroll of payrollsToMark) {
-            if (cashId && payableAccBulk) {
-              const netAmt = parseFloat(payroll.netSalary || "0");
-              const workerName = (workerMap.get(payroll.workerId) as string)?.trim() || `Worker #${payroll.workerId}`;
-              const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
-              const [pVoucher] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId,
-                  voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
-                  voucherType: "Payment",
-                  voucherDate: bulkPrToday,
-                  description: narration,
-                  totalAmount: netAmt.toFixed(2),
-                  currency: "USD",
-                  sourceModule: "FACTORY",
-                })
-                .returning();
-              if (netAmt > 0) {
-                await tx.insert(voucherEntries).values([
-                  {
-                    voucherId: pVoucher.id,
-                    ledgerAccountId: payableAccBulk.id,
-                    ...normUsd(netAmt.toFixed(2), "0"),
-                    narration,
-                  },
-                  { voucherId: pVoucher.id, ledgerAccountId: cashId, ...normUsd("0", netAmt.toFixed(2)), narration },
-                ]);
-              }
+        for (const payroll of payrollsToMark) {
+          if (cashId && payableAccBulk) {
+            const netAmt = parseFloat(payroll.netSalary || "0");
+            const workerName = (workerMap.get(payroll.workerId) as string)?.trim() || `Worker #${payroll.workerId}`;
+            const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
+            const [pVoucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId,
+                voucherNumber: `PAYMENT-PAY-${payroll.id}-${Date.now()}`,
+                voucherType: "Payment",
+                voucherDate: bulkPrToday,
+                description: narration,
+                totalAmount: netAmt.toFixed(2),
+                currency: "USD",
+                sourceModule: "FACTORY",
+              })
+              .returning();
+            if (netAmt > 0) {
+              await tx.insert(voucherEntries).values([
+                {
+                  voucherId: pVoucher.id,
+                  ledgerAccountId: payableAccBulk.id,
+                  ...normUsd(netAmt.toFixed(2), "0"),
+                  narration,
+                },
+                { voucherId: pVoucher.id, ledgerAccountId: cashId, ...normUsd("0", netAmt.toFixed(2)), narration },
+              ]);
             }
           }
-
-          await writeDaybookEntry(tx, {
-            companyId,
-            txDate: bulkPrToday,
-            txType: "PAYROLL_PAYMENT",
-            description: `Payroll bulk paid: ${normalizedIds.length} worker${normalizedIds.length !== 1 ? "s" : ""}`,
-          });
-          return { value: { updated: normalizedIds.length }, resultReference: operationKey };
         }
-      );
 
-      res.json(operation.value);
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: bulkPrToday,
+          txType: "PAYROLL_PAYMENT",
+          description: `Payroll bulk paid: ${normalizedIds.length} worker${normalizedIds.length !== 1 ? "s" : ""}`,
+        });
+         return { value: { updated: normalizedIds.length }, resultReference: operationKey };
+       });
+
+       res.json(operation.value);
     } catch (error: unknown) {
-      res.status(financialOperationErrorStatus(error)).json({ message: getErrorMessage(error) });
+       res.status(financialOperationErrorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

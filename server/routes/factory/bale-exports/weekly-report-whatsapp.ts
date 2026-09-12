@@ -14,24 +14,20 @@ import { buildWeeklyReportExcelBuffer } from "./_helpers";
 export function registerFactoryWeeklyReportWhatsappRoutes(app: Express) {
   // ── Weekly Report — WhatsApp settings & send ───────────────────────────────
 
-  app.get(
-    "/api/factory/weekly-report-wa-settings",
-    requireAuth,
-    async (_req: unknown, res: import("express").Response) => {
-      try {
-        const r = await pool.query(
-          `SELECT weekly_report_wa_group_chat_id, instance_id, api_token FROM whatsapp_settings WHERE id = 1`
-        );
-        const s = r.rows[0];
-        res.json({
-          groupChatId: s?.weekly_report_wa_group_chat_id || "",
-          hasCredentials: !!(s?.instance_id && s?.api_token),
-        });
-      } catch (e: unknown) {
-        res.status(500).json({ message: getErrorMessage(e) });
-      }
+  app.get("/api/factory/weekly-report-wa-settings", requireAuth, async (_req: unknown, res: import("express").Response) => {
+    try {
+      const r = await pool.query(
+        `SELECT weekly_report_wa_group_chat_id, instance_id, api_token FROM whatsapp_settings WHERE id = 1`
+      );
+      const s = r.rows[0];
+      res.json({
+        groupChatId: s?.weekly_report_wa_group_chat_id || "",
+        hasCredentials: !!(s?.instance_id && s?.api_token),
+      });
+    } catch (e: unknown) {
+      res.status(500).json({ message: getErrorMessage(e) });
     }
-  );
+  });
 
   app.patch("/api/factory/weekly-report-wa-settings", requireAuth, async (req: Request, res: Response) => {
     try {

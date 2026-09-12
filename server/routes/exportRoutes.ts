@@ -396,7 +396,7 @@ export function registerExportRoutes(app: Express) {
         SELECT * FROM daily_export_runs ORDER BY created_at DESC LIMIT 1
       `
         )
-        .catch(() => ({ rows: [] }));
+        .catch(() => ({ rows: ([]) }));
 
       // Recent runs — full detail for all 10 so UI can render each independently
       const recentQ = await pool
@@ -405,18 +405,18 @@ export function registerExportRoutes(app: Express) {
         SELECT * FROM daily_export_runs ORDER BY created_at DESC LIMIT 10
       `
         )
-        .catch(() => ({ rows: [] }));
+        .catch(() => ({ rows: ([]) }));
 
       // Readiness data
       const esQ = await pool
         .query(`SELECT gmail_user, gmail_app_password, schedule_enabled FROM export_settings WHERE id = 1`)
-        .catch(() => ({ rows: [] }));
+        .catch(() => ({ rows: ([]) }));
       const rcQ = await pool
         .query(`SELECT COUNT(*)::int AS cnt FROM export_recipients WHERE active = true`)
         .catch(() => ({ rows: [{ cnt: 0 }] }));
       const wsQ = await pool
         .query(`SELECT enabled, daily_auto_send, daily_recipient_id FROM whatsapp_settings WHERE id = 1`)
-        .catch(() => ({ rows: [] }));
+        .catch(() => ({ rows: ([]) }));
       const coQ = await pool.query(`SELECT COUNT(*)::int AS cnt FROM companies`).catch(() => ({ rows: [{ cnt: 0 }] }));
 
       const es = esQ.rows[0] ?? {};
@@ -428,7 +428,7 @@ export function registerExportRoutes(app: Express) {
       if (ws.daily_recipient_id) {
         const rrQ = await pool
           .query(`SELECT active FROM whatsapp_recipients WHERE id = $1`, [ws.daily_recipient_id])
-          .catch(() => ({ rows: [] }));
+          .catch(() => ({ rows: ([]) }));
         waRecipientActive = rrQ.rows[0]?.active === true;
       }
 

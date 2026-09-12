@@ -71,14 +71,19 @@ export function registerIntercompanyPosConfigRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/intercompany-pos-config/dest-accounts", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const { companyId } = req.query;
-      if (!companyId) return res.status(400).json({ message: "companyId required" });
-      const accounts = await storage.getAllLedgerAccounts(parseInt(companyId as string));
-      res.json(accounts);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  app.get(
+    "/api/intercompany-pos-config/dest-accounts",
+    requireAuth,
+    requireNonPOS,
+    async (req, res) => {
+      try {
+        const { companyId } = req.query;
+        if (!companyId) return res.status(400).json({ message: "companyId required" });
+        const accounts = await storage.getAllLedgerAccounts(parseInt(companyId as string));
+        res.json(accounts);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    },
+  );
 }

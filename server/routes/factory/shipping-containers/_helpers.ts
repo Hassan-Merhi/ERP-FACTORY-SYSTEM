@@ -34,11 +34,7 @@ export const scrUploadBase = multer({
   },
 });
 
-export function scrUpload(
-  req: import("express").Request,
-  res: import("express").Response,
-  next: import("express").NextFunction
-) {
+export function scrUpload(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {
   scrUploadBase.single("file")(req, res, (err) => {
     if (err) return res.status(400).json({ message: err.message });
     next();

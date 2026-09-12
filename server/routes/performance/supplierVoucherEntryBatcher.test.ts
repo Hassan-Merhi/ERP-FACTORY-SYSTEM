@@ -54,7 +54,10 @@ describe("supplier voucher-entry batcher", () => {
   it("keeps batches isolated by company", async () => {
     mocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
 
-    await Promise.all([getVoucherEntriesBySupplierBatched(11, 7), getVoucherEntriesBySupplierBatched(11, 8)]);
+    await Promise.all([
+      getVoucherEntriesBySupplierBatched(11, 7),
+      getVoucherEntriesBySupplierBatched(11, 8),
+    ]);
 
     expect(mocks.query).toHaveBeenCalledTimes(2);
     expect(mocks.query.mock.calls.map((call) => call[1])).toEqual(

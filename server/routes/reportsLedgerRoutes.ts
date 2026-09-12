@@ -87,8 +87,7 @@ export function registerReportsLedgerRoutes(app: Express) {
         "November",
         "December",
       ];
-      const monthlyData: { month: number; monthName: string; debit: number; credit: number; closingBalance: number }[] =
-        [];
+      const monthlyData: { month: number; monthName: string; debit: number; credit: number; closingBalance: number }[] = [];
       let runningBalance = openingBalance;
 
       for (let month = 0; month < 12; month++) {
@@ -103,13 +102,7 @@ export function registerReportsLedgerRoutes(app: Express) {
           credit += parseFloat(entry.credit || "0");
         }
         runningBalance += credit - debit;
-        monthlyData.push({
-          month: month + 1,
-          monthName: monthNames[month],
-          debit,
-          credit,
-          closingBalance: runningBalance,
-        });
+        monthlyData.push({ month: month + 1, monthName: monthNames[month], debit, credit, closingBalance: runningBalance });
       }
 
       res.json({

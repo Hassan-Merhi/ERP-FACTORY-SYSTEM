@@ -10,7 +10,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { requireAuth } from "../../../auth";
-import { createLoadingFromProformaAtomically, CreateLoadingFromProformaError } from "./createLoadingAtomic";
+import {
+  createLoadingFromProformaAtomically,
+  CreateLoadingFromProformaError,
+} from "./createLoadingAtomic";
 
 export function registerFactoryCustomerProformaLoadingRoutes(app: Express) {
   // Create a pending loading from a proforma — auto-adds matching bales from stock.

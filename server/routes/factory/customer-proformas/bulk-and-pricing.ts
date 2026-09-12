@@ -23,9 +23,7 @@ import { autoSavePriceToPriceList } from "./_helpers";
 function hasDuplicateNormalizedArticleCodes(lines: Array<{ articleCode?: unknown }>): boolean {
   const seen = new Set<string>();
   for (const line of lines) {
-    const normalized = String(line.articleCode ?? "")
-      .trim()
-      .toLowerCase();
+    const normalized = String(line.articleCode ?? "").trim().toLowerCase();
     if (!normalized) continue;
     if (seen.has(normalized)) return true;
     seen.add(normalized);

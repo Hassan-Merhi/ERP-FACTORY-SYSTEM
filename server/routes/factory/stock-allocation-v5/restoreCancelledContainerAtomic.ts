@@ -76,13 +76,9 @@ export async function restoreCancelledContainerAtomically(input: { companyId: nu
     );
 
     if (historyRows.length > 0) {
-      const baleIds = [
-        ...new Set(historyRows.map((row) => Number(row.baleId)).filter((id) => Number.isSafeInteger(id) && id > 0)),
-      ];
+      const baleIds = [...new Set(historyRows.map((row) => Number(row.baleId)).filter((id) => Number.isSafeInteger(id) && id > 0))];
       if (baleIds.length !== historyRows.length) {
-        throw new RestoreCancelledContainerError(
-          "Cancelled container history contains invalid or duplicate bale links"
-        );
+        throw new RestoreCancelledContainerError("Cancelled container history contains invalid or duplicate bale links");
       }
 
       // Lock physical bales before checking whether another active order reused

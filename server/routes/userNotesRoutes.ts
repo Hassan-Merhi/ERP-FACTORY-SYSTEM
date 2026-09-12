@@ -1,6 +1,10 @@
 import type { Express, Response } from "express";
 import { requireAuth } from "../auth";
-import { type AuthenticatedRequest, getAuthenticatedUserId, sendHttpError } from "../lib/httpHandlers";
+import {
+  type AuthenticatedRequest,
+  getAuthenticatedUserId,
+  sendHttpError,
+} from "../lib/httpHandlers";
 import { getUserNotes, saveUserNotes } from "../services/userNotesService";
 
 export function registerUserNotesRoutes(app: Express) {

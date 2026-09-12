@@ -113,14 +113,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(transactions, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(transactions, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -176,14 +174,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(transactions, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(transactions, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -239,14 +235,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(transactions, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(transactions, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -312,14 +306,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(transactions, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(transactions, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -370,14 +362,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(transactions, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(transactions, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -445,14 +435,12 @@ export function registerAccountTransactionRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
-      return res.json(
-        statementResponse(mapped, {
-          preNetBalance,
-          asOfDate,
-          startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
-        })
-      );
+      return res.json(statementResponse(mapped, {
+        preNetBalance,
+        asOfDate,
+        startDate: rawStart ?? null,
+        endDate: effectiveEndDate,
+      }));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

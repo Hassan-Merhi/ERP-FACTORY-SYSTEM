@@ -54,7 +54,11 @@ export const gitUpload = multer({
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type WarningCode =
-  "no_open_balance" | "ledger_exceeds_containers" | "allocation_gap" | "fuzzy_match" | "no_account_linked";
+  | "no_open_balance"
+  | "ledger_exceeds_containers"
+  | "allocation_gap"
+  | "fuzzy_match"
+  | "no_account_linked";
 
 export type AllocStatus = "Cleared" | "Partially Cleared" | "Open";
 

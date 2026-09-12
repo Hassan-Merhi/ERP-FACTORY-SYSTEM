@@ -140,7 +140,10 @@ export function registerWorkerStatementReadRoutes(app: Express) {
       const workerName = worker.fullName || `Worker #${workerId}`;
 
       // Advances
-      const advConds = [eq(factoryWorkerAdvances.workerId, workerId), eq(factoryWorkerAdvances.companyId, companyId)];
+      const advConds = [
+        eq(factoryWorkerAdvances.workerId, workerId),
+        eq(factoryWorkerAdvances.companyId, companyId),
+      ];
       if (startDate) advConds.push(sql`${factoryWorkerAdvances.advanceDate} >= ${startDate}`);
       if (endDate) advConds.push(sql`${factoryWorkerAdvances.advanceDate} <= ${endDate}`);
       const advances = await db

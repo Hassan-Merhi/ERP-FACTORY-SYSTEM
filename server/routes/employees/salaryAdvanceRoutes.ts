@@ -28,15 +28,20 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/salary-advances/employee/:employeeId", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const employeeId = parseInt(req.params.employeeId);
-      if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
-      res.json(await storage.getSalaryAdvancesByEmployee(employeeId));
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  app.get(
+    "/api/salary-advances/employee/:employeeId",
+    requireAuth,
+    requireNonPOS,
+    async (req, res) => {
+      try {
+        const employeeId = parseInt(req.params.employeeId);
+        if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
+        res.json(await storage.getSalaryAdvancesByEmployee(employeeId));
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    },
+  );
 
   app.post("/api/salary-advances", requireAuth, requireNonPOS, async (req, res) => {
     try {
@@ -173,17 +178,14 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         .from(salaryAdvanceDeductions)
         .where(
           allAdvances.length
-            ? inArray(
-                salaryAdvanceDeductions.salaryAdvanceId,
-                allAdvances.map((advance) => advance.id)
-              )
-            : sql`false`
+            ? inArray(salaryAdvanceDeductions.salaryAdvanceId, allAdvances.map((advance) => advance.id))
+            : sql`false`,
         );
       const manualByAdvance = new Map<number, number>();
       for (const deduction of allManualDeductions) {
         manualByAdvance.set(
           deduction.salaryAdvanceId,
-          (manualByAdvance.get(deduction.salaryAdvanceId) || 0) + parseFloat(deduction.deductionAmount || "0")
+          (manualByAdvance.get(deduction.salaryAdvanceId) || 0) + parseFloat(deduction.deductionAmount || "0"),
         );
       }
       const paidRuns = await db
@@ -195,12 +197,7 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         const items = await db
           .select({ employeeId: erpPayrollRunItems.employeeId, deduction: erpPayrollRunItems.deduction })
           .from(erpPayrollRunItems)
-          .where(
-            inArray(
-              erpPayrollRunItems.runId,
-              paidRuns.map((run) => run.id)
-            )
-          );
+          .where(inArray(erpPayrollRunItems.runId, paidRuns.map((run) => run.id)));
         for (const item of items) {
           const amount = parseFloat(item.deduction || "0");
           if (amount > 0 && item.employeeId) {
@@ -209,8 +206,7 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         }
       }
       const grouped = new Map<number, typeof allAdvances>();
-      for (const advance of allAdvances)
-        grouped.set(advance.employeeId, [...(grouped.get(advance.employeeId) || []), advance]);
+      for (const advance of allAdvances) grouped.set(advance.employeeId, [...(grouped.get(advance.employeeId) || []), advance]);
 
       let fixed = 0;
       await db.transaction(async (tx) => {
@@ -230,10 +226,7 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
             const advance = advances[index];
             const newBalance = parseFloat(Math.max(0, balances[index].balance).toFixed(2));
             const fullyPaid = newBalance <= 0.01;
-            if (
-              Math.abs(parseFloat(advance.remainingBalance || "0") - newBalance) > 0.01 ||
-              advance.fullyPaid !== fullyPaid
-            ) {
+            if (Math.abs(parseFloat(advance.remainingBalance || "0") - newBalance) > 0.01 || advance.fullyPaid !== fullyPaid) {
               await tx
                 .update(salaryAdvances)
                 .set({ remainingBalance: newBalance.toFixed(2), fullyPaid })

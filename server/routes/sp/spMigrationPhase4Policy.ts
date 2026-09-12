@@ -31,7 +31,11 @@ export function exactCutoverConfirmation(
   return null;
 }
 
-export function exactInventoryValue(quantity: unknown, averageRate: unknown, storedTotalValue: unknown): number {
+export function exactInventoryValue(
+  quantity: unknown,
+  averageRate: unknown,
+  storedTotalValue: unknown
+): number {
   const parsedStored = Number.parseFloat(String(storedTotalValue ?? ""));
   if (Number.isFinite(parsedStored)) return parsedStored;
   const parsedQuantity = Number.parseFloat(String(quantity ?? "0"));

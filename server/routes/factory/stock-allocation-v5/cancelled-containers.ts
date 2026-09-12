@@ -11,7 +11,10 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
-import { restoreCancelledContainerAtomically, RestoreCancelledContainerError } from "./restoreCancelledContainerAtomic";
+import {
+  restoreCancelledContainerAtomically,
+  RestoreCancelledContainerError,
+} from "./restoreCancelledContainerAtomic";
 
 export function registerV5CancelledContainerRoutes(app: Express) {
   // ── GET /api/factory/v5/recently-cancelled-containers ────────────────────

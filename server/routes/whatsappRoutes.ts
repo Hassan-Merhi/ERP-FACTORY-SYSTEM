@@ -478,10 +478,7 @@ export function registerWhatsAppRoutes(app: Express) {
 
   app.put("/api/whatsapp/np-settings", requireAuth, async (req, res) => {
     try {
-      const { recipientId, frequency, sendHour, sendDayOfWeek, enabled, autoSend } = req.body as Record<
-        string,
-        unknown
-      >;
+      const { recipientId, frequency, sendHour, sendDayOfWeek, enabled, autoSend } = req.body as Record<string, unknown>;
       await pool.query(
         `INSERT INTO net_position_export_settings
            (id, recipient_id, frequency, send_hour, send_day_of_week, enabled, auto_send)

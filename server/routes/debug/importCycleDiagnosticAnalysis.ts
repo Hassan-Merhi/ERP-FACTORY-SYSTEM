@@ -46,7 +46,9 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
       code: ledgerAccounts.code,
       parentType: sql<string>`${ledgerAccounts.accountType}`.as("parentType"),
       currentBalance: sql<string>`COALESCE(${ledgerAccounts.openingBalance}, '0')`.as("currentBalance"),
-      currentBalanceSide: sql<string>`COALESCE(${ledgerAccounts.openingBalanceSide}, 'Dr')`.as("currentBalanceSide"),
+      currentBalanceSide: sql<string>`COALESCE(${ledgerAccounts.openingBalanceSide}, 'Dr')`.as(
+        "currentBalanceSide"
+      ),
     })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
@@ -161,7 +163,9 @@ export async function buildImportCycleDiagnostics(companyId: number, snapshot: I
 
   for (const variance of variances) {
     variance.variance = round2(variance.computed - variance.fromAccounts);
-    variance.accountsInBucket = accountContributions.filter((account) => account.bucket === variance.bucket).length;
+    variance.accountsInBucket = accountContributions.filter(
+      (account) => account.bucket === variance.bucket
+    ).length;
   }
 
   const significantVariances = variances.filter((variance) => Math.abs(variance.variance) > 1);

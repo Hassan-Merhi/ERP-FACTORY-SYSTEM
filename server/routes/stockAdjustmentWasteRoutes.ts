@@ -236,10 +236,7 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       );
 
       // Calculate total from actual rates used
-      const totalAmount = adjResult.items.reduce(
-        (sum: number, item: { totalAmount: string }) => sum + parseFloat(item.totalAmount),
-        0
-      );
+      const totalAmount = adjResult.items.reduce((sum: number, item: { totalAmount: string }) => sum + parseFloat(item.totalAmount), 0);
 
       // Update voucher with actual total
       await db

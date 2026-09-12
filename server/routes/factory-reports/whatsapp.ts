@@ -62,15 +62,12 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
       const buffer = Buffer.from(base64Data, "base64");
       const today = date || new Date().toISOString().substring(0, 10);
       const finalFileName = String(fileName || `MixBatch_${today}.png`).slice(0, 180);
-      const finalCaption = String(caption || `Mix Batch Details — ${today}`)
-        .trim()
-        .slice(0, 500);
-      const auditLabel = String(reportLabel || finalCaption)
-        .trim()
-        .slice(0, 200);
+      const finalCaption = String(caption || `Mix Batch Details — ${today}`).trim().slice(0, 500);
+      const auditLabel = String(reportLabel || finalCaption).trim().slice(0, 200);
 
-      const { sendWhatsAppFileToChatId, sendWhatsAppFileToChatIdPos, getWaSettingsById } =
-        await import("../../services/whatsappService");
+      const { sendWhatsAppFileToChatId, sendWhatsAppFileToChatIdPos, getWaSettingsById } = await import(
+        "../../services/whatsappService"
+      );
 
       let result = await sendWhatsAppFileToChatId(groupChatId, buffer, finalFileName, finalCaption, "image/png");
       let usedFallback = false;
