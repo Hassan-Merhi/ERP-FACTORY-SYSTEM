@@ -75,6 +75,11 @@ interface _TodaySales {
   average: string;
 }
 
+interface PosTodayVoucher {
+  voucherType?: string | null;
+  totalAmount?: string | number | null;
+}
+
 interface Location {
   id: number;
   code: string;
@@ -153,7 +158,7 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
     isLoading: salesLoading,
     isError: salesError,
     refetch: refetchSales,
-  } = useQuery<{ voucherType?: string; totalAmount?: string | number | null }[]>({
+  } = useQuery<PosTodayVoucher[]>({
     queryKey: locationId ? [`/api/locations/${locationId}/vouchers/today`] : [],
     enabled: !!locationId,
   });
@@ -161,7 +166,7 @@ export default function POSDashboard({ posUser }: POSDashboardProps) {
   // Calculate today's sales from vouchers
   const todaySales = (() => {
     const salesVouchers = todayVouchers?.filter((v) => v.voucherType === "Sales") || [];
-    const totalRaw = salesVouchers.reduce((sum: number, v) => sum + parseFloat(String(v.totalAmount ?? "0")), 0);
+    const totalRaw = salesVouchers.reduce((sum: number, v) => sum + Number(v.totalAmount ?? 0), 0);
     return {
       count: salesVouchers.length,
       total: totalRaw,

@@ -31,6 +31,7 @@ export interface PosImportItem {
   error?: string;
   warning?: string;
   currentStock?: number;
+  [key: string]: unknown;
 }
 
 export interface PosImportPreview {

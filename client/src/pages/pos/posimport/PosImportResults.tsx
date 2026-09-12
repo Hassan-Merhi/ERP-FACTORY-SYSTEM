@@ -106,7 +106,7 @@ export function PosImportPreview({ model }: { model: PosImportModel }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {preview.items.map((item, index: number) => {
+              {preview.items.map((item: PosImportItem, index: number) => {
                 const validation = validationResult?.validatedItems?.[index];
                 const hasError = validation?.error;
 

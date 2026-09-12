@@ -1,9 +1,9 @@
+import type { AccountingForm, AccountingFormSubmit, CompanyOption } from "../types";
 /**
  * LocationForm — extracted sub-component.
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
-import type { AccountingForm, AccountingFormSubmit, CompanyOption } from "../types";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";

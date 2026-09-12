@@ -119,14 +119,14 @@ function EditableTransferDetail({
   };
 
   const myItems = detail.items;
-  const locationInventory = rawInventory.flatMap((i) => {
-    const stockItemId = i.stockItemId ?? i.id;
-    if (stockItemId == null) return [];
+  const locationInventory = rawInventory.flatMap((item) => {
+    const stockItemId = item.stockItemId ?? item.id;
+    if (stockItemId === undefined) return [];
     return [
       {
         stockItemId,
-        name: i.stockItemName ?? i.name ?? "",
-        quantity: String(i.quantity ?? "0"),
+        name: item.stockItemName ?? item.name ?? "",
+        quantity: String(item.quantity ?? "0"),
       },
     ];
   });

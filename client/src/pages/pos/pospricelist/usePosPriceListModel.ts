@@ -141,7 +141,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     return masters.filter((m) => !hiddenLocations.has(m.id));
   }, [isAllMode, masters, hiddenLocations]);
 
-  const locationPricedList = useMemo(() => {
+  const locationPricedList = useMemo<PriceListRow[]>(() => {
     if (isAllMode) return masterItems;
     if (!posUser) return priceList;
     return priceList.filter(
@@ -158,7 +158,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   }, [locationPricedList]);
 
   const isItemUnpriced = useCallback(
-    (item: PriceListItem | MasterItem): boolean => {
+    (item: PriceListRow): boolean => {
       if (isAllMode) {
         const hasBase = item.baseSellingPrice && parseFloat(item.baseSellingPrice) > 0;
         if (hasBase) return false; // base price covers all locations
@@ -255,7 +255,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     },
   });
 
-  const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null) => {
+  const startEdit = (stockItemId: number, locationId: number, currentPrice: string | null | undefined) => {
     if (posUser) return;
     lastSavedRef.current = null; // prevent onSuccess from clearing a re-opened edit
     const hasValue = currentPrice && parseFloat(currentPrice) > 0;
@@ -266,7 +266,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   const masterPriceFor = (item: PriceListRow, locationId: number): string | null =>
     item.masterPrices?.[locationId] ?? item.baseSellingPrice ?? null;
 
-  const editCell = (stockItemId: number, locationId: number, price: string | null) => {
+  const editCell = (stockItemId: number, locationId: number, price: string | null | undefined) => {
     const hasValue = price && parseFloat(price) > 0;
     setEditingItem({ stockItemId, locationId, value: hasValue ? price : "" });
   };
@@ -281,7 +281,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (nextIdx < 0 || nextIdx >= items.length) return;
     const nextItem = items[nextIdx];
     const nextPrice = isAllMode ? masterPriceFor(nextItem, current.locationId) : nextItem.sellingPrice;
-    editCell(nextItem.stockItemId, current.locationId, nextPrice ?? null);
+    editCell(nextItem.stockItemId, current.locationId, nextPrice);
   };
 
   const navigateHorizontal = (direction: "left" | "right") => {

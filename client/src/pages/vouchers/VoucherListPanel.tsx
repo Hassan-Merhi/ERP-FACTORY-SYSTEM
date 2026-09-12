@@ -6,22 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil } from "lucide-react";
 
+interface VoucherListItem {
+  id: number;
+  voucherDate: string;
+  voucherType: string;
+  description: string | null;
+  totalAmount: string | null;
+  optional?: boolean;
+}
+
 interface VoucherListPanelProps {
   onEdit: (id: number) => void;
   formatAmount: (amount: number) => string;
 }
 
 export function VoucherListPanel({ onEdit, formatAmount }: VoucherListPanelProps) {
-  const { data: vouchers = [], isLoading } = useQuery<
-    {
-      id: number;
-      voucherDate: string;
-      optional?: boolean;
-      voucherType?: string;
-      description?: string | null;
-      totalAmount?: string | number | null;
-    }[]
-  >({
+  const { data: vouchers = [], isLoading } = useQuery<VoucherListItem[]>({
     queryKey: ["/api/vouchers"],
   });
 
@@ -65,7 +65,7 @@ export function VoucherListPanel({ onEdit, formatAmount }: VoucherListPanelProps
                   </TableCell>
                   <TableCell className="max-w-[300px] truncate">{voucher.description}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {formatAmount(parseFloat(String(voucher.totalAmount ?? "0")))}
+                    {formatAmount(parseFloat(voucher.totalAmount || "0"))}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => onEdit(voucher.id)}>

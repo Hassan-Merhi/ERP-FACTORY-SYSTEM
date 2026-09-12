@@ -127,7 +127,7 @@ function SingleLocationPriceCell({ model, item }: { model: PosPriceListModel; it
             canEdit && "group cursor-pointer rounded-md px-2 py-1 hover-elevate"
           )}
           data-testid={`cell-price-${item.stockItemId}`}
-          onClick={() => canEdit && model.startEdit(item.stockItemId, selectedLocationId!, item.sellingPrice ?? null)}
+          onClick={() => canEdit && model.startEdit(item.stockItemId, selectedLocationId!, item.sellingPrice)}
           title={canEdit ? "Click to edit price" : undefined}
         >
           <span className="font-semibold tabular-nums">

@@ -113,13 +113,6 @@ function SetupCard({ model }: { model: ContainerLoadingScanModel }) {
         )}
       </div>
 
-      {!orderId && activeProforma && model.proformaCapacity && (
-        <p className="text-xs text-muted-foreground" data-testid="text-proforma-capacity">
-          {model.proformaCapacity.remainingTotalQty} / {model.proformaCapacity.requestedTotalQty} remaining across all
-          loadings
-        </p>
-      )}
-
       {!orderId && (
         <Button
           className="w-full"
@@ -128,8 +121,7 @@ function SetupCard({ model }: { model: ContainerLoadingScanModel }) {
             !customerId ||
             !model.selectedLocationId ||
             model.createOrderMutation.isPending ||
-            model.isProformaCapacityLoading ||
-            model.activeProformaExhausted
+            model.isProformaCapacityLoading
           }
           data-testid="button-start-loading"
         >
@@ -168,7 +160,7 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
             <TableRow>
               <TableHead className="text-xs">Article</TableHead>
               <TableHead className="text-xs text-right">Exp</TableHead>
-              <TableHead className="text-xs text-right">Loaded (This+Other)</TableHead>
+              <TableHead className="text-xs text-right">Loaded</TableHead>
               <TableHead className="text-xs text-right">Rem</TableHead>
             </TableRow>
           </TableHeader>
@@ -216,9 +208,6 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
                   >
                     {line.totalLoaded}
                   </span>
-                  <div className="text-[10px] text-muted-foreground">
-                    {line.loaded}+{line.siblingLoaded}
-                  </div>
                 </TableCell>
                 <TableCell className="text-xs text-right font-mono py-1.5">
                   {line.status === "fulfilled" && <span className="text-green-600 dark:text-green-400">✓</span>}
