@@ -4,16 +4,16 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from GcLshiMigration.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useMutation} from "@tanstack/react-query";
-import {apiRequest} from "@/lib/queryClient";
-import {useToast} from "@/hooks/use-toast";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
-import {DollarSign} from "lucide-react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DollarSign } from "lucide-react";
 
-import {fmtNum} from "../utils";
+import { fmtNum } from "../utils";
 
 export function ProfitOpeningRunner({ targetCompanyId, onDone }: { targetCompanyId: number; onDone: () => void }) {
   const { toast } = useToast();
@@ -23,7 +23,11 @@ export function ProfitOpeningRunner({ targetCompanyId, onDone }: { targetCompany
   const [useManualSplit, setUseManualSplit] = useState(false);
   const [ourShareAmount, setOurShareAmount] = useState("");
   const [supplierShareAmount, setSupplierShareAmount] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{
+    voucherNumber?: string;
+    ourShare?: number | string;
+    supplierShare?: number | string;
+  } | null>(null);
 
   const mutation = useMutation({
     mutationFn: () =>

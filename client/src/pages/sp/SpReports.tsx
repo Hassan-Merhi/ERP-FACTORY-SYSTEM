@@ -24,12 +24,34 @@ type AccountsResponse = {
   accounts?: CashAccount[];
 };
 
+interface SpProfitReport {
+  saleCount?: number;
+  totalRevenue?: number;
+  totalCogs?: number;
+  grossProfit?: number;
+  totalSharedCharges?: number;
+  netProfit?: number;
+}
+
+interface SpProfitSplit {
+  id: number;
+  periodMonth?: string;
+  grossProfit?: number;
+  ourShare?: number;
+  supplierShare?: number;
+}
+
+interface LocationOption {
+  id: number;
+  name: string;
+}
+
 function extractAccounts(payload: AccountsResponse | CashAccount[] | undefined): CashAccount[] {
   if (Array.isArray(payload)) return payload;
   return Array.isArray(payload?.accounts) ? payload.accounts : [];
 }
 
-function fmt(v: number, dec = 2) {
+function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
   return isNaN(n)
     ? `$0.${"0".repeat(dec)}`
@@ -99,9 +121,9 @@ export default function SpReports() {
   }`;
   const splitsUrl = "/api/sp/profit-splits";
 
-  const { data: profit, isLoading: profitLoading } = useQuery<any>({ queryKey: [profitUrl] });
-  const { data: splits = [], isLoading: splitsLoading } = useQuery<any[]>({ queryKey: [splitsUrl] });
-  const { data: locations = [] } = useQuery<any[]>({ queryKey: ["/api/locations"] });
+  const { data: profit, isLoading: profitLoading } = useQuery<SpProfitReport>({ queryKey: [profitUrl] });
+  const { data: splits = [], isLoading: splitsLoading } = useQuery<SpProfitSplit[]>({ queryKey: [splitsUrl] });
+  const { data: locations = [] } = useQuery<LocationOption[]>({ queryKey: ["/api/locations"] });
   const { data: accountsResponse } = useQuery<AccountsResponse | CashAccount[]>({
     queryKey: ["/api/accounts/all", selectedCompany?.id],
   });
@@ -237,17 +259,25 @@ export default function SpReports() {
                 <CardContent>
                   <div className="space-y-1">
                     {[
-                      { label: "Total Revenue", value: profit.totalRevenue, className: "text-green-600" },
-                      { label: "COGS (base + landed)", value: -profit.totalCogs, className: "text-destructive" },
+                      { label: "Total Revenue", value: profit.totalRevenue ?? 0, className: "text-green-600" },
+                      {
+                        label: "COGS (base + landed)",
+                        value: -(profit.totalCogs ?? 0),
+                        className: "text-destructive",
+                      },
                       {
                         label: "Gross Profit",
-                        value: profit.grossProfit,
+                        value: profit.grossProfit ?? 0,
                         className: "font-semibold border-t border-border/40 pt-1 mt-1",
                       },
-                      { label: "Shared Charges", value: -profit.totalSharedCharges, className: "text-destructive" },
+                      {
+                        label: "Shared Charges",
+                        value: -(profit.totalSharedCharges ?? 0),
+                        className: "text-destructive",
+                      },
                       {
                         label: "Net Profit",
-                        value: profit.netProfit,
+                        value: profit.netProfit ?? 0,
                         className: "font-bold border-t border-border/40 pt-1 mt-1 text-base",
                       },
                     ].map((row, i) => (
