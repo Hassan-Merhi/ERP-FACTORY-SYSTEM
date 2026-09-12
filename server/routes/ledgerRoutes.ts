@@ -3,7 +3,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth } from "../auth";
 import { getLedgerParentGroupOptions } from "../services/ledgerAccountOptionsService";
 import { registerLedgerAccountPaginationRoutes } from "./ledgerAccountPaginationRoutes";
-import { registerAccountTransactionPaginationRoutes } from "./accountTransactionPaginationRoutes";
+import { registerAccountTransactionPaginationRoutes } from "./account-transaction-pagination";
 import { registerLedgerRoutes as registerLegacyLedgerRoutes } from "./ledger";
 import { normalizeAccountOpeningBalance, registerAccountCurrencyRoutes } from "./accountCurrencyRoutes";
 import { registerHistoricalCurrencyGuardRoutes } from "./historicalCurrencyGuardRoutes";
