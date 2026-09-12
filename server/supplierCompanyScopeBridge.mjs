@@ -55,47 +55,53 @@ if (!globalThis[INSTALL_KEY]) {
   }
 
   if (!connectionString) {
-    throw new Error(
-      "Supplier company-scope migration could not start because no PostgreSQL configuration is available."
-    );
-  }
-
-  const migrationSql = await readFile(
-    new URL("../migrations/20260728_001_supplier_company_scope.sql", import.meta.url),
-    "utf8"
-  );
-
-  const pool = new Pool({
-    connectionString,
-    ssl: resolveDatabaseSsl(connectionString),
-    max: 1,
-    connectionTimeoutMillis: 15_000,
-    idleTimeoutMillis: 1_000,
-    allowExitOnIdle: true,
-  });
-
-  try {
-    await pool.query(migrationSql);
-    console.log(
+    console.warn(
       JSON.stringify({
         timestamp: new Date().toISOString(),
-        level: "INFO",
-        message: "Supplier company-scope migration applied",
+        level: "WARN",
+        message: "Supplier company-scope migration skipped because no database configuration is available",
         module: "supplier-company-scope-migration",
+        action: "startup-ensure",
       })
     );
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: "ERROR",
-        message: "Supplier company-scope migration failed",
-        module: "supplier-company-scope-migration",
-        error: error instanceof Error ? error.message : String(error),
-      })
+  } else {
+    const migrationSql = await readFile(
+      new URL("../migrations/20260728_001_supplier_company_scope.sql", import.meta.url),
+      "utf8"
     );
-    throw error;
-  } finally {
-    await pool.end();
+
+    const pool = new Pool({
+      connectionString,
+      ssl: resolveDatabaseSsl(connectionString),
+      max: 1,
+      connectionTimeoutMillis: 15_000,
+      idleTimeoutMillis: 1_000,
+      allowExitOnIdle: true,
+    });
+
+    try {
+      await pool.query(migrationSql);
+      console.log(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: "INFO",
+          message: "Supplier company-scope migration applied",
+          module: "supplier-company-scope-migration",
+        })
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: "ERROR",
+          message: "Supplier company-scope migration failed",
+          module: "supplier-company-scope-migration",
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+      throw error;
+    } finally {
+      await pool.end();
+    }
   }
 }

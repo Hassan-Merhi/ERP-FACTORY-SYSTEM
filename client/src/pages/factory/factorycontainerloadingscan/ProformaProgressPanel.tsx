@@ -114,6 +114,9 @@ function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; l
 
 function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { extraArticles, loadedByArticle, groupedBalesMap, proformaProgress } = model;
+  const sortedProgress = [...proformaProgress].sort(
+    (a, b) => (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4)
+  );
 
   return (
     <div className="overflow-y-auto max-h-[340px]">
@@ -130,6 +133,36 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           </TableRow>
         </TableHeader>
         <TableBody>
+          {sortedProgress.map((line) => (
+            <TableRow
+              key={line.id}
+              className={progressRowClass(line.status)}
+              data-testid={`row-progress-${line.articleCode}`}
+            >
+              <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
+              <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
+              <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
+              <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
+              <TableCell className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}>
+                {line.remaining}
+              </TableCell>
+              <TableCell className="py-1.5">
+                <StatusBadge status={line.status} />
+              </TableCell>
+              <TableCell className="text-xs text-right font-mono py-1.5" data-testid={`text-stock-${line.articleCode}`}>
+                <StockCell model={model} line={line} />
+              </TableCell>
+            </TableRow>
+          ))}
+
+          {extraArticles.length > 0 && (
+            <TableRow className="bg-muted/40" data-testid="row-extra-articles-heading">
+              <TableCell colSpan={7} className="py-2 text-xs font-semibold text-muted-foreground">
+                Not on Proforma — Allowed
+              </TableCell>
+            </TableRow>
+          )}
+
           {extraArticles.map((code) => (
             <TableRow key={code} className="bg-muted/20" data-testid={`row-extra-${code}`}>
               <TableCell className="text-xs font-mono py-1.5">{code}</TableCell>
@@ -147,34 +180,6 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
               <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
             </TableRow>
           ))}
-          {[...proformaProgress]
-            .sort((a, b) => (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4))
-            .map((line) => (
-              <TableRow
-                key={line.id}
-                className={progressRowClass(line.status)}
-                data-testid={`row-progress-${line.articleCode}`}
-              >
-                <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
-                <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
-                <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
-                <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
-                <TableCell
-                  className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}
-                >
-                  {line.remaining}
-                </TableCell>
-                <TableCell className="py-1.5">
-                  <StatusBadge status={line.status} />
-                </TableCell>
-                <TableCell
-                  className="text-xs text-right font-mono py-1.5"
-                  data-testid={`text-stock-${line.articleCode}`}
-                >
-                  <StockCell model={model} line={line} />
-                </TableCell>
-              </TableRow>
-            ))}
         </TableBody>
       </Table>
     </div>
@@ -251,9 +256,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
         <div>
           <h3 className="font-semibold text-sm">{linkedProforma.name}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Reusable proforma — statuses compare this loading only
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Reusable proforma — statuses compare this loading only</p>
         </div>
         <Badge variant="secondary" data-testid="badge-proforma-progress">
           Reusable

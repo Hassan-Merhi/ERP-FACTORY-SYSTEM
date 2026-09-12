@@ -43,14 +43,20 @@ async function cleanupGeneratedRequestIdentity(request) {
   const generatedKey = request[GENERATED_KEY];
   if (!generatedKey) return;
   request[GENERATED_KEY] = null;
-  await pool.query("DELETE FROM accounting_posting_requests WHERE idempotency_key = $1", [generatedKey]);
+  if (!process.env.DATABASE_URL && !process.env.PGHOST) return;
+  try {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE idempotency_key = $1", [generatedKey]);
+  } catch {}
 }
 
 afterEach(async () => {
-  await pool.query(
-    "DELETE FROM accounting_posting_requests WHERE source_type IS DISTINCT FROM $1 AND source_type IS DISTINCT FROM $2",
-    ["phase3-test-writer", "phase2-test"]
-  );
+  if (!process.env.DATABASE_URL && !process.env.PGHOST) return;
+  try {
+    await pool.query(
+      "DELETE FROM accounting_posting_requests WHERE source_type IS DISTINCT FROM $1 AND source_type IS DISTINCT FROM $2",
+      ["phase3-test-writer", "phase2-test"]
+    );
+  } catch {}
 });
 
 const requestPrototype = supertest.Test.prototype;
