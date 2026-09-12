@@ -24,5 +24,5 @@ export type StockTransferFormData = z.infer<typeof stockTransferFormSchema>;
 export interface StockTransferFormProps {
   voucherIdToEdit: number | null;
   isPOS: boolean;
-  posUser?: { assignedLocationId?: number };
+  posUser?: { assignedLocationId?: number | null };
 }
