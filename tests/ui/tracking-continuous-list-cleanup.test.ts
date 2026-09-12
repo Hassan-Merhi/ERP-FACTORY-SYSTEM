@@ -26,7 +26,15 @@ describe("tracking continuous-list cleanup", () => {
   });
 
   it("keeps cursor invariant failures as internal technical identifiers", () => {
-    const route = source("server/routes/accountTransactionPaginationRoutes.ts");
+    // The account-statement route module was split into focused statement
+    // modules; the cursor identifiers live in the per-statement runners now.
+    const route = [
+      "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
+      "server/routes/account-transaction-pagination/customerBalanceStatement.ts",
+      "server/routes/account-transaction-pagination/factoryCustomerLedgerStatement.ts",
+    ]
+      .map((modulePath) => source(modulePath))
+      .join("\n");
 
     expect(route).toContain("account-statement-cursor-row-invalid");
     expect(route).toContain("customer-statement-cursor-row-invalid");

@@ -1,18 +1,6 @@
 {
-  "description": "Reviewed CI ratchet deltas for intentional functionality added before the architecture snapshots were refreshed. Every allowance is exact so unrelated growth or routes still fail. The route-manifest additions were folded into config/route-manifest.json on 2026-09-11, together with the three compact Sales Report routes added by #1379 and the Phase 4 proforma-capacity read added by #1382, so routeManifestAdditions is empty and any new route now fails until it is reviewed and folded the same way. config/source-text-assertion-baseline.json was regenerated once audit-source-text-assertions learned to see relative-URL source reads, so every test previously carried here as a reviewed delta now lives in that baseline, which is the canonical list. The source-text allowance covers assertions that landed on main after that baseline was taken, each on a test the baseline already records, led by the #1193 entry in server/routes/sp/spGoldenCoastPhase11MonthlyCloseRoutes.test.ts pinning the shared-charge Decimal expression. The three #1196 assertions in tests/supplier-partner-net-position-inclusion.test.ts that this file used to carry were removed by #1200, so the ceiling drops with them.",
-  "godFileLineCaps": {
-    "server/routes/sp/spGoldenCoastPhase6PosSaleRoutes.ts": 909,
-    "server/services/factory/postOffloadPhase6Safety.ts": 927,
-    "server/services/rental/rentalPaymentPostingService.ts": 958,
-    "client/src/pages/ContainerLoadingScan.tsx": 1133,
-    "client/src/pages/daybook/VoucherDetailsDialog.tsx": 984,
-    "client/src/pages/factory/FactoryContainerLoadingScan.tsx": 1906,
-    "client/src/pages/factory/WasteDispatchOptimized.tsx": 987,
-    "client/src/pages/vouchers/StockTransferForm.tsx": 2388,
-    "client/src/pages/Suppliers.tsx": 944,
-    "client/src/pages/factory/production-raw-stock/OffloadDialog.tsx": 949,
-    "server/routes/accountTransactionPaginationRoutes.ts": 1268
-  },
+  "description": "Reviewed CI ratchet deltas for intentional functionality added before the architecture snapshots were refreshed. Every allowance is exact so unrelated growth or routes still fail. The route-manifest additions were folded into config/route-manifest.json on 2026-09-11, together with the three compact Sales Report routes added by #1379 and the Phase 4 proforma-capacity read added by #1382, so routeManifestAdditions is empty and any new route now fails until it is reviewed and folded the same way. config/source-text-assertion-baseline.json was regenerated once audit-source-text-assertions learned to see relative-URL source reads, so every test previously carried here as a reviewed delta now lives in that baseline, which is the canonical list. The source-text allowance covers assertions that landed on main after that baseline was taken, each on a test the baseline already records, led by the #1193 entry in server/routes/sp/spGoldenCoastPhase11MonthlyCloseRoutes.test.ts pinning the shared-charge Decimal expression. The three #1196 assertions in tests/supplier-partner-net-position-inclusion.test.ts that this file used to carry were removed by #1200, so the ceiling drops with them. godFileLineCaps is empty: every reviewed oversized file was split to or below the 900-line repository limit, so no line-cap allowances remain.",
+  "godFileLineCaps": {},
   "routeManifestAdditions": [],
   "routeManifestMountAdditions": [],
   "routeManifestReplacements": [],

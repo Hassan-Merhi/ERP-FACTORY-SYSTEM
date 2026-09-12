@@ -158,13 +158,7 @@
     "tests/write-evidence-ratchet.test.ts",
     "tests/write-route-coverage.test.ts"
   ],
-  "godFileHotspots": [
-    {
-      "path": "server/routes/accountTransactionPaginationRoutes.ts",
-      "lines": 1269,
-      "pinnedBy": ["tests/ui/tracking-continuous-list-cleanup.test.ts"]
-    }
-  ],
+  "godFileHotspots": [],
   "pinnedPathsNoLongerPresent": [
     "client/src/components/GlobalLanguageSwitch.tsx",
     "server/chat/reports/legacyReportEngine.ts",

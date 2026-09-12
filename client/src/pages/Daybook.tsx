@@ -69,6 +69,7 @@ import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
+import { entryBalanceUrl, selectBalanceDisplayEntries, selectCashAccountId } from "./daybook/voucherBalanceSelection";
 
 export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { toast } = useToast();
@@ -281,37 +282,10 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     );
   }, [viewVoucherEntriesRaw]);
 
-  const cashAccountId = useMemo(() => {
-    if (!selectedVoucher) return null;
-    const vt = selectedVoucher.voucherType;
-
-    // Sales / POS — cash-in account is the debit non-stock entry
-    if (vt === "Sales" || vt === "POS") {
-      const e = viewVoucherEntries.find(
-        (e) => !e.isStockItem && !e.stockItemId && parseFloat(e.debitAmount || "0") > 0
-      );
-      return e?.ledgerAccountId || e?.bankAccountId || null;
-    }
-
-    // Payment / Credit Note / Debit Note — source is the credit side (money going out)
-    if (vt === "Payment" || vt === "Credit Note" || vt === "Debit Note") {
-      const e = viewVoucherEntries.find((e) => parseFloat(e.creditAmount || "0") > 0);
-      return e?.ledgerAccountId || e?.bankAccountId || null;
-    }
-
-    // Receipt — source is the debit side (money coming in)
-    if (vt === "Receipt") {
-      const e = viewVoucherEntries.find((e) => parseFloat(e.debitAmount || "0") > 0);
-      return e?.ledgerAccountId || e?.bankAccountId || null;
-    }
-
-    // Journal / Transfer / Stock Transfer / Purchase and anything else —
-    // use the first non-stock entry that has a cash or bank account
-    const e = viewVoucherEntries.find(
-      (e) => !e.isStockItem && !e.stockItemId && (e.ledgerAccountId || e.bankAccountId)
-    );
-    return e?.ledgerAccountId || e?.bankAccountId || null;
-  }, [selectedVoucher, viewVoucherEntries]);
+  const cashAccountId = useMemo(
+    () => selectCashAccountId(selectedVoucher, viewVoucherEntries),
+    [selectedVoucher, viewVoucherEntries]
+  );
 
   const [cashAccountBalance, setCashAccountBalance] = useState("0");
   const [entryBalances, setEntryBalances] = useState<Record<number, string>>({});
@@ -338,37 +312,12 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     }
     const vt = selectedVoucher.voucherType;
 
-    // Which entries to show balances for per voucher type
-    const displayEntries = viewVoucherEntries.filter((e) => {
-      if (vt === "Payment") return parseFloat(e.debitAmount || "0") > 0;
-      if (vt === "Receipt") return parseFloat(e.creditAmount || "0") > 0;
-      if (vt === "Sales" || vt === "POS") return !e.isStockItem && !e.stockItemId;
-      // Journal, Credit Note, Debit Note, Purchase, Transfer, Stock Transfer, and all
-      // other types — show balance for every entry that has an account reference
-      return !!(
-        e.ledgerAccountId ||
-        e.bankAccountId ||
-        e.customerId ||
-        e.employeeId ||
-        e.supplierId ||
-        e.factorySupplierId
-      );
-    });
-
-    const resolveUrl = (entry: (typeof viewVoucherEntries)[number]): string | null => {
-      if (entry.ledgerAccountId) return `/api/accounts/ledger/${entry.ledgerAccountId}/balance`;
-      if (entry.bankAccountId) return `/api/accounts/ledger/${entry.bankAccountId}/balance`;
-      if (entry.customerId) return `/api/customers/${entry.customerId}/balance`;
-      if (entry.employeeId) return `/api/employees/${entry.employeeId}/balance`;
-      if (entry.supplierId) return `/api/suppliers/${entry.supplierId}/balance`;
-      if (entry.factorySupplierId) return `/api/factory/suppliers/${entry.factorySupplierId}/balance`;
-      return null;
-    };
+    const displayEntries = selectBalanceDisplayEntries(vt, viewVoucherEntries);
 
     const results: Record<number, string> = {};
     Promise.all(
       displayEntries.map(async (entry) => {
-        const url = resolveUrl(entry);
+        const url = entryBalanceUrl(entry);
         if (!url) return;
         try {
           const res = await fetch(url, { credentials: "include", cache: "no-store" });

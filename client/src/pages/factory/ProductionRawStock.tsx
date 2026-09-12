@@ -15,13 +15,13 @@ import { SupplierCategoriesDialog } from "./production-raw-stock/ProductionRawSt
 import { RawStockTable, type RawStockRow } from "./production-raw-stock/RawStockTable";
 import { MixBatchList, type MixBatchPrintRow, type MixBatchRow } from "./production-raw-stock/MixBatchList";
 import { KpiCards } from "./production-raw-stock/KpiCards";
-import {
-  OffloadDialog,
-  type OffloadContainer,
-  type OffloadLedgerAccount,
-  type OffloadPayload,
-  type OffloadSupplierOption,
-} from "./production-raw-stock/OffloadDialog";
+import { OffloadDialog } from "./production-raw-stock/OffloadDialog";
+import type {
+  OffloadContainer,
+  OffloadLedgerAccount,
+  OffloadPayload,
+  OffloadSupplierOption,
+} from "./production-raw-stock/offloadDialogTypes";
 import {
   StockAdjustmentDialog,
   type StockAdjustmentPayload,
