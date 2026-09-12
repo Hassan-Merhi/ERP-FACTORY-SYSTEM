@@ -201,6 +201,7 @@ beforeAll(async () => {
   }
 
   const employee = await agent.post("/api/employees").send({
+    companyId: ctx.companyId,
     firstName: "Phase",
     lastName: "Two",
     joinDate: "2026-08-01",
