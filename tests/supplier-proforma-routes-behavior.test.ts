@@ -89,7 +89,10 @@ const harness = vi.hoisted(() => {
   };
 });
 
-vi.mock("../server/db", () => ({ db: harness.db }));
+vi.mock("../server/db", () => ({
+  db: harness.db,
+  pool: { query: vi.fn(async () => ({ rowCount: 1, rows: [{ id: 2 }] })) },
+}));
 vi.mock("../server/lib/parseId", () => ({
   parseId: (value: unknown) => {
     const parsed = Number.parseInt(String(value), 10);
