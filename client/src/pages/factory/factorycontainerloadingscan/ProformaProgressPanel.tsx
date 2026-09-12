@@ -143,7 +143,9 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
               <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
-              <TableCell className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}>
+              <TableCell
+                className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}
+              >
                 {line.remaining}
               </TableCell>
               <TableCell className="py-1.5">
