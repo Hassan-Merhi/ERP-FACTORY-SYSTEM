@@ -143,18 +143,13 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
               <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
-              <TableCell
-                className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}
-              >
+              <TableCell className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}>
                 {line.remaining}
               </TableCell>
               <TableCell className="py-1.5">
                 <StatusBadge status={line.status} />
               </TableCell>
-              <TableCell
-                className="text-xs text-right font-mono py-1.5"
-                data-testid={`text-stock-${line.articleCode}`}
-              >
+              <TableCell className="text-xs text-right font-mono py-1.5" data-testid={`text-stock-${line.articleCode}`}>
                 <StockCell model={model} line={line} />
               </TableCell>
             </TableRow>
@@ -261,9 +256,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
         <div>
           <h3 className="font-semibold text-sm">{linkedProforma.name}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Reusable proforma — statuses compare this loading only
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Reusable proforma — statuses compare this loading only</p>
         </div>
         <Badge variant="secondary" data-testid="badge-proforma-progress">
           Reusable
