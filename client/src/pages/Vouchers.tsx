@@ -561,7 +561,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         <VoucherMobileTabs
           visibleSidebarGroups={visibleSidebarGroups}
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => setActiveTab(tab as typeof activeTab)}
         />
       )}
 
@@ -570,7 +570,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
           <VoucherDesktopNav
             visibleSidebarGroups={visibleSidebarGroups}
             activeTab={activeTab}
-            setActiveTab={setActiveTab}
+            setActiveTab={(tab) => setActiveTab(tab as typeof activeTab)}
           />
         )}
 

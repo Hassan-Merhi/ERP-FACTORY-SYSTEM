@@ -1,12 +1,13 @@
 import type React from "react";
 import { focusScopedTestId } from "@/lib/scopedFocus";
+import type { VoucherFormData } from "./voucherTypes";
 
 export function handlePaymentKeyDown(
   e: React.KeyboardEvent,
   rowIndex: number,
   fieldName: "account" | "amount",
   fieldsLength: number,
-  append: (v: any) => void
+  append: (value: VoucherFormData["entries"][number]) => void
 ): void {
   const isLastRow = rowIndex === fieldsLength - 1;
   const anchor = e.currentTarget as Element;
@@ -32,8 +33,7 @@ export function handlePaymentKeyDown(
       return;
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
-      if (rowIndex < fieldsLength - 1)
-        focusScopedTestId(`input-account-${rowIndex + 1}`, { delay: 50, anchor });
+      if (rowIndex < fieldsLength - 1) focusScopedTestId(`input-account-${rowIndex + 1}`, { delay: 50, anchor });
       return;
     }
   }

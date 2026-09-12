@@ -35,6 +35,7 @@ import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 import { formatNumber } from "@/lib/formatNumber";
 import type { AuthMe } from "@shared/apiTypes";
 import { sendInvoicePdfWithRetry } from "./utils/posPrintHelpers";
+import type { AuthMe } from "@shared/apiTypes";
 import type { Voucher, VoucherWithItems } from "./posdaybook/types";
 
 const offscreenPrintStyle: React.CSSProperties = {
