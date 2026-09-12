@@ -27,10 +27,12 @@ type Fingerprint = {
   rawStockRows: string;
   baleRows: string;
 };
+type Failure = { route: string; status: number; detail: string };
 
 const TEST_PREFIX = "covexp";
 const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
 const REQUEST_TIMEOUT_MS = 30000;
+const CONCURRENCY = 3;
 
 const REPORT_PATTERN = /(export|download|report|statement|pdf|xlsx|excel|csv|print)/i;
 const UNSAFE_OR_EXTERNAL: RegExp[] = [
@@ -126,6 +128,32 @@ async function fingerprint(companyId: number): Promise<Fingerprint> {
   return result.rows[0];
 }
 
+async function exercise(route: SweptRoute): Promise<Failure | null> {
+  try {
+    const response = await agent
+      .get(route.path)
+      .set("x-client-date", "2026-08-08")
+      .query({ startDate: "2026-08-01", endDate: "2026-08-08", date: "2026-08-08" })
+      .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
+    if (response.status >= 500 || response.status === 401) {
+      const body = response.body as { message?: string; error?: string } | undefined;
+      return {
+        route: `${route.mode} GET ${route.path}`,
+        status: response.status,
+        detail: body?.message || body?.error || response.text?.slice(0, 200) || "",
+      };
+    }
+    return null;
+  } catch (error) {
+    const timedOut = Boolean((error as { timeout?: unknown } | undefined)?.timeout);
+    return {
+      route: `${route.mode} GET ${route.path}`,
+      status: timedOut ? 598 : 599,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
   agent = request.agent(ctx.app);
@@ -165,37 +193,16 @@ afterAll(async () => {
 describe.sequential("Phase 1 read-only export/report sweep", () => {
   it("executes safe report and export generators without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(10);
-    const failures: Array<{ route: string; status: number; detail: string }> = [];
-    let activeMode: CompanyMode | null = null;
+    const failures: Failure[] = [];
 
-    for (const route of routes) {
-      if (activeMode !== route.mode) {
-        const switched = await agent.post("/api/auth/set-company").send({ companyId: companies[route.mode] });
-        expect(switched.status, `set-company ${route.mode}`).toBe(200);
-        activeMode = route.mode;
-      }
+    for (const mode of ["erp", "factory", "properties", "supplier_partner"] as CompanyMode[]) {
+      const switched = await agent.post("/api/auth/set-company").send({ companyId: companies[mode] });
+      expect(switched.status, `set-company ${mode}`).toBe(200);
+      const modeRoutes = routes.filter((route) => route.mode === mode);
 
-      try {
-        const response = await agent
-          .get(route.path)
-          .set("x-client-date", "2026-08-08")
-          .query({ startDate: "2026-08-01", endDate: "2026-08-08", date: "2026-08-08" })
-          .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
-        if (response.status >= 500 || response.status === 401) {
-          const body = response.body as { message?: string; error?: string } | undefined;
-          failures.push({
-            route: `${route.mode} GET ${route.path}`,
-            status: response.status,
-            detail: body?.message || body?.error || response.text?.slice(0, 200) || "",
-          });
-        }
-      } catch (error) {
-        const timedOut = Boolean((error as { timeout?: unknown } | undefined)?.timeout);
-        failures.push({
-          route: `${route.mode} GET ${route.path}`,
-          status: timedOut ? 598 : 599,
-          detail: error instanceof Error ? error.message : String(error),
-        });
+      for (let offset = 0; offset < modeRoutes.length; offset += CONCURRENCY) {
+        const outcomes = await Promise.all(modeRoutes.slice(offset, offset + CONCURRENCY).map(exercise));
+        failures.push(...outcomes.filter((outcome): outcome is Failure => outcome !== null));
       }
     }
 
