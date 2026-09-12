@@ -203,10 +203,13 @@ export function allocateRemainingProformaLines<T extends { articleCode: unknown;
   const unallocatedConsumed = new Map(
     snapshot.articles
       .filter((article) => article.isOnProforma)
-      .map((article) => [
-        article.normalizedArticleCode,
-        scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty,
-      ] as const)
+      .map(
+        (article) =>
+          [
+            article.normalizedArticleCode,
+            scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty,
+          ] as const
+      )
   );
 
   return lines.map((line) => {
