@@ -19,7 +19,7 @@ import {
   playScanBeep,
   playScanErrorSweep,
 } from "../factory/factorycontainerloadingscan/scanFeedback";
-import type { Customer, Location, OrderBale, OrderDetail, Proforma } from "./types";
+import type { AddLoadingBaleInput, Customer, Location, OrderBale, OrderDetail, Proforma } from "./types";
 import {
   buildProformaProgress,
   normalizeProformaArticleCode,
@@ -175,16 +175,11 @@ export function useContainerLoadingScanModel() {
   });
 
   const addBaleMutation = useMutation({
-    mutationFn: async (data: {
-      scanCode: string;
-      locationId: number;
-      allowBypassProforma?: boolean;
-      allowBypassOverload?: boolean;
-    }) => {
+    mutationFn: async (data: AddLoadingBaleInput) => {
       const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales`, data);
       return await res.json();
     },
-    onSuccess: (data, variables: { scanCode: string }) => {
+    onSuccess: (data, variables: AddLoadingBaleInput) => {
       setPendingBypassBaleRef(null);
       setPendingBypassOverloadRef(null);
       setScanFlash("success");
@@ -222,10 +217,10 @@ export function useContainerLoadingScanModel() {
       setScanCode("");
       scannerRef.current?.focus();
     },
-    onError: (error: Error, variables: any) => {
+    onError: (error: Error, variables: AddLoadingBaleInput) => {
       // Overload and not-on-proforma are soft rejections: arm a bypass so the
       // same code scanned a second time goes through.
-      if ((error as any).overloaded) {
+      if ((error as unknown as Error & { overloaded: unknown }).overloaded) {
         setPendingBypassOverloadRef(variables.scanCode);
         setPendingBypassBaleRef(null);
         setScanFlash("error");
@@ -235,7 +230,7 @@ export function useContainerLoadingScanModel() {
         scannerRef.current?.focus();
         return;
       }
-      if ((error as any).notInProforma) {
+      if ((error as unknown as Error & { notInProforma: unknown }).notInProforma) {
         setPendingBypassBaleRef(variables.scanCode);
         setPendingBypassOverloadRef(null);
         setScanFlash("error");

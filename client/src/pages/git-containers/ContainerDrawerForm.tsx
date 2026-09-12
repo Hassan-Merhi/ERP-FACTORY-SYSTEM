@@ -10,7 +10,7 @@ import { fmtDate, DrawerForm, EnrichedContainerRow } from "./gitContainerTypes";
 
 interface ContainerDrawerFormProps {
   form: DrawerForm;
-  set: (field: keyof DrawerForm, val: any) => void;
+  set: <K extends keyof DrawerForm>(field: K, val: DrawerForm[K]) => void;
   container: EnrichedContainerRow;
   canEdit: boolean;
   maxOffload: string | null;

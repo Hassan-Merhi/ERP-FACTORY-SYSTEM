@@ -3,14 +3,18 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { ContainerSyncAllResponse } from "./types";
 
 export function useContainerSyncAll() {
   const { toast } = useToast();
   const [syncAllConfirmOpen, setSyncAllConfirmOpen] = useState(false);
 
   const syncAllMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/containers/sync-all-vouchers", {}),
-    onSuccess: (data: any) => {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/containers/sync-all-vouchers", {});
+      return res.json() as Promise<ContainerSyncAllResponse>;
+    },
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/containers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/containers/active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/containers/sold"] });
