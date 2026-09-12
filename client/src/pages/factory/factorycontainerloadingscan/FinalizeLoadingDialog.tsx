@@ -47,7 +47,7 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
                 {line.status === "reference" && (
                   <span className="text-muted-foreground font-medium flex items-center justify-end gap-1">
                     <Info className="h-3 w-3" />
-                    Reference
+                    On Proforma
                   </span>
                 )}
                 {line.status === "fulfilled" && (
@@ -77,13 +77,13 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
                     {groupedBalesMap[code].baleName}
                   </div>
                 )}
-                <div className="text-muted-foreground text-xs">Outside proforma reference</div>
+                <div className="text-muted-foreground text-xs">Not on Proforma — Allowed</div>
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
               <TableCell className="text-right font-mono text-sm font-semibold">{loadedByArticle[code]}</TableCell>
               <TableCell className="text-right text-sm">
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Reference
+                  Not on Proforma — Allowed
                 </Badge>
               </TableCell>
             </TableRow>
@@ -104,7 +104,7 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
     <div className="flex items-center justify-between gap-2 text-sm border-t pt-2 flex-wrap gap-y-1">
       <div className="flex items-center gap-3 flex-wrap">
         {referenceOnly ? (
-          <span className="text-muted-foreground font-medium">Proforma is shown for reference only</span>
+          <span className="text-muted-foreground font-medium">Reusable proforma — quantities are informational</span>
         ) : (
           <>
             <span className="text-green-600 dark:text-green-400 font-medium">{fulfilled} fulfilled</span>
@@ -115,7 +115,7 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
           </>
         )}
         {extraArticles.length > 0 && (
-          <span className="text-muted-foreground font-medium">{extraArticles.length} outside reference</span>
+          <span className="text-muted-foreground font-medium">{extraArticles.length} not on proforma — allowed</span>
         )}
       </div>
       <span className="text-muted-foreground">
@@ -141,7 +141,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
             <>
               <p className="text-sm text-muted-foreground">
                 {referenceOnly
-                  ? "Review this loading beside the reusable proforma reference. Quantities are not capped across loadings."
+                  ? "Review this loading beside the reusable proforma. Quantities are not capped across loadings."
                   : "Review what was loaded vs the proforma before finalizing."}
               </p>
               <ReviewTable model={model} />
