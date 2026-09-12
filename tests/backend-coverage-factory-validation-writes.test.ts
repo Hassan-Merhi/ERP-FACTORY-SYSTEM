@@ -199,7 +199,9 @@ describe.sequential("Phase 1 Factory write validation matrix", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} Factory validation write(s) failed:\n${report}`).toEqual([]);
   }, 180000);
 

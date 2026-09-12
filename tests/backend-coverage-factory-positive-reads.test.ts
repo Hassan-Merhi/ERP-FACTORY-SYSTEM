@@ -51,7 +51,10 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /\.(xlsx|pdf|csv|zip)$/i,
 ];
 
-export function selectFactoryPositiveReadRoutes(manifest: Manifest, ids: ResourceIds): Array<{
+export function selectFactoryPositiveReadRoutes(
+  manifest: Manifest,
+  ids: ResourceIds
+): Array<{
   template: string;
   concrete: string;
 }> {
@@ -141,10 +144,7 @@ beforeAll(async () => {
     supplierId: Number(supplier.body.id),
     containerId: container.rows[0].id,
   };
-  routes = selectFactoryPositiveReadRoutes(
-    JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest,
-    resources
-  );
+  routes = selectFactoryPositiveReadRoutes(JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest, resources);
   before = await fingerprint(ctx.companyId);
 }, 120000);
 
@@ -182,7 +182,9 @@ describe.sequential("Phase 1 positive Factory read matrix", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} positive Factory read(s) failed:\n${report}`).toEqual([]);
   }, 180000);
 

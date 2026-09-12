@@ -243,7 +243,9 @@ describe.sequential("Phase 1 ERP and partner write validation matrix", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} ERP/partner validation write(s) failed:\n${report}`).toEqual([]);
   }, 240000);
 

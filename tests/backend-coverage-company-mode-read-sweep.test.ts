@@ -199,7 +199,9 @@ describe.sequential("Phase 1 company-mode read sweep", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} mode-correct read(s) failed:\n${report}`).toEqual([]);
   }, 300000);
 

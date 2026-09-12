@@ -289,13 +289,17 @@ describe.sequential("Phase 1 parameterized backend route matrix", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} parameterized route(s) failed the matrix:\n${report}`).toEqual([]);
   }, 300000);
 
   it("preserves accounting and inventory state across missing-resource write paths", async () => {
     for (const [mode, companyId] of Object.entries(companies) as [CompanyMode, number][]) {
-      expect(await sensitiveFingerprint(companyId), `${mode} sensitive state changed`).toEqual(beforeFingerprints[mode]);
+      expect(await sensitiveFingerprint(companyId), `${mode} sensitive state changed`).toEqual(
+        beforeFingerprints[mode]
+      );
       await assertAllVouchersBalanced(companyId);
     }
   });
