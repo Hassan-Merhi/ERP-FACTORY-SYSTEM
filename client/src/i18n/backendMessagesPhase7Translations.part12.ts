@@ -151,11 +151,6 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     fr: "Aucune valeur à mettre à jour",
   },
   {
-    en: "entries must be an array",
-    ar: "يجب أن تكون الإدخالات مصفوفة",
-    fr: "Les entrées doivent être un tableau",
-  },
-  {
     en: "date, wasteType and a valid kgWaste are required",
     ar: "التاريخ ونوع الهدر وكمية هدر صالحة بالكيلوغرام مطلوبة",
     fr: "La date, le type de déchet et une quantité kgWaste valide sont obligatoires",
@@ -174,5 +169,25 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     en: "No sheets to export",
     ar: "لا توجد أوراق للتصدير",
     fr: "Aucune feuille à exporter",
+  },
+  {
+    en: "No employee fields to update",
+    ar: "لا توجد حقول للموظف لتحديثها",
+    fr: "Aucun champ d’employé à mettre à jour",
+  },
+  {
+    en: "No advance fields to update",
+    ar: "لا توجد حقول للسلفة لتحديثها",
+    fr: "Aucun champ d’avance à mettre à jour",
+  },
+  {
+    en: "No stock transfer item fields to update",
+    ar: "لا توجد حقول لعنصر تحويل المخزون لتحديثها",
+    fr: "Aucun champ d’article de transfert de stock à mettre à jour",
+  },
+  {
+    en: "No stock adjustment item fields to update",
+    ar: "لا توجد حقول لعنصر تعديل المخزون لتحديثها",
+    fr: "Aucun champ d’article d’ajustement de stock à mettre à jour",
   },
 ];
