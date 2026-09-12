@@ -170,6 +170,12 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // worker_bonuses.cash_account_id is ON DELETE RESTRICT against
     // ledger_accounts, so a paid worker bonus blocks the ledger delete below.
     await pool.query("DELETE FROM worker_bonuses WHERE company_id = $1", [company.id]);
+    // fiscal_period_closures restricts on four parents at once — its closing
+    // voucher, its retained-earnings ledger account, the user who closed the
+    // period, and the company — so a suite that closed a period blocks the
+    // voucher delete below, then the ledger delete, then the company. It has to
+    // go before all of them, not with the company-scoped deletes at the end.
+    await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
     // Documents that hang off a voucher with a restricting key: a credit or
     // debit note's lines, a waste dispatch, and a stock adjustment's header and
     // lines (which the waste dispatch also creates, since waste is dispatched
@@ -343,6 +349,21 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // Durable financial request reservations are company-scoped and must be
     // removed before deleting the fixture company.
     await pool.query("DELETE FROM financial_operation_requests WHERE company_id = $1", [company.id]);
+
+    // Every table here blocks the company delete — RESTRICT on
+    // factory_settings and user_security_permissions, NO ACTION on the two
+    // spreadsheet tables — rather than cascading with it, and companies is
+    // their only blocking parent, so here is early enough.
+    // factory_settings is the one that actually broke CI: its constraint is
+    // added by startup migration 006 rather than by the drizzle schema, so it
+    // was invisible to this teardown until the broad route-sweep suites started
+    // touching settings endpoints and leaving a row behind. The rest were
+    // equally unguarded, so they are cleared together — a delete that matches
+    // nothing costs one round trip.
+    await pool.query("DELETE FROM factory_settings WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM user_security_permissions WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM live_spreadsheets WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM spreadsheets WHERE company_id = $1", [company.id]);
     await clearAsyncReferences();
 
     try {
