@@ -1,0 +1,29 @@
+name: Phase 2 Sync Once
+
+on:
+  push:
+    branches:
+      - test/backend-coverage-phase2
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: test/backend-coverage-phase2
+          fetch-depth: 0
+      - name: Merge latest main and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rm .github/workflows/phase2-sync-once.yml
+          git commit -m "ci: remove temporary Phase 2 sync workflow"
+          git push origin HEAD:test/backend-coverage-phase2
