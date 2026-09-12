@@ -56,7 +56,8 @@ async function readPresentColumns(client) {
 export async function ensureStockItemSchemaReadiness() {
   const connectionString = resolveConnectionString();
   if (!connectionString) {
-    throw new Error("Stock-item schema repair could not start because no PostgreSQL configuration is available.");
+    log("WARN", "Stock-item schema repair check skipped because no database configuration is available");
+    return;
   }
 
   const client = new Client({

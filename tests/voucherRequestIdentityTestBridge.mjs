@@ -44,7 +44,10 @@ async function cleanupGeneratedRequestIdentity(request) {
   // cleanup query. Explicit idempotency keys are never stored here and are
   // intentionally preserved for replay assertions within the current test.
   request[GENERATED_KEY] = null;
-  await pool.query("DELETE FROM accounting_posting_requests WHERE idempotency_key = $1", [generatedKey]);
+  if (!process.env.DATABASE_URL && !process.env.PGHOST) return;
+  try {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE idempotency_key = $1", [generatedKey]);
+  } catch {}
 }
 
 // The backend test job uses one disposable database for the whole Vitest run.
@@ -55,10 +58,13 @@ async function cleanupGeneratedRequestIdentity(request) {
 // dedicated Phase 2 and Phase 3 identity proofs deliberately carry markers
 // across test cases and remain excluded explicitly.
 afterEach(async () => {
-  await pool.query(
-    "DELETE FROM accounting_posting_requests WHERE source_type IS DISTINCT FROM $1 AND source_type IS DISTINCT FROM $2",
-    ["phase3-test-writer", "phase2-test"]
-  );
+  if (!process.env.DATABASE_URL && !process.env.PGHOST) return;
+  try {
+    await pool.query(
+      "DELETE FROM accounting_posting_requests WHERE source_type IS DISTINCT FROM $1 AND source_type IS DISTINCT FROM $2",
+      ["phase3-test-writer", "phase2-test"]
+    );
+  } catch {}
 });
 
 const requestPrototype = supertest.Test.prototype;

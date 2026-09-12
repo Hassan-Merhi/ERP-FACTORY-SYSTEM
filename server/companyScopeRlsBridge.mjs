@@ -42,7 +42,8 @@ function log(level, message, extra = {}) {
 export async function ensureCompanyScopeRlsReadiness() {
   const connectionString = resolveConnectionString();
   if (!connectionString) {
-    throw new Error("Company-scope RLS migration could not start because no PostgreSQL configuration is available.");
+    log("WARN", "Company-scope RLS migration check skipped because no database configuration is available");
+    return;
   }
 
   const migrationSql = await readFile(

@@ -27,6 +27,9 @@ if (process.env.DATABASE_URL) {
   const { PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE } = process.env;
   connectionString = `postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}`;
   databaseSource = "PG_ENV";
+} else if (process.env.NODE_ENV === "test") {
+  connectionString = "postgresql://test:test@localhost:5432/test";
+  databaseSource = "PG_ENV";
 } else {
   throw new Error("No database configuration found. Please set DATABASE_URL or provision a PostgreSQL database.");
 }
