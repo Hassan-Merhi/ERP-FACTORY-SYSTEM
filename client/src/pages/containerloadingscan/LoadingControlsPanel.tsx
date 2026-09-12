@@ -139,7 +139,7 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
           <h3 className="font-semibold text-sm">{linkedProforma!.name}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {referenceOnly
-              ? "Reference only — this proforma does not cap this loading"
+              ? "Reusable proforma — this proforma does not cap this loading"
               : `${fulfilledCount} / ${totalLines} lines fulfilled`}
           </p>
         </div>
@@ -148,7 +148,7 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
           className={allFulfilled ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}
           data-testid="badge-proforma-progress"
         >
-          {referenceOnly ? "Reference" : `${fulfilledCount}/${totalLines}`}
+          {referenceOnly ? "Reusable" : `${fulfilledCount}/${totalLines}`}
         </Badge>
       </div>
 
@@ -190,7 +190,7 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
                 <TableCell className="text-xs text-right py-1.5">
                   {line.status === "reference" ? (
                     <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">
-                      Reference
+                      On Proforma
                     </Badge>
                   ) : line.status === "fulfilled" ? (
                     <span className="text-green-600 dark:text-green-400">✓</span>
@@ -208,13 +208,13 @@ function ProgressCard({ model }: { model: ContainerLoadingScanModel }) {
               <TableRow key={code} className="bg-muted/20" data-testid={`row-extra-${code}`}>
                 <TableCell className="text-xs font-mono py-1.5">
                   <div>{code}</div>
-                  <div className="text-muted-foreground text-[10px]">Outside proforma reference</div>
+                  <div className="text-muted-foreground text-[10px]">Not on Proforma — Allowed</div>
                 </TableCell>
                 <TableCell className="text-xs text-right py-1.5 text-muted-foreground">—</TableCell>
                 <TableCell className="text-xs text-right font-mono py-1.5">{loadedByArticle[code]}</TableCell>
                 <TableCell className="text-xs text-right py-1.5">
                   <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">
-                    Reference
+                    Not on Proforma — Allowed
                   </Badge>
                 </TableCell>
               </TableRow>

@@ -25,7 +25,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
     return (
       <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
         <Info className="h-3 w-3 mr-1" />
-        Reference
+        On Proforma
       </Badge>
     );
   }
@@ -121,7 +121,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
               <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
               <TableCell className="py-1.5">
                 <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
-                  Outside reference
+                  Not on Proforma — Allowed
                 </Badge>
               </TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
@@ -244,7 +244,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
           <h3 className="font-semibold text-sm">{linkedProforma.name}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
             {referenceOnly
-              ? "Reference only — this proforma does not cap this loading"
+              ? "Reusable proforma — this proforma does not cap this loading"
               : `${fulfilledCount} / ${totalLines} lines fulfilled`}
           </p>
         </div>
@@ -253,7 +253,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
           className={allFulfilled ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}
           data-testid="badge-proforma-progress"
         >
-          {referenceOnly ? "Reference" : `${fulfilledCount}/${totalLines}`}
+          {referenceOnly ? "Reusable" : `${fulfilledCount}/${totalLines}`}
         </Badge>
       </div>
 
