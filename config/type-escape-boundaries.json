@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Phase 6 cleared the requested AccountingCreate, POS, vouchers, and Supplier Partner service escapes, deleting 32 frozen file entries and 58 escapes and lowering the ceiling from 263 to 205 after verified type-safety cleanup.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup. Wave 6 cleared every type escape from the transaction-journal, containers, daybook, and location-inventory page areas, deleting their 32 frozen entries and lowering the ceiling from 207 to 140 after verified type-safety cleanup.",
   "scan": {
     "roots": [
       "server",
@@ -64,21 +64,6 @@
         0,
         0
       ],
-      "client/src/pages/ContainerDetailPage.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/ContainerVerification.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/Daybook.tsx": [
-        4,
-        1,
-        0
-      ],
       "client/src/pages/DeletedItems.tsx": [
         2,
         0,
@@ -101,11 +86,6 @@
       ],
       "client/src/pages/IntercompanyRequests.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/LocationMonthlySummary.tsx": [
-        2,
         0,
         0
       ],
@@ -154,6 +134,41 @@
         0,
         0
       ],
+      "client/src/pages/accountingcreate/components/EmployeeForm.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/EntityFormWrapper.tsx": [
+        2,
+        1,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/LedgerAccountForm.tsx": [
+        3,
+        0,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/LocationForm.tsx": [
+        3,
+        0,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/StockGroupForm.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/StockItemForm.tsx": [
+        3,
+        0,
+        0
+      ],
+      "client/src/pages/accountingcreate/components/SupplierForm.tsx": [
+        2,
+        0,
+        0
+      ],
       "client/src/pages/analytics/ContainerReportPanel.tsx": [
         4,
         0,
@@ -179,117 +194,7 @@
         0,
         0
       ],
-      "client/src/pages/containerdetail/components/ContainerDetailSpView.tsx": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/containerdetail/useContainerDetailModel.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containerloadingscan/useContainerLoadingScanModel.ts": [
-        1,
-        2,
-        0
-      ],
-      "client/src/pages/containers/ContainerSpView.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/containers/OtwContainersTable.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containers/containerExcel.ts": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/containers/useContainerSyncAll.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containers/useContainerTracking.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/DaybookFilters.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/DaybookTable.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/VoucherEditDialog.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/voucherdetailsdialog/LedgerVoucherEntries.tsx": [
-        2,
-        1,
-        0
-      ],
-      "client/src/pages/git-containers/ContainerDrawer.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/git-containers/ContainerDrawerForm.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/git-containers/useGITContainersData.ts": [
-        2,
-        0,
-        0
-      ],
       "client/src/pages/git-mockup/TabAgentDuty.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/InventoryTable.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/LocationInventoryDialogs.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/StockGroupsView.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/StockMovementDialog.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryExports.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryMutations.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryState.ts": [
         1,
         0,
         0
@@ -300,6 +205,51 @@
         0
       ],
       "client/src/pages/pendinginvoiceverify/types.ts": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/pos/POSDashboard.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/pos/hooks/usePosQueries.ts": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/pos/pos-components/SaleGrid.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/pos/posimport/PosImportResults.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/pos/posimport/usePosImportModel.ts": [
+        4,
+        0,
+        0
+      ],
+      "client/src/pages/pos/pospricelist/PriceListTable.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/pos/pospricelist/usePosPriceListModel.ts": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/pos/postransferorders/components/CreateTransferDialog.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/pos/postransferorders/components/EditableTransferDetail.tsx": [
         1,
         0,
         0
@@ -369,31 +319,6 @@
         0,
         0
       ],
-      "client/src/pages/transactionjournal/components/detail/PaymentReceiptPanel.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/PurchasePanel.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/SalesPanel.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/StockMovementPanel.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/useTransactionJournalModel.ts": [
-        3,
-        0,
-        0
-      ],
       "client/src/pages/voucher-edit/VoucherAccountHelpers.ts": [
         1,
         0,
@@ -409,6 +334,76 @@
         0,
         0
       ],
+      "client/src/pages/vouchers/SaveRevisionDialog.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/StockTransferRevisionHistory.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/VoucherForm.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/VoucherFormHeader.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/VoucherListPanel.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/VoucherTabNav.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/keyboardHandlers.ts": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-adjustment-form/useStockAdjustmentFormModel.ts": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-transfer-form/StockTransferFooterAndDialogs.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-transfer-form/dialogs/ImportTransferExcelDialog.tsx": [
+        2,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-transfer-form/dialogs/SaveAsRevisionDialog.tsx": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-transfer-form/useStockTransferFormModel.ts": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/stock-transfer-form/useTransferFormDerived.ts": [
+        1,
+        0,
+        0
+      ],
+      "client/src/pages/vouchers/useVoucherHandlers.ts": [
+        5,
+        0,
+        0
+      ],
       "client/src/routes/AppRoutes.tsx": [
         1,
         0,
@@ -419,149 +414,14 @@
         0,
         0
       ],
-      "server/chat/persistence.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/reports/types.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/stockTransferDrafts.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/chat/voucherAndStockDrafts.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/lib/accountStatementPdfGenerator.ts": [
-        5,
-        0,
-        0
-      ],
-      "server/lib/trackingProviders/maerskProvider.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/lib/workerBalesBilingualPdfGenerator.ts": [
-        0,
-        2,
-        0
-      ],
       "server/seedDev.ts": [
         0,
         1,
-        0
-      ],
-      "server/services/export-excel/sheet-helpers.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/daybookSourceIntegrity.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/historical-replay/exactInvariants.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/historical-replay/types.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/post-offload-charge/legacy-links.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/factory/postOffloadImpactPreview.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/rawMaterialReconciliation.ts": [
-        3,
-        0,
-        0
-      ],
-      "server/services/factory/rawStockLockedRate.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/factory/repairToken.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/heavyExportCoordinator.ts": [
-        0,
-        2,
-        0
-      ],
-      "server/services/pos/edit/rebuildSaleAccounting.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/pos/edit/rebuildSaleItems.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/pos/edit/reverseOriginalSaleInventory.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/pos/edit/updateSaleService.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/pos/edit/validateEditSaleRequest.ts": [
-        4,
-        0,
-        0
-      ],
-      "server/services/scheduler/daily-export.ts": [
-        1,
-        0,
-        0
-      ],
-      "server/services/shared/ttlCache.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/smartTransferFeedback.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/stockTransferRevisionLifecycle.ts": [
-        2,
-        0,
-        0
-      ],
-      "server/services/whatsappService.ts": [
-        1,
-        0,
         0
       ]
     }
   },
   "totals": {
-    "typeEscapeCeiling": 205
+    "typeEscapeCeiling": 140
   }
 }
