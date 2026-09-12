@@ -343,6 +343,20 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // Durable financial request reservations are company-scoped and must be
     // removed before deleting the fixture company.
     await pool.query("DELETE FROM financial_operation_requests WHERE company_id = $1", [company.id]);
+
+    // Every table here holds an ON DELETE RESTRICT foreign key to companies, so
+    // a single leftover row blocks the company delete outright rather than
+    // cascading. factory_settings is the one that actually broke CI: its
+    // constraint is added by startup migration 006 rather than by the drizzle
+    // schema, so it was invisible to this teardown until the broad route-sweep
+    // suites started touching settings endpoints and leaving a row behind. The
+    // rest carry the same RESTRICT rule and were equally unguarded, so they are
+    // cleared together — a delete that matches nothing costs one round trip.
+    await pool.query("DELETE FROM factory_settings WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM user_security_permissions WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM live_spreadsheets WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM spreadsheets WHERE company_id = $1", [company.id]);
     await clearAsyncReferences();
 
     try {

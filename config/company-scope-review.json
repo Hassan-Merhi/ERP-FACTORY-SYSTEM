@@ -183,6 +183,10 @@
       "reason": "POS inventory deduction runs inside the assigned POS company transaction."
     },
     {
+      "path": "server/services/pos/edit/reverseOriginalSaleInventory.ts",
+      "reason": "POS sale-reversal restore. The inventory row is first resolved by SELECT ... FOR UPDATE filtered on company_id, location_id and stock_item_id, so the follow-up UPDATE ... WHERE id targets a row already proven to belong to the active company and held under that lock for the rest of the transaction."
+    },
+    {
       "path": "server/services/scheduler/maintenance.ts",
       "reason": "Maintenance jobs select their company scope before running data repairs."
     },
@@ -209,6 +213,10 @@
     {
       "path": "server/storage/accounting/vouchers.ts",
       "reason": "Voucher storage reads are reached after the owning company scope is established."
+    },
+    {
+      "path": "server/services/inventory/exactValueInventory.ts",
+      "reason": "Exact-value inventory restoration for document reversals. The row is resolved by SELECT ... FOR UPDATE filtered on company_id, location_id and stock_item_id, so the follow-up UPDATE ... WHERE id can only reach that already-company-scoped locked row; the insert branch writes company_id explicitly."
     },
     {
       "path": "server/storage/inventoryRowLock.ts",
