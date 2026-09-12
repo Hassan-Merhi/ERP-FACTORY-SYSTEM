@@ -12,7 +12,14 @@ import { db } from "../../../db";
 import { sanitiseFilename, contentDisposition } from "../../../lib/contentDisposition";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry, isLegacySHA256Hash, verifySupervisorPassword } from "../_helpers";
-import { users, userCompanyRoles, containerDocumentTypes, containerDocuments, containers } from "@shared/schema";
+import {
+  users,
+  userCompanyRoles,
+  containerDocumentTypes,
+  containerDocuments,
+  containers,
+  insertContainerDocumentTypeSchema,
+} from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import path from "path";
@@ -104,7 +111,16 @@ export function registerFactoryDocsRoutes(app: Express) {
 
   app.post("/api/factory/container-doc-types", requireAuth, async (req: Request, res: Response) => {
     try {
-      const [row] = await db.insert(containerDocumentTypes).values(req.body).returning();
+      // This inserted req.body wholesale, so a body missing the NOT NULL code
+      // and label failed the insert as a 500 — and any field the caller
+      // invented went straight at the table. insertContainerDocumentTypeSchema
+      // already describes this row (code and label required, id and createdAt
+      // omitted) and was going unused.
+      const parsed = insertContainerDocumentTypeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid body", errors: parsed.error.flatten() });
+      }
+      const [row] = await db.insert(containerDocumentTypes).values(parsed.data).returning();
       res.json(row);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

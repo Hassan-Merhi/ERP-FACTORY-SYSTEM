@@ -86,11 +86,24 @@ export function registerStockGroupArchiveRoutes(app: Express) {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      // The storage layer throws a plain "Archive not found" Error, which the
+      // catch below reported as a 500. Resolve the archive here instead, the
+      // same way the GET above does, so a missing or unparseable id is a 4xx
+      // and the storage layer keeps no knowledge of HTTP status codes.
+      const id = parseInt(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: "Invalid id" });
+      }
+      const existing = await storage.getStockGroupLocationArchiveById(id, req.session.currentCompanyId);
+      if (!existing) {
+        return res.status(404).json({ message: "Archive not found" });
+      }
+
       const permanent = req.query.permanent === "true";
       if (permanent) {
-        await storage.permanentlyDeleteStockGroupLocationArchive(parseInt(req.params.id), req.session.currentCompanyId);
+        await storage.permanentlyDeleteStockGroupLocationArchive(id, req.session.currentCompanyId);
       } else {
-        await storage.deleteStockGroupLocationArchive(parseInt(req.params.id), req.session.currentCompanyId);
+        await storage.deleteStockGroupLocationArchive(id, req.session.currentCompanyId);
       }
       res.json({ success: true });
     } catch (error: unknown) {

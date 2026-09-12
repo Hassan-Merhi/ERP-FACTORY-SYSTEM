@@ -169,6 +169,12 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
       if (req.body.notes !== undefined) updates.notes = req.body.notes;
       if (req.body.advanceDate) updates.advanceDate = req.body.advanceDate;
 
+      // A body carrying none of the updatable fields reaches drizzle as
+      // .set({}), which throws "No values to set" and surfaced as a 500.
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
+
       const [updated] = await db
         .update(factoryWorkerAdvances)
         .set(updates)
