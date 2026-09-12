@@ -2,30 +2,14 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Users,
-  Container,
-  DollarSign,
-  Download,
-  Edit,
-  EyeOff,
-  Eye,
-  ExternalLink,
-  FileText,
-  Truck,
-  Search,
-} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Edit, Eye, EyeOff, FileText, Search, Truck, Users, Container, DollarSign } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +23,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { apiRequest } from "@/lib/queryClient";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { suppliersApi } from "@/api/suppliersApi";
 import { format } from "date-fns";
@@ -48,11 +31,13 @@ import { useEscapeBack } from "@/hooks/use-escape-back";
 import { useSuppliersFilters } from "./suppliers/useSuppliersFilters";
 import type { Company } from "@/contexts/CompanyContext";
 import type { SupplierLedgerRow, SupplierPurchaseOrder, SupplierWithStats } from "./suppliers/supplierDisplay";
-import { getAvatarColor, getInitials, isPaymentRow, typeBadgeClass } from "./suppliers/supplierDisplay";
+import { getAvatarColor, getInitials } from "./suppliers/supplierDisplay";
+import { supplierLedgerToExportRows, voucherTabForType, type SupplierDateFilter } from "./suppliers/ledgerSummaries";
+import { SupplierDetailDialog, type SupplierDetailTab } from "./suppliers/SupplierDetailDialog";
 
 export default function Suppliers() {
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierWithStats | null>(null);
-  const [dialogTab, setDialogTab] = useState<"transactions" | "purchase-orders">("transactions");
+  const [dialogTab, setDialogTab] = useState<SupplierDetailTab>("transactions");
   const [supplierToDelete, setSupplierToDelete] = useState<{ id: number; name: string } | null>(null);
 
   useEscapeBack(selectedSupplier ? () => setSelectedSupplier(null) : null);
@@ -97,19 +82,7 @@ export default function Suppliers() {
       selectCompany(targetCompany);
     }
     setSelectedSupplier(null);
-    const voucherTypeMap: Record<string, string> = {
-      Payment: "payment",
-      Receipt: "receipt",
-      Journal: "journal",
-      Consumption: "adjustment",
-      Production: "adjustment",
-      Mixed: "adjustment",
-      StockTransfer: "transfer",
-      "Stock Transfer": "transfer",
-      "Credit Note": "credit-note",
-      "Debit Note": "credit-note",
-    };
-    const tabName = voucherTypeMap[txn.voucherType];
+    const tabName = voucherTabForType(txn.voucherType);
     if (tabName) {
       navigate(`/vouchers?edit=${txn.voucherId}&tab=${tabName}`);
     } else {
@@ -191,63 +164,12 @@ export default function Suppliers() {
 
   const handleExportToExcel = async () => {
     if (!selectedSupplier || unifiedLedger.length === 0) return;
-    const exportData = unifiedLedger.map((txn) => ({
-      Date: txn.date ? format(new Date(txn.date), "yyyy-MM-dd") : "",
-      Company: txn.companyName,
-      "Doc Number": txn.docNumber,
-      Type: txn.voucherType,
-      Description: txn.description,
-      Currency: txn.currency || txn.transactionCurrency || "USD",
-      "Native Debit": txn.transactionDebitAmount ?? txn.debitAmount ?? "",
-      "Native Credit": txn.transactionCreditAmount ?? txn.creditAmount ?? "",
-      "Historical Base Debit": txn.baseDebitAmount ?? "",
-      "Historical Base Credit": txn.baseCreditAmount ?? "",
-      "Historical Exchange Rate": txn.historicalExchangeRate ?? "",
-      "Balance (Historical Base)": txn.historicalBaseBalance ?? txn.balance,
-      "Currency Status": txn.currencyStatus || (txn.baseDebitAmount != null ? "HISTORICAL_BASE" : "LEGACY_BASE"),
-    }));
-    const worksheet = utils.json_to_sheet(exportData);
+    const worksheet = utils.json_to_sheet(supplierLedgerToExportRows(unifiedLedger));
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Supplier Ledger");
     const fileName = `${selectedSupplier.legalName}_Ledger_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
     await writeFile(workbook, fileName);
   };
-  const openingEntry = unifiedLedger.find((t) => t.type === "opening");
-  const ledgerRows = unifiedLedger.filter((t) => t.type !== "opening");
-
-  // Date filter helpers
-  const todayStr = format(new Date(), "yyyy-MM-dd");
-  const yesterdayStr = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
-  const nowDate = new Date();
-  const filteredLedgerRows =
-    dateFilter === "all"
-      ? ledgerRows
-      : dateFilter === "today"
-        ? ledgerRows.filter((t) => t.date && format(new Date(t.date), "yyyy-MM-dd") === todayStr)
-        : dateFilter === "yesterday"
-          ? ledgerRows.filter((t) => t.date && format(new Date(t.date), "yyyy-MM-dd") === yesterdayStr)
-          : dateFilter === "this_month"
-            ? ledgerRows.filter((t) => {
-                if (!t.date) return false;
-                const d = new Date(t.date);
-                return d.getFullYear() === nowDate.getFullYear() && d.getMonth() === nowDate.getMonth();
-              })
-            : ledgerRows.filter((t) => {
-                if (!t.date) return false;
-                return new Date(t.date).getFullYear() === nowDate.getFullYear();
-              });
-
-  const txCount = filteredLedgerRows.length;
-  const totalPurchases = filteredLedgerRows.reduce((s: number, t) => s + (Number(t.credit) || 0), 0);
-  const totalPayments = filteredLedgerRows.reduce((s: number, t) => s + (Number(t.debit) || 0), 0);
-  const totalPurchasesQty = filteredLedgerRows.filter(
-    (t) => t.voucherType === "Purchase" || (t.voucherType === "Journal" && (Number(t.credit) || 0) > 0)
-  ).length;
-  const currentBalance = unifiedLedger.length > 0 ? (unifiedLedger[unifiedLedger.length - 1]?.balance ?? 0) : 0;
-
-  // Display rows — optionally hide payment/debit rows from the table (KPIs are always full)
-  const displayedLedgerRows = hidePayments ? filteredLedgerRows.filter((t) => !isPaymentRow(t)) : filteredLedgerRows;
-  const hiddenPaymentsCount = hidePayments ? filteredLedgerRows.filter((t) => isPaymentRow(t)).length : 0;
 
   return (
     <div className="p-6 space-y-5">
@@ -464,371 +386,28 @@ export default function Suppliers() {
       )}
 
       {/* Supplier Details Dialog */}
-      <Dialog open={!!selectedSupplier} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
-          {/* ── Header ── */}
-          <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0 gap-0">
-            {/* Row 1: name + controls */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <DialogTitle className="text-lg font-bold mr-auto">{selectedSupplier?.legalName}</DialogTitle>
-              <Select value={companyFilter} onValueChange={setCompanyFilter}>
-                <SelectTrigger className="w-40" data-testid="select-company-filter">
-                  <SelectValue placeholder="All Companies" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Companies</SelectItem>
-                  {companies.map((company) => (
-                    <SelectItem key={company.id} value={company.id.toString()}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="default"
-                onClick={handleExportToExcel}
-                disabled={unifiedLedger.length === 0}
-                data-testid="button-export-excel"
-              >
-                <Download className="h-4 w-4 mr-1.5" />
-                Export
-              </Button>
-            </div>
-
-            {/* Row 2: KPI cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-              <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">Total Purchases</p>
-                {ledgerLoading ? (
-                  <Skeleton className="h-5 w-24" />
-                ) : (
-                  <p className="font-mono font-semibold text-sm">{formatAmount(totalPurchases)}</p>
-                )}
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">Total Payments</p>
-                {ledgerLoading ? (
-                  <Skeleton className="h-5 w-24" />
-                ) : (
-                  <p className="font-mono font-semibold text-sm text-green-600 dark:text-green-400">
-                    {formatAmount(totalPayments)}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">Purchases Qty</p>
-                {ledgerLoading ? (
-                  <Skeleton className="h-5 w-10" />
-                ) : (
-                  <p className="font-semibold text-sm">{totalPurchasesQty}</p>
-                )}
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">Transactions</p>
-                {ledgerLoading ? <Skeleton className="h-5 w-10" /> : <p className="font-semibold text-sm">{txCount}</p>}
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-4 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">Balance</p>
-                {ledgerLoading ? (
-                  <Skeleton className="h-5 w-24" />
-                ) : (
-                  <p className="font-mono font-semibold text-sm">{formatAmount(currentBalance)}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Row 3: date filter */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {(["all", "today", "yesterday", "this_month", "this_year"] as const).map((f) => (
-                <Button
-                  key={f}
-                  variant={dateFilter === f ? "default" : "outline"}
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setDateFilter(f)}
-                  data-testid={`button-date-filter-${f}`}
-                >
-                  {f === "all"
-                    ? "All"
-                    : f === "today"
-                      ? "Today"
-                      : f === "yesterday"
-                        ? "Yesterday"
-                        : f === "this_month"
-                          ? "This Month"
-                          : "This Year"}
-                </Button>
-              ))}
-              {dateFilter !== "all" && (
-                <span className="ml-1 text-xs text-muted-foreground">
-                  {txCount} result{txCount !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          </DialogHeader>
-
-          {/* ── Tabs ── */}
-          <Tabs
-            value={dialogTab}
-            onValueChange={(v) => setDialogTab(v as "transactions" | "purchase-orders")}
-            className="flex-1 flex flex-col overflow-hidden min-h-0"
-          >
-            <div className="px-6 pt-3 pb-0 shrink-0 flex items-center gap-3 flex-wrap">
-              <TabsList className="w-fit">
-                <TabsTrigger value="transactions" className="text-xs" data-testid="tab-transactions">
-                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                  Transactions
-                </TabsTrigger>
-                <TabsTrigger value="purchase-orders" className="text-xs" data-testid="tab-purchase-orders">
-                  <FileText className="h-3.5 w-3.5 mr-1.5" />
-                  Purchase Orders {purchaseOrders.length > 0 && `(${purchaseOrders.length})`}
-                </TabsTrigger>
-              </TabsList>
-              {dialogTab === "transactions" && (
-                <Button
-                  variant={hidePayments ? "default" : "outline"}
-                  size="sm"
-                  className="text-xs gap-1.5 ml-auto"
-                  onClick={() => setHidePayments((v) => !v)}
-                  data-testid="button-hide-payments"
-                >
-                  <EyeOff className="h-3.5 w-3.5" />
-                  {hidePayments ? `Payments hidden (${hiddenPaymentsCount})` : "Hide Payments"}
-                </Button>
-              )}
-            </div>
-
-            {/* Transactions tab */}
-            <TabsContent value="transactions" className="mt-0 px-6 pb-5 pt-3 flex-1 overflow-hidden">
-              {ledgerLoading ? (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
-                    {[80, 100, 80, 150, 80, 80, 80].map((w, i) => (
-                      <Skeleton key={i} className="h-3.5 rounded" style={{ width: w }} />
-                    ))}
-                  </div>
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="px-4 py-3 border-b last:border-b-0 flex gap-6 items-center">
-                      {[80, 100, 80, 150, 80, 80, 80].map((w, j) => (
-                        <Skeleton key={j} className="h-3 rounded" style={{ width: w }} />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ) : unifiedLedger.length === 0 ? (
-                <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">No transactions</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      No transactions found{companyFilter !== "all" ? " for this company" : ""}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {openingEntry && (
-                    <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-2.5">
-                      <span className="text-xs font-medium text-muted-foreground">Opening Balance</span>
-                      <span className="font-mono font-semibold text-sm">{formatAmount(openingEntry.balance)}</span>
-                    </div>
-                  )}
-                  <Table wrapperClassName="max-h-[calc(90vh-390px)]">
-                    <TableHeader>
-                      <TableRow className="bg-muted/40 hover:bg-muted/40">
-                        <TableHead className="h-9 text-xs font-semibold">Date</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold">Type</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold">Ref</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold text-right">Debit</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold text-right">Credit</TableHead>
-                        <TableHead className="h-9 text-xs font-semibold text-right">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {displayedLedgerRows.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-10 text-sm text-muted-foreground">
-                            {hidePayments && filteredLedgerRows.length > 0
-                              ? "All transactions are payments — toggle off to show them."
-                              : "No transactions in this period"}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        displayedLedgerRows.map((txn, idx: number) => {
-                          const isPayment = txn.voucherType === "Payment" || txn.debit > 0;
-                          return (
-                            <TableRow key={`${txn.type}-${txn.docNumber}-${idx}`} className="text-xs">
-                              <TableCell className="py-2.5 font-mono text-muted-foreground whitespace-nowrap">
-                                {txn.date ? format(new Date(txn.date), "dd MMM yyyy") : "-"}
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                <Badge variant="secondary" className="text-xs">
-                                  {txn.companyName}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                <Badge
-                                  variant="secondary"
-                                  className={`text-xs ${typeBadgeClass[isPayment ? "Payment" : txn.voucherType] || ""}`}
-                                >
-                                  {isPayment ? "Payment" : txn.voucherType}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                {txn.containerNumber ? (
-                                  <button
-                                    onClick={() => handleContainerClick(txn)}
-                                    className="font-mono text-xs text-primary hover:underline cursor-pointer flex items-center gap-1"
-                                    data-testid={`link-container-${idx}`}
-                                  >
-                                    {txn.containerNumber}
-                                    <ExternalLink className="h-3 w-3 shrink-0" />
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleTransactionClick(txn)}
-                                    className="text-xs text-muted-foreground hover:text-primary hover:underline cursor-pointer flex items-center gap-1"
-                                    data-testid={`link-transaction-${idx}`}
-                                  >
-                                    {txn.docNumber || "-"}
-                                    <ExternalLink className="h-3 w-3 shrink-0" />
-                                  </button>
-                                )}
-                              </TableCell>
-                              <TableCell className="py-2.5 text-right font-mono">
-                                {txn.debit > 0 ? formatAmount(txn.debit) : "—"}
-                              </TableCell>
-                              <TableCell className="py-2.5 text-right font-mono">
-                                {txn.credit > 0 ? formatAmount(txn.credit) : "—"}
-                              </TableCell>
-                              <TableCell className="py-2.5 text-right font-mono font-semibold">
-                                {formatAmount(txn.balance)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Purchase Orders tab */}
-            <TabsContent value="purchase-orders" className="mt-0 px-6 pb-5 pt-3 flex-1 overflow-hidden">
-              {posLoading ? (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/40 px-4 py-2.5 border-b flex gap-6">
-                    {[160, 120, 100, 100].map((w, i) => (
-                      <Skeleton key={i} className="h-3.5 rounded" style={{ width: w }} />
-                    ))}
-                  </div>
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="px-4 py-3.5 border-b last:border-b-0 flex gap-6 items-center">
-                      {[160, 120, 100, 100].map((w, j) => (
-                        <Skeleton key={j} className="h-3 rounded" style={{ width: w }} />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              ) : purchaseOrders.length === 0 ? (
-                <div className="border rounded-lg bg-muted/20 flex flex-col items-center justify-center py-16 gap-3 text-center">
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">No purchase orders</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      No purchase orders found{companyFilter !== "all" ? " for this company" : ""}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                (() => {
-                  const sortedPOs = [...purchaseOrders]
-                    .sort(
-                      (a, b) =>
-                        new Date(b.importDate || b.createdAt).getTime() -
-                        new Date(a.importDate || a.createdAt).getTime()
-                    )
-                    .map((po) => {
-                      const itemsTotal = parseFloat(String(po.itemsTotal || "0"));
-                      const freight = parseFloat(String(po.freight || "0"));
-                      const surcharge = parseFloat(String(po.surcharge || "0"));
-                      const fumigation = parseFloat(String(po.fumigation || "0"));
-                      const documentCharges = parseFloat(String(po.documentCharges || "0"));
-                      const discount = parseFloat(String(po.discount || "0"));
-                      const otherCharges = parseFloat(String(po.otherCharges || "0"));
-                      const totalAmount =
-                        itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
-                      return { ...po, totalAmount };
-                    });
-                  const grandTotal = sortedPOs.reduce((sum: number, po) => sum + po.totalAmount, 0);
-
-                  return (
-                    <div className="space-y-2">
-                      <Table wrapperClassName="max-h-[calc(90vh-340px)]">
-                        <TableHeader>
-                          <TableRow className="bg-muted/40 hover:bg-muted/40">
-                            <TableHead className="h-9 text-xs font-semibold">Container</TableHead>
-                            <TableHead className="h-9 text-xs font-semibold">Import Date</TableHead>
-                            <TableHead className="h-9 text-xs font-semibold">Company</TableHead>
-                            <TableHead className="h-9 text-xs font-semibold text-right">Total</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {sortedPOs.map((po, idx: number) => (
-                            <TableRow key={po.id} className="text-sm cursor-pointer" onClick={() => handlePOClick(po)}>
-                              <TableCell className="py-3">
-                                {po.containerId ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleContainerClick(po);
-                                    }}
-                                    className="flex items-center gap-1.5 font-mono font-semibold text-primary hover:underline"
-                                    data-testid={`link-po-container-${idx}`}
-                                  >
-                                    {po.containerNumber || "-"}
-                                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                                  </button>
-                                ) : (
-                                  <span className="font-mono font-semibold">{po.containerNumber || "-"}</span>
-                                )}
-                              </TableCell>
-                              <TableCell className="py-3 font-mono text-sm text-muted-foreground">
-                                {po.importDate ? format(new Date(po.importDate), "dd MMM yyyy") : "-"}
-                              </TableCell>
-                              <TableCell className="py-3">
-                                <Badge variant="secondary" className="text-xs">
-                                  {po.companyName}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-3 text-right font-mono font-semibold">
-                                {formatAmount(po.totalAmount)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      <div className="flex justify-end">
-                        <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-4 py-2 text-sm">
-                          <span className="text-muted-foreground">Grand Total</span>
-                          <span className="font-mono font-semibold">{formatAmount(grandTotal)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+      <SupplierDetailDialog
+        supplier={selectedSupplier}
+        companies={companies}
+        formatAmount={formatAmount}
+        companyFilter={companyFilter}
+        onCompanyFilterChange={setCompanyFilter}
+        dateFilter={dateFilter}
+        onDateFilterChange={(v: SupplierDateFilter) => setDateFilter(v)}
+        hidePayments={hidePayments}
+        onToggleHidePayments={() => setHidePayments((v) => !v)}
+        unifiedLedger={unifiedLedger}
+        ledgerLoading={ledgerLoading}
+        purchaseOrders={purchaseOrders}
+        posLoading={posLoading}
+        dialogTab={dialogTab}
+        onDialogTabChange={setDialogTab}
+        onClose={handleCloseDialog}
+        onExport={handleExportToExcel}
+        onTransactionClick={handleTransactionClick}
+        onPOClick={handlePOClick}
+        onContainerClick={handleContainerClick}
+      />
 
       {/* Delete confirmation */}
       <AlertDialog open={!!supplierToDelete} onOpenChange={(open) => !open && setSupplierToDelete(null)}>

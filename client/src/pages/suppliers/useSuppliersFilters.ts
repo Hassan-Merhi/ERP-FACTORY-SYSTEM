@@ -1,6 +1,5 @@
 import { usePaginatedFilterState, type FilterStateAction } from "@/hooks/use-paginated-filter-state";
-
-type SupplierDateFilter = "all" | "today" | "yesterday" | "this_month" | "this_year";
+import type { SupplierDateFilter } from "./ledgerSummaries";
 
 interface SuppliersFilters extends Record<string, unknown> {
   companyFilter: string;
