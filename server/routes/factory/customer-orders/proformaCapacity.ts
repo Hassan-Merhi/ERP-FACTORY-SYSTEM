@@ -29,12 +29,6 @@ export interface ProformaCapacityArticle {
   normalizedArticleCode: string;
   isOnProforma: boolean;
   requestedQty: number;
-  /**
-   * Locked expected quantity for the current container/loading. Null means this
-   * loading has no explicit per-container plan and the proforma is reference-only.
-   */
-  currentOrderExpectedQty: number | null;
-  isExpectedOnCurrentOrder: boolean;
   currentOrderLoadedQty: number;
   siblingLoadedQty: number;
   totalConsumedQty: number;
@@ -62,17 +56,6 @@ export interface ProformaCapacitySnapshot {
   remainingTotalQty: number;
   excessTotalQty: number;
   loadedOutsideProformaQty: number;
-  /**
-   * Per-container loading plan. These fields are deliberately separate from the
-   * aggregate proforma totals above. A reusable proforma may be attached to many
-   * independent loadings; only customer_order_expected_lines defines a strict
-   * quantity/membership plan for one loading.
-   */
-  currentOrderHasExpectedPlan: boolean;
-  currentOrderExpectedTotalQty: number | null;
-  currentOrderRemainingTotalQty: number | null;
-  currentOrderExcessTotalQty: number | null;
-  currentOrderLoadedOutsideExpectedQty: number | null;
   articles: ProformaCapacityArticle[];
 }
 
@@ -87,11 +70,6 @@ interface ProformaRow extends Record<string, unknown> {
 interface ProformaLineRow extends Record<string, unknown> {
   articleCode: string | null;
   quantity: unknown;
-}
-
-interface ExpectedLineRow extends Record<string, unknown> {
-  articleCode: string | null;
-  expectedQty: unknown;
 }
 
 interface ContributionRow extends Record<string, unknown> {
@@ -112,20 +90,19 @@ function nonNegativeQuantity(value: unknown): number {
  *
  * Rules:
  * - Article codes are compared case-insensitively after trimming.
- * - Duplicate/case-variant proforma lines are one global capacity bucket.
- * - customer_order_expected_lines is a separate, per-loading plan. Its presence
- *   means that loading has strict item/quantity expectations; its absence means
- *   the linked proforma is a reusable pricing/reference document only.
+ * - Duplicate/case-variant proforma lines are one capacity bucket and their
+ *   requested quantities are summed.
  * - Current-order and sibling-order consumption remain separately visible.
- * - Global remaining quantity never goes below zero; historical overages are
- *   exposed through excessQty instead of being hidden.
+ * - Remaining quantity never goes below zero; historical overages are exposed
+ *   through excessQty instead of being hidden.
+ * - Loaded articles absent from the proforma are returned for diagnostics but
+ *   do not inflate requested/consumed capacity totals.
  */
 export function buildProformaCapacitySnapshot(
   options: ProformaCapacityOptions,
   proforma: ProformaRow,
   lineRows: ProformaLineRow[],
-  contributionRows: ContributionRow[],
-  expectedLineRows: ExpectedLineRow[] = []
+  contributionRows: ContributionRow[]
 ): ProformaCapacitySnapshot {
   const currentOrderId = options.currentOrderId ?? null;
   const requestedByArticle = new Map<string, { articleCode: string; requestedQty: number; isOnProforma: true }>();
@@ -144,24 +121,6 @@ export function buildProformaCapacitySnapshot(
       });
     }
   }
-
-  const expectedByArticle = new Map<string, { articleCode: string; expectedQty: number }>();
-  if (currentOrderId !== null) {
-    for (const line of expectedLineRows) {
-      const normalized = normalizeLoadingArticleCode(line.articleCode);
-      if (!normalized) continue;
-      const existing = expectedByArticle.get(normalized);
-      if (existing) {
-        existing.expectedQty += nonNegativeQuantity(line.expectedQty);
-      } else {
-        expectedByArticle.set(normalized, {
-          articleCode: String(line.articleCode ?? "").trim() || normalized,
-          expectedQty: nonNegativeQuantity(line.expectedQty),
-        });
-      }
-    }
-  }
-  const currentOrderHasExpectedPlan = currentOrderId !== null && expectedByArticle.size > 0;
 
   const contributionsByArticle = new Map<string, Map<number, ProformaCapacityContribution>>();
   for (const row of contributionRows) {
@@ -189,17 +148,12 @@ export function buildProformaCapacitySnapshot(
     }
   }
 
-  const normalizedCodes = new Set<string>([
-    ...requestedByArticle.keys(),
-    ...expectedByArticle.keys(),
-    ...contributionsByArticle.keys(),
-  ]);
+  const normalizedCodes = new Set<string>([...requestedByArticle.keys(), ...contributionsByArticle.keys()]);
 
   const articles: ProformaCapacityArticle[] = [...normalizedCodes]
     .sort((a, b) => a.localeCompare(b))
     .map((normalizedArticleCode) => {
       const request = requestedByArticle.get(normalizedArticleCode);
-      const expected = expectedByArticle.get(normalizedArticleCode);
       const contributions = [...(contributionsByArticle.get(normalizedArticleCode)?.values() ?? [])].sort(
         (a, b) => a.orderId - b.orderId
       );
@@ -216,12 +170,10 @@ export function buildProformaCapacitySnapshot(
       const excessQty = isOnProforma ? Math.max(0, totalConsumedQty - requestedQty) : 0;
 
       return {
-        articleCode: request?.articleCode ?? expected?.articleCode ?? normalizedArticleCode,
+        articleCode: request?.articleCode ?? normalizedArticleCode,
         normalizedArticleCode,
         isOnProforma,
         requestedQty,
-        currentOrderExpectedQty: currentOrderHasExpectedPlan ? (expected?.expectedQty ?? null) : null,
-        isExpectedOnCurrentOrder: currentOrderHasExpectedPlan && !!expected,
         currentOrderLoadedQty,
         siblingLoadedQty,
         totalConsumedQty,
@@ -246,35 +198,6 @@ export function buildProformaCapacitySnapshot(
     .filter((article) => !article.isOnProforma)
     .reduce((sum, article) => sum + article.totalConsumedQty, 0);
 
-  const currentOrderExpectedTotalQty = currentOrderHasExpectedPlan
-    ? articles.reduce((sum, article) => sum + (article.currentOrderExpectedQty ?? 0), 0)
-    : null;
-  const currentOrderRemainingTotalQty = currentOrderHasExpectedPlan
-    ? articles.reduce(
-        (sum, article) =>
-          sum +
-          (article.isExpectedOnCurrentOrder
-            ? Math.max(0, (article.currentOrderExpectedQty ?? 0) - article.currentOrderLoadedQty)
-            : 0),
-        0
-      )
-    : null;
-  const currentOrderExcessTotalQty = currentOrderHasExpectedPlan
-    ? articles.reduce(
-        (sum, article) =>
-          sum +
-          (article.isExpectedOnCurrentOrder
-            ? Math.max(0, article.currentOrderLoadedQty - (article.currentOrderExpectedQty ?? 0))
-            : 0),
-        0
-      )
-    : null;
-  const currentOrderLoadedOutsideExpectedQty = currentOrderHasExpectedPlan
-    ? articles
-        .filter((article) => !article.isExpectedOnCurrentOrder)
-        .reduce((sum, article) => sum + article.currentOrderLoadedQty, 0)
-    : null;
-
   return {
     companyId: options.companyId,
     proformaId: options.proformaId,
@@ -290,11 +213,6 @@ export function buildProformaCapacitySnapshot(
     remainingTotalQty,
     excessTotalQty,
     loadedOutsideProformaQty,
-    currentOrderHasExpectedPlan,
-    currentOrderExpectedTotalQty,
-    currentOrderRemainingTotalQty,
-    currentOrderExcessTotalQty,
-    currentOrderLoadedOutsideExpectedQty,
     articles,
   };
 }
@@ -302,10 +220,13 @@ export function buildProformaCapacitySnapshot(
 /**
  * Authoritative proforma loading-capacity reader.
  *
- * Global consumption remains available for reservation/reporting. When a
- * currentOrderId is provided, the reader also loads that order's locked
- * customer_order_expected_lines so loading-time callers can distinguish a
- * strict per-container plan from a reference-only reusable proforma.
+ * Consumption semantics intentionally match the scanner's safety boundary:
+ * every non-cancelled, non-deleted order tied to this proforma consumes its
+ * capacity, regardless of whether it is LOADING, VERIFIED, or FINALIZED.
+ * Distinct physical bale IDs are counted so an accidental duplicate join row
+ * cannot consume the same capacity twice inside one order. Article-code
+ * recovery follows the scanner: persisted order-bale code, then physical-bale
+ * code, then the canonical product code.
  */
 export async function getProformaCapacitySnapshot(
   executor: ProformaCapacityExecutor,
@@ -377,21 +298,7 @@ export async function getProformaCapacitySnapshot(
     `)
   );
 
-  const currentOrderId = options.currentOrderId ?? null;
-  const expectedLineRows =
-    currentOrderId === null
-      ? []
-      : resultRows<ExpectedLineRow>(
-          await executor.execute(sql`
-            SELECT article_code AS "articleCode", expected_qty AS "expectedQty"
-            FROM customer_order_expected_lines
-            WHERE company_id = ${options.companyId}
-              AND order_id = ${currentOrderId}
-              AND proforma_id = ${options.proformaId}
-          `)
-        );
-
-  return buildProformaCapacitySnapshot(options, proforma, lineRows, contributionRows, expectedLineRows);
+  return buildProformaCapacitySnapshot(options, proforma, lineRows, contributionRows);
 }
 
 /** Small lookup helper for scan/import call sites that start from a raw code. */
