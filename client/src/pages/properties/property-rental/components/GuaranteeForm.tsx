@@ -135,7 +135,8 @@ function GuaranteeForm({
 
   const undoGuaranteeAsRent = useMutation({
     mutationFn: () => apiRequest("POST", `${apiBase}/contracts/${contract.id}/undo-guarantee-as-rent`, {}),
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { reversed?: number };
       setUndoConfirm(false);
       toast({
         title: "Guarantee reversed",

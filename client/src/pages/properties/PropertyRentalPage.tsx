@@ -76,7 +76,7 @@ export default function PropertyRentalPage({
       totalMonthlyRent = 0;
     units.forEach((u) => {
       if (u.contract) {
-        totalGuarantee += (u as any).guaranteeRemaining ?? Number(u.contract.guaranteeAmount || 0);
+        totalGuarantee += Number((u.guaranteeRemaining ?? u.contract.guaranteeAmount) || 0);
         const outstanding = u.outstanding ?? 0;
         if (outstanding > 0) totalOwed += outstanding;
         totalCredit += u.prepaidCredit ?? 0;

@@ -39,6 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Location } from "@shared/schema";
 
 import type { BaleDetail, GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
+import type { StockEntryWorker, WorkerCategory } from "./stockentryhistory/derived";
 import { deriveStockEntryHistory } from "./stockentryhistory/derived";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { createStockEntryHistoryReports } from "./stockentryhistory/reports";
@@ -149,18 +150,20 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   });
   const groups: GroupRow[] = useMemo(() => pagedGroups?.items ?? [], [pagedGroups]);
 
-  const { data: workers = [] } = useQuery<any[]>({
+  const { data: workers = [] } = useQuery<StockEntryWorker[]>({
     queryKey: ["/api/factory/workers"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  const { data: products = [] } = useQuery<any[]>({ queryKey: ["/api/factory/bale-products"] });
+  const { data: products = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/factory/bale-products"],
+  });
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data: categories = [] } = useQuery<any[]>({
+  const { data: categories = [] } = useQuery<(WorkerCategory & { name: string })[]>({
     queryKey: ["/api/factory/worker-categories"],
     queryFn: () => fetch("/api/factory/worker-categories", { credentials: "include" }).then((r) => r.json()),
   });
-  const { data: productCategories = [] } = useQuery<any[]>({
+  const { data: productCategories = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/factory/categories"],
     queryFn: () => fetch("/api/factory/categories", { credentials: "include" }).then((r) => r.json()),
     staleTime: 60_000,

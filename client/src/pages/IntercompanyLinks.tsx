@@ -162,7 +162,14 @@ export default function IntercompanyLinks() {
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: (payload: any) => apiRequest("POST", "/api/intercompany-links", payload),
+    mutationFn: (payload: {
+      label: string | null;
+      sourceCompanyId: number;
+      sourceLedgerAccountId: number;
+      destCompanyId: number;
+      destLedgerAccountId: number;
+      recipientUserIds?: string[];
+    }) => apiRequest("POST", "/api/intercompany-links", payload),
     onSuccess: () => {
       toast({ title: "Link created" });
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });
@@ -172,8 +179,19 @@ export default function IntercompanyLinks() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: { label: string | null; sourceCompanyId: number; sourceLedgerAccountId: number; destCompanyId: number; destLedgerAccountId: number; } }) =>
-      apiRequest("PUT", `/api/intercompany-links/${id}`, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: {
+        label: string | null;
+        sourceCompanyId: number;
+        sourceLedgerAccountId: number;
+        destCompanyId: number;
+        destLedgerAccountId: number;
+      };
+    }) => apiRequest("PUT", `/api/intercompany-links/${id}`, payload),
     onSuccess: () => {
       toast({ title: "Link updated" });
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-links"] });

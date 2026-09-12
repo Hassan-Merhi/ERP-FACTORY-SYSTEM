@@ -73,14 +73,34 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
     enabled: !!selectedCompany,
   });
 
-  const { data: repayments = [], isLoading: repaymentsLoading } = useQuery<any[]>({
+  const { data: repayments = [], isLoading: repaymentsLoading } = useQuery<
+    {
+      id: number;
+      workerName?: string;
+      employeeId?: number;
+      payrollMonth?: string;
+      deductionAmount?: string;
+      advanceRemaining?: string;
+      createdAt?: string;
+    }[]
+  >({
     queryKey: ["/api/salary-advance-deductions", selectedCompany?.id],
     enabled: !!selectedCompany,
   });
 
   const workerDeductionsBase =
     appMode === "factory" ? "/api/factory/worker-deductions" : "/api/payroll/worker-deductions";
-  const { data: workerDeductions = [], isLoading: deductionsLoading } = useQuery<any[]>({
+  const { data: workerDeductions = [], isLoading: deductionsLoading } = useQuery<
+    {
+      id: number;
+      workerId: number;
+      workerName?: string;
+      deductionDate?: string;
+      reason?: string | null;
+      amount?: string;
+      applied?: boolean;
+    }[]
+  >({
     queryKey: [workerDeductionsBase, selectedCompany?.id],
     queryFn: async () => {
       if (!selectedCompany?.id) return [];
@@ -176,7 +196,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
   const workerDeductionsWorkerBase = appMode === "factory" ? "/api/factory/workers" : "/api/payroll/workers";
 
   const addWorkerDeductionMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: { workerId: string; amount: string; reason: string; deductionDate: string }) => {
       return await modeApiRequest("POST", `${workerDeductionsWorkerBase}/${data.workerId}/deductions`, {
         amount: data.amount,
         reason: data.reason || null,

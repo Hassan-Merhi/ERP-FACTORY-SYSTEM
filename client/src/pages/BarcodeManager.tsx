@@ -46,7 +46,8 @@ export default function BarcodeManager() {
         barcodes: barcodeList.map((b) => ({ barcode: b })),
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { count: number };
       queryClient.invalidateQueries({ queryKey: ["/api/pending-barcodes", selectedCompany?.id] });
       toast({ title: `Imported ${data.count} barcodes` });
     },
@@ -103,14 +104,15 @@ export default function BarcodeManager() {
         const workbook = await read(data);
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const jsonData = utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        const jsonData = utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
 
         const barcodeList: string[] = [];
         jsonData.forEach((row, index) => {
-          if (index === 0 && typeof row[0] === "string" && row[0].toLowerCase().includes("barcode")) {
+          const firstCell = row[0];
+          if (index === 0 && typeof firstCell === "string" && firstCell.toLowerCase().includes("barcode")) {
             return;
           }
-          const barcode = row[0]?.toString().trim();
+          const barcode = firstCell == null ? "" : String(firstCell).trim();
           if (barcode) {
             barcodeList.push(barcode);
           }

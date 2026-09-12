@@ -49,7 +49,7 @@ export interface LoadedGroup {
 }
 
 export interface VerificationSummary {
-  order: any;
+  order: OrderDetail;
   proformaLines: ProformaLine[];
   loadedItems: LoadedGroup[];
   comparison: ComparisonItem[];

@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import type { LucideIcon } from "lucide-react";
 
 interface DeletedItem {
   id: number;
@@ -110,7 +111,7 @@ const typeLabels: Record<string, string> = {
   customerOrder: "Customer Invoice/Order",
 };
 
-const typeIcons: Record<string, any> = {
+const typeIcons: Record<string, LucideIcon> = {
   location: MapPin,
   stockItem: Package,
   stockGroup: FolderTree,
@@ -152,7 +153,9 @@ export default function DeletedItems() {
   });
 
   // Fetch journal entries for the selected voucher (to show accounts + descriptions)
-  const { data: voucherEntries = [], isLoading: entriesLoading } = useQuery<any[]>({
+  const { data: voucherEntries = [], isLoading: entriesLoading } = useQuery<
+    { id?: number; accountName?: string; description?: string; debitAmount?: string; creditAmount?: string }[]
+  >({
     queryKey: ["/api/vouchers", detailItem?.id, "view-entries"],
     queryFn: async () => {
       const res = await fetch(`/api/vouchers/${detailItem!.id}/view-entries`, { credentials: "include" });
@@ -801,12 +804,12 @@ export default function DeletedItems() {
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.debitAmount || "0") > 0
-                                    ? `$${parseFloat(entry.debitAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? `$${parseFloat(entry.debitAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                     : "—"}
                                 </td>
                                 <td className="px-3 py-2 text-right font-mono text-xs">
                                   {parseFloat(entry.creditAmount || "0") > 0
-                                    ? `$${parseFloat(entry.creditAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    ? `$${parseFloat(entry.creditAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                     : "—"}
                                 </td>
                               </tr>

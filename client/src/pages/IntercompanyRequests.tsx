@@ -98,7 +98,8 @@ export default function IntercompanyRequests() {
         description: description || undefined,
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (response) => {
+      const data = (await response.json()) as { voucherNumber?: string };
       toast({ title: "Approved", description: `Mirror voucher ${data.voucherNumber} created in destination company.` });
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/intercompany-requests/pending-count"] });

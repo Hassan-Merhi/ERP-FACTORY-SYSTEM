@@ -46,6 +46,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Company } from "@shared/schema";
+import type { LucideIcon } from "lucide-react";
+
+interface SettingsUserToDelete {
+  id: string;
+  username?: string;
+}
+
+interface SettingsSidebarItem {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  devOnly?: boolean;
+}
 
 export default function Settings() {
   const { toast } = useToast();
@@ -55,7 +68,7 @@ export default function Settings() {
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const [activeSection, setActiveSection] = useState("users-permissions");
-  const [userToDelete, setUserToDelete] = useState<any>(null);
+  const [userToDelete, setUserToDelete] = useState<SettingsUserToDelete | null>(null);
 
   const { data: companies = [], isLoading: _isLoadingCompanies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
@@ -126,7 +139,8 @@ export default function Settings() {
     },
   ];
 
-  const allowedItems = (items: any[]) => items.filter((item) => !item.devOnly || currentUser?.role === "Developer");
+  const allowedItems = (items: SettingsSidebarItem[]) =>
+    items.filter((item) => !item.devOnly || currentUser?.role === "Developer");
   const canManageTrackingDefaults = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
 
   return (
@@ -223,7 +237,7 @@ export default function Settings() {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => deleteUserMutation.mutate(userToDelete.id)}
+                onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
                 className="bg-destructive text-destructive-foreground"
               >
                 Delete
