@@ -168,6 +168,9 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
       const updates: Partial<typeof factoryWorkerAdvances.$inferInsert> = {};
       if (req.body.notes !== undefined) updates.notes = req.body.notes;
       if (req.body.advanceDate) updates.advanceDate = req.body.advanceDate;
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No advance fields to update" });
+      }
 
       const [updated] = await db
         .update(factoryWorkerAdvances)
