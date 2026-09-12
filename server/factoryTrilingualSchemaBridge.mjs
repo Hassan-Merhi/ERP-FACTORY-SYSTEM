@@ -56,7 +56,16 @@ async function runSchemaStatements(client, frenchSql, languagePreferenceSql) {
 async function ensureFactoryTrilingualSchema() {
   const connectionString = connectionStringFromEnvironment();
   if (!connectionString) {
-    throw new Error("Factory trilingual schema could not start because no PostgreSQL configuration is available.");
+    console.warn(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: "WARN",
+        message: "Factory trilingual schema check skipped because no database configuration is available",
+        module: "factory-trilingual-schema",
+        action: "startup-ensure",
+      })
+    );
+    return;
   }
 
   const { Client } = pg;
