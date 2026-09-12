@@ -340,7 +340,10 @@ describe("buildOffloadPayload", () => {
     expect(payload.mixBatchAllocations).toEqual([{ mixBatchId: 31, weightKg: "120" }]);
   });
 
-  it("throws when no container is selected (the dialog guards before calling)", () => {
-    expect(() => buildOffloadPayload(fields({ selectedContainerId: "" }), "key-10")).toThrow("Container is required");
+  it("passes containerId through unchanged — the dialog guards against an empty selection before calling", () => {
+    // Matches the original behavior: handleSubmit returns early when no
+    // container is selected; the builder itself stays pure and total.
+    expect(buildOffloadPayload(fields({ selectedContainerId: "" }), "key-10").containerId).toBe("");
+    expect(buildOffloadPayload(fields({ selectedContainerId: "42" }), "key-10").containerId).toBe("42");
   });
 });

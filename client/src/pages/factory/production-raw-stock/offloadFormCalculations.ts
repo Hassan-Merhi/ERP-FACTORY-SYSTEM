@@ -103,7 +103,8 @@ export function computeEstimatedAvgCostKg(inputs: EstimatedAvgCostKgInputs): num
  * idempotency key is generated and reused by the dialog and passed in.
  */
 export function buildOffloadPayload(fields: OffloadFormFields, idempotencyKey: string): OffloadPayload {
-  if (!fields.selectedContainerId) throw new Error("Container is required");
+  // The dialog guards `selectedContainerId` before calling this; the builder
+  // itself stays pure and total (no user-facing error string introduced here).
   const dutyStatus = fields.dutyPending ? "PENDING" : parseFloat(fields.dutyAmount || "0") > 0 ? "CONFIRMED" : "NONE";
   const fxRate = parseFloat(fields.fxRateToUsd || "1");
 
