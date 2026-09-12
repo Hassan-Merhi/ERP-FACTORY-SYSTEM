@@ -66,6 +66,15 @@ export function getAvailableProviders(): AIProvider[] {
   return available;
 }
 
+// Get configured providers for the settings UI (available flag per provider)
+export function getConfiguredProviders(): { provider: AIProvider; available: boolean }[] {
+  return [
+    { provider: "gemini", available: !!process.env.GEMINI_API_KEY },
+    { provider: "chatgpt", available: !!process.env.OPENAI_API_KEY },
+    { provider: "grok", available: !!process.env.XAI_API_KEY },
+  ];
+}
+
 // Call Gemini API
 async function callGemini(
   systemPrompt: string,

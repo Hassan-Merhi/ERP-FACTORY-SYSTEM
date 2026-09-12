@@ -50,13 +50,16 @@ describe("Mobile repair Phase 1 critical flows", () => {
   });
 
   it("keeps the responsive contracts anchored to the current Agents, Account Groups, and Chat markup", () => {
-    const agents = source("client/src/pages/Agents.tsx");
+    // The Agents page was split into pages/agents/* modules; the anchor markup
+    // (test ids and pane classes) now lives in the list/statement panels.
+    const agentList = source("client/src/pages/agents/AgentListPanel.tsx");
+    const agentStatement = source("client/src/pages/agents/AgentStatementPanel.tsx");
     const groups = source("client/src/pages/AccountGroups.tsx");
     const chat = source("client/src/pages/Chat.tsx");
 
-    expect(agents).toContain('data-testid="button-add-agent"');
-    expect(agents).toContain('data-testid="text-agent-account-name"');
-    expect(agents).toContain('className="w-72 shrink-0');
+    expect(agentList).toContain('data-testid="button-add-agent"');
+    expect(agentStatement).toContain('data-testid="text-agent-account-name"');
+    expect(agentList).toContain('className="w-72 shrink-0');
 
     expect(groups).toContain('data-testid="button-create-group"');
     expect(groups).toContain('className="w-72 border-r flex flex-col shrink-0"');

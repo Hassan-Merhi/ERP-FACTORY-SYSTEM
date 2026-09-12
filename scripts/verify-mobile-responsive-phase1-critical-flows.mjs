@@ -9,7 +9,10 @@ const read = (file) => fs.readFile(path.join(ROOT, file), "utf8");
 const browserCompat = await read("client/src/mobile-browser-compat.css");
 const workspaceBoundary = await read("client/src/components/ui/workspace-route-boundary.tsx");
 const erpShell = await read("client/src/app/ErpShell.tsx");
-const agents = await read("client/src/pages/Agents.tsx");
+// The Agents page was split into pages/agents/* modules; the anchor markup
+// (test ids and pane classes) now lives in the list/statement panels.
+const agentsList = await read("client/src/pages/agents/AgentListPanel.tsx");
+const agentsStatement = await read("client/src/pages/agents/AgentStatementPanel.tsx");
 const accountGroups = await read("client/src/pages/AccountGroups.tsx");
 const chat = await read("client/src/pages/Chat.tsx");
 const rawStock = await read("client/src/pages/factory/production-raw-stock/RawStockTable.tsx");
@@ -48,7 +51,8 @@ for (const token of ['data-workspace-route={routePath}', 'data-erp-route={routeP
 }
 
 for (const [name, source, tokens] of [
-  ["Agents", agents, ['data-testid="button-add-agent"', 'data-testid="text-agent-account-name"', 'className="w-72 shrink-0']],
+  ["Agents (list panel)", agentsList, ['data-testid="button-add-agent"', 'className="w-72 shrink-0']],
+  ["Agents (statement panel)", agentsStatement, ['data-testid="text-agent-account-name"']],
   ["Account Groups", accountGroups, ['data-testid="button-create-group"', 'className="w-72 border-r flex flex-col shrink-0"']],
   ["Chat", chat, ['data-testid="chat-page"', 'className="w-64 shrink-0 flex flex-col"']],
 ]) {
