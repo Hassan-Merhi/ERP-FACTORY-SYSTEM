@@ -350,20 +350,45 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // removed before deleting the fixture company.
     await pool.query("DELETE FROM financial_operation_requests WHERE company_id = $1", [company.id]);
 
-    // Every table here blocks the company delete — RESTRICT on
-    // factory_settings and user_security_permissions, NO ACTION on the two
-    // spreadsheet tables — rather than cascading with it, and companies is
-    // their only blocking parent, so here is early enough.
-    // factory_settings is the one that actually broke CI: its constraint is
-    // added by startup migration 006 rather than by the drizzle schema, so it
-    // was invisible to this teardown until the broad route-sweep suites started
-    // touching settings endpoints and leaving a row behind. The rest were
-    // equally unguarded, so they are cleared together — a delete that matches
-    // nothing costs one round trip.
-    await pool.query("DELETE FROM factory_settings WHERE company_id = $1", [company.id]);
-    await pool.query("DELETE FROM user_security_permissions WHERE company_id = $1", [company.id]);
-    await pool.query("DELETE FROM live_spreadsheets WHERE company_id = $1", [company.id]);
-    await pool.query("DELETE FROM spreadsheets WHERE company_id = $1", [company.id]);
+    // Final safety net for company-scoped leaf rows.
+    //
+    // The explicit deletes above stay because they encode orderings this
+    // cannot infer — voucher children before vouchers, transporter charges
+    // before the vouchers they reference, and so on. What they cannot keep up
+    // with is breadth: companies has ~150 inbound foreign keys that block a
+    // delete rather than cascade, and this teardown names only a couple of
+    // dozen. That was survivable while the fixture touched a handful of
+    // tables; the broad route-sweep suites exercise most of the write surface,
+    // so each newly-touched table failed the company delete one run at a time
+    // (factory_settings, then factory_bale_products, with ~85 more waiting).
+    //
+    // So discover them from the catalog instead of listing them, which also
+    // covers a table the day it is added. Repeat until a pass frees nothing,
+    // which resolves ordering among these tables themselves; each delete is
+    // its own statement, so one failing does not poison the rest.
+    const blockingTables = await pool.query<{ tbl: string }>(
+      `SELECT DISTINCT c.conrelid::regclass::text AS tbl
+         FROM pg_constraint c
+         JOIN pg_class parent ON parent.oid = c.confrelid
+         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'company_id' AND a.attnum > 0
+        WHERE c.contype = 'f'
+          AND parent.relname = 'companies'
+          AND c.confdeltype IN ('r', 'a')`
+    );
+    let blocking = blockingTables.rows.map((row) => row.tbl);
+    for (let pass = 0; pass < 5 && blocking.length > 0; pass += 1) {
+      const stillBlocking: string[] = [];
+      for (const tbl of blocking) {
+        try {
+          await pool.query(`DELETE FROM ${tbl} WHERE company_id = $1`, [company.id]);
+        } catch {
+          stillBlocking.push(tbl);
+        }
+      }
+      if (stillBlocking.length === blocking.length) break;
+      blocking = stillBlocking;
+    }
+
     await clearAsyncReferences();
 
     try {
