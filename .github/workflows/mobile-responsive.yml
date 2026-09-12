@@ -50,6 +50,13 @@ jobs:
       CSRF_ENFORCE: "0"
       ENABLE_SCHEDULERS: "false"
       PORT: "5000"
+      # The smoke harness drives every route across four viewports in two
+      # languages as a single signed-in user, so it bursts far past the
+      # production budget (~600 req/min) and the flood guard answers 429.
+      # Raise the budget for the run: route assertions are unchanged, only
+      # the anti-flood lane stops throttling our own driver.
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
       ERP_SMOKE_BASE_URL: http://127.0.0.1:5000
       ERP_SMOKE_OUTPUT_DIR: artifacts/ux-regression-browser
       ERP_SMOKE_USERNAME: ux_ci_${{ github.run_id }}
