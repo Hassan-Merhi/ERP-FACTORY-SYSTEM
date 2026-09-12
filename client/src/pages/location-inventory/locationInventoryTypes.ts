@@ -39,6 +39,17 @@ export interface InventoryItem {
   categoryName?: string | null;
 }
 
+/** Row returned by GET /api/inventory/negative (admin repair route). */
+export interface NegativeInventoryRow {
+  id: number;
+  locationId: number;
+  locationName: string;
+  stockItemId: number;
+  code: string;
+  name: string;
+  quantity: string;
+}
+
 export interface StockGroupSummary {
   groupId: number | null;
   groupCode: string | null;
@@ -89,6 +100,73 @@ export interface StockMovementMonth {
 }
 
 export type StockMovementPeriod = PeriodFilterValue;
+
+/** Month row from GET /api/inventory/movement (server inventory-movement/movement.ts). */
+export interface StockMovementMonthlySummary {
+  year: number;
+  month: number;
+  monthName: string;
+  openingQty: number;
+  openingRate: number;
+  openingValue: number;
+  inwardQty: number;
+  inwardRate: number;
+  inwardValue: number;
+  outwardQty: number;
+  outwardRate: number;
+  outwardValue: number;
+  closingQty: number;
+  closingRate: number;
+  closingValue: number;
+}
+
+/** Response of GET /api/inventory/movement. */
+export interface StockMovementResponse {
+  months: StockMovementMonthlySummary[];
+  grandTotal: {
+    inwardQty: number;
+    inwardValue: number;
+    outwardQty: number;
+    outwardValue: number;
+    closingQty: number;
+    closingValue: number;
+  };
+}
+
+/** Transaction row from GET /api/inventory/movement/drill (StockMovementTx + running close). */
+export interface StockMovementDrillTx {
+  date: string;
+  particulars: string;
+  vchType: string;
+  voucherId: number | null;
+  poId: number | null;
+  inwardQty: number;
+  inwardRate: number;
+  inwardValue: number;
+  outwardQty: number;
+  outwardRate: number;
+  outwardValue: number;
+  isPOS: boolean;
+  posSellingRate: number;
+  posSellingValue: number;
+  closingQty: number;
+  closingRate: number;
+  closingValue: number;
+  isOpeningBalance: boolean;
+}
+
+/** Response of GET /api/inventory/movement/drill. */
+export interface StockMovementDrillResponse {
+  transactions: StockMovementDrillTx[];
+  totals: {
+    inwardQty: number;
+    inwardRate: number;
+    inwardValue: number;
+    outwardQty: number;
+    outwardRate: number;
+    outwardValue: number;
+  };
+}
 
 export interface WhatsappGroup {
   id: string;

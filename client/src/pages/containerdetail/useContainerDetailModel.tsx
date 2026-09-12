@@ -14,10 +14,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Supplier, Customer, ContainerSale } from "@shared/schema";
 import {
-  type PurchaseOrder,
-  type POLineItem,
-  type ContainerCharge,
-  containers as containersTable,
   containerDocuments as containerDocumentsTable,
   containerDocumentTypes as containerDocumentTypesTable,
   containerFreight as containerFreightTable,
@@ -25,12 +21,16 @@ import {
 } from "@shared/schema";
 
 import { utils, writeFile, read as readExcel, ExcelJS } from "@/lib/excelHelper";
+import type { ContainerDetailData, SpContainerDetailResponse } from "../containers/types";
 
-interface ContainerDetailData {
-  container: typeof containersTable.$inferSelect;
-  pos: (PurchaseOrder & { items: POLineItem[] })[];
-  charges: ContainerCharge[];
-  offloadId?: number | null;
+/** Row returned by the container price-import preview endpoint. */
+export interface ContainerPriceImportPreviewRow {
+  barcode: string;
+  itemName: string | null;
+  lineItemIds?: number[];
+  status: "invalid" | "invalid_price" | "not_found" | "not_in_container" | "no_change" | "will_update";
+  currentRate: number | null;
+  newRate: number | null;
 }
 
 const saleFormSchema = z.object({
@@ -81,7 +81,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     enabled: !!containerId && !isSupplierPartner,
   });
 
-  const { data: spContainerData, isLoading: spDetailLoading } = useQuery({
+  const { data: spContainerData, isLoading: spDetailLoading } = useQuery<SpContainerDetailResponse>({
     queryKey: [`/api/sp/containers/${containerId}`],
     queryFn: () => fetch(`/api/sp/containers/${containerId}`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!containerId && isSupplierPartner,
@@ -114,7 +114,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const containerSale = containerSales.find((sale: ContainerSale) => sale.containerId === parseInt(containerId!));
 
   const { data: docsData, isLoading: _docsLoading } = useQuery<{
-    documents: ((typeof containerDocumentsTable.$inferSelect) & { isGhost: boolean })[];
+    documents: (typeof containerDocumentsTable.$inferSelect & { isGhost: boolean })[];
     docTypes: (typeof containerDocumentTypesTable.$inferSelect)[];
     completeness: { total: number; uploaded: number; complete: boolean };
   }>({
@@ -128,7 +128,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   });
 
   const { data: _freightData = [], isLoading: _freightLoading } = useQuery<
-    ((typeof containerFreightTable.$inferSelect) & {
+    (typeof containerFreightTable.$inferSelect & {
       payments?: unknown[];
       totalPaid?: number;
       computedStatus?: string;
@@ -151,7 +151,7 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showPriceImportDialog, setShowPriceImportDialog] = useState(false);
-  const [priceImportPreview, setPriceImportPreview] = useState<any[] | null>(null);
+  const [priceImportPreview, setPriceImportPreview] = useState<ContainerPriceImportPreviewRow[] | null>(null);
   const [priceImportParsing, setPriceImportParsing] = useState(false);
   const [priceImportError, setPriceImportError] = useState<string | null>(null);
   const priceImportFileRef = useRef<HTMLInputElement>(null);
@@ -331,7 +331,13 @@ export function useContainerDetailModel({ id: idProp, forceErp }: { id?: string;
     }
   }
 
-  type FreightFormValues = { vendorName: string; freightAmount: string; currency: string; dueDate: string; notes: string };
+  type FreightFormValues = {
+    vendorName: string;
+    freightAmount: string;
+    currency: string;
+    dueDate: string;
+    notes: string;
+  };
   type PaymentFormValues = { paymentDate: string; amount: string; method: string; reference: string };
 
   const freightForm = useForm<FreightFormValues>({

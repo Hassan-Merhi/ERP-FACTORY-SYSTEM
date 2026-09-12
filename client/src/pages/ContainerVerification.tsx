@@ -17,6 +17,8 @@ import { AliasConflictAlert, ComparisonCards } from "./containerverification/Com
 import { LoadedItemsCard } from "./containerverification/LoadedItemsCard";
 import { SummaryCards } from "./containerverification/SummaryCards";
 import type { LoadedItem, LoadedItemDraft, VerificationResult } from "./containerverification/types";
+import type { ContainerDetailData } from "./containers/types";
+import type { Supplier, SupplierProforma } from "@shared/schema";
 
 type SupplierIdentity = {
   id?: number;
@@ -46,12 +48,12 @@ export default function ContainerVerification() {
   const [autoCompareTriggered, setAutoCompareTriggered] = useState(false);
   const [viewMode, setViewMode] = useState<"detailed" | "summary">("detailed");
 
-  const { data: containerData } = useQuery<any>({
+  const { data: containerData } = useQuery<ContainerDetailData>({
     queryKey: [`/api/containers/${containerId}`],
     enabled: !!containerId,
   });
 
-  const { data: suppliers = [] } = useQuery<any[]>({
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
     queryKey: ["/api/suppliers", "allowParentFallback"],
     queryFn: async () => {
       const res = await fetch("/api/suppliers?allowParentFallback=true", { credentials: "include" });
@@ -71,7 +73,7 @@ export default function ContainerVerification() {
     enabled: !!selectedSupplierId && !suppliers.some((s) => String(s.id) === selectedSupplierId),
   });
 
-  const { data: proformas = [] } = useQuery<any[]>({
+  const { data: proformas = [] } = useQuery<SupplierProforma[]>({
     queryKey: ["/api/suppliers", selectedSupplierId, "proformas"],
     queryFn: async () => {
       if (!selectedSupplierId) return [];
@@ -157,9 +159,11 @@ export default function ContainerVerification() {
   });
 
   const importMutation = useMutation({
-    mutationFn: async (items: any[]) => {
+    mutationFn: async (
+      items: { barcode: string; itemName: string; qty: number; weightPerBale: string; pricePerBale: string }[]
+    ) => {
       const res = await apiRequest("POST", `/api/containers/${containerId}/import-loaded-items`, { items });
-      return res.json();
+      return res.json() as Promise<{ imported: number; items: LoadedItem[] }>;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
@@ -381,7 +385,7 @@ export default function ContainerVerification() {
                   )}
                   {suppliers.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
-                      {s.legalName || s.name || s.code}
+                      {s.legalName || s.code}
                     </SelectItem>
                   ))}
                 </SelectContent>

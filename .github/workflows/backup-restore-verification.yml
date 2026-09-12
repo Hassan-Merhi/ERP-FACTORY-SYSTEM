@@ -1,5 +1,13 @@
 name: Maintenance - Backup Restore Verification
 
+# Proves, every week, that the LIVE production database can be dumped and
+# restored — not just a disposable CI fixture. This is the only automation
+# that exercises the real backup path end to end, so an unconfigured backup
+# source fails loudly instead of skipping silently. Setup: repository secret
+# BACKUP_DATABASE_URL must hold the Render EXTERNAL database URL (read-only
+# use: pg_dump + count fingerprints; nothing is ever written to production).
+# See docs/operations/database-backup-rollback-recovery.md.
+
 on:
   schedule:
     - cron: '11 3 * * 0'
@@ -30,15 +38,22 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - name: Keep verification inert until backup source is configured
-        if: env.BACKUP_DATABASE_URL == ''
-        run: echo "BACKUP_DATABASE_URL is not configured; restore verification is skipped safely."
+      - name: Require a configured backup source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_DATABASE_URL:-}" ]; then
+            echo "::error::BACKUP_DATABASE_URL is not configured, so live-backup verification cannot run."
+            echo "Add the repository secret BACKUP_DATABASE_URL (Render EXTERNAL database URL), then re-run."
+            echo "Procedure: docs/operations/database-backup-rollback-recovery.md (Automated live-backup verification)."
+            exit 1
+          fi
+          echo "Backup source is configured."
 
       # The postgres service is 18.x and ubuntu-24.04 ships client 16, which
       # makes pg_dump abort on sight of a newer server rather than dump it.
       # Install the matching major and put it ahead of the preinstalled one.
       - name: Install PostgreSQL 18 client
-        if: env.BACKUP_DATABASE_URL != ''
         run: |
           set -euo pipefail
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -50,29 +65,51 @@ jobs:
           sudo apt-get install -y postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
-      - name: Create fresh logical backup
-        if: env.BACKUP_DATABASE_URL != ''
+      - name: Fingerprint live row counts before backup
         shell: bash
         run: |
           set -euo pipefail
+          # Read-only count fingerprint of the tables a restore must preserve.
+          # Only aggregate counts leave the database — no row data, no secrets.
+          fingerprint=$(psql "$BACKUP_DATABASE_URL" --tuples-only --no-align --command="
+            SELECT 'companies=' || (SELECT count(*) FROM companies)
+              || ' vouchers=' || (SELECT count(*) FROM vouchers)
+              || ' voucher_entries=' || (SELECT count(*) FROM voucher_entries)
+              || ' inventory=' || (SELECT count(*) FROM inventory)
+              || ' ledger_accounts=' || (SELECT count(*) FROM ledger_accounts);
+          ")
+          echo "Live fingerprint: $fingerprint"
+          echo "$fingerprint" > "$RUNNER_TEMP/fingerprint-live.txt"
+          test -s "$RUNNER_TEMP/fingerprint-live.txt"
+
+      - name: Create fresh logical backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
           pg_dump "$BACKUP_DATABASE_URL" --format=custom --no-owner --no-acl --file="$RUNNER_TEMP/backup.dump"
           test -s "$RUNNER_TEMP/backup.dump"
           size=$(stat -c%s "$RUNNER_TEMP/backup.dump")
-          echo "Backup size: $size bytes"
+          sha=$(sha256sum "$RUNNER_TEMP/backup.dump" | cut -d' ' -f1)
+          echo "Backup size: $size bytes (sha256: $sha, took $(( $(date +%s) - start ))s)"
+          echo "$size" > "$RUNNER_TEMP/backup-size.txt"
+          echo "$sha" > "$RUNNER_TEMP/backup-sha.txt"
           if [ "$size" -lt 10240 ]; then
             echo "Backup is suspiciously small."
             exit 1
           fi
 
       - name: Restore into isolated PostgreSQL service
-        if: env.BACKUP_DATABASE_URL != ''
         env:
           PGPASSWORD: postgres
         shell: bash
         run: |
           set -euo pipefail
+          start=$(date +%s)
           pg_restore --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
             --no-owner --no-acl --exit-on-error "$RUNNER_TEMP/backup.dump"
+          echo "Restore took $(( $(date +%s) - start ))s"
+          echo "$(( $(date +%s) - start ))" > "$RUNNER_TEMP/restore-seconds.txt"
           table_count=$(psql --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
             --tuples-only --no-align --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
           echo "Restored public table count: $table_count"
@@ -80,3 +117,61 @@ jobs:
             echo "Restore completed but no public tables were found."
             exit 1
           fi
+
+      - name: Verify restored fingerprint and core tables
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          restored=$(psql --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
+            --tuples-only --no-align --command="
+            SELECT 'companies=' || (SELECT count(*) FROM companies)
+              || ' vouchers=' || (SELECT count(*) FROM vouchers)
+              || ' voucher_entries=' || (SELECT count(*) FROM voucher_entries)
+              || ' inventory=' || (SELECT count(*) FROM inventory)
+              || ' ledger_accounts=' || (SELECT count(*) FROM ledger_accounts);
+          ")
+          live=$(cat "$RUNNER_TEMP/fingerprint-live.txt")
+          # A live database can legitimately gain rows between the fingerprint
+          # and the dump (transactions in flight), so the comparison is
+          # informational: a mismatch warns, but only a missing core table or
+          # a LOWER restored count fails the run.
+          echo "Live fingerprint:     $live"
+          echo "Restored fingerprint: $restored"
+          for table in companies vouchers voucher_entries inventory ledger_accounts; do
+            live_count=$(echo "$live" | tr ' ' '\n' | grep "^${table}=" | cut -d= -f2)
+            restored_count=$(echo "$restored" | tr ' ' '\n' | grep "^${table}=" | cut -d= -f2)
+            if [ -z "${restored_count:-}" ]; then
+              echo "::error::Core table '$table' is missing from the restored database."
+              exit 1
+            fi
+            if [ "${restored_count:-0}" -lt "${live_count:-0}" ]; then
+              echo "::error::Restored '$table' count ($restored_count) is below the live count ($live_count): rows were lost."
+              exit 1
+            fi
+          done
+          missing=$(psql --host=localhost --port=5432 --username=postgres --dbname=restore_verify \
+            --tuples-only --no-align --command="
+              SELECT string_agg(missing_table, ', ')
+              FROM (VALUES ('users'), ('migrations_log')) AS required(missing_table)
+              WHERE NOT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = required.missing_table
+              );
+          ")
+          if [ -n "$missing" ]; then
+            echo "::error::Restored database is missing required tables: $missing"
+            exit 1
+          fi
+          {
+            echo "## Live backup verification"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Backup size (bytes) | $(cat "$RUNNER_TEMP/backup-size.txt") |"
+            echo "| Backup SHA-256 | \`$(cat "$RUNNER_TEMP/backup-sha.txt")\` |"
+            echo "| Restore duration (s) | $(cat "$RUNNER_TEMP/restore-seconds.txt") |"
+            echo "| Fingerprint | \`$restored\` |"
+            echo "| Core tables present | users, migrations_log |"
+          } >> "$GITHUB_STEP_SUMMARY"

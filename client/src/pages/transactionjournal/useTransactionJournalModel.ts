@@ -17,7 +17,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PeriodFilterValue } from "@/components/ui/period-filter";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
-import type { CompanyOption, JournalResponse, VoucherDetail } from "./types";
+import type {
+  CompanyOption,
+  JournalPurchaseOrder,
+  JournalResponse,
+  JournalViewEntry,
+  JournalViewEntriesResponse,
+  VoucherDetail,
+} from "./types";
 import { createTransactionJournalFilters, type TransactionJournalFilters } from "./filterState";
 
 export const JOURNAL_PAGE_LIMIT = 50;
@@ -150,7 +157,7 @@ export function useTransactionJournalModel() {
     enabled: !!detailId,
   });
 
-  const { data: viewEntriesRaw, isLoading: viewEntriesLoading } = useQuery({
+  const { data: viewEntriesRaw, isLoading: viewEntriesLoading } = useQuery<JournalViewEntriesResponse>({
     queryKey: ["/api/global/transactions", detailId, "view-entries"],
     queryFn: async () => {
       const res = await fetch(`/api/global/transactions/${detailId}/view-entries`);
@@ -161,9 +168,13 @@ export function useTransactionJournalModel() {
   });
 
   // Normalise view-entries response (may be array or { entries, purchaseOrder, items })
-  const viewEntries: any[] = Array.isArray(viewEntriesRaw) ? viewEntriesRaw : (viewEntriesRaw?.entries ?? []);
-  const viewPurchaseOrder: any | null = viewEntriesRaw?.purchaseOrder ?? null;
-  const viewPurchaseItems: any[] = viewEntriesRaw?.items ?? [];
+  const viewEntries: JournalViewEntry[] = Array.isArray(viewEntriesRaw)
+    ? viewEntriesRaw
+    : (viewEntriesRaw?.entries ?? []);
+  const viewPurchaseOrder: JournalPurchaseOrder | null = Array.isArray(viewEntriesRaw)
+    ? null
+    : (viewEntriesRaw?.purchaseOrder ?? null);
+  const viewPurchaseItems: JournalViewEntry[] = Array.isArray(viewEntriesRaw) ? [] : (viewEntriesRaw?.items ?? []);
 
   const openDetail = (id: number) => {
     setEntryBalances({});

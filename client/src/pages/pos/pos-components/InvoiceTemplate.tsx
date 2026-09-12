@@ -1,4 +1,5 @@
 import { formatNumber } from "@/lib/formatNumber";
+import { SafeStyle } from "@/components/SafeStyle";
 
 type InvoiceSaleItem = {
   stockItemName?: string;
@@ -57,15 +58,18 @@ export function InvoiceTemplate({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-          @media print {
-            body { font-family: Arial, Helvetica, sans-serif !important; }
-            * { font-family: Arial, Helvetica, sans-serif !important; font-variant-numeric: tabular-nums !important; }
-          }
-        `,
-          }}
+        <SafeStyle
+          css={`
+            @media print {
+              body {
+                font-family: Arial, Helvetica, sans-serif !important;
+              }
+              * {
+                font-family: Arial, Helvetica, sans-serif !important;
+                font-variant-numeric: tabular-nums !important;
+              }
+            }
+          `}
         />
         {/* Title */}
         <div

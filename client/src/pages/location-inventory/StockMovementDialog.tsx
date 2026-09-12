@@ -7,9 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import type {
+  StockMovementDrillResponse,
   StockMovementItem,
   StockMovementMonth,
   StockMovementPeriod,
+  StockMovementResponse,
 } from "./locationInventoryTypes";
 
 interface StockMovementDialogProps {
@@ -54,7 +56,7 @@ export function StockMovementDialog({
     return n === 0 ? <span className="text-muted-foreground/30">—</span> : <>{formatAmount(n)}</>;
   };
 
-  const { data: stockMovementData, isLoading: stockMovementLoading } = useQuery({
+  const { data: stockMovementData, isLoading: stockMovementLoading } = useQuery<StockMovementResponse>({
     queryKey: stockMovementItem
       ? ["/api/inventory/movement", stockMovementItem.stockItemId, stockMovementItem.locationId, stockMovementPeriod]
       : [],
@@ -71,7 +73,7 @@ export function StockMovementDialog({
     },
   });
 
-  const { data: smDrillData, isLoading: smDrillLoading } = useQuery({
+  const { data: smDrillData, isLoading: smDrillLoading } = useQuery<StockMovementDrillResponse>({
     queryKey:
       stockMovementItem && drillMonth
         ? [
@@ -184,7 +186,7 @@ export function StockMovementDialog({
                       </td>
                     </tr>
                   )}
-                  {smDrillData?.transactions?.map((txn: any, idx: number) => {
+                  {smDrillData?.transactions?.map((txn, idx: number) => {
                     const editUrl = (() => {
                       if (txn.isOpeningBalance) return null;
                       const vt = (txn.vchType || "").toLowerCase();
@@ -278,6 +280,10 @@ export function StockMovementDialog({
                     smDrillData.transactions?.length > 0 &&
                     (() => {
                       const t = smDrillData.totals;
+                      // The drill endpoint's `totals` object sums inward/outward
+                      // only; the closing columns show the month-end running
+                      // balance, which is the closing of the last transaction.
+                      const lastTxn = smDrillData.transactions[smDrillData.transactions.length - 1];
                       return (
                         <tr className="bg-muted/50 border-t-2 font-semibold text-sm">
                           <td colSpan={3} className="px-4 py-2.5 border-r">
@@ -301,9 +307,13 @@ export function StockMovementDialog({
                           <td className="px-3 py-2.5 text-right font-mono text-red-700 dark:text-red-400 border-r">
                             {fmtA(t.outwardValue)}
                           </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-primary">{fmtN(t.closingQty, 0)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-primary">{fmtA(t.closingRate)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-primary">{fmtA(t.closingValue)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-primary">
+                            {fmtN(lastTxn.closingQty, 0)}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono text-primary">{fmtA(lastTxn.closingRate)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-primary">
+                            {fmtA(lastTxn.closingValue)}
+                          </td>
                         </tr>
                       );
                     })()}
@@ -379,7 +389,7 @@ export function StockMovementDialog({
                     </td>
                   </tr>
                 )}
-                {smRowsWithYear.map((m: any, idx: number) => {
+                {smRowsWithYear.map((m, idx: number) => {
                   const hasActivity = m.inwardQty > 0 || m.outwardQty > 0 || m.openingQty !== 0 || m.closingQty !== 0;
                   const fmtQ = (n: number) =>
                     n === 0 ? (

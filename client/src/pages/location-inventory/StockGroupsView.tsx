@@ -24,19 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { InventoryLocation as Location } from "./locationInventoryTypes";
+import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
 import type { AuthMe } from "@shared/apiTypes";
-
-interface StockGroupSummary {
-  groupId: number | null;
-  groupCode: string | null;
-  groupName: string;
-  totalQuantity: number;
-  totalValue: number;
-  averageRate: number;
-  itemCount: number;
-  items: any[];
-}
 
 interface StockGroupsViewProps {
   selectedLocationLocal: Location;

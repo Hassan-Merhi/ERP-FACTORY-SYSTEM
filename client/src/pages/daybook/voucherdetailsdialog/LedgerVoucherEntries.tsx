@@ -10,7 +10,7 @@
 import { MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ViewVoucherEntry, Voucher } from ".././types";
+import type { ViewVoucherEntry, Voucher, DaybookUser, TransferDetailData } from ".././types";
 import { isSingleAmountVoucherType, isStockEntryVoucherType, txCurrencyLabel } from "./utils";
 
 interface LedgerVoucherEntriesProps {
@@ -18,12 +18,12 @@ interface LedgerVoucherEntriesProps {
   viewVoucherEntries: ViewVoucherEntry[];
   isPOSUser: boolean;
   isStockTransferType: boolean;
-  transferDetail: any;
+  transferDetail: TransferDetailData | null;
   cashAccountBalance: string;
   entryBalances: Record<number, string>;
   formatAmount: (amt: number | string | null | undefined) => string;
   resolveEntryName: (entry: ViewVoucherEntry) => string;
-  user: any;
+  user: DaybookUser | null | undefined;
 }
 
 function CashAccountBanner({
@@ -97,7 +97,7 @@ function StockEntryRows({
             )}
             {isStockTransferType && (
               <TableCell className="text-sm text-muted-foreground">
-                {(entry as any).sourceLocationName || transferDetail?.sourceLocationName || "—"}
+                {entry.sourceLocationName || transferDetail?.sourceLocationName || "—"}
               </TableCell>
             )}
             <TableCell className="text-right font-mono">{Math.round(Math.abs(qty)).toLocaleString()}</TableCell>
