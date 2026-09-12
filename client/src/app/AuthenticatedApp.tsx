@@ -5,14 +5,13 @@ import { useMobilePerformanceLifecycle } from "@/hooks/use-mobile-performance-li
 import { useLocation, Redirect } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useWsInvalidation } from "@/hooks/use-ws-invalidation";
-import { LanguageOnboardingDialog } from "@/components/LanguageOnboardingDialog";
-import { RemoteSupportRuntime } from "@/components/RemoteSupportRuntime";
 import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import { useAppNavigation } from "./useAppNavigation";
 import { useAuthenticatedAppData } from "./useAuthenticatedAppData";
 import { resolveAuthenticatedAppRoute } from "./authenticatedAppRouteGuard";
 import { AppLeaveConfirmDialog } from "./AppLeaveConfirmDialog";
 import { AppLoadingState } from "./AppLoadingState";
+import { AuthenticatedAppOverlays } from "./AuthenticatedAppOverlays";
 import { useErpScrollRestoration } from "./useErpScrollRestoration";
 
 const PosShell = lazy(() => import("./PosShell").then((module) => ({ default: module.PosShell })));
@@ -66,19 +65,22 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   const leaveConfirmDialog = (
     <AppLeaveConfirmDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm} onConfirm={handleConfirmLeave} />
   );
-  const languageOnboarding = user.id === undefined ? null : <LanguageOnboardingDialog userId={user.id} />;
-  const appOverlays = (
-    <>
-      {languageOnboarding}
-      <RemoteSupportRuntime />
-    </>
-  );
+
+  // The company switch is intentionally SPA-native, but company-owned pages can
+  // still hold local component state and active query observers that were
+  // created under the previous server session. Key the workspace shell to the
+  // active company so a successful switch rebuilds that subtree immediately.
+  // CompanyContext has already cancelled/removed the previous company's query
+  // cache before committing this ID, so the remounted page fetches fresh data
+  // for the new company without requiring a browser refresh.
+  const companySessionKey = selectedCompany.id;
 
   if (isPOS) {
     return (
       <>
         <Suspense fallback={<AppLoadingState />}>
           <PosShell
+            key={companySessionKey}
             user={user}
             posImportEnabled={posImportEnabled}
             chatUnread={chatUnread}
@@ -87,7 +89,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -97,13 +99,14 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       <>
         <Suspense fallback={<AppLoadingState />}>
           <PropertiesShell
+            key={companySessionKey}
             user={user}
             currentLocation={currentLocation}
             handleLogout={handleLogout}
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -113,6 +116,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       <>
         <Suspense fallback={<AppLoadingState />}>
           <FactoryShell
+            key={companySessionKey}
             user={user}
             myAccess={myAccess}
             factoryDefaultPage={routeState.factoryDefaultPage}
@@ -120,7 +124,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
             leaveConfirmDialog={leaveConfirmDialog}
           />
         </Suspense>
-        {appOverlays}
+        <AuthenticatedAppOverlays userId={user.id} />
       </>
     );
   }
@@ -129,13 +133,14 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
     <>
       <Suspense fallback={<AppLoadingState />}>
         <ErpShell
+          key={companySessionKey}
           user={user}
           hasErpAccess={routeState.hasErpAccess}
           handleLogout={handleLogout}
           leaveConfirmDialog={leaveConfirmDialog}
         />
       </Suspense>
-      {appOverlays}
+      <AuthenticatedAppOverlays userId={user.id} />
     </>
   );
 }

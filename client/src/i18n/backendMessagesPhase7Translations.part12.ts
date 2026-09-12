@@ -125,4 +125,9 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "البالات المحمّلة الحالية تتجاوز سعة الفاتورة المبدئية المحددة أو لا تطابقها",
     fr: "Les balles déjà chargées dépassent la capacité de la proforma sélectionnée ou n’y correspondent pas",
   },
+  {
+    en: "Too many requests. Please slow down and try again shortly.",
+    ar: "طلبات كثيرة جدًا. يرجى التمهّل والمحاولة مرة أخرى بعد قليل.",
+    fr: "Trop de requêtes. Veuillez ralentir et réessayer dans un instant.",
+  },
 ];

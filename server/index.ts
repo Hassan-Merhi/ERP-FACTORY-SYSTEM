@@ -28,7 +28,9 @@ import {
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { apiRateLimit } from "./middleware/apiRateLimit";
 import { ORIGIN_GUARD_EXEMPT_PATHS, originGuard } from "./security/originGuard";
+import { helmetContentSecurityPolicyOption, registerCspReportRoute } from "./security/contentSecurityPolicy";
 
 registerProcessErrorHandlers();
 
@@ -58,12 +60,13 @@ app.use(
 );
 
 // Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
-// CSP is intentionally disabled — the SPA relies on inline scripts/styles via Vite,
-// and a wrong CSP would break the app silently. Other defaults are safe.
+// CSP ships report-only in production and off elsewhere; CSP_ENFORCE=true
+// flips the same policy to enforcing. Policy and violation collection live in
+// server/security/contentSecurityPolicy.ts.
 // crossOriginEmbedderPolicy is disabled to allow loading external images (logos, etc.).
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: helmetContentSecurityPolicyOption(),
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
@@ -267,6 +270,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global API rate limit — per-user buckets for signed-in callers, per-IP for
+// anonymous ones. Placed after the request loggers (so 429s are still logged)
+// and before the origin/CSRF guards (so floods are rejected first).
+app.use(apiRateLimit);
+
 // ── Phase D: Origin / Referer guard (CSRF defense layer 1) ─────────────────
 // Implementation lives in server/security/originGuard.ts.
 app.use(originGuard);
@@ -316,6 +324,11 @@ app.use((req, res, next) => {
     next();
   }
 });
+
+// CSP violation reports: browser telemetry, best-effort, throttled inside the
+// handler. Registered here (after body parsing) so reports are accepted even
+// though browsers cannot attach CSRF tokens to them.
+registerCspReportRoute(app);
 
 // Flag used by /api/health/db to signal readiness to Render's health check.
 // Port opens immediately; migrations run in background. Render holds traffic

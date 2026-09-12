@@ -7,6 +7,7 @@
  */
 import type { RefObject } from "react";
 import { formatNumber } from "@/lib/formatNumber";
+import { SafeStyle } from "@/components/SafeStyle";
 
 const CENTER_CELL = { textAlign: "center" as const, padding: "4px 3px", verticalAlign: "top", fontWeight: "600" };
 
@@ -152,15 +153,18 @@ export function PosImportPrintTemplate({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-                @media print {
-                  body { font-family: Arial, Helvetica, sans-serif !important; }
-                  * { font-family: Arial, Helvetica, sans-serif !important; font-variant-numeric: tabular-nums !important; }
-                }
-              `,
-          }}
+        <SafeStyle
+          css={`
+            @media print {
+              body {
+                font-family: Arial, Helvetica, sans-serif !important;
+              }
+              * {
+                font-family: Arial, Helvetica, sans-serif !important;
+                font-variant-numeric: tabular-nums !important;
+              }
+            }
+          `}
         />
 
         {/* Title */}
