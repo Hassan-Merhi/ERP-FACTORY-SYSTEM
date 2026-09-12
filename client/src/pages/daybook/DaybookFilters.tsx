@@ -5,18 +5,19 @@ import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter, PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { FilterStateAction } from "@/hooks/use-paginated-filter-state";
+import type { DaybookFiltersState } from "./filterState";
 
 interface DaybookFiltersProps {
   periodFilter: PeriodFilterValue;
   setPeriodFilter: (v: PeriodFilterValue) => void;
-  filters: {
-    voucherType: string;
-    searchQuery: string;
-    statusFilter: "all" | "active" | "optional";
-    minAmount: string;
-    maxAmount: string;
-  };
-  setFilters: (v: any) => void;
+  /**
+   * The full filter slice from filterState.ts, including `sortOrder`. The
+   * sort order itself is rendered by the table header, but the spread-based
+   * `setFilters({ ...filters, ... })` calls below need it to survive.
+   */
+  filters: DaybookFiltersState["filters"];
+  setFilters: (v: FilterStateAction<DaybookFiltersState["filters"]>) => void;
   hasActiveFilters?: boolean;
   onResetFilters?: () => void;
   onPrevDay?: () => void;

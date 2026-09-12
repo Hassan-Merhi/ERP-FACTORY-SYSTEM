@@ -163,19 +163,33 @@ function compareLines(suggested: CompactFeedbackLine[], finalLines: CompactFeedb
   };
 }
 
-function jsonObject(value: unknown): Record<string, any> {
-  return value && typeof value === "object" && !Array.isArray(value) ? ((value)) : {};
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/** The few top-level preview fields persisted into the feedback log. */
+interface PreviewFeedbackFields {
+  lines?: unknown;
+  destinationLocationId?: unknown;
+  targetQuantity?: unknown;
+  achievedQuantity?: unknown;
+  forecastingVersion?: number;
+  sourceOptimizationVersion?: number;
+  businessRulesVersion?: number;
 }
 
 export async function createSmartTransferPreviewFeedback(params: {
   companyId: number;
   userId: string;
   requestInput: unknown;
-  preview: Record<string, any>;
+  preview: object;
 }): Promise<string | null> {
   try {
+    // The preview payload is a smart-transfer preview result; only these
+    // top-level fields are persisted, so they are read structurally.
+    const previewFields = params.preview as PreviewFeedbackFields;
     const sessionId = `stf_${randomUUID()}`;
-    const lines = normalizeLines(params.preview.lines);
+    const lines = normalizeLines(previewFields.lines);
     const averageScore = lines.length > 0 ? lines.reduce((sum, line) => sum + line.itemScore, 0) / lines.length : 0;
 
     await db.insert(aiActionLog).values({
@@ -186,12 +200,12 @@ export async function createSmartTransferPreviewFeedback(params: {
       actionName: PREVIEW_ACTION,
       inputJson: params.requestInput,
       outputJson: {
-        destinationLocationId: params.preview.destinationLocationId,
-        targetQuantity: params.preview.targetQuantity,
-        achievedQuantity: params.preview.achievedQuantity,
-        forecastingVersion: params.preview.forecastingVersion ?? 1,
-        sourceOptimizationVersion: params.preview.sourceOptimizationVersion ?? 2,
-        businessRulesVersion: params.preview.businessRulesVersion ?? 3,
+        destinationLocationId: previewFields.destinationLocationId,
+        targetQuantity: previewFields.targetQuantity,
+        achievedQuantity: previewFields.achievedQuantity,
+        forecastingVersion: previewFields.forecastingVersion ?? 1,
+        sourceOptimizationVersion: previewFields.sourceOptimizationVersion ?? 2,
+        businessRulesVersion: previewFields.businessRulesVersion ?? 3,
         averageItemScore: roundNumber(averageScore, 2),
         lines,
       },

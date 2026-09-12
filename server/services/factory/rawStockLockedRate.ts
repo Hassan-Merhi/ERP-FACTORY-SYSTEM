@@ -56,7 +56,7 @@ export async function getAuthoritativeSupplierRemainingKg(
 }
 
 type RawSqlExecutor = {
-  query(text: string, params?: unknown[]): Promise<{ rows: any[] }>;
+  query(text: string, params?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
 };
 
 /** Executor-aware quantity helper used inside the serializable replay transaction. */
@@ -92,8 +92,8 @@ export async function getAuthoritativeSupplierRemainingKgWithExecutor(
     ),
   ]);
 
-  return new Decimal(stockResult.rows[0]?.remaining_kg ?? 0)
-    .plus(adjustmentResult.rows[0]?.net_adjusted_kg ?? 0)
+  return new Decimal(String(stockResult.rows[0]?.remaining_kg ?? 0))
+    .plus(String(adjustmentResult.rows[0]?.net_adjusted_kg ?? 0))
     .toNumber();
 }
 

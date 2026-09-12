@@ -213,7 +213,8 @@ export async function getStockSummary(companyId: number): Promise<{
 export async function getExpenseBreakdown(companyId: number): Promise<Array<{ name: string; value: number }> | null> {
   const _ebCacheKey = `expense-breakdown:${companyId}`;
   const _ebCached = _getCached(_ebCacheKey);
-  if (_ebCached) return _ebCached;
+  // Only this function writes this cache key, always as Array<{name, value}>.
+  if (_ebCached) return _ebCached as Array<{ name: string; value: number }>;
 
   // Get all expense-related ledger accounts
   const allAccounts = await storage.getAllLedgerAccounts(companyId);

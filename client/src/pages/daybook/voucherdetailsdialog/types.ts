@@ -3,8 +3,7 @@
  *
  * Extracted from VoucherDetailsDialog.tsx during the Phase 4 god-file split.
  */
-import type { AuthMe } from "@shared/apiTypes";
-import { Voucher, ViewVoucherEntry, Employee, LedgerAccount, BankAccount } from ".././types";
+import { Voucher, ViewVoucherEntry, Employee, LedgerAccount, BankAccount, DaybookUser } from ".././types";
 
 export type VoucherRevisionItem = {
   stockItemName?: string;
@@ -29,13 +28,13 @@ export type PurchaseOrderDialogData = {
   supplierId?: number;
   containerNumber?: string | null;
   containerId?: number;
-  itemsTotal?: string | number;
-  freight?: string | number;
-  fumigation?: string | number;
-  surcharge?: string | number;
-  documentCharges?: string | number;
-  otherCharges?: string | number;
-  discount?: string | number;
+  itemsTotal?: string | number | null;
+  freight?: string | number | null;
+  fumigation?: string | number | null;
+  surcharge?: string | number | null;
+  documentCharges?: string | number | null;
+  otherCharges?: string | number | null;
+  discount?: string | number | null;
 };
 
 export interface VoucherDetailsDialogProps {
@@ -64,7 +63,7 @@ export interface VoucherDetailsDialogProps {
   bankAccounts?: BankAccount[];
   viewProfitFilter: "all" | "gain" | "loss" | "even";
   setViewProfitFilter: (v: "all" | "gain" | "loss" | "even") => void;
-  user?: AuthMe | null;
+  user?: DaybookUser | null;
   handleEdit: (v: Voucher) => void;
   canEdit: (v: Voucher) => boolean;
   navigate: (path: string) => void;

@@ -98,7 +98,11 @@ export async function generateBilingualWorkerBalesPdf(
     const rowHeight = 24;
     const columns = [90, 115, 225, 70];
     const align = rtl ? "right" : "left";
-    const textOptions = rtl && arabicFont ? ({ align, features: ["rtla", "arab"] } as any) : { align };
+    // "arab" is accepted by fontkit at runtime but is not part of the
+    // published OpenTypeFeatures union, so the literal array is asserted at
+    // the use site (same convention as workerBalesPdfGenerator.ts).
+    const textOptions: PDFKit.Mixins.TextOptions =
+      rtl && arabicFont ? { align, features: ["rtla", "arab"] as PDFKit.Mixins.OpenTypeFeatures[] } : { align };
 
     const setFont = (bold = false) => {
       if (rtl && arabicFont) doc.font("FactoryArabic");
@@ -144,14 +148,14 @@ export async function generateBilingualWorkerBalesPdf(
       doc.fillColor("#263238").fontSize(8.5);
       values.forEach((value, columnIndex) => {
         const valueAlign = columnIndex === 3 ? "right" : align;
-        const options =
+        const options: PDFKit.Mixins.TextOptions =
           rtl && arabicFont
-            ? ({
+            ? {
                 width: columns[columnIndex] - 8,
                 align: valueAlign,
-                features: ["rtla", "arab"],
+                features: ["rtla", "arab"] as PDFKit.Mixins.OpenTypeFeatures[],
                 lineBreak: false,
-              } as any)
+              }
             : { width: columns[columnIndex] - 8, align: valueAlign, lineBreak: false };
         doc.text(String(value), cx + 4, y + 7, options);
         cx += columns[columnIndex];

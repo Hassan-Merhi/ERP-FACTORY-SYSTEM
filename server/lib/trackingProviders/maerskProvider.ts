@@ -82,15 +82,20 @@ function parseEvents(rawEvents: unknown): TrackingEvent[] {
     .filter((e) => e.date !== null || e.status !== null);
 }
 
-function pickEta(obj: any): string | null {
+function pickEta(obj: Record<string, unknown> | null | undefined): string | null {
   if (!obj) return null;
 
   // portCalls: destination is the last entry or explicitly flagged isDestination.
   // NEVER use portCalls[0] — that is the origin.
-  const portCalls: any[] = Array.isArray(obj.portCalls) ? obj.portCalls : [];
+  const portCalls: Record<string, unknown>[] = Array.isArray(obj.portCalls) ? obj.portCalls : [];
   const destPortCall =
     portCalls.find((p) => p.isDestination === true || p.isDestination === "true") ??
     (portCalls.length > 0 ? portCalls[portCalls.length - 1] : null);
+
+  const portOfDischarge =
+    obj.portOfDischarge && typeof obj.portOfDischarge === "object"
+      ? (obj.portOfDischarge as Record<string, unknown>)
+      : null;
 
   // Destination port fields outrank generic top-level fields which may refer
   // to any leg of the journey rather than the final destination.
@@ -98,9 +103,9 @@ function pickEta(obj: any): string | null {
     destPortCall?.eta ??
     destPortCall?.estimatedArrival ??
     destPortCall?.estimatedTimeOfArrival ??
-    obj.portOfDischarge?.eta ??
-    obj.portOfDischarge?.estimatedArrival ??
-    obj.portOfDischarge?.estimatedTimeOfArrival ??
+    portOfDischarge?.eta ??
+    portOfDischarge?.estimatedArrival ??
+    portOfDischarge?.estimatedTimeOfArrival ??
     obj.eta ??
     obj.estimatedArrival ??
     obj.estimatedTimeOfArrival ??

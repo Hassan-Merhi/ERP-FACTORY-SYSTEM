@@ -20,6 +20,11 @@ export const ORIGIN_GUARD_EXEMPT_PATHS = new Set<string>([
   // as offline — non-sensitive. The PATCH /api/user-presence heartbeat goes
   // through window.fetch and IS subject to CSRF + Origin enforcement.
   "/api/user-presence/leave",
+  // /api/csp-report receives browser-generated violation reports, which carry
+  // no X-CSRF-Token and no Origin guarantee. The endpoint is throttled and
+  // log-only (see server/security/contentSecurityPolicy.ts), so there is
+  // nothing to forge: it accepts best-effort telemetry and always answers 204.
+  "/api/csp-report",
 ]);
 
 export const originGuard: RequestHandler = (req, res, next) => {

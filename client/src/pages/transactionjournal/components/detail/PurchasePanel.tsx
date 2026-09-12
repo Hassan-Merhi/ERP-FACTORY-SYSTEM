@@ -10,6 +10,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { JournalPurchaseOrder, JournalViewEntry } from "../../types";
 import type { DetailPanelFormatters } from "./panelTypes";
 
 export function PurchasePanel({
@@ -22,10 +23,10 @@ export function PurchasePanel({
   fmt,
   fmtNum,
 }: {
-  po: any;
+  po: JournalPurchaseOrder;
   companyId: number;
-  viewEntries: any[];
-  viewPurchaseItems: any[];
+  viewEntries: JournalViewEntry[];
+  viewPurchaseItems: JournalViewEntry[];
   entryBalances: Record<number, string>;
   openInCompany: (companyId: number, path: string) => void;
 } & DetailPanelFormatters) {
@@ -195,7 +196,7 @@ export function LedgerEntriesPanel({
   entryBalances,
   fmt,
 }: {
-  entries: any[];
+  entries: JournalViewEntry[];
   entryBalances: Record<number, string>;
 } & Pick<DetailPanelFormatters, "fmt">) {
   const grandTotal = entries.reduce(

@@ -55,6 +55,9 @@ import type {
   Voucher,
   OffloadListItem,
   DaybookRow,
+  DaybookPurchaseOrderData,
+  DaybookUser,
+  DaybookViewEntriesResponse,
   VoucherEntry,
   ViewVoucherEntry,
 } from "./daybook/types";
@@ -67,7 +70,7 @@ import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouche
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
 
-export default function Daybook({ user }: { user?: any } = {}) {
+export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
   const vouchersBase = selectedCompany?.companyType === "properties" ? "/properties/vouchers" : "/vouchers";
@@ -199,7 +202,7 @@ export default function Daybook({ user }: { user?: any } = {}) {
     setVoucherPage(1);
   }, [selectedCompany?.id, setVoucherPage]);
 
-  const [purchaseOrderData, setPurchaseOrderData] = useState<any>(null);
+  const [purchaseOrderData, setPurchaseOrderData] = useState<DaybookPurchaseOrderData | null>(null);
   const [poSupplierBalance, setPoSupplierBalance] = useState<string | null>(null);
   // Declared here — before any useEffect that references it — to avoid TDZ errors.
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
@@ -217,7 +220,7 @@ export default function Daybook({ user }: { user?: any } = {}) {
   }, [purchaseOrderData?.supplierId, balanceRefreshKey]);
 
   const viewEntriesUrl = selectedVoucher ? `/api/vouchers/${selectedVoucher.id}/view-entries` : "";
-  const { data: viewVoucherEntriesRaw, isLoading: viewEntriesLoading } = useQuery<any>({
+  const { data: viewVoucherEntriesRaw, isLoading: viewEntriesLoading } = useQuery<DaybookViewEntriesResponse>({
     queryKey: selectedVoucher ? companyDataKey(viewEntriesUrl, selectedCompany?.id, "daybook-view-entries") : [],
     enabled: !!selectedVoucher && viewDialogOpen,
     ...frontendQueryPolicies.live,
@@ -229,7 +232,7 @@ export default function Daybook({ user }: { user?: any } = {}) {
   }, [viewVoucherEntriesRaw]);
 
   const expandedEntriesUrl = expandedVoucherId ? `/api/vouchers/${expandedVoucherId}/view-entries` : "";
-  const { data: expandedEntriesRaw, isLoading: expandedLoading } = useQuery<any>({
+  const { data: expandedEntriesRaw, isLoading: expandedLoading } = useQuery<DaybookViewEntriesResponse>({
     queryKey: expandedVoucherId
       ? companyDataKey(expandedEntriesUrl, selectedCompany?.id, "daybook-expanded-entries")
       : [],
@@ -449,7 +452,11 @@ export default function Daybook({ user }: { user?: any } = {}) {
         description: voucherToEdit.description || "",
         optional: voucherToEdit.optional,
         entries: voucherEntries.map((e) => ({
-          accountType: e.accountType as any,
+          // NOTE: /api/vouchers/:id/entries can also return "factorySupplier"
+          // and "customer" account types, which the edit form's enum does not
+          // offer. The raw value is passed through unchanged (historical
+          // behavior) rather than being silently remapped.
+          accountType: e.accountType as EditVoucherForm["entries"][number]["accountType"],
           accountId: e.accountId,
           accountName: e.accountName,
           debitAmount: e.debitAmount || "0",

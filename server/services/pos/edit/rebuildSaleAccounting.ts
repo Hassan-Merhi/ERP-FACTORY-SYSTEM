@@ -14,6 +14,7 @@
  * the current company rate.
  */
 import type { DbTransaction } from "../../../db";
+import type { VoucherEntryRow } from "./posEditSaleTypes";
 import { voucherEntries } from "@shared/schema";
 import { logger } from "../../../lib/logger";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
@@ -91,10 +92,10 @@ export async function rebuildSaleAccountingEntries(
   tx: DbTransaction,
   params: {
     voucherId: number;
-    oldEntries: any[];
+    oldEntries: VoucherEntryRow[];
     grandTotal: number;
-    paymentAccountType: any;
-    paymentAccountId: any;
+    paymentAccountType: unknown;
+    paymentAccountId: unknown;
     isSpCompanyEdit: boolean;
     editSpPayableAccountId: number | null;
     editSpDeductionClrAccountId: number | null;
@@ -134,7 +135,7 @@ export async function rebuildSaleAccountingEntries(
 
   // Debit entry (payment account) with dual-currency fields
   const normDR = normalizePosEntry(Math.abs(grandTotal), 0, voucherCurrency, voucherRate);
-  const newDebitEntry: any = {
+  const newDebitEntry: typeof voucherEntries.$inferInsert = {
     voucherId,
     debitAmount: grandTotal >= 0 ? normDR.debitAmount : "0",
     creditAmount: grandTotal < 0 ? normDR.debitAmount : "0",
@@ -149,12 +150,13 @@ export async function rebuildSaleAccountingEntries(
   };
 
   if (paymentAccountType && paymentAccountId) {
-    // User changed payment account - use new values
+    // User changed payment account - use new values. parseInt's coercion of
+    // the raw JSON value is preserved by stringifying exactly what arrived.
     if (paymentAccountType === "cash" || paymentAccountType === "credit") {
-      newDebitEntry.ledgerAccountId = parseInt(paymentAccountId);
+      newDebitEntry.ledgerAccountId = parseInt(String(paymentAccountId));
       newDebitEntry.bankAccountId = null;
     } else if (paymentAccountType === "bank") {
-      newDebitEntry.bankAccountId = parseInt(paymentAccountId);
+      newDebitEntry.bankAccountId = parseInt(String(paymentAccountId));
       newDebitEntry.ledgerAccountId = null;
     }
     newDebitEntry.supplierId = null;

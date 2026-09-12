@@ -6,6 +6,7 @@
  * double entry is treated as the source account and which rows are listed.
  */
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { JournalViewEntry } from "../../types";
 import type { DetailPanelFormatters } from "./panelTypes";
 
 export function PaymentReceiptPanel({
@@ -15,7 +16,7 @@ export function PaymentReceiptPanel({
   fmt,
 }: {
   vtype: string;
-  viewEntries: any[];
+  viewEntries: JournalViewEntry[];
   entryBalances: Record<number, string>;
 } & Pick<DetailPanelFormatters, "fmt">) {
   const sourceEntry =

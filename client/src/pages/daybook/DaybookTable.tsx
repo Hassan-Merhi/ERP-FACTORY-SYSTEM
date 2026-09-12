@@ -26,8 +26,8 @@ interface DaybookTableProps {
   accountNameCache: Record<number, string>;
   expandedLoading: boolean;
   expandedEntries: ViewVoucherEntry[];
-  formatAmount: (amt: any) => string;
-  formatTransactionAmount?: (amt: any, currency: string) => string;
+  formatAmount: (amt: number | string | null | undefined) => string;
+  formatTransactionAmount?: (amt: number | string | null | undefined, currency: string) => string;
   formatDisplayDate: (date: Date | string) => string;
   formatDisplayTime: (date: string) => string;
   handleView: (v: Voucher) => void;

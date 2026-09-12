@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Container, Supplier } from "@shared/schema";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import type { SoldContainer } from "./types";
+import type { SoldContainer, SpContainerWithLines } from "./types";
 
 interface SelectedCompany {
   id: number;
@@ -39,7 +39,7 @@ export function useContainerQueries(
     enabled: !!selectedCompany?.id && !isSupplierPartner,
   });
 
-  const { data: spContainersList = [], isLoading: spContainersLoading } = useQuery({
+  const { data: spContainersList = [], isLoading: spContainersLoading } = useQuery<SpContainerWithLines[]>({
     queryKey: ["/api/sp/containers"],
     queryFn: () => fetch("/api/sp/containers", { credentials: "include" }).then((r) => r.json()),
     enabled: !!selectedCompany?.id && isSupplierPartner,

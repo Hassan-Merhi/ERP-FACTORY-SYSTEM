@@ -12,7 +12,7 @@ import type { useContainerDetailModel } from "../useContainerDetailModel";
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailSpView({ model }: { model: Model }) {
   const { containerId, spContainerData, spDetailLoading, showSpOffloadDialog, setShowSpOffloadDialog } = model;
-  const spFmt = (v: any) => {
+  const spFmt = (v: number | string | null | undefined) => {
     const n = parseFloat(String(v ?? "0"));
     const isWhole = Math.abs(n) % 1 === 0;
     return isNaN(n)
@@ -29,7 +29,8 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
       </div>
     );
   }
-  if (!spContainerData || spContainerData.error) {
+  // The server signals a missing container with a `{ message }` error body.
+  if (!spContainerData || "message" in spContainerData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Package className="w-16 h-16 text-muted-foreground mb-4" />
@@ -47,7 +48,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
   const spc = spContainerData;
   const discFactor = 1 - parseFloat(spc.discountPct || "0") / 100;
   const baseCost = (spc.lines || []).reduce(
-    (s: number, l: any) => s + parseFloat(l.qty || "0") * parseFloat(l.unitRateUsd || "0") * discFactor,
+    (s: number, l) => s + parseFloat(l.qty || "0") * parseFloat(l.unitRateUsd || "0") * discFactor,
     0
   );
 
@@ -138,7 +139,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
                   </TableCell>
                 </TableRow>
               ) : (
-                (spc.lines || []).map((line: any) => {
+                (spc.lines || []).map((line) => {
                   const discRate = parseFloat(line.unitRateUsd || "0") * discFactor;
                   const lineCost = parseFloat(line.qty || "0") * discRate;
                   return (
@@ -179,12 +180,12 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(spc.prepaid || []).map((p: any) => (
+                {(spc.prepaid || []).map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="text-sm capitalize">{p.chargeType}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{p.description || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{p.notes || p.agentName || "—"}</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{spFmt(p.amountPaidUsd)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{p.paidDate}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{p.prepaidDate}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -214,7 +215,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(spc.offloadCharges || []).map((c: any) => (
+                  {(spc.offloadCharges || []).map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="text-sm capitalize">{c.chargeType}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{c.description || "—"}</TableCell>
