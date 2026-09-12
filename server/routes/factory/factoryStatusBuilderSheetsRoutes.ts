@@ -388,8 +388,6 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
         .where(eq(statusBuilderSheets.companyId, companyId))
         .orderBy(asc(statusBuilderSheets.orderIndex), asc(statusBuilderSheets.id));
 
-      if (sheets.length === 0) return res.status(404).json({ message: "No sheets to export" });
-
       const wb = xlsxUtils.book_new();
 
       for (const sheet of sheets) {
@@ -413,6 +411,15 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
         const ws = xlsxUtils.aoa_to_sheet(aoa);
         ws["!cols"] = [{ wch: 25 }, ...colLabels.map(() => ({ wch: 16 }))];
         xlsxUtils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+      }
+
+      // A company with no sheets left the workbook with no worksheets at all,
+      // and the writer rejects that with "Workbook is empty" — a 500 for what
+      // is simply an empty export. Emit a single "no data" sheet instead, the
+      // way the report PDFs do, so the download still succeeds.
+      if (sheets.length === 0) {
+        const ws = xlsxUtils.aoa_to_sheet([["No status-builder sheets found for this company."]]);
+        xlsxUtils.book_append_sheet(wb, ws, "Sheets");
       }
 
       const buf: Buffer = writeExcel(wb, { type: "buffer", bookType: "xlsx" });

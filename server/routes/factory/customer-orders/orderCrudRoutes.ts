@@ -1,5 +1,5 @@
 import { logAudit } from "../../helpers/auditHelpers";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, HttpError, sendHttpError } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId, parseOptionalId } from "../../../lib/parseId";
 import { getExportPriceVisibility } from "../../../helpers/exportVisibility";
@@ -640,10 +640,14 @@ export function registerOrderCrudRoutes(app: Express) {
               isNull(customerOrders.deletedAt)
             )
           );
-        if (!order) throw new Error("Order not found");
+        // Both conditions are caller errors, and throwing plain Errors from
+        // inside the transaction meant the catch reported them as 500s. The
+        // checks stay inside the transaction so the row stays locked between
+        // the read and the soft-delete.
+        if (!order) throw new HttpError(404, "Order not found");
 
         if (order.status === "FINALIZED") {
-          throw new Error("Cannot delete a finalized invoice. Cancel it first if needed.");
+          throw new HttpError(409, "Cannot delete a finalized invoice. Cancel it first if needed.");
         }
 
         // Soft-delete: release bales back to stock so they can be re-sold,
@@ -676,11 +680,8 @@ export function registerOrderCrudRoutes(app: Express) {
       });
       res.json({ success: true, message: "Invoice moved to Deleted Items" });
     } catch (error: unknown) {
-      const message = getErrorMessage(error);
-      if (message === "Order not found") return res.status(404).json({ message });
-      if (message.startsWith("Cannot delete")) return res.status(400).json({ message });
       logger.error("Error deleting customer order:", { error: error });
-      res.status(500).json({ message });
+      sendHttpError(res, error);
     }
   });
 

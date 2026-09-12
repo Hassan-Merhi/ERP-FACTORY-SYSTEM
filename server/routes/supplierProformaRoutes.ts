@@ -4,8 +4,8 @@ import { logger } from "../lib/logger";
 import { logAudit } from "./_helpers";
 import { Express } from "express";
 import type { Request, Response, RequestHandler } from "express";
-import { db, pool } from "../db";
-import { eq, and, ne } from "drizzle-orm";
+import { db } from "../db";
+import { eq, and, ne, sql } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers";
 import { registerContainerLoadedItemsRoutes } from "./container-loaded-items";
@@ -100,11 +100,18 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const supplierId = parseId(req.params.supplierId);
       if (supplierId === null) return res.status(400).json({ message: "Invalid id" });
       const { reference, notes, lines } = req.body;
-      const supplier = await pool.query<{ id: number }>(
-        "SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 LIMIT 1",
-        [supplierId, companyId]
+
+      // The insert took supplierId straight from the URL, so an unknown
+      // supplier failed the foreign key and surfaced as a 500 rather than a
+      // 404 for the missing parent. Scoped to the active company because
+      // suppliers.company_id is NOT NULL and backfilled to the owning company
+      // by 20260728_001_supplier_company_scope; raw SQL because that column is
+      // not part of the drizzle suppliers table.
+      const supplierCheck = await db.execute(
+        sql`SELECT id FROM suppliers WHERE id = ${supplierId} AND company_id = ${companyId} LIMIT 1`
       );
-      if (supplier.rowCount === 0) return res.status(404).json({ message: "Supplier not found" });
+      if (supplierCheck.rows.length === 0) return res.status(404).json({ message: "Supplier not found" });
+
       const [proforma] = await db
         .insert(supplierProformas)
         .values({

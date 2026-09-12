@@ -39,6 +39,10 @@ async function buildFullReconciliation(companyId: number) {
     db.execute(sql`
         SELECT COALESCE(SUM(li.quantity::numeric), 0) qty,
                COALESCE(SUM(li.quantity::numeric * li.average_rate::numeric), 0) value
+        -- location_inventory does not exist in this schema; per-location stock
+        -- lives in inventory, which carries the same location_id,
+        -- stock_item_id, quantity and average_rate columns this sum needs.
+        -- Both reconciliation endpoints were dead until this was corrected.
         FROM inventory li
         JOIN locations l ON l.id = li.location_id
         WHERE l.company_id = ${companyId} AND l.deleted_at IS NULL

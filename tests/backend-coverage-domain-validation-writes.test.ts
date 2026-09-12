@@ -153,13 +153,13 @@ function poisonBody(companyId: number) {
     items: [],
     lines: [],
     charges: [],
-    amount: "0",
-    quantity: "0",
+    amount: "",
+    quantity: "",
     name: "",
     code: "",
-    date: "2026-08-08",
-    startDate: "2026-08-01",
-    endDate: "2026-08-08",
+    date: "",
+    startDate: "",
+    endDate: "",
   };
 }
 

@@ -130,8 +130,11 @@ export function registerFactoryEmployeeCrudRoutes(app: Express) {
       if (phone !== undefined) updates.phone = phone;
       if (monthlySalary !== undefined) updates.monthlySalary = String(monthlySalary);
       if (active !== undefined) updates.active = active;
+
+      // A body carrying none of the updatable fields reaches drizzle as
+      // .set({}), which throws "No values to set" and surfaced as a 500.
       if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ message: "No employee fields to update" });
+        return res.status(400).json({ message: "No fields to update" });
       }
 
       const [updated] = await db

@@ -30,14 +30,32 @@ export function registerVoucherCreateRoutes(app: Express) {
     try {
       const isPOS = req.user?.role === "POS";
       const voucherType = req.body.voucherType;
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!req.body.voucherNumber || !voucherType || !req.body.voucherDate)
-        return res.status(400).json({ message: "voucherNumber, voucherType and voucherDate are required" });
       if (isPOS && voucherType !== "StockTransfer" && voucherType !== "Stock Transfer" && voucherType !== "Transfer") {
         return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
       }
-      const exchangeRate = await getCurrentExchangeRate(companyId);
+      // vouchers.company_id, voucher_number, voucher_type, voucher_date and
+      // total_amount are NOT NULL with no default, and none of them was
+      // checked before the insert, so a body missing them failed the query as
+      // a 500. Validated field by field rather than through
+      // insertVoucherSchema: that schema's voucherType enum omits
+      // "StockTransfer" and "Transfer", which the POS branch above accepts, so
+      // parsing with it would reject POS stock transfers.
+      const requiredVoucherFields: Array<[string, unknown]> = [
+        ["companyId", req.body.companyId ?? req.session.currentCompanyId],
+        ["voucherNumber", req.body.voucherNumber],
+        ["voucherType", voucherType],
+        ["voucherDate", req.body.voucherDate],
+        ["totalAmount", req.body.totalAmount],
+      ];
+      const missingVoucherField = requiredVoucherFields.find(
+        ([, value]) => value === undefined || value === null || value === ""
+      );
+      if (missingVoucherField) {
+        return res.status(400).json({ message: "Invalid request data", field: missingVoucherField[0] });
+      }
+
+      const companyId = req.session.currentCompanyId;
+      const exchangeRate = companyId ? await getCurrentExchangeRate(companyId) : null;
       const voucher = await storage.createVoucher({
         ...req.body,
         exchangeRate,
