@@ -33,6 +33,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
 import { formatNumber } from "@/lib/formatNumber";
+import type { AuthMe } from "@shared/apiTypes";
 import { sendInvoicePdfWithRetry } from "./utils/posPrintHelpers";
 import type { Voucher, VoucherWithItems } from "./posdaybook/types";
 
@@ -84,11 +85,11 @@ export default function POSDaybook() {
     storageKey: !dateParam && selectedCompany?.id ? `erp-pos-daybook-filters-v1:${selectedCompany.id}` : undefined,
   });
 
-  const { data: currentUser, isLoading: isLoadingUser } = useQuery<any>({
+  const { data: currentUser, isLoading: isLoadingUser } = useQuery<AuthMe>({
     queryKey: ["/api/auth/me"],
   });
 
-  const isAdminOrOwner = ["Admin", "Owner", "Developer"].includes(currentUser?.role);
+  const isAdminOrOwner = ["Admin", "Owner", "Developer"].includes(currentUser?.role ?? "");
   const isPOS = currentUser?.role === "POS";
   const daybookEditDays = Number(currentUser?.daybookEditDays || 0);
   const canEditDaybook = isAdminOrOwner || daybookEditDays > 0;

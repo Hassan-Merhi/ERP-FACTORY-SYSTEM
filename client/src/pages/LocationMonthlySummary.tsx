@@ -50,6 +50,22 @@ interface MonthlyData {
   closingRate: number;
 }
 
+/** Transaction row from GET /api/locations/:id/stock-items/:id/monthly-detail. */
+interface MonthlyDetailTx {
+  type: string;
+  date: string;
+  reference: string;
+  qty: number;
+  rate: number;
+  value: number;
+}
+
+/** Response of the monthly-detail drill-down endpoint. */
+interface MonthlyDetailResponse {
+  inTransactions: MonthlyDetailTx[];
+  outTransactions: MonthlyDetailTx[];
+}
+
 interface LocationMonthlySummaryData {
   stockItem: {
     id: number;
@@ -104,7 +120,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
   const [detailMonthName, setDetailMonthName] = useState("");
   const [detailDirection, setDetailDirection] = useState<"in" | "out">("out");
 
-  const { data: detailData, isLoading: detailLoading } = useQuery<{ inTransactions: any[]; outTransactions: any[] }>({
+  const { data: detailData, isLoading: detailLoading } = useQuery<MonthlyDetailResponse>({
     queryKey: [
       `/api/locations/${locationId}/stock-items/${stockItemId}/monthly-detail`,
       { year: detailYear, month: detailMonth },

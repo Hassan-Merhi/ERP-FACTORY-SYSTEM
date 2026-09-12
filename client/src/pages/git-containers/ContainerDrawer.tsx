@@ -44,7 +44,8 @@ export function ContainerDrawer({
     }
   }, [open, container]);
 
-  const set = (field: keyof DrawerForm, val: any) => setForm((prev) => (prev ? { ...prev, [field]: val } : prev));
+  const set = <K extends keyof DrawerForm>(field: K, val: DrawerForm[K]) =>
+    setForm((prev) => (prev ? { ...prev, [field]: val } : prev));
 
   const canEdit = sessionCompanyId === null || !container || container.companyId === sessionCompanyId;
 

@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { OffloadDialog } from "@/components/OffloadDialog";
 import { ContainerDetailDialog1 } from "./ContainerDetailDialog1";
-import type { useContainerDetailModel } from "../useContainerDetailModel";
+import type { ContainerPriceImportPreviewRow, useContainerDetailModel } from "../useContainerDetailModel";
 
 type Model = ReturnType<typeof useContainerDetailModel>;
 export function ContainerDetailErpView({ model }: { model: Model }) {
@@ -880,7 +880,10 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
               <Button
                 onClick={() => {
                   const rows = priceImportPreview
-                    .filter((r) => r.status === "will_update" && r.lineItemIds?.length)
+                    .filter(
+                      (r): r is ContainerPriceImportPreviewRow & { lineItemIds: number[]; newRate: number } =>
+                        r.status === "will_update" && !!r.lineItemIds?.length && r.newRate != null
+                    )
                     .map((r) => ({ lineItemIds: r.lineItemIds, newRate: r.newRate }));
                   priceApplyMutation.mutate(rows);
                 }}

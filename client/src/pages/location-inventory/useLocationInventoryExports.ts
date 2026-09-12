@@ -1,7 +1,10 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
 
-export function useLocationInventoryExports(selectedLocationLocal: Location | null, toast: (opts: any) => void) {
+export function useLocationInventoryExports(
+  selectedLocationLocal: Location | null,
+  toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void
+) {
   const handlePrintWithOption = async (withCost: boolean) => {
     if (!selectedLocationLocal) return;
     try {

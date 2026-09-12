@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { locationInventoryFullUrl } from "@/api/inventoryApi";
-import type { InventoryLocation as Location, InventoryItem } from "./locationInventoryTypes";
+import type { InventoryLocation as Location, InventoryItem, NegativeInventoryRow } from "./locationInventoryTypes";
 import type { AuthMe } from "@shared/apiTypes";
 
 interface UseLocationInventoryQueriesParams {
@@ -158,7 +158,7 @@ export function useLocationInventoryQueries({
   // queryFn always resolves to a flat array of inventory rows.
   const allInventoryData = Array.isArray(allInventoryRaw) ? allInventoryRaw : [];
 
-  const { data: allNegativeStock = [], isLoading: negativeStockLoading } = useQuery({
+  const { data: allNegativeStock = [], isLoading: negativeStockLoading } = useQuery<NegativeInventoryRow[]>({
     queryKey: companyId ? ["/api/inventory/negative", companyId] : [],
     queryFn: async () => {
       const res = await fetch("/api/inventory/negative", { credentials: "include" });

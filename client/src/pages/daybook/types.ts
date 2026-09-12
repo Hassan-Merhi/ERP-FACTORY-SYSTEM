@@ -178,4 +178,66 @@ export interface ViewVoucherEntry {
   historicalExchangeRate?: string | null;
   /** Rate convention (IDENTITY | TRANSACTION_PER_BASE). */
   rateConvention?: string | null;
+  /** Present on stock-transfer item rows from /api/vouchers/:id/view-entries. */
+  sourceLocationName?: string | null;
+}
+
+/** User fields the Daybook surfaces read; ErpRoutes passes its narrow route user. */
+export interface DaybookUser {
+  role?: string | null;
+  currentRole?: string | null;
+  canDeleteRecords?: boolean;
+}
+
+/** Purchase-order header returned in the view-entries envelope for Purchase vouchers. */
+export interface DaybookPurchaseOrderData {
+  id: number;
+  poNumber: string;
+  supplierId: number;
+  supplierName: string;
+  supplierCode: string;
+  containerId: number;
+  containerNumber: string;
+  currency: string;
+  itemsTotal: string | null;
+  status: string;
+  freight: string | null;
+  fumigation: string | null;
+  surcharge: string | null;
+  documentCharges: string | null;
+  otherCharges: string | null;
+  discount: string | null;
+}
+
+/**
+ * /api/vouchers/:id/view-entries returns either a plain row array or, for
+ * Purchase vouchers with line items, an `{ entries, purchaseOrder }` envelope.
+ */
+export interface DaybookViewEntriesEnvelope {
+  entries: ViewVoucherEntry[];
+  purchaseOrder: DaybookPurchaseOrderData;
+}
+
+export type DaybookViewEntriesResponse = ViewVoucherEntry[] | DaybookViewEntriesEnvelope;
+
+/** Stock-transfer detail block returned inside GET /api/vouchers/:id as transferData. */
+export interface TransferDetailData {
+  id: number;
+  voucherId: number;
+  sourceLocationId: number | null;
+  destinationLocationId: number | null;
+  sourceLocationName: string;
+  destinationLocationName: string;
+  notes: string | null;
+  items: Array<{
+    id: number;
+    stockItemId: number;
+    quantity: string;
+    rate: string | null;
+    totalAmount: string | null;
+    stockItemCode?: string;
+    stockItemName?: string;
+    stockItemUom?: string;
+    sourceLocationName?: string;
+  }>;
 }

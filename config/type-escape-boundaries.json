@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup. Wave 6 cleared every type escape from the transaction-journal, containers, daybook, and location-inventory page areas, deleting their 32 frozen entries and lowering the ceiling from 207 to 140 after verified type-safety cleanup.",
   "scan": {
     "roots": [
       "server",
@@ -64,21 +64,6 @@
         0,
         0
       ],
-      "client/src/pages/ContainerDetailPage.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/ContainerVerification.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/Daybook.tsx": [
-        4,
-        1,
-        0
-      ],
       "client/src/pages/DeletedItems.tsx": [
         2,
         0,
@@ -101,11 +86,6 @@
       ],
       "client/src/pages/IntercompanyRequests.tsx": [
         1,
-        0,
-        0
-      ],
-      "client/src/pages/LocationMonthlySummary.tsx": [
-        2,
         0,
         0
       ],
@@ -214,117 +194,7 @@
         0,
         0
       ],
-      "client/src/pages/containerdetail/components/ContainerDetailSpView.tsx": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/containerdetail/useContainerDetailModel.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containerloadingscan/useContainerLoadingScanModel.ts": [
-        1,
-        2,
-        0
-      ],
-      "client/src/pages/containers/ContainerSpView.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/containers/OtwContainersTable.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containers/containerExcel.ts": [
-        5,
-        0,
-        0
-      ],
-      "client/src/pages/containers/useContainerSyncAll.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/containers/useContainerTracking.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/DaybookFilters.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/DaybookTable.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/VoucherEditDialog.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/daybook/voucherdetailsdialog/LedgerVoucherEntries.tsx": [
-        2,
-        1,
-        0
-      ],
-      "client/src/pages/git-containers/ContainerDrawer.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/git-containers/ContainerDrawerForm.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/git-containers/useGITContainersData.ts": [
-        2,
-        0,
-        0
-      ],
       "client/src/pages/git-mockup/TabAgentDuty.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/InventoryTable.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/LocationInventoryDialogs.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/StockGroupsView.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/StockMovementDialog.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryExports.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryMutations.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/location-inventory/useLocationInventoryState.ts": [
         1,
         0,
         0
@@ -340,11 +210,6 @@
         0
       ],
       "client/src/pages/pos/POSDashboard.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/pos/POSDaybook.tsx": [
         1,
         0,
         0
@@ -454,31 +319,6 @@
         0,
         0
       ],
-      "client/src/pages/transactionjournal/components/detail/PaymentReceiptPanel.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/PurchasePanel.tsx": [
-        4,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/SalesPanel.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/components/detail/StockMovementPanel.tsx": [
-        2,
-        0,
-        0
-      ],
-      "client/src/pages/transactionjournal/useTransactionJournalModel.ts": [
-        3,
-        0,
-        0
-      ],
       "client/src/pages/voucher-edit/VoucherAccountHelpers.ts": [
         1,
         0,
@@ -582,6 +422,6 @@
     }
   },
   "totals": {
-    "typeEscapeCeiling": 207
+    "typeEscapeCeiling": 140
   }
 }

@@ -14,7 +14,7 @@ import type {
 
 interface UseLocationInventoryStateParams {
   companyId: number | undefined;
-  toast: any;
+  toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
 }
 
 export function useLocationInventoryState({ companyId, toast }: UseLocationInventoryStateParams) {

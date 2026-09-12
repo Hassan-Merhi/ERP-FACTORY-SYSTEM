@@ -1,6 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, type QueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateApiFamily } from "@/lib/frontendDataArchitecture";
 import { BulkProgress } from "./gitContainerTypes";
@@ -8,11 +8,13 @@ import { BulkProgress } from "./gitContainerTypes";
 interface UseGITContainersDataProps {
   isAllowed: boolean;
   refetch: () => void;
-  toast: any;
-  setImportResult: (v: ({ updated: number; skipped: number; notFound: number; errors: string[]; importId: string | null; }) | null) => void;
+  toast: (opts: { title: string; description?: string; variant?: "destructive" | "default" }) => void;
+  setImportResult: (
+    v: { updated: number; skipped: number; notFound: number; errors: string[]; importId: string | null } | null
+  ) => void;
   setShowProgressBanner: (v: boolean) => void;
   setBulkProgress: (v: BulkProgress) => void;
-  queryClient: any;
+  queryClient: QueryClient;
   showProgressBanner: boolean;
 }
 
@@ -117,7 +119,8 @@ export function useGITContainersData({
         setShowProgressBanner(true);
       }
     },
-    onError: (err: ClientErrorLike) => toast({ title: "Track All failed", description: err.message, variant: "destructive" }),
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Track All failed", description: err.message, variant: "destructive" }),
   });
 
   const isBulkPending = bulkTrackMutation.isPending;
@@ -162,7 +165,15 @@ export function useGITContainersData({
       if (intervalId) clearInterval(intervalId);
       if (stopTimeoutId) clearTimeout(stopTimeoutId);
     };
-  }, [isBulkPending, showProgressBanner, isAllowed, queryClient, setBulkProgress, setShowProgressBanner, bulkTrackMutation.isPending]);
+  }, [
+    isBulkPending,
+    showProgressBanner,
+    isAllowed,
+    queryClient,
+    setBulkProgress,
+    setShowProgressBanner,
+    bulkTrackMutation.isPending,
+  ]);
 
   return {
     importMutation,
