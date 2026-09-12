@@ -3,7 +3,7 @@ import type { Response } from "express";
 export class CustomerRouteError extends Error {
   constructor(
     public readonly statusCode: number,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "CustomerRouteError";

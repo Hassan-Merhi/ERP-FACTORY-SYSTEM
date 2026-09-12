@@ -99,68 +99,68 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           }),
         },
         async (tx) => {
-        const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
+          const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
 
-        // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
-        const payAmt = parseFloat(payment.amount);
-        const payAmtStr = payAmt.toFixed(2);
-        const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
+          // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
+          const payAmt = parseFloat(payment.amount);
+          const payAmtStr = payAmt.toFixed(2);
+          const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
 
-        const [payVoucher] = await tx
-          .insert(vouchers)
-          .values({
+          const [payVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherType: "Payment",
+              voucherNumber: payVoucherNum,
+              voucherDate: payment.date,
+              description: `Supplier payment – see factory payment #${payment.id}`,
+              totalAmount: payAmtStr,
+              currency: payment.currencyCode || "USD",
+              exchangeRate: String(parseFloat((payment.fxRateToUsd as string) || "1")),
+              sourceModule: "FACTORY",
+              effectiveDate: (req.body.effectiveDate as string) || null,
+            })
+            .returning();
+
+          // DR: Factory Supplier (debit reduces the liability we owe them)
+          await tx.insert(voucherEntries).values({
+            voucherId: payVoucher.id,
+            factorySupplierId: payment.supplierId,
+            debitAmount: payAmtStr,
+            creditAmount: "0",
+            narration: `Payment to supplier – factory payment #${payment.id}`,
+          });
+
+          // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
+          const crAccountId = payment.paidFromAccountId
+            ? payment.paidFromAccountId
+            : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
+
+          await tx.insert(voucherEntries).values({
+            voucherId: payVoucher.id,
+            ledgerAccountId: crAccountId,
+            debitAmount: "0",
+            creditAmount: payAmtStr,
+            narration: `Bank/cash outflow – factory payment #${payment.id}`,
+          });
+
+          const [spSupplier] = await tx
+            .select({ name: factorySuppliers.name })
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
+          await writeDaybookEntry(tx, {
             companyId,
-            voucherType: "Payment",
-            voucherNumber: payVoucherNum,
-            voucherDate: payment.date,
-            description: `Supplier payment – see factory payment #${payment.id}`,
-            totalAmount: payAmtStr,
-            currency: payment.currencyCode || "USD",
-            exchangeRate: String(parseFloat((payment.fxRateToUsd as string) || "1")),
-            sourceModule: "FACTORY",
+            txDate: payment.date,
+            txType: "SUPPLIER_PAYMENT",
+            referenceId: payment.id,
+            referenceTable: "factory_supplier_payments",
+            description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}`,
+            amountCurrency: parseFloat(payment.amount),
+            amountUsd: parseFloat(payment.amountUsd),
+            currencyCode: payment.currencyCode,
             effectiveDate: (req.body.effectiveDate as string) || null,
-          })
-          .returning();
-
-        // DR: Factory Supplier (debit reduces the liability we owe them)
-        await tx.insert(voucherEntries).values({
-          voucherId: payVoucher.id,
-          factorySupplierId: payment.supplierId,
-          debitAmount: payAmtStr,
-          creditAmount: "0",
-          narration: `Payment to supplier – factory payment #${payment.id}`,
-        });
-
-        // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
-        const crAccountId = payment.paidFromAccountId
-          ? payment.paidFromAccountId
-          : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
-
-        await tx.insert(voucherEntries).values({
-          voucherId: payVoucher.id,
-          ledgerAccountId: crAccountId,
-          debitAmount: "0",
-          creditAmount: payAmtStr,
-          narration: `Bank/cash outflow – factory payment #${payment.id}`,
-        });
-
-        const [spSupplier] = await tx
-          .select({ name: factorySuppliers.name })
-          .from(factorySuppliers)
-          .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
-        await writeDaybookEntry(tx, {
-          companyId,
-          txDate: payment.date,
-          txType: "SUPPLIER_PAYMENT",
-          referenceId: payment.id,
-          referenceTable: "factory_supplier_payments",
-          description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}`,
-          amountCurrency: parseFloat(payment.amount),
-          amountUsd: parseFloat(payment.amountUsd),
-          currencyCode: payment.currencyCode,
-          effectiveDate: (req.body.effectiveDate as string) || null,
-        });
-        return { value: payment, resultReference: payment.id };
+          });
+          return { value: payment, resultReference: payment.id };
         }
       );
       res.json(operation.value);

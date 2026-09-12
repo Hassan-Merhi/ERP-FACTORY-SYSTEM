@@ -388,6 +388,8 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
         .where(eq(statusBuilderSheets.companyId, companyId))
         .orderBy(asc(statusBuilderSheets.orderIndex), asc(statusBuilderSheets.id));
 
+      if (sheets.length === 0) return res.status(404).json({ message: "No sheets to export" });
+
       const wb = xlsxUtils.book_new();
 
       for (const sheet of sheets) {

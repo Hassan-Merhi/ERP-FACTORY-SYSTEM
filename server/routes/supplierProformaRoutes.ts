@@ -100,6 +100,12 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const supplierId = parseId(req.params.supplierId);
       if (supplierId === null) return res.status(400).json({ message: "Invalid id" });
       const { reference, notes, lines } = req.body;
+      const [supplier] = await db
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(and(eq(suppliers.id, supplierId), eq(suppliers.companyId, companyId)))
+        .limit(1);
+      if (!supplier) return res.status(404).json({ message: "Supplier not found" });
       const [proforma] = await db
         .insert(supplierProformas)
         .values({

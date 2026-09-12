@@ -13,14 +13,14 @@ export const sessionRepository = {
   async listActiveSessions(userId: string | undefined, includeAllUsers: boolean): Promise<StoredSessionRow[]> {
     if (includeAllUsers) {
       const result = await pool.query(
-        `SELECT sid, sess, expire FROM session WHERE expire > NOW() ORDER BY (sess->>'userId') NULLS LAST, expire DESC`,
+        `SELECT sid, sess, expire FROM session WHERE expire > NOW() ORDER BY (sess->>'userId') NULLS LAST, expire DESC`
       );
       return result.rows;
     }
 
     const result = await pool.query(
       `SELECT sid, sess, expire FROM session WHERE expire > NOW() AND sess->>'userId' = $1 ORDER BY expire DESC`,
-      [userId],
+      [userId]
     );
     return result.rows;
   },

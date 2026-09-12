@@ -39,8 +39,6 @@ const UNSAFE_OR_EXTERNAL: RegExp[] = [
   /(whatsapp|email|send-|send\/|tracking|carrier|ai-|openai|backup|restore)/i,
   /(repair|recalc|migration|migrate|cutover|reset|seed|rebuild|purge|backfill)/i,
   /(^|\/)(run|apply|execute|trigger|sync)(\/|$)/i,
-  /^\/api\/factory\/sheets\/export$/i,
-  /^\/api\/factory\/status-builder\/sheets\/export$/i,
 ];
 
 let ctx: TestContext;

@@ -52,9 +52,7 @@ export async function createLoadingFromProformaAtomically(input: CreateLoadingFr
     const [proforma] = await tx
       .select()
       .from(customerProformas)
-      .where(
-        and(eq(customerProformas.id, input.proformaId), eq(customerProformas.companyId, input.companyId))
-      )
+      .where(and(eq(customerProformas.id, input.proformaId), eq(customerProformas.companyId, input.companyId)))
       .limit(1);
     if (!proforma) throw new CreateLoadingFromProformaError("Proforma not found", 404);
     if (!proforma.isActive) {

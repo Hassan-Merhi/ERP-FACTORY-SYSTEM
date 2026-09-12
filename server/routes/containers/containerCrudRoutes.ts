@@ -276,7 +276,7 @@ export function registerContainerCrudRoutes(app: Express) {
         return res.status(404).json({ message: "Container not found" });
       }
 
-       const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
+      const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
       const charges = await storage.getChargesByContainer(containerId);
 
       // Get line items for all POs

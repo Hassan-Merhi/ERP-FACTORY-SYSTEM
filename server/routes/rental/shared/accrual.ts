@@ -274,7 +274,7 @@ export async function postRentAccrualForCompany(
             )
           );
           const actualPaidByRowId = new Map<number, number>(
-            ((paidQueryResult.rows)).map((r) => [Number(r.ledger_row_id), Number(r.total_paid)])
+            paidQueryResult.rows.map((r) => [Number(r.ledger_row_id), Number(r.total_paid)])
           );
 
           type Entry = { id: number; amount: number; unitId: number; month: number; year: number };

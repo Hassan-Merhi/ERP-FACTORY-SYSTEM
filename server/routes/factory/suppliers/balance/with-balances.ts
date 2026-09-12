@@ -200,8 +200,40 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
                 return new Date(d) > new Date(latest) ? d : latest;
               }, null)
             : null;
-        const supplierPayments = allPayments.filter((p: { id: number; companyId: number; supplierId: number; date: string; amount: string; currencyCode: string; fxRateToUsd: string; amountUsd: string; paidFromAccountId: number | null; notes: string | null; createdAt: Date; }) => p.supplierId === s.id);
-        const totalPaid = supplierPayments.reduce((sum: number, p: { id: number; companyId: number; supplierId: number; date: string; amount: string; currencyCode: string; fxRateToUsd: string; amountUsd: string; paidFromAccountId: number | null; notes: string | null; createdAt: Date; }) => sum + parseFloat(p.amountUsd || "0"), 0);
+        const supplierPayments = allPayments.filter(
+          (p: {
+            id: number;
+            companyId: number;
+            supplierId: number;
+            date: string;
+            amount: string;
+            currencyCode: string;
+            fxRateToUsd: string;
+            amountUsd: string;
+            paidFromAccountId: number | null;
+            notes: string | null;
+            createdAt: Date;
+          }) => p.supplierId === s.id
+        );
+        const totalPaid = supplierPayments.reduce(
+          (
+            sum: number,
+            p: {
+              id: number;
+              companyId: number;
+              supplierId: number;
+              date: string;
+              amount: string;
+              currencyCode: string;
+              fxRateToUsd: string;
+              amountUsd: string;
+              paidFromAccountId: number | null;
+              notes: string | null;
+              createdAt: Date;
+            }
+          ) => sum + parseFloat(p.amountUsd || "0"),
+          0
+        );
         // Include voucher-based payments (payment vouchers) in the balance
         const _voucherPaidUsd = voucherPaidBySupplier[s.id] || 0;
         // FX net (USD): FX-in transfers received minus FX-out transfers sent (in USD equivalent)
@@ -459,9 +491,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
       // Pre-compute broker statements for each broker parent so the list card
       // balance matches the detail page exactly (same data source).
       const brokerParentIds = new Set<number>(
-        (suppliersList)
-          .filter((s) => (suppliersList).some((c) => c.parentId === s.id))
-          .map((s) => s.id as number)
+        suppliersList.filter((s) => suppliersList.some((c) => c.parentId === s.id)).map((s) => s.id as number)
       );
       const brokerStmtMap: Record<number, NonNullable<Awaited<ReturnType<typeof buildBrokerStatement>>>> = {};
       for (const s of suppliersList) {
@@ -472,9 +502,9 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
       }
 
       // Second pass: for parent suppliers, roll up children's stats
-      const suppliersWithBalances = (suppliersList).map((s) => {
+      const suppliersWithBalances = suppliersList.map((s) => {
         const own = statsById[s.id];
-        const children = (suppliersList).filter((c) => c.parentId === s.id);
+        const children = suppliersList.filter((c) => c.parentId === s.id);
 
         if (children.length === 0) {
           // Leaf supplier — use own stats
@@ -504,24 +534,21 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         // They are returned separately as linkedSupplierExposure for informational display.
         const childStats = children.map((c) => statsById[c.id]);
         // Informational aggregates that span all parties (container counts, kg, dates)
-        const aggContainers =
-          own.totalContainers + childStats.reduce((n: number, cs) => n + cs.totalContainers, 0);
+        const aggContainers = own.totalContainers + childStats.reduce((n: number, cs) => n + cs.totalContainers, 0);
         const aggKg = own.totalKg + childStats.reduce((n: number, cs) => n + cs.totalKg, 0);
-        const aggPending =
-          own.pendingContainers + childStats.reduce((n: number, cs) => n + cs.pendingContainers, 0);
+        const aggPending = own.pendingContainers + childStats.reduce((n: number, cs) => n + cs.pendingContainers, 0);
         const aggOtwByCurrency: Record<string, number> = { ...own.otwByCurrency };
         for (const cs of childStats) {
           for (const [cc, n] of Object.entries(cs.otwByCurrency || {})) {
             aggOtwByCurrency[cc] = (aggOtwByCurrency[cc] || 0) + (n as number);
           }
         }
-        const aggReceived =
-          own.receivedContainers + childStats.reduce((n: number, cs) => n + cs.receivedContainers, 0);
-        const allDates = [own.lastContainerDate, ...childStats.map((cs) => cs.lastContainerDate)].filter((d): d is string => typeof d === "string");
+        const aggReceived = own.receivedContainers + childStats.reduce((n: number, cs) => n + cs.receivedContainers, 0);
+        const allDates = [own.lastContainerDate, ...childStats.map((cs) => cs.lastContainerDate)].filter(
+          (d): d is string => typeof d === "string"
+        );
         const aggLastDate =
-          allDates.length > 0
-            ? allDates.reduce((latest, d) => (new Date(d) > new Date(latest) ? d : latest))
-            : null;
+          allDates.length > 0 ? allDates.reduce((latest, d) => (new Date(d) > new Date(latest) ? d : latest)) : null;
         const aggDueContainers = [...own.dueContainers, ...childStats.flatMap((cs) => cs.dueContainers)];
 
         // Linked supplier exposure: per-child per-currency balances (informational, NOT counted in broker totals)

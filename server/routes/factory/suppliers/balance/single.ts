@@ -78,7 +78,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
             sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
           )
         );
-      for (const row of (voucherPaymentRows)) {
+      for (const row of voucherPaymentRows) {
         const sid = row.factorySupplierId;
         if (!sid) continue;
         if (row.optional) continue; // optional vouchers don't affect the balance
@@ -217,7 +217,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         // FX net: FX-in transfers received minus FX-out transfers sent (in USD)
         // Use toAmountUsd for both directions — it's the actual USD value settled.
         let fxNetUsd = 0;
-        for (const t of (allFxTransfers)) {
+        for (const t of allFxTransfers) {
           if (t.toSupplierId === sid) {
             fxNetUsd += parseFloat(t.toAmountUsd || "0");
           }

@@ -79,7 +79,45 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
 
       const result = await db.transaction(async (tx) => {
         // Use supplierId directly if provided, otherwise find-or-create by name
-        let existingSupplier: ({ id: number; companyId: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; notes: string | null; openingBalance: string; linkedSupplierId: number | null; parentId: number | null; supplierCategoryId: number | null; isActive: boolean; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; createdAt: Date; updatedAt: Date; }) | ({ name: string; id: number; email: string | null; companyId: number; notes: string | null; createdAt: Date; updatedAt: Date; phone: string | null; openingBalance: string; isActive: boolean; parentId: number | null; address: string | null; contactPerson: string | null; linkedSupplierId: number | null; supplierCategoryId: number | null; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; });
+        let existingSupplier:
+          | {
+              id: number;
+              companyId: number;
+              name: string;
+              contactPerson: string | null;
+              phone: string | null;
+              email: string | null;
+              address: string | null;
+              notes: string | null;
+              openingBalance: string;
+              linkedSupplierId: number | null;
+              parentId: number | null;
+              supplierCategoryId: number | null;
+              isActive: boolean;
+              isBroker: boolean;
+              currentRawMaterialCostPerKgUsd: string | null;
+              createdAt: Date;
+              updatedAt: Date;
+            }
+          | {
+              name: string;
+              id: number;
+              email: string | null;
+              companyId: number;
+              notes: string | null;
+              createdAt: Date;
+              updatedAt: Date;
+              phone: string | null;
+              openingBalance: string;
+              isActive: boolean;
+              parentId: number | null;
+              address: string | null;
+              contactPerson: string | null;
+              linkedSupplierId: number | null;
+              supplierCategoryId: number | null;
+              isBroker: boolean;
+              currentRawMaterialCostPerKgUsd: string | null;
+            };
         if (reqSupplierId) {
           const [found] = await tx
             .select()

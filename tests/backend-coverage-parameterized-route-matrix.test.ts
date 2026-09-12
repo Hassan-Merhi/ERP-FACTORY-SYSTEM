@@ -47,14 +47,6 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /\.(xlsx|pdf|csv|zip)$/i,
   /^\/api\/sessions\//i,
   /^\/api\/screen-feed\/live\//i,
-  /^\/api\/factory\/customer-orders\/:id$/i,
-  /^\/api\/factory\/(employees|transporters|advances|shipping-availability|workers)\/:id$/i,
-  /^\/api\/factory\/status-builder\/metrics\/:id$/i,
-  /^\/api\/factory\/status-builder\/runs\/:runId\/values$/i,
-  /^\/api\/factory\/sheets-sacks\/:id$/i,
-  /^\/api\/suppliers\/:supplierId\/proformas$/i,
-  /^\/api\/stock-group-archives\/:id$/i,
-  /^\/api\/users\/:userId\/chatbot$/i,
   /^\/api\/auth\//i,
 ];
 
@@ -105,6 +97,7 @@ export function materializeCoveragePath(routePath: string): string {
     if (name.includes("month")) return "8";
     if (name.includes("day")) return "8";
     if (name === "type" && routePath.includes("/api/accounts/:type/")) return "supplier";
+    if (name === "userid") return "00000000-0000-4000-8000-000000000001";
     if (name.includes("type") || name.includes("status")) return "unknown";
     if (name.includes("currency")) return "USD";
     if (name.includes("reference") || name.includes("ref") || name.includes("code") || name.includes("name")) {
@@ -149,9 +142,12 @@ function poisonBody(companyId: number) {
     items: [],
     charges: [],
     bales: [],
-    amount: "",
-    quantity: "",
-    date: "",
+    amount: "0",
+    quantity: "0",
+    date: "2026-08-08",
+    name: "coverage-probe",
+    code: "coverage-probe",
+    entries: [],
   };
 }
 

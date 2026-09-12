@@ -54,14 +54,14 @@ function parseScope(value: unknown): ReplayWriteScope | null {
   const availableBaleIdsToUpdate = numberArray(input.availableBaleIdsToUpdate);
   const finalizedBaleIdsToUpdate = numberArray(input.finalizedBaleIdsToUpdate);
   if (
-    !supplierIds
-    || !containerIdsToUpdate
-    || !rawStockIdsToUpdate
-    || !sourceIdsToUpdate
-    || !batchIdsToUpdate
-    || !availableBaleIdsToUpdate
-    || !finalizedBaleIdsToUpdate
-    || !Array.isArray(input.blockedBatches)
+    !supplierIds ||
+    !containerIdsToUpdate ||
+    !rawStockIdsToUpdate ||
+    !sourceIdsToUpdate ||
+    !batchIdsToUpdate ||
+    !availableBaleIdsToUpdate ||
+    !finalizedBaleIdsToUpdate ||
+    !Array.isArray(input.blockedBatches)
   ) {
     return null;
   }
@@ -72,11 +72,11 @@ function parseScope(value: unknown): ReplayWriteScope | null {
     const row = rawRow as Record<string, unknown>;
     const batchId = Number(row.batchId);
     if (
-      !Number.isInteger(batchId)
-      || batchId <= 0
-      || typeof row.batchCode !== "string"
-      || !Array.isArray(row.reasons)
-      || row.reasons.some((reason) => typeof reason !== "string")
+      !Number.isInteger(batchId) ||
+      batchId <= 0 ||
+      typeof row.batchCode !== "string" ||
+      !Array.isArray(row.reasons) ||
+      row.reasons.some((reason) => typeof reason !== "string")
     ) {
       return null;
     }
@@ -105,15 +105,15 @@ function parseEnvelope(value: unknown): ExactReplayVerificationEnvelope | null {
   const scope = parseScope(input.scope);
   const baleIds = numberArray(input.baleIds);
   if (
-    input.kind !== EXACT_UNDO_KIND
-    || typeof input.algorithmVersion !== "string"
-    || typeof input.fingerprint !== "string"
-    || !scope
-    || !baleIds
-    || !input.before
-    || typeof input.before !== "object"
-    || !input.after
-    || typeof input.after !== "object"
+    input.kind !== EXACT_UNDO_KIND ||
+    typeof input.algorithmVersion !== "string" ||
+    typeof input.fingerprint !== "string" ||
+    !scope ||
+    !baleIds ||
+    !input.before ||
+    typeof input.before !== "object" ||
+    !input.after ||
+    typeof input.after !== "object"
   ) {
     return null;
   }
@@ -148,9 +148,7 @@ export function registerHistoricalReplayPhase8VerificationRoutes(app: Express): 
     async (req: import("express").Request, res: import("express").Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const requestedId = req.query?.undoLogId == null
-        ? null
-        : Number.parseInt(String(req.query.undoLogId), 10);
+      const requestedId = req.query?.undoLogId == null ? null : Number.parseInt(String(req.query.undoLogId), 10);
       if (requestedId != null && (!Number.isInteger(requestedId) || requestedId <= 0)) {
         return res.status(400).json({
           message: "undoLogId must be a positive integer",
@@ -162,24 +160,25 @@ export function registerHistoricalReplayPhase8VerificationRoutes(app: Express): 
       try {
         await client.query("BEGIN");
         await client.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
-        const rowResult = requestedId == null
-          ? await client.query<VerificationUndoRow>(
-              `SELECT id, snapshot, algorithm_version, scope_fingerprint, applied_at, undone_at
+        const rowResult =
+          requestedId == null
+            ? await client.query<VerificationUndoRow>(
+                `SELECT id, snapshot, algorithm_version, scope_fingerprint, applied_at, undone_at
                FROM factory_recalc_undo_log
                WHERE company_id = $1
                  AND operation_type = 'HISTORICAL_REPLAY_EXACT'
                ORDER BY applied_at DESC, id DESC
                LIMIT 1`,
-              [companyId]
-            )
-          : await client.query<VerificationUndoRow>(
-              `SELECT id, snapshot, algorithm_version, scope_fingerprint, applied_at, undone_at
+                [companyId]
+              )
+            : await client.query<VerificationUndoRow>(
+                `SELECT id, snapshot, algorithm_version, scope_fingerprint, applied_at, undone_at
                FROM factory_recalc_undo_log
                WHERE id = $1
                  AND company_id = $2
                  AND operation_type = 'HISTORICAL_REPLAY_EXACT'`,
-              [requestedId, companyId]
-            );
+                [requestedId, companyId]
+              );
         const row = rowResult.rows[0];
         if (!row) {
           await client.query("ROLLBACK");
@@ -198,13 +197,14 @@ export function registerHistoricalReplayPhase8VerificationRoutes(app: Express): 
           });
         }
         if (
-          envelope.algorithmVersion !== REPLAY_ALGORITHM_VERSION
-          || row.algorithm_version !== REPLAY_ALGORITHM_VERSION
-          || row.scope_fingerprint !== envelope.fingerprint
+          envelope.algorithmVersion !== REPLAY_ALGORITHM_VERSION ||
+          row.algorithm_version !== REPLAY_ALGORITHM_VERSION ||
+          row.scope_fingerprint !== envelope.fingerprint
         ) {
           await client.query("ROLLBACK");
           return res.status(409).json({
-            message: "Historical Replay verification record does not match the current algorithm and stored fingerprint.",
+            message:
+              "Historical Replay verification record does not match the current algorithm and stored fingerprint.",
             code: "HISTORICAL_REPLAY_VERIFICATION_VERSION_MISMATCH",
           });
         }
@@ -238,10 +238,7 @@ export function registerHistoricalReplayPhase8VerificationRoutes(app: Express): 
       } catch (error: unknown) {
         await client.query("ROLLBACK");
         const code = (error as { code?: string }).code;
-        const mismatch = [
-          "HISTORICAL_REPLAY_UNDO_STALE",
-          "HISTORICAL_REPLAY_INVARIANT_VIOLATION",
-        ].includes(code ?? "");
+        const mismatch = ["HISTORICAL_REPLAY_UNDO_STALE", "HISTORICAL_REPLAY_INVARIANT_VIOLATION"].includes(code ?? "");
         return res.status(mismatch ? 409 : 500).json({
           verified: false,
           readOnly: true,

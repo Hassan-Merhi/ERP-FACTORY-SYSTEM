@@ -140,11 +140,14 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const { templateId, name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } =
         req.body;
+      const parsedTemplateId = parseOptionalId(templateId);
+      if (!parsedTemplateId || !String(name ?? "").trim())
+        return res.status(400).json({ message: "templateId and name are required" });
       const [metric] = await db
         .insert(statusMetrics)
         .values({
-          templateId,
-          name,
+          templateId: parsedTemplateId,
+          name: String(name).trim(),
           beforeSourceType: beforeSourceType ?? "manual",
           sourceType: sourceType ?? "manual",
           sourceField: sourceField ?? "quantity",
@@ -165,11 +168,13 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       const { name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } = req.body;
-      const [updated] = await db
-        .update(statusMetrics)
-        .set({ name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder })
-        .where(eq(statusMetrics.id, id))
-        .returning();
+      const changes = Object.fromEntries(
+        Object.entries({ name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder }).filter(
+          ([, value]) => value !== undefined
+        )
+      );
+      if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No values to update" });
+      const [updated] = await db.update(statusMetrics).set(changes).where(eq(statusMetrics.id, id)).returning();
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: getErrorMessage(err) });
@@ -327,6 +332,7 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       const { entries } = req.body as {
         entries: { metricId: number; manualAdjustment: number; beforeValue: number }[];
       };
+      if (!Array.isArray(entries)) return res.status(400).json({ message: "entries must be an array" });
       const now = new Date();
 
       for (const entry of entries) {

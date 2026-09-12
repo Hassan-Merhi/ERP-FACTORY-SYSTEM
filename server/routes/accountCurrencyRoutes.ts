@@ -103,9 +103,7 @@ function normalizedOpeningPayload(
     "0";
   const amount = new Decimal(nativeOpeningBalance || 0);
   const rawCurrency = (body.openingBalanceCurrency ?? existing?.openingBalanceCurrency ?? null) as
-    | string
-    | null
-    | undefined;
+    string | null | undefined;
 
   if (!amount.isFinite() || amount.lt(0)) {
     throw new Error("Opening balance must be a finite non-negative amount.");

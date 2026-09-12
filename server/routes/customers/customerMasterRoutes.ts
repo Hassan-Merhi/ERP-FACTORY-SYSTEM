@@ -2,11 +2,7 @@ import type { Express } from "express";
 
 import { requireAuth, requireNonPOS } from "../../auth";
 import { sendCustomerRouteError } from "./customerErrors";
-import {
-  getActiveCustomerCompanyId,
-  getCustomerAuditActor,
-  parseCustomerId,
-} from "./customerRequestContext";
+import { getActiveCustomerCompanyId, getCustomerAuditActor, parseCustomerId } from "./customerRequestContext";
 import { customerService } from "./customerService";
 
 export function registerCustomerMasterRoutes(app: Express) {
@@ -79,12 +75,7 @@ export function registerCustomerMasterRoutes(app: Express) {
     try {
       const companyId = getActiveCustomerCompanyId(req);
       const customerId = parseCustomerId(req.params.id);
-      const customer = await customerService.update(
-        customerId,
-        companyId,
-        req.body,
-        getCustomerAuditActor(req),
-      );
+      const customer = await customerService.update(customerId, companyId, req.body, getCustomerAuditActor(req));
       return res.json(customer);
     } catch (error: unknown) {
       return sendCustomerRouteError(res, error, 400);

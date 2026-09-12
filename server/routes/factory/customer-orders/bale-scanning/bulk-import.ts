@@ -152,7 +152,10 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 proformaId: order.proformaIdUsed,
                 currentOrderId: orderId,
               });
-              if (!capacity || !evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading").allowed) {
+              if (
+                !capacity ||
+                !evaluateProformaArticleCapacity(capacity, effectiveArticleCode, 1, "per_loading").allowed
+              ) {
                 return { kind: "notFound" as const };
               }
             }

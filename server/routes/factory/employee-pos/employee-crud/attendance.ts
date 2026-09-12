@@ -48,7 +48,7 @@ export function registerFactoryEmployeeAttendanceRoutes(app: Express) {
         AND employee_id = ANY(${sqlArray(empIds)})
       `);
       // Map snake_case raw SQL rows to camelCase for the frontend
-      const attendance = ((existing.rows)).map((r) => ({
+      const attendance = existing.rows.map((r) => ({
         id: r.id,
         employeeId: r.employee_id,
         attendanceDate: r.attendance_date,
@@ -100,7 +100,7 @@ export function registerFactoryEmployeeAttendanceRoutes(app: Express) {
         ORDER BY attendance_date
       `);
       // Map snake_case raw SQL rows to camelCase for the frontend
-      const attendance = ((rows.rows)).map((r) => ({
+      const attendance = rows.rows.map((r) => ({
         id: r.id,
         employeeId: r.employee_id,
         attendanceDate: r.attendance_date,

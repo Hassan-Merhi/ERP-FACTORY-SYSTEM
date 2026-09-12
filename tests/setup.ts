@@ -289,6 +289,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // referencing this company; those FKs otherwise block the company delete
     // below on the NEXT run that reuses this prefix. Delete in FK-safe order.
     await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM factory_bale_products WHERE company_id = $1", [company.id]);
     await pool.query(
       "DELETE FROM factory_mix_batch_sources WHERE mix_batch_id IN (SELECT id FROM factory_mix_batches WHERE company_id = $1)",
       [company.id]

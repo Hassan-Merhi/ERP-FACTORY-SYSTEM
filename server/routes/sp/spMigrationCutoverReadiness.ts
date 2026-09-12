@@ -202,10 +202,7 @@ export type CutoverReadiness = {
   unmappedInventory: CutoverReadinessUnmappedInventory[];
 };
 
-export async function buildCutoverReadiness(
-  sourceId: number,
-  targetId: number
-): Promise<CutoverReadiness> {
+export async function buildCutoverReadiness(sourceId: number, targetId: number): Promise<CutoverReadiness> {
   await Promise.all([ensurePhase2Schema(), ensureCutoverSchema()]);
   const blockers: Array<{ code: string; message: string; count?: number }> = [];
   const deltas: Array<{ code: string; message: string; count: number }> = [];

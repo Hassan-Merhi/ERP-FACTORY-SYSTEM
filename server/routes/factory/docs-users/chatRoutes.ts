@@ -62,10 +62,7 @@ export function registerFactoryChatRoutes(app: Express) {
         typingStatus.delete(senderId);
       }
 
-      broadcast(
-        { type: "typing:update", senderId, receiverId, isTyping, until },
-        { userIds: [receiverId] }
-      );
+      broadcast({ type: "typing:update", senderId, receiverId, isTyping, until }, { userIds: [receiverId] });
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

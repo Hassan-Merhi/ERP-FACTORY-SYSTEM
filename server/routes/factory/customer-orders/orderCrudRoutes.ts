@@ -676,8 +676,11 @@ export function registerOrderCrudRoutes(app: Express) {
       });
       res.json({ success: true, message: "Invoice moved to Deleted Items" });
     } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (message === "Order not found") return res.status(404).json({ message });
+      if (message.startsWith("Cannot delete")) return res.status(400).json({ message });
       logger.error("Error deleting customer order:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(500).json({ message });
     }
   });
 

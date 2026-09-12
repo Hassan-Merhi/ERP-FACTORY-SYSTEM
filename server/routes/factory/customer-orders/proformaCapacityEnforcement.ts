@@ -91,11 +91,7 @@ export function evaluateProformaArticleCapacity(
   const additionalQty = nonNegativeQuantity(requestedAdditionalQty);
   const article = findProformaCapacityArticle(snapshot, normalizedArticleCode);
   const validationMode = validationModeForScope(snapshot, scope);
-  const consumedQty = article
-    ? scope === "global"
-      ? article.totalConsumedQty
-      : article.currentOrderLoadedQty
-    : 0;
+  const consumedQty = article ? (scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty) : 0;
   const requestedQty = article?.requestedQty ?? 0;
 
   if (validationMode === "reference") {

@@ -85,22 +85,23 @@ export function registerSmartTransferPreviewRoutes(app: Express) {
         }
       );
 
-      const responsePreview = parsed.targetQuantity > 0 && preview.lines.length === 0
-        ? {
-            ...preview,
-            targetQuantity: parsed.targetQuantity,
-            achievedQuantity: 0,
-            shortfallQuantity: parsed.targetQuantity,
-            shortfall: true,
-            summary: `No eligible smart-transfer items qualified for the manually requested target of ${parsed.targetQuantity} unit(s).`,
-          }
-        : preview;
+      const responsePreview =
+        parsed.targetQuantity > 0 && preview.lines.length === 0
+          ? {
+              ...preview,
+              targetQuantity: parsed.targetQuantity,
+              achievedQuantity: 0,
+              shortfallQuantity: parsed.targetQuantity,
+              shortfall: true,
+              summary: `No eligible smart-transfer items qualified for the manually requested target of ${parsed.targetQuantity} unit(s).`,
+            }
+          : preview;
 
       const feedbackSessionId = await createSmartTransferPreviewFeedback({
         companyId,
         userId,
         requestInput: parsed,
-        preview: (responsePreview),
+        preview: responsePreview,
       });
 
       res.set("Cache-Control", "no-store");
@@ -118,7 +119,9 @@ export function registerSmartTransferPreviewRoutes(app: Express) {
 
       const message = String(getErrorMessage(error) || "");
       const isInputError =
-        /valid company|required|positive whole number|source location|destination location|YYYY-MM-DD|not found/i.test(message);
+        /valid company|required|positive whole number|source location|destination location|YYYY-MM-DD|not found/i.test(
+          message
+        );
       if (isInputError) return res.status(400).json({ message });
 
       logger.error("[SmartTransferPreview] Failed:", { error: error });

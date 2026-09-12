@@ -26,82 +26,82 @@ const EXPECTED_COLUMNS: {
   { table: "vouchers", column: "supplier_id", ddl: "INTEGER" },
 
   // ── voucher_entries (multi-currency) ─────────────────────────────────────────
-  { table: "voucher_entries", column: "transaction_currency",      ddl: "VARCHAR(3)" },
-  { table: "voucher_entries", column: "transaction_debit_amount",  ddl: "NUMERIC(20,6)" },
+  { table: "voucher_entries", column: "transaction_currency", ddl: "VARCHAR(3)" },
+  { table: "voucher_entries", column: "transaction_debit_amount", ddl: "NUMERIC(20,6)" },
   { table: "voucher_entries", column: "transaction_credit_amount", ddl: "NUMERIC(20,6)" },
-  { table: "voucher_entries", column: "base_debit_amount",         ddl: "NUMERIC(20,6)" },
-  { table: "voucher_entries", column: "base_credit_amount",        ddl: "NUMERIC(20,6)" },
-  { table: "voucher_entries", column: "historical_exchange_rate",  ddl: "NUMERIC(20,10)" },
-  { table: "voucher_entries", column: "rate_convention",           ddl: "VARCHAR(30)" },
-  { table: "voucher_entries", column: "factory_supplier_id",       ddl: "INTEGER" },
-  { table: "voucher_entries", column: "supplier_id",               ddl: "INTEGER" },
+  { table: "voucher_entries", column: "base_debit_amount", ddl: "NUMERIC(20,6)" },
+  { table: "voucher_entries", column: "base_credit_amount", ddl: "NUMERIC(20,6)" },
+  { table: "voucher_entries", column: "historical_exchange_rate", ddl: "NUMERIC(20,10)" },
+  { table: "voucher_entries", column: "rate_convention", ddl: "VARCHAR(30)" },
+  { table: "voucher_entries", column: "factory_supplier_id", ddl: "INTEGER" },
+  { table: "voucher_entries", column: "supplier_id", ddl: "INTEGER" },
 
   // ── ledger_accounts ──────────────────────────────────────────────────────────
-  { table: "ledger_accounts", column: "opening_balance_currency",        ddl: "VARCHAR(10)" },
+  { table: "ledger_accounts", column: "opening_balance_currency", ddl: "VARCHAR(10)" },
   { table: "ledger_accounts", column: "opening_balance_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "ledger_accounts", column: "opening_balance_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "ledger_accounts", column: "opening_balance_native_amount",   ddl: "NUMERIC(20,6)" },
-  { table: "ledger_accounts", column: "category",                        ddl: "TEXT" },
-  { table: "ledger_accounts", column: "sub_type",                        ddl: "TEXT" },
+  { table: "ledger_accounts", column: "opening_balance_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "ledger_accounts", column: "opening_balance_native_amount", ddl: "NUMERIC(20,6)" },
+  { table: "ledger_accounts", column: "category", ddl: "TEXT" },
+  { table: "ledger_accounts", column: "sub_type", ddl: "TEXT" },
 
   // ── Supplier Partner container linkage ───────────────────────────────────────
-  { table: "sp_containers", column: "supplier_id",          ddl: "INTEGER" },
+  { table: "sp_containers", column: "supplier_id", ddl: "INTEGER" },
   { table: "sp_containers", column: "goods_otw_voucher_id", ddl: "INTEGER" },
 
   // ── bank_accounts ────────────────────────────────────────────────────────────
-  { table: "bank_accounts", column: "opening_balance_currency",        ddl: "VARCHAR(10)" },
+  { table: "bank_accounts", column: "opening_balance_currency", ddl: "VARCHAR(10)" },
   { table: "bank_accounts", column: "opening_balance_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "bank_accounts", column: "opening_balance_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "bank_accounts", column: "opening_balance_native_amount",   ddl: "NUMERIC(20,6)" },
+  { table: "bank_accounts", column: "opening_balance_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "bank_accounts", column: "opening_balance_native_amount", ddl: "NUMERIC(20,6)" },
 
   // ── customers ────────────────────────────────────────────────────────────────
-  { table: "customers", column: "opening_balance_currency",        ddl: "VARCHAR(10)" },
+  { table: "customers", column: "opening_balance_currency", ddl: "VARCHAR(10)" },
   { table: "customers", column: "opening_balance_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "customers", column: "opening_balance_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "customers", column: "opening_balance_native_amount",   ddl: "NUMERIC(20,6)" },
+  { table: "customers", column: "opening_balance_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "customers", column: "opening_balance_native_amount", ddl: "NUMERIC(20,6)" },
 
   // ── suppliers ────────────────────────────────────────────────────────────────
-  { table: "suppliers", column: "opening_balance_side",            ddl: "VARCHAR(2) DEFAULT 'Cr'" },
-  { table: "suppliers", column: "opening_balance_currency",        ddl: "VARCHAR(10)" },
+  { table: "suppliers", column: "opening_balance_side", ddl: "VARCHAR(2) DEFAULT 'Cr'" },
+  { table: "suppliers", column: "opening_balance_currency", ddl: "VARCHAR(10)" },
   { table: "suppliers", column: "opening_balance_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "suppliers", column: "opening_balance_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "suppliers", column: "opening_balance_native_amount",   ddl: "NUMERIC(20,6)" },
+  { table: "suppliers", column: "opening_balance_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "suppliers", column: "opening_balance_native_amount", ddl: "NUMERIC(20,6)" },
 
   // ── employees ────────────────────────────────────────────────────────────────
-  { table: "employees", column: "opening_balance_side",            ddl: "VARCHAR(2) DEFAULT 'Cr'" },
-  { table: "employees", column: "opening_balance_currency",        ddl: "VARCHAR(10)" },
+  { table: "employees", column: "opening_balance_side", ddl: "VARCHAR(2) DEFAULT 'Cr'" },
+  { table: "employees", column: "opening_balance_currency", ddl: "VARCHAR(10)" },
   { table: "employees", column: "opening_balance_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "employees", column: "opening_balance_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "employees", column: "opening_balance_native_amount",   ddl: "NUMERIC(20,6)" },
-  { table: "employees", column: "sales_bonus_pct",                 ddl: "DECIMAL(10,4)" },
-  { table: "employees", column: "bales_bonus_rate",                ddl: "DECIMAL(10,4)" },
+  { table: "employees", column: "opening_balance_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "employees", column: "opening_balance_native_amount", ddl: "NUMERIC(20,6)" },
+  { table: "employees", column: "sales_bonus_pct", ddl: "DECIMAL(10,4)" },
+  { table: "employees", column: "bales_bonus_rate", ddl: "DECIMAL(10,4)" },
 
   // ── fixed_assets ─────────────────────────────────────────────────────────────
-  { table: "fixed_assets", column: "purchase_currency",        ddl: "VARCHAR(10)" },
+  { table: "fixed_assets", column: "purchase_currency", ddl: "VARCHAR(10)" },
   { table: "fixed_assets", column: "purchase_historical_rate", ddl: "NUMERIC(20,10)" },
-  { table: "fixed_assets", column: "purchase_base_amount",     ddl: "NUMERIC(20,6)" },
-  { table: "fixed_assets", column: "purchase_native_amount",   ddl: "NUMERIC(20,6)" },
+  { table: "fixed_assets", column: "purchase_base_amount", ddl: "NUMERIC(20,6)" },
+  { table: "fixed_assets", column: "purchase_native_amount", ddl: "NUMERIC(20,6)" },
 
   // ── salary_advances ──────────────────────────────────────────────────────────
   { table: "salary_advances", column: "remaining_balance", ddl: "DECIMAL(15,2) NOT NULL DEFAULT 0" },
-  { table: "salary_advances", column: "fully_paid",        ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "salary_advances", column: "fully_paid", ddl: "BOOLEAN NOT NULL DEFAULT false" },
 
   // ── user preferences / roles ─────────────────────────────────────────────────
-  { table: "user_preferences", column: "preferred_currency",                 ddl: "VARCHAR(10)" },
-  { table: "user_preferences", column: "show_profit_comparison_on_pos",      ddl: "BOOLEAN NOT NULL DEFAULT false" },
-  { table: "user_company_roles", column: "can_sell_negative_stock",          ddl: "BOOLEAN NOT NULL DEFAULT false" },
-  { table: "user_company_roles", column: "daybook_edit_days",                ddl: "INTEGER NOT NULL DEFAULT 0" },
-  { table: "user_company_roles", column: "can_access_customers",             ddl: "BOOLEAN NOT NULL DEFAULT false" },
-  { table: "user_company_roles", column: "can_delete_records",               ddl: "BOOLEAN NOT NULL DEFAULT false" },
-  { table: "user_company_roles", column: "cash_account_id",                  ddl: "INTEGER" },
-  { table: "user_company_roles", column: "pos_station",                      ddl: "INTEGER" },
-  { table: "user_company_roles", column: "pos_view_only",                    ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_preferences", column: "preferred_currency", ddl: "VARCHAR(10)" },
+  { table: "user_preferences", column: "show_profit_comparison_on_pos", ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_company_roles", column: "can_sell_negative_stock", ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_company_roles", column: "daybook_edit_days", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "user_company_roles", column: "can_access_customers", ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_company_roles", column: "can_delete_records", ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_company_roles", column: "cash_account_id", ddl: "INTEGER" },
+  { table: "user_company_roles", column: "pos_station", ddl: "INTEGER" },
+  { table: "user_company_roles", column: "pos_view_only", ddl: "BOOLEAN NOT NULL DEFAULT false" },
   { table: "users", column: "hidden_erp_cost_fields", ddl: "TEXT[] NOT NULL DEFAULT '{}'" },
-  { table: "users", column: "chatbot_enabled",         ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "users", column: "chatbot_enabled", ddl: "BOOLEAN NOT NULL DEFAULT false" },
 
   // ── companies ────────────────────────────────────────────────────────────────
-  { table: "companies", column: "base_currency",     ddl: "VARCHAR(10) DEFAULT 'USD'" },
-  { table: "companies", column: "display_currency",  ddl: "VARCHAR(10)" },
+  { table: "companies", column: "base_currency", ddl: "VARCHAR(10) DEFAULT 'USD'" },
+  { table: "companies", column: "display_currency", ddl: "VARCHAR(10)" },
 ];
 
 // ── Tables that must exist (not just columns) ─────────────────────────────────
@@ -127,7 +127,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
       // 1. Which expected tables are missing entirely?
       const tableCheckResult = await pool.query<{ table_name: string }>(
         `SELECT table_name FROM information_schema.tables
-         WHERE table_schema = 'public'`,
+         WHERE table_schema = 'public'`
       );
       const existingTables = new Set(tableCheckResult.rows.map((r) => r.table_name));
       const missingTables = EXPECTED_TABLES.filter((t) => !existingTables.has(t));
@@ -149,7 +149,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
              AND c.table_name   = t.tbl
              AND c.column_name  = t.col
          )`,
-        params,
+        params
       );
 
       const missingColumns = colCheckResult.rows.map((r) => `${r.tbl}.${r.col}`);
@@ -163,9 +163,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
           : `${missingTables.length} missing table(s), ${missingColumns.length} missing column(s).`,
         missingTables,
         missingColumns,
-        hint: ok
-          ? null
-          : "POST to /api/admin/schema-fix to apply the missing additions automatically.",
+        hint: ok ? null : "POST to /api/admin/schema-fix to apply the missing additions automatically.",
       });
     } catch (err: unknown) {
       return res.status(500).json({ message: getErrorMessage(err) });
@@ -185,7 +183,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
 
     // 1. Create missing tables (only safe no-data tables)
     const tableCheckResult = await pool.query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`
     );
     const existingTables = new Set(tableCheckResult.rows.map((r) => r.table_name));
 
@@ -225,7 +223,7 @@ export function registerSchemaDiagnosticRoutes(app: Express) {
            AND c.table_name   = t.tbl
            AND c.column_name  = t.col
        )`,
-      params,
+      params
     );
 
     for (const { tbl, col } of colCheckResult.rows) {

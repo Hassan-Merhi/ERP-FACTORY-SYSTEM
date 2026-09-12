@@ -378,11 +378,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .select()
     .from(bankAccounts)
     .where(
-      and(
-        eq(bankAccounts.companyId, companyId),
-        isNull(bankAccounts.deletedAt),
-        isNull(bankAccounts.linkedLedgerId)
-      )
+      and(eq(bankAccounts.companyId, companyId), isNull(bankAccounts.deletedAt), isNull(bankAccounts.linkedLedgerId))
     );
   const standaloneBankOpening = standaloneBankAccounts.reduce((sum, account) => {
     const openingBalanceRaw = parseFloat(account.openingBalance || "0");
@@ -455,10 +451,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .select({ openingValue: stockItems.openingValue })
     .from(stockItems)
     .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
-  const openingStockValue = stockItemsWithOpening.reduce(
-    (sum, item) => sum + parseFloat(item.openingValue || "0"),
-    0
-  );
+  const openingStockValue = stockItemsWithOpening.reduce((sum, item) => sum + parseFloat(item.openingValue || "0"), 0);
   openingBalanceEquity -= openingStockValue;
 
   const netImportCycleBalance =

@@ -23,9 +23,9 @@ export function registerContainerCostingRoutes(app: Express) {
       }
 
       // Get all POs for this container
-       const container = await storage.getContainerByIdForCompany(containerId, companyId);
-       if (!container) return res.status(404).json({ message: "Container not found" });
-       const containerPOs = await storage.getPurchaseOrdersByContainerForCompany(containerId, companyId);
+      const container = await storage.getContainerByIdForCompany(containerId, companyId);
+      if (!container) return res.status(404).json({ message: "Container not found" });
+      const containerPOs = await storage.getPurchaseOrdersByContainerForCompany(containerId, companyId);
       if (containerPOs.length === 0) {
         return res.status(400).json({ message: "No purchase orders found for this container" });
       }
@@ -125,7 +125,7 @@ export function registerContainerCostingRoutes(app: Express) {
         }
 
         // Recalculate itemsTotal for all affected POs, then the container
-         const containerPOs = await storage.getPurchaseOrdersByContainerForCompany(containerId, companyId);
+        const containerPOs = await storage.getPurchaseOrdersByContainerForCompany(containerId, companyId);
         const _poIds = containerPOs.map((po) => po.id);
 
         let containerItemsTotal = 0;

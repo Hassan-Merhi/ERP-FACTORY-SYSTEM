@@ -283,7 +283,7 @@ async function sendInvoicePdf(req: Request, res: Response, data: NonNullable<Awa
   let totalQty = 0;
   let totalWeight = 0;
   let totalAmount = 0;
-  for (const line of (data.lines)) {
+  for (const line of data.lines) {
     if (doc.y > 730) doc.addPage();
     const y = doc.y;
     const qty = safeNumber(line.qty);
@@ -386,23 +386,24 @@ async function sendLoadingExcel(req: Request, res: Response, data: NonNullable<A
 }
 
 export function registerFactoryBilingualDocumentRoutes(app: Express): void {
-  const invoiceHandler = (format: "pdf" | "excel") => async (req: Request, res: Response, next: import("express").NextFunction) => {
-    if (!hasExplicitLanguage(req)) return next();
-    try {
-      const companyId = companyIdFrom(req);
-      const orderId = orderIdFrom(req);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      if (!orderId) return res.status(400).json({ message: "Invalid order ID" });
-      const data = await loadOrder(orderId, companyId);
-      if (!data) return res.status(404).json({ message: "Order not found" });
-      if (format === "pdf") await sendInvoicePdf(req, res, data);
-      else await sendInvoiceExcel(req, res, data);
-      await auditExport(req, companyId, orderId, format, String(req.query.lang));
-    } catch (error) {
-      logger.error("Factory bilingual invoice export failed", { error });
-      if (!res.headersSent) res.status(500).json({ message: getErrorMessage(error) });
-    }
-  };
+  const invoiceHandler =
+    (format: "pdf" | "excel") => async (req: Request, res: Response, next: import("express").NextFunction) => {
+      if (!hasExplicitLanguage(req)) return next();
+      try {
+        const companyId = companyIdFrom(req);
+        const orderId = orderIdFrom(req);
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        if (!orderId) return res.status(400).json({ message: "Invalid order ID" });
+        const data = await loadOrder(orderId, companyId);
+        if (!data) return res.status(404).json({ message: "Order not found" });
+        if (format === "pdf") await sendInvoicePdf(req, res, data);
+        else await sendInvoiceExcel(req, res, data);
+        await auditExport(req, companyId, orderId, format, String(req.query.lang));
+      } catch (error) {
+        logger.error("Factory bilingual invoice export failed", { error });
+        if (!res.headersSent) res.status(500).json({ message: getErrorMessage(error) });
+      }
+    };
 
   const loadingHandler = async (req: Request, res: Response, next: import("express").NextFunction) => {
     if (!hasExplicitLanguage(req)) return next();

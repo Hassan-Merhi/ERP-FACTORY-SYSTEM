@@ -28,7 +28,6 @@ import { SP_RELEASE_CURRENCY, SP_RELEASE_EXCHANGE_RATE } from "../../services/sp
 import { requireSpCompany } from "./spHelpers";
 import { firstRow } from "../../lib/queryResult";
 
-
 function lifecycleDate(value: unknown): string {
   const date = String(value ?? "").trim();
   if (!date) return new Date().toISOString().slice(0, 10);

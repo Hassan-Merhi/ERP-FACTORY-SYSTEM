@@ -53,7 +53,6 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(import|upload|excel|template|export|download|whatsapp|pdf)/i,
   /(repair|recalc|migration|migrate|cutover|backup|restore|reset|seed|rebuild|purge|backfill)/i,
   /(^|\/)(refresh|track|sync|send|print)(\/|$)/i,
-  /^\/api\/vouchers$/i,
 ];
 
 let ctx: TestContext;
@@ -154,13 +153,13 @@ function poisonBody(companyId: number) {
     items: [],
     lines: [],
     charges: [],
-    amount: "",
-    quantity: "",
+    amount: "0",
+    quantity: "0",
     name: "",
     code: "",
-    date: "",
-    startDate: "",
-    endDate: "",
+    date: "2026-08-08",
+    startDate: "2026-08-01",
+    endDate: "2026-08-08",
   };
 }
 

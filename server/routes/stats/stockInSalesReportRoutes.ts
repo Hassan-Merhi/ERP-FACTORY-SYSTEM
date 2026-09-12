@@ -103,7 +103,10 @@ function locationAccessResponse(error: unknown, res: import("express").Response)
   return true;
 }
 
-async function resolveRequestLocationIds(req: import("express").Request, requestedLocationIds: number[]): Promise<number[]> {
+async function resolveRequestLocationIds(
+  req: import("express").Request,
+  requestedLocationIds: number[]
+): Promise<number[]> {
   const companyId = req.session.currentCompanyId;
   const userId = req.session.userId;
   const role = req.session.currentRole;

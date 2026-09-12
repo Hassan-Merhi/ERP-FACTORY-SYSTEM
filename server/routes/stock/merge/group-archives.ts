@@ -86,6 +86,10 @@ export function registerStockGroupArchiveRoutes(app: Express) {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      const archiveId = parseInt(req.params.id);
+      if (!Number.isFinite(archiveId)) return res.status(400).json({ message: "Invalid archive id" });
+      const existing = await storage.getStockGroupLocationArchiveById(archiveId, req.session.currentCompanyId);
+      if (!existing) return res.status(404).json({ message: "Archive not found" });
       const permanent = req.query.permanent === "true";
       if (permanent) {
         await storage.permanentlyDeleteStockGroupLocationArchive(parseInt(req.params.id), req.session.currentCompanyId);

@@ -27,7 +27,7 @@ export function registerWorkerDeleteRoutes(app: Express) {
 
       // Check if the worker has any bale entries
       const baleCheck = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM factory_bales WHERE worker_id = ${id} AND company_id = ${companyId} AND status NOT IN ('REMOVED','DELETED')`
+        sql`SELECT COUNT(*) as cnt FROM factory_bale_production_attributions a JOIN factory_bales b ON b.id = a.bale_id WHERE a.worker_id = ${id} AND b.company_id = ${companyId} AND b.status NOT IN ('REMOVED','DELETED')`
       );
       const baleCount = parseInt((baleCheck.rows[0] as { cnt: string })?.cnt || "0");
       if (baleCount > 0) {

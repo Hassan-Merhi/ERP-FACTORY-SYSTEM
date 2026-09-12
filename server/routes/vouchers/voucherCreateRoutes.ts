@@ -30,11 +30,14 @@ export function registerVoucherCreateRoutes(app: Express) {
     try {
       const isPOS = req.user?.role === "POS";
       const voucherType = req.body.voucherType;
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!req.body.voucherNumber || !voucherType || !req.body.voucherDate)
+        return res.status(400).json({ message: "voucherNumber, voucherType and voucherDate are required" });
       if (isPOS && voucherType !== "StockTransfer" && voucherType !== "Stock Transfer" && voucherType !== "Transfer") {
         return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
       }
-      const companyId = req.session.currentCompanyId;
-      const exchangeRate = companyId ? await getCurrentExchangeRate(companyId) : null;
+      const exchangeRate = await getCurrentExchangeRate(companyId);
       const voucher = await storage.createVoucher({
         ...req.body,
         exchangeRate,

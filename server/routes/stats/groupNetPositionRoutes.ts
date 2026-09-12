@@ -4,10 +4,7 @@ import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
-import {
-  calculateGroupNetPosition,
-  GroupHistoricalCurrencyError,
-} from "../../helpers/groupNetPosition";
+import { calculateGroupNetPosition, GroupHistoricalCurrencyError } from "../../helpers/groupNetPosition";
 import { generateGroupNetPositionExcel } from "../../helpers/generateGroupNetPositionExcel";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;

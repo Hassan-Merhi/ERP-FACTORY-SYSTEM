@@ -118,13 +118,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
-          .where(
-            and(
-              eq(ledgerAccounts.companyId, companyId),
-              eq(vouchers.optional, false),
-              isNull(vouchers.deletedAt)
-            )
-          )
+          .where(and(eq(ledgerAccounts.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
           .execute(),
       ]);
       // Strip internal system-only accounts (sp_stock, sp_opnbal are isHidden=true for a reason)

@@ -166,7 +166,25 @@ export function registerAccountMigrationRoutes(app: Express) {
 
         // Build per-account plan (code conflict resolution + entry counts)
         const accountPlans: Array<{
-          account: { id: number; companyId: number; code: string; name: string; accountType: string; subType: string | null; parentId: number | null; openingBalance: string | null; openingBalanceSide: string | null; openingBalanceNativeAmount: string | null; openingBalanceCurrency: string | null; openingBalanceHistoricalRate: string | null; openingBalanceBaseAmount: string | null; active: boolean; isHidden: boolean; deletedAt: Date | null; createdAt: Date; };
+          account: {
+            id: number;
+            companyId: number;
+            code: string;
+            name: string;
+            accountType: string;
+            subType: string | null;
+            parentId: number | null;
+            openingBalance: string | null;
+            openingBalanceSide: string | null;
+            openingBalanceNativeAmount: string | null;
+            openingBalanceCurrency: string | null;
+            openingBalanceHistoricalRate: string | null;
+            openingBalanceBaseAmount: string | null;
+            active: boolean;
+            isHidden: boolean;
+            deletedAt: Date | null;
+            createdAt: Date;
+          };
           originalCode: string;
           finalCode: string;
           entryCount: number;

@@ -10,7 +10,9 @@ function isOwnerWithdrawalClearingAccount(value: unknown): boolean {
   return (
     String(row.subType ?? row.sub_type ?? "") === GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE ||
     String(row.code ?? "") === GC_OWNER_WITHDRAWAL_CLEARING_CODE ||
-    String(row.name ?? "").trim().toLowerCase() === GC_OWNER_WITHDRAWAL_CLEARING_NAME.toLowerCase()
+    String(row.name ?? "")
+      .trim()
+      .toLowerCase() === GC_OWNER_WITHDRAWAL_CLEARING_NAME.toLowerCase()
   );
 }
 

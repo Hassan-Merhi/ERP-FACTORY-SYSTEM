@@ -112,6 +112,9 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;
+      const parsedKgWaste = Number(kgWaste);
+      if (!date || !wasteType || kgWaste == null || !Number.isFinite(parsedKgWaste) || parsedKgWaste < 0)
+        return res.status(400).json({ message: "date, wasteType and a valid kgWaste are required" });
 
       const [entry] = await db
         .insert(factoryWasteEntries)

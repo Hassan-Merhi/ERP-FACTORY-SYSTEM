@@ -5,7 +5,7 @@ const ADMIN_SESSION_ROLES = new Set(["Admin", "Owner", "Developer"]);
 export class SessionRouteError extends Error {
   constructor(
     public readonly statusCode: number,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "SessionRouteError";
@@ -13,11 +13,7 @@ export class SessionRouteError extends Error {
 }
 
 export const sessionService = {
-  async list(params: {
-    userId: string | undefined;
-    role: string | undefined;
-    currentSid: string;
-  }) {
+  async list(params: { userId: string | undefined; role: string | undefined; currentSid: string }) {
     const includeAllUsers = ADMIN_SESSION_ROLES.has(params.role || "");
     const rows = await sessionRepository.listActiveSessions(params.userId, includeAllUsers);
     const ips = Array.from(new Set(rows.map((row) => row.sess?.ip).filter(Boolean))) as string[];
@@ -58,11 +54,7 @@ export const sessionService = {
     });
   },
 
-  async revoke(params: {
-    sid: string;
-    userId: string | undefined;
-    role: string | undefined;
-  }) {
+  async revoke(params: { sid: string; userId: string | undefined; role: string | undefined }) {
     const session = await sessionRepository.getSession(params.sid);
     if (!session) throw new SessionRouteError(404, "Session not found");
 

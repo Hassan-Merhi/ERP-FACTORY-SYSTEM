@@ -104,7 +104,15 @@ export function registerFactoryDocsRoutes(app: Express) {
 
   app.post("/api/factory/container-doc-types", requireAuth, async (req: Request, res: Response) => {
     try {
-      const [row] = await db.insert(containerDocumentTypes).values(req.body).returning();
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const code = String(req.body?.code ?? "").trim();
+      const label = String(req.body?.label ?? "").trim();
+      if (!code || !label) return res.status(400).json({ message: "code and label are required" });
+      const [row] = await db
+        .insert(containerDocumentTypes)
+        .values({ ...req.body, companyId, code, label })
+        .returning();
       res.json(row);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

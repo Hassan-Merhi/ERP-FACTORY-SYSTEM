@@ -37,9 +37,6 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(import|upload|excel|template|export|download|whatsapp|pdf)/i,
   /(repair|recalc|migration|migrate|cutover|backup|restore|reset|seed|rebuild|purge|backfill)/i,
   /(^|\/)(refresh|track|sync|send|print)(\/|$)/i,
-  /^\/api\/factory\/container-doc-types$/i,
-  /^\/api\/factory\/waste$/i,
-  /^\/api\/factory\/status-builder\/metrics$/i,
 ];
 
 let ctx: TestContext;
@@ -102,13 +99,13 @@ function poisonBody() {
     charges: [],
     bales: [],
     transfers: [],
-    amount: "",
-    quantity: "",
+    amount: "0",
+    quantity: "0",
     name: "",
     code: "",
-    date: "",
-    startDate: "",
-    endDate: "",
+    date: "2026-08-08",
+    startDate: "2026-08-01",
+    endDate: "2026-08-08",
   };
 }
 
