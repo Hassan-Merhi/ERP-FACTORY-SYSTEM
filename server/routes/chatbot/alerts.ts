@@ -126,7 +126,19 @@ export function registerChatbotAlertRoutes(app: Express) {
       const { userId } = req.params;
       const { enabled } = req.body;
 
-      await db.update(users).set({ chatbotEnabled: enabled }).where(eq(users.id, userId));
+      // Without this, a body missing `enabled` left the update with nothing to
+      // set, which drizzle rejects and the catch below reported as an opaque
+      // 500 "Internal server error".
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ message: "enabled must be a boolean" });
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({ chatbotEnabled: enabled })
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+      if (!updated) return res.status(404).json({ message: "User not found" });
 
       res.json({ message: `Chatbot ${enabled ? "enabled" : "disabled"} for user` });
     } catch (_error: unknown) {
