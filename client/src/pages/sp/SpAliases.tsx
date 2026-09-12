@@ -8,6 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Loader2, Link2, Trash2, Plus, Info } from "lucide-react";
 
+interface SpAlias {
+  id: number;
+  alias_code?: string;
+  stock_item_name?: string | null;
+  stock_item_code?: string | null;
+  stock_item_id?: number;
+  description?: string | null;
+}
+
 export default function SpAliases() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -16,12 +25,13 @@ export default function SpAliases() {
   const [stockItemId, setStockItemId] = useState("");
   const [description, setDescription] = useState("");
 
-  const { data: aliases = [], isLoading } = useQuery({
+  const { data: aliases = [], isLoading } = useQuery<SpAlias[]>({
     queryKey: ["/api/sp/aliases"],
   });
 
   const addMutation = useMutation({
-    mutationFn: (body: any) => apiRequest("POST", "/api/sp/aliases", body),
+    mutationFn: (body: { aliasCode: string; stockItemId: number; description?: string }) =>
+      apiRequest("POST", "/api/sp/aliases", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/aliases"] });
       toast({ title: "Alias added" });
@@ -135,7 +145,7 @@ export default function SpAliases() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading...
           </div>
-        ) : (aliases as any[]).length === 0 ? (
+        ) : aliases.length === 0 ? (
           <p className="text-sm text-muted-foreground">No aliases configured.</p>
         ) : (
           <Card>
@@ -151,7 +161,7 @@ export default function SpAliases() {
                     <span className="col-span-4">Description</span>
                     <span className="col-span-1"></span>
                   </div>
-                  {(aliases as any[]).map((a) => (
+                  {aliases.map((a) => (
                     <div
                       key={a.id}
                       className="grid grid-cols-12 text-xs py-2 border-b border-border/30 last:border-0 items-center"
