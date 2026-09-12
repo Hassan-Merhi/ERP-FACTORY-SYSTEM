@@ -36,20 +36,20 @@ function snapshot(overrides: Partial<ProformaCapacitySnapshot> = {}): ProformaCa
 }
 
 describe("buildProformaProgress", () => {
-  it("uses authoritative global consumption without subtracting the current loading twice", () => {
+  it("shows progress for the current loading without counting sibling loadings", () => {
     expect(buildProformaProgress(snapshot())).toEqual([
       expect.objectContaining({
         quantity: 42,
         loaded: 5,
         siblingLoaded: 10,
-        totalLoaded: 15,
-        remaining: 27,
+        totalLoaded: 5,
+        remaining: 37,
         status: "short",
       }),
     ]);
   });
 
-  it("preserves historical overload while flooring remaining quantity at zero", () => {
+  it("does not mark the current loading overloaded because sibling loadings exceeded the proforma", () => {
     const value = snapshot({
       remainingTotalQty: 0,
       excessTotalQty: 65,
@@ -70,7 +70,30 @@ describe("buildProformaProgress", () => {
       ],
     });
     expect(buildProformaProgress(value)[0]).toEqual(
-      expect.objectContaining({ status: "overloaded", remaining: 0, excess: 65 })
+      expect.objectContaining({ status: "short", totalLoaded: 5, remaining: 37, excess: 0 })
+    );
+  });
+
+  it("still marks a loading overloaded when that loading itself exceeds the line quantity", () => {
+    const value = snapshot({
+      articles: [
+        {
+          articleCode: "A",
+          normalizedArticleCode: "a",
+          isOnProforma: true,
+          requestedQty: 2,
+          currentOrderLoadedQty: 3,
+          siblingLoadedQty: 100,
+          totalConsumedQty: 103,
+          remainingQty: 0,
+          excessQty: 101,
+          isFulfilled: true,
+          isOverloaded: true,
+        },
+      ],
+    });
+    expect(buildProformaProgress(value)[0]).toEqual(
+      expect.objectContaining({ status: "overloaded", totalLoaded: 3, remaining: 0, excess: 1 })
     );
   });
 });
