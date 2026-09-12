@@ -133,7 +133,8 @@ function FinalizeDialog({ model }: { model: ContainerLoadingScanModel }) {
           {hasProformaReview ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Review this loading against the reusable proforma. Statuses are informational and apply to this loading only.
+                Review this loading against the reusable proforma. Statuses are informational and apply to this loading
+                only.
               </p>
               <ReviewTable model={model} />
               <ReviewTotals model={model} />
