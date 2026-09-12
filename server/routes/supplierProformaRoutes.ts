@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 import { logAudit } from "./_helpers";
 import { Express } from "express";
 import type { Request, Response, RequestHandler } from "express";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { eq, and, ne } from "drizzle-orm";
 import ExcelJS from "exceljs";
 import { buildAliasMap, resolveBarcode } from "./helpers/proformaBarcodeHelpers";
@@ -100,12 +100,11 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       const supplierId = parseId(req.params.supplierId);
       if (supplierId === null) return res.status(400).json({ message: "Invalid id" });
       const { reference, notes, lines } = req.body;
-      const [supplier] = await db
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(and(eq(suppliers.id, supplierId), eq(suppliers.companyId, companyId)))
-        .limit(1);
-      if (!supplier) return res.status(404).json({ message: "Supplier not found" });
+      const supplier = await pool.query<{ id: number }>(
+        "SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 LIMIT 1",
+        [supplierId, companyId]
+      );
+      if (supplier.rowCount === 0) return res.status(404).json({ message: "Supplier not found" });
       const [proforma] = await db
         .insert(supplierProformas)
         .values({
