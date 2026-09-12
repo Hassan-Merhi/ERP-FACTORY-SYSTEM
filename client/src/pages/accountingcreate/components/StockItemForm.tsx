@@ -3,6 +3,7 @@
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
+import type { AccountingForm, AccountingFormSubmit, AccountingFormValues, StockGroupOption } from "../types";
 import { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -21,12 +22,12 @@ function StockItemForm({
   onCancel,
   isPending,
 }: {
-  form: any;
-  onSubmit: (data: false, saveAndNew?: boolean) => void;
+  form: AccountingForm;
+  onSubmit: AccountingFormSubmit;
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const { data: stockGroups = [] } = useQuery<any[]>({
+  const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
     queryKey: ["/api/stock-groups"],
   });
 
@@ -44,7 +45,11 @@ function StockItemForm({
   return (
     <Card className="p-4 md:p-6">
       <Form {...form}>
-        <form noValidate onSubmit={form.handleSubmit((data: any) => onSubmit(data, false))} className="space-y-6">
+        <form
+          noValidate
+          onSubmit={form.handleSubmit((data: AccountingFormValues) => onSubmit(data, false))}
+          className="space-y-6"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}

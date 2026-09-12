@@ -3,11 +3,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { UseFormReturn } from "react-hook-form";
+import type { FieldValues, UseFormReturn } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 
 interface VoucherFormProps {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<FieldValues>;
   onSubmit: (data: Record<string, unknown>) => void;
   isPending: boolean;
   voucherNumber?: string;

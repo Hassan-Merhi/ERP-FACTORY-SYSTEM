@@ -8,7 +8,12 @@ interface SaveRevisionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transferRevisionsCount: number;
-  revisionItems: any[];
+  revisionItems: {
+    stockItemName: string;
+    originalQuantity: number;
+    delta: number;
+    newQuantity: number;
+  }[];
   revisionNote: string;
   setRevisionNote: (note: string) => void;
   isSaving: boolean;

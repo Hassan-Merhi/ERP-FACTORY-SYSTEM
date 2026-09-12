@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatQty } from "./utils";
+import type { PriceListRow } from "./types";
 import type { PosPriceListModel } from "./usePosPriceListModel";
 
 /**
@@ -76,7 +77,7 @@ function PriceEditor({
   );
 }
 
-function MasterPriceCells({ model, item }: { model: PosPriceListModel; item: any }) {
+function MasterPriceCells({ model, item }: { model: PosPriceListModel; item: PriceListRow }) {
   const { canEdit, editingItem, formatAmount } = model;
   return (
     <>
@@ -112,7 +113,7 @@ function MasterPriceCells({ model, item }: { model: PosPriceListModel; item: any
   );
 }
 
-function SingleLocationPriceCell({ model, item }: { model: PosPriceListModel; item: any }) {
+function SingleLocationPriceCell({ model, item }: { model: PosPriceListModel; item: PriceListRow }) {
   const { canEdit, editingItem, formatAmount, selectedLocationId } = model;
   const isEditing = editingItem?.stockItemId === item.stockItemId;
   return (
@@ -126,7 +127,7 @@ function SingleLocationPriceCell({ model, item }: { model: PosPriceListModel; it
             canEdit && "group cursor-pointer rounded-md px-2 py-1 hover-elevate"
           )}
           data-testid={`cell-price-${item.stockItemId}`}
-          onClick={() => canEdit && model.startEdit(item.stockItemId, selectedLocationId!, item.sellingPrice)}
+          onClick={() => canEdit && model.startEdit(item.stockItemId, selectedLocationId!, item.sellingPrice ?? null)}
           title={canEdit ? "Click to edit price" : undefined}
         >
           <span className="font-semibold tabular-nums">

@@ -20,7 +20,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
-import type { Location, MasterItem, MasterPriceListResponse, POSPriceListProps, PriceListItem } from "./types";
+import type {
+  Location,
+  MasterItem,
+  MasterPriceListResponse,
+  POSPriceListProps,
+  PriceListItem,
+  PriceListRow,
+} from "./types";
 import { ALL_LOCATIONS_ID } from "./utils";
 
 const PRIVILEGED_ROLES = ["Admin", "Owner", "Manager", "Developer"];
@@ -135,7 +142,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   }, [isAllMode, masters, hiddenLocations]);
 
   const locationPricedList = useMemo(() => {
-    if (isAllMode) return masterItems as any[];
+    if (isAllMode) return masterItems;
     if (!posUser) return priceList;
     return priceList.filter(
       (item) => item.hasCustomPrice && item.sellingPrice !== null && parseFloat(item.quantity) > 0
@@ -256,7 +263,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
   };
 
   /** Price shown for an item in a given master column (falls back to the base price). */
-  const masterPriceFor = (item: any, locationId: number): string | null =>
+  const masterPriceFor = (item: PriceListRow, locationId: number): string | null =>
     item.masterPrices?.[locationId] ?? item.baseSellingPrice ?? null;
 
   const editCell = (stockItemId: number, locationId: number, price: string | null) => {
@@ -274,7 +281,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     if (nextIdx < 0 || nextIdx >= items.length) return;
     const nextItem = items[nextIdx];
     const nextPrice = isAllMode ? masterPriceFor(nextItem, current.locationId) : nextItem.sellingPrice;
-    editCell(nextItem.stockItemId, current.locationId, nextPrice);
+    editCell(nextItem.stockItemId, current.locationId, nextPrice ?? null);
   };
 
   const navigateHorizontal = (direction: "left" | "right") => {

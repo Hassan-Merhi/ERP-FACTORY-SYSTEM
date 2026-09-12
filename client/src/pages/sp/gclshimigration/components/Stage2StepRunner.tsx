@@ -3,14 +3,23 @@
  *
  * Extracted from GcLshiMigration.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useMutation} from "@tanstack/react-query";
-import {apiRequest} from "@/lib/queryClient";
-import {useToast} from "@/hooks/use-toast";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "@/components/ui/alert-dialog";
-import {AlertTriangle, Play, Lock, type LucideIcon} from "lucide-react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle, Play, Lock, type LucideIcon } from "lucide-react";
 
 export function Stage2StepRunner({
   label,
@@ -36,7 +45,11 @@ export function Stage2StepRunner({
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{
+    rowsCreated?: number;
+    summary?: string[];
+    warnings?: string[];
+  } | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -104,7 +117,7 @@ export function Stage2StepRunner({
           ))}
           {(result.warnings ?? []).length > 0 && (
             <div className="text-amber-600 dark:text-amber-400 space-y-0.5 mt-1">
-              {result.warnings.map((w: string, i: number) => (
+              {(result.warnings ?? []).map((w, i: number) => (
                 <p key={i} className="flex gap-1">
                   <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" /> {w}
                 </p>

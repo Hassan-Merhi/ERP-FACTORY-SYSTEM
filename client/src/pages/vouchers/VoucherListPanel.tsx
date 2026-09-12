@@ -12,7 +12,16 @@ interface VoucherListPanelProps {
 }
 
 export function VoucherListPanel({ onEdit, formatAmount }: VoucherListPanelProps) {
-  const { data: vouchers = [], isLoading } = useQuery<any[]>({
+  const { data: vouchers = [], isLoading } = useQuery<
+    {
+      id: number;
+      voucherDate: string;
+      optional?: boolean;
+      voucherType?: string;
+      description?: string | null;
+      totalAmount?: string | number | null;
+    }[]
+  >({
     queryKey: ["/api/vouchers"],
   });
 
@@ -56,7 +65,7 @@ export function VoucherListPanel({ onEdit, formatAmount }: VoucherListPanelProps
                   </TableCell>
                   <TableCell className="max-w-[300px] truncate">{voucher.description}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {formatAmount(parseFloat(voucher.totalAmount || "0"))}
+                    {formatAmount(parseFloat(String(voucher.totalAmount ?? "0")))}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => onEdit(voucher.id)}>

@@ -21,3 +21,38 @@ export interface Customer {
   id: number;
   legalName: string;
 }
+
+export interface PosImportItem {
+  barcode?: string;
+  quantity: number | string;
+  rate: number | string;
+  stockItemName?: string;
+  stockItemId?: number;
+  error?: string;
+  warning?: string;
+  currentStock?: number;
+}
+
+export interface PosImportPreview {
+  items: PosImportItem[];
+  totalValue: number;
+}
+
+export interface PosImportValidationResult {
+  errors: string[];
+  warnings: string[];
+  validatedItems: PosImportItem[];
+}
+
+export interface ImportedSale {
+  voucher?: {
+    exchangeRate?: string;
+    description?: string;
+  } | null;
+  items: PosImportItem[];
+  grandTotal: number | string;
+  saleDate: string;
+  location?: Location;
+  isCreditSale: boolean;
+  customer?: { name: string } | null;
+}

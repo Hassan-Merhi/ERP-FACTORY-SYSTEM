@@ -4,6 +4,6 @@
  * Extracted from GcLshiMigration.tsx during the Phase 4 god-file split.
  */
 
-export function fmtNum(n: number) {
-  return (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function fmtNum(n: number | string | undefined | null) {
+  return Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

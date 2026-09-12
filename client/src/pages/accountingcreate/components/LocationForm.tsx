@@ -3,6 +3,7 @@
  *
  * Extracted from AccountingCreate.tsx during the Phase 4 god-file split.
  */
+import type { AccountingForm, AccountingFormSubmit, CompanyOption } from "../types";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -18,19 +19,19 @@ function LocationForm({
   onCancel,
   isPending,
 }: {
-  form: any;
-  onSubmit: (data: any, saveAndNew?: boolean) => void;
+  form: AccountingForm;
+  onSubmit: AccountingFormSubmit;
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const { data: companies = [] } = useQuery<any[]>({
+  const { data: companies = [] } = useQuery<CompanyOption[]>({
     queryKey: ["/api/companies"],
   });
 
   return (
     <Card className="p-4 md:p-6">
       <Form {...form}>
-        <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <form noValidate onSubmit={form.handleSubmit((data) => onSubmit(data))} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}

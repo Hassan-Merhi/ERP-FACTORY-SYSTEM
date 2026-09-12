@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "@/lib/formatNumber";
+import type { PosImportItem } from "./types";
 import type { PosImportModel } from "./usePosImportModel";
 
 export function PosImportValidationErrors({ model }: { model: PosImportModel }) {
@@ -47,7 +48,7 @@ export function PosImportValidationErrors({ model }: { model: PosImportModel }) 
   );
 }
 
-function RowStatus({ validation }: { validation: any }) {
+function RowStatus({ validation }: { validation: PosImportItem | undefined }) {
   if (!validation) return <span className="text-sm text-muted-foreground">Not validated</span>;
   if (validation.error) {
     return (
@@ -105,7 +106,7 @@ export function PosImportPreview({ model }: { model: PosImportModel }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {preview.items.map((item: any, index: number) => {
+              {preview.items.map((item, index: number) => {
                 const validation = validationResult?.validatedItems?.[index];
                 const hasError = validation?.error;
 
@@ -118,11 +119,11 @@ export function PosImportPreview({ model }: { model: PosImportModel }) {
                     <TableCell className="text-right">{item.quantity}</TableCell>
                     <TableCell className="text-right">
                       {prefix}
-                      {formatNumber(item.rate)}
+                      {formatNumber(Number(item.rate))}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {prefix}
-                      {formatNumber(item.quantity * item.rate)}
+                      {formatNumber(Number(item.quantity) * Number(item.rate))}
                     </TableCell>
                     <TableCell>
                       <RowStatus validation={validation} />

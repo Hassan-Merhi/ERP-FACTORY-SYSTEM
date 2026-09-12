@@ -11,12 +11,16 @@ import { SafeStyle } from "@/components/SafeStyle";
 
 const CENTER_CELL = { textAlign: "center" as const, padding: "4px 3px", verticalAlign: "top", fontWeight: "600" };
 
+function parseAmt(value: string | number | undefined): number {
+  return parseFloat(String(value ?? "0")) || 0;
+}
+
 interface PrintSaleItem {
   name?: string;
   stockItemName?: string;
   itemCode?: string;
-  quantity?: string;
-  rate?: string;
+  quantity?: string | number;
+  rate?: string | number;
 }
 
 interface PrintSale {
@@ -43,9 +47,9 @@ function ItemsTable({
   fmtPrint,
 }: Pick<PrintProps, "importedSale" | "printCurrPrefix" | "fmtPrint">) {
   const items = importedSale?.items ?? [];
-  const totalQty = items.reduce((sum: number, item: PrintSaleItem) => sum + parseFloat(item.quantity || "0"), 0);
+  const totalQty = items.reduce((sum: number, item: PrintSaleItem) => sum + parseAmt(item.quantity), 0);
   const totalAmount = items.reduce(
-    (sum: number, item: PrintSaleItem) => sum + parseFloat(item.quantity || "0") * parseFloat(item.rate || "0"),
+    (sum: number, item: PrintSaleItem) => sum + parseAmt(item.quantity) * parseAmt(item.rate),
     0
   );
   return (
@@ -78,8 +82,8 @@ function ItemsTable({
       </thead>
       <tbody>
         {items.map((item: PrintSaleItem, idx: number) => {
-          const rate = parseFloat(item.rate || "0");
-          const qty = parseFloat(item.quantity || "0");
+          const rate = parseAmt(item.rate);
+          const qty = parseAmt(item.quantity);
           return (
             <tr
               key={idx}
@@ -132,7 +136,7 @@ export function PosImportPrintTemplate({
 }: PrintProps) {
   const items = importedSale?.items ?? [];
   const totalPaid = items.reduce(
-    (sum: number, item: PrintSaleItem) => sum + parseFloat(item.quantity || "0") * parseFloat(item.rate || "0"),
+    (sum: number, item: PrintSaleItem) => sum + parseAmt(item.quantity) * parseAmt(item.rate),
     0
   );
   const showDailyRate =

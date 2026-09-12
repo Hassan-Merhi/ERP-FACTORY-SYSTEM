@@ -241,7 +241,7 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
                                   >
                                     <div className="font-medium truncate">{item.stockItemName}</div>
                                     <div className="text-xs text-muted-foreground">
-                                      Avail: {formatNumber(item.quantity)}
+                                      Avail: {formatNumber(parseFloat(item.quantity))}
                                     </div>
                                   </button>
                                 ))}

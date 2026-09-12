@@ -53,6 +53,16 @@ function NavigationCard({ item, testId }: { item: (typeof dailyWork)[number]; te
   );
 }
 
+interface SpSale {
+  id: number;
+  status?: string;
+  saleDate?: string;
+  customerName?: string;
+  lines?: unknown[];
+  totalFinalCostUsd?: string | number;
+  totalSalePriceUsd?: string | number;
+}
+
 function money(value: unknown): string {
   const amount = Number(value ?? 0);
   return `$${(Number.isFinite(amount) ? amount : 0).toLocaleString("en-US", {
@@ -64,7 +74,7 @@ function money(value: unknown): string {
 export default function SpOverview() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedSale, setSelectedSale] = useState<any | null>(null);
+  const [selectedSale, setSelectedSale] = useState<SpSale | null>(null);
   const [reason, setReason] = useState("");
 
   const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
@@ -73,7 +83,7 @@ export default function SpOverview() {
   const role = currentUser?.currentRole ?? currentUser?.role ?? "";
   const canReverse = role === "Admin" || role === "Developer";
 
-  const { data: sales = [], isLoading: salesLoading } = useQuery<any[]>({
+  const { data: sales = [], isLoading: salesLoading } = useQuery<SpSale[]>({
     queryKey: ["/api/sp/sales"],
   });
 
