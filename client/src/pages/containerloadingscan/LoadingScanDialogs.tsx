@@ -2,11 +2,11 @@
  * Dialogs of the ERP container loading scan page: the Validate & Finalize
  * review and the resume "last scanned" prompt.
  *
- * Split out of ContainerLoadingScan.tsx unchanged — with a linked proforma the
- * finalize dialog reviews every line plus the not-on-proforma extras, and
- * without one it just confirms the totals.
+ * With a reusable linked proforma the review is informational: items listed on
+ * the proforma are shown as on-proforma, and other loaded items are explicitly
+ * allowed rather than rendered as destructive errors.
  */
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,8 +21,8 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
         <TableHeader className="sticky top-0 z-30 bg-background">
           <TableRow>
             <TableHead>Article / Product</TableHead>
-            <TableHead className="text-right">Expected</TableHead>
-            <TableHead className="text-right">Loaded</TableHead>
+            <TableHead className="text-right">Proforma</TableHead>
+            <TableHead className="text-right">Loaded Here</TableHead>
             <TableHead className="text-right">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -31,11 +31,13 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
             <TableRow
               key={line.id}
               className={
-                line.status === "fulfilled"
-                  ? "bg-green-50 dark:bg-green-950/40"
-                  : line.status === "overloaded"
-                    ? "bg-orange-50 dark:bg-orange-950/30"
-                    : ""
+                line.status === "reference"
+                  ? ""
+                  : line.status === "fulfilled"
+                    ? "bg-green-50 dark:bg-green-950/40"
+                    : line.status === "overloaded"
+                      ? "bg-orange-50 dark:bg-orange-950/30"
+                      : ""
               }
             >
               <TableCell className="text-sm">
@@ -45,6 +47,12 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
               <TableCell className="text-right font-mono text-sm">{line.quantity}</TableCell>
               <TableCell className="text-right font-mono text-sm">{line.totalLoaded}</TableCell>
               <TableCell className="text-right text-sm">
+                {line.status === "reference" && (
+                  <span className="text-muted-foreground font-medium flex items-center justify-end gap-1">
+                    <Info className="h-3 w-3" />
+                    On Proforma
+                  </span>
+                )}
                 {line.status === "fulfilled" && (
                   <span className="text-green-600 dark:text-green-400 font-semibold">✓ Done</span>
                 )}
@@ -64,18 +72,16 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
             </TableRow>
           ))}
           {extraArticles.map((code) => (
-            <TableRow key={code} className="bg-red-50 dark:bg-red-950/30">
+            <TableRow key={code} className="bg-muted/20">
               <TableCell className="text-sm">
-                <div className="font-mono text-xs text-red-700 dark:text-red-400">{code}</div>
-                <div className="text-red-500 text-xs">Not on proforma</div>
+                <div className="font-mono text-xs">{code}</div>
+                <div className="text-muted-foreground text-xs">Not on Proforma — Allowed</div>
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
-              <TableCell className="text-right font-mono text-sm text-red-600 dark:text-red-400 font-semibold">
-                {loadedByArticle[code]}
-              </TableCell>
+              <TableCell className="text-right font-mono text-sm font-semibold">{loadedByArticle[code]}</TableCell>
               <TableCell className="text-right text-sm">
-                <Badge variant="destructive" className="text-xs no-default-hover-elevate no-default-active-elevate">
-                  Not on proforma
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Not on Proforma — Allowed
                 </Badge>
               </TableCell>
             </TableRow>
@@ -88,19 +94,26 @@ function ReviewTable({ model }: { model: ContainerLoadingScanModel }) {
 
 function ReviewTotals({ model }: { model: ContainerLoadingScanModel }) {
   const { proformaProgress, extraArticles, bales, totalWeight } = model;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
   const fulfilled = proformaProgress.filter((l) => l.status === "fulfilled").length;
   const overloaded = proformaProgress.filter((l) => l.status === "overloaded").length;
   const short = proformaProgress.filter((l) => l.status === "short" || l.status === "none").length;
   return (
     <div className="flex items-center justify-between gap-2 text-sm border-t pt-2 flex-wrap gap-y-1">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-green-600 dark:text-green-400 font-medium">{fulfilled} fulfilled</span>
-        {overloaded > 0 && (
-          <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} overloaded</span>
+        {referenceOnly ? (
+          <span className="text-muted-foreground font-medium">Reusable proforma — quantities are informational</span>
+        ) : (
+          <>
+            <span className="text-green-600 dark:text-green-400 font-medium">{fulfilled} fulfilled</span>
+            {overloaded > 0 && (
+              <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} overloaded</span>
+            )}
+            {short > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{short} short</span>}
+          </>
         )}
-        {short > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{short} short</span>}
         {extraArticles.length > 0 && (
-          <span className="text-red-600 dark:text-red-400 font-medium">{extraArticles.length} not on proforma</span>
+          <span className="text-muted-foreground font-medium">{extraArticles.length} not on proforma — allowed</span>
         )}
       </div>
       <span className="text-muted-foreground">
@@ -113,6 +126,7 @@ function ReviewTotals({ model }: { model: ContainerLoadingScanModel }) {
 function FinalizeDialog({ model }: { model: ContainerLoadingScanModel }) {
   const { linkedProforma, proformaProgress, bales, totalWeight, finalizeMutation } = model;
   const hasProformaReview = !!linkedProforma && proformaProgress.length > 0;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
   return (
     <Dialog open={model.showFinalizeDialog} onOpenChange={model.setShowFinalizeDialog}>
       <DialogContent className="max-w-lg">
@@ -122,7 +136,11 @@ function FinalizeDialog({ model }: { model: ContainerLoadingScanModel }) {
         <div className="space-y-4">
           {hasProformaReview ? (
             <>
-              <p className="text-sm text-muted-foreground">Review what was loaded vs the proforma before finalizing.</p>
+              <p className="text-sm text-muted-foreground">
+                {referenceOnly
+                  ? "Review this loading beside the reusable proforma. Quantities are not capped across loadings."
+                  : "Review what was loaded vs the proforma before finalizing."}
+              </p>
               <ReviewTable model={model} />
               <ReviewTotals model={model} />
             </>
