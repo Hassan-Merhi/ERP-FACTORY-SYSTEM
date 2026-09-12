@@ -210,28 +210,23 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
     it("validates input constraints strictly", async () => {
       const fakeTx = { execute: vi.fn() } as unknown as DbTransaction;
 
-      await expect(
-        reserveFinancialOperationTx(fakeTx, { ...baseInput, companyId: 0 })
-      ).rejects.toThrowError(
+      await expect(reserveFinancialOperationTx(fakeTx, { ...baseInput, companyId: 0 })).rejects.toThrowError(
         expect.objectContaining({ code: "FINANCIAL_OPERATION_COMPANY_INVALID" })
       );
 
-      await expect(
-        reserveFinancialOperationTx(fakeTx, { ...baseInput, operationName: "" })
-      ).rejects.toThrowError(
+      await expect(reserveFinancialOperationTx(fakeTx, { ...baseInput, operationName: "" })).rejects.toThrowError(
         expect.objectContaining({ code: "FINANCIAL_OPERATION_ID_REQUIRED" })
       );
 
       await expect(
         reserveFinancialOperationTx(fakeTx, { ...baseInput, requestFingerprint: "short" })
-      ).rejects.toThrowError(
-        expect.objectContaining({ code: "FINANCIAL_OPERATION_FINGERPRINT_INVALID" })
-      );
+      ).rejects.toThrowError(expect.objectContaining({ code: "FINANCIAL_OPERATION_FINGERPRINT_INVALID" }));
     });
 
     it("grants ownership on first submission insert", async () => {
       const fakeTx = {
-        execute: vi.fn()
+        execute: vi
+          .fn()
           .mockResolvedValueOnce({ rows: [] }) // lock
           .mockResolvedValueOnce({ rows: [{ id: 1 }], rowCount: 1 }), // insert
       } as unknown as DbTransaction;
@@ -243,7 +238,8 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
 
     it("returns completed replay on double-submit with same fingerprint", async () => {
       const fakeTx = {
-        execute: vi.fn()
+        execute: vi
+          .fn()
           .mockResolvedValueOnce({ rows: [] }) // lock
           .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // insert on conflict
           .mockResolvedValueOnce({
@@ -274,7 +270,8 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
       const modifiedFingerprint = financialOperationFingerprint(modifiedPayload);
 
       const fakeTx = {
-        execute: vi.fn()
+        execute: vi
+          .fn()
           .mockResolvedValueOnce({ rows: [] }) // lock
           .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // insert conflict
           .mockResolvedValueOnce({
@@ -310,13 +307,7 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
         execute: vi.fn().mockResolvedValueOnce({ rowCount: 1 }),
       } as unknown as DbTransaction;
 
-      await completeFinancialOperationTx(
-        fakeTx,
-        baseInput,
-        { voucherId: 888 },
-        "VOUCHER-888",
-        201
-      );
+      await completeFinancialOperationTx(fakeTx, baseInput, { voucherId: 888 }, "VOUCHER-888", 201);
 
       expect(fakeTx.execute).toHaveBeenCalled();
     });
@@ -326,9 +317,7 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
         execute: vi.fn().mockResolvedValueOnce({ rowCount: 0 }),
       } as unknown as DbTransaction;
 
-      await expect(
-        completeFinancialOperationTx(fakeTx, baseInput, { voucherId: 888 })
-      ).rejects.toThrowError(
+      await expect(completeFinancialOperationTx(fakeTx, baseInput, { voucherId: 888 })).rejects.toThrowError(
         expect.objectContaining({
           code: "FINANCIAL_OPERATION_COMPLETION_FAILED",
         })
@@ -370,7 +359,8 @@ describe("Failure-Mode Suite: Double-Submit & Idempotency", () => {
 
       const fakeTx = {
         execute: vi.fn(async () => ({ rows: [] })),
-        select: vi.fn()
+        select: vi
+          .fn()
           .mockReturnValueOnce({
             from: vi.fn(() => ({
               where: vi.fn(() => ({

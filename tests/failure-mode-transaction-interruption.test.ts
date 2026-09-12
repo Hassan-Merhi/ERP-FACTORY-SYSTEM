@@ -277,7 +277,7 @@ describe("Failure-Mode Suite: Transaction Interruption & Atomic Rollback", () =>
         const fakeTx = {
           execute: vi.fn(async (query: any) => {
             const str = query?.queryChunks
-              ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : c?.value ?? "")).join(" ")
+              ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : (c?.value ?? ""))).join(" ")
               : String(query);
 
             if (str.includes("pg_advisory_xact_lock")) {

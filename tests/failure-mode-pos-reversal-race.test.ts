@@ -9,10 +9,7 @@ import {
   postExactStockMovementReversalTx,
   type ExactStockMovementReversalAdapter,
 } from "../server/services/inventory/stockMovementReversal";
-import {
-  buildPosSaleAdvisoryLockKey,
-  normalizePosClientSaleId,
-} from "../server/services/pos/posSaleIdempotency";
+import { buildPosSaleAdvisoryLockKey, normalizePosClientSaleId } from "../server/services/pos/posSaleIdempotency";
 import type { CentralPostingDependencies } from "../server/services/accounting/centralPostingEngine";
 import type { DbTransaction } from "../server/db";
 
@@ -140,10 +137,7 @@ describe("Failure-Mode Suite: POS Reversal Race & Inventory Cost Integrity", () 
       };
 
       // Race 2 reversal requests concurrently
-      const [first, second] = await Promise.all([
-        executeReversalRequest(),
-        executeReversalRequest(),
-      ]);
+      const [first, second] = await Promise.all([executeReversalRequest(), executeReversalRequest()]);
 
       // Both returned the same reversal voucher ID
       expect(first.voucher.id).toBe(888);

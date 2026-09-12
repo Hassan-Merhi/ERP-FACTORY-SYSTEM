@@ -6,12 +6,7 @@ import {
   DurableFinancialOperationError,
   type DurableFinancialOperationInput,
 } from "../server/services/accounting/durableFinancialOperation";
-import {
-  retryAsync,
-  isEmailConfigError,
-  isWaConfigError,
-  type RetryResult,
-} from "../server/helpers/retryAsync";
+import { retryAsync, isEmailConfigError, isWaConfigError, type RetryResult } from "../server/helpers/retryAsync";
 import type { DbTransaction } from "../server/db";
 
 describe("Failure-Mode Suite: Crash / Retry Resilience", () => {
@@ -36,7 +31,7 @@ describe("Failure-Mode Suite: Crash / Retry Resilience", () => {
         const fakeTx = {
           execute: vi.fn(async (query: any) => {
             const str = query?.queryChunks
-              ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : c?.value ?? "")).join(" ")
+              ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : (c?.value ?? ""))).join(" ")
               : String(query);
 
             if (str.includes("pg_advisory_xact_lock")) return { rows: [] };
@@ -115,7 +110,7 @@ describe("Failure-Mode Suite: Crash / Retry Resilience", () => {
       const fakeTx = {
         execute: vi.fn(async (query: any) => {
           const str = query?.queryChunks
-            ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : c?.value ?? "")).join(" ")
+            ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : (c?.value ?? ""))).join(" ")
             : String(query);
 
           if (str.includes("pg_advisory_xact_lock")) return { rows: [] };
@@ -159,7 +154,7 @@ describe("Failure-Mode Suite: Crash / Retry Resilience", () => {
       const fakeTx = {
         execute: vi.fn(async (query: any) => {
           const str = query?.queryChunks
-            ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : c?.value ?? "")).join(" ")
+            ? query.queryChunks.map((c: any) => (typeof c === "string" ? c : (c?.value ?? ""))).join(" ")
             : String(query);
 
           if (str.includes("pg_advisory_xact_lock")) return { rows: [] };
