@@ -22,15 +22,27 @@ function implementedQueryTypes(): string[] {
   return fs
     .readdirSync(resolve("server/chat/reports/implementations"))
     .filter((name) => /^phase\d+ReportShard\.ts$/.test(name))
-    .flatMap((name) => [...read(path.join("server/chat/reports/implementations", name)).matchAll(/case\s+"([a-z0-9_]+)"\s*:/g)])
+    .flatMap((name) => [
+      ...read(path.join("server/chat/reports/implementations", name)).matchAll(/case\s+"([a-z0-9_]+)"\s*:/g),
+    ])
     .map((match) => match[1]);
 }
 
 describe("Phase 6 chat reporting architecture", () => {
   it("keeps chatService behind the stable report gateway", () => {
+    // The invariant is that the chat path reaches reporting only through the
+    // reports gateway and never branches on queryType itself. #1422 moved the
+    // Phase 1 data query out of chatService into chat/phase1DataQuery, so the
+    // direct gateway import now lives one delegation deeper — the boundary is
+    // unchanged, the file holding the import is not. Both files are checked for
+    // the switch so the added indirection cannot become a place to hide one.
     const source = read("server/chatService.ts");
-    expect(source).toContain('from "./chat/reports"');
+    expect(source).toContain('from "./chat/phase1DataQuery"');
     expect(source).not.toContain("switch (params.queryType)");
+
+    const dataQuery = read("server/chat/phase1DataQuery.ts");
+    expect(dataQuery).toContain('from "./reports"');
+    expect(dataQuery).not.toContain("switch (params.queryType)");
   });
 
   it("keeps the public report module as a thin dispatcher facade", () => {
@@ -68,7 +80,9 @@ describe("Phase 6 chat reporting architecture", () => {
       .filter((name) => /^phase\d+ReportShard\.ts$/.test(name));
     expect(shardFiles).toHaveLength(7);
     for (const file of shardFiles) {
-      expect(read(path.join("server/chat/reports/implementations", file)).split(/\r?\n/).length).toBeLessThanOrEqual(900);
+      expect(read(path.join("server/chat/reports/implementations", file)).split(/\r?\n/).length).toBeLessThanOrEqual(
+        900
+      );
     }
   });
 });
