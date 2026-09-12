@@ -73,6 +73,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "canonfse",
   "custload",
   "phase4cap",
+  "phase2cov",
 ]);
 
 function testCompanyType(prefix: string): "erp" | "factory" {
