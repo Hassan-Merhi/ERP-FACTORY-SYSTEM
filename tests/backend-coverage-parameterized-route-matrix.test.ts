@@ -1,19 +1,11 @@
 /**
  * Phase 1 backend coverage — parameterized route matrix.
  *
- * The existing API smoke sweep protects parameterless GET routes and the
- * authenticated write-safety sweep protects sensitive writes that would
- * otherwise be guard-only. The remaining broad blind spot is parameterized
- * routes: a route can register correctly and still throw as soon as its id,
- * reference, date, or other path parameter is parsed.
- *
- * This suite executes every parameterized /api route through the real Express
- * app as an authenticated Developer in the correct company mode. It uses
- * guaranteed-missing ids/references (and valid date-like parameters), so write
- * routes must reject without mutating accounting or inventory state. This is
- * deliberately behavioural coverage: requests pass through the real auth,
- * permission, tenant, parsing, query, and handler layers, and the test verifies
- * both liveness and state preservation.
+ * The parameterless GET surface already has a broad smoke sweep. This closes
+ * the complementary blind spot: parameterized API routes are exercised through
+ * the real auth, permission, tenant, path-parsing and handler stack with
+ * guaranteed-missing resources. Missing-resource writes must also leave the
+ * sensitive accounting/inventory state unchanged.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -26,10 +18,8 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 
 type CompanyMode = "erp" | "factory" | "properties" | "supplier_partner";
 type HttpMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
-
 type Manifest = { routes: string[] };
 type MatrixRoute = { method: HttpMethod; path: string };
-
 type SensitiveFingerprint = {
   voucher_count: string;
   debit_total: string;
@@ -64,7 +54,6 @@ let parentCompanyId: number;
 let companySequence = 0;
 let companies: Record<CompanyMode, number>;
 let routes: MatrixRoute[] = [];
-let failures: Array<{ route: string; status: number; detail: string }> = [];
 let beforeFingerprints: Record<CompanyMode, SensitiveFingerprint>;
 
 function modeForPath(routePath: string): CompanyMode {
@@ -83,14 +72,11 @@ export function selectParameterizedApiRoutes(manifest: Manifest): MatrixRoute[] 
   const selected: MatrixRoute[] = [];
 
   for (const entry of manifest.routes) {
-    const firstSpace = entry.indexOf(" ");
-    if (firstSpace <= 0) continue;
-    const method = entry.slice(0, firstSpace);
-    const routePath = entry.slice(firstSpace + 1);
-    if (!isHttpMethod(method)) continue;
-    if (!routePath.startsWith("/api/")) continue;
-    if (!routePath.includes(":")) continue;
-    if (routePath.includes("*")) continue;
+    // Manifest entries are "METHOD /path [guard > chain]". Split on spaces so
+    // the guard annotation can never become part of the requested URL.
+    const [method, routePath] = entry.split(" ");
+    if (!isHttpMethod(method) || !routePath?.startsWith("/api/")) continue;
+    if (!routePath.includes(":") || routePath.includes("*")) continue;
     if (EXCLUDED_PATTERNS.some((pattern) => pattern.test(routePath))) continue;
 
     const key = `${method} ${routePath}`;
@@ -98,7 +84,6 @@ export function selectParameterizedApiRoutes(manifest: Manifest): MatrixRoute[] 
     seen.add(key);
     selected.push({ method, path: routePath });
   }
-
   return selected;
 }
 
@@ -109,8 +94,7 @@ export function materializeCoveragePath(routePath: string): string {
     if (name.includes("year")) return "2026";
     if (name.includes("month")) return "8";
     if (name.includes("day")) return "8";
-    if (name.includes("type")) return "unknown";
-    if (name.includes("status")) return "unknown";
+    if (name.includes("type") || name.includes("status")) return "unknown";
     if (name.includes("currency")) return "USD";
     if (name.includes("reference") || name.includes("ref") || name.includes("code") || name.includes("name")) {
       return encodeURIComponent(MISSING_REFERENCE);
@@ -173,7 +157,6 @@ async function createCompany(mode: CompanyMode, label: string): Promise<number> 
     ]
   );
   const companyId = result.rows[0].id;
-
   await pool.query(
     `INSERT INTO user_company_roles
        (user_id, company_id, role, can_delete_records, can_sell_negative_stock)
@@ -200,12 +183,8 @@ async function sensitiveFingerprint(companyId: number): Promise<SensitiveFingerp
   const result = await pool.query<SensitiveFingerprint>(
     `SELECT
        (SELECT COUNT(*)::text FROM vouchers v WHERE v.company_id = $1) AS voucher_count,
-       (SELECT COALESCE(SUM(ve.debit_amount::numeric), 0)::text
-          FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
-         WHERE v.company_id = $1) AS debit_total,
-       (SELECT COALESCE(SUM(ve.credit_amount::numeric), 0)::text
-          FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
-         WHERE v.company_id = $1) AS credit_total,
+       (SELECT COALESCE(SUM(ve.debit_amount::numeric), 0)::text FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id WHERE v.company_id = $1) AS debit_total,
+       (SELECT COALESCE(SUM(ve.credit_amount::numeric), 0)::text FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id WHERE v.company_id = $1) AS credit_total,
        (SELECT COUNT(*)::text FROM inventory i WHERE i.company_id = $1) AS inventory_count,
        (SELECT COALESCE(SUM(i.quantity::numeric), 0)::text FROM inventory i WHERE i.company_id = $1) AS inventory_qty,
        (SELECT COALESCE(SUM(i.total_value::numeric), 0)::text FROM inventory i WHERE i.company_id = $1) AS inventory_value,
@@ -235,10 +214,8 @@ async function assertAllVouchersBalanced(companyId: number): Promise<void> {
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
   agent = request.agent(ctx.app);
-
   await pool.query(
-    `UPDATE user_company_roles
-        SET role = 'Developer', can_delete_records = true, can_sell_negative_stock = true
+    `UPDATE user_company_roles SET role = 'Developer', can_delete_records = true, can_sell_negative_stock = true
       WHERE user_id = $1 AND company_id = $2`,
     [ctx.userId, ctx.companyId]
   );
@@ -255,7 +232,6 @@ beforeAll(async () => {
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     [String(parentCompanyId)]
   );
-
   companies = {
     erp: ctx.companyId,
     factory: await createCompany("factory", "factory"),
@@ -263,8 +239,7 @@ beforeAll(async () => {
     supplier_partner: await createCompany("supplier_partner", "supplier-partner"),
   };
 
-  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest;
-  routes = selectParameterizedApiRoutes(manifest);
+  routes = selectParameterizedApiRoutes(JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest);
   beforeFingerprints = {
     erp: await sensitiveFingerprint(companies.erp),
     factory: await sensitiveFingerprint(companies.factory),
@@ -281,9 +256,8 @@ afterAll(async () => {
 describe.sequential("Phase 1 parameterized backend route matrix", () => {
   it("executes the broad parameterized API surface without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(250);
-
+    const failures: Array<{ route: string; status: number; detail: string }> = [];
     let activeMode: CompanyMode | null = null;
-    failures = [];
 
     for (const route of routes) {
       const mode = modeForPath(route.path);
@@ -291,23 +265,18 @@ describe.sequential("Phase 1 parameterized backend route matrix", () => {
         await selectCompany(companies[mode]);
         activeMode = mode;
       }
-
       const concretePath = materializeCoveragePath(route.path);
       try {
         const response = await requestFor(route.method, concretePath)
           .set("x-client-date", "2026-08-08")
           .send(poisonBody(companies[mode]))
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
-
         if (response.status >= 500) {
+          const body = response.body as { message?: string; error?: string } | undefined;
           failures.push({
             route: `${route.method} ${route.path}`,
             status: response.status,
-            detail:
-              (response.body as { message?: string; error?: string } | undefined)?.message ||
-              (response.body as { message?: string; error?: string } | undefined)?.error ||
-              response.text?.slice(0, 200) ||
-              "",
+            detail: body?.message || body?.error || response.text?.slice(0, 200) || "",
           });
         }
       } catch (error) {
@@ -320,9 +289,7 @@ describe.sequential("Phase 1 parameterized backend route matrix", () => {
       }
     }
 
-    const report = failures
-      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
-      .join("\n");
+    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
     expect(failures, `${failures.length} parameterized route(s) failed the matrix:\n${report}`).toEqual([]);
   }, 300000);
 
