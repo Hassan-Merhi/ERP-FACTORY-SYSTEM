@@ -22,6 +22,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { AuthMe, ApiListRow } from "@shared/apiTypes";
+import type { LucideIcon } from "lucide-react";
 
 type Period =
   "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "all_time" | "specific_month" | "custom_range";
@@ -140,7 +141,7 @@ function KpiCard({
 }: {
   title: string;
   value: number;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   isProfit?: boolean;
 }) {
@@ -172,7 +173,7 @@ function AccountSection({
   badgeColor,
 }: {
   title: string;
-  accounts: any[];
+  accounts: { name: string; debit: number; credit: number; balance: number }[];
   total: number;
   type: "income" | "expense";
   badgeColor: string;

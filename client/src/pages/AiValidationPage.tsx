@@ -34,11 +34,24 @@ interface SuggestedFix {
   reason: string;
 }
 
+interface ValidationSummary {
+  message?: string;
+  codeColumn?: string;
+  nameColumn?: string;
+  totalChecked?: number;
+  found?: number;
+  missing?: number;
+  duplicateInFile?: number;
+  closeMatches?: number;
+  duplicateGroups?: number;
+  duplicateItems?: number;
+}
+
 interface ValidationResult {
   validationType: string;
   file1Name: string | null;
   file2Name: string | null;
-  summary: Record<string, any>;
+  summary: ValidationSummary;
   errors: ValidationItem[];
   warnings: ValidationItem[];
   suggestedFixes: SuggestedFix[];

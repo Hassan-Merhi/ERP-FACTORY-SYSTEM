@@ -22,7 +22,7 @@ import {
 
 interface UseVoucherEditMutationsOptions {
   id: string | undefined;
-  modeApiRequest: (method: string, url: string, body?: any) => Promise<any>;
+  modeApiRequest: (method: string, url: string, body?: unknown) => Promise<Response>;
   voucherType: string | undefined;
   exchangeRate: number;
   handleBack: () => void;

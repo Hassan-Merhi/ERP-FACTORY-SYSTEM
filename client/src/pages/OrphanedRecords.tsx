@@ -81,7 +81,7 @@ export default function OrphanedRecordsPage() {
   const orphanedRecords = recordsData?.orphanedVouchers || [];
   const unbalancedRecords = recordsData?.unbalancedVouchers || [];
 
-  const { data: locations = [] } = useQuery<any[]>({
+  const { data: locations = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/locations"],
   });
 
@@ -123,7 +123,8 @@ export default function OrphanedRecordsPage() {
     mutationFn: async (data: { voucherIds: number[]; newLocationId: number }) => {
       return modeApiRequest("POST", "/api/orphaned-records/reassign", data);
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { updated: number; newLocationName: string };
       toast({
         title: "Success",
         description: `${data.updated} records reassigned to ${data.newLocationName}`,

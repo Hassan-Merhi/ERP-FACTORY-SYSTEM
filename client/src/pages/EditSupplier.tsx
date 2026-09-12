@@ -21,6 +21,19 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { ApiListRow } from "@shared/apiTypes";
 
+type SupplierFormValues = {
+  code: string;
+  legalName: string;
+  email: string;
+  phone: string;
+  address: string;
+  taxId: string;
+  paymentTerms: string;
+  openingBalance: string;
+  active: boolean;
+  stockGroupId: number | null;
+};
+
 export default function EditSupplier() {
   const params = useParams();
   const [_location, navigate] = useLocation();
@@ -45,7 +58,7 @@ export default function EditSupplier() {
     },
   });
 
-  const form = useForm({
+  const form = useForm<SupplierFormValues>({
     resolver: zodResolver(insertSupplierSchema.partial()),
     defaultValues: {
       code: "",
@@ -82,9 +95,9 @@ export default function EditSupplier() {
   }, [form, supplier]);
 
   const updateMutation = useMutation({
-    mutationFn: async (data) => {
+    mutationFn: async (data: SupplierFormValues) => {
       const res = await apiRequest("PATCH", `/api/suppliers/${supplierId}`, data);
-      return await res.json();
+      return (await res.json()) as { legalName?: string };
     },
     onSuccess: (data) => {
       toast({
@@ -106,7 +119,7 @@ export default function EditSupplier() {
     },
   });
 
-  const onSubmit = (data: any) => {
+  const onSubmit = (data: SupplierFormValues) => {
     updateMutation.mutate(data);
   };
 

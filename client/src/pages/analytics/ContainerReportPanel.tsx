@@ -6,9 +6,32 @@ import { PeriodFilter, PeriodFilterValue } from "@/components/ui/period-filter";
 import { Container as ContainerIcon } from "lucide-react";
 import { ReportContainer, ContainerData, Supplier } from "./analyticsTypes";
 
+interface FactoryContainerSalesRow {
+  id: number;
+  containerNumber?: string;
+  customerName?: string;
+  customerId?: number;
+  invoiceNumber?: string;
+  saleDate?: string;
+  containerStatus?: string;
+  paymentStatus?: string;
+  totalAmount: string;
+  paidAmount: string;
+}
+
+interface FactoryContainerSales {
+  summary: { count: number; total: number; paid: number; outstanding: number };
+  rows: FactoryContainerSalesRow[];
+}
+
+interface UserCompanyOption {
+  companyId: number;
+  companyName: string;
+}
+
 interface ContainerReportPanelProps {
   appMode: string;
-  factoryContainerSales: any;
+  factoryContainerSales: FactoryContainerSales | undefined;
   loadingFactoryContainerSales: boolean;
   formatAmount: (amount: number) => string;
   containerPeriodFilter: PeriodFilterValue;
@@ -20,7 +43,7 @@ interface ContainerReportPanelProps {
   setReportContainerStatus: (status: string) => void;
   reportAllCompanies: string;
   setReportAllCompanies: (id: string) => void;
-  userCompanies: any[];
+  userCompanies: UserCompanyOption[];
   loadingContainers: boolean;
   containerData?: ContainerData;
 }
@@ -98,7 +121,7 @@ export function ContainerReportPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {factoryContainerSales.rows.map((row: any) => (
+                  {factoryContainerSales.rows.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell className="font-mono">{row.containerNumber || "-"}</TableCell>
                       <TableCell className="font-medium">{row.customerName || `#${row.customerId}`}</TableCell>
@@ -133,7 +156,7 @@ export function ContainerReportPanel({
               </Table>
             </div>
             <div className="md:hidden space-y-3">
-              {factoryContainerSales.rows.map((row: any) => (
+              {factoryContainerSales.rows.map((row) => (
                 <Card key={row.id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between gap-2">

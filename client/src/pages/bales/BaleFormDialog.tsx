@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { insertBaleSchema } from "@shared/schema";
+import type { ApiListRow } from "@shared/apiTypes";
 import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
@@ -22,7 +23,7 @@ interface BaleFormDialogProps {
   form: UseFormReturn<BaleFormValues>;
   onSubmit: (data: BaleFormValues) => void;
   isPending: boolean;
-  containers: any[];
+  containers: ApiListRow[];
 }
 
 export function BaleFormDialog({ open, onOpenChange, form, onSubmit, isPending, containers }: BaleFormDialogProps) {
@@ -156,11 +157,13 @@ export function BaleFormDialog({ open, onOpenChange, form, onSubmit, isPending, 
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {containers.map((c) => (
-                          <SelectItem key={c.id} value={c.id.toString()}>
-                            {c.containerNumber}
-                          </SelectItem>
-                        ))}
+                        {containers
+                          .filter((c): c is ApiListRow & { id: number | string } => c.id != null)
+                          .map((c) => (
+                            <SelectItem key={String(c.id)} value={String(c.id)}>
+                              {String(c.containerNumber ?? c.name ?? c.id)}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />

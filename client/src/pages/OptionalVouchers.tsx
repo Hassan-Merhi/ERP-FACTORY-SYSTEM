@@ -14,6 +14,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileText, Search, Pencil, Check, Trash2, X } from "lucide-react";
 import { format } from "date-fns";
 
+interface OptionalVoucher {
+  id: number;
+  voucherType: string;
+  voucherDate?: string;
+  description?: string | null;
+  totalAmount?: string;
+}
+
 export default function OptionalVouchers() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -37,7 +45,7 @@ export default function OptionalVouchers() {
     isLoading,
     isError,
     error,
-  } = useQuery<any[]>({
+  } = useQuery<OptionalVoucher[]>({
     queryKey: ["/api/vouchers/optional", typeFilter, startDate, endDate, search],
     queryFn: async () => {
       const res = await apiRequest("GET", queryUrl);
@@ -122,7 +130,7 @@ export default function OptionalVouchers() {
 
   const grandTotal = vouchers.reduce((sum, v) => sum + parseFloat(v.totalAmount || "0"), 0);
 
-  const handleEdit = (v: any) => {
+  const handleEdit = (v: OptionalVoucher) => {
     const voucherTypeMap: Record<string, string> = {
       Payment: "payment",
       Receipt: "receipt",

@@ -4,6 +4,8 @@
  * Extracted from SupplierProfitCheck.tsx during the Phase 4 god-file split.
  */
 
+import type { LucideIcon } from "lucide-react";
+
 export // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
   icon: Icon,
@@ -13,7 +15,7 @@ function StatCard({
   sub,
   valueColor,
 }: {
-  icon: any;
+  icon: LucideIcon;
   iconBg: string;
   label: string;
   value: string;

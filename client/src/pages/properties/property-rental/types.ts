@@ -22,6 +22,7 @@ type Unit = {
   nextBillingDate?: string | null;
   isShared?: boolean;
   ownerCompanyName?: string | null;
+  guaranteeRemaining?: number | string | null;
 };
 
 export type Contract = {

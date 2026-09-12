@@ -10,6 +10,29 @@ import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { ChevronRight } from "lucide-react";
 import { LocationSales, POSTransaction } from "./analyticsTypes";
 
+interface FactorySalesByCustomerRow {
+  customerId?: number | null;
+  customerName?: string;
+  containers: number;
+  totalAmount: string;
+  paidAmount: string;
+}
+
+interface FactoryPosSummaryRow {
+  customerId?: number | null;
+  customerName?: string;
+  sales: number;
+  totalAmount: string;
+  cashSales: string;
+  creditSales: string;
+  depositAmount: string;
+}
+
+interface FactoryPosSummary {
+  byCustomer?: FactoryPosSummaryRow[];
+  grand?: FactoryPosSummaryRow;
+}
+
 interface SalesReportPanelProps {
   appMode: string;
   factorySalesStartDate: string;
@@ -17,9 +40,9 @@ interface SalesReportPanelProps {
   factorySalesEndDate: string;
   setFactorySalesEndDate: (date: string) => void;
   loadingFactorySales: boolean;
-  factorySalesByCustomer: any[];
+  factorySalesByCustomer: FactorySalesByCustomerRow[];
   loadingFactoryPos: boolean;
-  factoryPosSummary: any;
+  factoryPosSummary: FactoryPosSummary | undefined;
   formatAmount: (amount: number) => string;
   formatNumber: (num: number) => string;
   selectedPeriod: string;
@@ -140,14 +163,10 @@ export function SalesReportPanel({
                       {factorySalesByCustomer.reduce((s: number, r) => s + Number(r.containers), 0)}
                     </TableCell>
                     <TableCell className="text-right font-mono hidden sm:table-cell">
-                      {formatAmount(
-                        factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.totalAmount), 0)
-                      )}
+                      {formatAmount(factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.totalAmount), 0))}
                     </TableCell>
                     <TableCell className="text-right font-mono hidden sm:table-cell">
-                      {formatAmount(
-                        factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.paidAmount), 0)
-                      )}
+                      {formatAmount(factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.paidAmount), 0))}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatAmount(
@@ -191,7 +210,7 @@ export function SalesReportPanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(factoryPosSummary.byCustomer ?? []).map((row: any, idx: number) => (
+                  {(factoryPosSummary.byCustomer ?? []).map((row, idx: number) => (
                     <TableRow key={row.customerId ?? idx}>
                       <TableCell className="font-medium">{row.customerName}</TableCell>
                       <TableCell className="text-right hidden sm:table-cell">{row.sales}</TableCell>

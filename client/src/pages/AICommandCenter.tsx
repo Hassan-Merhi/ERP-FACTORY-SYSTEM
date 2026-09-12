@@ -42,7 +42,7 @@ interface PlanStep {
   params: Record<string, unknown>;
   requiresApproval: boolean;
   status: StepStatus;
-  result?: any;
+  result?: unknown;
   error?: string;
   approvalId?: number;
   startedAt?: string;
@@ -54,8 +54,8 @@ interface Approval {
   taskId: number;
   actionType: string;
   actionLabel: string;
-  previewJson: any;
-  payloadJson: any;
+  previewJson: unknown;
+  payloadJson: unknown;
   status: string;
   createdAt: string;
 }
@@ -113,7 +113,7 @@ function formatTaskType(t: string) {
 
 function StepRow({ step }: { step: PlanStep }) {
   const [open, setOpen] = useState(false);
-  const hasResult = step.result || step.error;
+  const hasResult = step.result != null || Boolean(step.error);
 
   return (
     <div className="group">
@@ -177,7 +177,7 @@ function ApprovalCard({
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {preview && (
+        {preview != null ? (
           <div>
             <Button
               variant="ghost"
@@ -196,7 +196,7 @@ function ApprovalCard({
               </div>
             )}
           </div>
-        )}
+        ) : null}
 
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -263,8 +263,11 @@ export default function AICommandCenter() {
 
   // ── Mutations ────────────────────────────────────────────────────────────
   const createTask = useMutation({
-    mutationFn: (data: { instruction: string }) => apiRequest("POST", "/api/ai-agent/tasks", data),
-    onSuccess: (task: any) => {
+    mutationFn: async (data: { instruction: string }) => {
+      const res = await apiRequest("POST", "/api/ai-agent/tasks", data);
+      return (await res.json()) as { id: number; plan?: { steps?: unknown[] } };
+    },
+    onSuccess: (task) => {
       setActiveTaskId(task.id);
       setInstruction("");
       setUploadedFile(null);
@@ -272,7 +275,8 @@ export default function AICommandCenter() {
       queryClient.invalidateQueries({ queryKey: ["/api/ai-agent/tasks"] });
       toast({ title: "Task created", description: `Plan ready — ${task.plan?.steps?.length ?? 0} step(s) generated` });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to create task", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to create task", description: e.message, variant: "destructive" }),
   });
 
   const runTask = useMutation({
@@ -299,7 +303,8 @@ export default function AICommandCenter() {
       queryClient.invalidateQueries({ queryKey: ["/api/ai-agent/tasks"] });
       toast({ title: "Approved", description: "Action approved and continuing task" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Approval failed", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Approval failed", description: e.message, variant: "destructive" }),
   });
 
   const rejectAction = useMutation({

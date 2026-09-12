@@ -14,6 +14,20 @@ import { Layers, Search, ChevronRight, ArrowLeft, List, FolderOpen, Download, Lo
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 
+interface ContainerPoItem {
+  quantity?: string;
+  rate?: string;
+  stockItemName?: string;
+  itemName?: string;
+  stockItemId?: number | null;
+  stockGroupId?: number | null;
+  stockGroupName?: string;
+}
+
+interface ContainerDetailPayload {
+  pos?: { items?: ContainerPoItem[] }[];
+}
+
 interface Container {
   id: number;
   status: string;
@@ -113,7 +127,7 @@ export default function CombinedInventory() {
     retry: false,
   });
 
-  const inventoryRows = useMemo(() => (inventoryPage?.data ?? []), [inventoryPage?.data]);
+  const inventoryRows = useMemo(() => inventoryPage?.data ?? [], [inventoryPage?.data]);
   const inventoryTotal = inventoryPage?.total ?? 0;
   const inventoryTotalPages = inventoryPage?.totalPages ?? 1;
 
@@ -143,9 +157,9 @@ export default function CombinedInventory() {
 
     containerDetailsQueries.forEach((q) => {
       if (!q.data) return;
-      const containerData = q.data as unknown as { pos: { forEach: (...args: unknown[]) => unknown } };
-      containerData?.pos?.forEach((po: any) => {
-        po.items?.forEach((item: any) => {
+      const containerData = q.data as unknown as ContainerDetailPayload;
+      containerData?.pos?.forEach((po) => {
+        po.items?.forEach((item) => {
           const qty = parseFloat(item.quantity || "0");
           const rate = parseFloat(item.rate || "0");
           const itemName = item.stockItemName || item.itemName || "";

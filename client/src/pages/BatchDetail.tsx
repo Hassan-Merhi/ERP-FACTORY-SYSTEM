@@ -20,6 +20,26 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { FactoryMixBatch, FactoryMixBatchSource } from "@shared/schema";
 
+interface BatchBaleRow {
+  bale: {
+    id: number;
+    baleCode?: string;
+    weightKg?: string;
+    costPerKg?: string;
+    category?: string;
+    status: string;
+    warehouseLocation?: string;
+    createdAt?: string;
+  };
+  product?: { name?: string; articleCode?: string };
+  location?: { name?: string };
+}
+
+interface FactorySupplierOption {
+  id: number;
+  name: string;
+}
+
 interface BatchDetailProps {
   batchId: number;
   onBack: () => void;
@@ -50,7 +70,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
     queryKey: ["/api/factory/mix-batches", batchId],
   });
 
-  const { data: balesData, isLoading: balesLoading } = useQuery<any[]>({
+  const { data: balesData, isLoading: balesLoading } = useQuery<BatchBaleRow[]>({
     queryKey: ["/api/factory/bales", { mixBatchId: batchId }],
     queryFn: async () => {
       const res = await fetch(`/api/factory/bales?mixBatchId=${batchId}`, {
@@ -72,7 +92,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
     },
   });
 
-  const { data: suppliers } = useQuery<any[]>({
+  const { data: suppliers } = useQuery<FactorySupplierOption[]>({
     queryKey: ["/api/factory/suppliers"],
   });
 
@@ -353,10 +373,10 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
                             {product?.articleCode || bale.category || "-"}
                           </TableCell>
                           <TableCell className="text-right font-mono">
-                            {formatNumber(parseFloat(bale.weightKg))}
+                            {formatNumber(parseFloat(bale.weightKg || "0"))}
                           </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
-                            ${parseFloat(bale.costPerKg).toFixed(4)}
+                            ${parseFloat(bale.costPerKg || "0").toFixed(4)}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -382,7 +402,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
                             {location?.name || bale.warehouseLocation || "-"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {formatDisplayDate(bale.createdAt)}
+                            {bale.createdAt ? formatDisplayDate(bale.createdAt) : "-"}
                           </TableCell>
                         </TableRow>
                       );

@@ -229,12 +229,14 @@ export default function AccountTransfer() {
   const toAccount = accounts.find((a) => a.id === toAccountId);
 
   const transfer = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/voucher-entries/transfer-account", {
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/voucher-entries/transfer-account", {
         entryIds: Array.from(selectedIds),
         toAccountId,
-      }),
-    onSuccess: (data: any) => {
+      });
+      return (await res.json()) as { moved: number; toAccount: string };
+    },
+    onSuccess: (data) => {
       setDone({ moved: data.moved, toAccount: data.toAccount });
       setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["/api/voucher-entries/by-account", fromAccountId] });

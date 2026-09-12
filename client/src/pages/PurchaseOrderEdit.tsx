@@ -57,7 +57,7 @@ export default function PurchaseOrderEdit() {
   const sidebarRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: stockItems } = useQuery<any[]>({
+  const { data: stockItems } = useQuery<StockItem[]>({
     queryKey: ["/api/stock-items/light", selectedCompany?.id],
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -65,7 +65,11 @@ export default function PurchaseOrderEdit() {
     refetchOnReconnect: false,
   });
 
-  const { data: po, isLoading, error } = useQuery<PurchaseOrder>({
+  const {
+    data: po,
+    isLoading,
+    error,
+  } = useQuery<PurchaseOrder>({
     queryKey: [`/api/purchase-orders/${poId}`],
     enabled: !!poId,
   });
@@ -190,10 +194,7 @@ export default function PurchaseOrderEdit() {
   });
 
   const handleAddItem = useCallback(() => {
-    setItems((previous) => [
-      ...previous,
-      { stockItemId: null, itemName: "", quantity: "1", rate: "0" },
-    ]);
+    setItems((previous) => [...previous, { stockItemId: null, itemName: "", quantity: "1", rate: "0" }]);
   }, []);
 
   const handleRemoveItem = useCallback((index: number) => {
@@ -213,8 +214,7 @@ export default function PurchaseOrderEdit() {
           } else {
             nextItems[index] = {
               ...existingItem,
-              stockItemId:
-                typeof numericId === "number" && !isNaN(numericId) ? numericId : existingItem.stockItemId,
+              stockItemId: typeof numericId === "number" && !isNaN(numericId) ? numericId : existingItem.stockItemId,
             };
           }
         } else {
@@ -236,7 +236,10 @@ export default function PurchaseOrderEdit() {
     [items]
   );
 
-  const itemsTotal = useMemo(() => lineTotals.reduce((sum, total) => sum + parseFloat(total), 0).toFixed(2), [lineTotals]);
+  const itemsTotal = useMemo(
+    () => lineTotals.reduce((sum, total) => sum + parseFloat(total), 0).toFixed(2),
+    [lineTotals]
+  );
 
   const chargesTotal = useMemo(() => {
     const freightAmount = parseFloat(freight) || 0;
@@ -246,15 +249,20 @@ export default function PurchaseOrderEdit() {
     const discountAmount = parseFloat(discount) || 0;
     const otherChargesAmount = parseFloat(otherCharges) || 0;
     return (
-      freightAmount + surchargeAmount + fumigationAmount + documentChargesAmount - discountAmount + otherChargesAmount
+      freightAmount +
+      surchargeAmount +
+      fumigationAmount +
+      documentChargesAmount -
+      discountAmount +
+      otherChargesAmount
     ).toFixed(2);
   }, [freight, surcharge, fumigation, documentCharges, discount, otherCharges]);
 
-  const grandTotal = useMemo(() => (parseFloat(itemsTotal) + parseFloat(chargesTotal)).toFixed(2), [itemsTotal, chargesTotal]);
-  const totalQuantity = useMemo(
-    () => items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0),
-    [items]
+  const grandTotal = useMemo(
+    () => (parseFloat(itemsTotal) + parseFloat(chargesTotal)).toFixed(2),
+    [itemsTotal, chargesTotal]
   );
+  const totalQuantity = useMemo(() => items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), [items]);
 
   const stockItemsList = useMemo(() => (stockItems || []) as StockItem[], [stockItems]);
   const filteredStockItems = useMemo(() => {
@@ -262,8 +270,7 @@ export default function PurchaseOrderEdit() {
     const term = searchTerm.toLowerCase();
     return stockItemsList
       .filter(
-        (item) =>
-          (item.name || "").toLowerCase().includes(term) || (item.code || "").toLowerCase().includes(term)
+        (item) => (item.name || "").toLowerCase().includes(term) || (item.code || "").toLowerCase().includes(term)
       )
       .slice(0, 100);
   }, [stockItemsList, searchTerm]);
@@ -295,11 +302,19 @@ export default function PurchaseOrderEdit() {
       return;
     }
     if (isFactory && freightPaidBy === "own" && parseFloat(freight) > 0 && !freightOwnAccountId) {
-      toast({ title: "Account Required", description: "Select an account for the freight payment.", variant: "destructive" });
+      toast({
+        title: "Account Required",
+        description: "Select an account for the freight payment.",
+        variant: "destructive",
+      });
       return;
     }
     if (freightPaidBy === "parent" && parseFloat(freight) > 0 && !freightParentAccountId) {
-      toast({ title: "Account Required", description: "Select a parent company account for the freight.", variant: "destructive" });
+      toast({
+        title: "Account Required",
+        description: "Select a parent company account for the freight.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -494,9 +509,7 @@ export default function PurchaseOrderEdit() {
                               if (event.key === "ArrowDown") {
                                 if (showItemSidebar && filteredStockItems.length > 0) {
                                   event.preventDefault();
-                                  setHighlightedIndex(
-                                    Math.min(filteredStockItems.length - 1, highlightedIndex + 1)
-                                  );
+                                  setHighlightedIndex(Math.min(filteredStockItems.length - 1, highlightedIndex + 1));
                                 }
                               } else if (event.key === "ArrowUp") {
                                 if (showItemSidebar && filteredStockItems.length > 0) {
@@ -664,23 +677,63 @@ export default function PurchaseOrderEdit() {
                 </div>
                 <div>
                   <Label htmlFor="surcharge">Surcharge</Label>
-                  <Input id="surcharge" type="number" step="0.01" value={surcharge} onChange={(event) => setSurcharge(event.target.value)} className="text-right" data-testid="input-surcharge" />
+                  <Input
+                    id="surcharge"
+                    type="number"
+                    step="0.01"
+                    value={surcharge}
+                    onChange={(event) => setSurcharge(event.target.value)}
+                    className="text-right"
+                    data-testid="input-surcharge"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="fumigation">Fumigation</Label>
-                  <Input id="fumigation" type="number" step="0.01" value={fumigation} onChange={(event) => setFumigation(event.target.value)} className="text-right" data-testid="input-fumigation" />
+                  <Input
+                    id="fumigation"
+                    type="number"
+                    step="0.01"
+                    value={fumigation}
+                    onChange={(event) => setFumigation(event.target.value)}
+                    className="text-right"
+                    data-testid="input-fumigation"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="documentCharges">Document Charges</Label>
-                  <Input id="documentCharges" type="number" step="0.01" value={documentCharges} onChange={(event) => setDocumentCharges(event.target.value)} className="text-right" data-testid="input-document-charges" />
+                  <Input
+                    id="documentCharges"
+                    type="number"
+                    step="0.01"
+                    value={documentCharges}
+                    onChange={(event) => setDocumentCharges(event.target.value)}
+                    className="text-right"
+                    data-testid="input-document-charges"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="discount">Discount</Label>
-                  <Input id="discount" type="number" step="0.01" value={discount} onChange={(event) => setDiscount(event.target.value)} className="text-right" data-testid="input-discount" />
+                  <Input
+                    id="discount"
+                    type="number"
+                    step="0.01"
+                    value={discount}
+                    onChange={(event) => setDiscount(event.target.value)}
+                    className="text-right"
+                    data-testid="input-discount"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="otherCharges">Other Charges</Label>
-                  <Input id="otherCharges" type="number" step="0.01" value={otherCharges} onChange={(event) => setOtherCharges(event.target.value)} className="text-right" data-testid="input-other-charges" />
+                  <Input
+                    id="otherCharges"
+                    type="number"
+                    step="0.01"
+                    value={otherCharges}
+                    onChange={(event) => setOtherCharges(event.target.value)}
+                    className="text-right"
+                    data-testid="input-other-charges"
+                  />
                 </div>
               </div>
 
@@ -690,7 +743,8 @@ export default function PurchaseOrderEdit() {
                   <span className="text-xl font-bold font-mono">${formatCurrency(parseFloat(grandTotal))}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Items (${formatCurrency(parseFloat(itemsTotal))}) + Charges (${formatCurrency(parseFloat(chargesTotal))})
+                  Items (${formatCurrency(parseFloat(itemsTotal))}) + Charges ($
+                  {formatCurrency(parseFloat(chargesTotal))})
                 </p>
               </div>
             </div>

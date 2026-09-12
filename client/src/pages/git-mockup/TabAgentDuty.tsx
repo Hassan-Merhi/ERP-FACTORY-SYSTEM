@@ -58,23 +58,28 @@ export function TabAgentDuty() {
 
       fetch(`/api/git/agent-adjustments-bulk/${cid}`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((body: { byAgent: Record<string, any[]> } | null) => {
-          if (!body) return;
-          for (const [agentName, adjustments] of Object.entries(body.byAgent)) {
-            const key = `/api/git/agent-adjustments/${cid}/${encodeURIComponent(agentName)}`;
-            if (!queryClient.getQueryData([key])) queryClient.setQueryData([key], adjustments);
-          }
-          const section = sections.find((s) => s.companyId === cid);
-          if (section) {
-            for (const agent of section.agents) {
-              const key = `/api/git/agent-adjustments/${cid}/${encodeURIComponent(agent.agentName)}`;
-              if (!queryClient.getQueryData([key])) queryClient.setQueryData([key], []);
+        .then(
+          (
+            body: {
+              byAgent: Record<string, { id: number; description: string; amount: number; type: string }[]>;
+            } | null
+          ) => {
+            if (!body) return;
+            for (const [agentName, adjustments] of Object.entries(body.byAgent)) {
+              const key = `/api/git/agent-adjustments/${cid}/${encodeURIComponent(agentName)}`;
+              if (!queryClient.getQueryData([key])) queryClient.setQueryData([key], adjustments);
+            }
+            const section = sections.find((s) => s.companyId === cid);
+            if (section) {
+              for (const agent of section.agents) {
+                const key = `/api/git/agent-adjustments/${cid}/${encodeURIComponent(agent.agentName)}`;
+                if (!queryClient.getQueryData([key])) queryClient.setQueryData([key], []);
+              }
             }
           }
-        })
+        )
         .catch(() => {});
     }
-    
   }, [data, sections]);
 
   // In "all companies" mode always merge agents with the same name across companies.
@@ -120,7 +125,7 @@ export function TabAgentDuty() {
     }
     merged.sort((a, b) => a.agentName.localeCompare(b.agentName));
     return [{ companyId: 0, companyName: "All Companies", agents: merged }];
-  }, [companyMode, sections]); 
+  }, [companyMode, sections]);
 
   const totalAgents = displaySections.reduce((s, c) => s + c.agents.length, 0);
 

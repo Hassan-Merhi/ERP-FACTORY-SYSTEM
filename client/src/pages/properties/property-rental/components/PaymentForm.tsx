@@ -56,7 +56,8 @@ export function PaymentForm({
         exchangeRate: form.exchangeRate,
         scheduleFuturePayment,
       }),
-    onSuccess: (data: any) => {
+    onSuccess: async (res) => {
+      const data = (await res.json()) as { scheduled?: boolean };
       if (data?.scheduled) {
         toast({
           title: "Payment scheduled",
