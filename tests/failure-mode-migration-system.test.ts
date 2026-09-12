@@ -49,10 +49,7 @@ import {
   getMigrationLockOptions,
   releaseStartupMigrationLock,
 } from "../server/startupMigrationCoordinator";
-import {
-  FACTORY_BILINGUAL_COLUMNS,
-  FACTORY_BILINGUAL_ARTICLE_INDEX,
-} from "../server/factoryBilingualSchemaBridge.mjs";
+import { FACTORY_BILINGUAL_COLUMNS, FACTORY_BILINGUAL_ARTICLE_INDEX } from "../server/factoryBilingualSchemaBridge.mjs";
 
 function emptyResult() {
   return { rows: [] as any[], rowCount: 0 };
@@ -263,9 +260,7 @@ describe("Failure-Mode Suite: Migration & Startup System Failures", () => {
       await warmupPromise;
 
       expect(harness.poolQuery).toHaveBeenCalledTimes(3);
-      expect(loggerErrorSpy).toHaveBeenCalledWith(
-        "✗ DB warmup failed after 3 attempts — queries will connect lazily"
-      );
+      expect(loggerErrorSpy).toHaveBeenCalledWith("✗ DB warmup failed after 3 attempts — queries will connect lazily");
       vi.useRealTimers();
     });
   });
@@ -280,9 +275,7 @@ describe("Failure-Mode Suite: Migration & Startup System Failures", () => {
     });
 
     it("verifies canonical normalized article code index name", () => {
-      expect(FACTORY_BILINGUAL_ARTICLE_INDEX).toBe(
-        "factory_bale_products_company_article_code_normalized_idx"
-      );
+      expect(FACTORY_BILINGUAL_ARTICLE_INDEX).toBe("factory_bale_products_company_article_code_normalized_idx");
     });
   });
 });

@@ -91,12 +91,7 @@ async function createCompany(mode: CompanyMode): Promise<number> {
   const result = await pool.query<{ id: number }>(
     `INSERT INTO companies (code, name, company_type, parent_company_id, active, base_currency)
      VALUES ($1, $2, $3, $4, true, 'USD') RETURNING id`,
-    [
-      `${TEST_PREFIX}-${mode}-${sequence}`.slice(0, 50),
-      `${TEST_PREFIX}_${mode}_${sequence}`,
-      mode,
-      ctx.companyId,
-    ]
+    [`${TEST_PREFIX}-${mode}-${sequence}`.slice(0, 50), `${TEST_PREFIX}_${mode}_${sequence}`, mode, ctx.companyId]
   );
   const companyId = result.rows[0].id;
 
@@ -204,7 +199,9 @@ describe.sequential("Phase 1 read-only export/report sweep", () => {
       }
     }
 
-    const report = failures.map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`).join("\n");
+    const report = failures
+      .map((failure) => `  ${failure.status} ${failure.route}\n      ${failure.detail}`)
+      .join("\n");
     expect(failures, `${failures.length} export/report route(s) failed:\n${report}`).toEqual([]);
   }, 300000);
 

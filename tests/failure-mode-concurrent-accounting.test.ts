@@ -126,9 +126,7 @@ describe("Failure-Mode Suite: Concurrent Accounting Posting", () => {
       };
 
       // Run 10 workers concurrently
-      const results = await Promise.all(
-        Array.from({ length: CONCURRENCY }, (_, i) => executeWorker(i + 1))
-      );
+      const results = await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => executeWorker(i + 1)));
 
       // Verify all 10 completed successfully
       expect(results).toHaveLength(CONCURRENCY);
@@ -178,9 +176,7 @@ describe("Failure-Mode Suite: Concurrent Accounting Posting", () => {
         return postBalancedVoucherTx(stubTx, req, dependencies);
       };
 
-      const results = await Promise.all(
-        requests.map((req, index) => executeDistinctWorker(req, index))
-      );
+      const results = await Promise.all(requests.map((req, index) => executeDistinctWorker(req, index)));
 
       expect(results).toHaveLength(COUNT);
       for (let i = 0; i < COUNT; i++) {
