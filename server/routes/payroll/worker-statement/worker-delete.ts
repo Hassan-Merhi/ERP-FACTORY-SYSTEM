@@ -38,11 +38,20 @@ export function registerWorkerDeleteRoutes(app: Express) {
       //
       // This guard queried factory_bales.worker_id, a column that does not
       // exist in this schema, so it threw on every call and no worker could
-      // ever be deleted — the guard never actually protected anything. Bales
-      // carry the worker as worker_name (text), so match on that. Two workers
-      // sharing a full name both stay blocked, which is the safe direction.
+      // ever be deleted — the guard never actually protected anything.
+      //
+      // Bale assignment sets finalized_by (the worker id) and worker_name (a
+      // name snapshot) together, and renaming a worker updates only
+      // factory_workers. So finalized_by is the identifier to match on: a
+      // name-based match would find nothing for a renamed worker and let the
+      // delete through while their bales still exist. worker_name is still
+      // checked as a fallback for any row whose finalized_by was never set,
+      // since for a delete guard both signals should block.
       const baleCheck = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM factory_bales WHERE worker_name = ${worker.fullName} AND company_id = ${companyId} AND status NOT IN ('REMOVED','DELETED')`
+        sql`SELECT COUNT(*) as cnt FROM factory_bales
+            WHERE company_id = ${companyId}
+              AND status NOT IN ('REMOVED','DELETED')
+              AND (finalized_by = ${worker.id} OR (finalized_by IS NULL AND worker_name = ${worker.fullName}))`
       );
       const baleCount = parseInt((baleCheck.rows[0] as { cnt: string })?.cnt || "0");
       if (baleCount > 0) {
