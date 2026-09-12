@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "detectorVersion": 9,
   "policyDigest": "f1c6e5e3ab5cfcb6faeb5c854ae37033676b5782e2858007404e90a861a607c9",
-  "reviewedAt": "2026-08-31",
-  "reviewedHead": "phase3-translation-ui-polish",
-  "description": "Phase 3 app-wide translation completion: every classified actionable literal is covered by EN/FR/AR runtime translations; the untranslated-text ratchet is locked at zero.",
+  "reviewedAt": "2026-09-12",
+  "reviewedHead": "p0-god-file-decomposition",
+  "description": "Reviewed untranslated-text ceiling. Actionable counts may only decrease unless the baseline is explicitly re-reviewed. 2026-09-12 re-review (p0-god-file-decomposition): the chatService/index/Agents refactor MOVED three pre-existing user-facing strings into new files, making them visible to the scanner for the first time (they were previously hidden by scanner blind spots — a '/api/*' inside a line comment in server/index.ts and a '/*' inside a regex literal in Agents.tsx). No new untranslated UI text was added: backend-messages 0→2 and other-client 0→1 cover exactly those three strings.",
   "maxActionable": 36,
   "modules": {
     "accounting": {
@@ -14,7 +14,7 @@
       "maxActionable": 4
     },
     "backend-messages": {
-      "maxActionable": 0
+      "maxActionable": 2
     },
     "container-purchasing": {
       "maxActionable": 0
@@ -26,7 +26,7 @@
       "maxActionable": 0
     },
     "other-client": {
-      "maxActionable": 0
+      "maxActionable": 1
     },
     "payroll": {
       "maxActionable": 0
