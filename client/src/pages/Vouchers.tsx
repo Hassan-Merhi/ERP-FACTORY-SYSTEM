@@ -32,6 +32,7 @@ import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { resolveWhatsAppPrompt } from "@/lib/whatsapp-prompt";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
 import { getApiRequest } from "@/lib/factoryApi";
+import type { AuthMe } from "@shared/apiTypes";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
 import {
@@ -62,7 +63,7 @@ import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
 
 interface VouchersProps {
-  posUser?: { id: number; assignedLocationId?: number } | null;
+  posUser?: Pick<AuthMe, "assignedLocationId"> | null;
 }
 
 export default function Vouchers({ posUser }: VouchersProps = {}) {

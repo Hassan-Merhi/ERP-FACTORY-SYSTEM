@@ -33,7 +33,7 @@ export type FactoryMyAccess = {
 
 /** GET /api/auth/me — user row minus password, plus session fields. */
 export type AuthMe = {
-  id: string;
+  id: string | number;
   username?: string | null;
   fullName?: string | null;
   active?: boolean;
@@ -46,7 +46,7 @@ export type AuthMe = {
   currentLocationId?: number | null;
   currentPOSStation?: number | null;
   assignedLocationId?: number | null;
-  posStation?: number | null;
+  posStation?: string | number | null;
   cashAccountId?: number | null;
   canSellNegativeStock?: boolean;
   posViewOnly?: boolean;

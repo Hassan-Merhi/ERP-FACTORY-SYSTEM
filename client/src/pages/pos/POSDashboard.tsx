@@ -1,3 +1,4 @@
+import type { AuthMe } from "@shared/apiTypes";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -87,13 +88,7 @@ interface Location {
 }
 
 interface POSDashboardProps {
-  posUser?: {
-    id: string;
-    username: string;
-    assignedLocationId: number;
-    cashAccountId: number | null;
-    posStation: number | null;
-  };
+  posUser?: AuthMe;
 }
 
 export default function POSDashboard({ posUser }: POSDashboardProps) {

@@ -3,11 +3,12 @@ import { useLocation } from "wouter";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { PosRoutes } from "./PosRoutes";
 import { ErpRoutes } from "./ErpRoutes";
+import type { AuthMe } from "@shared/apiTypes";
 
 const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
 
 interface RouterProps {
-  user: any;
+  user: AuthMe;
   posImportEnabled?: boolean;
 }
 

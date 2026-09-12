@@ -3,6 +3,14 @@ import { getErrorMessage } from "./lib/httpHandlers";
 import { eq, and, sql } from "drizzle-orm";
 import { users, baleProducts, baleLabelPrints, baleSequences, mixBatches } from "@shared/schema";
 
+type SeedBaleRow = {
+  id: number;
+  quantity: number;
+  pieces?: number | null;
+  weight_kg: string;
+  weightKg?: string | null;
+};
+
 export async function runDevSeed() {
   const COMPANY_ID = 11;
   const LOCATION_ID = 184;
@@ -105,7 +113,7 @@ export async function runDevSeed() {
         VALUES (${COMPANY_ID}, ${batchId}, ${LOCATION_ID}, ${baleCode}, ${barcodeValue}, ${pieces}, ${weightKg}, ${costPerKg}, ${totalCost}, 'LABEL_PRINTED', ${createdAt}, ${createdAt})
         RETURNING *
       `);
-      const bale = result.rows[0] as any;
+      const bale = result.rows[0] as SeedBaleRow;
       createdBales.push({ ...bale, product });
     } catch (e: unknown) {
       if (getErrorMessage(e)?.includes("duplicate")) continue;
@@ -131,6 +139,7 @@ export async function runDevSeed() {
       const daysAgo = Math.floor(Math.random() * 14);
       const printedAt = new Date(now - daysAgo * 86400000);
 
+      const articleCode = bale.product.articleCode || bale.product.code;
       try {
         const [lp] = await db
           .insert(baleLabelPrints)
@@ -138,7 +147,7 @@ export async function runDevSeed() {
             companyId: COMPANY_ID,
             productionBaleId: bale.id,
             productId: bale.product.id,
-            articleCode: bale.product.articleCode || bale.product.code,
+            articleCode,
             referenceNumber: refNum,
             pieces: bale.quantity || bale.pieces || 1,
             approxWeightKg: bale.weight_kg || bale.weightKg || "25.000",
@@ -151,8 +160,8 @@ export async function runDevSeed() {
         createdLabels.push(lp);
 
         if (sampleRefs.length < 5) sampleRefs.push(refNum);
-        if (sampleArticles.length < 5 && !sampleArticles.includes(bale.product.articleCode)) {
-          sampleArticles.push(bale.product.articleCode);
+        if (sampleArticles.length < 5 && !sampleArticles.includes(articleCode)) {
+          sampleArticles.push(articleCode);
         }
       } catch (e: unknown) {
         if (getErrorMessage(e)?.includes("duplicate")) continue;
