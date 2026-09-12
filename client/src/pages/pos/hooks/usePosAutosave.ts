@@ -12,6 +12,12 @@ interface PosAutosaveParams {
   refetchDrafts?: () => void;
 }
 
+function errorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  const status = Number((error as { status?: unknown }).status);
+  return Number.isInteger(status) ? status : null;
+}
+
 export function usePosAutosave({
   autoSaveStateRef,
   autoSaveInProgressRef,
@@ -21,6 +27,12 @@ export function usePosAutosave({
 }: PosAutosaveParams) {
   useEffect(() => {
     let sessionLost = false;
+    // A rejected client write is deterministic for the same draft payload. Keep
+    // that fingerprint blocked until the operator changes the draft instead of
+    // hammering the same denied POST/PATCH every three seconds.
+    let blockedFingerprint: string | null = null;
+    let retryNotBefore = 0;
+    let transientFailureCount = 0;
 
     const interval = setInterval(async () => {
       if (sessionLost) return;
@@ -37,7 +49,8 @@ export function usePosAutosave({
         paymentAccountId: s.paymentAccountId,
         selectedCustomerId: s.selectedCustomerId,
       });
-      if (fingerprint === lastSavedFingerprintRef.current) return;
+      if (fingerprint === lastSavedFingerprintRef.current || fingerprint === blockedFingerprint) return;
+      if (Date.now() < retryNotBefore) return;
       autoSaveInProgressRef.current = true;
       try {
         const draftData = {
@@ -70,10 +83,23 @@ export function usePosAutosave({
         if (data?.id) setCurrentDraftId(data.id);
         upsertPosDraftSummary(s.activeLocation.id, data, draftData.items);
         lastSavedFingerprintRef.current = fingerprint;
+        blockedFingerprint = null;
+        retryNotBefore = 0;
+        transientFailureCount = 0;
         setLastAutosaved(new Date());
       } catch (err: unknown) {
-        if (err && typeof err === "object" && "status" in err && err.status === 401) {
+        const status = errorStatus(err);
+        if (status === 401) {
           sessionLost = true;
+        } else if (status !== null && status >= 400 && status < 500 && ![408, 425, 429].includes(status)) {
+          // Permission/validation/not-found failures will not heal on a timer.
+          // Retry only after the operator changes the draft fingerprint.
+          blockedFingerprint = fingerprint;
+        } else {
+          // Network, 5xx and explicitly retryable HTTP failures get bounded
+          // exponential backoff instead of a fixed three-second retry loop.
+          transientFailureCount += 1;
+          retryNotBefore = Date.now() + Math.min(60_000, 5_000 * 2 ** (transientFailureCount - 1));
         }
       } finally {
         autoSaveInProgressRef.current = false;
