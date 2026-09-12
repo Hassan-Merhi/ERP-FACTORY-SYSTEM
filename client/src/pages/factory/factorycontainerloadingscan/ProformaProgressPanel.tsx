@@ -31,6 +31,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
       </Badge>
     );
   }
+
   if (status === "overloaded") {
     return (
       <Badge
@@ -41,6 +42,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
       </Badge>
     );
   }
+
   if (status === "short") {
     return (
       <Badge
@@ -51,6 +53,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
       </Badge>
     );
   }
+
   if (status === "none") {
     return (
       <Badge
@@ -61,6 +64,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
       </Badge>
     );
   }
+
   return (
     <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
       <Info className="h-3 w-3 mr-1" />
@@ -69,9 +73,24 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
   );
 }
 
+function progressRowClass(status: ProformaLineStatus) {
+  if (status === "fulfilled") return "bg-green-50 dark:bg-green-950/40";
+  if (status === "overloaded") return "bg-orange-50 dark:bg-orange-950/30";
+  if (status === "short") return "bg-yellow-50 dark:bg-yellow-950/30";
+  if (status === "none") return "bg-red-50 dark:bg-red-950/30";
+  return "";
+}
+
+function remainingTextClass(status: ProformaLineStatus) {
+  if (status === "none") return "text-red-600 dark:text-red-400 font-semibold";
+  if (status === "short") return "text-yellow-700 dark:text-yellow-300 font-semibold";
+  return "text-muted-foreground";
+}
+
 function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; line: ProformaProgressLine }) {
   const inStock = model.stockCounts[line.articleCode] ?? null;
   if (inStock === null) return <span className="text-muted-foreground">—</span>;
+
   const needsMore = line.status === "short" || line.status === "none";
   const shortage = needsMore && inStock < line.remaining;
   const listParams = new URLSearchParams({
@@ -79,7 +98,9 @@ function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; l
     productName: line.productName,
     back: window.location.pathname + window.location.search,
   });
+
   if (model.stockLocationId) listParams.set("locationId", String(model.stockLocationId));
+
   return (
     <button
       className={`underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 ${shortage ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`}
@@ -93,6 +114,7 @@ function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; l
 
 function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { extraArticles, loadedByArticle, groupedBalesMap, proformaProgress } = model;
+
   return (
     <div className="overflow-y-auto max-h-[340px]">
       <Table>
@@ -127,44 +149,32 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           ))}
           {[...proformaProgress]
             .sort((a, b) => (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4))
-            .map((line) => {
-              const rowClass =
-                line.status === "fulfilled"
-                  ? "bg-green-50 dark:bg-green-950/40"
-                  : line.status === "overloaded"
-                    ? "bg-orange-50 dark:bg-orange-950/30"
-                    : line.status === "short"
-                      ? "bg-yellow-50 dark:bg-yellow-950/30"
-                      : line.status === "none"
-                        ? "bg-red-50 dark:bg-red-950/30"
-                        : "";
-              const remainingClass =
-                line.status === "none"
-                  ? "text-red-600 dark:text-red-400 font-semibold"
-                  : line.status === "short"
-                    ? "text-yellow-700 dark:text-yellow-300 font-semibold"
-                    : "text-muted-foreground";
-              return (
-                <TableRow key={line.id} className={rowClass} data-testid={`row-progress-${line.articleCode}`}>
-                  <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
-                  <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
-                  <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
-                  <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
-                  <TableCell className={`text-xs text-right font-mono py-1.5 ${remainingClass}`}>
-                    {line.remaining}
-                  </TableCell>
-                  <TableCell className="py-1.5">
-                    <StatusBadge status={line.status} />
-                  </TableCell>
-                  <TableCell
-                    className="text-xs text-right font-mono py-1.5"
-                    data-testid={`text-stock-${line.articleCode}`}
-                  >
-                    <StockCell model={model} line={line} />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            .map((line) => (
+              <TableRow
+                key={line.id}
+                className={progressRowClass(line.status)}
+                data-testid={`row-progress-${line.articleCode}`}
+              >
+                <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
+                <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
+                <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
+                <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
+                <TableCell
+                  className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}
+                >
+                  {line.remaining}
+                </TableCell>
+                <TableCell className="py-1.5">
+                  <StatusBadge status={line.status} />
+                </TableCell>
+                <TableCell
+                  className="text-xs text-right font-mono py-1.5"
+                  data-testid={`text-stock-${line.articleCode}`}
+                >
+                  <StockCell model={model} line={line} />
+                </TableCell>
+              </TableRow>
+            ))}
         </TableBody>
       </Table>
     </div>
@@ -173,6 +183,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
 
 function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (model.orderedGroups.length === 0) return null;
+
   return (
     <div className="border-t pt-3">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">Loaded Bales</p>
@@ -234,6 +245,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
   const { orderId, linkedProforma, proformaProgress, bales, totalWeight } = model;
   if (!orderId) return null;
   if (!linkedProforma) return <OrderSummaryCard model={model} />;
+
   return (
     <div className="rounded-xl border overflow-hidden flex flex-col" data-testid="card-proforma-progress">
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
