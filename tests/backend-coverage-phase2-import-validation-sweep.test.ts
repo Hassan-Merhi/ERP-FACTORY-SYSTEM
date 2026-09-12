@@ -33,7 +33,10 @@ const MANIFEST_PATH = path.join(process.cwd(), "config/route-manifest.json");
 const REQUEST_TIMEOUT_MS = 20000;
 const CONCURRENCY = 6;
 const IMPORT_PATTERN = /(import|upload|preview|validate)/i;
-const MULTIPART_PATTERN = /(import|upload|excel|xlsx|csv|workbook|file)/i;
+// Route names containing "import" are not necessarily multipart endpoints.
+// Only explicit upload paths are exercised as fileless multipart requests;
+// import/validate/preview routes otherwise receive an empty JSON-shaped body.
+const MULTIPART_PATTERN = /\/upload(?:\/|$)/i;
 const EXCLUDED: RegExp[] = [
   /(whatsapp|email|openai|ai-|carrier|tracking)/i,
   /(repair|recalc|migration|migrate|cutover|backup|restore|reset|seed|rebuild|purge|backfill)/i,
