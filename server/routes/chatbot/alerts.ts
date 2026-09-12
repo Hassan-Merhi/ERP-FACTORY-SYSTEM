@@ -125,6 +125,9 @@ export function registerChatbotAlertRoutes(app: Express) {
 
       const { userId } = req.params;
       const { enabled } = req.body;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ message: "enabled must be a boolean" });
+      }
 
       await db.update(users).set({ chatbotEnabled: enabled }).where(eq(users.id, userId));
 
