@@ -73,13 +73,16 @@ describe("partial offload cost consistency", () => {
   });
 
   it("pins the UI preview, server offload, receipt history, and post-offload refresh to the same sources", () => {
+    // The UI-preview cost math was extracted from OffloadDialog.tsx into the
+    // pure module below during the P1 god-file split; the contract being
+    // pinned (valuation basis vs actual received divisor) is unchanged.
     const dialog = repoFile(
       "client",
       "src",
       "pages",
       "factory",
       "production-raw-stock",
-      "OffloadDialog.tsx"
+      "offloadFormCalculations.ts"
     );
     const landedCost = repoFile(
       "server",
