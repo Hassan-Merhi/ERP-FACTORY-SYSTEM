@@ -12,42 +12,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useLocation } from "wouter";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import {
-  Eye,
-  EyeOff,
-  Trash2,
-  RotateCcw,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  Package,
-  Container,
-  ChevronRight,
-  ChevronDown,
-  GripVertical,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Eye, EyeOff, Package } from "lucide-react";
 import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/queryClient";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 
 import type { Customer, CustomerOrder, StatusFilter } from "./factoryinvoices/types";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import {
+  applyCustomGroupOrder,
+  filterOrdersByStatus,
+  getEstimatedKg,
+  getEstimatedPrice,
+  getRemainingBales,
+  groupOrdersByCustomer,
+  statusFilterCounts,
+} from "./factoryinvoices/invoiceCalculations";
+import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
+import { InvoiceOrderRow } from "./factoryinvoices/InvoiceOrderRow";
+
 export default function FactoryInvoices() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -201,18 +183,9 @@ export default function FactoryInvoices() {
     },
   });
 
-  const loadingCount = allOrders.filter((o) => o.status === "LOADING").length;
-  const verifiedCount = allOrders.filter((o) => o.status === "VERIFIED" || o.status === "PENDING_VERIFICATION").length;
-  const finalizedCount = allOrders.filter((o) => o.status === "FINALIZED").length;
+  const { loading: loadingCount, verified: verifiedCount, finalized: finalizedCount } = statusFilterCounts(allOrders);
 
-  const filteredOrders =
-    statusFilter === "LOADING"
-      ? allOrders.filter((o) => o.status === "LOADING")
-      : statusFilter === "VERIFIED"
-        ? allOrders.filter((o) => o.status === "VERIFIED" || o.status === "PENDING_VERIFICATION")
-        : statusFilter === "FINALIZED"
-          ? allOrders.filter((o) => o.status === "FINALIZED")
-          : allOrders;
+  const filteredOrders = filterOrdersByStatus(allOrders, statusFilter);
 
   const statusFilters: { key: StatusFilter; label: string; count: number }[] = [
     { key: "LOADING", label: "Loading", count: loadingCount },
@@ -257,64 +230,16 @@ export default function FactoryInvoices() {
     }
   };
 
-  // Per-order remaining: how many bales still needed to meet proforma target
-  const getRemainingBales = (order: { proformaExpectedBales?: string; totalQtyBales: number }): number => {
-    const expected = parseFloat(order.proformaExpectedBales || "0");
-    if (expected <= 0) return 0;
-    return Math.max(0, expected - (order.totalQtyBales || 0));
-  };
-
-  // Estimate kg and price for remaining bales using the order's average
-  const getEstimatedKg = (order: { totalQtyBales: number; totalWeightKg: string }, bales: number): number => {
-    const loaded = order.totalQtyBales || 0;
-    if (loaded <= 0) return 0;
-    const avgWeight = parseFloat(order.totalWeightKg || "0") / loaded;
-    return bales * avgWeight;
-  };
-
-  const getEstimatedPrice = (order: { totalQtyBales: number; grandTotal: string }, bales: number): number => {
-    const loaded = order.totalQtyBales || 0;
-    if (loaded <= 0) return 0;
-    const avgPrice = parseFloat(order.grandTotal || "0") / loaded;
-    return bales * avgPrice;
-  };
-
   // Column count for colspan calculations
   // +1 for the drag-handle column
   const colCount = 12 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0);
 
-  const fmtKg = (val: string | number | null | undefined) => {
-    const n = parseFloat(String(val ?? "0"));
-    if (!n) return <span className="text-muted-foreground/40">—</span>;
-    return <>{n.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg</>;
-  };
-
   // Group orders by customer, preserving first-appearance order
-  const customerGroups = (() => {
-    const seen = new Map<number, { customerId: number; customerName: string; orders: CustomerOrder[] }>();
-    for (const order of filteredOrders) {
-      if (!seen.has(order.customerId)) {
-        seen.set(order.customerId, { customerId: order.customerId, customerName: order.customerName, orders: [] });
-      }
-      seen.get(order.customerId)!.orders.push(order);
-    }
-    return Array.from(seen.values());
-  })();
+  const customerGroups = groupOrdersByCustomer(filteredOrders);
 
   // Apply any custom drag-to-reorder order for the current tab/filter combo
   const groupOrderKey = `${statusFilter}__${customerFilter}__${showHidden}`;
-  const orderedCustomerGroups = (() => {
-    const customOrder = customGroupOrders.get(groupOrderKey);
-    if (!customOrder || customOrder.length === 0) return customerGroups;
-    const groupMap = new Map(customerGroups.map((g) => [g.customerId, g]));
-    const reordered = customOrder.flatMap((id) => {
-      const g = groupMap.get(id);
-      return g ? [g] : [];
-    });
-    const inOrder = new Set(customOrder);
-    const extras = customerGroups.filter((g) => !inOrder.has(g.customerId));
-    return [...reordered, ...extras];
-  })();
+  const orderedCustomerGroups = applyCustomGroupOrder(customerGroups, customGroupOrders.get(groupOrderKey) ?? []);
 
   // Drag handlers (group-level reordering)
   const handleDragStart = (idx: number) => {
@@ -341,6 +266,20 @@ export default function FactoryInvoices() {
   const handleDragEnd = () => {
     dragIdxRef.current = null;
     setDropIdx(null);
+  };
+
+  const orderRowContext = {
+    hideProformaCol,
+    hideTotalsUsd,
+    formatDisplayDate,
+    getStatusBadge,
+    onRowClick: handleRowClick,
+    onToggleHideOrder: (order: CustomerOrder) => hideMutation.mutate({ orderId: order.id, isHidden: !order.isHidden }),
+    onDownload: downloadFromUrl,
+    isAdmin,
+    unfinalizePending: unfinalizeMutation.isPending,
+    onRevertOrder: (orderId: number) => unfinalizeMutation.mutate(orderId),
+    onDeleteOrder: (orderId: number) => deleteMutation.mutate(orderId),
   };
 
   return (
@@ -507,375 +446,37 @@ export default function FactoryInvoices() {
                     const isDropTarget =
                       dropIdx === groupIdx && dragIdxRef.current !== null && dragIdxRef.current !== groupIdx;
 
-                    const renderOrderRow = (order: CustomerOrder, indented = false) => {
-                      const remaining = getRemainingBales(order);
-                      const expected = parseFloat(order.proformaExpectedBales || "0");
-                      const overloaded = expected > 0 ? Math.max(0, (order.totalQtyBales || 0) - expected) : 0;
+                    if (isSingle) {
                       return (
-                        <TableRow
-                          key={order.id}
-                          className={`cursor-pointer ${order.isHidden ? "opacity-50" : ""} ${
-                            !indented && isDropTarget ? "border-t-2 border-primary" : ""
-                          } ${!indented && isDragging ? "opacity-40" : ""}`}
-                          draggable={!indented}
-                          onDragStart={!indented ? () => handleDragStart(groupIdx) : undefined}
-                          onDragOver={!indented ? (e) => handleDragOver(e, groupIdx) : undefined}
-                          onDrop={!indented ? () => handleDrop(groupIdx) : undefined}
-                          onDragEnd={!indented ? handleDragEnd : undefined}
-                          onClick={() => handleRowClick(order)}
-                          data-testid={`row-order-${order.id}`}
-                        >
-                          {/* Drag handle — only for top-level (non-indented) rows */}
-                          <TableCell className="w-7 px-1" onClick={(e) => e.stopPropagation()}>
-                            {!indented && (
-                              <GripVertical className="h-4 w-4 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing" />
-                            )}
-                          </TableCell>
-                          <TableCell data-testid={`text-customer-name-${order.id}`}>
-                            {indented ? (
-                              <span className="pl-5 text-muted-foreground/50 text-xs">↳</span>
-                            ) : (
-                              order.customerName
-                            )}
-                          </TableCell>
-                          <TableCell
-                            className="font-mono text-sm text-muted-foreground"
-                            data-testid={`text-loading-number-${order.id}`}
-                          >
-                            #{order.id}
-                          </TableCell>
-                          {!hideProformaCol && (
-                            <TableCell
-                              className="text-sm text-muted-foreground"
-                              data-testid={`text-proforma-${order.id}`}
-                            >
-                              {order.proformaName || <span className="text-muted-foreground/50">—</span>}
-                            </TableCell>
-                          )}
-                          <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
-                            {order.containerNumber || <span className="text-muted-foreground/50">—</span>}
-                          </TableCell>
-                          <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
-                            {order.destination || <span className="text-muted-foreground/50">—</span>}
-                          </TableCell>
-                          <TableCell
-                            className="text-sm max-w-[200px] truncate"
-                            data-testid={`text-notes-${order.id}`}
-                            title={order.containerNotes ?? undefined}
-                          >
-                            {order.containerNotes || <span className="text-muted-foreground/50">—</span>}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm" data-testid={`text-order-date-${order.id}`}>
-                            {order.orderDate ? formatDisplayDate(order.orderDate) : "-"}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(order.status)}</TableCell>
-                          <TableCell className="text-right font-mono" data-testid={`text-total-bales-${order.id}`}>
-                            {order.totalQtyBales ?? "-"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
-                            {fmtKg(order.totalWeightKg)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
-                            {expected <= 0 ? (
-                              <span className="text-muted-foreground/40">—</span>
-                            ) : remaining > 0 ? (
-                              <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>
-                            ) : overloaded > 0 ? (
-                              <span className="text-amber-600 dark:text-amber-400 font-medium">+{overloaded}</span>
-                            ) : (
-                              <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
-                            {parseFloat(order.freightAmount || "0") <= 0 &&
-                            parseFloat(order.otherChargesTotal || "0") <= 0 ? (
-                              <span className="text-muted-foreground/40">—</span>
-                            ) : (
-                              <div className="flex flex-col items-end gap-0.5">
-                                {parseFloat(order.freightAmount || "0") > 0 && (
-                                  <span className="text-blue-600 dark:text-blue-400">
-                                    $
-                                    {parseFloat(order.freightAmount).toLocaleString(undefined, {
-                                      minimumFractionDigits: 0,
-                                      maximumFractionDigits: 2,
-                                    })}
-                                    <span className="text-muted-foreground/60 text-xs ml-1">freight</span>
-                                  </span>
-                                )}
-                                {parseFloat(order.otherChargesTotal || "0") > 0 && (
-                                  <span className="text-purple-600 dark:text-purple-400">
-                                    $
-                                    {parseFloat(order.otherChargesTotal).toLocaleString(undefined, {
-                                      minimumFractionDigits: 0,
-                                      maximumFractionDigits: 2,
-                                    })}
-                                    <span className="text-muted-foreground/60 text-xs ml-1">other</span>
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                          {!hideTotalsUsd && (
-                            <TableCell
-                              className="text-right font-mono font-semibold"
-                              data-testid={`text-grand-total-${order.id}`}
-                            >
-                              $
-                              {parseFloat(order.grandTotal || "0").toLocaleString(undefined, {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                          )}
-                          <TableCell>
-                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title={order.isHidden ? "Unhide loading" : "Hide loading"}
-                                data-testid={`button-hide-order-${order.id}`}
-                                onClick={() => hideMutation.mutate({ orderId: order.id, isHidden: !order.isHidden })}
-                              >
-                                {order.isHidden ? (
-                                  <Eye className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    data-testid={`button-download-${order.id}`}
-                                    title="Download Invoice"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadFromUrl(
-                                        `/api/factory/customer-orders/${order.id}/export/excel`,
-                                        "invoice.xlsx"
-                                      )
-                                    }
-                                    data-testid={`button-download-excel-${order.id}`}
-                                  >
-                                    <FileSpreadsheet className="h-4 w-4 mr-2" />
-                                    Excel
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadFromUrl(
-                                        `/api/factory/customer-orders/${order.id}/export-excel?noCharges=1`,
-                                        "invoice-no-charges.xlsx"
-                                      )
-                                    }
-                                    data-testid={`button-download-excel-no-charges-${order.id}`}
-                                  >
-                                    <FileSpreadsheet className="h-4 w-4 mr-2" />
-                                    Excel (No Charges)
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadFromUrl(
-                                        `/api/factory/customer-orders/${order.id}/export-pdf`,
-                                        "invoice.pdf"
-                                      )
-                                    }
-                                    data-testid={`button-download-pdf-${order.id}`}
-                                  >
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    PDF
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      downloadFromUrl(
-                                        `/api/factory/customer-orders/${order.id}/export-pdf?noCharges=1`,
-                                        "invoice-no-charges.pdf"
-                                      )
-                                    }
-                                    data-testid={`button-download-pdf-no-charges-${order.id}`}
-                                  >
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    PDF (No Charges)
-                                  </DropdownMenuItem>
-                                  {isAdmin && (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        downloadFromUrl(
-                                          `/api/factory/customer-orders/${order.id}/loading-status-export`,
-                                          "loading-status.xlsx"
-                                        )
-                                      }
-                                      data-testid={`button-download-loading-status-${order.id}`}
-                                    >
-                                      <Container className="h-4 w-4 mr-2" />
-                                      Loading Status + Bale Refs
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRowClick(order)}
-                                data-testid={`button-view-order-${order.id}`}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              {order.status === "FINALIZED" && (
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      disabled={unfinalizeMutation.isPending}
-                                      data-testid={`button-revert-order-${order.id}`}
-                                    >
-                                      <RotateCcw className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Revert to Verified</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        This will revert invoice {order.invoiceNumber} for {order.customerName} back to
-                                        Verified status. The invoice number will be voided, all bales will return to
-                                        stock, and the customer balance entry will be removed. This cannot be done if
-                                        any payment has been recorded against this invoice.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel data-testid={`button-cancel-revert-${order.id}`}>
-                                        Cancel
-                                      </AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => unfinalizeMutation.mutate(order.id)}
-                                        data-testid={`button-confirm-revert-${order.id}`}
-                                      >
-                                        Revert to Verified
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              )}
-                              {order.status !== "FINALIZED" && (
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" data-testid={`button-delete-order-${order.id}`}>
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        This will permanently delete invoice {order.invoiceNumber || `#${order.id}`} for{" "}
-                                        {order.customerName}. Any bales assigned to this order will be returned to
-                                        stock. This cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel data-testid={`button-cancel-delete-${order.id}`}>
-                                        Cancel
-                                      </AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => deleteMutation.mutate(order.id)}
-                                        data-testid={`button-confirm-delete-${order.id}`}
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    };
-
-                    if (isSingle) return renderOrderRow(group.orders[0], false);
-
-                    // Multi-loading: summary row + expandable children
-                    const totalBales = group.orders.reduce((s, o) => s + (o.totalQtyBales || 0), 0);
-                    const totalWeightKg = group.orders.reduce((s, o) => s + parseFloat(o.totalWeightKg || "0"), 0);
-                    const totalRemaining = group.orders.reduce((s, o) => s + getRemainingBales(o), 0);
-                    const totalOverloaded = group.orders.reduce((s, o) => {
-                      const exp = parseFloat(o.proformaExpectedBales || "0");
-                      return s + (exp > 0 ? Math.max(0, (o.totalQtyBales || 0) - exp) : 0);
-                    }, 0);
-                    const totalAmount = group.orders.reduce((s, o) => s + parseFloat(o.grandTotal || "0"), 0);
-
-                    return (
-                      <>
-                        {/* Group summary row */}
-                        <TableRow
-                          key={`group-${group.customerId}`}
-                          className={`cursor-pointer bg-muted/40 font-medium ${
-                            isDropTarget ? "border-t-2 border-primary" : ""
-                          } ${isDragging ? "opacity-40" : ""}`}
-                          draggable
+                        <InvoiceOrderRow
+                          key={group.orders[0].id}
+                          order={group.orders[0]}
+                          indented={false}
+                          isDropTarget={isDropTarget}
+                          isDragging={isDragging}
                           onDragStart={() => handleDragStart(groupIdx)}
                           onDragOver={(e) => handleDragOver(e, groupIdx)}
                           onDrop={() => handleDrop(groupIdx)}
                           onDragEnd={handleDragEnd}
-                          onClick={() => toggleCustomer(group.customerId)}
-                          data-testid={`row-group-${group.customerId}`}
-                        >
-                          {/* Drag handle */}
-                          <TableCell className="w-7 px-1" onClick={(e) => e.stopPropagation()}>
-                            <GripVertical className="h-4 w-4 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing" />
-                          </TableCell>
-                          <TableCell data-testid={`text-group-customer-${group.customerId}`}>
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              )}
-                              <span>{group.customerName}</span>
-                              <Badge variant="outline" className="text-xs font-normal">
-                                {group.orders.length} loadings
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">—</TableCell>
-                          {!hideProformaCol && <TableCell />}
-                          <TableCell />
-                          <TableCell />
-                          <TableCell />
-                          <TableCell />
-                          <TableCell />
-                          <TableCell className="text-right font-mono">{totalBales}</TableCell>
-                          <TableCell className="text-right font-mono text-sm">{fmtKg(totalWeightKg)}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {totalRemaining > 0 ? (
-                              <span className="text-red-600 dark:text-red-400">{totalRemaining}</span>
-                            ) : totalOverloaded > 0 ? (
-                              <span className="text-amber-600 dark:text-amber-400">+{totalOverloaded}</span>
-                            ) : (
-                              <span className="text-green-600 dark:text-green-400">Done</span>
-                            )}
-                          </TableCell>
-                          <TableCell />
-                          {!hideTotalsUsd && (
-                            <TableCell className="text-right font-mono">
-                              $
-                              {totalAmount.toLocaleString(undefined, {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 2,
-                              })}
-                            </TableCell>
-                          )}
-                          <TableCell />
-                        </TableRow>
-                        {/* Expanded individual rows */}
-                        {isExpanded && group.orders.map((order) => renderOrderRow(order, true))}
-                      </>
+                          {...orderRowContext}
+                        />
+                      );
+                    }
+
+                    return (
+                      <InvoiceGroupRow
+                        key={`group-${group.customerId}`}
+                        group={group}
+                        isExpanded={isExpanded}
+                        isDropTarget={isDropTarget}
+                        isDragging={isDragging}
+                        onToggleExpand={toggleCustomer}
+                        onDragStart={() => handleDragStart(groupIdx)}
+                        onDragOver={(e) => handleDragOver(e, groupIdx)}
+                        onDrop={() => handleDrop(groupIdx)}
+                        onDragEnd={handleDragEnd}
+                        {...orderRowContext}
+                      />
                     );
                   })
                 )}

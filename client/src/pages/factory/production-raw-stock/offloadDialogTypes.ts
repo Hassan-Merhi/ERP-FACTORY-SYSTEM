@@ -81,3 +81,45 @@ export interface OffloadDialogProps {
   wrapAdminAction: (action: () => void, title: string) => void;
   mixBatches: unknown[];
 }
+
+/**
+ * The user-editable state of the offload form. Grouped here so the pure
+ * calculation and payload-building modules can operate on a single typed
+ * snapshot without depending on React.
+ */
+export interface OffloadFormFields {
+  offloadDate: string;
+  offloadDestination: string;
+  selectedContainerId: string;
+  actualReceivedKg: string;
+  costPerKg: string;
+  currencyCode: string;
+  fxRateToUsd: string;
+  freight: string;
+  freightAccountId: string;
+  freightCurrencyCode: string;
+  freightFxRate: string;
+  freightFxRateLoading: boolean;
+  freightFromContainer: boolean;
+  otherCharges: string;
+  otherChargesAccountId: string;
+  otherChargesCurrencyCode: string;
+  otherChargesFxRate: string;
+  otherChargesFxRateLoading: boolean;
+  otherChargesFromContainer: boolean;
+  commissionFromContainer: boolean;
+  containerCommissionCcy: string;
+  commissionPersonName: string;
+  commissionType: "PER_KG" | "FIXED";
+  commissionRate: string;
+  commissionLedgerAccountId: string;
+  commissionFxRate: string;
+  commissionFxRateLoading: boolean;
+  commissionFxEffectiveDate: string | null;
+  dutyAmount: string;
+  dutyAccountId: string;
+  dutyPending: boolean;
+  dutyNotes: string;
+  additionalCharges: AdditionalCharge[];
+  mixBatchAllocations: MixBatchAllocation[];
+}
