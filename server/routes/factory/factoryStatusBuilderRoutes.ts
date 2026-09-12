@@ -140,6 +140,14 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const { templateId, name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder } =
         req.body;
+      // template_id and name are both NOT NULL and neither was validated, so a
+      // body without them failed the insert as a 500 instead of a 400.
+      if (!Number.isInteger(templateId)) {
+        return res.status(400).json({ error: "templateId is required and must be an integer" });
+      }
+      if (typeof name !== "string" || name.trim() === "") {
+        return res.status(400).json({ error: "name is required" });
+      }
       const [metric] = await db
         .insert(statusMetrics)
         .values({
