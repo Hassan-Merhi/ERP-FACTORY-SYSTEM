@@ -50,6 +50,7 @@ const EXCLUDED: RegExp[] = [
 
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
+let factoryCompanyId: number;
 let ids: ResourceIds;
 let routes: RouteCase[] = [];
 let before: Fingerprint;
@@ -172,8 +173,49 @@ beforeAll(async () => {
   });
   if (login.status !== 200) throw new Error(`Login failed: ${login.status} ${login.text}`);
 
-  const selected = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
-  if (selected.status !== 200) throw new Error(`Company selection failed: ${selected.status} ${selected.text}`);
+  const factoryCompany = await pool.query<{ id: number }>(
+    `INSERT INTO companies (code, name, company_type, parent_company_id, active, base_currency)
+     VALUES ($1, $2, 'factory', $3, true, 'USD') RETURNING id`,
+    [`P2COVF`, `${TEST_PREFIX}_FactoryCompany`, ctx.companyId]
+  );
+  factoryCompanyId = factoryCompany.rows[0].id;
+  await pool.query(
+    `INSERT INTO user_company_roles
+       (user_id, company_id, role, can_delete_records, can_sell_negative_stock)
+     VALUES ($1, $2, 'Developer', true, true)`,
+    [ctx.userId, factoryCompanyId]
+  );
+  await pool.query(
+    `INSERT INTO user_security_permissions (user_id, company_id, permission, granted_by)
+     SELECT user_id, $2, permission, granted_by
+       FROM user_security_permissions
+      WHERE user_id = $1 AND company_id = $3
+     ON CONFLICT (user_id, company_id, permission) DO NOTHING`,
+    [ctx.userId, factoryCompanyId, ctx.companyId]
+  );
+
+  const selected = await agent.post("/api/auth/set-company").send({ companyId: factoryCompanyId });
+  if (selected.status !== 200) throw new Error(`Factory company selection failed: ${selected.status} ${selected.text}`);
+
+  const location = await pool.query<{ id: number }>(
+    `INSERT INTO locations (company_id, code, name) VALUES ($1, $2, $3) RETURNING id`,
+    [factoryCompanyId, "P2COVF-WH", `${TEST_PREFIX}_FactoryWarehouse`]
+  );
+  const stockGroup = await pool.query<{ id: number }>(
+    `INSERT INTO stock_groups (company_id, code, name) VALUES ($1, $2, $3) RETURNING id`,
+    [factoryCompanyId, "P2COVF-GRP", `${TEST_PREFIX}_FactoryGroup`]
+  );
+  const stockItem = await pool.query<{ id: number }>(
+    `INSERT INTO stock_items (company_id, code, name, uom, stock_group_id, active)
+     VALUES ($1, $2, $3, 'PCS', $4, true) RETURNING id`,
+    [factoryCompanyId, "P2COVF-ITEM", `${TEST_PREFIX}_FactoryItem`, stockGroup.rows[0].id]
+  );
+  const account = await pool.query<{ id: number }>(
+    `INSERT INTO ledger_accounts
+       (company_id, code, name, account_type, sub_type, opening_balance, opening_balance_side)
+     VALUES ($1, $2, $3, 'Cash', 'Cash', '0', 'Dr') RETURNING id`,
+    [factoryCompanyId, "P2COVF-CASH", `${TEST_PREFIX}_FactoryCash`]
+  );
 
   const supplier = await agent.post("/api/factory/suppliers").send({
     name: `${TEST_PREFIX}_supplier`,
@@ -206,24 +248,26 @@ beforeAll(async () => {
        (company_id, supplier_id, container_number, total_kg, rate_per_kg, currency_code, status)
      VALUES ($1, $2, $3, '1000.000', '2.500000', 'USD', 'PENDING')
      RETURNING id`,
-    [ctx.companyId, Number(supplier.body.id), `${TEST_PREFIX}-CONT`]
+    [factoryCompanyId, Number(supplier.body.id), `${TEST_PREFIX}-CONT`]
   );
 
   ids = {
-    accountId: ctx.salesAccountId,
+    accountId: account.rows[0].id,
     containerId: container.rows[0].id,
     customerId: Number(customer.body.id),
-    locationId: ctx.locationId,
+    locationId: location.rows[0].id,
     productId: Number(product.body.id),
-    stockItemId: ctx.stockItemIds[0],
+    stockItemId: stockItem.rows[0].id,
     supplierId: Number(supplier.body.id),
   };
 
   routes = selectPhase2FactoryDeepReads(JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as Manifest, ids);
-  before = await fingerprint(ctx.companyId);
+  before = await fingerprint(factoryCompanyId);
 }, 120000);
 
 afterAll(async () => {
+  await pool.query("DELETE FROM factory_bale_products WHERE company_id = $1", [factoryCompanyId]).catch(() => undefined);
+  await pool.query("DELETE FROM factory_production_plans WHERE company_id = $1", [factoryCompanyId]).catch(() => undefined);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 120000);
@@ -244,6 +288,6 @@ describe.sequential("Phase 2 deep Factory reads", () => {
   }, 300000);
 
   it("keeps accounting, inventory and raw stock unchanged", async () => {
-    expect(await fingerprint(ctx.companyId)).toEqual(before);
+    expect(await fingerprint(factoryCompanyId)).toEqual(before);
   });
 });
