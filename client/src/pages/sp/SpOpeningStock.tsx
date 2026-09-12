@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Loader2, ArrowRight } from "lucide-react";
 
-function fmt(v: number, dec = 2) {
+function fmt(v: number | string | undefined, dec = 2) {
   const n = parseFloat(String(v ?? "0"));
   return isNaN(n)
     ? `$0.${"0".repeat(dec)}`
@@ -16,6 +16,21 @@ function fmt(v: number, dec = 2) {
 }
 function num(v: string) {
   return parseFloat(v || "0") || 0;
+}
+
+interface OpeningStockRow {
+  id: number;
+  article_code?: string;
+  articleCode?: string;
+  description?: string | null;
+  qty_in?: string | number;
+  qtyIn?: string | number;
+  qty_remaining?: string | number;
+  qtyRemaining?: string | number;
+  base_unit_cost_usd?: string | number;
+  baseUnitCostUsd?: string | number;
+  final_unit_cost_usd?: string | number;
+  finalUnitCostUsd?: string | number;
 }
 
 export default function SpOpeningStock() {
@@ -36,12 +51,19 @@ export default function SpOpeningStock() {
     if (b > 0 || l > 0) setFinalUC(String((b + l).toFixed(6)));
   }, [baseUC, landedUC]);
 
-  const { data: past = [], isLoading: pastLoading } = useQuery({
+  const { data: past = [], isLoading: pastLoading } = useQuery<OpeningStockRow[]>({
     queryKey: ["/api/sp/opening-stock"],
   });
 
   const mutation = useMutation({
-    mutationFn: (body: any) => apiRequest("POST", "/api/sp/opening-stock", body),
+    mutationFn: (body: {
+      articleCode: string;
+      qty: string;
+      baseUnitCostUsd: string;
+      landedUnitCostUsd: string;
+      finalUnitCostUsd: string;
+      notes: string;
+    }) => apiRequest("POST", "/api/sp/opening-stock", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sp/opening-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sp/report/stock"] });
@@ -220,7 +242,7 @@ export default function SpOpeningStock() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading...
           </div>
-        ) : (past as any[]).length === 0 ? (
+        ) : past.length === 0 ? (
           <p className="text-sm text-muted-foreground">No opening stock entries yet.</p>
         ) : (
           <Card>
@@ -234,7 +256,7 @@ export default function SpOpeningStock() {
                     <span className="text-right">Base/u</span>
                     <span className="text-right">Final/u</span>
                   </div>
-                  {(past as any[]).map((p, i: number) => (
+                  {past.map((p, i: number) => (
                     <div
                       key={p.id}
                       className="grid grid-cols-6 text-xs py-1.5 border-b border-border/30 last:border-0"
@@ -245,10 +267,10 @@ export default function SpOpeningStock() {
                         {p.description && <p className="text-muted-foreground">{p.description}</p>}
                       </div>
                       <span className="text-right tabular-nums text-muted-foreground">
-                        {parseFloat(p.qty_in ?? p.qtyIn ?? "0").toFixed(2)}
+                        {parseFloat(String(p.qty_in ?? p.qtyIn ?? "0")).toFixed(2)}
                       </span>
                       <span className="text-right tabular-nums font-semibold text-green-600">
-                        {parseFloat(p.qty_remaining ?? p.qtyRemaining ?? "0").toFixed(2)}
+                        {parseFloat(String(p.qty_remaining ?? p.qtyRemaining ?? "0")).toFixed(2)}
                       </span>
                       <span className="text-right tabular-nums">
                         {fmt(p.base_unit_cost_usd ?? p.baseUnitCostUsd, 4)}
