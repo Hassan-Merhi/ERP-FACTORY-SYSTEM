@@ -312,6 +312,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM factory_containers WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM factory_suppliers WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM factory_daybook_entries WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM factory_settings WHERE company_id = $1", [company.id]);
     // Employees, once the voucher_entries keyed by employee_id are gone.
     await pool.query("DELETE FROM employee_advance_repayments WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM employee_advances WHERE company_id = $1", [company.id]);

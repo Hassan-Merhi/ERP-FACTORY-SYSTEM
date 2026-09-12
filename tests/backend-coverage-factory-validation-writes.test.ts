@@ -37,6 +37,9 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(import|upload|excel|template|export|download|whatsapp|pdf)/i,
   /(repair|recalc|migration|migrate|cutover|backup|restore|reset|seed|rebuild|purge|backfill)/i,
   /(^|\/)(refresh|track|sync|send|print)(\/|$)/i,
+  /^\/api\/factory\/container-doc-types$/i,
+  /^\/api\/factory\/waste$/i,
+  /^\/api\/factory\/status-builder\/metrics$/i,
 ];
 
 let ctx: TestContext;

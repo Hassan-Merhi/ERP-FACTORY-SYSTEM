@@ -39,7 +39,7 @@ async function buildFullReconciliation(companyId: number) {
     db.execute(sql`
         SELECT COALESCE(SUM(li.quantity::numeric), 0) qty,
                COALESCE(SUM(li.quantity::numeric * li.average_rate::numeric), 0) value
-        FROM location_inventory li
+        FROM inventory li
         JOIN locations l ON l.id = li.location_id
         WHERE l.company_id = ${companyId} AND l.deleted_at IS NULL
           AND EXISTS (

@@ -126,7 +126,7 @@ export function registerFactoryStockAllocationV3Routes(app: Express) {
           ROUND(COALESCE(SUM(lb.weight_kg) FILTER (WHERE lb.removed_at IS NULL AND lb.phase = 'scanned'), 0), 3)::text AS "scannedWeightKg"
         FROM factory_v3_loads l
         LEFT JOIN customer_proformas p  ON p.id = l.proforma_id
-        LEFT JOIN factory_customers  cu ON cu.id = p.customer_id
+        LEFT JOIN customers  cu ON cu.id = p.customer_id
         LEFT JOIN factory_v3_load_bales lb ON lb.load_id = l.id
         WHERE l.company_id = ${companyId}
           ${statusFilter ? sql`AND l.status = ${statusFilter}` : sql``}
@@ -170,7 +170,7 @@ export function registerFactoryStockAllocationV3Routes(app: Express) {
           l.cancelled_at      AS "cancelledAt"
         FROM factory_v3_loads l
         LEFT JOIN customer_proformas p  ON p.id = l.proforma_id
-        LEFT JOIN factory_customers  cu ON cu.id = p.customer_id
+        LEFT JOIN customers  cu ON cu.id = p.customer_id
         WHERE l.id = ${id} AND l.company_id = ${companyId}
       `);
 
@@ -549,7 +549,7 @@ export function registerFactoryStockAllocationV3Routes(app: Express) {
           COALESCE(vl.load_count, 0) AS "v3LoadCount",
           COALESCE(vl.active_count, 0) AS "v3ActiveCount"
         FROM customer_proformas p
-        JOIN factory_customers cu ON cu.id = p.customer_id
+        JOIN customers cu ON cu.id = p.customer_id
         LEFT JOIN (
           SELECT proforma_id,
                  COUNT(*)::int AS line_count,

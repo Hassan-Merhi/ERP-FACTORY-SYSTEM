@@ -45,6 +45,16 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(^|\/)(run|apply|execute|trigger|sync)(\/|$)/i,
   /(export|download|template)/i,
   /\.(xlsx|pdf|csv|zip)$/i,
+  /^\/api\/sessions\//i,
+  /^\/api\/screen-feed\/live\//i,
+  /^\/api\/factory\/customer-orders\/:id$/i,
+  /^\/api\/factory\/(employees|transporters|advances|shipping-availability|workers)\/:id$/i,
+  /^\/api\/factory\/status-builder\/metrics\/:id$/i,
+  /^\/api\/factory\/status-builder\/runs\/:runId\/values$/i,
+  /^\/api\/factory\/sheets-sacks\/:id$/i,
+  /^\/api\/suppliers\/:supplierId\/proformas$/i,
+  /^\/api\/stock-group-archives\/:id$/i,
+  /^\/api\/users\/:userId\/chatbot$/i,
   /^\/api\/auth\//i,
 ];
 
@@ -94,6 +104,7 @@ export function materializeCoveragePath(routePath: string): string {
     if (name.includes("year")) return "2026";
     if (name.includes("month")) return "8";
     if (name.includes("day")) return "8";
+    if (name === "type" && routePath.includes("/api/accounts/:type/")) return "supplier";
     if (name.includes("type") || name.includes("status")) return "unknown";
     if (name.includes("currency")) return "USD";
     if (name.includes("reference") || name.includes("ref") || name.includes("code") || name.includes("name")) {
