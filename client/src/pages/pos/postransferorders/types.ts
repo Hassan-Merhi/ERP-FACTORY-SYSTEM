@@ -5,10 +5,8 @@
  */
 
 export interface PosUser {
-  id: number;
-  username: string;
-  assignedLocationId?: number;
-  posStation?: string;
+  id: string | number;
+  assignedLocationId?: number | null;
 }
 
 export interface PosTransferOrdersProps {

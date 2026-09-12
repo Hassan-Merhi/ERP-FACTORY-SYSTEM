@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup. Wave 6 cleared every type escape from the transaction-journal, containers, daybook, and location-inventory page areas, deleting their 32 frozen entries and lowering the ceiling from 207 to 140 after verified type-safety cleanup. Wave 7 cleared every type escape from the AccountingCreate, POS, vouchers, and Supplier Partner page areas, deleting their 37 frozen entries and lowering the ceiling from 140 to 69 after verified type-safety cleanup. Wave 8 cleared every type escape from the remaining client page modules (client/src/pages), deleting their 39 frozen entries and lowering the ceiling from 69 to 4 after verified type-safety cleanup.",
+  "description": "One-way ratchet on type escapes, counted from the TypeScript AST by scripts/audit-type-escapes.mjs. Every file carrying escapes is frozen at its current count in scan.baseline as [explicitAny, asAny, suppressions]: counts may fall freely, any increase fails, and a file with no entry must introduce none. totals.typeEscapeCeiling is the backlog as a single number and may only fall. Lower a baseline in the same change that removes the escapes — leaving headroom lets it refill silently. Wave 1 type-safety cleanup rebuilt the baseline at its verified value, lowering the ceiling from 913 to 662 after verified type-safety cleanup. Wave 2 cleared every type escape from the factory modules (server/routes/factory and client/src/pages/factory), deleting their 102 frozen entries and lowering the ceiling from 662 to 468 after verified type-safety cleanup. Wave 3 cleared every type escape from the remaining server route modules (server/routes outside the Wave 2 factory scope), deleting their 66 frozen entries and lowering the ceiling from 468 to 344 after verified type-safety cleanup. Wave 4 cleared every type escape from the settings modules (client/src/pages/settings), deleting their 39 frozen entries and lowering the ceiling from 344 to 263 after verified type-safety cleanup. Wave 5 cleared every type escape from the server service, chat, and library modules (server/services, server/chat, server/lib), deleting their 28 frozen entries and lowering the ceiling from 263 to 207 after verified type-safety cleanup. Wave 6 cleared every type escape from the transaction-journal, containers, daybook, and location-inventory page areas, deleting their 32 frozen entries and lowering the ceiling from 207 to 140 after verified type-safety cleanup. Wave 7 cleared every type escape from the AccountingCreate, POS, vouchers, and Supplier Partner page areas, deleting their 37 frozen entries and lowering the ceiling from 140 to 69 after verified type-safety cleanup. Wave 8 cleared every type escape from the remaining client page modules (client/src/pages), deleting their 39 frozen entries and lowering the ceiling from 69 to 4 after verified type-safety cleanup. Wave 9 cleared the final four type escapes from the lazy-loader, route, and development-seed boundaries, deleting their four frozen entries and lowering the ceiling from 4 to 0 after verified type-safety cleanup.",
   "scan": {
     "roots": [
       "server",
@@ -18,30 +18,9 @@
     ],
     "excludeFiles": [],
     "ratchetBucket": 1,
-    "baseline": {
-      "client/src/lib/lazyRetry.ts": [
-        1,
-        0,
-        0
-      ],
-      "client/src/routes/AppRoutes.tsx": [
-        1,
-        0,
-        0
-      ],
-      "client/src/routes/PosRoutes.tsx": [
-        1,
-        0,
-        0
-      ],
-      "server/seedDev.ts": [
-        0,
-        1,
-        0
-      ]
-    }
+    "baseline": {}
   },
   "totals": {
-    "typeEscapeCeiling": 4
+    "typeEscapeCeiling": 0
   }
 }

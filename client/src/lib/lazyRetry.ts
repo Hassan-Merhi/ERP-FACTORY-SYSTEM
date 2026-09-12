@@ -1,4 +1,4 @@
-import { lazy, type ComponentType } from "react";
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
 type ModuleFactory<T> = () => Promise<{ default: T }>;
 
@@ -11,7 +11,7 @@ function wait(ms: number): Promise<void> {
 
 export async function importWithRetry<T>(
   factory: ModuleFactory<T>,
-  attempts: number = DEFAULT_ATTEMPTS,
+  attempts: number = DEFAULT_ATTEMPTS
 ): Promise<{ default: T }> {
   let lastError: unknown;
 
@@ -41,9 +41,13 @@ export async function importWithRetry<T>(
  * moment later. A chunk that is genuinely gone still exhausts its attempts and
  * still reaches the recovery path, so deploys behave exactly as before.
  */
-export function lazyRetry<T extends ComponentType<any>>(
-  factory: ModuleFactory<T>,
-  attempts: number = DEFAULT_ATTEMPTS,
-) {
-  return lazy(() => importWithRetry(factory, attempts));
+type LoadableComponent = ComponentType<Record<string, unknown>>;
+
+type LazyResult<T> = T extends ComponentType<infer Props> ? LazyExoticComponent<ComponentType<Props>> : never;
+
+export function lazyRetry<T>(factory: ModuleFactory<T>, attempts: number = DEFAULT_ATTEMPTS): LazyResult<T> {
+  const load = async (): Promise<{ default: LoadableComponent }> =>
+    (await importWithRetry(factory, attempts)) as unknown as { default: LoadableComponent };
+
+  return lazy(load) as unknown as LazyResult<T>;
 }

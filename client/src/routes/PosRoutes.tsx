@@ -17,9 +17,10 @@ import {
   PosTransferOrders,
   MySettings,
 } from "@/lazyPages";
+import type { AuthMe } from "@shared/apiTypes";
 
 interface PosRoutesProps {
-  user: any;
+  user: AuthMe;
   posImportEnabled?: boolean;
 }
 
