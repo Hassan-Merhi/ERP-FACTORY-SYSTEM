@@ -27,7 +27,7 @@
       "reason": "Ledger IDs are resolved from the already company-scoped allocation flow."
     },
     {
-      "path": "server/routes/accountTransactionPaginationRoutes.ts",
+      "path": "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
       "reason": "Account and voucher ownership is validated before the pagination query executes."
     },
     {

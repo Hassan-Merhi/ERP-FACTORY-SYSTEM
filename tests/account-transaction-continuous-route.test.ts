@@ -43,7 +43,7 @@ vi.mock("drizzle-orm", () => ({
   isNull: (column: unknown) => ({ isNull: column }),
 }));
 
-import { registerAccountTransactionPaginationRoutes } from "../server/routes/accountTransactionPaginationRoutes";
+import { registerAccountTransactionPaginationRoutes } from "../server/routes/account-transaction-pagination";
 
 const previousNodeEnv = process.env.NODE_ENV;
 const previousSecret = process.env.CONTINUOUS_CURSOR_SECRET;
