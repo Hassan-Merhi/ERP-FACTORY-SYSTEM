@@ -1,25 +1,34 @@
 /**
- * Right-hand comparison panel of the container loading scan page: proforma
- * lines against what has been loaded, the extra (not-on-proforma) rows, the
- * loaded-bales summary, and the plain order summary shown when no proforma is
- * linked.
- *
- * Split out of FactoryContainerLoadingScan.tsx unchanged — the same status
- * ordering (overloaded, short, none, fulfilled), the same badge wording and
- * the same clickable in-stock count that deep-links to the bale list.
+ * Right-hand comparison panel of the container loading scan page. A linked
+ * proforma is a reusable reference while loading: it can show the master item
+ * list and quantities beside the current loading without classifying the live
+ * loading as over/under/missing.
  */
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ProformaProgressLine } from "@/lib/proformaCapacity";
-import type { ProformaLineStatus } from "./useFactoryContainerLoadingScanModel";
+import type { ProformaLineStatus, ProformaProgressLine } from "@/lib/proformaCapacity";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
-const STATUS_ORDER: Record<ProformaLineStatus, number> = { overloaded: 0, short: 1, none: 2, fulfilled: 3 };
+const STATUS_ORDER: Record<ProformaLineStatus, number> = {
+  overloaded: 0,
+  short: 1,
+  none: 2,
+  fulfilled: 3,
+  reference: 4,
+};
 
 const BADGE_BASE = "text-[10px] no-default-hover-elevate no-default-active-elevate";
 
 function StatusBadge({ status }: { status: ProformaLineStatus }) {
+  if (status === "reference") {
+    return (
+      <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
+        <Info className="h-3 w-3 mr-1" />
+        Reference
+      </Badge>
+    );
+  }
   if (status === "fulfilled") {
     return (
       <Badge
@@ -35,7 +44,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
     return (
       <Badge
         variant="outline"
-        className={`${BADGE_BASE} bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800`}
+        className={`${BADGE_BASE} bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800`}
       >
         Over Loaded
       </Badge>
@@ -85,6 +94,7 @@ function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; l
 
 function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { extraArticles, loadedByArticle, groupedBalesMap, proformaProgress } = model;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
   return (
     <div className="overflow-y-auto max-h-[340px]">
       <Table>
@@ -92,8 +102,8 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           <TableRow>
             <TableHead className="text-xs">Article</TableHead>
             <TableHead className="text-xs">Product</TableHead>
-            <TableHead className="text-xs text-right">Expected</TableHead>
-            <TableHead className="text-xs text-right">Loaded</TableHead>
+            <TableHead className="text-xs text-right">Proforma Qty</TableHead>
+            <TableHead className="text-xs text-right">Loaded Here</TableHead>
             <TableHead className="text-xs text-right">Remaining</TableHead>
             <TableHead className="text-xs">Status</TableHead>
             <TableHead className="text-xs text-right">Stock</TableHead>
@@ -101,34 +111,34 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
         </TableHeader>
         <TableBody>
           {extraArticles.map((code) => (
-            <TableRow key={code} className="bg-orange-50 dark:bg-orange-950/40" data-testid={`row-extra-${code}`}>
+            <TableRow key={code} className="bg-muted/20" data-testid={`row-extra-${code}`}>
               <TableCell className="text-xs font-mono py-1.5">{code}</TableCell>
               <TableCell className="text-xs py-1.5 text-muted-foreground">
                 {groupedBalesMap[code]?.baleName || "—"}
               </TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">0</TableCell>
+              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5">{loadedByArticle[code]}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">
-                <span className="text-orange-600 dark:text-orange-400 font-medium">+{loadedByArticle[code]}</span>
-              </TableCell>
+              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
               <TableCell className="py-1.5">
-                <Badge variant="destructive" className={BADGE_BASE}>
-                  Not in Proforma
+                <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
+                  Outside reference
                 </Badge>
               </TableCell>
               <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
             </TableRow>
           ))}
           {[...proformaProgress]
-            .sort((a, b) => (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3))
+            .sort((a, b) => (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4))
             .map((line) => {
               const remaining = line.remaining;
               const rowClass =
-                line.status === "short" || line.status === "none"
-                  ? "bg-red-50 dark:bg-red-950"
-                  : line.status === "overloaded"
-                    ? "bg-green-50 dark:bg-green-950"
-                    : "";
+                line.status === "reference"
+                  ? ""
+                  : line.status === "short" || line.status === "none"
+                    ? "bg-red-50 dark:bg-red-950"
+                    : line.status === "overloaded"
+                      ? "bg-orange-50 dark:bg-orange-950"
+                      : "";
               return (
                 <TableRow key={line.id} className={rowClass} data-testid={`row-progress-${line.articleCode}`}>
                   <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
@@ -136,10 +146,10 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
                   <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
                   <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
                   <TableCell className="text-xs text-right font-mono py-1.5">
-                    {remaining > 0 ? (
+                    {line.status === "reference" || referenceOnly ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : remaining > 0 ? (
                       <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>
-                    ) : remaining < 0 ? (
-                      <span className="text-green-600 dark:text-green-400 font-medium">+{Math.abs(remaining)}</span>
                     ) : (
                       <span className="text-muted-foreground">0</span>
                     )}
@@ -222,17 +232,20 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
 }
 
 export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadingScanModel }) {
-  const { orderId, linkedProforma, fulfilledCount, totalLines, bales, totalWeight } = model;
+  const { orderId, linkedProforma, fulfilledCount, totalLines, proformaProgress, bales, totalWeight } = model;
   if (!orderId) return null;
   if (!linkedProforma) return <OrderSummaryCard model={model} />;
-  const allFulfilled = fulfilledCount === totalLines && totalLines > 0;
+  const referenceOnly = proformaProgress.some((line) => line.status === "reference");
+  const allFulfilled = !referenceOnly && fulfilledCount === totalLines && totalLines > 0;
   return (
     <div className="rounded-xl border overflow-hidden flex flex-col" data-testid="card-proforma-progress">
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
         <div>
           <h3 className="font-semibold text-sm">{linkedProforma.name}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {fulfilledCount} / {totalLines} lines fulfilled
+            {referenceOnly
+              ? "Reference only — this proforma does not cap this loading"
+              : `${fulfilledCount} / ${totalLines} lines fulfilled`}
           </p>
         </div>
         <Badge
@@ -240,13 +253,11 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
           className={allFulfilled ? "bg-green-600 text-white no-default-hover-elevate no-default-active-elevate" : ""}
           data-testid="badge-proforma-progress"
         >
-          {fulfilledCount}/{totalLines}
+          {referenceOnly ? "Reference" : `${fulfilledCount}/${totalLines}`}
         </Badge>
       </div>
 
       <ComparisonTable model={model} />
-
-      {/* ── Loaded Bales summary table ── */}
       <LoadedBalesSummary model={model} />
 
       <div className="border-t pt-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
