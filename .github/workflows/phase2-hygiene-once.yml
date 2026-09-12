@@ -1,0 +1,47 @@
+name: Phase 2 Hygiene Once
+
+on:
+  push:
+    branches:
+      - test/backend-coverage-phase2
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: test/backend-coverage-phase2
+          fetch-depth: 0
+      - name: Preserve real contract fixes and revert formatting-only route churn
+        shell: bash
+        run: |
+          set -euo pipefail
+          keep=(
+            server/routes/vouchers/voucherCreateRoutes.ts
+            server/routes/factory/docs-users/docsRoutes.ts
+            server/routes/factory-intelligence/dashboard-waste.ts
+            server/routes/supplierProformaRoutes.ts
+            server/routes/factory/factoryStatusBuilderRoutes.ts
+            server/routes/payroll/worker-statement/worker-delete.ts
+            server/routes/factory/customer-orders/orderCrudRoutes.ts
+            server/routes/stock/merge/group-archives.ts
+            server/routes/factory/factorySheetsRoutes.ts
+            server/routes/factory/factoryStatusBuilderSheetsRoutes.ts
+          )
+          tar -cf /tmp/phase2-real-fixes.tar "${keep[@]}"
+          git checkout c8f64e714782108ba8e2422f6eaa7cb6a731f978 -- server/routes
+          tar -xf /tmp/phase2-real-fixes.tar
+      - name: Commit clean diff and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/phase2-hygiene-once.yml
+          git add server/routes
+          git commit -m "chore: remove Phase 2 formatting-only route noise"
+          git push origin HEAD:test/backend-coverage-phase2
