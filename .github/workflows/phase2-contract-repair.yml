@@ -1,0 +1,136 @@
+name: Phase 2 Contract Repair
+on:
+  push:
+    branches: [test/backend-coverage-phase2]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: test/backend-coverage-phase2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - run: npm ci --no-audit --bin-links=true
+      - name: Repair route contracts and restore full coverage probes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          def rep(path, old, new, count=1):
+              p=Path(path); s=p.read_text()
+              if old not in s: raise SystemExit(f"missing anchor: {path}: {old[:90]!r}")
+              p.write_text(s.replace(old,new,count))
+
+          # Restore the broad parameterized matrix; only streaming/session-store endpoints remain out of this request/response probe.
+          p=Path('tests/backend-coverage-parameterized-route-matrix.test.ts'); s=p.read_text()
+          for line in [
+            '  /^\\/api\\/factory\\/customer-orders\\/:id$/i,\n',
+            '  /^\\/api\\/factory\\/(employees|transporters|advances|shipping-availability|workers)\\/:id$/i,\n',
+            '  /^\\/api\\/factory\\/status-builder\\/metrics\\/:id$/i,\n',
+            '  /^\\/api\\/factory\\/status-builder\\/runs\\/:runId\\/values$/i,\n',
+            '  /^\\/api\\/factory\\/sheets-sacks\\/:id$/i,\n',
+            '  /^\\/api\\/suppliers\\/:supplierId\\/proformas$/i,\n',
+            '  /^\\/api\\/stock-group-archives\\/:id$/i,\n',
+            '  /^\\/api\\/users\\/:userId\\/chatbot$/i,\n',
+          ]: s=s.replace(line,'')
+          s=s.replace('    if (name.includes("type") || name.includes("status")) return "unknown";\n',
+                      '    if (name === "userid") return "00000000-0000-4000-8000-000000000001";\n    if (name.includes("type") || name.includes("status")) return "unknown";\n')
+          s=s.replace('    amount: "",\n    quantity: "",\n    date: "",\n',
+                      '    amount: "0",\n    quantity: "0",\n    date: "2026-08-08",\n    name: "coverage-probe",\n    code: "coverage-probe",\n    entries: [],\n')
+          p.write_text(s)
+
+          # Undo route hiding from the temporary repair and use actual handler validation instead.
+          for file, lines in {
+            'tests/backend-coverage-domain-validation-writes.test.ts':['  /^\\/api\\/vouchers$/i,\n'],
+            'tests/backend-coverage-factory-validation-writes.test.ts':[
+              '  /^\\/api\\/factory\\/container-doc-types$/i,\n','  /^\\/api\\/factory\\/waste$/i,\n','  /^\\/api\\/factory\\/status-builder\\/metrics$/i,\n'],
+            'tests/backend-coverage-export-report-sweep.test.ts':[
+              '  /^\\/api\\/factory\\/sheets\\/export$/i,\n','  /^\\/api\\/factory\\/status-builder\\/sheets\\/export$/i,\n'],
+          }.items():
+            p=Path(file); s=p.read_text()
+            for line in lines: s=s.replace(line,'')
+            s=s.replace('    amount: "",','    amount: "0",').replace('    quantity: "",','    quantity: "0",').replace('    date: "",','    date: "2026-08-08",').replace('    startDate: "",','    startDate: "2026-08-01",').replace('    endDate: "",','    endDate: "2026-08-08",')
+            p.write_text(s)
+
+          # Teardown dependencies discovered by the sweeps.
+          p=Path('tests/setup.ts'); s=p.read_text()
+          if 'DELETE FROM factory_bale_products WHERE company_id = $1' not in s:
+            s=s.replace('    await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [company.id]);\n',
+                        '    await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [company.id]);\n    await pool.query("DELETE FROM factory_bale_products WHERE company_id = $1", [company.id]);\n',1)
+          p.write_text(s)
+
+          # Voucher validation.
+          rep('server/routes/vouchers/voucherCreateRoutes.ts',
+              '      const voucherType = req.body.voucherType;\n      if (isPOS && voucherType !== "StockTransfer"',
+              '      const voucherType = req.body.voucherType;\n      const companyId = req.session.currentCompanyId;\n      if (!companyId) return res.status(400).json({ message: "No company selected" });\n      if (!req.body.voucherNumber || !voucherType || !req.body.voucherDate) return res.status(400).json({ message: "voucherNumber, voucherType and voucherDate are required" });\n      if (isPOS && voucherType !== "StockTransfer"')
+          rep('server/routes/vouchers/voucherCreateRoutes.ts',
+              '      const companyId = req.session.currentCompanyId;\n      const exchangeRate = companyId ? await getCurrentExchangeRate(companyId) : null;\n',
+              '      const exchangeRate = await getCurrentExchangeRate(companyId);\n')
+
+          # Factory document type validation/scoping.
+          rep('server/routes/factory/docs-users/docsRoutes.ts',
+              '    try {\n      const [row] = await db.insert(containerDocumentTypes).values(req.body).returning();\n      res.json(row);\n',
+              '    try {\n      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;\n      if (!companyId) return res.status(400).json({ message: "No company selected" });\n      const code = String(req.body?.code ?? "").trim();\n      const label = String(req.body?.label ?? "").trim();\n      if (!code || !label) return res.status(400).json({ message: "code and label are required" });\n      const [row] = await db.insert(containerDocumentTypes).values({ ...req.body, companyId, code, label }).returning();\n      res.json(row);\n')
+
+          # Waste validation.
+          rep('server/routes/factory-intelligence/dashboard-waste.ts',
+              '      const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;\n\n      const [entry] = await db\n',
+              '      const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;\n      const parsedKgWaste = Number(kgWaste);\n      if (!date || !wasteType || kgWaste == null || !Number.isFinite(parsedKgWaste) || parsedKgWaste < 0) return res.status(400).json({ message: "date, wasteType and a valid kgWaste are required" });\n\n      const [entry] = await db\n')
+
+          # Supplier proforma parent validation.
+          rep('server/routes/supplierProformaRoutes.ts',
+              '      const { reference, notes, lines } = req.body;\n      const [proforma] = await db\n',
+              '      const { reference, notes, lines } = req.body;\n      const [supplier] = await db.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.companyId, companyId))).limit(1);\n      if (!supplier) return res.status(404).json({ message: "Supplier not found" });\n      const [proforma] = await db\n')
+
+          # Status-builder validation.
+          rep('server/routes/factory/factoryStatusBuilderRoutes.ts',
+              '      const [metric] = await db\n        .insert(statusMetrics)\n',
+              '      const parsedTemplateId = parseOptionalId(templateId);\n      if (!parsedTemplateId || !String(name ?? "").trim()) return res.status(400).json({ message: "templateId and name are required" });\n      const [metric] = await db\n        .insert(statusMetrics)\n')
+          rep('server/routes/factory/factoryStatusBuilderRoutes.ts','          templateId,\n          name,\n','          templateId: parsedTemplateId,\n          name: String(name).trim(),\n')
+          rep('server/routes/factory/factoryStatusBuilderRoutes.ts',
+              '      const [updated] = await db\n        .update(statusMetrics)\n        .set({ name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder })\n',
+              '      const changes = Object.fromEntries(Object.entries({ name, beforeSourceType, sourceType, sourceField, operation, filtersJson, sortOrder }).filter(([, value]) => value !== undefined));\n      if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No values to update" });\n      const [updated] = await db\n        .update(statusMetrics)\n        .set(changes)\n')
+          rep('server/routes/factory/factoryStatusBuilderRoutes.ts','      const now = new Date();\n\n      for (const entry of entries) {\n','      if (!Array.isArray(entries)) return res.status(400).json({ message: "entries must be an array" });\n      const now = new Date();\n\n      for (const entry of entries) {\n')
+
+          # Correct worker attribution table.
+          rep('server/routes/payroll/worker-statement/worker-delete.ts',
+              "SELECT COUNT(*) as cnt FROM factory_bales WHERE worker_id = ${id} AND company_id = ${companyId} AND status NOT IN ('REMOVED','DELETED')",
+              "SELECT COUNT(*) as cnt FROM factory_bale_production_attributions a JOIN factory_bales b ON b.id = a.bale_id WHERE a.worker_id = ${id} AND b.company_id = ${companyId} AND b.status NOT IN ('REMOVED','DELETED')")
+
+          # Missing customer order => 404.
+          rep('server/routes/factory/customer-orders/orderCrudRoutes.ts',
+              '      logger.error("Error deleting customer order:", { error: error });\n      res.status(500).json({ message: getErrorMessage(error) });\n',
+              '      const message = getErrorMessage(error);\n      if (message === "Order not found") return res.status(404).json({ message });\n      if (message.startsWith("Cannot delete")) return res.status(400).json({ message });\n      logger.error("Error deleting customer order:", { error: error });\n      res.status(500).json({ message });\n')
+
+          # Archive missing => 404 before destructive storage call.
+          rep('server/routes/stock/merge/group-archives.ts',
+              '      const permanent = req.query.permanent === "true";\n',
+              '      const archiveId = parseInt(req.params.id);\n      if (!Number.isFinite(archiveId)) return res.status(400).json({ message: "Invalid archive id" });\n      const existing = await storage.getStockGroupLocationArchiveById(archiveId, req.session.currentCompanyId);\n      if (!existing) return res.status(404).json({ message: "Archive not found" });\n      const permanent = req.query.permanent === "true";\n',1)
+
+          # Empty workbook export is an empty-state response, not a 500.
+          for file, table in [('server/routes/factory/factorySheetsRoutes.ts','factorySheets'),('server/routes/factory/factoryStatusBuilderSheetsRoutes.ts','statusBuilderSheets')]:
+            p=Path(file); s=p.read_text()
+            needle='      const wb = xlsxUtils.book_new();\n'
+            export_marker='sheets/export'
+            idx=s.find(export_marker)
+            if idx<0: raise SystemExit(f'export marker missing {file}')
+            pos=s.find(needle, idx)
+            if pos<0: raise SystemExit(f'workbook anchor missing {file}')
+            guard='      if (sheets.length === 0) return res.status(404).json({ message: "No sheets to export" });\n\n'
+            s=s[:pos]+guard+s[pos:]
+            p.write_text(s)
+          PY
+      - name: Format
+        run: node node_modules/prettier/bin/prettier.cjs --write server/routes tests/backend-coverage-parameterized-route-matrix.test.ts tests/backend-coverage-domain-validation-writes.test.ts tests/backend-coverage-factory-validation-writes.test.ts tests/backend-coverage-export-report-sweep.test.ts tests/setup.ts
+      - name: Commit and self-remove
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/phase2-contract-repair.yml
+          git add server tests
+          git commit -m "fix: enforce coverage-discovered route contracts"
+          git push origin HEAD:test/backend-coverage-phase2
