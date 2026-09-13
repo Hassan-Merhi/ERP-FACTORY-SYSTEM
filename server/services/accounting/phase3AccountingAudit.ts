@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import type { VoucherLedgerExpectation } from "./voucherLedgerExpectation";
 
 export type Phase3AuditDomain = "payments" | "vouchers" | "sales" | "payroll" | "stock" | "invariants";
 
@@ -14,10 +15,8 @@ export interface PaymentAuditSnapshot {
   voucherId: number;
   voucherType: "Payment" | "Receipt";
   totalAmount: string;
-  /** Base-currency ledger totals: these must balance exactly. */
   ledgerDebit: string;
   ledgerCredit: string;
-  /** Cash-side totals in the same transaction currency as totalAmount. */
   cashDebit: string;
   cashCredit: string;
   cancelled?: boolean;
@@ -27,22 +26,18 @@ export interface VoucherAuditSnapshot {
   voucherId: number;
   voucherType: string;
   totalAmount: string;
-  /** Base-currency totals used for double-entry invariants. */
   ledgerDebit: string;
   ledgerCredit: string;
-  /** Transaction-currency totals used to reconcile the voucher header. Defaults to base totals for USD/legacy rows. */
   documentDebit?: string;
   documentCredit?: string;
-  ledgerExpectation: "balanced" | "single-sided" | "none" | "unclassified";
+  ledgerExpectation: VoucherLedgerExpectation;
   cancelled?: boolean;
 }
 
 export interface SaleAuditSnapshot {
   voucherId: number;
-  /** ERP POS Sales totals are stored in USD even when the display currency is not USD. */
   totalAmount: string;
   revenueCredit: string;
-  /** Supplier-partner sales use payable/profit settlement rather than the normal SALES income leg. */
   revenueRequired?: boolean;
   soldQuantity: string;
   recordedCogsValue: string;
@@ -103,7 +98,6 @@ export interface Phase3AccountingAuditReport {
 
 export class Phase3AccountingAuditError extends Error {
   readonly code: string;
-
   constructor(code: string, message: string) {
     super(message);
     this.name = "Phase3AccountingAuditError";
@@ -111,7 +105,6 @@ export class Phase3AccountingAuditError extends Error {
   }
 }
 
-/** Half a cent: persisted document headers are commonly 2dp while normalized base rows can be 6dp. */
 const MONEY_TOLERANCE = new Decimal("0.005");
 
 function decimal(value: unknown, field: string): Decimal {
@@ -192,14 +185,7 @@ function assertUniqueIds<T>(rows: T[], field: keyof T, label: string): void {
   }
 }
 
-/**
- * Pure, deterministic Phase 3 accounting audit.
- *
- * Database adapters normalize each accounting domain into the snapshots above;
- * this function owns the invariants and never repairs or mutates financial data.
- * Keeping the comparisons pure makes the same rules usable by scheduled audits,
- * historical audit tooling, API diagnostics, and CI tests.
- */
+/** Pure, deterministic Phase 3 accounting reconciliation. */
 export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3AccountingAuditReport {
   const companyId = positiveInteger(input.companyId, "companyId");
   if (positiveInteger(input.stock.companyId, "stock.companyId") !== companyId) {
@@ -225,17 +211,22 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
     const baseCredit = decimal(voucher.ledgerCredit, `${identity}.ledgerCredit`);
     const documentDebit = decimal(voucher.documentDebit ?? voucher.ledgerDebit, `${identity}.documentDebit`);
     const documentCredit = decimal(voucher.documentCredit ?? voucher.ledgerCredit, `${identity}.documentCredit`);
+    const expectation = voucher.ledgerExpectation;
 
-    if (voucher.ledgerExpectation === "unclassified") {
+    if (expectation === "unclassified") {
       addIssue(issues, "vouchers", identity, "VOUCHER_TYPE_UNCLASSIFIED", "classified voucher type", voucher.voucherType);
       continue;
     }
 
-    if (voucher.ledgerExpectation === "balanced") {
+    if (expectation === "balanced" || expectation === "balanced-only") {
       balancedDebits = balancedDebits.plus(baseDebit);
       balancedCredits = balancedCredits.plus(baseCredit);
-      compareMoney(issues, "vouchers", identity, "VOUCHER_DEBIT_TOTAL_MISMATCH", total, documentDebit);
-      compareMoney(issues, "vouchers", identity, "VOUCHER_CREDIT_TOTAL_MISMATCH", total, documentCredit);
+
+      if (expectation === "balanced") {
+        compareMoney(issues, "vouchers", identity, "VOUCHER_DEBIT_TOTAL_MISMATCH", total, documentDebit);
+        compareMoney(issues, "vouchers", identity, "VOUCHER_CREDIT_TOTAL_MISMATCH", total, documentCredit);
+      }
+
       if (!baseDebit.eq(baseCredit)) {
         addIssue(
           issues,
@@ -246,7 +237,10 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
           baseCredit
         );
       }
-    } else if (voucher.ledgerExpectation === "single-sided") {
+      continue;
+    }
+
+    if (expectation === "single-sided") {
       const debitPosted = !baseDebit.isZero();
       const creditPosted = !baseCredit.isZero();
       if (debitPosted === creditPosted) {
@@ -259,7 +253,17 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
           debitPosted ? "both ledger sides" : "no ledger side"
         );
       }
-    } else if (!baseDebit.isZero() || !baseCredit.isZero()) {
+      continue;
+    }
+
+    if (expectation === "inventory-sided") {
+      if (baseDebit.isZero() && baseCredit.isZero()) {
+        addIssue(issues, "vouchers", identity, "INVENTORY_SIDED_VOUCHER_EMPTY", "at least one GL side", "no ledger side");
+      }
+      continue;
+    }
+
+    if (expectation === "none" && (!baseDebit.isZero() || !baseCredit.isZero())) {
       addIssue(
         issues,
         "vouchers",
@@ -348,46 +352,22 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
       addIssue(issues, "payroll", identity, "PAYROLL_PAYMENT_VOUCHER_COUNT_MISMATCH", "1", String(paymentVoucherCount));
     }
 
-    compareMoney(
-      issues,
-      "payroll",
-      identity,
-      "PAYROLL_PAYMENT_TOTAL_MISMATCH",
-      netSalary,
-      decimal(payroll.paymentVoucherTotal, `${identity}.paymentVoucherTotal`)
-    );
+    compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_TOTAL_MISMATCH", netSalary, decimal(payroll.paymentVoucherTotal, `${identity}.paymentVoucherTotal`));
     const paymentDebit = decimal(payroll.paymentLedgerDebit, `${identity}.paymentLedgerDebit`);
     const paymentCredit = decimal(payroll.paymentLedgerCredit, `${identity}.paymentLedgerCredit`);
     compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_DEBIT_MISMATCH", netSalary, paymentDebit);
     compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_CREDIT_MISMATCH", netSalary, paymentCredit);
-    compareMoney(
-      issues,
-      "payroll",
-      identity,
-      "PAYROLL_CASH_CREDIT_MISMATCH",
-      netSalary,
-      decimal(payroll.paymentCashCredit, `${identity}.paymentCashCredit`)
-    );
+    compareMoney(issues, "payroll", identity, "PAYROLL_CASH_CREDIT_MISMATCH", netSalary, decimal(payroll.paymentCashCredit, `${identity}.paymentCashCredit`));
 
     if (daybookCount !== 1) {
       addIssue(issues, "payroll", identity, "PAYROLL_DAYBOOK_COUNT_MISMATCH", "1", String(daybookCount));
     }
-    compareMoney(
-      issues,
-      "payroll",
-      identity,
-      "PAYROLL_DAYBOOK_AMOUNT_MISMATCH",
-      netSalary,
-      decimal(payroll.daybookAmount, `${identity}.daybookAmount`)
-    );
+    compareMoney(issues, "payroll", identity, "PAYROLL_DAYBOOK_AMOUNT_MISMATCH", netSalary, decimal(payroll.daybookAmount, `${identity}.daybookAmount`));
   }
 
   const operationalInventoryValue = decimal(input.stock.operationalInventoryValue, "stock.operationalInventoryValue");
   const accountingInventoryValue = decimal(input.stock.accountingInventoryValue, "stock.accountingInventoryValue");
-  const inventoryAccountCount = nonNegativeInteger(
-    input.stock.accountingInventoryAccountCount,
-    "stock.accountingInventoryAccountCount"
-  );
+  const inventoryAccountCount = nonNegativeInteger(input.stock.accountingInventoryAccountCount, "stock.accountingInventoryAccountCount");
   if (inventoryAccountCount === 0 && !operationalInventoryValue.isZero()) {
     addIssue(
       issues,
@@ -398,14 +378,7 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
       "0"
     );
   } else if (inventoryAccountCount > 0) {
-    compareMoney(
-      issues,
-      "stock",
-      `company:${companyId}`,
-      "STOCK_ACCOUNTING_VALUE_MISMATCH",
-      operationalInventoryValue,
-      accountingInventoryValue
-    );
+    compareMoney(issues, "stock", `company:${companyId}`, "STOCK_ACCOUNTING_VALUE_MISMATCH", operationalInventoryValue, accountingInventoryValue);
   }
 
   for (const duplicate of input.duplicateEntries) {
