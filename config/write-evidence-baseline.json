@@ -86,7 +86,7 @@
   },
   "voucherWritesWithoutRequestIdentity": {
     "rationale": "Files that still create vouchers without a canonical stable posting identity. The retry need not be a user double-click: a proxy timeout, mobile network handover, or offline replay can submit the same operation again. A file is credited when it carries a stable request/source identity itself or reaches the central/infrastructure posting boundary that requires one. Phase 3 removed 11 infrastructure writers from the measured backlog by requiring deterministic source identity and serialized posting reuse. Phase 4 removes 22 high-risk operational writers by putting manual vouchers, payroll/advances, employee cash/POS and supplier payments behind a durable company-scoped request boundary whose stable identity survives browser retry/offline replay. The remaining active measured backlog is 48 creation paths: 15 explicit replay-guard paths, 11 migration/import/repair paths, and 22 Phase 5 operational paths. Only creation counts: updating, soft-deleting, restoring, or moving an existing voucher cannot produce a second voucher row.",
-    "ceiling": 15,
+    "ceiling": 14,
     "files": [
       "server/routes/balance-repair/undo.ts",
       "server/routes/containers/containerFreightWriteRoutes.ts",
@@ -95,7 +95,6 @@
       "server/routes/factory/customer-orders/finalize-loading/finalize.ts",
       "server/routes/helpers/intercompanyHelpers.ts",
       "server/routes/intercompanyNotificationRoutes.ts",
-      "server/routes/offloadRoutes.ts",
       "server/routes/payroll/advanceManagementRoutes.ts",
       "server/routes/payroll/core/generate.ts",
       "server/routes/payroll/core/migrations.ts",

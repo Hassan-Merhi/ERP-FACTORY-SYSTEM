@@ -27,11 +27,26 @@ export async function executeContainerOffloadLifecycle(
   input: ContainerOffloadLifecycleInput
 ): Promise<ContainerOffloadLifecycleResult> {
   return db.transaction(async (tx) => {
+    // The container row is the offload's ownership token and it is taken FOR
+    // UPDATE, in container → offload order, before any state is read.
+    //
+    // container_offloads has no unique key on container_id, so without this lock
+    // two simultaneous offloads of the same container both read status OTW, both
+    // found no existing offload, and both committed: two offload records, the
+    // stock received twice, the charge vouchers and Supplier Partner journals
+    // posted twice. The "Multiple offload records exist for this container"
+    // guard below could only report that damage after the fact.
+    //
+    // Serialized here, the second request re-reads the committed row, sees
+    // OFFLOADED, and takes the same create-or-replace path a second sequential
+    // request always took — one offload record, one set of stock and voucher
+    // effects.
     const [container] = await tx
       .select()
       .from(schema.containers)
       .where(and(eq(schema.containers.id, input.containerId), eq(schema.containers.companyId, input.companyId)))
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     if (!container) {
       throw new ContainerOffloadLifecycleError("Container not found", 404, "CONTAINER_NOT_FOUND");

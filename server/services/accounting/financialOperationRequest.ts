@@ -29,6 +29,26 @@ export function resolveFinancialOperationKey(req: Request): string {
   return key;
 }
 
+/**
+ * Optional variant of `resolveFinancialOperationKey` for writers whose existing
+ * callers do not send an identity yet.
+ *
+ * Returning null keeps the request servable exactly as before, while the two
+ * transports still have to agree when a caller does supply both. A route that
+ * combines this with a transaction-owned state guard gets replay safety from the
+ * guard and a durable, transport-level replay from the identity when present.
+ */
+export function resolveOptionalFinancialOperationKey(req: Request): string | null {
+  try {
+    return resolveFinancialOperationKey(req);
+  } catch (error) {
+    if (error instanceof DurableFinancialOperationError && error.code === "FINANCIAL_OPERATION_ID_REQUIRED") {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export function financialOperationErrorStatus(error: unknown): number {
   if (!(error instanceof DurableFinancialOperationError)) return 500;
   if (
