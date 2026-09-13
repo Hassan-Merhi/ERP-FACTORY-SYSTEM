@@ -7,6 +7,7 @@ import {
   type ConvergenceReconciliationResult,
 } from "./convergenceReconciliation";
 import { createDatabaseConvergenceAdapter } from "./databaseConvergenceAdapter";
+import { runDatabasePhase3AccountingAudit } from "./databasePhase3AccountingAudit";
 
 const convergenceAdapter = createDatabaseConvergenceAdapter(loadDatabaseStockConvergenceSnapshots);
 
@@ -33,10 +34,35 @@ const defaultDependencies: ScheduledConvergenceDependencies = {
     return result.rows.map(({ id }) => id);
   },
   reconcileCompany(companyId) {
-    return db.transaction(async (tx) => reconcileConvergenceTx(tx, companyId, convergenceAdapter), {
-      isolationLevel: "repeatable read",
-      accessMode: "read only",
-    });
+    return db.transaction(
+      async (tx) => {
+        const convergence = await reconcileConvergenceTx(tx, companyId, convergenceAdapter);
+
+        // Phase 3 extends the existing convergence observer with the accounting
+        // contracts that span multiple subsystems: payments/cash, vouchers,
+        // POS revenue + COGS + canonical stock, payroll settlement, inventory
+        // valuation, duplicate posting signatures, and debit=credit invariants.
+        // It is intentionally read-only and shares this repeatable-read snapshot.
+        const phase3 = await runDatabasePhase3AccountingAudit({ tx, companyId });
+        if (!phase3.clean) {
+          logger.warn("Scheduled Phase 3 accounting audit found discrepancies", {
+            module: "accounting",
+            action: "phase3ScheduledAudit",
+            companyId,
+            issueCount: phase3.issues.length,
+            issueCodes: [...new Set(phase3.issues.map(({ code }) => code))].sort(),
+            issues: phase3.issues.slice(0, 100),
+            checked: phase3.checked,
+          });
+        }
+
+        return convergence;
+      },
+      {
+        isolationLevel: "repeatable read",
+        accessMode: "read only",
+      }
+    );
   },
   info(message, context) {
     logger.info(message, context);
