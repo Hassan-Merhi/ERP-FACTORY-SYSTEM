@@ -89,11 +89,7 @@ function asDecimal(value: unknown, field: string): string {
   return normalized;
 }
 
-/**
- * Load every Phase 3 reconciliation surface from one company-scoped database snapshot.
- * The caller is expected to run this inside the same repeatable-read company transaction
- * used by scheduled convergence reconciliation.
- */
+/** Load every Phase 3 surface from one company-scoped repeatable-read snapshot. */
 export async function loadDatabasePhase3AccountingAudit(input: {
   tx: DrizzleTransaction;
   companyId: number;
@@ -102,10 +98,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
   asPositiveInteger(companyId, "companyId");
 
   const companyResult = await tx.execute(sql`
-    SELECT company_type
-    FROM companies
-    WHERE id = ${companyId}
-    LIMIT 1
+    SELECT company_type FROM companies WHERE id = ${companyId} LIMIT 1
   `);
   const company = resultRows<CompanyRow>(companyResult)[0];
   if (!company) {
@@ -126,16 +119,14 @@ export async function loadDatabasePhase3AccountingAudit(input: {
       COALESCE(SUM(COALESCE(ve.transaction_credit_amount, ve.base_credit_amount, ve.credit_amount, 0)), 0)::text AS tx_credit,
       COALESCE(SUM(
         CASE
-          WHEN ve.bank_account_id IS NOT NULL
-            OR lower(COALESCE(la.account_type, '')) IN ('cash', 'bank')
+          WHEN ve.bank_account_id IS NOT NULL OR lower(COALESCE(la.account_type, '')) IN ('cash', 'bank')
           THEN COALESCE(ve.transaction_debit_amount, ve.base_debit_amount, ve.debit_amount, 0)
           ELSE 0
         END
       ), 0)::text AS cash_tx_debit,
       COALESCE(SUM(
         CASE
-          WHEN ve.bank_account_id IS NOT NULL
-            OR lower(COALESCE(la.account_type, '')) IN ('cash', 'bank')
+          WHEN ve.bank_account_id IS NOT NULL OR lower(COALESCE(la.account_type, '')) IN ('cash', 'bank')
           THEN COALESCE(ve.transaction_credit_amount, ve.base_credit_amount, ve.credit_amount, 0)
           ELSE 0
         END
@@ -167,8 +158,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
       totalAmount,
       ledgerDebit: baseDebit,
       ledgerCredit: baseCredit,
-      // Generic ERP POS stores its voucher header in USD even when its display
-      // currency is CFA/EUR; other non-USD vouchers store the transaction amount.
+      // Generic ERP POS headers are USD even when their display currency is CFA/EUR.
       documentDebit: isErpPosSale ? baseDebit : txDebit,
       documentCredit: isErpPosSale ? baseCredit : txCredit,
       ledgerExpectation: classifyVoucherLedgerExpectation(voucherType),
@@ -206,7 +196,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
         COALESCE(SUM(csm.quantity_delta * csm.unit_cost), 0) AS movement_value
       FROM canonical_stock_movements csm
       WHERE csm.company_id = ${companyId}
-        AND csm.source_type = 'pos-sale'
+        AND csm.source_type IN ('pos-sale', 'pos-import')
       GROUP BY csm.source_id
     ), revenue AS (
       SELECT
@@ -238,8 +228,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
     JOIN movements m ON m.source_id = v.id::text
     LEFT JOIN sale_items si ON si.voucher_id = v.id
     LEFT JOIN revenue r ON r.voucher_id = v.id
-    WHERE v.company_id = ${companyId}
-      AND v.voucher_type = 'Sales'
+    WHERE v.company_id = ${companyId} AND v.voucher_type = 'Sales'
     ORDER BY v.id
   `);
   const sales: SaleAuditSnapshot[] = resultRows<SaleRow>(salesResult).map((row) => {
@@ -266,43 +255,35 @@ export async function loadDatabasePhase3AccountingAudit(input: {
       (
         SELECT COUNT(*)::int
         FROM vouchers pv
-        WHERE pv.company_id = p.company_id
-          AND pv.deleted_at IS NULL
+        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
           AND pv.voucher_type = 'Payment'
           AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
       ) AS payment_voucher_count,
       COALESCE((
         SELECT SUM(pv.total_amount)
         FROM vouchers pv
-        WHERE pv.company_id = p.company_id
-          AND pv.deleted_at IS NULL
+        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
           AND pv.voucher_type = 'Payment'
           AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
       ), 0)::text AS payment_voucher_total,
       COALESCE((
         SELECT SUM(COALESCE(ve.base_debit_amount, ve.debit_amount, 0))
-        FROM voucher_entries ve
-        JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id
-          AND pv.deleted_at IS NULL
+        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
+        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
           AND pv.voucher_type = 'Payment'
           AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
       ), 0)::text AS payment_debit,
       COALESCE((
         SELECT SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0))
-        FROM voucher_entries ve
-        JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id
-          AND pv.deleted_at IS NULL
+        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
+        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
           AND pv.voucher_type = 'Payment'
           AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
       ), 0)::text AS payment_credit,
       COALESCE((
         SELECT SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0))
-        FROM voucher_entries ve
-        JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id
-          AND pv.deleted_at IS NULL
+        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
+        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
           AND pv.voucher_type = 'Payment'
           AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
           AND ve.ledger_account_id = p.cash_account_id
@@ -328,16 +309,13 @@ export async function loadDatabasePhase3AccountingAudit(input: {
       AND (
         upper(COALESCE(p.status, '')) = 'PAID'
         OR EXISTS (
-          SELECT 1
-          FROM vouchers pv
-          WHERE pv.company_id = p.company_id
-            AND pv.deleted_at IS NULL
+          SELECT 1 FROM vouchers pv
+          WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
             AND pv.voucher_type = 'Payment'
             AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
         )
         OR EXISTS (
-          SELECT 1
-          FROM factory_daybook_entries d
+          SELECT 1 FROM factory_daybook_entries d
           WHERE d.company_id = p.company_id
             AND d.reference_table = 'factory_payrolls'
             AND d.reference_id = p.id
@@ -398,8 +376,14 @@ export async function loadDatabasePhase3AccountingAudit(input: {
         AND ve.ledger_account_id IN (SELECT id FROM inventory_accounts)
     )
     SELECT
-      COALESCE((SELECT SUM(i.total_value) FROM inventory i WHERE i.company_id = ${companyId}), 0)::text AS operational_value,
-      (COALESCE((SELECT opening_value FROM account_opening), 0) + COALESCE((SELECT movement_value FROM account_flow), 0))::text AS accounting_value,
+      COALESCE((
+        SELECT SUM(i.total_value)
+        FROM inventory i
+        JOIN locations l ON l.id = i.location_id
+        WHERE i.company_id = ${companyId} AND l.deleted_at IS NULL
+      ), 0)::text AS operational_value,
+      (COALESCE((SELECT opening_value FROM account_opening), 0)
+        + COALESCE((SELECT movement_value FROM account_flow), 0))::text AS accounting_value,
       (SELECT COUNT(*)::int FROM inventory_accounts) AS inventory_account_count
   `);
   const stockRow = resultRows<StockRow>(stockResult)[0];
@@ -413,22 +397,18 @@ export async function loadDatabasePhase3AccountingAudit(input: {
     accountingInventoryAccountCount: asNonNegativeInteger(stockRow.inventory_account_count, "stock.inventoryAccountCount"),
   };
 
-  // Exact duplicate-looking expense lines can be valid (for example two workers
-  // or two charges with the same amount). Only surface duplicates when the parent
-  // voucher is itself over-posted/unbalanced, which is the high-confidence retry
-  // signature seen in historical corruption.
+  // Repeated lines can be legitimate. Surface duplicate signatures only when
+  // the parent voucher is already over-posted/unbalanced, which is the durable
+  // retry-corruption signature rather than a mere same-amount coincidence.
   const duplicateResult = await tx.execute(sql`
     WITH voucher_totals AS (
       SELECT
-        v.id,
-        v.currency,
-        v.total_amount,
+        v.id, v.currency, v.total_amount,
         COALESCE(SUM(COALESCE(ve.base_debit_amount, ve.debit_amount, 0)), 0) AS debit,
         COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0)), 0) AS credit
       FROM vouchers v
       LEFT JOIN voucher_entries ve ON ve.voucher_id = v.id
-      WHERE v.company_id = ${companyId}
-        AND v.deleted_at IS NULL
+      WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL
       GROUP BY v.id, v.currency, v.total_amount
     ), duplicate_groups AS (
       SELECT
@@ -443,12 +423,8 @@ export async function loadDatabasePhase3AccountingAudit(input: {
         COUNT(*)::int AS occurrences
       FROM voucher_entries ve
       JOIN vouchers v ON v.id = ve.voucher_id
-      WHERE v.company_id = ${companyId}
-        AND v.deleted_at IS NULL
-      GROUP BY
-        ve.voucher_id,
-        ve.ledger_account_id,
-        ve.bank_account_id,
+      WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL
+      GROUP BY ve.voucher_id, ve.ledger_account_id, ve.bank_account_id,
         COALESCE(ve.base_debit_amount, ve.debit_amount, 0),
         COALESCE(ve.base_credit_amount, ve.credit_amount, 0),
         COALESCE(ve.narration, '')
@@ -460,10 +436,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
     WHERE vt.debit <> vt.credit
        OR (
          upper(COALESCE(vt.currency, 'USD')) = 'USD'
-         AND (
-           abs(vt.debit - vt.total_amount) >= 0.01
-           OR abs(vt.credit - vt.total_amount) >= 0.01
-         )
+         AND (abs(vt.debit - vt.total_amount) >= 0.01 OR abs(vt.credit - vt.total_amount) >= 0.01)
        )
     ORDER BY d.voucher_id, d.signature
   `);
@@ -473,15 +446,7 @@ export async function loadDatabasePhase3AccountingAudit(input: {
     occurrences: asNonNegativeInteger(row.occurrences, "duplicateEntry.occurrences"),
   }));
 
-  return {
-    companyId,
-    payments,
-    vouchers,
-    sales,
-    payrolls,
-    stock,
-    duplicateEntries,
-  };
+  return { companyId, payments, vouchers, sales, payrolls, stock, duplicateEntries };
 }
 
 export async function runDatabasePhase3AccountingAudit(input: {
