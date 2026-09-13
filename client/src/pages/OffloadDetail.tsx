@@ -175,7 +175,12 @@ export default function OffloadDetail() {
   });
 
   const toggleOptionalMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/offloads/${id}/toggle-optional`),
+    // The button states its intent (Suspend → optional, Restore → active) rather
+    // than asking the server to flip whatever it currently holds. That is what
+    // lets a retransmitted click be recognized as the same request: the payload
+    // is identical, so the fetch guard reuses one clientRequestId and the server
+    // replays the committed outcome instead of toggling back.
+    mutationFn: () => apiRequest("POST", `/api/offloads/${id}/toggle-optional`, { optional: !offload?.optional }),
     onSuccess: async (res) => {
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: [`/api/offloads/${id}`] });

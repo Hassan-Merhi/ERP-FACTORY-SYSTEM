@@ -3,20 +3,20 @@
  *
  * Offload daybook listing/detail, offload optional-toggle, container
  * offload-diagnostics, and the post-offload voucher backfill/repair admin
- * endpoints. Extracted from debugRoutes.ts as a sub-registrar; behaviour is
- * unchanged.
+ * endpoints. Extracted from debugRoutes.ts as a sub-registrar.
+ *
+ * The optional-toggle effect set lives in
+ * services/containers/offloadOptionalToggle.ts so the state guard and the row
+ * locks are transaction-owned; this file only resolves the caller identity and
+ * maps the outcome onto a response.
  */
-import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { logger } from "../lib/logger";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { eq, and, or, desc, inArray, gte, lte, like, sql } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, like, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
-import { adjustInventory, reverseInventoryByExactValue } from "../inventoryHelper";
-import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { getOrCreateLedgerAccount } from "./factory/_helpers";
 import { assertActiveCompanyAccess, sendCompanyAccessError } from "../security/companyAccessBoundary";
 import {
@@ -32,8 +32,38 @@ import {
   vouchers,
 } from "@shared/schema";
 import { resultRows } from "../lib/queryResult";
+import {
+  financialOperationErrorStatus,
+  financialOperationRequestPayload,
+  resolveOptionalFinancialOperationKey,
+} from "../services/accounting/financialOperationRequest";
+import {
+  DurableFinancialOperationError,
+  financialOperationFingerprint,
+  withDurableFinancialOperation,
+} from "../services/accounting/durableFinancialOperation";
+import {
+  applyOffloadOptionalToggleTx,
+  OffloadOptionalToggleError,
+  type OffloadOptionalToggleOutcome,
+} from "../services/containers/offloadOptionalToggle";
 
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+/**
+ * The state the caller asked for, when it stated one.
+ *
+ * The suspend/restore button knows which direction it means, and saying so is
+ * what lets a retransmission be recognized as a replay instead of being served
+ * as a second toggle in the opposite direction. Legacy callers send no body and
+ * keep the pure toggle behaviour.
+ */
+function requestedOptionalState(body: unknown): boolean | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const value = (body as Record<string, unknown>).optional;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
 
 export function registerOffloadRoutes(app: Express) {
   // List offloads for daybook view (filtered by date range and company)
@@ -235,7 +265,14 @@ export function registerOffloadRoutes(app: Express) {
     }
   });
 
-  // Toggle offload optional status — suspends/unsuspends inventory + vouchers without reversing permanently
+  // Toggle offload optional status — suspends/unsuspends inventory + vouchers without reversing permanently.
+  //
+  // The effect set lives in applyOffloadOptionalToggleTx so the target state, the
+  // row locks, and the replay decision are one transaction-owned unit: a retry or
+  // a second simultaneous request cannot remove or restore the offloaded stock a
+  // second time. A caller that supplies X-Idempotency-Key/clientRequestId also
+  // gets the durable financial-operation replay, so an identical retransmission
+  // returns the recorded outcome instead of running again.
   app.post(
     "/api/offloads/:id/toggle-optional",
     requireAuth,
@@ -246,154 +283,47 @@ export function registerOffloadRoutes(app: Express) {
         const offloadId = parseInt(req.params.id);
         if (isNaN(offloadId)) return res.status(400).json({ message: "Invalid offload ID" });
 
-        const [offload] = await db
-          .select({
-            id: containerOffloads.id,
-            containerId: containerOffloads.containerId,
-            locationId: containerOffloads.locationId,
-            optional: containerOffloads.optional,
-            offloadedAt: containerOffloads.offloadedAt,
-            companyId: containers.companyId,
-            containerNumber: containers.containerNumber,
-          })
-          .from(containerOffloads)
-          .innerJoin(containers, eq(containerOffloads.containerId, containers.id))
-          .where(eq(containerOffloads.id, offloadId))
-          .execute();
+        const requestId = resolveOptionalFinancialOperationKey(req);
+        const toggleInput = {
+          companyId: access.activeCompanyId,
+          offloadId,
+          requestedOptional: requestedOptionalState(req.body),
+          requestId,
+          actorUserId: req.session.userId ?? null,
+          actorUsername: req.session.username ?? null,
+        };
 
-        if (!offload) return res.status(404).json({ message: "Offload not found" });
-        if (offload.companyId !== access.activeCompanyId) {
-          return res.status(403).json({ message: "No access to this company", code: "COMPANY_ACCESS_DENIED" });
+        if (requestId) {
+          const operation = await withDurableFinancialOperation<OffloadOptionalToggleOutcome>(
+            {
+              companyId: Number(access.activeCompanyId),
+              operationName: "container.offload-optional-toggle",
+              idempotencyKey: requestId,
+              requestFingerprint: financialOperationFingerprint({
+                method: req.method,
+                path: req.path,
+                companyId: Number(access.activeCompanyId),
+                body: financialOperationRequestPayload(req.body),
+              }),
+            },
+            async (tx) => ({ value: await applyOffloadOptionalToggleTx(tx, toggleInput) })
+          );
+          return res.json({
+            optional: operation.value.optional,
+            replayed: operation.replayed || operation.value.replayed,
+            message: operation.value.message,
+          });
         }
 
-        const makeOptional = !offload.optional; // toggle
-        const cn = offload.containerNumber;
-        const operationId = randomUUID();
-        const occurredAt = new Date().toISOString();
-
-        // Fetch the exact offload items (quantities + values as-offloaded)
-        const offloadItems = await db
-          .select()
-          .from(containerOffloadItems)
-          .where(eq(containerOffloadItems.offloadId, offloadId))
-          .execute();
-
-        if (offloadItems.length === 0) {
-          return res.status(400).json({ message: "No offload items found — cannot toggle optional status" });
-        }
-
-        await db.transaction(async (tx) => {
-          // 1. Toggle inventory
-          for (const item of offloadItems) {
-            const qty = parseFloat(item.quantity);
-            const value = parseFloat(item.totalValue);
-            const rate = parseFloat(item.rate);
-
-            if (makeOptional) {
-              // Suspending: remove the stock that was added at offload
-              await reverseInventoryByExactValue(
-                tx,
-                offload.locationId,
-                item.stockItemId,
-                qty,
-                value,
-                offload.companyId
-              );
-            } else {
-              // Unsuspending: add the stock back at the original rate
-              await adjustInventory(tx, offload.locationId, item.stockItemId, qty, offload.companyId, rate);
-            }
-
-            await postStockMovementTx(
-              tx,
-              {
-                companyId: offload.companyId,
-                stockItemId: item.stockItemId,
-                kind: "adjustment",
-                quantity: String(Math.abs(qty)),
-                unitCost: String(Math.max(rate || (qty !== 0 ? value / qty : 0), 0)),
-                fromLocationId: makeOptional ? offload.locationId : undefined,
-                toLocationId: makeOptional ? undefined : offload.locationId,
-                occurredAt,
-                source: {
-                  sourceType: makeOptional ? "offload_optional_suspend" : "offload_optional_restore",
-                  sourceId: String(offloadId),
-                  idempotencyKey: `offload-optional:${offload.companyId}:${offloadId}:${operationId}:${item.id}`,
-                },
-                actor: {
-                  userId: req.session.userId,
-                  username: req.session.username,
-                  reason: makeOptional ? "Suspend container offload" : "Restore container offload",
-                },
-                allowNegativeStock: true,
-              },
-              canonicalStockMovementAdapter
-            );
-          }
-
-          // 2. Toggle all offload-related vouchers (DUTY-, OFFICE-, TRANS-, XFER-, CHG-)
-          const offloadVouchers = await tx
-            .select({ id: vouchers.id })
-            .from(vouchers)
-            .where(
-              and(
-                eq(vouchers.companyId, offload.companyId),
-                or(
-                  like(vouchers.voucherNumber, `DUTY-${cn}-%`),
-                  like(vouchers.voucherNumber, `OFFICE-${cn}-%`),
-                  like(vouchers.voucherNumber, `TRANS-${cn}-%`),
-                  like(vouchers.voucherNumber, `XFER-${cn}-%`),
-                  like(vouchers.voucherNumber, `CHG-${cn}-%`)
-                )
-              )
-            )
-            .execute();
-
-          if (offloadVouchers.length > 0) {
-            const voucherIds = offloadVouchers.map((v) => v.id);
-            await tx.update(vouchers).set({ optional: makeOptional }).where(inArray(vouchers.id, voucherIds));
-          }
-
-          // 3. Update the offload record itself
-          await tx.update(containerOffloads).set({ optional: makeOptional }).where(eq(containerOffloads.id, offloadId));
-
-          // 4. Sync container status to match the new offload state
-          if (makeOptional) {
-            // Suspending: check if ALL offloads for this container are now optional.
-            // If so, revert the container back to OTW so it shows on the tracking page.
-            const remainingActive = await tx
-              .select({ id: containerOffloads.id })
-              .from(containerOffloads)
-              .where(
-                and(eq(containerOffloads.containerId, offload.containerId), eq(containerOffloads.optional, false))
-              );
-            if (remainingActive.length === 0) {
-              await tx
-                .update(containers)
-                .set({ status: "OTW", offloadDate: null })
-                .where(eq(containers.id, offload.containerId));
-            }
-          } else {
-            // Unsuspending: container must be OFFLOADED again.
-            // Restore offloadDate from the offload's offloadedAt timestamp.
-            const restoredDate =
-              offload.offloadedAt instanceof Date
-                ? offload.offloadedAt.toISOString().split("T")[0]
-                : new Date().toISOString().split("T")[0];
-            await tx
-              .update(containers)
-              .set({ status: "OFFLOADED", offloadDate: restoredDate })
-              .where(eq(containers.id, offload.containerId));
-          }
-        });
-
-        res.json({
-          optional: makeOptional,
-          message: makeOptional
-            ? "Offload suspended — stock removed, vouchers set to optional, container moved back to OTW."
-            : "Offload restored — stock re-added, vouchers made active, container marked OFFLOADED.",
-        });
+        const outcome = await db.transaction(async (tx) => applyOffloadOptionalToggleTx(tx, toggleInput));
+        res.json({ optional: outcome.optional, replayed: outcome.replayed, message: outcome.message });
       } catch (error: unknown) {
+        if (error instanceof OffloadOptionalToggleError) {
+          return res.status(error.status).json({ message: error.message, code: error.code });
+        }
+        if (error instanceof DurableFinancialOperationError) {
+          return res.status(financialOperationErrorStatus(error)).json({ message: error.message, code: error.code });
+        }
         logger.error("Error toggling offload optional:", { error: error });
         return sendCompanyAccessError(res, error);
       }

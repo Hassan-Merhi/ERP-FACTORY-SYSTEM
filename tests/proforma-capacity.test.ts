@@ -17,7 +17,7 @@ const baseProforma = {
 const options = { companyId: 12, proformaId: 71, currentOrderId: 170 };
 
 describe("authoritative proforma capacity engine", () => {
-  it("sums duplicate/case-variant proforma lines and separates current from sibling consumption", () => {
+  it("sums duplicate/case-variant proforma lines without consuming capacity from sibling loadings", () => {
     const snapshot = buildProformaCapacitySnapshot(
       options,
       baseProforma,
@@ -39,12 +39,12 @@ describe("authoritative proforma capacity engine", () => {
         normalizedArticleCode: "hmd12630",
         requestedQty: 5,
         currentOrderLoadedQty: 1,
-        siblingLoadedQty: 3,
-        totalConsumedQty: 4,
-        remainingQty: 1,
+        siblingLoadedQty: 0,
+        totalConsumedQty: 1,
+        remainingQty: 4,
         excessQty: 0,
-        contributingOrderIds: [154, 159, 170],
-        siblingOrderIds: [154, 159],
+        contributingOrderIds: [170],
+        siblingOrderIds: [],
         isFulfilled: false,
         isOverloaded: false,
       })
@@ -53,15 +53,15 @@ describe("authoritative proforma capacity engine", () => {
       expect.objectContaining({
         requestedTotalQty: 5,
         currentOrderLoadedTotalQty: 1,
-        siblingLoadedTotalQty: 3,
-        totalConsumedQty: 4,
-        remainingTotalQty: 1,
+        siblingLoadedTotalQty: 0,
+        totalConsumedQty: 1,
+        remainingTotalQty: 4,
         excessTotalQty: 0,
       })
     );
   });
 
-  it("shows zero capacity before the current loading scans its first bale when siblings already fulfilled the line", () => {
+  it("keeps full capacity before the current loading scans its first bale even when a sibling fulfilled the line", () => {
     const snapshot = buildProformaCapacitySnapshot(
       options,
       baseProforma,
@@ -73,21 +73,21 @@ describe("authoritative proforma capacity engine", () => {
       expect.objectContaining({
         requestedQty: 1,
         currentOrderLoadedQty: 0,
-        siblingLoadedQty: 1,
-        totalConsumedQty: 1,
-        remainingQty: 0,
+        siblingLoadedQty: 0,
+        totalConsumedQty: 0,
+        remainingQty: 1,
         excessQty: 0,
-        isFulfilled: true,
+        isFulfilled: false,
         isOverloaded: false,
-        contributingOrderIds: [154],
-        siblingOrderIds: [154],
+        contributingOrderIds: [],
+        siblingOrderIds: [],
       })
     );
   });
 
   it("preserves historical overages instead of hiding them behind a zero remaining value", () => {
     const snapshot = buildProformaCapacitySnapshot(
-      options,
+      { ...options, currentOrderId: null },
       baseProforma,
       [{ articleCode: "HMD12630", quantity: 42 }],
       [
@@ -186,9 +186,9 @@ describe("authoritative proforma capacity engine", () => {
       expect.objectContaining({
         requestedQty: 5,
         currentOrderLoadedQty: 1,
-        siblingLoadedQty: 2,
-        remainingQty: 2,
-        contributingOrderIds: [154, 170],
+        siblingLoadedQty: 0,
+        remainingQty: 4,
+        contributingOrderIds: [170],
       })
     );
   });
