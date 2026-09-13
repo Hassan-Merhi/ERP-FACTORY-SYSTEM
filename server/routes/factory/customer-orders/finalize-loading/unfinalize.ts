@@ -95,10 +95,16 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
 
       await db.transaction(async (tx) => {
+        // Locked for the same reason the finalize path locks it: this is the
+        // reversal that removes the receivable and retires the charge vouchers, and
+        // it must not run twice against one invoice. The status re-read after the
+        // lock is what makes the second concurrent revert a no-op error rather than
+        // a second set of deletions.
         const [order] = await tx
           .select()
           .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+          .for("update");
         if (!order) throw new Error("Order not found");
         if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted to Draft");
 
