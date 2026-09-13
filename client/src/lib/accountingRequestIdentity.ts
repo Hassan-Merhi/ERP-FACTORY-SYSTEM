@@ -98,6 +98,15 @@ function isPhase4OperationalAccountingRequest(
     if (PHASE4_OPERATIONAL_POST_PATHS.has(pathname)) return true;
     if (/^\/api\/factory\/employees\/[^/]+\/(?:deposit|withdraw)$/.test(pathname)) return true;
     if (/^\/api\/factory\/worker-bonuses\/[^/]+\/pay$/.test(pathname)) return true;
+    // Suspending/restoring a container offload moves stock and flips its charge
+    // vouchers, so a retransmitted click has to carry the same identity and be
+    // replayed by the server instead of being applied a second time.
+    if (/^\/api\/offloads\/[^/]+\/toggle-optional$/.test(pathname)) return true;
+    // Reversing a factory container offload deletes the offload's raw stock and
+    // vouchers, corrects the supplier's locked cost rate and re-posts the
+    // pre-offload freight voucher, so a retransmitted reversal must carry one
+    // identity and be replayed rather than applied twice.
+    if (/^\/api\/factory\/containers\/[^/]+\/reverse-offload$/.test(pathname)) return true;
     if (/^\/api\/factory\/workers\/[^/]+\/bulk-repay-advances$/.test(pathname)) return true;
     if (/^\/api\/factory\/advances\/[^/]+\/repayments$/.test(pathname)) return true;
     return false;

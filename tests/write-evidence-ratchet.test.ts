@@ -45,6 +45,7 @@ const voucherReview = JSON.parse(
     phase5OperationalCompleted: number;
     phase6SpecialPurposeCompleted: number;
     phase7PostReviewSafeWriters: number;
+    phase8RequestIdentityCompleted: number;
     unreviewed: number;
   };
   reviewed: Record<string, { verdict: string; reason: string; files: string[] }>;
@@ -130,15 +131,15 @@ describe("write evidence ratchet", () => {
     expect(baseline.stockWritesWithoutJournalEvidence.reviewed.unjournalled.files).toEqual([]);
   });
 
-  it("keeps only the exact 15 reviewed compatibility writers in the active voucher backlog", () => {
+  it("keeps only the exact 14 reviewed compatibility writers in the active voucher backlog", () => {
     const classified = Object.values(voucherReview.reviewed).flatMap((group) => group.files);
 
     expect(voucherReview.reviewState).toBe("REVIEWED FILE BY FILE");
-    expect(voucherReview.summary.activeReviewed).toBe(15);
-    expect(voucherReview.summary.explicitReplayGuard).toBe(15);
+    expect(voucherReview.summary.activeReviewed).toBe(14);
+    expect(voucherReview.summary.explicitReplayGuard).toBe(14);
     expect(voucherReview.summary.migrationImportRepair).toBe(0);
     expect(voucherReview.summary.operationalWithoutRequestIdentity).toBe(0);
-    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(15);
+    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(14);
     expect([...classified, ...voucherReview.unreviewed].sort()).toEqual(
       [...baseline.voucherWritesWithoutRequestIdentity.files].sort()
     );
@@ -172,6 +173,7 @@ describe("write evidence ratchet", () => {
       "phase-6-deterministic-source-writers": 6,
       "phase-6-intrinsic-replay-safe-writers": 5,
       "phase-7-post-review-safe-writers": 1,
+      "phase-8-request-identity-writers": 1,
     };
 
     for (const [groupName, expectedCount] of Object.entries(expectedCounts)) {
@@ -189,16 +191,21 @@ describe("write evidence ratchet", () => {
     expect(voucherReview.summary.phase5OperationalCompleted).toBe(22);
     expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(11);
     expect(voucherReview.summary.phase7PostReviewSafeWriters).toBe(1);
+    expect(voucherReview.summary.phase8RequestIdentityCompleted).toBe(1);
   });
 
   it("keeps the original 81-path review accounting honest", () => {
     expect(voucherReview.summary.initialReviewed).toBe(81);
+    // Phase 8 is part of the original 81: those files were reviewed as active
+    // compatibility writers and later earned a request identity, so they leave the
+    // measured backlog without leaving the accounting.
     expect(
       voucherReview.summary.activeReviewed +
         voucherReview.summary.phase3InfrastructureCompleted +
         voucherReview.summary.phase4OperationalCompleted +
         voucherReview.summary.phase5OperationalCompleted +
-        voucherReview.summary.phase6SpecialPurposeCompleted
+        voucherReview.summary.phase6SpecialPurposeCompleted +
+        voucherReview.summary.phase8RequestIdentityCompleted
     ).toBe(voucherReview.summary.initialReviewed);
   });
 
