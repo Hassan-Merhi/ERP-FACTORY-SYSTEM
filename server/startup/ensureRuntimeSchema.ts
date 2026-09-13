@@ -149,4 +149,13 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   await runPhase3HistoricalRepair();
   const { runPhase3PayrollDaybookRepair } = await import("../services/accounting/phase3PayrollDaybookRepair");
   await runPhase3PayrollDaybookRepair();
+
+  // Stock valuation uses an immutable cutover snapshot plus append-only canonical
+  // movements. Capture the baseline only after accounting/daybook repair, while
+  // startup is still blocking traffic to the new instance.
+  const { ensurePhase3InventoryValuationSchema } = await import(
+    "../services/accounting/ensurePhase3InventoryValuationSchema"
+  );
+  const baselinesCreated = await ensurePhase3InventoryValuationSchema(pool);
+  logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
 }
