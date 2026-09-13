@@ -6,6 +6,10 @@ import { phase4ReportShard } from "./phase4ReportShard";
 import { phase5ReportShard } from "./phase5ReportShard";
 import { phase6ReportShard } from "./phase6ReportShard";
 import { phase7ReportShard } from "./phase7ReportShard";
+import {
+  hasSchemaCompatibleReportOverride,
+  runSchemaCompatibleReportOverride,
+} from "./schemaCompatibleReportOverrides";
 
 export const reportImplementationShards: readonly ReportImplementationShard[] = [
   phase1ReportShard,
@@ -39,5 +43,8 @@ export function findReportImplementation(queryType: string): ReportImplementatio
 
 export async function runReportImplementation(ctx: DataQueryContext): Promise<DataQueryResult> {
   const queryType = typeof ctx.params.queryType === "string" ? ctx.params.queryType : "";
+  if (hasSchemaCompatibleReportOverride(queryType)) {
+    return runSchemaCompatibleReportOverride(ctx);
+  }
   return implementationByQueryType.get(queryType)?.run(ctx);
 }
