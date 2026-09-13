@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
+  const executeResults: unknown[][] = [];
   const insertResults: unknown[][] = [];
   const updateResults: unknown[][] = [];
   const transactionInserted: unknown[] = [];
@@ -59,6 +60,7 @@ const harness = vi.hoisted(() => {
 
   const db: any = {
     select,
+    execute: vi.fn(async () => ({ rows: executeResults.shift() ?? [] })),
     insert,
     update,
     delete: del,
@@ -77,6 +79,7 @@ const harness = vi.hoisted(() => {
   return {
     db,
     selectResults,
+    executeResults,
     insertResults,
     updateResults,
     transactionInserted,
@@ -112,6 +115,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (column: unknown, value: unknown) => ({ type: "eq", column, value }),
   and: (...conditions: unknown[]) => ({ type: "and", conditions }),
   ne: (column: unknown, value: unknown) => ({ type: "ne", column, value }),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: Array.from(strings), values }),
 }));
 vi.mock("@shared/schema", () => ({
   supplierProformas: {
@@ -183,6 +187,7 @@ describe("supplier proforma route behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.selectResults.splice(0);
+    harness.executeResults.splice(0);
     harness.insertResults.splice(0);
     harness.updateResults.splice(0);
     harness.transactionInserted.splice(0);
@@ -230,6 +235,7 @@ describe("supplier proforma route behavior", () => {
   });
 
   it("creates a proforma with canonical alias codes, sanitized decimals, and one atomic line transaction", async () => {
+    harness.executeResults.push([{ id: 2 }]);
     harness.insertResults.push([{ id: 10, companyId: 4, supplierId: 2, reference: "PF-NEW", notes: null }]);
     harness.selectResults.push([
       { id: 101, proformaId: 10, barcode: "MAIN-1", qty: 3, weightPerBale: "45.5", pricePerBale: "1234.5" },
@@ -257,6 +263,7 @@ describe("supplier proforma route behavior", () => {
       res
     );
 
+    expect(harness.db.execute).toHaveBeenCalledTimes(1);
     expect(harness.buildAliasMap).toHaveBeenCalledWith(4);
     expect(harness.transactionInserted).toEqual([
       {
