@@ -1,0 +1,401 @@
+import Decimal from "decimal.js";
+
+export type Phase3AuditDomain = "payments" | "vouchers" | "sales" | "payroll" | "stock" | "invariants";
+
+export interface Phase3AuditIssue {
+  domain: Phase3AuditDomain;
+  identity: string;
+  code: string;
+  expected: string;
+  actual: string;
+}
+
+export interface PaymentAuditSnapshot {
+  voucherId: number;
+  voucherType: "Payment" | "Receipt";
+  totalAmount: string;
+  ledgerDebit: string;
+  ledgerCredit: string;
+  cashDebit: string;
+  cashCredit: string;
+  cancelled?: boolean;
+}
+
+export interface VoucherAuditSnapshot {
+  voucherId: number;
+  voucherType: string;
+  totalAmount: string;
+  ledgerDebit: string;
+  ledgerCredit: string;
+  ledgerExpectation: "balanced" | "single-sided" | "none" | "unclassified";
+  cancelled?: boolean;
+}
+
+export interface SaleAuditSnapshot {
+  voucherId: number;
+  totalAmount: string;
+  revenueCredit: string;
+  soldQuantity: string;
+  recordedCogsValue: string;
+  inventoryMovementQuantity: string;
+  inventoryMovementValue: string;
+  cancelled?: boolean;
+}
+
+export interface PayrollAuditSnapshot {
+  payrollId: number;
+  status: string;
+  netSalary: string;
+  cashAccountId: number | null;
+  paymentVoucherCount: number;
+  paymentVoucherTotal: string;
+  paymentLedgerDebit: string;
+  paymentLedgerCredit: string;
+  paymentCashCredit: string;
+  daybookCount: number;
+  daybookAmount: string;
+}
+
+export interface StockAccountingAuditSnapshot {
+  companyId: number;
+  operationalInventoryValue: string;
+  accountingInventoryValue: string;
+  accountingInventoryAccountCount: number;
+}
+
+export interface DuplicateEntryGroup {
+  voucherId: number;
+  signature: string;
+  occurrences: number;
+}
+
+export interface Phase3AccountingAuditInput {
+  companyId: number;
+  payments: PaymentAuditSnapshot[];
+  vouchers: VoucherAuditSnapshot[];
+  sales: SaleAuditSnapshot[];
+  payrolls: PayrollAuditSnapshot[];
+  stock: StockAccountingAuditSnapshot;
+  duplicateEntries: DuplicateEntryGroup[];
+}
+
+export interface Phase3AccountingAuditReport {
+  companyId: number;
+  clean: boolean;
+  issues: Phase3AuditIssue[];
+  checked: {
+    payments: number;
+    vouchers: number;
+    sales: number;
+    payrolls: number;
+    duplicateEntryGroups: number;
+  };
+}
+
+export class Phase3AccountingAuditError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "Phase3AccountingAuditError";
+    this.code = code;
+  }
+}
+
+function decimal(value: unknown, field: string): Decimal {
+  try {
+    const parsed = new Decimal(String(value ?? ""));
+    if (!parsed.isFinite()) throw new Error("not finite");
+    return parsed;
+  } catch {
+    throw new Phase3AccountingAuditError("PHASE3_DECIMAL_INVALID", `${field} is not a finite decimal`);
+  }
+}
+
+function positiveInteger(value: unknown, field: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Phase3AccountingAuditError("PHASE3_ID_INVALID", `${field} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function nonNegativeInteger(value: unknown, field: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Phase3AccountingAuditError("PHASE3_COUNT_INVALID", `${field} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+function addIssue(
+  issues: Phase3AuditIssue[],
+  domain: Phase3AuditDomain,
+  identity: string,
+  code: string,
+  expected: Decimal | string,
+  actual: Decimal | string
+): void {
+  issues.push({
+    domain,
+    identity,
+    code,
+    expected: expected instanceof Decimal ? expected.toFixed() : expected,
+    actual: actual instanceof Decimal ? actual.toFixed() : actual,
+  });
+}
+
+function compare(
+  issues: Phase3AuditIssue[],
+  domain: Phase3AuditDomain,
+  identity: string,
+  code: string,
+  expected: Decimal,
+  actual: Decimal
+): void {
+  if (!expected.eq(actual)) addIssue(issues, domain, identity, code, expected, actual);
+}
+
+function assertUniqueIds<T>(rows: T[], field: keyof T, label: string): void {
+  const seen = new Set<number>();
+  for (const row of rows) {
+    const id = positiveInteger(row[field], `${label}.${String(field)}`);
+    if (seen.has(id)) {
+      throw new Phase3AccountingAuditError("PHASE3_DUPLICATE_SNAPSHOT", `Duplicate ${label} snapshot ${id}`);
+    }
+    seen.add(id);
+  }
+}
+
+/**
+ * Pure, deterministic Phase 3 accounting audit.
+ *
+ * Database adapters normalize each accounting domain into the snapshots above;
+ * this function owns the invariants and never repairs or mutates financial data.
+ * Keeping the comparisons pure makes the same rules usable by scheduled audits,
+ * historical audit tooling, API diagnostics, and CI tests.
+ */
+export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3AccountingAuditReport {
+  const companyId = positiveInteger(input.companyId, "companyId");
+  if (positiveInteger(input.stock.companyId, "stock.companyId") !== companyId) {
+    throw new Phase3AccountingAuditError("PHASE3_COMPANY_MISMATCH", "Stock snapshot crossed the company boundary");
+  }
+
+  assertUniqueIds(input.payments, "voucherId", "payment");
+  assertUniqueIds(input.vouchers, "voucherId", "voucher");
+  assertUniqueIds(input.sales, "voucherId", "sale");
+  assertUniqueIds(input.payrolls, "payrollId", "payroll");
+
+  const issues: Phase3AuditIssue[] = [];
+  let balancedDebits = new Decimal(0);
+  let balancedCredits = new Decimal(0);
+
+  for (const voucher of input.vouchers) {
+    const voucherId = positiveInteger(voucher.voucherId, "voucher.voucherId");
+    const identity = `voucher:${voucherId}`;
+    if (voucher.cancelled) continue;
+
+    const total = decimal(voucher.totalAmount, `voucher:${voucherId}.totalAmount`);
+    const debit = decimal(voucher.ledgerDebit, `voucher:${voucherId}.ledgerDebit`);
+    const credit = decimal(voucher.ledgerCredit, `voucher:${voucherId}.ledgerCredit`);
+
+    if (voucher.ledgerExpectation === "unclassified") {
+      addIssue(issues, "vouchers", identity, "VOUCHER_TYPE_UNCLASSIFIED", "classified voucher type", voucher.voucherType);
+      continue;
+    }
+
+    if (voucher.ledgerExpectation === "balanced") {
+      balancedDebits = balancedDebits.plus(debit);
+      balancedCredits = balancedCredits.plus(credit);
+      compare(issues, "vouchers", identity, "VOUCHER_DEBIT_TOTAL_MISMATCH", total, debit);
+      compare(issues, "vouchers", identity, "VOUCHER_CREDIT_TOTAL_MISMATCH", total, credit);
+      if (!debit.eq(credit)) {
+        addIssue(
+          issues,
+          "vouchers",
+          identity,
+          voucher.voucherType === "Journal" ? "UNBALANCED_JOURNAL" : "UNBALANCED_VOUCHER",
+          debit,
+          credit
+        );
+      }
+    } else if (voucher.ledgerExpectation === "single-sided") {
+      const debitPosted = !debit.isZero();
+      const creditPosted = !credit.isZero();
+      if (debitPosted === creditPosted) {
+        addIssue(
+          issues,
+          "vouchers",
+          identity,
+          "SINGLE_SIDED_VOUCHER_INVALID",
+          "exactly one ledger side",
+          debitPosted ? "both ledger sides" : "no ledger side"
+        );
+      }
+    } else if (!debit.isZero() || !credit.isZero()) {
+      addIssue(issues, "vouchers", identity, "NO_LEDGER_VOUCHER_HAS_ENTRIES", "0 debit / 0 credit", `${debit.toFixed()} / ${credit.toFixed()}`);
+    }
+  }
+
+  compare(
+    issues,
+    "invariants",
+    `company:${companyId}`,
+    "TOTAL_DEBITS_CREDITS_MISMATCH",
+    balancedDebits,
+    balancedCredits
+  );
+
+  for (const payment of input.payments) {
+    const voucherId = positiveInteger(payment.voucherId, "payment.voucherId");
+    if (payment.cancelled) continue;
+    const identity = `payment:${voucherId}`;
+    const total = decimal(payment.totalAmount, `${identity}.totalAmount`);
+    const debit = decimal(payment.ledgerDebit, `${identity}.ledgerDebit`);
+    const credit = decimal(payment.ledgerCredit, `${identity}.ledgerCredit`);
+    const cashDebit = decimal(payment.cashDebit, `${identity}.cashDebit`);
+    const cashCredit = decimal(payment.cashCredit, `${identity}.cashCredit`);
+
+    compare(issues, "payments", identity, "PAYMENT_LEDGER_NOT_BALANCED", debit, credit);
+    if (payment.voucherType === "Payment") {
+      compare(issues, "payments", identity, "PAYMENT_CASH_CREDIT_MISMATCH", total, cashCredit);
+    } else {
+      compare(issues, "payments", identity, "RECEIPT_CASH_DEBIT_MISMATCH", total, cashDebit);
+    }
+  }
+
+  for (const sale of input.sales) {
+    const voucherId = positiveInteger(sale.voucherId, "sale.voucherId");
+    const identity = `sale:${voucherId}`;
+    const movementQty = decimal(sale.inventoryMovementQuantity, `${identity}.inventoryMovementQuantity`);
+    const movementValue = decimal(sale.inventoryMovementValue, `${identity}.inventoryMovementValue`);
+
+    if (sale.cancelled) {
+      compare(issues, "sales", identity, "CANCELLED_SALE_INVENTORY_NOT_REVERSED", new Decimal(0), movementQty);
+      compare(issues, "sales", identity, "CANCELLED_SALE_VALUE_NOT_REVERSED", new Decimal(0), movementValue);
+      continue;
+    }
+
+    const total = decimal(sale.totalAmount, `${identity}.totalAmount`);
+    const revenue = decimal(sale.revenueCredit, `${identity}.revenueCredit`);
+    const soldQty = decimal(sale.soldQuantity, `${identity}.soldQuantity`).abs();
+    const cogs = decimal(sale.recordedCogsValue, `${identity}.recordedCogsValue`).abs();
+
+    compare(issues, "sales", identity, "SALE_REVENUE_MISMATCH", total, revenue);
+    compare(issues, "sales", identity, "SALE_INVENTORY_QUANTITY_MISMATCH", soldQty, movementQty.abs());
+    compare(issues, "sales", identity, "SALE_COGS_INVENTORY_VALUE_MISMATCH", cogs, movementValue.abs());
+  }
+
+  for (const payroll of input.payrolls) {
+    const payrollId = positiveInteger(payroll.payrollId, "payroll.payrollId");
+    const identity = `payroll:${payrollId}`;
+    const netSalary = decimal(payroll.netSalary, `${identity}.netSalary`).abs();
+    const paymentVoucherCount = nonNegativeInteger(payroll.paymentVoucherCount, `${identity}.paymentVoucherCount`);
+    const daybookCount = nonNegativeInteger(payroll.daybookCount, `${identity}.daybookCount`);
+    const isPaid = String(payroll.status).toUpperCase() === "PAID";
+
+    if (!isPaid) {
+      if (paymentVoucherCount !== 0) {
+        addIssue(issues, "payroll", identity, "UNPAID_PAYROLL_HAS_PAYMENT_VOUCHER", "0", String(paymentVoucherCount));
+      }
+      if (daybookCount !== 0) {
+        addIssue(issues, "payroll", identity, "UNPAID_PAYROLL_HAS_DAYBOOK_PAYMENT", "0", String(daybookCount));
+      }
+      continue;
+    }
+
+    if (netSalary.isZero()) continue;
+    if (!payroll.cashAccountId) {
+      addIssue(issues, "payroll", identity, "PAID_PAYROLL_CASH_ACCOUNT_MISSING", "cash/bank account", "missing");
+    }
+    if (paymentVoucherCount !== 1) {
+      addIssue(issues, "payroll", identity, "PAYROLL_PAYMENT_VOUCHER_COUNT_MISMATCH", "1", String(paymentVoucherCount));
+    }
+
+    compare(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_PAYMENT_TOTAL_MISMATCH",
+      netSalary,
+      decimal(payroll.paymentVoucherTotal, `${identity}.paymentVoucherTotal`)
+    );
+    const paymentDebit = decimal(payroll.paymentLedgerDebit, `${identity}.paymentLedgerDebit`);
+    const paymentCredit = decimal(payroll.paymentLedgerCredit, `${identity}.paymentLedgerCredit`);
+    compare(issues, "payroll", identity, "PAYROLL_PAYMENT_DEBIT_MISMATCH", netSalary, paymentDebit);
+    compare(issues, "payroll", identity, "PAYROLL_PAYMENT_CREDIT_MISMATCH", netSalary, paymentCredit);
+    compare(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_CASH_CREDIT_MISMATCH",
+      netSalary,
+      decimal(payroll.paymentCashCredit, `${identity}.paymentCashCredit`)
+    );
+
+    if (daybookCount !== 1) {
+      addIssue(issues, "payroll", identity, "PAYROLL_DAYBOOK_COUNT_MISMATCH", "1", String(daybookCount));
+    }
+    compare(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_DAYBOOK_AMOUNT_MISMATCH",
+      netSalary,
+      decimal(payroll.daybookAmount, `${identity}.daybookAmount`)
+    );
+  }
+
+  const operationalInventoryValue = decimal(input.stock.operationalInventoryValue, "stock.operationalInventoryValue");
+  const accountingInventoryValue = decimal(input.stock.accountingInventoryValue, "stock.accountingInventoryValue");
+  const inventoryAccountCount = nonNegativeInteger(
+    input.stock.accountingInventoryAccountCount,
+    "stock.accountingInventoryAccountCount"
+  );
+  if (inventoryAccountCount === 0 && !operationalInventoryValue.isZero()) {
+    addIssue(
+      issues,
+      "stock",
+      `company:${companyId}`,
+      "STOCK_ACCOUNTING_MAPPING_MISSING",
+      "at least one inventory ledger account",
+      "0"
+    );
+  } else if (inventoryAccountCount > 0) {
+    compare(
+      issues,
+      "stock",
+      `company:${companyId}`,
+      "STOCK_ACCOUNTING_VALUE_MISMATCH",
+      operationalInventoryValue,
+      accountingInventoryValue
+    );
+  }
+
+  for (const duplicate of input.duplicateEntries) {
+    const voucherId = positiveInteger(duplicate.voucherId, "duplicateEntry.voucherId");
+    const occurrences = nonNegativeInteger(duplicate.occurrences, "duplicateEntry.occurrences");
+    if (occurrences <= 1) continue;
+    addIssue(
+      issues,
+      "invariants",
+      `voucher:${voucherId}`,
+      "DUPLICATE_ACCOUNTING_ENTRY",
+      "1",
+      `${occurrences} × ${duplicate.signature}`
+    );
+  }
+
+  return {
+    companyId,
+    clean: issues.length === 0,
+    issues,
+    checked: {
+      payments: input.payments.length,
+      vouchers: input.vouchers.length,
+      sales: input.sales.length,
+      payrolls: input.payrolls.length,
+      duplicateEntryGroups: input.duplicateEntries.length,
+    },
+  };
+}
