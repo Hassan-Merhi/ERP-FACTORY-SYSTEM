@@ -105,4 +105,11 @@ export const reportsExportsPhase6TranslationsPart4: readonly Phase6ReportsExport
     ar: "القراءة: نوع بيانات غير مدعوم",
     fr: "Lecture : type de données non pris en charge",
   },
+  {
+    en: "Cost Breakdown: ${container.container_number}",
+    ar: "تفصيل التكلفة: {0}",
+    fr: "Détail des coûts : {0}",
+  },
+  { en: "Item: ${item.name}", ar: "الصنف: {0}", fr: "Article : {0}" },
+  { en: "Containers from: ${supplier}", ar: "حاويات من: {0}", fr: "Conteneurs de : {0}" },
 ];
