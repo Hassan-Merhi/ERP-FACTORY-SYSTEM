@@ -68,26 +68,22 @@ describe.sequential("Phase 3 report workflow coverage", () => {
     }
   });
 
-  it(
-    "executes all 71 successful report workflow implementations against the migrated database",
-    async () => {
-      const failures: string[] = [];
+  it("executes all 71 successful report workflow implementations against the migrated database", async () => {
+    const failures: string[] = [];
 
-      for (const queryType of implementedReportQueryTypes) {
-        try {
-          const result = await runReportImplementation(reportContext(queryType));
-          if (!result || result.queryType !== queryType) {
-            failures.push(`${queryType}: returned ${JSON.stringify(result)?.slice(0, 180)}`);
-          }
-        } catch (error) {
-          failures.push(`${queryType}: ${error instanceof Error ? error.message : String(error)}`);
+    for (const queryType of implementedReportQueryTypes) {
+      try {
+        const result = await runReportImplementation(reportContext(queryType));
+        if (!result || result.queryType !== queryType) {
+          failures.push(`${queryType}: returned ${JSON.stringify(result)?.slice(0, 180)}`);
         }
+      } catch (error) {
+        failures.push(`${queryType}: ${error instanceof Error ? error.message : String(error)}`);
       }
+    }
 
-      expect(failures, failures.join("\n")).toEqual([]);
-    },
-    180000
-  );
+    expect(failures, failures.join("\n")).toEqual([]);
+  }, 180000);
 
   it("covers statement success/no-data branches with real fixture ledger accounts", async () => {
     const customerStatement = await runReportImplementation(

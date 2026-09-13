@@ -200,7 +200,18 @@ export async function runSchemaCompatibleReportOverride(ctx: DataQueryContext): 
         title: "Container Profitability",
         subtitle: `${dateFrom} → ${dateTo}`,
         table: {
-          headers: ["Container #", "Supplier", "Customer", "Curr.", "Cost", "Sale", "Comm.", "Profit", "Margin", "Payment"],
+          headers: [
+            "Container #",
+            "Supplier",
+            "Customer",
+            "Curr.",
+            "Cost",
+            "Sale",
+            "Comm.",
+            "Profit",
+            "Margin",
+            "Payment",
+          ],
           rows: tableRows,
         },
         noData: tableRows.length === 0,
@@ -379,11 +390,16 @@ export async function runSchemaCompatibleReportOverride(ctx: DataQueryContext): 
         breakdownRows.push(["Duty Fee", container.currency, fmt(parseFloat(container.duty_fee || "0"))]);
       }
       for (const po of poRows.rows) {
-        if (parseFloat(po.freight || "0") > 0) breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(parseFloat(po.freight))]);
-        if (parseFloat(po.fumigation || "0") > 0) breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(parseFloat(po.fumigation))]);
-        if (parseFloat(po.surcharge || "0") > 0) breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(parseFloat(po.surcharge))]);
-        if (parseFloat(po.doc_charges || "0") > 0) breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(parseFloat(po.doc_charges))]);
-        if (parseFloat(po.discount || "0") > 0) breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(parseFloat(po.discount))})`]);
+        if (parseFloat(po.freight || "0") > 0)
+          breakdownRows.push([`Freight (${po.po_number})`, po.currency, fmt(parseFloat(po.freight))]);
+        if (parseFloat(po.fumigation || "0") > 0)
+          breakdownRows.push([`Fumigation (${po.po_number})`, po.currency, fmt(parseFloat(po.fumigation))]);
+        if (parseFloat(po.surcharge || "0") > 0)
+          breakdownRows.push([`Surcharge (${po.po_number})`, po.currency, fmt(parseFloat(po.surcharge))]);
+        if (parseFloat(po.doc_charges || "0") > 0)
+          breakdownRows.push([`Doc Charges (${po.po_number})`, po.currency, fmt(parseFloat(po.doc_charges))]);
+        if (parseFloat(po.discount || "0") > 0)
+          breakdownRows.push([`Discount (${po.po_number})`, po.currency, `(${fmt(parseFloat(po.discount))})`]);
       }
       breakdownRows.push(["GRAND TOTAL", container.currency, fmt(parseFloat(container.grand_total || "0"))]);
       return {
@@ -430,7 +446,11 @@ export async function runSchemaCompatibleReportOverride(ctx: DataQueryContext): 
         LIMIT 1
       `);
       if (!itemRows.rows.length) {
-        return { queryType: "stock_item_detail", title: "Stock Item Detail", summary: `No item found matching "${itemName}".` };
+        return {
+          queryType: "stock_item_detail",
+          title: "Stock Item Detail",
+          summary: `No item found matching "${itemName}".`,
+        };
       }
       const item = itemRows.rows[0];
       const inventoryRows = await db.execute<{
@@ -469,7 +489,11 @@ export async function runSchemaCompatibleReportOverride(ctx: DataQueryContext): 
           { label: "UOM", value: item.uom },
           { label: "Selling Price", value: fmtDec(parseFloat(item.selling_price || "0")) },
           { label: "Reorder Level", value: `${fmtDec(parseFloat(item.reorder_level || "0"))} ${item.uom}` },
-          { label: "Total Stock", value: `${fmtDec(totalQty)} ${item.uom}`, highlight: totalQty > 0 ? "positive" : "negative" },
+          {
+            label: "Total Stock",
+            value: `${fmtDec(totalQty)} ${item.uom}`,
+            highlight: totalQty > 0 ? "positive" : "negative",
+          },
           { label: "Total Value", value: fmt(totalValue), highlight: "positive" },
         ],
         table: { headers: ["Location", "Qty", "Avg Rate", "Value"], rows: tableRows },
