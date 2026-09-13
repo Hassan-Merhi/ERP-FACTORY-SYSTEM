@@ -105,7 +105,9 @@ describe.sequential("Phase 3 report workflow coverage", () => {
 
   it("covers required-input and unknown-query failure paths without throwing", async () => {
     for (const queryType of ["customer_statement", "supplier_statement"] as const) {
-      const result = await runReportImplementation(reportContext(queryType, { entityName: undefined }));
+      const result = await runReportImplementation(
+        reportContext(queryType, { entityName: undefined })
+      );
       expect(result?.queryType).toBe(queryType);
       expect(String(result?.summary ?? "")).toMatch(/specify/i);
     }
