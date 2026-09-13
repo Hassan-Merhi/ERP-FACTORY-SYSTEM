@@ -142,10 +142,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     logger.error("[startup] ✗ Could not ensure multi-currency columns:", { error: getErrorMessage(colErr) });
   }
 
-  // Phase 3 historical accounting repair is intentionally part of the blocking
-  // pre-listen startup path. The repair is idempotent and evidence-gated; if an
-  // unexpected accounting shape is encountered it throws, keeping the previous
-  // Render instance live instead of serving a partially repaired deployment.
+  // Phase 3 historical repairs are part of the blocking pre-listen path. Both
+  // passes are idempotent and evidence-gated; ambiguous accounting causes a
+  // throw so Render keeps the previous healthy instance live.
   const { runPhase3HistoricalRepair } = await import("../services/accounting/phase3HistoricalRepair");
   await runPhase3HistoricalRepair();
+  const { runPhase3PayrollDaybookRepair } = await import("../services/accounting/phase3PayrollDaybookRepair");
+  await runPhase3PayrollDaybookRepair();
 }
