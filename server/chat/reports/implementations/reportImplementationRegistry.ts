@@ -6,7 +6,10 @@ import { phase4ReportShard } from "./phase4ReportShard";
 import { phase5ReportShard } from "./phase5ReportShard";
 import { phase6ReportShard } from "./phase6ReportShard";
 import { phase7ReportShard } from "./phase7ReportShard";
-import { hasSchemaCompatibleReportOverride, runSchemaCompatibleReportOverride } from "./schemaCompatibleReportOverrides";
+import {
+  hasSchemaCompatibleReportOverride,
+  runSchemaCompatibleReportOverride,
+} from "./schemaCompatibleReportOverrides";
 
 export const reportImplementationShards: readonly ReportImplementationShard[] = [
   phase1ReportShard,
