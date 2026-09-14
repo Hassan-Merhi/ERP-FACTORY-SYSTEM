@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
@@ -196,6 +196,38 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
 
       const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
 
+      // The text fields above normalize blanks to null so COALESCE keeps the
+      // stored value. The numeric ones used `?? null`, which let a blank
+      // string through to a numeric column — "invalid input syntax for type
+      // numeric" as a 500. Treat blank as absent like the text fields, and
+      // reject a value that is present but not a number.
+      //
+      // pack_qty and pcs_per_pack are INTEGER columns, so they need the
+      // integer check too: a finite 1.5 would otherwise reach them and fail
+      // the query the same way, which the parseInt these replaced did not do.
+      type ParsedNumber = { ok: true; value: number | null } | { ok: false };
+      const parseNumber = (value: unknown, integerOnly: boolean): ParsedNumber => {
+        if (value === undefined || value === null || value === "") return { ok: true, value: null };
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return { ok: false };
+        if (integerOnly && !Number.isInteger(parsed)) return { ok: false };
+        return { ok: true, value: parsed };
+      };
+      const parsedQuantity = parseNumber(quantity, false);
+      const parsedUnitPrice = parseNumber(unitPrice, false);
+      const parsedPackQty = parseNumber(packQty, true);
+      const parsedPcsPerPack = parseNumber(pcsPerPack, true);
+      if (!parsedQuantity.ok) return res.status(400).json({ message: "Invalid quantity", field: "quantity" });
+      if (!parsedUnitPrice.ok) return res.status(400).json({ message: "Invalid request data", field: "unitPrice" });
+      if (!parsedPackQty.ok) return res.status(400).json({ message: "Invalid request data", field: "packQty" });
+      if (!parsedPcsPerPack.ok) {
+        return res.status(400).json({ message: "Invalid request data", field: "pcsPerPack" });
+      }
+      const quantityParam = parsedQuantity.value;
+      const unitPriceParam = parsedUnitPrice.value;
+      const packQtyParam = parsedPackQty.value;
+      const pcsPerPackParam = parsedPcsPerPack.value;
+
       const { rows } = await pool.query(
         `UPDATE factory_sheets_sacks
          SET type         = COALESCE($1, type),
@@ -213,10 +245,10 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
           type || null,
           name || null,
           size || null,
-          quantity ?? null,
-          unitPrice ?? null,
-          packQty != null ? parseInt(packQty) : null,
-          pcsPerPack != null ? parseInt(pcsPerPack) : null,
+          quantityParam,
+          unitPriceParam,
+          packQtyParam,
+          pcsPerPackParam,
           rowColor || null,
           notes || null,
           id,
@@ -227,7 +259,7 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
       res.json(rows[0]);
     } catch (err: unknown) {
       logger.error("PATCH /api/factory/sheets-sacks/:id error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to update item" });
+      sendHttpError(res, err);
     }
   });
 

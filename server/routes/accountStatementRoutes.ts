@@ -293,6 +293,13 @@ export function registerAccountStatementRoutes(app: Express) {
 
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+      // Anything outside this set reached the generator's trailing else and
+      // threw "Unknown account type", which the catch reported as a 500. These
+      // are exactly the types the generator branches on, and the same set the
+      // statement route above validates against.
+      if (!["ledger", "bank", "fixed-asset", "supplier", "employee", "customer"].includes(accountType)) {
+        return res.status(400).json({ message: "Unknown account type" });
+      }
       if (startDateRaw !== undefined && typeof startDateRaw !== "string") {
         return res.status(400).json({ message: "startDate must be a single YYYY-MM-DD value" });
       }

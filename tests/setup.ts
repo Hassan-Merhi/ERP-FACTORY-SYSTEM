@@ -73,6 +73,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "canonfse",
   "custload",
   "phase4cap",
+  "ordfin",
 ]);
 
 function testCompanyType(prefix: string): "erp" | "factory" {
@@ -170,6 +171,12 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // worker_bonuses.cash_account_id is ON DELETE RESTRICT against
     // ledger_accounts, so a paid worker bonus blocks the ledger delete below.
     await pool.query("DELETE FROM worker_bonuses WHERE company_id = $1", [company.id]);
+    // fiscal_period_closures restricts on four parents at once — its closing
+    // voucher, its retained-earnings ledger account, the user who closed the
+    // period, and the company — so a suite that closed a period blocks the
+    // voucher delete below, then the ledger delete, then the company. It has to
+    // go before all of them, not with the company-scoped deletes at the end.
+    await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
     // Documents that hang off a voucher with a restricting key: a credit or
     // debit note's lines, a waste dispatch, and a stock adjustment's header and
     // lines (which the waste dispatch also creates, since waste is dispatched
@@ -221,6 +228,21 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // its fixture alive. The journal is append-only in production — there is no
     // delete path in the application — which is precisely why the fixture has to
     // clear it explicitly here.
+    // container_offload_items.stock_item_id is ON DELETE RESTRICT against
+    // stock_items, so an offload fixture blocks the stock_items delete below.
+    // It has to be cleared here rather than with the rest of the container
+    // teardown, which runs after stock_items and locations are already gone.
+    await pool.query(
+      "DELETE FROM container_offload_items WHERE offload_id IN (SELECT id FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1))",
+      [company.id]
+    );
+    // container_offloads.location_id is ON DELETE RESTRICT against locations for
+    // the same reason, so the offload header has to go here too; the rest of the
+    // container teardown below still clears the containers themselves.
+    await pool.query(
+      "DELETE FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
+      [company.id]
+    );
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
@@ -236,20 +258,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
 
     // Normal container records are also created by PO tests. Remove their
     // restricting child rows before deleting the containers themselves.
-    await pool.query(
-      "DELETE FROM container_offload_items WHERE offload_id IN (SELECT id FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1))",
-      [company.id]
-    );
+    // container_offload_items and container_offloads were already cleared above,
+    // ahead of the stock_items and locations deletes they reference.
     await pool.query(
       "DELETE FROM container_freight_payments WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
       [company.id]
     );
     await pool.query(
       "DELETE FROM container_freight_payments WHERE container_freight_id IN (SELECT id FROM container_freight WHERE company_id = $1)",
-      [company.id]
-    );
-    await pool.query(
-      "DELETE FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
       [company.id]
     );
     await pool.query(
@@ -321,6 +337,10 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // POST /api/bale-label-prints/allocate-pool allocates from this table, so a
     // suite that printed labels leaves a row here holding the company down.
     await pool.query("DELETE FROM reference_sequences WHERE company_id = $1", [company.id]);
+    // Finalizing a customer order allocates from this sequence, and its
+    // company_id is ON DELETE RESTRICT, so a suite that finalized an invoice
+    // leaves the fixture company undeletable without this.
+    await pool.query("DELETE FROM customer_invoice_sequences WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM bale_sequences WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM factory_bale_sequences WHERE company_id = $1", [company.id]);
 
@@ -343,6 +363,46 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // Durable financial request reservations are company-scoped and must be
     // removed before deleting the fixture company.
     await pool.query("DELETE FROM financial_operation_requests WHERE company_id = $1", [company.id]);
+
+    // Final safety net for company-scoped leaf rows.
+    //
+    // The explicit deletes above stay because they encode orderings this
+    // cannot infer — voucher children before vouchers, transporter charges
+    // before the vouchers they reference, and so on. What they cannot keep up
+    // with is breadth: companies has ~150 inbound foreign keys that block a
+    // delete rather than cascade, and this teardown names only a couple of
+    // dozen. That was survivable while the fixture touched a handful of
+    // tables; the broad route-sweep suites exercise most of the write surface,
+    // so each newly-touched table failed the company delete one run at a time
+    // (factory_settings, then factory_bale_products, with ~85 more waiting).
+    //
+    // So discover them from the catalog instead of listing them, which also
+    // covers a table the day it is added. Repeat until a pass frees nothing,
+    // which resolves ordering among these tables themselves; each delete is
+    // its own statement, so one failing does not poison the rest.
+    const blockingTables = await pool.query<{ tbl: string }>(
+      `SELECT DISTINCT c.conrelid::regclass::text AS tbl
+         FROM pg_constraint c
+         JOIN pg_class parent ON parent.oid = c.confrelid
+         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'company_id' AND a.attnum > 0
+        WHERE c.contype = 'f'
+          AND parent.relname = 'companies'
+          AND c.confdeltype IN ('r', 'a')`
+    );
+    let blocking = blockingTables.rows.map((row) => row.tbl);
+    for (let pass = 0; pass < 5 && blocking.length > 0; pass += 1) {
+      const stillBlocking: string[] = [];
+      for (const tbl of blocking) {
+        try {
+          await pool.query(`DELETE FROM ${tbl} WHERE company_id = $1`, [company.id]);
+        } catch {
+          stillBlocking.push(tbl);
+        }
+      }
+      if (stillBlocking.length === blocking.length) break;
+      blocking = stillBlocking;
+    }
+
     await clearAsyncReferences();
 
     try {

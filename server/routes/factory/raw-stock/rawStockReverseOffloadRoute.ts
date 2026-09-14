@@ -16,7 +16,7 @@ import {
   factoryContainerReceipts,
 } from "@shared/schema";
 
-import { db } from "../../../db";
+import { db, type DbTransaction, type DatabaseOrTransaction } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { logAudit } from "../../helpers/auditHelpers";
 import { logger } from "../../../lib/logger";
@@ -27,6 +27,79 @@ import {
   getAuthoritativeSupplierRemainingKg,
   getLockedSupplierRate,
 } from "../../../services/factory/rawStockLockedRate";
+import {
+  financialOperationErrorStatus,
+  financialOperationRequestPayload,
+  resolveOptionalFinancialOperationKey,
+} from "../../../services/accounting/financialOperationRequest";
+import {
+  DurableFinancialOperationError,
+  financialOperationFingerprint,
+  withDurableFinancialOperation,
+} from "../../../services/accounting/durableFinancialOperation";
+
+const REVERSAL_STATUS_MESSAGE = "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed";
+const REVERSAL_SUCCESS_MESSAGE = "Offload reversed successfully. Container is back to its previous status.";
+
+function isReversibleStatus(status: string | null | undefined): boolean {
+  return status === "OFFLOADED" || status === "PARTIALLY_RECEIVED";
+}
+
+/** Carries the caller's status through the reversal so the error can be typed. */
+class ReverseOffloadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ReverseOffloadError";
+  }
+}
+
+type ReverseOffloadOutcome = { message: string; containerStatus: string | null };
+
+function consumingMixBatchMessage(codes: string[]): string {
+  return `Cannot reverse offload: stock from this container has already been consumed in mix batch(es) ${codes.join(", ")}. Remove it from those batches first before reversing.`;
+}
+
+/**
+ * Batch codes that have already consumed this container's raw stock in
+ * production. Run against the same executor as the reversal so the check inside
+ * the transaction sees what the reversal is about to undo.
+ */
+async function findConsumingMixBatchCodes(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  containerId: number
+): Promise<string[]> {
+  const mixSourceLinks = await executor
+    .select({ mixBatchId: factoryMixBatchSources.mixBatchId })
+    .from(factoryMixBatchSources)
+    .where(eq(factoryMixBatchSources.containerId, containerId));
+
+  if (mixSourceLinks.length === 0) return [];
+
+  const linkedBatchIds = [...new Set(mixSourceLinks.map((link) => link.mixBatchId))];
+  const usedBatches = await executor
+    .select({ batchCode: factoryMixBatches.batchCode })
+    .from(factoryMixBatches)
+    .where(
+      and(
+        eq(factoryMixBatches.companyId, companyId),
+        inArray(factoryMixBatches.id, linkedBatchIds),
+        sql`${factoryMixBatches.usedKg}::numeric > 0`,
+        // A soft-deleted batch no longer holds live production usage — its
+        // consumption of this container's stock was already reversed by the
+        // delete route (factoryMixBatchRoutes.ts). Without this filter, a
+        // deleted batch's stale, never-reset usedKg field permanently blocks
+        // reversing the offload even though nothing is actually consuming the
+        // stock anymore.
+        isNull(factoryMixBatches.deletedAt)
+      )
+    );
+
+  return usedBatches.map((batch) => batch.batchCode);
+}
 
 /**
  * POST /api/factory/containers/:id/reverse-offload — undoes an offload,
@@ -54,50 +127,49 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         .where(and(eq(factoryContainers.id, containerId), eq(factoryContainers.companyId, companyId)));
 
       if (!container) return res.status(404).json({ message: "Container not found" });
-      if (container.status !== "OFFLOADED" && container.status !== "PARTIALLY_RECEIVED") {
-        return res.status(400).json({ message: "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed" });
+      if (!isReversibleStatus(container.status)) {
+        return res.status(400).json({ message: REVERSAL_STATUS_MESSAGE });
       }
 
-      // Safety guard: block reversal if this container's raw stock has already been
-      // consumed in a mix batch that has production usage (daily usage or pressing batches recorded).
-      const mixSourceLinks = await db
-        .select({ mixBatchId: factoryMixBatchSources.mixBatchId })
-        .from(factoryMixBatchSources)
-        .where(eq(factoryMixBatchSources.containerId, containerId));
+      // Early, unlocked copy of the consumption guard so the common rejection does
+      // not open a transaction. It is repeated on the locked row below, which is
+      // the check that actually decides anything.
+      const earlyBlockedBy = await findConsumingMixBatchCodes(db, companyId, containerId);
+      if (earlyBlockedBy.length > 0) {
+        return res.status(400).json({ message: consumingMixBatchMessage(earlyBlockedBy) });
+      }
 
-      if (mixSourceLinks.length > 0) {
-        const linkedBatchIds = [...new Set(mixSourceLinks.map((s) => s.mixBatchId))];
-        const usedBatches = await db
-          .select({
-            id: factoryMixBatches.id,
-            batchCode: factoryMixBatches.batchCode,
-            usedKg: factoryMixBatches.usedKg,
-          })
-          .from(factoryMixBatches)
-          .where(
-            and(
-              eq(factoryMixBatches.companyId, companyId),
-              inArray(factoryMixBatches.id, linkedBatchIds),
-              sql`${factoryMixBatches.usedKg}::numeric > 0`,
-              // A soft-deleted batch no longer holds live production usage — its
-              // consumption of this container's stock was already reversed by the
-              // delete route (factoryMixBatchRoutes.ts). Without this filter, a
-              // deleted batch's stale, never-reset usedKg field permanently blocks
-              // reversing the offload even though nothing is actually consuming
-              // the stock anymore.
-              isNull(factoryMixBatches.deletedAt)
-            )
-          );
+      const requestId = resolveOptionalFinancialOperationKey(req);
 
-        if (usedBatches.length > 0) {
-          const codes = usedBatches.map((b) => b.batchCode).join(", ");
-          return res.status(400).json({
-            message: `Cannot reverse offload: stock from this container has already been consumed in mix batch(es) ${codes}. Remove it from those batches first before reversing.`,
-          });
+      const reverseOffload = async (tx: DbTransaction, _identity: string): Promise<ReverseOffloadOutcome> => {
+        // The container row is the reversal's ownership token. Locking it before
+        // anything is read is what makes a double-submit safe: without it two
+        // simultaneous reversals both saw OFFLOADED, both deleted the offload's
+        // daybook and vouchers, both re-applied the supplier locked-rate
+        // correction, and both re-posted the pre-offload freight voucher — one
+        // reversal requested, two sets of financial effects committed.
+        const [lockedContainer] = await tx
+          .select()
+          .from(factoryContainers)
+          .where(and(eq(factoryContainers.id, containerId), eq(factoryContainers.companyId, companyId)))
+          .for("update");
+
+        if (!lockedContainer) throw new ReverseOffloadError("Container not found", 404);
+        if (!isReversibleStatus(lockedContainer.status)) {
+          // Already reversed by the request that held the lock first. Reported as
+          // 400 rather than 409 on purpose: the client's accounting-identity guard
+          // treats a codeless 409 as an uncertain outcome and would keep the
+          // request identity pending forever, retrying a reversal that is
+          // definitively finished.
+          throw new ReverseOffloadError(REVERSAL_STATUS_MESSAGE, 400);
         }
-      }
 
-      await db.transaction(async (tx) => {
+        const blockedBy = await findConsumingMixBatchCodes(tx, companyId, containerId);
+        if (blockedBy.length > 0) {
+          throw new ReverseOffloadError(consumingMixBatchMessage(blockedBy), 400);
+        }
+
+        const container = lockedContainer;
         // 1. Find the raw stock entry for this container (fetch full cost fields
         //    so we can compute the supplier locked-rate correction below).
         const [rawStockRow] = await tx
@@ -282,10 +354,26 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         const restoredOtherChargesAccountId = hasSnapshot ? container.preOffloadOtherChargesAccountId || null : null;
         const restoredOtherChargesSupplierId = hasSnapshot ? container.preOffloadOtherChargesSupplierId || null : null;
 
-        // Re-post the original creation-time FACTORY-FREIGHT voucher if one existed before offload
+        // Re-post the original creation-time FACTORY-FREIGHT voucher if one existed
+        // before offload. The number matches the one factory container creation
+        // posts (`FACTORY-FREIGHT-{containerId}`) rather than carrying a timestamp:
+        // this is the same voucher being restored, so it keeps one identity that the
+        // next offload's cleanup can find exactly.
         const restoredFreightAmt = parseFloat(restoredFreight || "0");
-        if (restoredFreightAmt > 0 && restoredFreightAccountId) {
-          const restoredFreightVoucherNum = `FACTORY-FREIGHT-${containerId}-${Date.now()}`;
+        // A voucher with only a debit leg is an unbalanced posting: it inflates one
+        // side of the ledger and reports as VOUCHER_NOT_BALANCED in the convergence
+        // reconciliation. The freight credit has to land on somebody — the paying
+        // supplier, or the company's own account when it paid the freight itself —
+        // so resolve the counterparty first and only post when both legs exist.
+        const restoredFreightCreditSupplierId = restoredFreightSupplierId ?? null;
+        const restoredFreightCreditAccountId = Number(container.freightOwnAccountId ?? NaN);
+        const hasRestoredFreightCreditLedger = Number.isInteger(restoredFreightCreditAccountId);
+        if (
+          restoredFreightAmt > 0 &&
+          restoredFreightAccountId &&
+          (restoredFreightCreditSupplierId !== null || hasRestoredFreightCreditLedger)
+        ) {
+          const restoredFreightVoucherNum = `FACTORY-FREIGHT-${containerId}`;
           const [restoredFreightVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -318,23 +406,37 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           //     own account when it was own-account paid (never fall back
           //     to container.supplierId — that would silently debit the
           //     material supplier for freight they didn't owe).
-          if (restoredFreightSupplierId) {
+          if (restoredFreightCreditSupplierId !== null) {
             await tx.insert(voucherEntries).values({
               voucherId: restoredFreightVoucher.id,
-              factorySupplierId: restoredFreightSupplierId,
+              factorySupplierId: restoredFreightCreditSupplierId,
               debitAmount: "0",
               creditAmount: String(restoredFreightAmt),
               narration: `Freight payable to supplier - container ${container.containerNumber}`,
             });
-          } else if (container.freightOwnAccountId) {
+          } else if (hasRestoredFreightCreditLedger) {
             await tx.insert(voucherEntries).values({
               voucherId: restoredFreightVoucher.id,
-              ledgerAccountId: container.freightOwnAccountId,
+              ledgerAccountId: restoredFreightCreditAccountId,
               debitAmount: "0",
               creditAmount: String(restoredFreightAmt),
               narration: `Freight paid via own account - container ${container.containerNumber}`,
             });
           }
+        } else if (restoredFreightAmt > 0 && restoredFreightAccountId) {
+          // The freight itself is still restored onto the container in step 10, so
+          // no amount is lost — but with no counterparty to credit there is no
+          // balanced voucher to post. Recorded rather than silently half-booked.
+          logger.warn("reverse-offload skipped a freight voucher with no credit leg", {
+            module: "factoryRawStock",
+            action: "reverseOffload",
+            companyId,
+            containerId,
+            freightAmount: restoredFreightAmt,
+            freightAccountId: restoredFreightAccountId,
+            freightSupplierId: restoredFreightSupplierId,
+            freightOwnAccountId: container.freightOwnAccountId,
+          });
         }
 
         // Restore pre-offload commission snapshot (if one was saved)
@@ -401,7 +503,32 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(factoryContainers.id, containerId));
-      });
+
+        return { message: REVERSAL_SUCCESS_MESSAGE, containerStatus: container.status };
+      };
+
+      // The reversal is one indivisible unit of work. With a caller-supplied
+      // request identity it also becomes a durable operation, so a client retry
+      // after an uncertain response replays the stored outcome instead of running
+      // the reversal a second time against a container that is no longer OFFLOADED.
+      const outcome: ReverseOffloadOutcome = requestId
+        ? (
+            await withDurableFinancialOperation<ReverseOffloadOutcome>(
+              {
+                companyId,
+                operationName: "factory.container.reverse-offload",
+                idempotencyKey: requestId,
+                requestFingerprint: financialOperationFingerprint({
+                  method: req.method,
+                  path: req.originalUrl,
+                  companyId,
+                  body: financialOperationRequestPayload(req.body),
+                }),
+              },
+              async (tx) => ({ value: await reverseOffload(tx, requestId) })
+            )
+          ).value
+        : await db.transaction((tx) => reverseOffload(tx, ""));
 
       await logAudit({
         userId: req.session.userId!,
@@ -413,8 +540,14 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
         recordIdentifier: `Container #${containerId} offload reversed`,
         changes: null,
       });
-      res.json({ message: "Offload reversed successfully. Container is back to its previous status." });
+      res.json({ message: outcome.message });
     } catch (error: unknown) {
+      if (error instanceof ReverseOffloadError) {
+        return res.status(error.status).json({ message: error.message });
+      }
+      if (error instanceof DurableFinancialOperationError) {
+        return res.status(financialOperationErrorStatus(error)).json({ message: error.message });
+      }
       logger.error("Error reversing offload:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

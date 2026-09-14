@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => {
   const selectResults: unknown[][] = [];
   const insertResults: unknown[][] = [];
+  // The create route resolves the supplier through db.execute, because
+  // suppliers.company_id is not part of the drizzle table and the check has to
+  // be company-scoped. Queue its rows the same way as the builder mocks above.
+  const executeResults: unknown[][] = [];
   const updateResults: unknown[][] = [];
   const transactionInserted: unknown[] = [];
   const insertedValues: unknown[] = [];
@@ -57,10 +61,13 @@ const harness = vi.hoisted(() => {
     return builder;
   });
 
+  const execute = vi.fn(async () => ({ rows: executeResults.shift() ?? [] }));
+
   const db: any = {
     select,
     insert,
     update,
+    execute,
     delete: del,
     transaction: vi.fn(async (callback: (tx: any) => unknown) =>
       callback({
@@ -78,6 +85,7 @@ const harness = vi.hoisted(() => {
     db,
     selectResults,
     insertResults,
+    executeResults,
     updateResults,
     transactionInserted,
     insertedValues,
@@ -109,6 +117,9 @@ vi.mock("drizzle-orm", () => ({
   eq: (column: unknown, value: unknown) => ({ type: "eq", column, value }),
   and: (...conditions: unknown[]) => ({ type: "and", conditions }),
   ne: (column: unknown, value: unknown) => ({ type: "ne", column, value }),
+  // The create route resolves the supplier with a raw statement, so the tag
+  // has to exist here; the db.execute mock is what decides the rows.
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ type: "sql", strings: [...strings], values }),
 }));
 vi.mock("@shared/schema", () => ({
   supplierProformas: {
@@ -181,6 +192,7 @@ describe("supplier proforma route behavior", () => {
     vi.clearAllMocks();
     harness.selectResults.splice(0);
     harness.insertResults.splice(0);
+    harness.executeResults.splice(0);
     harness.updateResults.splice(0);
     harness.transactionInserted.splice(0);
     harness.insertedValues.splice(0);
@@ -227,6 +239,9 @@ describe("supplier proforma route behavior", () => {
   });
 
   it("creates a proforma with canonical alias codes, sanitized decimals, and one atomic line transaction", async () => {
+    // Supplier 2 exists in company 4; the route now resolves it before the
+    // insert so an unknown supplier is a 404 rather than a foreign-key 500.
+    harness.executeResults.push([{ id: 2 }]);
     harness.insertResults.push([{ id: 10, companyId: 4, supplierId: 2, reference: "PF-NEW", notes: null }]);
     harness.selectResults.push([
       { id: 101, proformaId: 10, barcode: "MAIN-1", qty: 3, weightPerBale: "45.5", pricePerBale: "1234.5" },
@@ -275,6 +290,19 @@ describe("supplier proforma route behavior", () => {
       expect.objectContaining({ companyId: 4, action: "create", tableName: "supplier_proformas", recordId: 10 })
     );
     expect(res.body).toMatchObject({ id: 10, reference: "PF-NEW", lines: expect.any(Array) });
+  });
+
+  it("answers 404 when the supplier does not exist in the active company", async () => {
+    // No supplier row queued, so the lookup finds nothing. Before this check
+    // the insert went ahead and failed its foreign key as a 500.
+    const res = resHarness();
+    await routes.get("POST /api/suppliers/:supplierId/proformas")!(
+      req({ params: { supplierId: "2" }, body: { reference: "PF-NEW" } }),
+      res
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ message: "Supplier not found" });
+    expect(harness.insertedValues).toEqual([]);
   });
 
   it("prevents adding lines to a proforma owned by another company", async () => {

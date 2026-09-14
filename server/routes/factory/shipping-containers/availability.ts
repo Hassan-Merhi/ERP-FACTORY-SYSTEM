@@ -53,9 +53,24 @@ export function registerShippingAvailabilityRoutes(app: Express) {
       if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
       const { date, shippingCompany, availableContainers, note } = req.body;
       const updates: Record<string, unknown> = {};
-      if (date !== undefined) updates.date = date;
+      if (date !== undefined) {
+        // A blank or unparseable date passed the !== undefined check and
+        // reached the date column as-is, failing the query as a 500.
+        if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
+          return res.status(400).json({ message: "Invalid request data", field: "date" });
+        }
+        updates.date = date;
+      }
       if (shippingCompany !== undefined) updates.shippingCompany = shippingCompany;
-      if (availableContainers !== undefined) updates.availableContainers = Number(availableContainers);
+      if (availableContainers !== undefined) {
+        // Number("") is 0 and Number("abc") is NaN; neither belongs in an
+        // integer column straight from the request body.
+        const parsed = Number(availableContainers);
+        if (!Number.isFinite(parsed)) {
+          return res.status(400).json({ message: "Invalid request data", field: "availableContainers" });
+        }
+        updates.availableContainers = parsed;
+      }
       if (note !== undefined) updates.note = note || null;
       if (Object.keys(updates).length === 0) return res.status(400).json({ message: "No fields to update" });
       const [row] = await db

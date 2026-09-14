@@ -41,10 +41,18 @@ export function registerOrderFinalizeRoutes(app: Express) {
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
 
       const result = await db.transaction(async (tx) => {
+        // The order row is locked before its status is read. Finalizing consumes an
+        // invoice number, writes the customer's SALE receivable, flips every bale to
+        // SOLD and posts the charge vouchers, so two simultaneous finalizations of
+        // one loading would each do all of it: two invoices, the receivable booked
+        // twice, and two voucher sets for the same charges. Blocking here makes the
+        // second transaction re-read the committed row and fail the status guard
+        // below instead of repeating the effects.
         const [order] = await tx
           .select()
           .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+          .for("update");
         if (!order) throw new Error("Order not found");
         if (!["DRAFT", "VERIFIED"].includes(order.status))
           throw new Error("Only DRAFT or VERIFIED orders can be finalized");

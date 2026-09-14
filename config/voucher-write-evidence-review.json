@@ -1,11 +1,11 @@
 {
-  "version": 4,
+  "version": 5,
   "reviewState": "REVIEWED FILE BY FILE",
   "scope": "Active voucher creation sites detected by scripts/audit-write-evidence.mjs after excluding updates/deletes/restores/moves of existing voucher rows. Completed phases are retained separately as historical evidence and must not re-enter the active backlog.",
   "summary": {
     "initialReviewed": 81,
-    "activeReviewed": 15,
-    "explicitReplayGuard": 15,
+    "activeReviewed": 14,
+    "explicitReplayGuard": 14,
     "migrationImportRepair": 0,
     "operationalWithoutRequestIdentity": 0,
     "phase3InfrastructureCompleted": 11,
@@ -13,7 +13,8 @@
     "phase5OperationalCompleted": 22,
     "phase6SpecialPurposeCompleted": 11,
     "unreviewed": 0,
-    "phase7PostReviewSafeWriters": 1
+    "phase7PostReviewSafeWriters": 1,
+    "phase8RequestIdentityCompleted": 1
   },
   "reviewed": {
     "explicit-replay-guard": {
@@ -27,7 +28,6 @@
         "server/routes/factory/customer-orders/finalize-loading/finalize.ts",
         "server/routes/helpers/intercompanyHelpers.ts",
         "server/routes/intercompanyNotificationRoutes.ts",
-        "server/routes/offloadRoutes.ts",
         "server/routes/payroll/advanceManagementRoutes.ts",
         "server/routes/payroll/core/generate.ts",
         "server/routes/payroll/core/migrations.ts",
@@ -140,6 +140,13 @@
       "reason": "This stock-transfer creator entered the live tree after the original 81-file voucher review. Its create-from-scratch branch already consumes clientRequestId, uses the stock-document idempotency key/marker inside the transfer transaction, replays the existing transfer on retry, and is protected by the global accounting request identity client path. Phase 7 records it explicitly so the direct-creation audit can distinguish reviewed growth from an unprotected escape hatch.",
       "files": [
         "server/routes/fiscal-transfers/create.ts"
+      ]
+    },
+    "phase-8-request-identity-writers": {
+      "verdict": "reviewed compatibility creator whose write path now carries a durable request identity",
+      "reason": "server/routes/offloadRoutes.ts was reviewed as an explicit replay-guard creator because its post-offload charge backfill checked for the voucher it was about to write. Its other voucher-affecting path, the offload optional toggle, moved into services/containers/offloadOptionalToggle.ts behind withDurableFinancialOperation, a transaction-owned state guard and container/offload row locks, so the file now carries a stable request identity and is credited out of the measured backlog. The backfill creator that remains in this file keeps the documented existing-voucher replay check, and the file stays in this inventory so the direct-creation audit still accounts for it.",
+      "files": [
+        "server/routes/offloadRoutes.ts"
       ]
     }
   },
