@@ -6,6 +6,7 @@ import { registerStockMergeRoutes } from "./stock/merge";
 import { registerStockItemManageRoutes } from "./stock/stockItemManageRoutes";
 import { registerStockPriceListImportRoutes } from "./stock/stockPriceListImportRoutes";
 import { registerRetailRoutes } from "./retailRoutes";
+import { registerRetailCatalogRoutes } from "./retailCatalogRoutes";
 import { registerRetailReportingRoutes } from "./retailReportingRoutes";
 
 export function registerStockRoutes(app: Express) {
@@ -17,5 +18,6 @@ export function registerStockRoutes(app: Express) {
   registerStockItemManageRoutes(app);
   registerStockPriceListImportRoutes(app);
   registerRetailRoutes(app);
+  registerRetailCatalogRoutes(app);
   registerRetailReportingRoutes(app);
 }
