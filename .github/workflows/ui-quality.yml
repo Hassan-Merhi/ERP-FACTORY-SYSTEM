@@ -66,7 +66,7 @@ jobs:
               esac
 
               case "$file" in
-                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|.github/workflows/ui-quality.yml)
+                client/*|server/*|shared/*|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
                   i18n=true
                   ;;
               esac
