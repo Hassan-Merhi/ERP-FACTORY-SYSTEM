@@ -1,22 +1,23 @@
-name: Temporary Phase 1 Prettier Export
+name: Temporary Phase 1 Gate Fixer
 
 on:
-  push:
-    branches:
-      - tmp/phase1-prettier-export-20260914
   pull_request:
     branches:
       - test/backend-coverage-phase2
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  format:
+  apply:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout latest coverage branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: test/backend-coverage-phase2
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up canonical Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -27,7 +28,78 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Format Phase 1 blockers
+      - name: Add reviewed retail translations
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const file = "client/src/i18n/retailWave2Translations.ts";
+          let source = fs.readFileSync(file, "utf8");
+          const entries = [
+            ["Gross profit", "إجمالي الربح", "Bénéfice brut"],
+            ["Inventory value", "قيمة المخزون", "Valeur du stock"],
+            ["Units sold", "الوحدات المباعة", "Unités vendues"],
+            ["Best-selling products", "المنتجات الأكثر مبيعًا", "Produits les plus vendus"],
+            ["Best-selling brands", "العلامات التجارية الأكثر مبيعًا", "Marques les plus vendues"],
+            ["Best-selling sizes", "المقاسات الأكثر مبيعًا", "Tailles les plus vendues"],
+            ["Sales by location", "المبيعات حسب الموقع", "Ventes par emplacement"],
+            ["Low-stock items", "الأصناف منخفضة المخزون", "Articles à faible stock"],
+            ["Out-of-stock products", "المنتجات النافدة من المخزون", "Produits en rupture de stock"],
+            ["Slow-moving inventory", "المخزون بطيء الحركة", "Stock à rotation lente"],
+            ["Low at", "منخفض عند", "Faible à"],
+            ["Last sale", "آخر عملية بيع", "Dernière vente"],
+            ["Retail Dashboard", "لوحة معلومات التجزئة", "Tableau de bord de détail"],
+            ["Loading retail reporting…", "جارٍ تحميل تقارير التجزئة…", "Chargement des rapports de détail…"],
+            ["Nothing to review.", "لا يوجد شيء للمراجعة.", "Rien à examiner."],
+            ["Retail reporting is only available for Retail / Variant Inventory companies.", "تقارير التجزئة متاحة فقط لشركات مخزون التجزئة / المتغيرات.", "Les rapports de détail sont disponibles uniquement pour les sociétés Stock détail / variantes."],
+            ["Sales, margin, inventory health, and variant-level reconciliation from the retail movement ledger.", "المبيعات والهامش وصحة المخزون والتسوية على مستوى المتغير من دفتر حركة التجزئة.", "Ventes, marge, état du stock et rapprochement par variante à partir du grand livre des mouvements de détail."],
+            ["Could not load retail reporting.", "تعذر تحميل تقارير التجزئة.", "Impossible de charger les rapports de détail."],
+            ["New brand name", "اسم العلامة التجارية الجديدة", "Nom de la nouvelle marque"],
+            ["Search product or brand…", "ابحث عن منتج أو علامة تجارية…", "Rechercher un produit ou une marque…"],
+            ["Add brand", "إضافة علامة تجارية", "Ajouter une marque"],
+            ["Product images", "صور المنتج", "Images du produit"],
+            ["Upload JPG, PNG, WEBP or GIF images. Up to 8 images.", "حمّل صور JPG أو PNG أو WEBP أو GIF. بحد أقصى 8 صور.", "Téléversez des images JPG, PNG, WEBP ou GIF. Jusqu’à 8 images."],
+            ["Uploading image…", "جارٍ تحميل الصورة…", "Téléversement de l’image…"],
+            ["Each size has its own barcode, selling price, cost and location stock.", "لكل مقاس باركود وسعر بيع وتكلفة ومخزون موقع خاص به.", "Chaque taille possède son propre code-barres, prix de vente, coût et stock par emplacement."],
+            ["Brand added", "تمت إضافة العلامة التجارية", "Marque ajoutée"],
+            ["Could not add brand", "تعذرت إضافة العلامة التجارية", "Impossible d’ajouter la marque"],
+            ["Image limit reached", "تم بلوغ حد الصور", "Limite d’images atteinte"],
+            ["You can upload up to ${MAX_PRODUCT_IMAGES} images.", "يمكنك تحميل ما يصل إلى {{0}} صور.", "Vous pouvez téléverser jusqu’à {{0}} images."],
+            ["Unsupported image", "صورة غير مدعومة", "Image non prise en charge"],
+            ["Use JPG, PNG, WEBP or GIF images.", "استخدم صور JPG أو PNG أو WEBP أو GIF.", "Utilisez des images JPG, PNG, WEBP ou GIF."],
+            ["Image too large", "الصورة كبيرة جدًا", "Image trop volumineuse"],
+            ["${tooLarge.name} is larger than 10 MB.", "{{0}} أكبر من 10 ميغابايت.", "{{0}} dépasse 10 Mo."],
+            ["Image upload failed", "فشل تحميل الصورة", "Échec du téléversement de l’image"],
+            ["Could not upload image", "تعذر تحميل الصورة", "Impossible de téléverser l’image"],
+            ["Item name is required", "اسم الصنف مطلوب", "Le nom de l’article est requis"],
+            ["Every size needs a size value and barcode", "يحتاج كل مقاس إلى قيمة مقاس وباركود", "Chaque taille doit avoir une valeur de taille et un code-barres"],
+            ["Row ${badIndex + 2} is missing Name, Size, Barcode or Location", "الصف {{0}} يفتقد الاسم أو المقاس أو الباركود أو الموقع", "La ligne {{0}} ne contient pas le nom, la taille, le code-barres ou l’emplacement"],
+            ["No stock transfer item fields to update", "لا توجد حقول صنف نقل مخزون لتحديثها", "Aucun champ d’article de transfert de stock à mettre à jour"],
+            ["No stock adjustment item fields to update", "لا توجد حقول صنف تسوية مخزون لتحديثها", "Aucun champ d’article d’ajustement de stock à mettre à jour"],
+            ["Retail catalog is only available for Retail / Variant Inventory companies", "كتالوج التجزئة متاح فقط لشركات مخزون التجزئة / المتغيرات", "Le catalogue de détail est disponible uniquement pour les sociétés Stock détail / variantes"],
+            ["Report start date must be before end date", "يجب أن يكون تاريخ بدء التقرير قبل تاريخ الانتهاء", "La date de début du rapport doit précéder la date de fin"],
+            ["Retail report location is not active or does not belong to the selected company", "موقع تقرير التجزئة غير نشط أو لا ينتمي إلى الشركة المحددة", "L’emplacement du rapport de détail est inactif ou n’appartient pas à la société sélectionnée"],
+          ];
+          const missing = entries.filter(([en]) => !source.includes(`en: ${JSON.stringify(en)}`));
+          if (missing.length) {
+            const marker = "\n];\n\nconst exactTranslations";
+            if (!source.includes(marker)) throw new Error("retailWave2 translation array marker not found");
+            const block = [
+              "  // Retail dashboard, inventory and reporting strings surfaced by the Phase 1 exact-head certification.",
+              ...missing.flatMap(([en, ar, fr]) => [
+                "  {",
+                `    en: ${JSON.stringify(en)},`,
+                `    ar: ${JSON.stringify(ar)},`,
+                `    fr: ${JSON.stringify(fr)},`,
+                "  },",
+              ]),
+            ].join("\n");
+            source = source.replace(marker, `\n${block}\n];\n\nconst exactTranslations`);
+            fs.writeFileSync(file, source);
+          }
+          console.log(`Retail translations present: ${entries.length}; added: ${missing.length}`);
+          NODE
+
+      - name: Format exact changed files
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
             tests/backend-coverage-maersk-parser-branches.test.ts \
@@ -36,15 +108,31 @@ jobs:
             tests/phase7-backend-messages-translations.test.ts \
             client/src/i18n/retailWave2Translations.ts
 
-      - name: Upload exact formatted files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: phase1-prettier-files
-          path: |
-            tests/backend-coverage-maersk-parser-branches.test.ts
-            tests/backend-coverage-maintenance-failure-workflows.test.ts
-            tests/backend-coverage-properties-deep-reads.test.ts
-            tests/phase7-backend-messages-translations.test.ts
+      - name: Verify untranslated-text ratchet
+        run: node scripts/audit-i18n-phase14.mjs
+
+      - name: Verify formatted files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --check \
+            tests/backend-coverage-maersk-parser-branches.test.ts \
+            tests/backend-coverage-maintenance-failure-workflows.test.ts \
+            tests/backend-coverage-properties-deep-reads.test.ts \
+            tests/phase7-backend-messages-translations.test.ts \
             client/src/i18n/retailWave2Translations.ts
-          if-no-files-found: error
-          retention-days: 1
+
+      - name: Commit verified gate fixes
+        run: |
+          git config user.name "ChatGPT Phase 1"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/backend-coverage-maersk-parser-branches.test.ts \
+            tests/backend-coverage-maintenance-failure-workflows.test.ts \
+            tests/backend-coverage-properties-deep-reads.test.ts \
+            tests/phase7-backend-messages-translations.test.ts \
+            client/src/i18n/retailWave2Translations.ts
+          if git diff --cached --quiet; then
+            echo "No gate fixes remain to commit."
+            exit 0
+          fi
+          git commit -m "Fix exact-head Phase 1 certification gates"
+          git push origin HEAD:test/backend-coverage-phase2
