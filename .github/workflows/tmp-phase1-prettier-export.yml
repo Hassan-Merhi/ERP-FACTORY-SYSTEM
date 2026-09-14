@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - tmp/phase1-prettier-export-20260914
+  pull_request:
+    branches:
+      - test/backend-coverage-phase2
 
 permissions:
   contents: read
