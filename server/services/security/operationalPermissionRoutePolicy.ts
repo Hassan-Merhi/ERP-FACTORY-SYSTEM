@@ -38,7 +38,7 @@ const IMPORT_PREFIXES = [
   "/api/import",
 ];
 
-const POS_IMPORT_PREFIX = "/api/pos-import";
+const POS_SALES_IMPORT_PREFIXES = ["/api/pos-import", "/api/credit-sales-import"] as const;
 const ARABIC_TRANSLATION_TEMPLATE_PATH = "/api/factory/bale-products/arabic-template";
 
 function posShiftPermission(method: string, path: string): OperationalPermissionRouteMatch | null {
@@ -68,8 +68,10 @@ function posShiftPermission(method: string, path: string): OperationalPermission
   return null;
 }
 
-function isPosImportRoute(path: string): boolean {
-  return path === POS_IMPORT_PREFIX || path.startsWith(`${POS_IMPORT_PREFIX}/`);
+function isPosSalesImportRoute(path: string): boolean {
+  return POS_SALES_IMPORT_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  );
 }
 
 function isImportRoute(method: string, path: string): boolean {
@@ -168,9 +170,10 @@ export function classifyOperationalPermissionRoute(
   const shiftPermission = posShiftPermission(method, path);
   if (shiftPermission) return shiftPermission;
 
-  // POS Excel import is an intentional POS workflow when enabled for the company.
-  // POS roles are allowed by default for action permissions, while View Only stays blocked.
-  if (isPosImportRoute(path)) {
+  // POS Excel imports are intentional sales workflows when enabled for the company.
+  // This includes both cash/normal POS sales and customer/credit sales. POS roles are
+  // allowed by default for action permissions, while View Only stays blocked.
+  if (isPosSalesImportRoute(path)) {
     return {
       operation: "import",
       permissionType: "action",
