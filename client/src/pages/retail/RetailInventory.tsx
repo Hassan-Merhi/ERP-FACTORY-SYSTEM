@@ -437,7 +437,10 @@ function ProductEditor({
             {draft.imageUrls.length > 0 && (
               <div className="flex flex-wrap gap-3">
                 {draft.imageUrls.map((src, index) => (
-                  <div key={`${src}-${index}`} className="group relative h-24 w-24 overflow-hidden rounded-lg border bg-muted">
+                  <div
+                    key={`${src}-${index}`}
+                    className="group relative h-24 w-24 overflow-hidden rounded-lg border bg-muted"
+                  >
                     <img src={src} alt="" className="h-full w-full object-cover" />
                     <Button
                       type="button"
@@ -734,8 +737,8 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           <DialogTitle>Import Retail Products</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Columns: Name | Brand | Size | Barcode | Cost | Price | Qty | Location | Category. Brand can be left blank
-          for Other / No Brand. Rows with the same product name and brand are grouped together automatically.
+          Columns: Name | Brand | Size | Barcode | Cost | Price | Qty | Location | Category. Brand can be left blank for
+          Other / No Brand. Rows with the same product name and brand are grouped together automatically.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadTemplate}>
@@ -1102,7 +1105,9 @@ export default function RetailInventory() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
-          {(catalogPage?.totalPages ?? 0) > 0 ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}` : ""}
+          {(catalogPage?.totalPages ?? 0) > 0
+            ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}`
+            : ""}
         </p>
         <div className="flex gap-2">
           <Button
