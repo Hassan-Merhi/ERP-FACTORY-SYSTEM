@@ -15,25 +15,27 @@ describe("operational permission route policy", () => {
     expect(classifyOperationalPermissionRoute("GET", "/api/stats/import-cycle-balance")).toBeNull();
   });
 
-  it("allows POS-role access to the POS import workflow while keeping View Only blocked", () => {
-    expect(classifyOperationalPermissionRoute("GET", "/api/pos-import/template")).toMatchObject({
-      operation: "import",
-      permissionType: "action",
-      permissionKey: "act_import_data",
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/parse")).toMatchObject({
-      operation: "import",
-      permissionType: "action",
-      permissionKey: "act_import_data",
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/validate")).toMatchObject({
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/import")).toMatchObject({
-      deniedRoles: ["View Only"],
-    });
+  it("allows POS-role access to normal and customer sales imports while keeping View Only blocked", () => {
+    for (const prefix of ["/api/pos-import", "/api/credit-sales-import"]) {
+      expect(classifyOperationalPermissionRoute("GET", `${prefix}/template`)).toMatchObject({
+        operation: "import",
+        permissionType: "action",
+        permissionKey: "act_import_data",
+        deniedRoles: ["View Only"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/parse`)).toMatchObject({
+        operation: "import",
+        permissionType: "action",
+        permissionKey: "act_import_data",
+        deniedRoles: ["View Only"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/validate`)).toMatchObject({
+        deniedRoles: ["View Only"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/import`)).toMatchObject({
+        deniedRoles: ["View Only"],
+      });
+    }
   });
 
   it("protects the Arabic template through Excel export and import mutations through action access", () => {
