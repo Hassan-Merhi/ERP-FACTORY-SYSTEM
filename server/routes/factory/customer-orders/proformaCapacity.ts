@@ -128,12 +128,10 @@ export function buildProformaCapacitySnapshot(
     const orderId = Number(row.orderId);
     if (!normalized || !Number.isSafeInteger(orderId) || orderId <= 0) continue;
 
-    // Capacity is loading-local whenever a current loading is supplied. A
-    // sibling loading may use the same proforma, but its scanned bales must
-    // never consume this loading's allowance or make this loading appear
-    // fulfilled/overloaded. Global snapshots (no currentOrderId) still retain
-    // aggregate contributions for reconciliation and diagnostics.
-    if (currentOrderId !== null && orderId !== currentOrderId) continue;
+    // Keep the complete contribution set in the authoritative snapshot even
+    // when a current loading is supplied. Per-loading enforcement reads only
+    // currentOrderLoadedQty; global/reconciliation consumers intentionally need
+    // siblingLoadedQty and totalConsumedQty from this same snapshot.
     const loadedQty = nonNegativeQuantity(row.loadedQty);
     if (loadedQty <= 0) continue;
 
