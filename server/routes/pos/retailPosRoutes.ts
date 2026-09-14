@@ -15,6 +15,7 @@ import {
   retailStockOperations,
   retailVariantInventory,
 } from "@shared/schema";
+import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
@@ -282,7 +283,7 @@ async function loadSaleResponse(companyId: number, saleId: number) {
 }
 
 export function registerRetailPosRoutes(app: Express): void {
-  app.get("/api/pos/retail/items", async (req, res) => {
+  app.get("/api/pos/retail/items", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -353,7 +354,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/barcodes/:barcode", async (req, res) => {
+  app.get("/api/pos/retail/barcodes/:barcode", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -410,7 +411,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales", async (req, res) => {
+  app.post("/api/pos/retail/sales", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -501,7 +502,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/sales", async (req, res) => {
+  app.get("/api/pos/retail/sales", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -523,7 +524,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/returns", async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/returns", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -647,7 +648,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/transfers", async (req, res) => {
+  app.post("/api/pos/retail/transfers", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -741,7 +742,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/adjustments", async (req, res) => {
+  app.post("/api/pos/retail/adjustments", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -787,7 +788,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/cancel", async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/cancel", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -867,7 +868,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/movements", async (req, res) => {
+  app.get("/api/pos/retail/movements", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
