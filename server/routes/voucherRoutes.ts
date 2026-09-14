@@ -18,6 +18,7 @@ import { registerVoucherJournalRoutes } from "./vouchers/voucherJournalRoutes";
 import { registerVoucherSalesUpdateRoutes } from "./vouchers/sales-update";
 import { registerVoucherPurchaseUpdateRoutes } from "./vouchers/voucherPurchaseUpdateRoutes";
 import { registerVoucherTransferRoutes } from "./vouchers/transfer";
+import { registerExactStockTransferEditRoute } from "./vouchers/exactStockTransferEditRoute";
 import { registerSmartTransferPreviewRoutes } from "./vouchers/smartTransferPreviewRoutes";
 import { registerStockTransferLifecycleRoutes } from "./vouchers/stockTransferLifecycleRoutes";
 import { registerStockTransferRevisionLifecycleRoutes } from "./vouchers/stockTransferRevisionLifecycleRoutes";
@@ -55,6 +56,10 @@ export function registerVoucherRoutes(app: Express) {
   // Native SQL pagination shadows the legacy array reader while preserving its
   // array response for callers that do not explicitly request pagination.
   registerVoucherPaginationRoutes(app);
+
+  // Posted transfer edits use the exact persisted quantity/value lifecycle.
+  // Draft/optional edits fall through to the dedicated save/finalize flow.
+  registerExactStockTransferEditRoute(app);
 
   // Stock-transfer lifecycle routes must shadow the older direct transfer editor.
   registerStockTransferLifecycleRoutes(app);
