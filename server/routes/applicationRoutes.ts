@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 
 import { requireAuth } from "../auth";
 import { db } from "../db";
-import { isValidIsoDate } from "../lib/requestValidation";
 import { broadcast } from "../wsServer";
 import { classifyRealtimeWrite, shouldEmitWriteInvalidation } from "../../shared/realtimeInvalidation";
 import { registerAccountRoutes } from "./accounts";
@@ -16,7 +15,7 @@ import { registerBarcodeImageBandwidthMiddleware } from "./barcodeImageBandwidth
 import { registerBankAssetRoutes } from "./bankAssetRoutes";
 import { registerBusinessAlertRoutes } from "./businessAlertsRoutes";
 import { registerContainerRoutes } from "./containerRoutes";
-import { registerCreditNoteRoutes } from "./creditNoteRoutes";
+import { registerCreditNoteRoutes } from "./creditNoteRouteRegistry";
 import { registerCustomerRoutes } from "./customerRoutes";
 import { registerDebugRoutes } from "./debugRoutes";
 import { registerEmployeeRoutes } from "./employeeRoutes";
@@ -105,16 +104,6 @@ function registerWriteInvalidationSignal(app: Express): void {
   });
 }
 
-function registerCreditNoteCreateDateValidation(app: Express): void {
-  app.use("/api/credit-notes", (req, res, next) => {
-    if (req.method !== "POST" || !req.session?.userId) return next();
-    if (req.body?.voucherDate !== undefined && !isValidIsoDate(req.body.voucherDate)) {
-      return res.status(400).json({ message: "voucherDate must be a valid YYYY-MM-DD date" });
-    }
-    next();
-  });
-}
-
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
@@ -190,7 +179,6 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
     prefixes: ["/api/chatbot", "/api/users"],
     load: async () => (await import("./chatbot")).registerChatbotRoutes,
   });
-  registerCreditNoteCreateDateValidation(app);
   registerCreditNoteRoutes(app);
   await registerLazyRouteModule(app, {
     prefixes: ["/api/reports/net-profit-excel"],
