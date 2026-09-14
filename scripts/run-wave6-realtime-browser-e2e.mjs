@@ -125,6 +125,18 @@ async function selectCompany(page, companyCode) {
     if (!response.ok) throw new Error(`Company switch failed (${response.status})`);
     window.localStorage.setItem("selectedCompanyId", String(companyId));
   }, companyCode);
+
+  // This test helper changes the session directly instead of using CompanyContext,
+  // so it intentionally bypasses refreshRealtimeSessionScope(). Reload once after
+  // the raw fixture switch so the replacement socket authenticates with the same
+  // company scope production CompanyContext establishes after a normal switch.
+  await page.reload({ waitUntil: "domcontentloaded", timeout: timeoutMs });
+  await page.waitForFunction(
+    () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
+    { timeout: timeoutMs }
+  );
+  await completeLanguageOnboarding(page);
+  await waitForRealtimeReady(page);
 }
 
 async function waitForRealtimeReady(page) {
