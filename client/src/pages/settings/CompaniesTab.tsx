@@ -138,7 +138,6 @@ export function CompaniesTab() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-semibold flex items-center gap-2">
@@ -239,6 +238,7 @@ export function CompaniesTab() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="erp">Normal ERP</SelectItem>
+                          <SelectItem value="retail">Retail / Variant Inventory</SelectItem>
                           <SelectItem value="factory">Factory Production</SelectItem>
                           <SelectItem value="properties">Properties</SelectItem>
                           <SelectItem value="supplier_partner">Supplier Partner</SelectItem>
@@ -382,7 +382,6 @@ export function CompaniesTab() {
         </Dialog>
       </div>
 
-      {/* Search */}
       {companies.length > 3 && (
         <div className="relative max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -396,7 +395,6 @@ export function CompaniesTab() {
         </div>
       )}
 
-      {/* Cards */}
       {isLoadingCompanies ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -432,6 +430,7 @@ export function CompaniesTab() {
                 const isFactory = company.companyType === "factory" || company.companyType === "factory_v2";
                 const isProperties = company.companyType === "properties";
                 const isSupplierPartner = company.companyType === "supplier_partner";
+                const isRetail = company.companyType === "retail";
                 const parentCompany = companies.find(
                   (candidate) => Number(candidate.id) === Number(company.parentCompanyId)
                 );
@@ -441,7 +440,9 @@ export function CompaniesTab() {
                     ? "Properties"
                     : isSupplierPartner
                       ? "Supplier Partner"
-                      : "ERP";
+                      : isRetail
+                        ? "Retail"
+                        : "ERP";
 
                 const accentClass = isFactory
                   ? "bg-orange-500"
@@ -449,7 +450,9 @@ export function CompaniesTab() {
                     ? "bg-green-500"
                     : isSupplierPartner
                       ? "bg-rose-500"
-                      : "bg-indigo-500";
+                      : isRetail
+                        ? "bg-sky-500"
+                        : "bg-indigo-500";
 
                 const typeBadgeClass = isFactory
                   ? "border-orange-200 text-orange-700 bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:bg-orange-950"
@@ -457,7 +460,9 @@ export function CompaniesTab() {
                     ? "border-green-200 text-green-700 bg-green-50 dark:border-green-800 dark:text-green-300 dark:bg-green-950"
                     : isSupplierPartner
                       ? "border-rose-200 text-rose-700 bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:bg-rose-950"
-                      : "border-indigo-200 text-indigo-700 bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:bg-indigo-950";
+                      : isRetail
+                        ? "border-sky-200 text-sky-700 bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:bg-sky-950"
+                        : "border-indigo-200 text-indigo-700 bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:bg-indigo-950";
 
                 return (
                   <div
@@ -539,7 +544,6 @@ export function CompaniesTab() {
         })()
       )}
 
-      {/* Delete confirmation */}
       <AlertDialog open={!!companyToDelete} onOpenChange={(open) => !open && setCompanyToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

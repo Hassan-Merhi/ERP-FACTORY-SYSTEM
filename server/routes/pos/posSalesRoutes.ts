@@ -27,6 +27,12 @@ export function registerPosSalesRoutes(app: Express): void {
         .where(eq(companies.id, req.session.currentCompanyId!))
         .limit(1);
       const isSpCompany = currentCoRow?.companyType === "supplier_partner";
+      if (currentCoRow?.companyType === "retail") {
+        return res.status(409).json({
+          message: "Retail companies must use the exact-variant retail POS endpoint",
+          code: "RETAIL_POS_ENDPOINT_REQUIRED",
+        });
+      }
 
       const result = await createPosSale(
         {

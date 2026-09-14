@@ -6,6 +6,8 @@ import { ErpRoutes } from "./ErpRoutes";
 import type { AuthMe } from "@shared/apiTypes";
 
 const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
+const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
+const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
 
 interface RouterProps {
   user: AuthMe;
@@ -17,17 +19,13 @@ interface RouterProps {
  *
  * - Handles the legacy /pos → / redirect for POS users.
  * - Delegates to PosRoutes for user.role === "POS".
- * - Hosts the lazy-loaded Golden Coast operations integration route inside the ERP shell.
+ * - Hosts company-type workspaces that sit outside the normal ERP route table.
  * - Delegates all other authenticated ERP routes to ErpRoutes.
- *
- * Named "Router" so App.tsx callers require no JSX changes after the import
- * path moves from an inline definition to this module.
  */
 export function Router({ user, posImportEnabled }: RouterProps) {
   const isPOS = user?.role === "POS";
   const [location, navigate] = useLocation();
 
-  // Redirect legacy /pos URL to / for POS users
   useEffect(() => {
     if (isPOS && window.location.pathname === "/pos") {
       navigate("/");
@@ -40,6 +38,14 @@ export function Router({ user, posImportEnabled }: RouterProps) {
 
   if (location === "/sp/golden-coast") {
     return <SpGoldenCoast />;
+  }
+
+  if (location === "/retail/pos") {
+    return <RetailPOS />;
+  }
+
+  if (location === "/retail" || location.startsWith("/retail/")) {
+    return <RetailInventory />;
   }
 
   return <ErpRoutes user={user} />;

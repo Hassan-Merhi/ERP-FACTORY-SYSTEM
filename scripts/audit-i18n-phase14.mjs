@@ -77,6 +77,8 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/factoryInsuranceTranslations.ts",
   "client/src/i18n/posItemReplacement.applicationTranslations.ts",
   "client/src/i18n/supplierProfitCheckTranslations.ts",
+  "client/src/i18n/retailWave1Translations.ts",
+  "client/src/i18n/retailWave2Translations.ts",
 ];
 
 const reviewedTechnicalValues = new Set([

@@ -36,7 +36,7 @@ export const insertCompanySchema = createInsertSchema(companies)
   .extend({
     code: z.string().min(1, "Code is required"),
     name: z.string().min(1, "Name is required"),
-    companyType: z.enum(["erp", "factory", "factory_v2", "properties", "supplier_partner"]).default("erp"),
+    companyType: z.enum(["erp", "factory", "factory_v2", "properties", "supplier_partner", "retail"]).default("erp"),
     parentCompanyId: z.number().nullable().optional(),
     baseCurrency: z.string().optional(),
     displayCurrency: z.string().optional(),
@@ -58,9 +58,6 @@ export const exchangeRates = pgTable(
   },
   (t) => ({
     companyIdx: index("exchange_rates_company_idx").on(t.companyId),
-    // One shared company-wide rate per (company, date, currency pair) — this is the
-    // backend source of truth the "Set Today's Exchange Rate" popup relies on to know
-    // whether *any* user has already set today's rate for the company.
     companyDatePairUnique: uniqueIndex("exchange_rates_company_date_pair_unique").on(
       t.companyId,
       t.effectiveDate,

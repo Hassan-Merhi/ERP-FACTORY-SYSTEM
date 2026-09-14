@@ -38,6 +38,8 @@ export function resolveAuthenticatedAppRoute({
   const isPropertiesRoute = currentLocation.startsWith("/properties/");
   const isSupplierPartnerCompany = companyType === "supplier_partner";
   const isSupplierPartnerRoute = currentLocation === "/sp" || currentLocation.startsWith("/sp/");
+  const isRetailCompany = companyType === "retail";
+  const isRetailRoute = currentLocation === "/retail" || currentLocation.startsWith("/retail/");
   const isFactoryCompany = companyType === "factory" || companyType === "factory_v2";
   const isFactoryRoute = currentLocation.startsWith("/factory/");
   const hasErpAccess = !isFactoryCompany || !myAccess || myAccess.hasErpAccess;
@@ -66,17 +68,22 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: "/sp/setup" };
   } else if (isSupplierPartnerCompany && isSupplierPartnerRoute && !SUPPLIER_PARTNER_PATHS.has(currentLocation)) {
     decision = { kind: "redirect", to: "/sp" };
+  } else if (isRetailRoute && !isRetailCompany) {
+    decision = { kind: "redirect", to: "/tracking" };
+  } else if (
+    isRetailCompany &&
+    !isRetailRoute &&
+    currentLocation !== "/my-settings" &&
+    currentLocation !== "/intercompany-requests"
+  ) {
+    decision = { kind: "redirect", to: "/retail" };
   } else if (isFactoryRoute && !isFactoryCompany) {
-    // Factory-only bootstrap data must never gate an ERP/non-Factory company.
-    // The company type alone is enough to reject a stale /factory/* route.
     decision = { kind: "redirect", to: "/" };
   } else if (isFactoryBootstrapRoute && myAccessLoading && myAccess === undefined) {
     decision = { kind: "loading" };
   } else if (isFactoryBootstrapRoute && myAccess === undefined && !myAccessError) {
     decision = { kind: "loading" };
   } else if (isFactoryBootstrapRoute && myAccess === undefined && myAccessError) {
-    // React Query has exhausted its configured retries before any usable access
-    // data was loaded. A background refetch error must not evict cached access.
     decision = { kind: "bootstrap-error" };
   } else if (
     isFactoryCompany &&
@@ -105,6 +112,8 @@ export function resolveAuthenticatedAppRoute({
     decision,
     isPropertiesCompany,
     isPropertiesRoute,
+    isRetailCompany,
+    isRetailRoute,
     isFactoryCompany,
     isFactoryRoute,
     hasErpAccess,

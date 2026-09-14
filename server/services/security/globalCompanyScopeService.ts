@@ -7,18 +7,13 @@ export const globalCompanyTypeFilter = or(
   eq(companies.companyType, "properties"),
   eq(companies.companyType, "factory"),
   eq(companies.companyType, "factory_v2"),
-  eq(companies.companyType, "supplier_partner")
+  eq(companies.companyType, "supplier_partner"),
+  eq(companies.companyType, "retail")
 );
 
-export async function resolveAllowedGlobalCompanyIds(
-  userId: string,
-  role: string
-): Promise<number[]> {
+export async function resolveAllowedGlobalCompanyIds(userId: string, role: string): Promise<number[]> {
   if (role === "Developer") {
-    const rows = await db
-      .select({ id: companies.id })
-      .from(companies)
-      .where(globalCompanyTypeFilter);
+    const rows = await db.select({ id: companies.id }).from(companies).where(globalCompanyTypeFilter);
     return rows.map((row) => row.id);
   }
 
@@ -36,11 +31,7 @@ export async function resolveAllowedGlobalCompanyIds(
   return rows.map((row) => row.id);
 }
 
-export async function userCanAccessGlobalCompany(
-  userId: string,
-  role: string,
-  companyId: number
-): Promise<boolean> {
+export async function userCanAccessGlobalCompany(userId: string, role: string, companyId: number): Promise<boolean> {
   const allowed = await resolveAllowedGlobalCompanyIds(userId, role);
   return allowed.includes(companyId);
 }
