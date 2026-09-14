@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS "retail_pos_sales" (
   "idempotency_key" varchar(191) NOT NULL,
   "status" varchar(32) DEFAULT 'completed' NOT NULL,
   "total_amount" numeric(20,6) DEFAULT '0' NOT NULL,
-  "created_by" integer NOT NULL,
+  "created_by" varchar NOT NULL REFERENCES "users"("id") ON DELETE restrict,
   "notes" text,
   "canceled_at" timestamp,
   "created_at" timestamp DEFAULT now() NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS "retail_pos_returns" (
   "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
   "sale_id" integer NOT NULL REFERENCES "retail_pos_sales"("id") ON DELETE restrict,
   "idempotency_key" varchar(191) NOT NULL,
-  "created_by" integer NOT NULL,
+  "created_by" varchar NOT NULL REFERENCES "users"("id") ON DELETE restrict,
   "notes" text,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS "retail_stock_operations" (
   "operation_type" varchar(40) NOT NULL,
   "idempotency_key" varchar(191) NOT NULL,
   "reference_id" varchar(191),
-  "created_by" integer NOT NULL,
+  "created_by" varchar NOT NULL REFERENCES "users"("id") ON DELETE restrict,
   "metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS "retail_stock_movements" (
   "event_key" varchar(255) NOT NULL,
   "reference_type" varchar(40),
   "reference_id" varchar(191),
-  "created_by" integer NOT NULL,
+  "created_by" varchar NOT NULL REFERENCES "users"("id") ON DELETE restrict,
   "metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
   "created_at" timestamp DEFAULT now() NOT NULL
 );
