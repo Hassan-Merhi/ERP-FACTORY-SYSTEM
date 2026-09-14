@@ -1,0 +1,40 @@
+name: Temporary Stock Movement Format
+
+on:
+  push:
+    branches:
+      - fix/stock-movement-ui-active-months
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/stock-movement-ui-active-months
+          fetch-depth: 0
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit
+      - name: Format Stock Movement dialog
+        run: node node_modules/prettier/bin/prettier.cjs --write client/src/pages/location-inventory/StockMovementDialog.tsx
+      - name: Commit formatted file
+        run: |
+          if git diff --quiet -- client/src/pages/location-inventory/StockMovementDialog.tsx; then
+            echo "No formatting changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/pages/location-inventory/StockMovementDialog.tsx
+          git commit -m "Format stock movement dialog"
+          git push origin HEAD:fix/stock-movement-ui-active-months
