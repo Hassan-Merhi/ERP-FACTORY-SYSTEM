@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git add package.json package-lock.json .github/workflows/wave5-typescript-dual-runtime-sync.yml
+          git add -A
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
