@@ -62,18 +62,20 @@ Other permanent workflows that are conditional by path or event—such as RTL an
 
 This workflow is defense in depth. The ruleset prevents a prohibited write or merge; the workflow detects governance drift and prevents an ungoverned commit from being treated as release-ready.
 
-## Exact-main release certification
+## Main Certification
 
-A green PR is necessary but is not the final deployment authority. After the PR merges, the exact resulting `main` SHA must pass the post-merge certification status:
+A green PR is necessary but is not the final application-certification authority. After the PR merges, the exact resulting `main` SHA must pass the post-merge status:
 
-`phase3/exact-main-certification`
+`Main Certification`
 
-That certification independently reruns static/build contracts, disposable PostgreSQL setup, backend and frontend regression/coverage, security, and backup/restore rehearsal on the commit that actually exists on `main`.
+`.github/workflows/main-certification.yml` is the single post-merge application certification. It verifies the exact merged SHA, installs dependencies, runs static/build contracts, provisions disposable PostgreSQL, executes startup migrations, verifies backend and frontend regression/coverage, performs the API smoke sweep, and checks the server bundle, production-readiness, observability/stabilization, bandwidth, and mobile-routing contracts.
+
+Normal `.github/workflows/ci.yml` protects the pull request and does not automatically rerun its complete heavy suite on a `main` push. Security, release verification, and resilience workflows remain separate specialist authorities for guarantees Main Certification does not duplicate.
 
 Render is configured to deploy from `main` only after checks pass. Therefore a release is valid only when both conditions are true:
 
 1. the change entered governed `main` through a current, green pull request; and
-2. the exact merged `main` SHA passed its post-merge certification.
+2. the exact merged `main` SHA passed Main Certification plus any specialist checks applicable to the release.
 
 ## Emergency changes
 
