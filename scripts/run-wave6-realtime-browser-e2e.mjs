@@ -234,6 +234,9 @@ try {
   await login(posPage, posUsername, posPassword);
 
   await runCase("two-session POS write auto-refreshes watched inventory", watcherPage, async () => {
+    await watcherPage.bringToFront();
+    await watcherPage.waitForFunction(() => document.visibilityState === "visible", { timeout: timeoutMs });
+    const visibilityState = await watcherPage.evaluate(() => document.visibilityState);
     const { initialQuantity } = await openWatchedInventory(watcherPage);
     const realtimeStatus = await waitForRealtimeReady(watcherPage);
     const watchedRequests = [];
@@ -245,6 +248,11 @@ try {
       }
     };
     watcherPage.on("request", onRequest);
+
+    const visibilityBeforeMutation = await watcherPage.evaluate(() => document.visibilityState);
+    if (visibilityBeforeMutation !== "visible") {
+      throw new Error(`Watched inventory page must be visible before the realtime mutation; got ${visibilityBeforeMutation}`);
+    }
 
     const mutationStartedAt = Date.now();
     const autoRefreshPromise = waitForInventoryResponse(watcherPage, { after: mutationStartedAt });
@@ -279,6 +287,8 @@ try {
 
     return {
       realtimeStatus,
+      visibilityState,
+      visibilityBeforeMutation,
       initialQuantity,
       refreshedQuantity,
       automaticInventoryRequests: watchedRequests.length,
