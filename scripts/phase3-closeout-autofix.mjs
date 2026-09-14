@@ -1,16 +1,16 @@
 import fs from "node:fs";
 
 // Temporary closeout helper: apply deterministic Phase 3 fixes and let CI verify them.
-const file = "server/services/accounting/phase3HistoricalRepair.ts";
-let source = fs.readFileSync(file, "utf8");
+const repairFile = "server/services/accounting/phase3HistoricalRepair.ts";
+let repairSource = fs.readFileSync(repairFile, "utf8");
 
-source = source.replace(
+repairSource = repairSource.replace(
   /\nfunction dateText\(value: unknown\): string \{\n  return String\(value \?\? ""\)\.slice\(0, 10\);\n\}\n/,
   "\n"
 );
 
-const start = source.indexOf("  const old = await client.query<{ id: number }>(");
-const end = source.indexOf("\n  for (const row of workerRows) {", start);
+const start = repairSource.indexOf("  const old = await client.query<{ id: number }>(");
+const end = repairSource.indexOf("\n  for (const row of workerRows) {", start);
 if (start < 0 || end < 0) {
   throw new Error("Could not locate the Phase 3 payroll voucher rebuild block");
 }
@@ -69,5 +69,19 @@ const replacement = `  const old = await client.query<{ id: number }>(
   await client.query(\`DELETE FROM voucher_entries WHERE voucher_id=$1\`, [voucherId]);
 `;
 
-source = source.slice(0, start) + replacement + source.slice(end);
-fs.writeFileSync(file, source);
+repairSource = repairSource.slice(0, start) + replacement + repairSource.slice(end);
+fs.writeFileSync(repairFile, repairSource);
+
+// Phase 3 inventory cutover reads canonical_stock_movements. The always-running
+// canonical journal ensure must therefore precede ensureRuntimeSchema on a fresh
+// database; otherwise runtime startup can reach the Phase 3 baseline before the
+// canonical journal exists.
+const indexFile = "server/index.ts";
+let indexSource = fs.readFileSync(indexFile, "utf8");
+const oldOrder = `      await ensureRuntimeSchema(pool);\n      await ensureCanonicalStockMovementJournal(pool);`;
+const newOrder = `      await ensureCanonicalStockMovementJournal(pool);\n      await ensureRuntimeSchema(pool);`;
+if (!indexSource.includes(oldOrder) && !indexSource.includes(newOrder)) {
+  throw new Error("Could not locate canonical journal/runtime schema startup order");
+}
+indexSource = indexSource.replace(oldOrder, newOrder);
+fs.writeFileSync(indexFile, indexSource);
