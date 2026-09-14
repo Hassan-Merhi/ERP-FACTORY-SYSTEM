@@ -20,6 +20,30 @@ import {
 const PREFIX = "p18sp";
 const TX_DATE = "2026-09-14";
 
+type ReconciliationSurface = {
+  key: string;
+  databaseValue: number;
+  reportValue: number;
+  pass: boolean;
+};
+
+type ReconciliationReport = {
+  status: string;
+  mismatchCount: number;
+  surfaces: ReconciliationSurface[];
+  summary: {
+    supplierCount: number;
+  };
+};
+
+type ProjectionAccount = {
+  id?: number;
+  name?: string;
+  code?: string;
+  value?: number;
+  category?: string;
+};
+
 let fixture: GoldenCoastPhase5Fixture;
 let gcSupplierId: number;
 let plainSupplierId: number;
@@ -47,7 +71,13 @@ async function insertSupplier(companyId: number, suffix: string, openingBalance 
     `INSERT INTO suppliers (company_id, code, legal_name, email, opening_balance, active)
      VALUES ($1, $2, $3, $4, $5, true)
      RETURNING id`,
-    [companyId, `${PREFIX}-${suffix}-${companyId}`, `${PREFIX} ${suffix} Supplier`, `${suffix.toLowerCase()}@phase18.test`, openingBalance]
+    [
+      companyId,
+      `${PREFIX}-${suffix}-${companyId}`,
+      `${PREFIX} ${suffix} Supplier`,
+      `${suffix.toLowerCase()}@phase18.test`,
+      openingBalance,
+    ]
   );
   return result.rows[0].id;
 }
@@ -83,8 +113,8 @@ async function insertBalancedSupplierVoucher(input: {
   return voucherId;
 }
 
-function surface(report: any, key: string): any {
-  const row = (report.surfaces as Array<any>).find((candidate) => candidate.key === key);
+function surface(report: ReconciliationReport, key: string): ReconciliationSurface {
+  const row = report.surfaces.find((candidate) => candidate.key === key);
   if (!row) throw new Error(`Missing reconciliation surface ${key}`);
   return row;
 }
@@ -130,10 +160,16 @@ beforeAll(async () => {
 afterAll(async () => {
   if (fixture) {
     const companyIds = [fixture.ctx.companyId, fixture.plainCompanyId, fixture.hadiCompanyId];
-    await pool.query(`DELETE FROM sp_offload_charges WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_offload_charges WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM sp_offloads WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_prepaid_charges WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_container_lines WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_prepaid_charges WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_container_lines WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM sp_containers WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
     await pool.query(`DELETE FROM bank_accounts WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
     await teardownGoldenCoastPhase5Fixture(fixture);
@@ -229,38 +265,45 @@ describe.sequential("Phase 18 Supplier Partner accounting controls", () => {
 
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);
-    expect(reconciliation.body.status).toBe("PASS");
-    expect(reconciliation.body.mismatchCount).toBe(0);
+    const reconciliationBody = reconciliation.body as ReconciliationReport;
+    expect(reconciliationBody.status).toBe("PASS");
+    expect(reconciliationBody.mismatchCount).toBe(0);
 
-    expect(surface(reconciliation.body, "goods_otw_open")).toMatchObject({
+    expect(surface(reconciliationBody, "goods_otw_open")).toMatchObject({
       databaseValue: 500,
       reportValue: 500,
       pass: true,
     });
-    expect(surface(reconciliation.body, "supplier_statements")).toMatchObject({
+    expect(surface(reconciliationBody, "supplier_statements")).toMatchObject({
       databaseValue: 500,
       reportValue: 500,
       pass: true,
     });
-    expect(surface(reconciliation.body, "supplier_statement_control")).toMatchObject({
+    expect(surface(reconciliationBody, "supplier_statement_control")).toMatchObject({
       databaseValue: 750,
       reportValue: 750,
       pass: true,
     });
-    expect(surface(reconciliation.body, "supplier_payable_control")).toMatchObject({
+    expect(surface(reconciliationBody, "supplier_payable_control")).toMatchObject({
       databaseValue: 250,
       reportValue: 250,
       pass: true,
     });
-    expect(surface(reconciliation.body, "prepaid_balances")).toMatchObject({
+    expect(surface(reconciliationBody, "prepaid_balances")).toMatchObject({
       databaseValue: 80,
       reportValue: 80,
       pass: true,
     });
   }, 120000);
 
-  it("keeps non-parent Supplier Partner statements company-scoped and excludes global opening balance", async () => {
+  it("keeps non-parent Supplier Partner supplier visibility and statements company-scoped", async () => {
     await selectCompany(fixture, fixture.plainCompanyId);
+
+    const listed = await fixture.agent.get("/api/suppliers?allowParentFallback=true");
+    expect(listed.status, listed.text).toBe(200);
+    const listedIds = (listed.body as Array<{ id: number }>).map((supplier) => supplier.id);
+    expect(listedIds).toContain(plainSupplierId);
+    expect(listedIds).not.toContain(gcSupplierId);
 
     const plainExpenseAccountId = await insertLedgerAccount({
       companyId: fixture.plainCompanyId,
@@ -289,23 +332,24 @@ describe.sequential("Phase 18 Supplier Partner accounting controls", () => {
 
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);
-    expect(surface(reconciliation.body, "supplier_statement_control")).toMatchObject({
+    const reconciliationBody = reconciliation.body as ReconciliationReport;
+    expect(surface(reconciliationBody, "supplier_statement_control")).toMatchObject({
       databaseValue: 75,
       reportValue: 75,
       pass: true,
     });
-    expect(surface(reconciliation.body, "supplier_payable_control")).toMatchObject({
+    expect(surface(reconciliationBody, "supplier_payable_control")).toMatchObject({
       databaseValue: 75,
       reportValue: 75,
       pass: true,
     });
-    expect(reconciliation.body.summary.supplierCount).toBe(1);
+    expect(reconciliationBody.summary.supplierCount).toBe(1);
   }, 120000);
 
   it("verifies Golden Coast Net Position projection rules without changing ordinary Supplier Partner output", () => {
     const baseBody = {
-      forUs: { total: 0, accounts: [] as any[], breakdown: [] },
-      onUs: { total: 0, accounts: [] as any[], breakdown: [] },
+      forUs: { total: 0, accounts: [] as ProjectionAccount[], breakdown: [] },
+      onUs: { total: 0, accounts: [] as ProjectionAccount[], breakdown: [] },
       equity: {},
       netPositionBreakdown: {},
     };
@@ -379,23 +423,26 @@ describe.sequential("Phase 18 Supplier Partner accounting controls", () => {
       [6, { debit: 25, credit: 0 }],
     ]);
 
-    const projected: any = projectGoldenCoastResidualEquity({
+    const projected = projectGoldenCoastResidualEquity({
       body: structuredClone(baseBody),
       companyAccounts: gcAccounts,
       accountBalances: balances,
     });
-    expect(projected.forUs.accounts.some((account: any) => account.id === 4)).toBe(false);
-    expect(projected.forUs.accounts.some((account: any) => account.id === 5)).toBe(false);
-    expect(projected.forUs.accounts.find((account: any) => account.id === 3)).toMatchObject({
+    const projectedAccounts = Array.isArray(projected.forUs?.accounts)
+      ? (projected.forUs.accounts as ProjectionAccount[])
+      : [];
+    expect(projectedAccounts.some((account) => account.id === 4)).toBe(false);
+    expect(projectedAccounts.some((account) => account.id === 5)).toBe(false);
+    expect(projectedAccounts.find((account) => account.id === 3)).toMatchObject({
       value: 100,
       category: "Cash",
     });
-    expect(projected.forUs.accounts.find((account: any) => account.id === 6)).toMatchObject({
+    expect(projectedAccounts.find((account) => account.id === 6)).toMatchObject({
       value: 25,
       category: "Prepaid",
     });
-    expect(projected.equity.hassanClaim).toBe(40);
-    expect(projected.equity.freshStartResidual).toBe(85);
+    expect(projected.equity?.hassanClaim).toBe(40);
+    expect(projected.equity?.freshStartResidual).toBe(85);
     expect(projected.netPosition).toBe(125);
 
     const ordinaryBody = structuredClone(baseBody);
