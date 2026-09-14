@@ -182,4 +182,64 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "الحقل {0} مطلوب",
     fr: "Le champ {0} est requis",
   },
+  {
+    en: "Attendance WhatsApp Group",
+    ar: "مجموعة واتساب للحضور",
+    fr: "Groupe WhatsApp de présence",
+  },
+  {
+    en: "This group is used only for Attendance Register images. It does not change production or weekly report groups.",
+    ar: "تُستخدم هذه المجموعة فقط لصور سجل الحضور. ولا تغيّر مجموعات الإنتاج أو التقارير الأسبوعية.",
+    fr: "Ce groupe est utilisé uniquement pour les images du registre de présence. Il ne modifie pas les groupes de production ni de rapports hebdomadaires.",
+  },
+  {
+    en: "Search WhatsApp groups...",
+    ar: "ابحث في مجموعات واتساب...",
+    fr: "Rechercher des groupes WhatsApp...",
+  },
+  {
+    en: "No WhatsApp groups found.",
+    ar: "لم يتم العثور على مجموعات واتساب.",
+    fr: "Aucun groupe WhatsApp trouvé.",
+  },
+  {
+    en: "Could not load factory staff.",
+    ar: "تعذر تحميل موظفي المصنع.",
+    fr: "Impossible de charger le personnel de l’usine.",
+  },
+  {
+    en: "Attendance WhatsApp group updated",
+    ar: "تم تحديث مجموعة واتساب للحضور",
+    fr: "Groupe WhatsApp de présence mis à jour",
+  },
+  {
+    en: "Failed to save WhatsApp group",
+    ar: "تعذر حفظ مجموعة واتساب",
+    fr: "Impossible d’enregistrer le groupe WhatsApp",
+  },
+  {
+    en: "Failed to load WhatsApp groups",
+    ar: "تعذر تحميل مجموعات واتساب",
+    fr: "Impossible de charger les groupes WhatsApp",
+  },
+  {
+    en: "No Production WhatsApp group configured. Go to Factory Settings → Production WhatsApp Group.",
+    ar: "لم يتم إعداد مجموعة واتساب للإنتاج. انتقل إلى إعدادات المصنع ← مجموعة واتساب للإنتاج.",
+    fr: "Aucun groupe WhatsApp de production n’est configuré. Accédez à Paramètres de l’usine → Groupe WhatsApp de production.",
+  },
+  {
+    en: "Production WhatsApp credentials are not configured.",
+    ar: "بيانات اعتماد واتساب للإنتاج غير مُعدة.",
+    fr: "Les identifiants WhatsApp de production ne sont pas configurés.",
+  },
+  {
+    en: "Production WhatsApp sending is disabled.",
+    ar: "إرسال واتساب للإنتاج معطّل.",
+    fr: "L’envoi WhatsApp de production est désactivé.",
+  },
+  {
+    en: "Production Targets image sent to the configured Production WhatsApp group.",
+    ar: "تم إرسال صورة أهداف الإنتاج إلى مجموعة واتساب للإنتاج المُعدة.",
+    fr: "L’image des objectifs de production a été envoyée au groupe WhatsApp de production configuré.",
+  },
 ];

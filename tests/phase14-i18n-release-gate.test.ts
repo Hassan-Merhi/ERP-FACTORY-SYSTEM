@@ -22,7 +22,7 @@ describe("Phase 14 trilingual release gate", () => {
     const classifier = fs.readFileSync("scripts/verify-i18n-audit-classifier.mjs", "utf8");
     const policy = JSON.parse(fs.readFileSync("config/i18n-audit-policy.json", "utf8"));
     const baseline = JSON.parse(fs.readFileSync("config/i18n-phase14-baseline.json", "utf8"));
-    const workflow = fs.readFileSync(".github/workflows/i18n-audit.yml", "utf8");
+    const workflow = fs.readFileSync(".github/workflows/ui-quality.yml", "utf8");
 
     expect(audit).toContain("compatibility-covered");
     expect(audit).toContain("applicationTranslations.ts");

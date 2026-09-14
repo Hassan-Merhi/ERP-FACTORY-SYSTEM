@@ -1,8 +1,6 @@
 name: Resilience Rehearsal
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: "17 3 * * 0"
   workflow_dispatch:
@@ -117,9 +115,6 @@ jobs:
 
       - name: Create and verify backup
         run: |
-          # Record both versions before dumping. pg_dump refuses a server newer
-          # than itself and writes nothing, which otherwise surfaces only as an
-          # empty dump several steps later.
           echo "client: $(pg_dump --version)"
           echo "server: $(psql "$DATABASE_URL" -tAc 'SHOW server_version')"
           BACKUP_FILE="$RUNNER_TEMP/erp-resilience.dump"

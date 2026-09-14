@@ -74,6 +74,7 @@ if (recoveryRunbook.includes("production RPO is certified") || recoveryRunbook.i
 
 const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "schedule:",
+  "workflow_dispatch:",
   "cron:",
   'DR_REHEARSAL_RTO_SECONDS: "300"',
   "npm run verify:observability",
@@ -87,31 +88,32 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 ]);
 
-// Wave 3 keeps resilience behavior unchanged. Wave 4 will deliberately move
-// this specialist rehearsal to scheduled/manual ownership. Until then, retain
-// the existing every-main guarantee and keep the contract explicit.
-if (!/^on:\n\s*push:\n\s*branches:\s*\[\s*main\s*\]/m.test(resilienceWorkflow)) {
-  failures.push(
-    ".github/workflows/resilience-rehearsal.yml must run on every push to main until specialist workflow consolidation is applied."
-  );
+if (!/^  schedule:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must retain its scheduled trigger.");
 }
-if (/^\s*paths(?:-ignore)?:/m.test(resilienceWorkflow)) {
-  failures.push(
-    ".github/workflows/resilience-rehearsal.yml must not narrow its triggers with a paths filter before specialist workflow consolidation."
-  );
+if (!/^  workflow_dispatch:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must remain manually dispatchable.");
 }
-
-if (resilienceWorkflow.includes("secrets.")) {
-  failures.push("Resilience rehearsal must not reference repository or environment secrets; it must stay on disposable localhost PostgreSQL.");
+if (/^  push:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must not run on every push after Wave 4 consolidation.");
 }
-
 if (!/retention-days:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(resilienceWorkflow)) {
   failures.push("Resilience evidence must be retained for at least 30 days.");
 }
 
-// Main Certification proves the exact merged application commit and owns the
-// observability/stabilization application contracts. Disaster-recovery evidence
-// remains in resilience-rehearsal.yml rather than being duplicated here.
+const liveBackupWorkflow = requireMarkers(".github/workflows/backup-restore-verification.yml", [
+  "Maintenance - Backup Restore Verification",
+  "schedule:",
+  "workflow_dispatch:",
+  "Create fresh logical backup",
+  "pg_dump",
+  "Restore into isolated PostgreSQL service",
+  "Verify restored fingerprint and core tables",
+]);
+if (/^  push:/m.test(liveBackupWorkflow)) {
+  failures.push("Live backup verification must remain scheduled/manual rather than an every-push test.");
+}
+
 requireMarkers(".github/workflows/main-certification.yml", [
   "name: Main Certification",
   "Verify exact merged main SHA",
