@@ -1,11 +1,9 @@
 /**
  * Phase 17 backend coverage — Factory production flows.
  *
- * Exercises the real PostgreSQL-backed production paths rather than mocking
- * route handlers. The invariants here deliberately cross the Factory/ERP
- * boundary: a produced bale may only raise ERP inventory when canonical stock
- * movement evidence is written in the same transaction, and replaying a
- * finalized pressing batch must never create a second stock receipt.
+ * Real PostgreSQL-backed production coverage. The acceptance invariant crosses
+ * Factory and ERP: produced stock must have canonical stock evidence in the
+ * same transaction, and replay must not create duplicate inventory evidence.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -34,19 +32,13 @@ async function movementFingerprint(sourceType: string, sourceIds: string[]): Pro
     `SELECT
        (SELECT COUNT(*)::text
           FROM canonical_stock_movements
-         WHERE company_id = $1
-           AND source_type = $2
-           AND source_id = ANY($3::text[])) AS "movementCount",
+         WHERE company_id = $1 AND source_type = $2 AND source_id = ANY($3::text[])) AS "movementCount",
        (SELECT COALESCE(SUM(quantity_delta::numeric), 0)::text
           FROM canonical_stock_movements
-         WHERE company_id = $1
-           AND source_type = $2
-           AND source_id = ANY($3::text[])) AS "quantityDelta",
+         WHERE company_id = $1 AND source_type = $2 AND source_id = ANY($3::text[])) AS "quantityDelta",
        (SELECT COUNT(*)::text
           FROM canonical_stock_movement_requests
-         WHERE company_id = $1
-           AND source_type = $2
-           AND source_id = ANY($3::text[])) AS "requestCount"`,
+         WHERE company_id = $1 AND source_type = $2 AND source_id = ANY($3::text[])) AS "requestCount"`,
     [ctx.companyId, sourceType, sourceIds]
   );
   return result.rows[0];
@@ -101,7 +93,7 @@ beforeAll(async () => {
   const product = await pool.query<{ id: number }>(
     `INSERT INTO factory_bale_products
        (company_id, code, article_code, name, weight_per_bale_kg, category_id, production_price, active)
-     VALUES ($1, 'P17-PROD', 'P17-ARTICLE', 'Phase 17 Bale', '25', $2, '2.0000000', true)
+     VALUES ($1, 'P17-PROD', 'P17-ARTICLE', 'Phase 17 Bale', '25', $2, '2.00', true)
      RETURNING id`,
     [ctx.companyId, category.rows[0].id]
   );
@@ -142,13 +134,25 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ctx?.companyId) {
-    await pool.query(`DELETE FROM factory_staff_tracking_period_closures WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_staff_tracking_entries WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_staff_tracking_period_closures WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_staff_tracking_entries WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM factory_worker_categories WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_production_position_rules WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_production_position_memberships WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_production_positions WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM factory_bale_production_attributions WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_production_position_rules WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_production_position_memberships WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_production_positions WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_bale_production_attributions WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM factory_workers WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
   }
   await cleanupTestData(PREFIX);
@@ -156,9 +160,7 @@ afterAll(async () => {
 }, 120000);
 
 describe.sequential("Phase 17 Factory production flows", () => {
-  let pressingBaleIds: number[] = [];
-
-  it("covers pressing and finalization while creating canonical stock evidence exactly once", async () => {
+  it("covers pressing/finalization and creates canonical stock evidence exactly once", async () => {
     const pressed = await agent.post("/api/factory/pressing/create-and-print").send({
       productId,
       quantity: 2,
@@ -166,77 +168,61 @@ describe.sequential("Phase 17 Factory production flows", () => {
       txDate: PRODUCTION_DATE,
     });
     expect(pressed.status, pressed.text).toBe(200);
-    pressingBaleIds = (pressed.body.bales as Array<{ id: number }>).map((bale) => bale.id);
-    expect(pressingBaleIds).toHaveLength(2);
+    const baleIds = (pressed.body.bales as Array<{ id: number }>).map((bale) => bale.id);
+    expect(baleIds).toHaveLength(2);
 
     const finalized = await agent.post("/api/factory/finalize").send({
       pressingBatchId: pressed.body.pressingBatchId,
-      scannedBaleIds: pressingBaleIds,
+      scannedBaleIds: baleIds,
       erpLocationId: ctx.locationId,
       mixBatchId,
       txDate: PRODUCTION_DATE,
     });
     expect(finalized.status, finalized.text).toBe(200);
-    expect(finalized.body.updated).toBe(2);
-    expect(finalized.body.isFullyFinalized).toBe(true);
+    expect(finalized.body).toMatchObject({ updated: 2, isFullyFinalized: true });
 
     const stockItemId = await stockItemForProduct();
     expect(await inventoryQuantity(stockItemId, ctx.locationId)).toBe(2);
-    const firstEvidence = await movementFingerprint(
-      "factory-bale-finalize",
-      pressingBaleIds.map(String)
-    );
+    const firstEvidence = await movementFingerprint("factory-bale-finalize", baleIds.map(String));
     expect(firstEvidence).toEqual({ movementCount: "2", quantityDelta: "2.000000", requestCount: "2" });
 
     const replay = await agent.post("/api/factory/finalize").send({
       pressingBatchId: pressed.body.pressingBatchId,
-      scannedBaleIds: pressingBaleIds,
+      scannedBaleIds: baleIds,
       erpLocationId: ctx.locationId,
       mixBatchId,
       txDate: PRODUCTION_DATE,
     });
     expect(replay.status).toBe(400);
     expect(String(replay.body.message)).toMatch(/already fully finalized/i);
-
     expect(await inventoryQuantity(stockItemId, ctx.locationId)).toBe(2);
-    expect(await movementFingerprint("factory-bale-finalize", pressingBaleIds.map(String))).toEqual(firstEvidence);
+    expect(await movementFingerprint("factory-bale-finalize", baleIds.map(String))).toEqual(firstEvidence);
   }, 120000);
 
-  it("covers Stock Entry worker attribution and writes one aggregated receipt per stock item", async () => {
+  it("covers Stock Entry worker attribution and one aggregated receipt per stock item", async () => {
     const created = await agent.post("/api/factory/stock-entry").send({
       erpLocationId: ctx.location2Id,
       entryDate: PRODUCTION_DATE,
       mixBatchId,
-      items: [
-        {
-          productId,
-          quantity: 3,
-          weightPerBale: 10,
-          finalizedBy: workerId,
-        },
-      ],
+      items: [{ productId, quantity: 3, weightPerBale: 10, finalizedBy: workerId }],
     });
     expect(created.status, created.text).toBe(200);
 
     const bales = await pool.query<{ id: number }>(
       `SELECT id
          FROM factory_bales
-        WHERE company_id = $1
-          AND product_id = $2
-          AND stock_entry_date = $3
-          AND finalized_by = $4
+        WHERE company_id = $1 AND product_id = $2 AND stock_entry_date = $3 AND finalized_by = $4
         ORDER BY id`,
       [ctx.companyId, productId, PRODUCTION_DATE, workerId]
     );
     expect(bales.rows).toHaveLength(3);
 
     const attributions = await pool.query<{
-      bale_id: number;
       worker_id: number;
       production_position_id: number;
       production_position_name_snapshot: string;
     }>(
-      `SELECT bale_id, worker_id, production_position_id, production_position_name_snapshot
+      `SELECT worker_id, production_position_id, production_position_name_snapshot
          FROM factory_bale_production_attributions
         WHERE company_id = $1 AND bale_id = ANY($2::int[])
         ORDER BY bale_id`,
@@ -249,12 +235,7 @@ describe.sequential("Phase 17 Factory production flows", () => {
 
     const stockItemId = await stockItemForProduct();
     expect(await inventoryQuantity(stockItemId, ctx.location2Id)).toBe(3);
-
-    const evidence = await pool.query<{
-      movement_count: string;
-      quantity_delta: string;
-      request_count: string;
-    }>(
+    const evidence = await pool.query<{ movement_count: string; quantity_delta: string; request_count: string }>(
       `SELECT
          (SELECT COUNT(*)::text FROM canonical_stock_movements
            WHERE company_id = $1 AND source_type = 'factory-stock-entry' AND stock_item_id = $2 AND location_id = $3) movement_count,
@@ -267,12 +248,10 @@ describe.sequential("Phase 17 Factory production flows", () => {
     expect(evidence.rows[0]).toEqual({ movement_count: "1", quantity_delta: "3.000000", request_count: "1" });
   }, 120000);
 
-  it("covers invalid and missing production configuration without creating stock evidence", async () => {
-    const invalidQuantity = await agent.post("/api/factory/pressing/create-and-print").send({
-      productId,
-      quantity: 0,
-      weightPerBale: 25,
-    });
+  it("covers invalid/missing production configuration without posting stock evidence", async () => {
+    const invalidQuantity = await agent
+      .post("/api/factory/pressing/create-and-print")
+      .send({ productId, quantity: 0, weightPerBale: 25 });
     expect(invalidQuantity.status).toBe(400);
     expect(String(invalidQuantity.body.message)).toMatch(/quantity/i);
 
@@ -288,7 +267,7 @@ describe.sequential("Phase 17 Factory production flows", () => {
       entryDate: PRODUCTION_DATE,
       items: [{ productId, quantity: 1, weightPerBale: 10, productionPositionId: primaryPositionId }],
     });
-    expect(positionWithoutWorker.status).toBe(500);
+    expect(positionWithoutWorker.status).toBe(400);
     expect(String(positionWithoutWorker.body.message)).toMatch(/without a worker/i);
 
     const secondPosition = await pool.query<{ id: number }>(
@@ -313,7 +292,7 @@ describe.sequential("Phase 17 Factory production flows", () => {
       entryDate: PRODUCTION_DATE,
       items: [{ productId, quantity: 1, weightPerBale: 10, finalizedBy: workerId }],
     });
-    expect(ambiguousWorker.status).toBe(500);
+    expect(ambiguousWorker.status).toBe(400);
     expect(String(ambiguousWorker.body.message)).toMatch(/multiple production positions/i);
     const after = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM canonical_stock_movements WHERE company_id = $1`,
@@ -345,7 +324,7 @@ describe.sequential("Phase 17 Factory production flows", () => {
     });
   }, 120000);
 
-  it("covers Production Targets, saved worker groups, finalization and lock behavior", async () => {
+  it("covers Production Targets, worker groups, snapshots and finalized locking", async () => {
     const ungrouped = await agent.post("/api/factory/staff-tracking/bulk").send({
       page: "production",
       periodType: "daily",
