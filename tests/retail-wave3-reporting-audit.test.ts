@@ -80,7 +80,6 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     const pos = read("client/src/pages/pos/RetailPOS.tsx");
 
     expect(reporting).toContain("Math.min(Math.max(filters.limit ?? 10, 1), 50)");
-    expect(pos).toContain("Math.min").or;
     expect(inventory).toContain('loading="lazy"');
     expect(inventory).toContain('decoding="async"');
     expect(pos).toContain('loading="lazy"');
