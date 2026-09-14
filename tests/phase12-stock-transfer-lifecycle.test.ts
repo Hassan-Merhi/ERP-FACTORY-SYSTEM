@@ -63,6 +63,18 @@ async function inventoryState(locationId: number, stockItemId: number): Promise<
   };
 }
 
+async function negativeLayerQuantity(locationId: number, stockItemId: number): Promise<number> {
+  const result = await pool.query<{ qty: string }>(
+    `SELECT COALESCE(SUM(qty), 0)::text AS qty
+       FROM inventory_negative_layers
+      WHERE company_id = $1
+        AND location_id = $2
+        AND stock_item_id = $3`,
+    [ctx.companyId, locationId, stockItemId]
+  );
+  return Number(result.rows[0]?.qty ?? 0);
+}
+
 function expectInventory(
   actual: InventoryState,
   expected: { quantity: number; totalValue: number; averageRate?: number }
@@ -222,7 +234,7 @@ describe("Phase 12 — stock transfer quantity/value lifecycle", () => {
   );
 
   it(
-    "allows a permitted negative transfer and restores the exact pre-transfer value on cancel/retry",
+    "allows a permitted negative transfer and restores quantity, value and shortage layers on cancel/retry",
     async () => {
       const stockItemId = ctx.stockItemIds[1];
       await setInventory(ctx.locationId, stockItemId, 5, 10, 50);
@@ -245,6 +257,7 @@ describe("Phase 12 — stock transfer quantity/value lifecycle", () => {
         totalValue: 80,
         averageRate: 10,
       });
+      expect(await negativeLayerQuantity(ctx.locationId, stockItemId)).toBeCloseTo(3, 3);
 
       const voucherId = Number(created.body.voucher.id);
       const cancelled = await agent.delete(`/api/vouchers/${voucherId}`);
@@ -256,6 +269,7 @@ describe("Phase 12 — stock transfer quantity/value lifecycle", () => {
         averageRate: 10,
       });
       expectInventory(await inventoryState(ctx.location2Id, stockItemId), { quantity: 0, totalValue: 0 });
+      expect(await negativeLayerQuantity(ctx.locationId, stockItemId)).toBe(0);
 
       const retry = await agent.delete(`/api/vouchers/${voucherId}`);
       expect(retry.status).toBe(200);
@@ -266,6 +280,7 @@ describe("Phase 12 — stock transfer quantity/value lifecycle", () => {
         averageRate: 10,
       });
       expectInventory(await inventoryState(ctx.location2Id, stockItemId), { quantity: 0, totalValue: 0 });
+      expect(await negativeLayerQuantity(ctx.locationId, stockItemId)).toBe(0);
     },
     120000
   );
