@@ -1,0 +1,90 @@
+name: Wave 5 TypeScript Dual Runtime Sync
+
+on:
+  push:
+    branches: [ci/wave5-protection-policy]
+    paths:
+      - ".github/workflows/wave5-typescript-dual-runtime-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wave5-typescript-dual-runtime-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Wave 5 branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ci/wave5-protection-policy
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Apply official TypeScript 7 + TypeScript 6 API layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          pkg.scripts.check = "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit";
+          const dev = pkg.devDependencies ?? {};
+          const ordered = {};
+          for (const [key, value] of Object.entries(dev)) {
+            if (key === "typescript") {
+              ordered["@typescript/native"] = "npm:typescript@7.0.2";
+              ordered.typescript = "npm:@typescript/typescript6@6.0.2";
+            } else if (key !== "@typescript/native") {
+              ordered[key] = value;
+            }
+          }
+          if (!("typescript" in ordered)) {
+            ordered["@typescript/native"] = "npm:typescript@7.0.2";
+            ordered.typescript = "npm:@typescript/typescript6@6.0.2";
+          }
+          pkg.devDependencies = ordered;
+          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          NODE
+
+          npm install --package-lock-only --ignore-scripts --no-audit
+          npm ci --ignore-scripts --no-audit
+
+          node --input-type=module <<'NODE'
+          import ts from "typescript";
+          if (!ts.ScriptTarget?.Latest) throw new Error("TypeScript 6 API compatibility package is not active");
+          console.log(`TypeScript API compatibility: ${ts.version}`);
+          NODE
+
+          ts7_version=$(node_modules/.bin/tsc --version)
+          echo "Native compiler: ${ts7_version}"
+          case "$ts7_version" in
+            "Version 7.0.2") ;;
+            *) echo "Unexpected TypeScript 7 compiler version: $ts7_version"; exit 1 ;;
+          esac
+
+      - name: Remove one-time migration workflow
+        run: git rm .github/workflows/wave5-typescript-dual-runtime-sync.yml
+
+      - name: Commit synchronized package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package.json package-lock.json .github/workflows/wave5-typescript-dual-runtime-sync.yml
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: support TypeScript 7 with TypeScript 6 tooling API"
+          git push origin HEAD:ci/wave5-protection-policy
