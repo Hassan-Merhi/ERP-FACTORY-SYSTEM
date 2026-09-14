@@ -20,8 +20,8 @@ interface RouterProps {
  *
  * - Handles the legacy /pos → / redirect for POS users.
  * - Delegates to PosRoutes for user.role === "POS".
- * - Hosts company-type workspaces that sit outside the normal ERP route table.
- * - Delegates all other authenticated ERP routes to ErpRoutes.
+ * - Hosts only the retail modules that genuinely differ from normal ERP.
+ * - Delegates dashboard, accounts, vouchers, daybook, parties and all other ERP pages to ErpRoutes.
  */
 export function Router({ user, posImportEnabled }: RouterProps) {
   const isPOS = user?.role === "POS";
@@ -45,16 +45,12 @@ export function Router({ user, posImportEnabled }: RouterProps) {
     return <RetailPOS />;
   }
 
-  if (location === "/retail/dashboard") {
+  if (location === "/retail/reports") {
     return <RetailDashboard />;
   }
 
   if (location === "/retail" || location === "/retail/inventory" || location.startsWith("/retail/products/")) {
     return <RetailInventory />;
-  }
-
-  if (location.startsWith("/retail/")) {
-    return <RetailDashboard />;
   }
 
   return <ErpRoutes user={user} />;
