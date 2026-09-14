@@ -31,7 +31,9 @@ const editSchema = z.object({
 });
 
 function isAdjustmentVoucherType(value: string | null | undefined): boolean {
-  return value === "Production" || value === "Consumption" || value === "Mixed" || value === "Stock Adjustment";
+  return (
+    value === "Production" || value === "Consumption" || value === "Mixed" || value === "Stock Adjustment"
+  );
 }
 
 export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void {
@@ -63,7 +65,9 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
 
         const blockedReason = voucherMutationBlockReason(voucher);
         if (blockedReason) return res.status(403).json({ message: blockedReason });
-        if (voucher.deletedAt) return res.status(400).json({ message: "Deleted stock adjustments cannot be changed" });
+        if (voucher.deletedAt) {
+          return res.status(400).json({ message: "Deleted stock adjustments cannot be changed" });
+        }
 
         const parsed = editSchema.parse(req.body);
         const updated = await storage.updateStockAdjustment(
