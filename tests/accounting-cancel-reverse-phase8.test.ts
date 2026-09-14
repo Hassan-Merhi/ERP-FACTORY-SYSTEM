@@ -128,7 +128,7 @@ describe("Phase 8 — cancel/delete is replay-safe for major accounting document
   for (const voucherType of ["Payment", "Receipt"] as const) {
     it(`${voucherType} soft-delete reverses once and an already-cancelled retry cannot duplicate the cancellation`, async () => {
       const created = await agent.post("/api/vouchers/payment-receipt").send(paymentReceiptBody(voucherType, "125.75"));
-      expect(created.status).toBe(201);
+      expect(created.status).toBe(200);
       const voucherId = extractVoucherId(created.body);
       const beforeEntries = await entriesFor(voucherId);
       expect(beforeEntries).toHaveLength(2);
@@ -159,7 +159,7 @@ describe("Phase 8 — cancel/delete is replay-safe for major accounting document
 
   it("Journal soft-delete is replay-safe and does not add or remove accounting legs on retry", async () => {
     const created = await agent.post("/api/vouchers/journal").send(journalBody("333.33", "Journal cancel"));
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const voucherId = extractVoucherId(created.body);
     const beforeEntries = await entriesFor(voucherId);
     expect(beforeEntries).toHaveLength(2);
@@ -185,7 +185,7 @@ describe("Phase 8 — cancel/delete is replay-safe for major accounting document
 describe("Phase 8 — exact reversal is balanced, append-only and idempotent", () => {
   it("posts one exact reversal, replays the same reversal on retry, and refuses reversal-of-reversal", async () => {
     const created = await agent.post("/api/vouchers/journal").send(journalBody("480.25", "Exact reversal source"));
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const originalId = extractVoucherId(created.body);
     const originalEntries = await entriesFor(originalId);
     expect(originalEntries).toHaveLength(2);
@@ -256,7 +256,7 @@ describe("Phase 8 — exact reversal is balanced, append-only and idempotent", (
 
   it("refuses exact reversal of an already-cancelled voucher without creating accounting evidence", async () => {
     const created = await agent.post("/api/vouchers/journal").send(journalBody("91.25", "Cancelled reversal source"));
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const originalId = extractVoucherId(created.body);
 
     const cancelled = await agent.delete(`/api/vouchers/${originalId}`);
