@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { companies, locations } from "./common";
 import { retailProductVariants } from "./retail";
+import { users } from "./users";
 
 export const RETAIL_STOCK_MOVEMENT_TYPES = [
   "sale",
@@ -39,7 +40,9 @@ export const retailPosSales = pgTable(
     idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
     status: varchar("status", { length: 32 }).notNull().default("completed"),
     totalAmount: decimal("total_amount", { precision: 20, scale: 6 }).notNull().default("0"),
-    createdBy: integer("created_by").notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     notes: text("notes"),
     canceledAt: timestamp("canceled_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -91,7 +94,9 @@ export const retailPosReturns = pgTable(
       .notNull()
       .references(() => retailPosSales.id, { onDelete: "restrict" }),
     idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
-    createdBy: integer("created_by").notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -145,7 +150,9 @@ export const retailStockOperations = pgTable(
     operationType: varchar("operation_type", { length: 40 }).notNull(),
     idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
     referenceId: varchar("reference_id", { length: 191 }),
-    createdBy: integer("created_by").notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -178,7 +185,9 @@ export const retailStockMovements = pgTable(
     eventKey: varchar("event_key", { length: 255 }).notNull(),
     referenceType: varchar("reference_type", { length: 40 }),
     referenceId: varchar("reference_id", { length: 191 }),
-    createdBy: integer("created_by").notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
