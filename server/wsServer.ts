@@ -81,10 +81,7 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
             }
 
             const session = (request as SessionUpgradeRequest).session;
-            const companyIds = normalizeBroadcastCompanyIds([
-              session?.currentCompanyId,
-              session?.factoryCompanyId,
-            ]);
+            const companyIds = normalizeBroadcastCompanyIds([session?.currentCompanyId, session?.factoryCompanyId]);
             const userId = normalizeBroadcastUserId(session?.userId);
             if (companyIds.length > 0 || userId) {
               finish({ status: "resolved", companyIds, userId });
