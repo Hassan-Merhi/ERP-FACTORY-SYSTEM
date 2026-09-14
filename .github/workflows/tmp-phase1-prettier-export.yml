@@ -1,0 +1,45 @@
+name: Temporary Phase 1 Prettier Export
+
+on:
+  push:
+    branches:
+      - tmp/phase1-prettier-export-20260914
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up canonical Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Format the four Phase 1 blockers
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            tests/backend-coverage-maersk-parser-branches.test.ts \
+            tests/backend-coverage-maintenance-failure-workflows.test.ts \
+            tests/backend-coverage-properties-deep-reads.test.ts \
+            tests/phase7-backend-messages-translations.test.ts
+
+      - name: Upload exact formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: phase1-prettier-files
+          path: |
+            tests/backend-coverage-maersk-parser-branches.test.ts
+            tests/backend-coverage-maintenance-failure-workflows.test.ts
+            tests/backend-coverage-properties-deep-reads.test.ts
+            tests/phase7-backend-messages-translations.test.ts
+          if-no-files-found: error
+          retention-days: 1
