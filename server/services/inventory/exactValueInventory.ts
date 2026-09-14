@@ -37,12 +37,59 @@ export interface ExactInventoryRestoreResult {
 }
 
 /**
+ * Release only the shortage quantity that an incoming historical reversal
+ * actually resolves. A historical reversal is not a new receipt, so no cost
+ * variance is booked; this only keeps the shortage ledger quantity aligned with
+ * the live negative inventory balance.
+ */
+async function releaseResolvedNegativeLayers(
+  tx: DbTransaction,
+  companyId: number,
+  locationId: number,
+  stockItemId: number,
+  quantityToRelease: Decimal
+): Promise<void> {
+  if (quantityToRelease.lte(QTY_EPSILON)) return;
+
+  const result = await tx.execute(sql`
+    SELECT id, qty
+    FROM inventory_negative_layers
+    WHERE company_id = ${companyId}
+      AND location_id = ${locationId}
+      AND stock_item_id = ${stockItemId}
+    ORDER BY id ASC
+    FOR UPDATE
+  `);
+
+  let remaining = quantityToRelease;
+  for (const layer of resultRows<NegativeLayerRow>(result)) {
+    if (remaining.lte(QTY_EPSILON)) break;
+
+    const layerQty = Decimal.max(decimal(layer.qty), ZERO);
+    const consume = Decimal.min(layerQty, remaining);
+    const layerRemainder = layerQty.minus(consume);
+    remaining = remaining.minus(consume);
+
+    if (layerRemainder.lt(QTY_EPSILON)) {
+      await tx.execute(sql`DELETE FROM inventory_negative_layers WHERE id = ${layer.id}`);
+    } else {
+      await tx.execute(sql`
+        UPDATE inventory_negative_layers
+        SET qty = ${layerRemainder.toFixed(QTY_DP)}, updated_at = NOW()
+        WHERE id = ${layer.id}
+      `);
+    }
+  }
+}
+
+/**
  * Restore a historical inventory issue using its exact stored quantity and value.
  *
- * This is intentionally different from a normal receipt. A receipt may settle
- * FIFO negative-stock layers; reversing an existing document must not consume
- * unrelated shortage layers or rebuild historical value from today's rounded
- * average rate.
+ * This is intentionally different from a normal receipt. It does not recost the
+ * historical issue or rebuild value from today's rounded average. If live stock
+ * is negative, however, increasing quantity necessarily resolves part of that
+ * shortage, so the matching aggregate quantity is released from the negative
+ * layer ledger as part of the same transaction.
  */
 export async function restoreInventoryByExactValue(
   tx: DbTransaction,
@@ -102,6 +149,9 @@ export async function restoreInventoryByExactValue(
   const currentRate = Decimal.max(decimal(existing.average_rate), ZERO);
   const currentValue = Decimal.max(decimal(existing.total_value), ZERO);
   const newQty = currentQty.plus(restoreQty);
+  const shortageResolved = currentQty.isNegative() ? Decimal.min(currentQty.abs(), restoreQty) : ZERO;
+
+  await releaseResolvedNegativeLayers(tx, companyId, locationId, stockItemId, shortageResolved);
 
   let newValue = ZERO;
   let newRate = restoreRate.gt(ZERO) ? restoreRate : currentRate;
@@ -135,108 +185,4 @@ export async function restoreInventoryByExactValue(
     averageRate: newRate.toNumber(),
     created: false,
   };
-}
-
-/**
- * Remove only the negative-layer quantity resolved by a historical issue
- * reversal. Layers tied to the same voucher are preferred; legacy rows without
- * source metadata fall back to FIFO so aggregate layer quantity remains aligned
- * with the live negative balance.
- */
-async function releaseHistoricalIssueNegativeLayers(
-  tx: DbTransaction,
-  companyId: number,
-  locationId: number,
-  stockItemId: number,
-  quantityToRelease: Decimal,
-  sourceVoucherId?: number
-): Promise<void> {
-  if (quantityToRelease.lte(QTY_EPSILON)) return;
-
-  const result = await tx.execute(sql`
-    SELECT id, qty
-    FROM inventory_negative_layers
-    WHERE company_id = ${companyId}
-      AND location_id = ${locationId}
-      AND stock_item_id = ${stockItemId}
-    ORDER BY
-      CASE
-        WHEN ${sourceVoucherId ?? null}::int IS NOT NULL
-          AND source_voucher_id = ${sourceVoucherId ?? null}
-        THEN 0
-        ELSE 1
-      END,
-      id ASC
-    FOR UPDATE
-  `);
-
-  let remaining = quantityToRelease;
-  for (const layer of resultRows<NegativeLayerRow>(result)) {
-    if (remaining.lte(QTY_EPSILON)) break;
-    const layerQty = Decimal.max(decimal(layer.qty), ZERO);
-    const consume = Decimal.min(layerQty, remaining);
-    const layerRemainder = layerQty.minus(consume);
-    remaining = remaining.minus(consume);
-
-    if (layerRemainder.lt(QTY_EPSILON)) {
-      await tx.execute(sql`DELETE FROM inventory_negative_layers WHERE id = ${layer.id}`);
-    } else {
-      await tx.execute(sql`
-        UPDATE inventory_negative_layers
-        SET qty = ${layerRemainder.toFixed(QTY_DP)}, updated_at = NOW()
-        WHERE id = ${layer.id}
-      `);
-    }
-  }
-}
-
-/**
- * Reverse a historical stock issue while preserving its exact stored value and
- * keeping the negative-stock layer ledger in sync.
- *
- * This is the correct inverse of an issue that may have crossed below zero:
- * quantity/value are restored exactly, and only the shortage actually resolved
- * by the reversal is removed from inventory_negative_layers.
- */
-export async function restoreHistoricalIssueByExactValue(
-  tx: DbTransaction,
-  input: {
-    companyId: number;
-    locationId: number;
-    stockItemId: number;
-    quantity: number;
-    value: number;
-    sourceVoucherId?: number;
-  }
-): Promise<ExactInventoryRestoreResult> {
-  const restoreQty = Decimal.max(decimal(input.quantity), ZERO);
-  const lockResult = await tx.execute(sql`
-    SELECT id, quantity
-    FROM inventory
-    WHERE company_id = ${input.companyId}
-      AND location_id = ${input.locationId}
-      AND stock_item_id = ${input.stockItemId}
-    FOR UPDATE
-  `);
-  const existing = firstRow<Pick<InventoryRow, "id" | "quantity">>(lockResult);
-  const currentQty = decimal(existing?.quantity);
-  const shortageResolved = currentQty.isNegative() ? Decimal.min(currentQty.abs(), restoreQty) : ZERO;
-
-  await releaseHistoricalIssueNegativeLayers(
-    tx,
-    input.companyId,
-    input.locationId,
-    input.stockItemId,
-    shortageResolved,
-    input.sourceVoucherId
-  );
-
-  return restoreInventoryByExactValue(
-    tx,
-    input.companyId,
-    input.locationId,
-    input.stockItemId,
-    restoreQty.toNumber(),
-    input.value
-  );
 }
