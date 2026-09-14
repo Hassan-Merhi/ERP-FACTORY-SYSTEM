@@ -1,11 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
-import {
-  stockAdjustmentItems,
-  stockAdjustmentVouchers,
-  voucherEntries,
-  vouchers,
-} from "@shared/schema";
+import { stockAdjustmentItems, stockAdjustmentVouchers, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../db";
 import { reverseInventoryByExactValue } from "../inventoryHelper";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
@@ -16,11 +11,7 @@ import { postStockMovementTx } from "./inventory/stockMovementIntegrityService";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export class StockAdjustmentDeletionError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly status: number
-  ) {
+  constructor(public readonly code: string, message: string, public readonly status: number) {
     super(message);
     this.name = "StockAdjustmentDeletionError";
   }
