@@ -80,7 +80,6 @@ export default function RetailInventory() {
     placeholderData: (previous) => previous,
   });
   const products = catalogPage?.items ?? [];
-  const filteredProducts = products;
   const sizes = catalogFacets?.sizes ?? [];
   const categories = catalogFacets?.categories ?? [];
 
@@ -106,11 +105,10 @@ export default function RetailInventory() {
   if (detailMatch) {
     if (!detailProduct) return <div className="p-6 text-sm text-muted-foreground">Loading product…</div>;
     return (
-      <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/retail")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Inventory
+          <Button variant="ghost" onClick={() => navigate("/retail/inventory")}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
           </Button>
           <Button
             onClick={() => {
@@ -118,22 +116,21 @@ export default function RetailInventory() {
               setEditorOpen(true);
             }}
           >
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit product
+            <Pencil className="mr-2 h-4 w-4" /> Edit product
           </Button>
         </div>
-        <div className="flex gap-5 items-start">
+
+        <div className="flex items-start gap-5">
           <ProductImage product={detailProduct} className="h-32 w-32 rounded-lg border" />
           <div>
-            <p className="text-sm text-muted-foreground">{detailProduct.code}</p>
             <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
             <p className="mt-1">
               {detailProduct.brand.name}
               {detailProduct.category ? ` · ${detailProduct.category}` : ""}
             </p>
-            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">{detailProduct.description}</p>
           </div>
         </div>
+
         {detailProduct.imageUrls.length > 1 && (
           <div className="flex gap-2 overflow-x-auto">
             {detailProduct.imageUrls.map((src) => (
@@ -148,6 +145,7 @@ export default function RetailInventory() {
             ))}
           </div>
         )}
+
         <Card>
           <CardHeader>
             <CardTitle>Stock by size</CardTitle>
@@ -183,6 +181,7 @@ export default function RetailInventory() {
             </table>
           </CardContent>
         </Card>
+
         <ProductEditor
           open={editorOpen}
           onOpenChange={setEditorOpen}
@@ -195,25 +194,23 @@ export default function RetailInventory() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Boxes className="h-6 w-6" />
             <h1 className="text-2xl font-bold">Retail Inventory</h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Products grouped by brand with independent stock and barcodes for every size.
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => navigate("/retail/pos")}>
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Open POS
+            <ShoppingCart className="mr-2 h-4 w-4" /> Open POS
           </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import
+            <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
           <Button
             onClick={() => {
@@ -221,15 +218,14 @@ export default function RetailInventory() {
               setEditorOpen(true);
             }}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
+            <Plus className="mr-2 h-4 w-4" /> Add Product
           </Button>
         </div>
       </div>
 
       <div className="grid gap-2 md:grid-cols-6">
         <Input
-          placeholder="Search product, code or brand…"
+          placeholder="Search product or brand…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="md:col-span-2"
@@ -293,11 +289,11 @@ export default function RetailInventory() {
       </div>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm min-w-[850px]">
+        <CardContent className="overflow-x-auto p-0">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left">
-                <th className="p-3 w-16">Image</th>
+                <th className="w-16 p-3">Image</th>
                 <th>Product</th>
                 <th>Brand</th>
                 <th>Available sizes</th>
@@ -313,17 +309,17 @@ export default function RetailInventory() {
                     Loading retail inventory…
                   </td>
                 </tr>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted-foreground">
                     No products match these filters.
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                products.map((product) => (
                   <tr
                     key={product.id}
-                    className="border-b last:border-0 hover:bg-muted/20 cursor-pointer"
+                    className="cursor-pointer border-b last:border-0 hover:bg-muted/20"
                     onClick={() => navigate(`/retail/products/${product.id}`)}
                   >
                     <td className="p-3">
@@ -331,7 +327,6 @@ export default function RetailInventory() {
                     </td>
                     <td>
                       <div className="font-medium">{product.name}</div>
-                      <div className="text-xs text-muted-foreground">{product.code}</div>
                     </td>
                     <td>{product.brand.name}</td>
                     <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>

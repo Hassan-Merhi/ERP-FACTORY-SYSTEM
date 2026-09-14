@@ -53,6 +53,56 @@ export const retailWave3Translations: readonly Phase3SharedUiEntry[] = [
     ar: "موقع تقرير التجزئة غير نشط أو لا ينتمي إلى الشركة المحددة",
     fr: "L’emplacement du rapport de détail n’est pas actif ou n’appartient pas à la société sélectionnée",
   },
+  // Retail ERP integration and product-entry UX (#1476): brand creation,
+  // image uploads and the simplified product form.
+  { en: "Search product or brand…", ar: "ابحث عن منتج أو علامة…", fr: "Rechercher un produit ou une marque…" },
+  { en: "Add brand", ar: "إضافة علامة", fr: "Ajouter une marque" },
+  { en: "New brand name", ar: "اسم العلامة الجديدة", fr: "Nom de la nouvelle marque" },
+  { en: "Brand added", ar: "تمت إضافة العلامة", fr: "Marque ajoutée" },
+  { en: "Could not add brand", ar: "تعذر إضافة العلامة", fr: "Impossible d’ajouter la marque" },
+  { en: "Product images", ar: "صور المنتج", fr: "Images du produit" },
+  {
+    en: "Upload JPG, PNG, WEBP or GIF images. Up to 8 images.",
+    ar: "ارفع صور JPG أو PNG أو WEBP أو GIF. حتى 8 صور.",
+    fr: "Téléversez des images JPG, PNG, WEBP ou GIF. Jusqu’à 8 images.",
+  },
+  { en: "Uploading image…", ar: "جارٍ رفع الصورة…", fr: "Téléversement de l’image…" },
+  { en: "Image limit reached", ar: "تم بلوغ حد الصور", fr: "Limite d’images atteinte" },
+  {
+    en: "You can upload up to ${MAX_PRODUCT_IMAGES} images.",
+    ar: "يمكنك رفع حتى {{0}} صورة.",
+    fr: "Vous pouvez téléverser jusqu’à {{0}} images.",
+  },
+  { en: "Unsupported image", ar: "صورة غير مدعومة", fr: "Image non prise en charge" },
+  {
+    en: "Use JPG, PNG, WEBP or GIF images.",
+    ar: "استخدم صور JPG أو PNG أو WEBP أو GIF.",
+    fr: "Utilisez des images JPG, PNG, WEBP ou GIF.",
+  },
+  { en: "Image too large", ar: "الصورة كبيرة جدًا", fr: "Image trop volumineuse" },
+  {
+    en: "${tooLarge.name} is larger than 10 MB.",
+    ar: "{{0}} أكبر من 10 ميغابايت.",
+    fr: "{{0}} dépasse 10 Mo.",
+  },
+  { en: "Image upload failed", ar: "فشل رفع الصورة", fr: "Échec du téléversement de l’image" },
+  { en: "Could not upload image", ar: "تعذر رفع الصورة", fr: "Impossible de téléverser l’image" },
+  {
+    en: "Each size has its own barcode, selling price, cost and location stock.",
+    ar: "لكل مقاس باركود وسعر بيع وتكلفة ومخزون موقع خاص به.",
+    fr: "Chaque taille a son propre code-barres, prix de vente, coût et stock par emplacement.",
+  },
+  { en: "Item name is required", ar: "اسم الصنف مطلوب", fr: "Le nom de l’article est requis" },
+  {
+    en: "Every size needs a size value and barcode",
+    ar: "كل مقاس يحتاج إلى قيمة مقاس وباركود",
+    fr: "Chaque taille nécessite une valeur de taille et un code-barres",
+  },
+  {
+    en: "Row ${badIndex + 2} is missing Name, Size, Barcode or Location",
+    ar: "الصف {{0}} ينقصه الاسم أو المقاس أو الباركود أو الموقع",
+    fr: "La ligne {{0}} n’a pas de nom, taille, code-barres ou emplacement",
+  },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();

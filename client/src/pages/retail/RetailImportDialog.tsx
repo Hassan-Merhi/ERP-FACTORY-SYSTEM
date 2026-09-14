@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { read, utils, writeFile } from "@/lib/excelHelper";
+import { buildInternalProductCode, NO_BRAND } from "./retailInventoryTypes";
 
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
@@ -15,7 +16,6 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const downloadTemplate = async () => {
     const sheet = utils.json_to_sheet([
       {
-        Code: "SHOE-001",
         Name: "Runner",
         Brand: "Acme",
         Size: "42",
@@ -27,7 +27,6 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         Category: "Shoes",
       },
       {
-        Code: "SHOE-001",
         Name: "Runner",
         Brand: "Acme",
         Size: "43",
@@ -79,10 +78,13 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       const raw = utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       const mapped = raw.map((source) => {
         const row = new Map(Object.entries(source).map(([key, value]) => [key.trim().toLowerCase(), value]));
+        const name = String(row.get("name") ?? "").trim();
+        const brand = String(row.get("brand") ?? NO_BRAND).trim() || NO_BRAND;
+        const suppliedCode = String(row.get("code") ?? "").trim();
         return {
-          code: String(row.get("code") ?? "").trim(),
-          name: String(row.get("name") ?? "").trim(),
-          brand: String(row.get("brand") ?? "Other / No Brand").trim() || "Other / No Brand",
+          code: suppliedCode || buildInternalProductCode(name, brand),
+          name,
+          brand,
           size: String(row.get("size") ?? "").trim(),
           barcode: String(row.get("barcode") ?? "").trim(),
           cost: Number(row.get("cost") ?? 0),
@@ -90,13 +92,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           qty: Number(row.get("qty") ?? 0),
           location: String(row.get("location") ?? "").trim(),
           category: String(row.get("category") ?? "").trim() || undefined,
-          description: String(row.get("description") ?? "").trim() || undefined,
-          imageUrl: String(row.get("image url") ?? row.get("imageurl") ?? "").trim() || undefined,
         };
       });
-      const required = ["code", "name", "size", "barcode", "location"] as const;
+      const required = ["name", "size", "barcode", "location"] as const;
       const badIndex = mapped.findIndex((row) => required.some((key) => !String(row[key] ?? "").trim()));
-      if (badIndex >= 0) throw new Error(`Row ${badIndex + 2} is missing Code, Name, Size, Barcode or Location`);
+      if (badIndex >= 0) throw new Error(`Row ${badIndex + 2} is missing Name, Size, Barcode or Location`);
       setRows(mapped);
       setFileName(file.name);
       toast({ title: "File ready", description: `${mapped.length} rows validated for import` });
@@ -117,8 +117,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <DialogTitle>Import Retail Products</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Required columns: Code | Name | Brand | Size | Barcode | Cost | Price | Qty | Location. Multiple sizes with
-          the same Code are grouped under one product.
+          Columns: Name | Brand | Size | Barcode | Cost | Price | Qty | Location | Category. Brand can be left blank for
+          Other / No Brand. Rows with the same product name and brand are grouped together automatically.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadTemplate}>

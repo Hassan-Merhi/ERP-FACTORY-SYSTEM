@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
+import { Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
+  ALLOWED_IMAGE_TYPES,
   blankDraft,
   blankVariant,
+  buildInternalProductCode,
+  MAX_IMAGE_BYTES,
+  MAX_PRODUCT_IMAGES,
+  NO_BRAND,
   type Brand,
   type DraftVariant,
   type Location,
@@ -34,50 +38,118 @@ export function ProductEditor({
 }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState<ProductDraft>(() => blankDraft());
-  const [loadedProductId, setLoadedProductId] = useState<number | null>(null);
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [uploadingImages, setUploadingImages] = useState(false);
 
-  if (open) {
-    const targetId = product?.id ?? 0;
-    if (loadedProductId !== targetId) {
-      setLoadedProductId(targetId);
-      setDraft(
-        product
-          ? {
-              code: product.code,
-              name: product.name,
-              brandId: product.brand.id ?? "",
-              brandName: "",
-              category: product.category ?? "",
-              description: product.description ?? "",
-              imageUrls: (product.imageUrls ?? []).join("\n"),
-              active: product.active,
-              variants: product.variants.map((variant) => ({
-                id: variant.id,
-                size: variant.size,
-                barcode: variant.barcode,
-                sku: variant.sku ?? "",
-                cost: variant.cost,
-                sellingPrice: variant.sellingPrice,
-                lowStockThreshold: variant.lowStockThreshold,
-                active: variant.active,
-                stocks: variant.stocks.length
-                  ? variant.stocks.map((stock) => ({ locationId: stock.locationId, quantity: stock.quantity }))
-                  : [{ locationId: "", quantity: 0 }],
-              })),
-            }
-          : blankDraft()
-      );
+  useEffect(() => {
+    if (!open) return;
+    setDraft(
+      product
+        ? {
+            code: product.code,
+            name: product.name,
+            brandId: product.brand.name === NO_BRAND ? "" : (product.brand.id ?? ""),
+            category: product.category ?? "",
+            imageUrls: [...(product.imageUrls ?? [])],
+            active: product.active,
+            variants: product.variants.map((variant) => ({
+              id: variant.id,
+              size: variant.size,
+              barcode: variant.barcode,
+              sku: variant.sku ?? "",
+              cost: variant.cost,
+              sellingPrice: variant.sellingPrice,
+              lowStockThreshold: variant.lowStockThreshold,
+              active: variant.active,
+              stocks: variant.stocks.length
+                ? variant.stocks.map((stock) => ({ locationId: stock.locationId, quantity: stock.quantity }))
+                : [{ locationId: "", quantity: 0 }],
+            })),
+          }
+        : blankDraft()
+    );
+    setAddingBrand(false);
+    setNewBrandName("");
+  }, [open, product]);
+
+  const createBrandMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const response = await apiRequest("POST", "/api/retail/brands", { name });
+      return response.json() as Promise<Brand>;
+    },
+    onSuccess: (brand) => {
+      queryClient.invalidateQueries({ queryKey: ["retail-brands"] });
+      setDraft((current) => ({ ...current, brandId: brand.id }));
+      setNewBrandName("");
+      setAddingBrand(false);
+      toast({ title: "Brand added", description: brand.name });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Could not add brand", description: error.message, variant: "destructive" }),
+  });
+
+  const uploadImages = async (files?: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = MAX_PRODUCT_IMAGES - draft.imageUrls.length;
+    if (remaining <= 0) {
+      toast({ title: "Image limit reached", description: `You can upload up to ${MAX_PRODUCT_IMAGES} images.` });
+      return;
     }
-  } else if (loadedProductId !== null) {
-    setLoadedProductId(null);
-  }
+
+    const selected = Array.from(files).slice(0, remaining);
+    const invalidType = selected.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type));
+    if (invalidType) {
+      toast({
+        title: "Unsupported image",
+        description: "Use JPG, PNG, WEBP or GIF images.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const tooLarge = selected.find((file) => file.size > MAX_IMAGE_BYTES);
+    if (tooLarge) {
+      toast({
+        title: "Image too large",
+        description: `${tooLarge.name} is larger than 10 MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImages(true);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${file.name}`);
+        uploadedUrls.push(new URL(`/api/files/${body.id}/preview`, window.location.origin).toString());
+      }
+      setDraft((current) => ({
+        ...current,
+        imageUrls: [...current.imageUrls, ...uploadedUrls].slice(0, MAX_PRODUCT_IMAGES),
+      }));
+      toast({ title: selected.length === 1 ? "Image uploaded" : `${selected.length} images uploaded` });
+    } catch (error) {
+      toast({
+        title: "Image upload failed",
+        description: error instanceof Error ? error.message : "Could not upload image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const imageUrls = draft.imageUrls
-        .split(/\n|,/)
-        .map((url) => url.trim())
-        .filter(Boolean);
       const variants = draft.variants.map((variant) => ({
         id: variant.id,
         size: variant.size.trim(),
@@ -91,18 +163,23 @@ export function ProductEditor({
           .filter((stock) => stock.locationId !== "")
           .map((stock) => ({ locationId: Number(stock.locationId), quantity: Number(stock.quantity) })),
       }));
-      if (!draft.name.trim() || !draft.code.trim()) throw new Error("Product code and name are required");
+
+      if (!draft.name.trim()) throw new Error("Item name is required");
       if (!variants.length || variants.some((variant) => !variant.size || !variant.barcode)) {
-        throw new Error("Every variant needs a size and barcode");
+        throw new Error("Every size needs a size value and barcode");
       }
+
+      const selectedBrandName =
+        draft.brandId === "" ? NO_BRAND : brands.find((brand) => brand.id === Number(draft.brandId))?.name || NO_BRAND;
+      const internalCode = draft.code.trim() || buildInternalProductCode(draft.name, selectedBrandName);
       const payload = {
-        code: draft.code.trim(),
+        code: internalCode,
         name: draft.name.trim(),
         brandId: draft.brandId === "" ? undefined : Number(draft.brandId),
-        brandName: draft.brandId === "" ? draft.brandName.trim() || "Other / No Brand" : undefined,
+        brandName: draft.brandId === "" ? NO_BRAND : undefined,
         category: draft.category.trim() || null,
-        description: draft.description.trim() || null,
-        imageUrls,
+        description: null,
+        imageUrls: draft.imageUrls,
         active: draft.active,
         variants,
       };
@@ -137,55 +214,105 @@ export function ProductEditor({
         <DialogHeader>
           <DialogTitle>{product ? `Edit ${product.name}` : "Add Retail Product"}</DialogTitle>
         </DialogHeader>
+
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-2">
             <Label>Item name *</Label>
             <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </div>
+
           <div className="space-y-2">
-            <Label>SKU / Item code *</Label>
-            <Input value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Brand</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Brand</Label>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setAddingBrand((current) => !current)}>
+                <Plus className="mr-1 h-4 w-4" /> Add brand
+              </Button>
+            </div>
             <select
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
               value={draft.brandId}
               onChange={(e) => setDraft({ ...draft, brandId: e.target.value ? Number(e.target.value) : "" })}
             >
-              <option value="">Other / No Brand or custom brand</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.name}
-                </option>
-              ))}
+              <option value="">{NO_BRAND}</option>
+              {brands
+                .filter((brand) => !brand.isNoBrand)
+                .map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </option>
+                ))}
             </select>
+            {addingBrand && (
+              <div className="flex gap-2">
+                <Input
+                  value={newBrandName}
+                  placeholder="New brand name"
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newBrandName.trim()) createBrandMutation.mutate(newBrandName.trim());
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  disabled={!newBrandName.trim() || createBrandMutation.isPending}
+                  onClick={() => createBrandMutation.mutate(newBrandName.trim())}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
           </div>
-          {draft.brandId === "" && (
-            <div className="space-y-2">
-              <Label>Custom brand (optional)</Label>
-              <Input
-                value={draft.brandName}
-                placeholder="Leave empty for Other / No Brand"
-                onChange={(e) => setDraft({ ...draft, brandName: e.target.value })}
-              />
-            </div>
-          )}
+
           <div className="space-y-2">
             <Label>Category</Label>
             <Input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Product image URLs</Label>
-            <Textarea
-              value={draft.imageUrls}
-              placeholder="One image URL per line (up to 8)"
-              onChange={(e) => setDraft({ ...draft, imageUrls: e.target.value })}
+
+          <div className="space-y-3 md:col-span-2">
+            <div>
+              <Label>Product images</Label>
+              <p className="mt-1 text-xs text-muted-foreground">Upload JPG, PNG, WEBP or GIF images. Up to 8 images.</p>
+            </div>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              disabled={uploadingImages || draft.imageUrls.length >= MAX_PRODUCT_IMAGES}
+              onChange={(e) => {
+                void uploadImages(e.target.files);
+                e.currentTarget.value = "";
+              }}
             />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Description</Label>
-            <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+            {uploadingImages && <p className="text-sm text-muted-foreground">Uploading image…</p>}
+            {draft.imageUrls.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {draft.imageUrls.map((src, index) => (
+                  <div
+                    key={`${src}-${index}`}
+                    className="group relative h-24 w-24 overflow-hidden rounded-lg border bg-muted"
+                  >
+                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      className="absolute right-1 top-1 h-7 w-7"
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          imageUrls: current.imageUrls.filter((_, imageIndex) => imageIndex !== index),
+                        }))
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -194,7 +321,7 @@ export function ProductEditor({
             <div>
               <h3 className="font-semibold">Sizes / Variants</h3>
               <p className="text-xs text-muted-foreground">
-                Each size has its own barcode, price, cost and location stock.
+                Each size has its own barcode, selling price, cost and location stock.
               </p>
             </div>
             <Button
@@ -202,13 +329,13 @@ export function ProductEditor({
               variant="outline"
               onClick={() => setDraft((current) => ({ ...current, variants: [...current.variants, blankVariant()] }))}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add size
+              <Plus className="mr-1 h-4 w-4" /> Add size
             </Button>
           </div>
 
           {draft.variants.map((variant, variantIndex) => (
             <Card key={variant.id ?? `new-${variantIndex}`}>
-              <CardContent className="p-4 space-y-4">
+              <CardContent className="space-y-4 p-4">
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="space-y-1">
                     <Label>Size *</Label>
@@ -255,6 +382,7 @@ export function ProductEditor({
                     />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Stock by location</Label>
@@ -319,6 +447,7 @@ export function ProductEditor({
                     </div>
                   ))}
                 </div>
+
                 {draft.variants.length > 1 && !variant.id && (
                   <Button
                     type="button"
@@ -343,7 +472,7 @@ export function ProductEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || uploadingImages}>
             {saveMutation.isPending ? "Saving…" : "Save product"}
           </Button>
         </div>

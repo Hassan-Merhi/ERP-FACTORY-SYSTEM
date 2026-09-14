@@ -15,41 +15,40 @@ describe("operational permission route policy", () => {
     expect(classifyOperationalPermissionRoute("GET", "/api/stats/import-cycle-balance")).toBeNull();
   });
 
-  it("allows POS-role access to the POS import workflow while keeping View Only blocked", () => {
-    expect(classifyOperationalPermissionRoute("GET", "/api/pos-import/template")).toMatchObject({
-      operation: "import",
-      permissionType: "action",
-      permissionKey: "act_import_data",
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/parse")).toMatchObject({
-      operation: "import",
-      permissionType: "action",
-      permissionKey: "act_import_data",
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/validate")).toMatchObject({
-      deniedRoles: ["View Only"],
-    });
-    expect(classifyOperationalPermissionRoute("POST", "/api/pos-import/import")).toMatchObject({
-      deniedRoles: ["View Only"],
-    });
+  it("allows POS-role access to normal and customer sales imports while keeping View Only blocked", () => {
+    for (const prefix of ["/api/pos-import", "/api/credit-sales-import"]) {
+      expect(classifyOperationalPermissionRoute("GET", `${prefix}/template`)).toMatchObject({
+        operation: "import",
+        permissionType: "action",
+        permissionKey: "act_import_data",
+        deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/parse`)).toMatchObject({
+        operation: "import",
+        permissionType: "action",
+        permissionKey: "act_import_data",
+        deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/validate`)).toMatchObject({
+        deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
+      });
+      expect(classifyOperationalPermissionRoute("POST", `${prefix}/import`)).toMatchObject({
+        deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
+      });
+    }
   });
 
   it("protects the Arabic template through Excel export and import mutations through action access", () => {
-    expect(
-      classifyOperationalPermissionRoute("GET", "/api/factory/bale-products/arabic-template")
-    ).toMatchObject({
+    expect(classifyOperationalPermissionRoute("GET", "/api/factory/bale-products/arabic-template")).toMatchObject({
       operation: "excel-export",
       permissionType: "export",
       permissionKey: "exp_excel",
     });
-    expect(
-      classifyOperationalPermissionRoute(
-        "POST",
-        "/api/factory/bale-products/arabic-import/apply"
-      )
-    ).toMatchObject({
+    expect(classifyOperationalPermissionRoute("POST", "/api/factory/bale-products/arabic-import/apply")).toMatchObject({
       operation: "import",
       permissionType: "action",
       permissionKey: "act_import_data",
@@ -58,9 +57,7 @@ describe("operational permission route policy", () => {
   });
 
   it("classifies company-scoped repair and recalculation mutations", () => {
-    expect(
-      classifyOperationalPermissionRoute("POST", "/api/admin/recalculate-equity-adjustment")
-    ).toMatchObject({
+    expect(classifyOperationalPermissionRoute("POST", "/api/admin/recalculate-equity-adjustment")).toMatchObject({
       operation: "bulk-maintenance",
       permissionKey: "act_bulk_operations",
     });

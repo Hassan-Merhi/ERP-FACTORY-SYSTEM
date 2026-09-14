@@ -8,9 +8,21 @@ import {
   RETAIL_NO_BRAND_NAME,
 } from "../shared/schema";
 import { companyTypeSchema } from "../client/src/contracts/sessionContracts";
+import { resolveAuthenticatedAppRoute } from "../client/src/app/authenticatedAppRouteGuard";
 
 const root = process.cwd();
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
+
+const route = (currentLocation: string, companyType: string | null = "retail") =>
+  resolveAuthenticatedAppRoute({
+    currentLocation,
+    companyType,
+    isAdminOwner: true,
+    myAccess: undefined,
+    myAccessLoading: false,
+    myAccessError: false,
+    factorySettings: undefined,
+  }).decision;
 
 describe("retail company type", () => {
   it("is accepted by shared company validation and the client session contract", () => {
@@ -25,24 +37,33 @@ describe("retail company type", () => {
     expect(companyTypeSchema.parse("retail")).toBe("retail");
   });
 
-  it("routes retail companies into the retail workspace", () => {
-    const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
-    expect(guard).toContain('const isRetailCompany = companyType === "retail"');
-    expect(guard).toContain('currentLocation === "/retail" || currentLocation.startsWith("/retail/")');
-    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/dashboard" }');
+  it("keeps retail companies inside the normal ERP workspace", () => {
+    expect(route("/")).toEqual({ kind: "redirect", to: "/financial-overview" });
+    expect(route("/retail/dashboard")).toEqual({ kind: "redirect", to: "/financial-overview" });
+
+    for (const normalErpPage of ["/financial-overview", "/accounts", "/vouchers", "/daybook", "/parties", "/create"])
+      expect(route(normalErpPage)).toEqual({ kind: "continue" });
+  });
+
+  it("specializes only retail inventory and POS routes", () => {
+    expect(route("/inventory")).toEqual({ kind: "redirect", to: "/retail/inventory" });
+    expect(route("/stock")).toEqual({ kind: "redirect", to: "/retail/inventory" });
+    expect(route("/location-inventory")).toEqual({ kind: "redirect", to: "/retail/inventory" });
+    expect(route("/pos")).toEqual({ kind: "redirect", to: "/retail/pos" });
+    expect(route("/retail/inventory")).toEqual({ kind: "continue" });
+    expect(route("/retail/pos")).toEqual({ kind: "continue" });
   });
 
   it("rejects the retail workspace for non-retail companies", () => {
-    const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
-    expect(guard).toContain("isRetailRoute && !isRetailCompany");
-    expect(guard).toContain('decision = { kind: "redirect", to: "/tracking" }');
+    expect(route("/retail/inventory", "normal")).toEqual({ kind: "redirect", to: "/tracking" });
   });
 });
 
 describe("retail product and import contracts", () => {
   it("accepts multiple independently barcoded size variants with location stock", () => {
     const result = retailProductWriteSchema.parse({
-      code: "TSHIRT-01",
+      // Product code remains an internal persistence key; the retail UI generates it automatically.
+      code: "RTL-CLASSIC-TEE",
       name: "Classic Tee",
       brandName: RETAIL_NO_BRAND_NAME,
       imageUrls: ["https://example.com/tee.jpg"],
@@ -68,9 +89,9 @@ describe("retail product and import contracts", () => {
     expect(result.variants[1].stocks[0].quantity).toBe(7);
   });
 
-  it("requires the import foundation columns and defaults empty brand to no-brand", () => {
+  it("keeps import persistence compatible while the UI generates hidden product codes", () => {
     const row = retailImportRowSchema.parse({
-      code: "SHOE-1",
+      code: "RTL-RUNNER",
       name: "Runner",
       size: "42",
       barcode: "600000000001",
@@ -90,5 +111,22 @@ describe("retail product and import contracts", () => {
       variants: [{ size: "M", cost: 1, sellingPrice: 2, stocks: [] }],
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it("keeps SKU/item code and description out of the product form and uses real image uploads", () => {
+    // The product form moved into RetailProductEditor.tsx when RetailInventory.tsx was
+    // split to stay under the 900-line repository limit. The negative assertions run
+    // against both halves so the contract holds wherever the form ends up living.
+    const editor = read("client/src/pages/retail/RetailProductEditor.tsx");
+    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
+    const productForm = `${editor}\n${inventory}`;
+    expect(productForm).not.toContain("SKU / Item code");
+    expect(productForm).not.toContain("Product image URLs");
+    expect(productForm).not.toContain("<Label>Description</Label>");
+    expect(editor).toContain("Add brand");
+    expect(editor).toContain('type="file"');
+    expect(editor).toContain('accept="image/jpeg,image/png,image/webp,image/gif"');
+    expect(editor).toContain('fetch("/api/files/upload"');
+    expect(editor).toContain("buildInternalProductCode");
   });
 });
