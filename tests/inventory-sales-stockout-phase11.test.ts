@@ -142,7 +142,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.query(`DELETE FROM user_location_cash_accounts WHERE company_id = $1`, [ctx.companyId]);
-  await pool.query(`DELETE FROM inventory_negative_layers WHERE location_id IN ($1, $2)`, [ctx.locationId, ctx.location2Id]);
+  await pool.query(`DELETE FROM inventory_negative_layers WHERE location_id IN ($1, $2)`, [
+    ctx.locationId,
+    ctx.location2Id,
+  ]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 60_000);
