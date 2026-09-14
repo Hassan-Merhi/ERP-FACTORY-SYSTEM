@@ -12,6 +12,8 @@ const SUPPLIER_PARTNER_PATHS = new Set([
   "/sp/gc-migration",
 ]);
 
+const RETAIL_INVENTORY_ALIASES = new Set(["/inventory", "/stock", "/location-inventory", "/stock-items"]);
+
 export type AuthenticatedAppRouteDecision =
   { kind: "continue" } | { kind: "loading" } | { kind: "bootstrap-error" } | { kind: "redirect"; to: string };
 
@@ -70,13 +72,15 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: "/sp" };
   } else if (isRetailRoute && !isRetailCompany) {
     decision = { kind: "redirect", to: "/tracking" };
-  } else if (
-    isRetailCompany &&
-    !isRetailRoute &&
-    currentLocation !== "/my-settings" &&
-    currentLocation !== "/intercompany-requests"
-  ) {
-    decision = { kind: "redirect", to: "/retail/dashboard" };
+  } else if (isRetailCompany && (currentLocation === "/" || currentLocation === "/retail/dashboard")) {
+    // Retail is still a normal ERP company. Its landing page is the standard ERP dashboard.
+    decision = { kind: "redirect", to: "/financial-overview" };
+  } else if (isRetailCompany && currentLocation === "/pos") {
+    // Retail uses the variant-aware POS rather than the legacy stock-item POS.
+    decision = { kind: "redirect", to: "/retail/pos" };
+  } else if (isRetailCompany && RETAIL_INVENTORY_ALIASES.has(currentLocation)) {
+    // Only inventory is specialized; accounting, vouchers, parties, daybook, etc. stay on normal ERP routes.
+    decision = { kind: "redirect", to: "/retail/inventory" };
   } else if (isFactoryRoute && !isFactoryCompany) {
     decision = { kind: "redirect", to: "/" };
   } else if (isFactoryBootstrapRoute && myAccessLoading && myAccess === undefined) {
