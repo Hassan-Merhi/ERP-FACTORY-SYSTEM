@@ -44,6 +44,9 @@ requireMarkers("docs/operations/database-backup-rollback-recovery.md", [
   "Production RPO and RTO",
 ]);
 
+// Disaster-recovery rehearsal remains a specialist workflow. Main Certification
+// owns merged-application correctness; the resilience workflow owns disposable
+// dump/restore evidence until its schedule is consolidated separately.
 requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "pg_dump",
   "verify-database-backup.mjs",
@@ -60,11 +63,24 @@ requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "verify-phase11-12-observability-disaster-recovery.mjs",
 ]);
 
-requireMarkers(".github/workflows/exact-main-certification.yml", [
-  "exact-main-source-critical-counts.tsv",
-  "exact-main-restore-critical-counts.tsv",
-  "DR_REHEARSAL_RTO_SECONDS",
-  "verify-phase11-12-observability-disaster-recovery.mjs",
+// Main Certification is the single post-merge application certification. Keep
+// this contract focused on what the exact merged application SHA must prove;
+// security and disaster-recovery specialist workflows are verified separately.
+requireMarkers(".github/workflows/main-certification.yml", [
+  "name: Main Certification",
+  "Verify exact merged main SHA",
+  "test:backend:verify",
+  "test:backend:verify:coverage",
+  "test:frontend",
+  "test:frontend:coverage",
+  "test:smoke-sweep",
+  "verify:server-bundle",
+  "verify:final-production-readiness",
+  "verify:observability",
+  "verify:stabilization",
+  "verify:mobile-web-routing",
+  "verify:bandwidth",
+  "context='Main Certification'",
 ]);
 
 requireMarkers("scripts/verify-phase11-12-observability-disaster-recovery.mjs", [
