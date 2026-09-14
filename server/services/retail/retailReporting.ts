@@ -43,9 +43,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
   const limit = Math.min(Math.max(filters.limit ?? 10, 1), 50);
   const financialLocation = financialLocationPredicate(filters.locationId);
   const inventoryLocation = inventoryLocationPredicate(filters.locationId);
-  const inventoryParams: unknown[] = filters.locationId
-    ? [filters.companyId, filters.locationId]
-    : [filters.companyId];
+  const inventoryParams: unknown[] = filters.locationId ? [filters.companyId, filters.locationId] : [filters.companyId];
   const financialParams: unknown[] = filters.locationId
     ? [filters.companyId, filters.from, filters.to, filters.locationId]
     : [filters.companyId, filters.from, filters.to];
@@ -348,12 +346,8 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
     lowStock: lowStockResult.rows.map((row) =>
       mapNumericFields(row, ["product_id", "variant_id", "location_id", "quantity", "threshold"])
     ),
-    outOfStock: outOfStockResult.rows.map((row) =>
-      mapNumericFields(row, ["product_id", "variant_id", "quantity"])
-    ),
-    slowMoving: slowMovingResult.rows.map((row) =>
-      mapNumericFields(row, ["product_id", "variant_id", "quantity"])
-    ),
+    outOfStock: outOfStockResult.rows.map((row) => mapNumericFields(row, ["product_id", "variant_id", "quantity"])),
+    slowMoving: slowMovingResult.rows.map((row) => mapNumericFields(row, ["product_id", "variant_id", "quantity"])),
     profitByProduct: rankings.products,
     profitByBrand: rankings.brands,
   };
@@ -533,7 +527,12 @@ export async function runRetailAudit(companyId: number): Promise<{
   };
 
   add("duplicate_barcodes", "error", duplicateBarcodes.rows, "Duplicate barcodes exist inside the retail company.");
-  add("negative_quantities", "warning", negativeQuantities.rows, "Negative retail quantities exist and require review.");
+  add(
+    "negative_quantities",
+    "warning",
+    negativeQuantities.rows,
+    "Negative retail quantities exist and require review."
+  );
   add("orphan_variants", "error", orphanVariants.rows, "Variants are orphaned or point across company boundaries.");
   add(
     "products_without_valid_variants",
@@ -572,12 +571,8 @@ export async function runRetailAudit(companyId: number): Promise<{
     "Movement history contains arithmetic or before/after continuity breaks."
   );
 
-  const errors = issues
-    .filter((issue) => issue.severity === "error")
-    .reduce((sum, issue) => sum + issue.count, 0);
-  const warnings = issues
-    .filter((issue) => issue.severity === "warning")
-    .reduce((sum, issue) => sum + issue.count, 0);
+  const errors = issues.filter((issue) => issue.severity === "error").reduce((sum, issue) => sum + issue.count, 0);
+  const warnings = issues.filter((issue) => issue.severity === "warning").reduce((sum, issue) => sum + issue.count, 0);
 
   return { ready: errors === 0, errors, warnings, issues };
 }

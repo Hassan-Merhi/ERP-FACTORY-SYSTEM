@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -51,6 +51,8 @@ interface RetailDashboardData {
     inventory_value: number;
     product_count: number;
     variant_count: number;
+    low_stock_count: number;
+    out_of_stock_count: number;
     revenue: number;
     cogs: number;
     gross_profit: number;
@@ -111,7 +113,7 @@ function SummaryCard({
   title: string;
   value: string;
   subtitle?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }) {
   return (
     <Card>
@@ -208,7 +210,9 @@ function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]
                   <td className="px-3 py-2.5">{row.size ?? "—"}</td>
                   {mode === "low" ? <td className="px-3 py-2.5">{row.location_name ?? "—"}</td> : null}
                   <td className="px-3 py-2.5 text-right font-medium tabular-nums">{quantity(row.quantity)}</td>
-                  {mode === "low" ? <td className="px-4 py-2.5 text-right tabular-nums">{quantity(row.threshold)}</td> : null}
+                  {mode === "low" ? (
+                    <td className="px-4 py-2.5 text-right tabular-nums">{quantity(row.threshold)}</td>
+                  ) : null}
                   {mode === "slow" ? (
                     <td className="px-4 py-2.5 text-muted-foreground">
                       {row.last_sale_at ? new Date(row.last_sale_at).toLocaleDateString() : "Never"}
@@ -218,7 +222,10 @@ function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]
               ))
             ) : (
               <tr>
-                <td colSpan={mode === "low" || mode === "slow" ? 5 : 3} className="px-4 py-8 text-center text-muted-foreground">
+                <td
+                  colSpan={mode === "low" || mode === "slow" ? 5 : 3}
+                  className="px-4 py-8 text-center text-muted-foreground"
+                >
                   Nothing to review.
                 </td>
               </tr>
@@ -257,13 +264,7 @@ export default function RetailDashboard() {
     queryFn: () => getJson("/api/locations"),
     enabled: retailEnabled,
   });
-  const {
-    data,
-    isLoading,
-    isFetching,
-    refetch,
-    error,
-  } = useQuery<RetailDashboardData>({
+  const { data, isLoading, isFetching, refetch, error } = useQuery<RetailDashboardData>({
     queryKey: ["retail-dashboard", companyKey, reportUrl],
     queryFn: () => getJson(reportUrl),
     enabled: retailEnabled,
@@ -280,7 +281,9 @@ export default function RetailDashboard() {
     return (
       <div className="p-6">
         <Card>
-          <CardContent className="p-6">Retail reporting is only available for Retail / Variant Inventory companies.</CardContent>
+          <CardContent className="p-6">
+            Retail reporting is only available for Retail / Variant Inventory companies.
+          </CardContent>
         </Card>
       </div>
     );
@@ -359,49 +362,124 @@ export default function RetailDashboard() {
           }`}
         >
           <div className="flex items-start gap-3">
-            {audit.ready ? <ShieldCheck className="mt-0.5 h-5 w-5" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-destructive" />}
+            {audit.ready ? (
+              <ShieldCheck className="mt-0.5 h-5 w-5" />
+            ) : (
+              <AlertTriangle className="mt-0.5 h-5 w-5 text-destructive" />
+            )}
             <div>
-              <p className="font-medium">{audit.ready ? "Retail reconciliation is clean" : "Retail reconciliation needs attention"}</p>
+              <p className="font-medium">
+                {audit.ready ? "Retail reconciliation is clean" : "Retail reconciliation needs attention"}
+              </p>
               <p className="text-sm text-muted-foreground">
-                {audit.errors} blocking error{audit.errors === 1 ? "" : "s"} · {audit.warnings} warning{audit.warnings === 1 ? "" : "s"}
+                {audit.errors} blocking error{audit.errors === 1 ? "" : "s"} · {audit.warnings} warning
+                {audit.warnings === 1 ? "" : "s"}
               </p>
             </div>
           </div>
           {!audit.ready ? (
-            <div className="text-sm text-muted-foreground">{audit.issues.slice(0, 2).map((issue) => issue.message).join(" · ")}</div>
+            <div className="text-sm text-muted-foreground">
+              {audit.issues
+                .slice(0, 2)
+                .map((issue) => issue.message)
+                .join(" · ")}
+            </div>
           ) : null}
         </div>
       ) : null}
 
       {error ? (
         <Card>
-          <CardContent className="p-6 text-sm text-destructive">{error instanceof Error ? error.message : "Could not load retail reporting."}</CardContent>
+          <CardContent className="p-6 text-sm text-destructive">
+            {error instanceof Error ? error.message : "Could not load retail reporting."}
+          </CardContent>
         </Card>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Revenue" value={money(summary?.revenue)} subtitle="Net of returns and cancellations" icon={<DollarSign className="h-5 w-5" />} />
-        <SummaryCard title="COGS" value={money(summary?.cogs)} subtitle="Sale-time cost snapshots" icon={<ShoppingCart className="h-5 w-5" />} />
-        <SummaryCard title="Gross profit" value={money(summary?.gross_profit)} subtitle="Revenue minus COGS" icon={<TrendingUp className="h-5 w-5" />} />
-        <SummaryCard title="Inventory value" value={money(summary?.inventory_value)} subtitle={`${quantity(summary?.inventory_quantity)} units on hand`} icon={<PackageCheck className="h-5 w-5" />} />
+        <SummaryCard
+          title="Revenue"
+          value={money(summary?.revenue)}
+          subtitle="Net of returns and cancellations"
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="COGS"
+          value={money(summary?.cogs)}
+          subtitle="Sale-time cost snapshots"
+          icon={<ShoppingCart className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="Gross profit"
+          value={money(summary?.gross_profit)}
+          subtitle="Revenue minus COGS"
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="Inventory value"
+          value={money(summary?.inventory_value)}
+          subtitle={`${quantity(summary?.inventory_quantity)} units on hand`}
+          icon={<PackageCheck className="h-5 w-5" />}
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Products" value={quantity(summary?.product_count)} subtitle={`${quantity(summary?.variant_count)} variants`} icon={<Boxes className="h-5 w-5" />} />
-        <SummaryCard title="Units sold" value={quantity(summary?.units_sold)} subtitle="Net units in selected period" icon={<ShoppingCart className="h-5 w-5" />} />
-        <SummaryCard title="Low stock" value={quantity(data?.lowStock.length)} subtitle="Variant/location rows at threshold" icon={<AlertTriangle className="h-5 w-5" />} />
-        <SummaryCard title="Out of stock" value={quantity(data?.outOfStock.length)} subtitle="Active variants with no stock" icon={<PackageX className="h-5 w-5" />} />
+        <SummaryCard
+          title="Products"
+          value={quantity(summary?.product_count)}
+          subtitle={`${quantity(summary?.variant_count)} variants`}
+          icon={<Boxes className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="Units sold"
+          value={quantity(summary?.units_sold)}
+          subtitle="Net units in selected period"
+          icon={<ShoppingCart className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="Low stock"
+          value={quantity(summary?.low_stock_count)}
+          subtitle="Variant/location rows at threshold"
+          icon={<AlertTriangle className="h-5 w-5" />}
+        />
+        <SummaryCard
+          title="Out of stock"
+          value={quantity(summary?.out_of_stock_count)}
+          subtitle="Active variants with no stock"
+          icon={<PackageX className="h-5 w-5" />}
+        />
       </div>
 
-      {isLoading ? <div className="py-12 text-center text-sm text-muted-foreground">Loading retail reporting…</div> : null}
+      {isLoading ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">Loading retail reporting…</div>
+      ) : null}
 
       {data ? (
         <>
           <div className="grid gap-4 xl:grid-cols-2">
-            <RankingTable title="Best-selling products" rows={data.bestSellingProducts} label={(row) => row.product_name ?? row.name ?? "—"} showProfit />
-            <RankingTable title="Best-selling brands" rows={data.bestSellingBrands} label={(row) => row.name ?? row.brand_name ?? row.brand ?? "—"} showProfit />
-            <RankingTable title="Best-selling sizes" rows={data.bestSellingSizes} label={(row) => row.name ?? row.size ?? "—"} />
-            <RankingTable title="Sales by location" rows={data.salesByLocation} label={(row) => row.name ?? row.location_name ?? "—"} showProfit />
+            <RankingTable
+              title="Best-selling products"
+              rows={data.bestSellingProducts}
+              label={(row) => row.product_name ?? row.name ?? "—"}
+              showProfit
+            />
+            <RankingTable
+              title="Best-selling brands"
+              rows={data.bestSellingBrands}
+              label={(row) => row.name ?? row.brand_name ?? row.brand ?? "—"}
+              showProfit
+            />
+            <RankingTable
+              title="Best-selling sizes"
+              rows={data.bestSellingSizes}
+              label={(row) => row.name ?? row.size ?? "—"}
+            />
+            <RankingTable
+              title="Sales by location"
+              rows={data.salesByLocation}
+              label={(row) => row.name ?? row.location_name ?? "—"}
+              showProfit
+            />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">

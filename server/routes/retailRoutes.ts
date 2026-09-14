@@ -22,6 +22,69 @@ type RetailQueryExecutor = Pick<typeof db, "select" | "insert" | "update" | "del
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
 
+type RetailTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function writeVariantInventoryWithMovement(
+  tx: RetailTransaction,
+  input: {
+    companyId: number;
+    variantId: number;
+    cost: number;
+    stocks: RetailProductWrite["variants"][number]["stocks"];
+    createdBy: string;
+    referenceType: "retail_product_create" | "retail_product_edit";
+    referenceId: string;
+    eventPrefix: string;
+  }
+) {
+  const existingRows = await tx
+    .select({ locationId: retailVariantInventory.locationId, quantity: retailVariantInventory.quantity })
+    .from(retailVariantInventory)
+    .where(
+      and(eq(retailVariantInventory.companyId, input.companyId), eq(retailVariantInventory.variantId, input.variantId))
+    );
+  const existing = new Map(existingRows.map((row) => [row.locationId, asNumber(row.quantity)]));
+  const desired = new Map(input.stocks.map((stock) => [stock.locationId, Number(stock.quantity)]));
+  const locationIds = [...new Set([...existing.keys(), ...desired.keys()])].sort((a, b) => a - b);
+
+  for (const locationId of locationIds) {
+    const before = existing.get(locationId) ?? 0;
+    const after = desired.get(locationId) ?? 0;
+
+    await tx
+      .insert(retailVariantInventory)
+      .values({
+        companyId: input.companyId,
+        variantId: input.variantId,
+        locationId,
+        quantity: String(after),
+        averageCost: String(input.cost),
+      })
+      .onConflictDoUpdate({
+        target: [retailVariantInventory.variantId, retailVariantInventory.locationId],
+        set: { quantity: String(after), averageCost: String(input.cost), updatedAt: new Date() },
+      });
+
+    const delta = after - before;
+    if (Math.abs(delta) <= 0.000001) continue;
+
+    await tx.insert(retailStockMovements).values({
+      companyId: input.companyId,
+      variantId: input.variantId,
+      locationId,
+      movementType: "adjustment",
+      quantityDelta: String(delta),
+      quantityBefore: String(before),
+      quantityAfter: String(after),
+      eventKey: `${input.eventPrefix}:${input.variantId}:${locationId}`.slice(0, 255),
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      createdBy: input.createdBy,
+      metadata: { source: input.referenceType },
+    });
+  }
+}
+
 async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
   const companyId = req.session.currentCompanyId;
   if (!companyId) {
@@ -446,15 +509,16 @@ export function registerRetailRoutes(app: Express) {
             .returning({ id: retailProductVariants.id });
 
           if (variantInput.stocks.length) {
-            await tx.insert(retailVariantInventory).values(
-              variantInput.stocks.map((stock) => ({
-                companyId,
-                variantId: variant.id,
-                locationId: stock.locationId,
-                quantity: String(stock.quantity),
-                averageCost: String(variantInput.cost),
-              }))
-            );
+            await writeVariantInventoryWithMovement(tx, {
+              companyId,
+              variantId: variant.id,
+              cost: variantInput.cost,
+              stocks: variantInput.stocks,
+              createdBy: req.user!.id,
+              referenceType: "retail_product_create",
+              referenceId: String(product.id),
+              eventPrefix: `product-create:${product.id}`,
+            });
           }
         }
 
@@ -480,6 +544,8 @@ export function registerRetailRoutes(app: Express) {
 
       const input = retailProductWriteSchema.parse(req.body);
       validateVariantPayload(input);
+
+      const productEditKey = `product-edit:${productId}:${Date.now()}:${req.user!.id}`;
 
       await db.transaction(async (tx) => {
         const [existingProduct] = await tx
@@ -562,23 +628,16 @@ export function registerRetailRoutes(app: Express) {
             submittedIds.add(variantId);
           }
 
-          await tx
-            .delete(retailVariantInventory)
-            .where(
-              and(eq(retailVariantInventory.variantId, variantId), eq(retailVariantInventory.companyId, companyId))
-            );
-
-          if (variantInput.stocks.length) {
-            await tx.insert(retailVariantInventory).values(
-              variantInput.stocks.map((stock) => ({
-                companyId,
-                variantId,
-                locationId: stock.locationId,
-                quantity: String(stock.quantity),
-                averageCost: String(variantInput.cost),
-              }))
-            );
-          }
+          await writeVariantInventoryWithMovement(tx, {
+            companyId,
+            variantId,
+            cost: variantInput.cost,
+            stocks: variantInput.stocks,
+            createdBy: req.user!.id,
+            referenceType: "retail_product_edit",
+            referenceId: String(productId),
+            eventPrefix: productEditKey,
+          });
         }
 
         const omitted = existingVariants.filter((variant) => !submittedIds.has(variant.id));

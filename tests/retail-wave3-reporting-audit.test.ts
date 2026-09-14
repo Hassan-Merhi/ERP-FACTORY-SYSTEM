@@ -108,9 +108,9 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
 
   it("exposes authenticated dashboard, audit and production-readiness endpoints", () => {
     const routes = read("server/routes/retailReportingRoutes.ts");
-    expect(routes).toContain('/api/retail/reporting/dashboard');
-    expect(routes).toContain('/api/retail/reporting/audit');
-    expect(routes).toContain('/api/retail/reporting/readiness');
+    expect(routes).toContain("/api/retail/reporting/dashboard");
+    expect(routes).toContain("/api/retail/reporting/audit");
+    expect(routes).toContain("/api/retail/reporting/readiness");
     expect(routes.match(/requireAuth, requireNonPOS/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(routes).toContain("res.status(audit.ready ? 200 : 409)");
   });
