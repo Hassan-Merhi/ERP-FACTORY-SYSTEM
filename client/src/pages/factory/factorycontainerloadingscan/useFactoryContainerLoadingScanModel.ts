@@ -109,16 +109,29 @@ export function useFactoryContainerLoadingScanModel() {
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
-  // Check for ?orderId= resume param using wouter's useSearch (reactive to URL changes)
+  // Keep the active order synchronized with the URL. Navigating from
+  // ?orderId=<old> back to the plain /new route must clear the old loading;
+  // otherwise the same mounted page silently keeps scanning into the old order.
   useEffect(() => {
     const params = new URLSearchParams(search);
     const resumeOrderId = params.get("orderId");
-    if (resumeOrderId) {
-      const id = parseInt(resumeOrderId);
-      if (!isNaN(id)) {
-        setOrderId(id);
-        setIsResuming(true);
-      }
+    if (!resumeOrderId) {
+      setOrderId(null);
+      setIsResuming(false);
+      setSelectedCustomerId("");
+      setSelectedLocationId("");
+      setSelectedProformaId("");
+      setLoadingNote("");
+      setLastScannedRef(null);
+      setPendingBypassBaleRef(null);
+      setPendingBypassOverloadRef(null);
+      return;
+    }
+
+    const id = parseInt(resumeOrderId);
+    if (!isNaN(id)) {
+      setOrderId(id);
+      setIsResuming(true);
     }
   }, [search]);
 
@@ -193,7 +206,11 @@ export function useFactoryContainerLoadingScanModel() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch proforma capacity");
-      return res.json();
+      const snapshot = (await res.json()) as ProformaCapacitySnapshot;
+      if (orderId && snapshot.currentOrderId !== orderId) {
+        throw new Error("Proforma capacity returned for the wrong loading order");
+      }
+      return snapshot;
     },
     enabled: !!capacityProformaId,
     staleTime: 0,
@@ -240,9 +257,13 @@ export function useFactoryContainerLoadingScanModel() {
     },
     onSuccess: (data: CreateLoadingOrderResponse) => {
       setOrderId(data.id);
+      setIsResuming(false);
+      // Canonicalize the newly-created loading in the URL. This prevents a
+      // refresh or same-route navigation from snapping back to an older order.
+      navigate(`/factory/sales/loading/new?orderId=${data.id}`);
       toast({
         title: "Loading order created",
-        description: "You can now start scanning bales",
+        description: `Loading #${data.id} is separate and ready for scanning`,
       });
       setTimeout(() => scannerRef.current?.focus(), 100);
     },
@@ -498,12 +519,9 @@ export function useFactoryContainerLoadingScanModel() {
   const handleStartLoading = useCallback(async () => {
     if (!customerId || !selectedLocationId) return;
     const proforma = chosenProforma();
-    if (proforma && proformaCapacity?.proformaId === proforma.id && proformaCapacity.remainingTotalQty <= 0) {
-      toast({ title: "Proforma fully consumed", description: "No remaining quantity is available for a new loading." });
-      return;
-    }
 
-    // Check if there are already pending loading orders for this proforma
+    // A reusable proforma is a per-loading reference. Aggregate quantities from
+    // older/sibling loadings must never prevent creation of a fresh loading.
     if (proforma) {
       try {
         const res = await fetch(`/api/factory/customer-orders?customerId=${customerId}&proformaId=${proforma.id}`, {
@@ -534,14 +552,12 @@ export function useFactoryContainerLoadingScanModel() {
     customerId,
     selectedLocationId,
     chosenProforma,
-    proformaCapacity,
     orderDate,
     loadingNote,
     createOrderMutation,
-    toast,
   ]);
 
-  /** "Start New Loading" from the pending-orders warning — no note is carried over. */
+  /** Create a separate loading from the pending-orders warning. */
   const startNewLoadingAnyway = () => {
     setShowPendingWarning(false);
     const proforma = chosenProforma();
@@ -550,6 +566,7 @@ export function useFactoryContainerLoadingScanModel() {
       proformaIdUsed: proforma?.id || null,
       locationId: parseInt(selectedLocationId),
       orderDate,
+      containerNotes: loadingNote.trim() || undefined,
     });
   };
 
