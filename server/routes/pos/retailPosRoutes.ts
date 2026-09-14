@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   companies,
@@ -574,27 +574,31 @@ export function registerRetailPosRoutes(app: Express): void {
         for (const item of body.items)
           aggregate.set(item.saleItemId, (aggregate.get(item.saleItemId) ?? 0) + item.quantity);
 
-        for (const [saleItemId, quantity] of aggregate) {
-          await tx.execute(
-            sql`select id from retail_pos_sale_items where id = ${saleItemId} and sale_id = ${saleId} for update`
-          );
-          const [saleItem] = await tx
-            .select({
-              id: retailPosSaleItems.id,
-              variantId: retailPosSaleItems.variantId,
-              quantity: retailPosSaleItems.quantity,
-              returnedQuantity: retailPosSaleItems.returnedQuantity,
-              unitPrice: retailPosSaleItems.unitPrice,
-            })
-            .from(retailPosSaleItems)
-            .where(
-              and(
-                eq(retailPosSaleItems.id, saleItemId),
-                eq(retailPosSaleItems.saleId, saleId),
-                eq(retailPosSaleItems.companyId, companyId)
-              )
+        // Lock and preload every referenced sale item in one statement. Locking in a
+        // deterministic id order also keeps concurrent returns from deadlocking each other.
+        const saleItemIds = [...aggregate.keys()].sort((a, b) => a - b);
+        const saleItemRows = await tx
+          .select({
+            id: retailPosSaleItems.id,
+            variantId: retailPosSaleItems.variantId,
+            quantity: retailPosSaleItems.quantity,
+            returnedQuantity: retailPosSaleItems.returnedQuantity,
+            unitPrice: retailPosSaleItems.unitPrice,
+          })
+          .from(retailPosSaleItems)
+          .where(
+            and(
+              inArray(retailPosSaleItems.id, saleItemIds),
+              eq(retailPosSaleItems.saleId, saleId),
+              eq(retailPosSaleItems.companyId, companyId)
             )
-            .limit(1);
+          )
+          .orderBy(retailPosSaleItems.id)
+          .for("update");
+        const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
+
+        for (const [saleItemId, quantity] of aggregate) {
+          const saleItem = saleItemsById.get(saleItemId);
           if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
           const sold = toNumber(saleItem.quantity);
           const alreadyReturned = toNumber(saleItem.returnedQuantity);

@@ -975,7 +975,9 @@ export default function RetailInventory() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
-          {(catalogPage?.totalPages ?? 0) > 0 ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}` : ""}
+          {(catalogPage?.totalPages ?? 0) > 0
+            ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}`
+            : ""}
         </p>
         <div className="flex gap-2">
           <Button
