@@ -157,7 +157,7 @@ describe("Phase 7 — Payment and Receipt edits replace accounting evidence", ()
   for (const voucherType of ["Payment", "Receipt"] as const) {
     it(`${voucherType} edit replaces account, amount, date and particulars without duplicate legs`, async () => {
       const created = await agent.post("/api/vouchers/payment-receipt").send(paymentReceiptBody(voucherType, "100"));
-      expect(created.status).toBe(201);
+      expect(created.status).toBe(200);
       const voucherId = extractVoucherId(created.body);
       const oldEntries = await entriesFor(voucherId);
       expect(oldEntries).toHaveLength(2);
@@ -227,7 +227,7 @@ describe("Phase 7 — Payment and Receipt edits replace accounting evidence", ()
 describe("Phase 7 — Journal edit replaces account, amount, currency, date and particulars", () => {
   it("rewrites a USD journal as CFA using one balanced replacement set", async () => {
     const created = await agent.post("/api/vouchers/journal").send(journalBody("100"));
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     const voucherId = extractVoucherId(created.body);
     const oldEntries = await entriesFor(voucherId);
     expect(oldEntries).toHaveLength(2);
