@@ -209,7 +209,11 @@ describe("Phase 15 costing edge cases", () => {
     expect(Number(rawAfterSecond.rows[0].cost_per_kg_usd)).toBeCloseTo(7.5, 6);
     expect(await supplierLockedRate()).toBeCloseTo(lockedAfterFirst, 8);
 
-    const receipts = await pool.query<{ received_kg: string; cumulative_received_kg: string; fixed_cost_per_kg_usd: string }>(
+    const receipts = await pool.query<{
+      received_kg: string;
+      cumulative_received_kg: string;
+      fixed_cost_per_kg_usd: string;
+    }>(
       `SELECT received_kg, cumulative_received_kg, fixed_cost_per_kg_usd
          FROM factory_container_receipts
         WHERE container_id = $1

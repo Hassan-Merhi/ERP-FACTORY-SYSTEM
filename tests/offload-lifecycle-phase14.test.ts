@@ -158,7 +158,9 @@ describe("Phase 14 offload lifecycle", () => {
     stock = await inventory();
     expect(Number(stock.quantity)).toBeCloseTo(0, 3);
     expect(Number(stock.total_value)).toBeCloseTo(0, 2);
-    expect((await pool.query(`SELECT id FROM container_offloads WHERE container_id = $1`, [containerId])).rowCount).toBe(0);
+    expect(
+      (await pool.query(`SELECT id FROM container_offloads WHERE container_id = $1`, [containerId])).rowCount
+    ).toBe(0);
     expect((await activeChargeVouchers()).rowCount).toBe(0);
 
     const retiredEntries = await pool.query<{ count: string }>(
