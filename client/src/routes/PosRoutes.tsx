@@ -18,6 +18,8 @@ import {
   MySettings,
 } from "@/lazyPages";
 import type { AuthMe } from "@shared/apiTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import RetailPOS from "@/pages/pos/RetailPOS";
 
 interface PosRoutesProps {
   user: AuthMe;
@@ -30,6 +32,20 @@ interface PosRoutesProps {
  * No auth checks beyond that — Router already guards the entry point.
  */
 export function PosRoutes({ user, posImportEnabled }: PosRoutesProps) {
+  const { selectedCompany } = useCompany();
+
+  if (selectedCompany?.companyType === "retail") {
+    return (
+      <Switch>
+        <Route path="/">{() => <RetailPOS />}</Route>
+        <Route path="/pos">{() => <RetailPOS />}</Route>
+        <Route path="/retail/pos">{() => <RetailPOS />}</Route>
+        <Route path="/my-settings" component={MySettings} />
+        <Route>{() => <Redirect to="/" />}</Route>
+      </Switch>
+    );
+  }
+
   return (
     <Switch>
       <Route path="/">{() => <POSContainerTracking posUser={user} />}</Route>

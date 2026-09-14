@@ -144,11 +144,20 @@ export default function RetailPOS() {
     queryFn: () => readJson<Location[]>("/api/locations"),
     enabled: selectedCompany?.companyType === "retail",
   });
-  const locations = (locationsQuery.data ?? []).filter((location) => location.id > 0);
+  const isPosRole = selectedCompany?.role === "POS";
+  const assignedLocationId = selectedCompany?.assignedLocationId ?? null;
+  const locations = (locationsQuery.data ?? [])
+    .filter((location) => location.id > 0)
+    .filter((location) => !isPosRole || location.id === assignedLocationId);
 
   useEffect(() => {
+    if (isPosRole) {
+      const assignedLocation = locations.find((location) => location.id === assignedLocationId) ?? null;
+      if (selectedLocation?.id !== assignedLocation?.id) setSelectedLocation(assignedLocation);
+      return;
+    }
     if (!selectedLocation && locations.length === 1) setSelectedLocation(locations[0]);
-  }, [locations, selectedLocation, setSelectedLocation]);
+  }, [assignedLocationId, isPosRole, locations, selectedLocation, setSelectedLocation]);
 
   useEffect(() => {
     setCart([]);
@@ -329,6 +338,7 @@ export default function RetailPOS() {
           <Label htmlFor="retail-pos-location">Selling location</Label>
           <select
             id="retail-pos-location"
+            disabled={isPosRole}
             value={selectedLocation?.id ?? ""}
             onChange={(event) => {
               const location = locations.find((entry) => entry.id === Number(event.target.value)) ?? null;
@@ -549,66 +559,68 @@ export default function RetailPOS() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Label>Variant</Label>
-              <select
-                value={transferVariantId}
-                onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
-                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">Choose exact product + size</option>
-                {(itemsQuery.data ?? []).map((item) => (
-                  <option key={item.variantId} value={item.variantId}>
-                    {item.name} · {item.brand} · {item.size} · Qty {item.quantity}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Destination</Label>
-              <select
-                value={transferToLocationId}
-                onChange={(event) => setTransferToLocationId(event.target.value ? Number(event.target.value) : "")}
-                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">Choose destination</option>
-                {locations
-                  .filter((location) => location.id !== selectedLocation?.id)
-                  .map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
+        {!isPosRole && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label>Variant</Label>
+                <select
+                  value={transferVariantId}
+                  onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
+                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Choose exact product + size</option>
+                  {(itemsQuery.data ?? []).map((item) => (
+                    <option key={item.variantId} value={item.variantId}>
+                      {item.name} · {item.brand} · {item.size} · Qty {item.quantity}
                     </option>
                   ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="retail-transfer-qty">Quantity</Label>
-              <Input
-                id="retail-transfer-qty"
-                type="number"
-                min="0.000001"
-                step="1"
-                value={transferQuantity}
-                onChange={(event) => setTransferQuantity(Number(event.target.value))}
-              />
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={transferMutation.isPending || !transferVariantId || !transferToLocationId}
-              onClick={() => transferMutation.mutate()}
-            >
-              {transferMutation.isPending ? "Transferring…" : "Transfer exact variant"}
-            </Button>
-          </CardContent>
-        </Card>
+                </select>
+              </div>
+              <div>
+                <Label>Destination</Label>
+                <select
+                  value={transferToLocationId}
+                  onChange={(event) => setTransferToLocationId(event.target.value ? Number(event.target.value) : "")}
+                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Choose destination</option>
+                  {locations
+                    .filter((location) => location.id !== selectedLocation?.id)
+                    .map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="retail-transfer-qty">Quantity</Label>
+                <Input
+                  id="retail-transfer-qty"
+                  type="number"
+                  min="0.000001"
+                  step="1"
+                  value={transferQuantity}
+                  onChange={(event) => setTransferQuantity(Number(event.target.value))}
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={transferMutation.isPending || !transferVariantId || !transferToLocationId}
+                onClick={() => transferMutation.mutate()}
+              >
+                {transferMutation.isPending ? "Transferring…" : "Transfer exact variant"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

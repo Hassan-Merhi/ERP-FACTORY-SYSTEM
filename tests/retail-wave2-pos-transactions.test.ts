@@ -91,6 +91,25 @@ describe("Retail POS Wave 2 transaction invariants", () => {
     expect(legacySales).toContain("RETAIL_POS_ENDPOINT_REQUIRED");
   });
 
+  it("makes the retail POS reachable for managers and POS-role cashiers", () => {
+    const appRoutes = read("client/src/routes/AppRoutes.tsx");
+    const posRoutes = read("client/src/routes/PosRoutes.tsx");
+    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
+
+    expect(appRoutes).toContain('location === "/retail/pos"');
+    expect(appRoutes).toContain("return <RetailPOS />");
+    expect(posRoutes).toContain('selectedCompany?.companyType === "retail"');
+    expect(posRoutes).toContain('<Route path="/">{() => <RetailPOS />}</Route>');
+    expect(posRoutes).toContain('<Route path="/pos">{() => <RetailPOS />}</Route>');
+    expect(inventory).toContain('navigate("/retail/pos")');
+    expect(inventory).toContain("Open POS");
+    const retailPos = read("client/src/pages/pos/RetailPOS.tsx");
+    expect(retailPos).toContain('selectedCompany?.role === "POS"');
+    expect(retailPos).toContain("assignedLocationId");
+    expect(retailPos).toContain("disabled={isPosRole}");
+    expect(retailPos).toContain("{!isPosRole && (");
+  });
+
   it("supports exact barcode lookup and keyboard wedge scanners", () => {
     const route = read("server/routes/pos/retailPosRoutes.ts");
     const ui = read("client/src/pages/pos/RetailPOS.tsx");
