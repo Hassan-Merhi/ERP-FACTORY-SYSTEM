@@ -1,0 +1,63 @@
+name: Phase 17-18 Format Helper
+
+on:
+  push:
+    branches:
+      - test/backend-coverage-phases17-18-production-supplier-partner
+
+permissions:
+  contents: write
+
+jobs:
+  format-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Download exact repository source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            | tar --extract --gzip --strip-components=1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format Phase 17-18 tests
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            tests/backend-coverage-phase17-factory-production-flows.test.ts \
+            tests/backend-coverage-phase18-supplier-partner-accounting.test.ts
+          node node_modules/prettier/bin/prettier.cjs --check \
+            tests/backend-coverage-phase17-factory-production-flows.test.ts \
+            tests/backend-coverage-phase18-supplier-partner-accounting.test.ts
+      - name: Commit formatted tests to branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for path in \
+            tests/backend-coverage-phase17-factory-production-flows.test.ts \
+            tests/backend-coverage-phase18-supplier-partner-accounting.test.ts
+          do
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${GITHUB_REF_NAME}" --jq '.sha')"
+            content="$(base64 -w0 "${path}")"
+            jq -n \
+              --arg message "style: format Phases 17-18 backend coverage tests" \
+              --arg content "${content}" \
+              --arg sha "${sha}" \
+              --arg branch "${GITHUB_REF_NAME}" \
+              '{message:$message,content:$content,sha:$sha,branch:$branch}' \
+              | gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" --input - >/dev/null
+          done
