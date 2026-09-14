@@ -74,6 +74,7 @@ export const retailPosSaleItems = pgTable(
     quantity: decimal("quantity", { precision: 20, scale: 6 }).notNull(),
     returnedQuantity: decimal("returned_quantity", { precision: 20, scale: 6 }).notNull().default("0"),
     unitPrice: decimal("unit_price", { precision: 20, scale: 6 }).notNull(),
+    unitCost: decimal("unit_cost", { precision: 20, scale: 6 }).notNull().default("0"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
