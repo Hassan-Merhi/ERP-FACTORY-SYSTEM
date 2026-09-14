@@ -1,0 +1,115 @@
+name: Retail Wave 2 Cashier Fix
+
+on:
+  push:
+    branches:
+      - feat/retail-pos-stock-movement-wave2
+
+permissions:
+  contents: write
+
+jobs:
+  cashier-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/retail-pos-stock-movement-wave2
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Normalize registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Tighten cashier location behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f"target not found in {path}: {old[:180]!r}")
+              p.write_text(s.replace(old, new, 1))
+
+          ui = "client/src/pages/pos/RetailPOS.tsx"
+          replace_once(
+              ui,
+              '''  const locations = (locationsQuery.data ?? []).filter((location) => location.id > 0);\n\n  useEffect(() => {\n    if (!selectedLocation && locations.length === 1) setSelectedLocation(locations[0]);\n  }, [locations, selectedLocation, setSelectedLocation]);''',
+              '''  const isPosRole = selectedCompany?.role === "POS";\n  const assignedLocationId = selectedCompany?.assignedLocationId ?? null;\n  const locations = (locationsQuery.data ?? [])\n    .filter((location) => location.id > 0)\n    .filter((location) => !isPosRole || location.id === assignedLocationId);\n\n  useEffect(() => {\n    if (isPosRole) {\n      const assignedLocation = locations.find((location) => location.id === assignedLocationId) ?? null;\n      if (selectedLocation?.id !== assignedLocation?.id) setSelectedLocation(assignedLocation);\n      return;\n    }\n    if (!selectedLocation && locations.length === 1) setSelectedLocation(locations[0]);\n  }, [assignedLocationId, isPosRole, locations, selectedLocation, setSelectedLocation]);''',
+          )
+          replace_once(
+              ui,
+              '''            id="retail-pos-location"\n            value={selectedLocation?.id ?? ""}''',
+              '''            id="retail-pos-location"\n            disabled={isPosRole}\n            value={selectedLocation?.id ?? ""}''',
+          )
+          replace_once(
+              ui,
+              '''        <Card>\n          <CardHeader>\n            <CardTitle className="flex items-center gap-2 text-lg">\n              <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer''',
+              '''        {!isPosRole && (\n          <Card>\n            <CardHeader>\n              <CardTitle className="flex items-center gap-2 text-lg">\n                <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer''',
+          )
+          replace_once(
+              ui,
+              '''          </CardContent>\n        </Card>\n      </div>\n    </div>\n  );\n}''',
+              '''            </CardContent>\n          </Card>\n        )}\n      </div>\n    </div>\n  );\n}''',
+          )
+
+          integration = "tests/retail-wave2-pos-integration.test.ts"
+          replace_once(
+              integration,
+              '    await db.insert(schema.userCompanyRoles).values({ userId, companyId, role: "Admin" });',
+              '    await db.insert(schema.userCompanyRoles).values({ userId, companyId, role: "POS" });',
+          )
+          replace_once(
+              integration,
+              '''    locationId = location.id;\n\n    const [brand] = await db''',
+              '''    locationId = location.id;\n\n    await db\n      .update(schema.userCompanyRoles)\n      .set({ assignedLocationId: locationId })\n      .where(and(eq(schema.userCompanyRoles.userId, userId), eq(schema.userCompanyRoles.companyId, companyId)));\n    await db.insert(schema.userLocations).values({ userId, companyId, locationId });\n\n    const [brand] = await db''',
+          )
+
+          contracts = "tests/retail-wave2-pos-transactions.test.ts"
+          replace_once(
+              contracts,
+              '''    expect(inventory).toContain("Open POS");\n  });''',
+              '''    expect(inventory).toContain("Open POS");\n    const retailPos = read("client/src/pages/pos/RetailPOS.tsx");\n    expect(retailPos).toContain('selectedCompany?.role === "POS"');\n    expect(retailPos).toContain("assignedLocationId");\n    expect(retailPos).toContain("disabled={isPosRole}");\n    expect(retailPos).toContain("{!isPosRole && (");\n  });''',
+          )
+          PY
+
+      - name: Format changed files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/pages/pos/RetailPOS.tsx \
+            tests/retail-wave2-pos-integration.test.ts \
+            tests/retail-wave2-pos-transactions.test.ts
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Retail Wave 2 contracts
+        run: node node_modules/vitest/vitest.mjs run tests/retail-wave2-pos-transactions.test.ts tests/retail-wave1-contract.test.ts
+
+      - name: Classified i18n audit
+        run: node scripts/audit-i18n-phase14.mjs
+
+      - name: Commit cashier fix
+        run: |
+          git checkout -- package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/pages/pos/RetailPOS.tsx tests/retail-wave2-pos-integration.test.ts tests/retail-wave2-pos-transactions.test.ts
+          if git diff --cached --quiet; then
+            echo "No cashier changes needed"
+          else
+            git commit -m "Lock Retail POS cashiers to assigned location"
+            git push origin HEAD:feat/retail-pos-stock-movement-wave2
+          fi
