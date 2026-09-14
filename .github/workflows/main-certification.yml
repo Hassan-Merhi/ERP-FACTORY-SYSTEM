@@ -1,0 +1,341 @@
+name: Main Certification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: main-certification
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Application Certification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d heliumdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      SESSION_SECRET: main-certification-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGSSLMODE: disable
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PORT: "5000"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The changed-file format check compares the merged commit to its
+          # first parent, so retain both commits while keeping checkout shallow.
+          fetch-depth: 2
+
+      - name: Verify exact merged main SHA
+        id: exact_sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_AFTER_SHA: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::Checkout SHA ${checked_out_sha} does not match workflow SHA ${GITHUB_SHA}."
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Main Certification only accepts pushes to refs/heads/main; got ${GITHUB_REF}."
+              exit 1
+            fi
+            if [[ "$PUSH_AFTER_SHA" != "$GITHUB_SHA" ]]; then
+              echo "::error::Push after SHA ${PUSH_AFTER_SHA} does not match workflow SHA ${GITHUB_SHA}."
+              exit 1
+            fi
+          else
+            authoritative_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+            if [[ "$authoritative_main_sha" != "$GITHUB_SHA" ]]; then
+              echo "::error::Manual certification must target current main ${authoritative_main_sha}; got ${GITHUB_SHA}."
+              exit 1
+            fi
+          fi
+
+          echo "Exact merged main SHA verified: ${GITHUB_SHA}"
+
+      - name: Mark certification pending
+        if: always() && steps.exact_sha.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state='pending' \
+            -f context='Main Certification' \
+            -f description='Main certification is running' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Set up Node
+        id: node_setup
+        if: always() && steps.exact_sha.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Normalize package registry URLs
+        id: registry
+        if: always() && steps.exact_sha.outcome == 'success' && steps.node_setup.outcome == 'success'
+        continue-on-error: true
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install dependencies
+        id: install
+        if: >-
+          always() &&
+          steps.exact_sha.outcome == 'success' &&
+          steps.node_setup.outcome == 'success' &&
+          steps.registry.outcome == 'success'
+        continue-on-error: true
+        env:
+          SKIP_GIT_HOOKS: "1"
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Static and build checks
+        id: static
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run verify:lockfile
+          npm run verify:production-dependencies
+          npm run format:check:changed -- --base HEAD^
+          npm run lint
+          npm run audit:lint-ratchet
+          npm run check
+          npm run build
+
+      - name: Prepare PostgreSQL and run startup migrations
+        id: schema
+        if: always() && steps.install.outcome == 'success' && steps.static.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          node scripts/verify-migration-registry.mjs --json
+          node node_modules/drizzle-kit/bin.cjs push --force
+          node scripts/verify-ci-disposable-schema.mjs
+
+          # drizzle-kit creates the declared schema. The application's startup
+          # migrations add runtime-managed tables/columns, so boot the compiled
+          # server once and prove the database health endpoint becomes ready.
+          node dist/index.js > "$RUNNER_TEMP/startup-migrations.txt" 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for _attempt in $(seq 1 180); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" > "$RUNNER_TEMP/health-db.json"; then
+              cat "$RUNNER_TEMP/health-db.json"
+              echo
+              exit 0
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              echo "Application exited before startup migrations became ready."
+              cat "$RUNNER_TEMP/startup-migrations.txt"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Timed out waiting for application startup migrations."
+          cat "$RUNNER_TEMP/startup-migrations.txt"
+          exit 1
+
+      - name: Backend verification and coverage
+        id: backend
+        if: always() && steps.schema.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run test:backend:verify
+          npm run test:backend:verify:coverage
+
+      - name: Frontend verification and coverage
+        id: frontend
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run test:frontend
+          npm run test:frontend:coverage
+
+      - name: API smoke sweep
+        id: smoke
+        if: always() && steps.schema.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:smoke-sweep
+
+      - name: Verify server bundle
+        id: server_bundle
+        if: always() && steps.static.outcome == 'success'
+        continue-on-error: true
+        run: npm run verify:server-bundle
+
+      - name: Verify production readiness
+        id: readiness
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run verify:final-production-readiness
+
+      - name: Verify observability and stabilization
+        id: observability
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run verify:observability
+          node scripts/verify-phase11-12-observability-disaster-recovery.mjs
+          npm run verify:stabilization
+
+      - name: Verify bandwidth and mobile-routing contracts
+        id: routing
+        if: always() && steps.install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm run verify:mobile-web-routing
+          npm run verify:bandwidth
+          node scripts/verify-program7d-accessibility-responsive.mjs
+
+      - name: Evaluate certification components
+        if: always()
+        env:
+          EXACT_SHA: ${{ steps.exact_sha.outcome }}
+          NODE_SETUP: ${{ steps.node_setup.outcome }}
+          REGISTRY: ${{ steps.registry.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          STATIC: ${{ steps.static.outcome }}
+          SCHEMA: ${{ steps.schema.outcome }}
+          BACKEND: ${{ steps.backend.outcome }}
+          FRONTEND: ${{ steps.frontend.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
+          SERVER_BUNDLE: ${{ steps.server_bundle.outcome }}
+          READINESS: ${{ steps.readiness.outcome }}
+          OBSERVABILITY: ${{ steps.observability.outcome }}
+          ROUTING: ${{ steps.routing.outcome }}
+        run: |
+          set -euo pipefail
+
+          failed_checks=()
+          check_result() {
+            local label="$1"
+            local result="$2"
+            printf '%s=%s\n' "$label" "$result"
+            if [[ "$result" != 'success' ]]; then
+              failed_checks+=("${label}:${result}")
+            fi
+          }
+
+          check_result exact_sha "$EXACT_SHA"
+          check_result node_setup "$NODE_SETUP"
+          check_result registry "$REGISTRY"
+          check_result install "$INSTALL"
+          check_result static "$STATIC"
+          check_result schema "$SCHEMA"
+          check_result backend "$BACKEND"
+          check_result frontend "$FRONTEND"
+          check_result smoke "$SMOKE"
+          check_result server_bundle "$SERVER_BUNDLE"
+          check_result readiness "$READINESS"
+          check_result observability "$OBSERVABILITY"
+          check_result routing "$ROUTING"
+
+          {
+            echo '## Main Certification application suite'
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            if [[ "${#failed_checks[@]}" -eq 0 ]]; then
+              echo '- Result: **success**'
+            else
+              echo '- Result: **failure**'
+              echo "- Failed components: \`${failed_checks[*]}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${#failed_checks[@]}" -ne 0 ]]; then
+            echo "::error::Main Certification failed components: ${failed_checks[*]}"
+            exit 1
+          fi
+
+          echo 'All Main Certification application components passed.'
+
+  publish:
+    name: Publish authoritative certification status
+    needs: certify
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Publish authoritative certification status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CERTIFICATION_RESULT: ${{ needs.certify.result }}
+        run: |
+          set -euo pipefail
+
+          state='failure'
+          description='Main certification failed'
+          if [[ "$CERTIFICATION_RESULT" == 'success' ]]; then
+            state='success'
+            description='Main certification passed'
+          fi
+
+          # This publisher is deliberately a separate job with no PostgreSQL
+          # service. It still runs if the application job cannot start, so the
+          # exact SHA never gets stranded with a stale/pending authoritative
+          # status because a service or runner setup failed before test steps.
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context='Main Certification' \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          {
+            echo '## Authoritative Main Certification status'
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- Application job result: \`${CERTIFICATION_RESULT}\`"
+            echo "- Published status: **${state}**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          test "$state" = 'success'

@@ -1,23 +1,21 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  # Without this, a PR's checks only run if someone dispatches them by hand, and
-  # three changes reached main unverified because nobody did. `push` fires only
-  # on main, so a pull request runs this workflow once, not twice.
+  # PR CI protects changes before merge. The authoritative post-merge suite is
+  # .github/workflows/main-certification.yml, which certifies the exact main SHA.
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
-# Every job only reads the repository: checkout, `gh api` compare/commit reads,
-# and artifact uploads. Nothing here writes back to GitHub.
+# CI is read-only: source inspection, compare/PR reads, test execution, and
+# artifact uploads. Nothing here writes repository contents or statuses.
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
@@ -73,7 +71,7 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
             enable_all
-            echo "Non-PR event: running the full CI suite."
+            echo "Manual CI dispatch: running the full PR validation suite."
           else
             mapfile -t changed_files < <(
               gh api --paginate \
