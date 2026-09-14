@@ -9,6 +9,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
+import {
+  allocatePayrollAccountingAmounts,
+  moneyFromCents,
+} from "../../../services/accounting/payrollAccountingAmounts";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import {
   factoryWorkers,
@@ -150,10 +154,10 @@ export function registerPayrollGenerateRoutes(app: Express) {
 
       const created = await db.transaction(async (tx) => {
         let count = 0;
-        let totalNet = 0;
-        let totalAdvanceDeductions = 0;
-        // Track per-worker expense amounts for accounting
-        const workerExpenses: { workerId: number; workerName: string; salAmt: number; bonAmt: number }[] = [];
+        let totalNetCents = 0;
+        let totalAdvanceDeductionsCents = 0;
+        // Track the exact persisted two-decimal worker values used by accounting.
+        const workerExpenses: { workerId: number; workerName: string; salAmt: string; bonAmt: string }[] = [];
         for (const worker of targetWorkers) {
           const baseSal = parseFloat(worker.baseSalary || "0");
           const freq = worker.payFrequency || worker.salaryType || "Monthly";
@@ -205,13 +209,17 @@ export function registerPayrollGenerateRoutes(app: Express) {
           // Include pending worker deductions
           const workerPendingDeductions = deductionAmtByWorker[worker.id] || 0;
           const net = base + bonus + transport - advanceDeduction - workerPendingDeductions;
-          // Accumulate per-worker expense amounts for accounting
+          const accounting = allocatePayrollAccountingAmounts({
+            netSalary: net,
+            advances: advanceDeduction,
+            bonus,
+          });
           const workerName = (worker.fullName as string) || `Worker #${worker.id}`;
           workerExpenses.push({
             workerId: worker.id,
             workerName,
-            salAmt: base + transport - workerPendingDeductions,
-            bonAmt: bonus,
+            salAmt: accounting.salaryExpense,
+            bonAmt: accounting.bonusExpense,
           });
           const [newPayroll] = await tx
             .insert(factoryPayrolls)
@@ -227,8 +235,8 @@ export function registerPayrollGenerateRoutes(app: Express) {
               kgEarnings: "0",
               overtimePay: "0",
               deductions: workerPendingDeductions.toFixed(2),
-              advances: advanceDeduction.toFixed(2),
-              netSalary: net.toFixed(2),
+              advances: accounting.advances,
+              netSalary: accounting.netSalary,
               balesCount: 0,
               kgProcessed: "0",
               overtimeHours: "0",
@@ -244,15 +252,15 @@ export function registerPayrollGenerateRoutes(app: Express) {
               .set({ applied: true, payrollId: newPayroll.id })
               .where(inArray(factoryWorkerDeductions.id, deductionByWorker[worker.id]));
           }
-          // Settle advances immediately at generate time so remaining balance updates right away
-          await settleAdvancesForPayroll(tx, companyId, worker.id, advanceDeduction);
-          totalNet += net;
-          totalAdvanceDeductions += advanceDeduction;
+          // Settle the same cent-exact advance amount persisted on the payroll.
+          await settleAdvancesForPayroll(tx, companyId, worker.id, Number(accounting.advances));
+          totalNetCents += accounting.netCents;
+          totalAdvanceDeductionsCents += accounting.advanceCents;
           count++;
         }
         // Accounting: Dr per-worker Salary/Bonus Expense / Cr Payroll Payable (net) / Cr Factory Worker Advances
-        const totalGross = totalNet + totalAdvanceDeductions;
-        if (totalGross > 0) {
+        const totalGrossCents = totalNetCents + totalAdvanceDeductionsCents;
+        if (totalGrossCents > 0) {
           // ── Dedup guard: remove any existing PAYROLL-GEN vouchers for this period ──
           // Prevents duplicate expense vouchers when payroll is regenerated (e.g. after a data pull).
           const staleGenVouchers = await tx
@@ -287,7 +295,7 @@ export function registerPayrollGenerateRoutes(app: Express) {
               voucherType: "Journal",
               voucherDate: periodStart,
               description: desc,
-              totalAmount: totalGross.toFixed(2),
+              totalAmount: moneyFromCents(totalGrossCents),
               currency: "USD",
               sourceModule: "FACTORY",
             })
@@ -296,42 +304,43 @@ export function registerPayrollGenerateRoutes(app: Express) {
           // DR entries per worker (one salary line + one bonus line each)
           for (const { workerId, workerName, salAmt, bonAmt } of workerExpenses) {
             const accs = workerAccCache.get(workerId)!;
-            if (salAmt > 0) {
+            if (Number(salAmt) > 0) {
               journalEntries.push({
                 voucherId: genVoucher.id,
                 ledgerAccountId: accs.salaryId,
-                ...normUsd(salAmt.toFixed(2), "0"),
+                ...normUsd(salAmt, "0"),
                 narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
               });
             }
-            if (bonAmt > 0) {
+            if (Number(bonAmt) > 0) {
               journalEntries.push({
                 voucherId: genVoucher.id,
                 ledgerAccountId: accs.bonusId,
-                ...normUsd(bonAmt.toFixed(2), "0"),
+                ...normUsd(bonAmt, "0"),
                 narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
               });
             }
           }
-          if (totalNet > 0) {
+          if (totalNetCents > 0) {
             journalEntries.push({
               voucherId: genVoucher.id,
               ledgerAccountId: payableAccGen.id,
-              ...normUsd("0", totalNet.toFixed(2)),
+              ...normUsd("0", moneyFromCents(totalNetCents)),
               narration: desc,
             });
           }
           // Credit Factory Worker Advances to reduce the asset as deductions are settled
-          if (totalAdvanceDeductions > 0) {
+          if (totalAdvanceDeductionsCents > 0) {
             journalEntries.push({
               voucherId: genVoucher.id,
               ledgerAccountId: advancesAccGen.id,
-              ...normUsd("0", totalAdvanceDeductions.toFixed(2)),
+              ...normUsd("0", moneyFromCents(totalAdvanceDeductionsCents)),
               narration: `Advance deductions settled - ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`,
             });
           }
           await tx.insert(voucherEntries).values(journalEntries);
         }
+        const totalNet = Number(moneyFromCents(totalNetCents));
         await writeDaybookEntry(tx, {
           companyId,
           txDate: periodStart,

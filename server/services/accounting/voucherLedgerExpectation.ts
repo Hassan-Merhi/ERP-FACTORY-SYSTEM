@@ -2,41 +2,28 @@
  * What ledger evidence a voucher type owes.
  *
  * Convergence reconciliation started from one assumption — every voucher posts
- * a balanced double entry whose sides each equal the document total — and two
- * voucher types broke it in the first week of use. Rather than keep growing an
- * exclusion list, each type states what it posts, and a type nobody has
- * classified is reported rather than quietly skipped.
+ * a balanced double entry whose sides each equal the document total — and that
+ * is not true for every persisted document shape. Each type states what it
+ * actually posts, and a type nobody has classified is reported rather than
+ * quietly skipped.
  *
- * "balanced"     Debits equal credits, and each side equals the document total.
- * "single-sided" Exactly one side is posted. The other side of the movement is
- *                inventory, which is not a ledger account in this system, so
- *                the entry cannot balance and must not be judged as if it could.
- * "none"         The document posts no ledger entry at all. Its convergence is
- *                checked on the stock side of the same report.
+ * "balanced"        Debits equal credits, and each side equals the document total.
+ * "balanced-only"   Debits equal credits, but the document header is not the
+ *                   ledger-side total. Credit/Debit Notes are the important case:
+ *                   the refund/receipt header can differ from inventory cost and
+ *                   the variance account makes the ledger balance at cost value.
+ * "single-sided"    Exactly one GL side is posted. Inventory is the contra side.
+ * "inventory-sided" One or both GL sides can be posted and inventory carries the
+ *                   net contra. Mixed production/consumption documents use this.
+ * "none"            The document posts no ledger entry at all; stock evidence is
+ *                   reconciled separately.
  */
-export type VoucherLedgerExpectation = "balanced" | "single-sided" | "none" | "unclassified";
+export type VoucherLedgerExpectation =
+  "balanced" | "balanced-only" | "single-sided" | "inventory-sided" | "none" | "unclassified";
 
 /**
- * Evidence for each classification, gathered by reading the code that writes
- * the entries rather than by inspecting data that happened to be present:
- *
- * - Journal, Payment, Receipt post through the central posting engine, which
- *   refuses an unbalanced entry set.
- * - Sales posts the cash/customer side against the sales account
- *   (insertSaleAccountingEntries); Purchase mirrors it.
- * - Credit Note and Debit Note post a cash leg and an inventory leg per line
- *   (creditNoteRoutes), so they balance.
- * - Stock Adjustment posts exactly one entry: production credits the production
- *   account, consumption debits the consumption account. The contra side is
- *   inventory (server/storage/stock-ops/transfers-create.ts).
- * - Consumption is the voucher type a waste dispatch creates, and waste is
- *   dispatched as a stock adjustment — so it carries the same single entry.
- * - Stock Transfer moves stock between locations and posts nothing. The three
- *   spellings are the ones the transfer document loader treats as one type.
- *
- * "Opening", "Advance" and "Payroll" are deliberately absent: they are synthetic
- * rows built by statement and report queries and are never persisted as
- * vouchers, so no reconciliation ever sees them.
+ * Evidence for each classification comes from the writers, not from whichever
+ * rows happen to exist in production today.
  */
 const VOUCHER_LEDGER_EXPECTATIONS: Record<string, VoucherLedgerExpectation> = {
   Journal: "balanced",
@@ -44,10 +31,12 @@ const VOUCHER_LEDGER_EXPECTATIONS: Record<string, VoucherLedgerExpectation> = {
   Receipt: "balanced",
   Sales: "balanced",
   Purchase: "balanced",
-  "Credit Note": "balanced",
-  "Debit Note": "balanced",
+  "Credit Note": "balanced-only",
+  "Debit Note": "balanced-only",
   "Stock Adjustment": "single-sided",
+  Production: "single-sided",
   Consumption: "single-sided",
+  Mixed: "inventory-sided",
   "Stock Transfer": "none",
   StockTransfer: "none",
   Transfer: "none",
@@ -55,9 +44,8 @@ const VOUCHER_LEDGER_EXPECTATIONS: Record<string, VoucherLedgerExpectation> = {
 
 /**
  * Classifies a voucher type. An unrecognised type is "unclassified" rather than
- * assumed harmless: the reconciler reports it, so a newly introduced voucher
- * type is surfaced by the next reconciliation instead of silently escaping
- * every accounting check.
+ * assumed harmless: the reconciler reports it, so a newly introduced posting
+ * path cannot silently escape accounting checks.
  */
 export function classifyVoucherLedgerExpectation(voucherType: unknown): VoucherLedgerExpectation {
   const key = String(voucherType ?? "").trim();

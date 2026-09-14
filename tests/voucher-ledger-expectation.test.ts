@@ -1,15 +1,5 @@
 /**
  * Per-type ledger expectations for convergence reconciliation.
- *
- * The reconciliation began with one rule for every voucher — debits equal
- * credits and each side equals the document total — and two types broke it
- * immediately: Stock Transfer posts no ledger entry at all, and Stock
- * Adjustment posts exactly one because the contra side is inventory, which is
- * not a ledger account here. Both were excluded by name, which works right up
- * until a third type appears and nobody notices.
- *
- * These tests pin the classification and, more importantly, pin what happens to
- * a type nobody classified: it is reported, not skipped.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -45,17 +35,22 @@ function snapshot(overrides: Partial<AccountingConvergenceSnapshot>): Accounting
 }
 
 describe("voucher ledger expectations", () => {
-  it("classifies the types that post a balanced double entry", () => {
-    for (const type of ["Journal", "Payment", "Receipt", "Sales", "Purchase", "Credit Note", "Debit Note"]) {
+  it("classifies true document-total double entries", () => {
+    for (const type of ["Journal", "Payment", "Receipt", "Sales", "Purchase"]) {
       expect(classifyVoucherLedgerExpectation(type)).toBe("balanced");
     }
   });
 
-  it("classifies the inventory documents that post one side or none", () => {
-    // The contra side of an adjustment is inventory, not a ledger account.
+  it("classifies notes as balanced-only because refund and inventory cost can differ", () => {
+    expect(classifyVoucherLedgerExpectation("Credit Note")).toBe("balanced-only");
+    expect(classifyVoucherLedgerExpectation("Debit Note")).toBe("balanced-only");
+  });
+
+  it("classifies inventory-sided stock documents without forcing false GL balance", () => {
     expect(classifyVoucherLedgerExpectation("Stock Adjustment")).toBe("single-sided");
-    // Waste is dispatched as an adjustment under this voucher type.
+    expect(classifyVoucherLedgerExpectation("Production")).toBe("single-sided");
     expect(classifyVoucherLedgerExpectation("Consumption")).toBe("single-sided");
+    expect(classifyVoucherLedgerExpectation("Mixed")).toBe("inventory-sided");
     for (const type of ["Stock Transfer", "StockTransfer", "Transfer"]) {
       expect(classifyVoucherLedgerExpectation(type)).toBe("none");
     }
@@ -70,7 +65,7 @@ describe("voucher ledger expectations", () => {
 });
 
 describe("reconciliation by ledger expectation", () => {
-  it("still checks both sides of a balanced voucher", async () => {
+  it("still checks both sides and document totals of a balanced voucher", async () => {
     const result = await reconcileConvergenceTx(
       tx,
       7,
@@ -79,6 +74,26 @@ describe("reconciliation by ledger expectation", () => {
 
     expect(result.clean).toBe(false);
     expect(result.discrepancies.map((entry) => entry.code)).toContain("VOUCHER_LEDGER_CREDIT_MISMATCH");
+  });
+
+  it("accepts a balanced-only note whose balanced ledger value differs from its header", async () => {
+    const result = await reconcileConvergenceTx(
+      tx,
+      7,
+      adapterFor([
+        snapshot({
+          voucherId: 21,
+          voucherBaseDebit: "80",
+          voucherBaseCredit: "80",
+          ledgerBaseDebit: "112.09",
+          ledgerBaseCredit: "112.09",
+          ledgerExpectation: "balanced-only",
+        }),
+      ])
+    );
+
+    expect(result.clean).toBe(true);
+    expect(result.discrepancies).toEqual([]);
   });
 
   it("does not demand ledger evidence from a document that posts none", async () => {
@@ -95,8 +110,6 @@ describe("reconciliation by ledger expectation", () => {
       ])
     );
 
-    // A stock transfer's convergence is checked on the stock side; reporting it
-    // here would flag every transfer ever made.
     expect(result.discrepancies).toEqual([]);
     expect(result.clean).toBe(true);
   });
@@ -137,10 +150,25 @@ describe("reconciliation by ledger expectation", () => {
       ])
     );
 
-    // Exempting a type from the balance rule is not the same as exempting it
-    // from every rule: it still has to post the one entry it claims to.
     expect(both.discrepancies.map((entry) => entry.code)).toContain("SINGLE_SIDED_LEDGER_INVALID");
     expect(neither.discrepancies.map((entry) => entry.code)).toContain("SINGLE_SIDED_LEDGER_INVALID");
+  });
+
+  it("allows Mixed documents to carry inventory as the net contra side", async () => {
+    const result = await reconcileConvergenceTx(
+      tx,
+      7,
+      adapterFor([
+        snapshot({
+          voucherId: 22,
+          ledgerExpectation: "inventory-sided",
+          ledgerBaseDebit: "1031.28",
+          ledgerBaseCredit: "786.64",
+        }),
+      ])
+    );
+
+    expect(result.clean).toBe(true);
   });
 
   it("reports an unclassified voucher type instead of skipping it", async () => {
@@ -150,8 +178,6 @@ describe("reconciliation by ledger expectation", () => {
       adapterFor([snapshot({ voucherId: 17, ledgerExpectation: "unclassified" })])
     );
 
-    // Without this a new posting path could be added and never reconciled
-    // against anything, which is the failure the whole report exists to catch.
     expect(result.clean).toBe(false);
     expect(result.discrepancies.map((entry) => entry.code)).toContain("VOUCHER_TYPE_UNCLASSIFIED");
   });
@@ -160,14 +186,7 @@ describe("reconciliation by ledger expectation", () => {
     const result = await reconcileConvergenceTx(
       tx,
       7,
-      adapterFor([
-        snapshot({
-          voucherId: 19,
-          voucherCancelled: true,
-          expectsDaybook: true,
-          daybookBaseAmount: "50",
-        }),
-      ])
+      adapterFor([snapshot({ voucherId: 19, voucherCancelled: true, expectsDaybook: true, daybookBaseAmount: "50" })])
     );
 
     expect(result.clean).toBe(false);
@@ -189,8 +208,6 @@ describe("reconciliation by ledger expectation", () => {
       ])
     );
 
-    // The document no longer stands, so comparing entries against it would
-    // report every cancellation ever made as a defect.
     expect(result.discrepancies).toEqual([]);
   });
 
