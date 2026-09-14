@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { isValidIsoDate } from "../lib/requestValidation";
 import { registerDaybookPaginationRoutes } from "./daybookPaginationRoutes";
 import { registerSupplierPurchaseOrderPaginationRoutes } from "./vouchers/supplierPurchaseOrderPaginationRoutes";
 import { registerVoucherPaginationRoutes } from "./vouchers/voucherPaginationRoutes";
@@ -44,6 +45,23 @@ function registerVoucherDetailCompatibility(app: Express) {
   });
 }
 
+function registerVoucherCreateDateValidation(app: Express): void {
+  app.use(
+    ["/api/vouchers/with-entries", "/api/vouchers/payment-receipt", "/api/vouchers/journal"],
+    (req, res, next) => {
+      if (req.method !== "POST" || !req.session?.userId) return next();
+
+      const rawDate =
+        req.path === "/api/vouchers/with-entries" ? req.body?.voucher?.voucherDate : req.body?.voucherDate;
+      if (rawDate !== undefined && !isValidIsoDate(rawDate)) {
+        return res.status(400).json({ message: "voucherDate must be a valid YYYY-MM-DD date" });
+      }
+
+      next();
+    }
+  );
+}
+
 export function registerVoucherRoutes(app: Express) {
   // The ERP Daybook uses one SQL-paged chronological union of vouchers and offloads.
   registerDaybookPaginationRoutes(app);
@@ -70,6 +88,11 @@ export function registerVoucherRoutes(app: Express) {
   // destination locations render without changing existing API consumers.
   registerVoucherDetailCompatibility(app);
   registerVoucherQueryRoutes(app);
+
+  // Validate date-shaped SQL inputs before they reach a driver cast. Keep this
+  // behind an authenticated session so malformed unauthenticated requests still
+  // receive the normal 401 from the route's auth middleware.
+  registerVoucherCreateDateValidation(app);
 
   // Program 2 protected creation handlers call next() for unsupported legacy
   // compatibility shapes, so they must be registered before the old creators.
