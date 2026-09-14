@@ -97,6 +97,7 @@ export async function fetchStockMovements(
       voucherNumber: vouchers.voucherNumber,
       voucherType: vouchers.voucherType,
       voucherId: vouchers.id,
+      locationName: vouchers.locationName,
       qty: salesItems.quantity,
       costPrice: salesItems.costPrice,
       totalCost: salesItems.totalCost,
@@ -120,9 +121,10 @@ export async function fetchStockMovements(
     const value = parseFloat(r.totalCost || "0");
     const vt = r.voucherType || "Sales";
     const isPOS = vt.toLowerCase().includes("pos");
+    const locationSuffix = r.locationName ? ` • ${r.locationName}` : "";
     results.push({
       date: r.date,
-      particulars: isPOS ? "Cash" : r.voucherNumber,
+      particulars: `${isPOS ? "Cash" : r.voucherNumber}${locationSuffix}`,
       vchType: vt,
       voucherId: r.voucherId,
       poId: null,
