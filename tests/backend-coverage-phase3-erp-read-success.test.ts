@@ -146,7 +146,11 @@ describe("Phase 3 ERP read success paths", () => {
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body.some((row: { id?: number; name?: string }) => row.id === ctx.cashAccountId && row.name === TRANSPORTER_NAME)).toBe(true);
+    expect(
+      response.body.some(
+        (row: { id?: number; name?: string }) => row.id === ctx.cashAccountId && row.name === TRANSPORTER_NAME
+      )
+    ).toBe(true);
   });
 
   it("reads seeded transporter payment terms", async () => {
