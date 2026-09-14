@@ -44,7 +44,7 @@
     "audit:lint-ratchet": "node scripts/audit-lint-warnings.mjs",
     "audit:ux-consistency": "node scripts/audit-ux-module-consistency.mjs",
     "start": "node --expose-gc --import ./server/factoryContainerSchemaBridge.mjs --import ./server/supplierCompanyScopeBridge.mjs --import ./server/exportBufferBridge.mjs --import ./server/scheduledAttachmentBridge.mjs --import ./server/apiPaginationBridge.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js",
-    "check": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",
+    "check": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit",
     "check:security": "node scripts/run-program-6-focused-security-checks.mjs",
     "db:push": "drizzle-kit push",
     "build:cap": "vite build --mode capacitor",
@@ -218,7 +218,8 @@
     "prettier": "^3.8.4",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",
-    "typescript": "7.0.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.69.0",
     "vitest": "^5.0.0"
   },

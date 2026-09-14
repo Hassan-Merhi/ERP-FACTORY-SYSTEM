@@ -1,13 +1,17 @@
 name: GitHub Actions Quality
 
 on:
-  push:
+  pull_request:
     branches: [main]
   schedule:
     - cron: "37 5 * * 1"
   workflow_dispatch:
 
 permissions: {}
+
+concurrency:
+  group: actions-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:
@@ -20,8 +24,7 @@ jobs:
       ACTIONLINT_VERSION: "1.7.12"
       ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
       PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      PUSH_BEFORE_SHA: ${{ github.event.before }}
-      HEAD_SHA: ${{ github.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,20 +49,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "${GITHUB_EVENT_NAME}" in
-            pull_request)
-              git diff --name-only --diff-filter=ACMR "$PR_BASE_SHA" "$HEAD_SHA" -- \
-                '.github/workflows/*.yml' '.github/workflows/*.yaml' > /tmp/actionlint-files.txt
-              ;;
-            push)
-              git diff --name-only --diff-filter=ACMR "$PUSH_BEFORE_SHA" "$HEAD_SHA" -- \
-                '.github/workflows/*.yml' '.github/workflows/*.yaml' > /tmp/actionlint-files.txt
-              ;;
-            *)
-              find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) \
-                -print | sort > /tmp/actionlint-files.txt
-              ;;
-          esac
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            git diff --name-only --diff-filter=ACMR "$PR_BASE_SHA" "$HEAD_SHA" -- \
+              '.github/workflows/*.yml' '.github/workflows/*.yaml' > /tmp/actionlint-files.txt
+          else
+            find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) \
+              -print | sort > /tmp/actionlint-files.txt
+          fi
           if [[ -s /tmp/actionlint-files.txt ]]; then
             echo "has_files=true" >> "$GITHUB_OUTPUT"
             cat /tmp/actionlint-files.txt

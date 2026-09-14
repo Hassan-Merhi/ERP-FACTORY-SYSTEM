@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "targetBranch": "main",
+  "strictRequiredStatusChecks": true,
+  "requiredContexts": [
+    "Check / Build / Lint / Test",
+    "Secret scan",
+    "Dependency audit",
+    "Focused security readiness",
+    "Analyze JavaScript / TypeScript",
+    "Semgrep CE new-findings gate",
+    "actionlint",
+    "zizmor",
+    "Classified untranslated-text audit"
+  ],
+  "postMergeOnlyContexts": [
+    "Protect main and release path",
+    "Main Certification"
+  ],
+  "retiredCompatibilityContexts": [
+    "Dependency Review",
+    "ci/circleci: static-build",
+    "ci/circleci: postgres-regression",
+    "ci/circleci: backend-core-regression",
+    "ci/circleci: frontend-regression",
+    "ci/circleci: security-readiness"
+  ],
+  "producers": {
+    "Check / Build / Lint / Test": ".github/workflows/ci.yml",
+    "Secret scan": ".github/workflows/security.yml",
+    "Dependency audit": ".github/workflows/security.yml",
+    "Focused security readiness": ".github/workflows/security.yml",
+    "Analyze JavaScript / TypeScript": ".github/workflows/codeql.yml",
+    "Semgrep CE new-findings gate": ".github/workflows/semgrep.yml",
+    "actionlint": ".github/workflows/actions-quality.yml",
+    "zizmor": ".github/workflows/actions-quality.yml",
+    "Classified untranslated-text audit": ".github/workflows/ui-quality.yml"
+  }
+}
