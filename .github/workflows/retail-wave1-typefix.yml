@@ -31,17 +31,21 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Apply explicit transaction row type
+      - name: Apply explicit import row types
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('server/routes/retailRoutes.ts')
           s = p.read_text()
-          old = 'const existingByBarcode = new Map(existingBarcodeRows.map((row) => [normalize(row.barcode), row]));'
-          new = '''const existingByBarcode = new Map(\n          existingBarcodeRows.map(\n            (row: { id: number; barcode: string; productId: number; size: string }) => [normalize(row.barcode), row]\n          )\n        );'''
-          if old not in s:
-              raise SystemExit('target line not found')
-          p.write_text(s.replace(old, new))
+          replacements = {
+              'rows.map((row) => row.barcode)': 'rows.map((row: { barcode: string }) => row.barcode)',
+              'const existingByBarcode = new Map(existingBarcodeRows.map((row) => [normalize(row.barcode), row]));': '''const existingByBarcode = new Map(\n          existingBarcodeRows.map(\n            (row: { id: number; barcode: string; productId: number; size: string }) => [normalize(row.barcode), row]\n          )\n        );''',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'target not found: {old}')
+              s = s.replace(old, new)
+          p.write_text(s)
           PY
           node node_modules/prettier/bin/prettier.cjs --write server/routes/retailRoutes.ts
           npm run check
