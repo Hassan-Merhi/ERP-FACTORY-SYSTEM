@@ -5,10 +5,10 @@ export type ProformaCapacityRejectionReason = "not_in_proforma" | "quantity_exce
 
 /**
  * Loading-time semantics are intentionally different from aggregate reporting.
- * A proforma can be reused on many independent loadings and is a pricing/item
- * reference while a loading is live. It must not reject a scan because another
- * loading used the same item, or because this loading's actual mix differs from
- * the master proforma quantities.
+ * A proforma can be reused on many independent loadings, so sibling loadings
+ * must never consume the current loading's allowance. The current loading still
+ * enforces its own proforma membership and quantity limits so overloads keep the
+ * established two-scan confirmation flow.
  *
  * `global` remains available for reports/reservations that intentionally need
  * the aggregate historical picture.
@@ -68,18 +68,18 @@ function validationModeForScope(
 
 function remainingTotalForScope(snapshot: ProformaCapacitySnapshot, scope: ProformaCapacityScope): number {
   if (scope === "global") return snapshot.remainingTotalQty;
-  // Creation/template checks are independent of sibling loadings. A live order
-  // is reference-only, so this value is informational and must never block it.
+  // Creation checks remain independent of sibling loadings. This total is
+  // informational for a live order and must never make a new loading unavailable.
   return snapshot.articles
     .filter((article) => article.isOnProforma)
     .reduce((sum, article) => sum + Math.max(0, article.requestedQty - article.currentOrderLoadedQty), 0);
 }
 
 /**
- * Evaluate one proposed quantity increase. Live loading scans are reference-only
- * and therefore never fail proforma membership/quantity checks. Physical bale
- * duplicate, stock/location, order-status and other safety checks still run in
- * their normal routes.
+ * Evaluate one proposed quantity increase. Per-loading scope enforces only what
+ * the current loading itself has consumed; sibling loadings are ignored. This
+ * preserves reusable proformas while keeping membership and quantity soft
+ * rejections available to the scanner's explicit second-scan bypass workflow.
  */
 export function evaluateProformaArticleCapacity(
   snapshot: ProformaCapacitySnapshot,
@@ -91,27 +91,8 @@ export function evaluateProformaArticleCapacity(
   const additionalQty = nonNegativeQuantity(requestedAdditionalQty);
   const article = findProformaCapacityArticle(snapshot, normalizedArticleCode);
   const validationMode = validationModeForScope(snapshot, scope);
-  const consumedQty = article
-    ? scope === "global"
-      ? article.totalConsumedQty
-      : article.currentOrderLoadedQty
-    : 0;
+  const consumedQty = article ? (scope === "global" ? article.totalConsumedQty : article.currentOrderLoadedQty) : 0;
   const requestedQty = article?.requestedQty ?? 0;
-
-  if (validationMode === "reference") {
-    return {
-      allowed: true,
-      reason: null,
-      validationMode,
-      articleCode: article?.articleCode ?? String(articleCode ?? "").trim(),
-      normalizedArticleCode,
-      requestedAdditionalQty: additionalQty,
-      requestedQty,
-      consumedQty,
-      remainingQty: Math.max(0, requestedQty - consumedQty),
-      projectedConsumedQty: consumedQty + additionalQty,
-    };
-  }
 
   if (!article?.isOnProforma) {
     return {
