@@ -1,9 +1,9 @@
 /**
  * Full-bleed scan feedback overlays for the container loading scanner.
  *
- * Split out of FactoryContainerLoadingScan.tsx unchanged: success and hard
- * error flash centre-screen, while the two "scan again to bypass" prompts pin
- * below the header so the scanner stays visible.
+ * Success and hard errors flash centre-screen. Proforma soft rejections stay
+ * below the header so the scanner remains visible: overloads require the same
+ * bale/code to be scanned again before it is added to the order.
  */
 /**
  * Only the four scan-state flags are needed, so both loading scanners (factory
@@ -60,7 +60,7 @@ export function ScanOverlays({ model }: { model: ScanOverlayState }) {
         <BypassBanner
           className="bg-orange-500 text-white rounded-xl px-12 py-6 shadow-2xl border-4 border-orange-700 text-center"
           title="QUANTITY EXCEEDED"
-          subtitle="Scan again to bypass"
+          subtitle="Scan again to add to order"
         />
       )}
       {model.pendingBypassBaleRef !== null && (
