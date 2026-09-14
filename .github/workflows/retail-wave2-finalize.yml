@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Finish Wave 2 wiring
+      - name: Finish Wave 2 wiring and safety
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -40,73 +40,150 @@ jobs:
               p = Path(path)
               s = p.read_text()
               if old not in s:
-                  raise SystemExit(f"target not found in {path}: {old[:120]!r}")
+                  raise SystemExit(f"target not found in {path}: {old[:160]!r}")
               p.write_text(s.replace(old, new, 1))
 
-          # Production route uses the same stock invariant functions covered by tests.
+          route = 'server/routes/pos/retailPosRoutes.ts'
           replace(
-              'server/routes/pos/retailPosRoutes.ts',
+              route,
               'import { getErrorMessage } from "../../lib/httpHandlers";\n',
               'import { getErrorMessage } from "../../lib/httpHandlers";\nimport {\n  aggregateRetailCartItems,\n  nextRetailReturnQuantity,\n  nextRetailSaleQuantity,\n  nextRetailTransferQuantities,\n  validateRetailReturnQuantity,\n} from "../../services/retail/retailStockMath";\n'
           )
           replace(
-              'server/routes/pos/retailPosRoutes.ts',
+              route,
               '''function aggregateSaleItems(items: z.infer<typeof saleSchema>["items"]) {\n  const aggregate = new Map<number, number>();\n  for (const item of items) aggregate.set(item.variantId, (aggregate.get(item.variantId) ?? 0) + item.quantity);\n  return [...aggregate.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));\n}\n\n''',
               ''
           )
+          replace(route, 'const items = aggregateSaleItems(body.items);', 'const items = aggregateRetailCartItems(body.items);')
           replace(
-              'server/routes/pos/retailPosRoutes.ts',
-              'const items = aggregateSaleItems(body.items);',
-              'const items = aggregateRetailCartItems(body.items);'
-          )
-          replace(
-              'server/routes/pos/retailPosRoutes.ts',
+              route,
               '''          const after = stock.quantity - item.quantity;\n          if (!canSellNegativeStock && after < 0) {\n            throw new Error(`Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`);\n          }''',
               '''          let after: number;\n          try {\n            after = nextRetailSaleQuantity(stock.quantity, item.quantity, canSellNegativeStock);\n          } catch {\n            throw new Error(\n              `Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`\n            );\n          }'''
           )
           replace(
-              'server/routes/pos/retailPosRoutes.ts',
+              route,
               '''          const sold = toNumber(saleItem.quantity);\n          const alreadyReturned = toNumber(saleItem.returnedQuantity);\n          if (quantity > sold - alreadyReturned + 0.000001) throw new Error("Return quantity exceeds the remaining sold quantity");\n\n          const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);\n          const after = stock.quantity + quantity;''',
               '''          const sold = toNumber(saleItem.quantity);\n          const alreadyReturned = toNumber(saleItem.returnedQuantity);\n          const nextReturnedQuantity = validateRetailReturnQuantity(sold, alreadyReturned, quantity);\n\n          const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);\n          const after = nextRetailReturnQuantity(stock.quantity, quantity);'''
           )
+          replace(route, '.set({ returnedQuantity: String(alreadyReturned + quantity) })', '.set({ returnedQuantity: String(nextReturnedQuantity) })')
           replace(
-              'server/routes/pos/retailPosRoutes.ts',
-              '.set({ returnedQuantity: String(alreadyReturned + quantity) })',
-              '.set({ returnedQuantity: String(nextReturnedQuantity) })'
-          )
-          replace(
-              'server/routes/pos/retailPosRoutes.ts',
+              route,
               '''        const sourceAfter = source.quantity - body.quantity;\n        if (!canSellNegativeStock && sourceAfter < 0) throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);\n        const destinationAfter = destination.quantity + body.quantity;''',
               '''        let sourceAfter: number;\n        let destinationAfter: number;\n        try {\n          ({ sourceAfter, destinationAfter } = nextRetailTransferQuantities(\n            source.quantity,\n            destination.quantity,\n            body.quantity,\n            canSellNegativeStock\n          ));\n        } catch {\n          throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);\n        }'''
           )
 
-          # Every Excel import writes an exact stock movement row, with retry-safe event keys.
+          # Return and cancellation bodies carry the active location, so the existing POS permission middleware
+          # validates POS-user location assignment before the transaction starts.
           replace(
-              'server/routes/retailRoutes.ts',
-              '  retailProductWriteSchema,\n  retailVariantInventory,',
-              '  retailProductWriteSchema,\n  retailStockMovements,\n  retailVariantInventory,'
+              route,
+              '''const returnSchema = z.object({\n  idempotencyKey: idempotencyKeySchema,''',
+              '''const returnSchema = z.object({\n  locationId: z.coerce.number().int().positive(),\n  idempotencyKey: idempotencyKeySchema,'''
           )
           replace(
-              'server/routes/retailRoutes.ts',
+              route,
+              '''const cancelSchema = z.object({\n  idempotencyKey: idempotencyKeySchema,''',
+              '''const cancelSchema = z.object({\n  locationId: z.coerce.number().int().positive(),\n  idempotencyKey: idempotencyKeySchema,'''
+          )
+          replace(
+              route,
+              '''      const body = returnSchema.parse(req.body);\n      const userId = currentUserId(req);''',
+              '''      const body = returnSchema.parse(req.body);\n      await ensureCompanyLocation(companyId, body.locationId);\n      const userId = currentUserId(req);'''
+          )
+          replace(
+              route,
+              '''        if (!sale) throw new Error("Retail sale not found");\n        if (sale.status !== "completed") throw new Error("Canceled sales cannot receive additional returns");''',
+              '''        if (!sale) throw new Error("Retail sale not found");\n        if (sale.locationId !== body.locationId) throw new Error("Return location must match the original sale location");\n        if (sale.status !== "completed") throw new Error("Canceled sales cannot receive additional returns");'''
+          )
+          replace(
+              route,
+              '''      const body = transferSchema.parse(req.body);\n      if (body.fromLocationId === body.toLocationId)''',
+              '''      const body = transferSchema.parse(req.body);\n      if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot transfer retail stock" });\n      if (body.fromLocationId === body.toLocationId)'''
+          )
+          replace(
+              route,
+              '''      const body = cancelSchema.parse(req.body);\n      const userId = currentUserId(req);''',
+              '''      const body = cancelSchema.parse(req.body);\n      await ensureCompanyLocation(companyId, body.locationId);\n      const userId = currentUserId(req);'''
+          )
+          replace(
+              route,
+              '''        if (!sale) throw new Error("Retail sale not found");\n        if (sale.status === "canceled") return { replayed: true };''',
+              '''        if (!sale) throw new Error("Retail sale not found");\n        if (sale.locationId !== body.locationId) throw new Error("Cancellation location must match the original sale location");\n        if (sale.status === "canceled") return { replayed: true };'''
+          )
+
+          # Import stock changes get an explicit movement record. Import keeps SET semantics and movement events are
+          # retry-safe for a repeated batch key.
+          retail = 'server/routes/retailRoutes.ts'
+          replace(
+              retail,
+              'import { requireAuth, requireNonPOS } from "../auth";\n',
+              'import { retailStockMovements } from "@shared/schema/retailPos";\nimport { requireAuth, requireNonPOS } from "../auth";\n'
+          )
+          replace(
+              retail,
               '''      const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];\n      if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });''',
               '''      const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];\n      const importBatchKey = String(\n        req.body?.idempotencyKey || `retail-import-${Date.now()}-${req.user?.id ?? req.session.userId ?? 0}`\n      ).slice(0, 191);\n      if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });'''
           )
           replace(
-              'server/routes/retailRoutes.ts',
+              retail,
               '''          await tx\n            .insert(retailVariantInventory)''',
               '''          const [previousInventory] = await tx\n            .select({ quantity: retailVariantInventory.quantity })\n            .from(retailVariantInventory)\n            .where(\n              and(\n                eq(retailVariantInventory.companyId, companyId),\n                eq(retailVariantInventory.variantId, variant.id),\n                eq(retailVariantInventory.locationId, locationId)\n              )\n            )\n            .limit(1);\n          const quantityBefore = asNumber(previousInventory?.quantity);\n\n          await tx\n            .insert(retailVariantInventory)'''
           )
           replace(
-              'server/routes/retailRoutes.ts',
+              retail,
               '''          await tx\n            .update(retailProductVariants)\n            .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })''',
-              '''          await tx\n            .insert(retailStockMovements)\n            .values({\n              companyId,\n              variantId: variant.id,\n              locationId,\n              movementType: "import",\n              quantityDelta: String(row.qty - quantityBefore),\n              quantityBefore: String(quantityBefore),\n              quantityAfter: String(row.qty),\n              eventKey: `import:${importBatchKey}:${variant.id}:${locationId}`.slice(0, 255),\n              referenceType: "retail_import",\n              referenceId: importBatchKey,\n              createdBy: req.user?.id ?? req.session.userId ?? 0,\n              metadata: { productCode: row.code, size: row.size, barcode: row.barcode },\n            })\n            .onConflictDoNothing({\n              target: [retailStockMovements.companyId, retailStockMovements.eventKey],\n            });\n\n          await tx\n            .update(retailProductVariants)\n            .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })'''
+              '''          const importMovement: typeof retailStockMovements.$inferInsert = {\n            companyId,\n            variantId: variant.id,\n            locationId,\n            movementType: "import",\n            quantityDelta: String(row.qty - quantityBefore),\n            quantityBefore: String(quantityBefore),\n            quantityAfter: String(row.qty),\n            eventKey: `import:${importBatchKey}:${variant.id}:${locationId}`.slice(0, 255),\n            referenceType: "retail_import",\n            referenceId: importBatchKey,\n            createdBy: req.user!.id,\n            metadata: { productCode: row.code, size: row.size, barcode: row.barcode },\n          };\n          await tx\n            .insert(retailStockMovements)\n            .values(importMovement)\n            .onConflictDoNothing({\n              target: [retailStockMovements.companyId, retailStockMovements.eventKey],\n            });\n\n          await tx\n            .update(retailProductVariants)\n            .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })'''
           )
 
-          # Frontend supplies a stable idempotency key per import submission.
+          inventory = 'client/src/pages/retail/RetailInventory.tsx'
           replace(
-              'client/src/pages/retail/RetailInventory.tsx',
+              inventory,
               'const response = await apiRequest("POST", "/api/retail/import", { rows });',
               '''const response = await apiRequest("POST", "/api/retail/import", {\n        rows,\n        idempotencyKey: `retail-import-${\n          typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`\n        }`,\n      });'''
+          )
+
+          # UI location shape exactly matches LocationContext and retry keys remain stable after an unknown network
+          # outcome. A changed cart/transfer fingerprint deliberately creates a fresh transaction key.
+          ui = 'client/src/pages/pos/RetailPOS.tsx'
+          replace(ui, '  city?: string | null;\n  state?: string | null;\n  country?: string | null;', '  city: string | null;\n  state: string | null;\n  country: string | null;')
+          replace(
+              ui,
+              '  const [transferQuantity, setTransferQuantity] = useState(1);',
+              '''  const [transferQuantity, setTransferQuantity] = useState(1);\n  const saleAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);\n  const transferAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);'''
+          )
+          replace(
+              ui,
+              '''      const response = await apiRequest("POST", "/api/pos/retail/sales", {\n        locationId: selectedLocation.id,\n        idempotencyKey: makeKey("retail-sale"),\n        items: cart.map((line) => ({ variantId: line.variantId, quantity: line.cartQuantity })),\n      });''',
+              '''      const items = cart.map((line) => ({ variantId: line.variantId, quantity: line.cartQuantity }));\n      const fingerprint = `${selectedLocation.id}|${items\n        .map((item) => `${item.variantId}:${item.quantity}`)\n        .sort()\n        .join("|")}`;\n      if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {\n        saleAttemptRef.current = { fingerprint, key: makeKey("retail-sale") };\n      }\n      const response = await apiRequest("POST", "/api/pos/retail/sales", {\n        locationId: selectedLocation.id,\n        idempotencyKey: saleAttemptRef.current.key,\n        items,\n      });'''
+          )
+          replace(
+              ui,
+              '''    onSuccess: async () => {\n      setCart([]);''',
+              '''    onSuccess: async () => {\n      saleAttemptRef.current = null;\n      setCart([]);'''
+          )
+          replace(
+              ui,
+              '''    mutationFn: async ({ saleId, saleItemId }: { saleId: number; saleItemId: number }) => {\n      const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/returns`, {\n        idempotencyKey: makeKey("retail-return"),\n        items: [{ saleItemId, quantity: 1 }],\n      });''',
+              '''    mutationFn: async ({\n      saleId,\n      saleItemId,\n      returnedQuantity,\n    }: {\n      saleId: number;\n      saleItemId: number;\n      returnedQuantity: number;\n    }) => {\n      if (!selectedLocation?.id) throw new Error("Select a location first");\n      const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/returns`, {\n        locationId: selectedLocation.id,\n        idempotencyKey: `retail-return-${saleId}-${saleItemId}-${returnedQuantity}`,\n        items: [{ saleItemId, quantity: 1 }],\n      });'''
+          )
+          replace(
+              ui,
+              '''      const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/cancel`, {\n        idempotencyKey: makeKey("retail-cancel"),\n        reason: "POS sale cancellation",\n      });''',
+              '''      if (!selectedLocation?.id) throw new Error("Select a location first");\n      const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/cancel`, {\n        locationId: selectedLocation.id,\n        idempotencyKey: `retail-cancel-${saleId}`,\n        reason: "POS sale cancellation",\n      });'''
+          )
+          replace(
+              ui,
+              '''      const response = await apiRequest("POST", "/api/pos/retail/transfers", {\n        idempotencyKey: makeKey("retail-transfer"),\n        variantId: Number(transferVariantId),\n        fromLocationId: selectedLocation.id,\n        toLocationId: Number(transferToLocationId),\n        quantity: Number(transferQuantity),\n      });''',
+              '''      const fingerprint = `${selectedLocation.id}|${transferToLocationId}|${transferVariantId}|${transferQuantity}`;\n      if (!transferAttemptRef.current || transferAttemptRef.current.fingerprint !== fingerprint) {\n        transferAttemptRef.current = { fingerprint, key: makeKey("retail-transfer") };\n      }\n      const response = await apiRequest("POST", "/api/pos/retail/transfers", {\n        idempotencyKey: transferAttemptRef.current.key,\n        variantId: Number(transferVariantId),\n        fromLocationId: selectedLocation.id,\n        toLocationId: Number(transferToLocationId),\n        quantity: Number(transferQuantity),\n      });'''
+          )
+          replace(
+              ui,
+              '''    onSuccess: async () => {\n      setTransferVariantId("");''',
+              '''    onSuccess: async () => {\n      transferAttemptRef.current = null;\n      setTransferVariantId("");'''
+          )
+          replace(
+              ui,
+              'onClick={() => returnMutation.mutate({ saleId: sale.id, saleItemId: item.id })}',
+              'onClick={() => returnMutation.mutate({ saleId: sale.id, saleItemId: item.id, returnedQuantity: item.returnedQuantity })}'
           )
           PY
 
