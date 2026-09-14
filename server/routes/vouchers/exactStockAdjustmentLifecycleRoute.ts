@@ -8,10 +8,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
-import {
-  deleteStockAdjustmentVoucher,
-  StockAdjustmentDeletionError,
-} from "../../services/stockAdjustmentDeletion";
+import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 
 const editSchema = z.object({
@@ -31,9 +28,7 @@ const editSchema = z.object({
 });
 
 function isAdjustmentVoucherType(value: string | null | undefined): boolean {
-  return (
-    value === "Production" || value === "Consumption" || value === "Mixed" || value === "Stock Adjustment"
-  );
+  return value === "Production" || value === "Consumption" || value === "Mixed" || value === "Stock Adjustment";
 }
 
 export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void {
