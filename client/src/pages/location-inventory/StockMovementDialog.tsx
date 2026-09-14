@@ -144,7 +144,9 @@ export function StockMovementDialog({
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <DialogTitle className="text-xl font-semibold tracking-tight md:text-[22px]">Stock Movement</DialogTitle>
+                  <DialogTitle className="text-xl font-semibold tracking-tight md:text-[22px]">
+                    Stock Movement
+                  </DialogTitle>
                   {drillMonth && (
                     <span className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm">
                       {drillMonth.monthName} {drillMonth.year}
@@ -324,7 +326,9 @@ export function StockMovementDialog({
                           <td className={inNumberCell}>{fmtA(txn.inwardRate)}</td>
                           <td className={cn(inNumberCell, "border-r border-border/40")}>{fmtA(txn.inwardValue)}</td>
                           <td className={outNumberCell}>{fmtN(txn.outwardQty, 0)}</td>
-                          <td className={outNumberCell}>{fmtA(txn.posSellingRate ? txn.posSellingRate : txn.outwardRate)}</td>
+                          <td className={outNumberCell}>
+                            {fmtA(txn.posSellingRate ? txn.posSellingRate : txn.outwardRate)}
+                          </td>
                           <td className={cn(outNumberCell, "border-r border-border/40")}>
                             {fmtA(txn.posSellingValue ? txn.posSellingValue : txn.outwardValue)}
                           </td>
@@ -402,26 +406,37 @@ export function StockMovementDialog({
                     </th>
                   </tr>
                   <tr className="bg-muted/95 text-[11px] backdrop-blur">
-                    {["Qty", "Rate", "Value", "Qty", "Rate", "Value", "Qty", "Rate", "Value", "Qty", "Rate", "Value"].map(
-                      (h, i) => (
-                        <th
-                          key={`${h}-${i}`}
-                          className={cn(
-                            "min-w-[86px] whitespace-nowrap px-4 py-2.5 text-right font-medium",
-                            i < 3
-                              ? "bg-muted/20 text-muted-foreground"
-                              : i < 6
-                                ? "bg-emerald-500/[0.035] text-emerald-600 dark:text-emerald-400"
-                                : i < 9
-                                  ? "bg-rose-500/[0.035] text-rose-600 dark:text-rose-400"
-                                  : "bg-blue-500/[0.035] text-blue-600 dark:text-blue-400",
-                            i === 2 || i === 5 || i === 8 ? "border-r border-border/50" : ""
-                          )}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
+                    {[
+                      "Qty",
+                      "Rate",
+                      "Value",
+                      "Qty",
+                      "Rate",
+                      "Value",
+                      "Qty",
+                      "Rate",
+                      "Value",
+                      "Qty",
+                      "Rate",
+                      "Value",
+                    ].map((h, i) => (
+                      <th
+                        key={`${h}-${i}`}
+                        className={cn(
+                          "min-w-[86px] whitespace-nowrap px-4 py-2.5 text-right font-medium",
+                          i < 3
+                            ? "bg-muted/20 text-muted-foreground"
+                            : i < 6
+                              ? "bg-emerald-500/[0.035] text-emerald-600 dark:text-emerald-400"
+                              : i < 9
+                                ? "bg-rose-500/[0.035] text-rose-600 dark:text-rose-400"
+                                : "bg-blue-500/[0.035] text-blue-600 dark:text-blue-400",
+                          i === 2 || i === 5 || i === 8 ? "border-r border-border/50" : ""
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -474,13 +489,19 @@ export function StockMovementDialog({
                         </td>
                         <td className={cn(mutedNumberCell, "border-t border-border/40")}>{fmtQ(m.openingQty)}</td>
                         <td className={cn(mutedNumberCell, "border-t border-border/40")}>{fmtR(m.openingRate)}</td>
-                        <td className={cn(mutedNumberCell, "border-r border-t border-border/40")}>{fmtV(m.openingValue)}</td>
+                        <td className={cn(mutedNumberCell, "border-r border-t border-border/40")}>
+                          {fmtV(m.openingValue)}
+                        </td>
                         <td className={cn(inNumberCell, "border-t border-border/40")}>{fmtQ(m.inwardQty)}</td>
                         <td className={cn(inNumberCell, "border-t border-border/40")}>{fmtR(m.inwardRate)}</td>
-                        <td className={cn(inNumberCell, "border-r border-t border-border/40")}>{fmtV(m.inwardValue)}</td>
+                        <td className={cn(inNumberCell, "border-r border-t border-border/40")}>
+                          {fmtV(m.inwardValue)}
+                        </td>
                         <td className={cn(outNumberCell, "border-t border-border/40")}>{fmtQ(m.outwardQty)}</td>
                         <td className={cn(outNumberCell, "border-t border-border/40")}>{fmtR(m.outwardRate)}</td>
-                        <td className={cn(outNumberCell, "border-r border-t border-border/40")}>{fmtV(m.outwardValue)}</td>
+                        <td className={cn(outNumberCell, "border-r border-t border-border/40")}>
+                          {fmtV(m.outwardValue)}
+                        </td>
                         <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtQ(m.closingQty)}</td>
                         <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtR(m.closingRate)}</td>
                         <td className={cn(closingNumberCell, "border-t border-border/40")}>{fmtV(m.closingValue)}</td>
@@ -538,7 +559,9 @@ export function StockMovementDialog({
 
         <div className="flex flex-shrink-0 flex-col gap-3 border-t border-border/60 bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-7">
           <div className="min-h-4">
-            {drillMonth && <span className="text-xs text-muted-foreground">Press Esc to return to monthly summary</span>}
+            {drillMonth && (
+              <span className="text-xs text-muted-foreground">Press Esc to return to monthly summary</span>
+            )}
           </div>
           <div className="flex items-center justify-end gap-2">
             {drillMonth ? (
@@ -570,7 +593,9 @@ export function StockMovementDialog({
                   const sid = stockMovementItem.stockItemId;
                   if (drillMonth) {
                     if (locId) {
-                      navigate(`/locations/${locId}/stock-items/${sid}/vouchers/${drillMonth.year}/${drillMonth.month}`);
+                      navigate(
+                        `/locations/${locId}/stock-items/${sid}/vouchers/${drillMonth.year}/${drillMonth.month}`
+                      );
                     }
                   } else if (locId) {
                     navigate(`/locations/${locId}/stock-items/${sid}/history`);
