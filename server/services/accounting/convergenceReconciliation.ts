@@ -15,15 +15,7 @@ export interface AccountingConvergenceSnapshot {
   ledgerBaseCredit: string;
   daybookBaseAmount?: string | null;
   expectsDaybook: boolean;
-  /**
-   * What ledger evidence this voucher type owes. Absent means "balanced", which
-   * keeps older adapters working, but the database adapter always states it.
-   */
   ledgerExpectation?: VoucherLedgerExpectation;
-  /**
-   * The voucher has been cancelled (soft-deleted). Its ledger entries are kept
-   * as history, but nothing derived from it may still be presented as live.
-   */
   voucherCancelled?: boolean;
 }
 
@@ -37,11 +29,6 @@ export interface StockConvergenceSnapshot {
   movementValue: string;
 }
 
-/**
- * Generic over the transaction handle so a caller holding a concrete drizzle
- * transaction can reconcile with it directly, while the loaders stay written
- * against the minimal read shape they actually need.
- */
 export interface ConvergenceReconciliationAdapter<TTransaction = CompanyScopedReadTransaction> {
   loadAccountingSnapshots(input: { tx: TTransaction; companyId: number }): Promise<AccountingConvergenceSnapshot[]>;
   loadStockSnapshots(input: { tx: TTransaction; companyId: number }): Promise<StockConvergenceSnapshot[]>;
@@ -130,8 +117,7 @@ function assertUniqueIdentity(seen: Set<string>, identity: string, domain: strin
 
 /**
  * Read-only transaction-owned reconciliation for the central convergence path.
- * It never repairs data. The caller may surface discrepancies to an operator, but
- * any correction must go through the canonical posting/reversal services.
+ * It never repairs data. Repairs must use the source posting/reversal services.
  */
 export async function reconcileConvergenceTx<
   TTransaction extends CompanyScopedTransaction = CompanyScopedReadTransaction,
@@ -168,11 +154,6 @@ export async function reconcileConvergenceTx<
     assertUniqueIdentity(accountingIdentities, identity, "accounting");
 
     if (row.voucherCancelled) {
-      // A cancelled voucher keeps its ledger entries as history, so comparing
-      // them against a document that no longer stands would report every
-      // cancellation as a defect. What must not survive the cancellation is the
-      // Factory Daybook mirror: the Daybook is a cash view, and a mirror left
-      // behind reports money moving for a document nobody can open any more.
       if (row.daybookBaseAmount != null) {
         discrepancies.push({
           domain: "accounting",
@@ -192,9 +173,6 @@ export async function reconcileConvergenceTx<
 
     const expectation = row.ledgerExpectation ?? "balanced";
     if (expectation === "unclassified") {
-      // A voucher type nobody has classified escapes every accounting check
-      // below, so it is reported instead. Silence here would mean a new posting
-      // path could be introduced and never reconciled against anything.
       discrepancies.push({
         domain: "accounting",
         identity,
@@ -207,11 +185,12 @@ export async function reconcileConvergenceTx<
       compare(discrepancies, "accounting", identity, "VOUCHER_LEDGER_CREDIT_MISMATCH", voucherCredit, ledgerCredit);
       compare(discrepancies, "accounting", identity, "VOUCHER_NOT_BALANCED", voucherDebit, voucherCredit);
       compare(discrepancies, "accounting", identity, "LEDGER_NOT_BALANCED", ledgerDebit, ledgerCredit);
+    } else if (expectation === "balanced-only") {
+      // Credit/Debit Notes can have a refund/receipt header that differs from
+      // inventory cost. The variance account closes the journal at inventory
+      // value, so only the actual ledger balance is invariant here.
+      compare(discrepancies, "accounting", identity, "LEDGER_NOT_BALANCED", ledgerDebit, ledgerCredit);
     } else if (expectation === "single-sided") {
-      // One side is posted against inventory, so the sides cannot balance and
-      // the document total cannot equal both. What can still be checked is that
-      // exactly one side carries the value: an entry set that posts both, or
-      // neither, is not the single-sided posting this type is supposed to make.
       const debitPosted = !ledgerDebit.isZero();
       const creditPosted = !ledgerCredit.isZero();
       if (debitPosted === creditPosted) {
@@ -223,6 +202,26 @@ export async function reconcileConvergenceTx<
           actual: debitPosted ? "both sides posted" : "no side posted",
         });
       }
+    } else if (expectation === "inventory-sided") {
+      // Mixed stock documents can legitimately post both GL sides with inventory
+      // carrying the net contra. They still must contain accounting evidence.
+      if (ledgerDebit.isZero() && ledgerCredit.isZero()) {
+        discrepancies.push({
+          domain: "accounting",
+          identity,
+          code: "INVENTORY_SIDED_LEDGER_EMPTY",
+          expected: "at least one posted ledger side",
+          actual: "no ledger entries",
+        });
+      }
+    } else if (expectation === "none" && (!ledgerDebit.isZero() || !ledgerCredit.isZero())) {
+      discrepancies.push({
+        domain: "accounting",
+        identity,
+        code: "NO_LEDGER_VOUCHER_HAS_ENTRIES",
+        expected: "0 debit / 0 credit",
+        actual: `${ledgerDebit.toFixed()} / ${ledgerCredit.toFixed()}`,
+      });
     }
 
     if (row.expectsDaybook) {

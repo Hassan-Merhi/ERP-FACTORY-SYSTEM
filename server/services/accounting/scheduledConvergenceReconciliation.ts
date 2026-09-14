@@ -7,6 +7,9 @@ import {
   type ConvergenceReconciliationResult,
 } from "./convergenceReconciliation";
 import { createDatabaseConvergenceAdapter } from "./databaseConvergenceAdapter";
+import { loadDatabasePhase3AccountingAudit } from "./databasePhase3AccountingAudit";
+import { auditPhase3Accounting } from "./phase3AccountingAudit";
+import { loadPhase3InventoryValuationSnapshot } from "./phase3InventoryValuation";
 
 const convergenceAdapter = createDatabaseConvergenceAdapter(loadDatabaseStockConvergenceSnapshots);
 
@@ -33,10 +36,36 @@ const defaultDependencies: ScheduledConvergenceDependencies = {
     return result.rows.map(({ id }) => id);
   },
   reconcileCompany(companyId) {
-    return db.transaction(async (tx) => reconcileConvergenceTx(tx, companyId, convergenceAdapter), {
-      isolationLevel: "repeatable read",
-      accessMode: "read only",
-    });
+    return db.transaction(
+      async (tx) => {
+        const convergence = await reconcileConvergenceTx(tx, companyId, convergenceAdapter);
+
+        // Load the cross-subsystem accounting surfaces and replace the legacy
+        // Inventory-GL heuristic with the Phase 3 cutover valuation: immutable
+        // baseline + append-only canonical movements replayed independently from
+        // live inventory. Both reads share this repeatable-read snapshot.
+        const phase3Input = await loadDatabasePhase3AccountingAudit({ tx, companyId });
+        phase3Input.stock = await loadPhase3InventoryValuationSnapshot({ tx, companyId });
+        const phase3 = auditPhase3Accounting(phase3Input);
+        if (!phase3.clean) {
+          logger.warn("Scheduled Phase 3 accounting audit found discrepancies", {
+            module: "accounting",
+            action: "phase3ScheduledAudit",
+            companyId,
+            issueCount: phase3.issues.length,
+            issueCodes: [...new Set(phase3.issues.map(({ code }) => code))].sort(),
+            issues: phase3.issues.slice(0, 100),
+            checked: phase3.checked,
+          });
+        }
+
+        return convergence;
+      },
+      {
+        isolationLevel: "repeatable read",
+        accessMode: "read only",
+      }
+    );
   },
   info(message, context) {
     logger.info(message, context);
@@ -56,16 +85,10 @@ function discrepancyCodes(result: ConvergenceReconciliationResult): string[] {
 /**
  * Run read-only convergence reconciliation for every company.
  *
- * This is deliberately an observer, never a repair job. A mismatch is durable
- * evidence for an operator to investigate through the existing Admin
- * reconciliation page; silently changing accounting or inventory here would
- * destroy the evidence that the mismatch happened.
- *
- * Companies are isolated from one another: one company's rejected/unavailable
- * evidence is logged and counted, then the remaining companies are still
- * checked. Each individual reconciliation runs inside its own tenant-scoped,
- * repeatable-read transaction so all document and journal loaders observe one
- * stable database snapshot even while live posting continues.
+ * This is deliberately an observer, never a repair job. Historical repairs run
+ * once in the guarded startup path; scheduled reconciliation only reports new
+ * drift. Each company uses its own repeatable-read transaction so source rows,
+ * journal rows and valuation evidence are one stable snapshot.
  */
 export async function runScheduledConvergenceReconciliation(
   dependencies: ScheduledConvergenceDependencies = defaultDependencies
