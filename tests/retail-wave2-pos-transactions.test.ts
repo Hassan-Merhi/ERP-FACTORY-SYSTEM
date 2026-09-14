@@ -103,6 +103,11 @@ describe("Retail POS Wave 2 transaction invariants", () => {
     expect(posRoutes).toContain('<Route path="/pos">{() => <RetailPOS />}</Route>');
     expect(inventory).toContain('navigate("/retail/pos")');
     expect(inventory).toContain("Open POS");
+    const retailPos = read("client/src/pages/pos/RetailPOS.tsx");
+    expect(retailPos).toContain('selectedCompany?.role === "POS"');
+    expect(retailPos).toContain("assignedLocationId");
+    expect(retailPos).toContain("disabled={isPosRole}");
+    expect(retailPos).toContain("{!isPosRole && (");
   });
 
   it("supports exact barcode lookup and keyboard wedge scanners", () => {

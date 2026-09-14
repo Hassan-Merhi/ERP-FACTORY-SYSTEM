@@ -78,7 +78,7 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       .returning({ id: schema.companies.id });
     companyId = company.id;
 
-    await db.insert(schema.userCompanyRoles).values({ userId, companyId, role: "Admin" });
+    await db.insert(schema.userCompanyRoles).values({ userId, companyId, role: "POS" });
     await db.insert(schema.userSecurityPermissions).values(
       KNOWN_SECURITY_PERMISSIONS.map((permission) => ({
         userId,
@@ -93,6 +93,12 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       .values({ companyId, code: "RWP2-MAIN", name: "Retail Wave 2 Main" })
       .returning({ id: schema.locations.id });
     locationId = location.id;
+
+    await db
+      .update(schema.userCompanyRoles)
+      .set({ assignedLocationId: locationId })
+      .where(and(eq(schema.userCompanyRoles.userId, userId), eq(schema.userCompanyRoles.companyId, companyId)));
+    await db.insert(schema.userLocations).values({ userId, companyId, locationId });
 
     const [brand] = await db
       .insert(schema.retailBrands)
