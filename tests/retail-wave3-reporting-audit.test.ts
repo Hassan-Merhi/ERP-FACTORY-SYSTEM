@@ -92,15 +92,20 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     expect(pos).toContain("xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.7fr)]");
   });
 
-  it("makes reporting the retail landing page without changing other company-type guards", () => {
+  it("keeps reporting available without replacing the standard ERP dashboard and accounting workspace", () => {
     const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
+    const routes = read("client/src/routes/AppRoutes.tsx");
     expect(guard).toContain('const isPropertiesCompany = companyType === "properties"');
     expect(guard).toContain('const isSupplierPartnerCompany = companyType === "supplier_partner"');
     expect(guard).toContain('const isFactoryCompany = companyType === "factory" || companyType === "factory_v2"');
     expect(guard).toContain('const isRetailCompany = companyType === "retail"');
-    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/dashboard" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/financial-overview" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/inventory" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/pos" }');
     expect(guard).toContain('decision = { kind: "redirect", to: "/properties/daybook" }');
     expect(guard).toContain('decision = { kind: "redirect", to: "/sp" }');
+    expect(routes).toContain('location === "/retail/reports"');
+    expect(routes).toContain("return <ErpRoutes user={user} />");
   });
 
   it("exposes authenticated dashboard, audit and production-readiness endpoints", () => {
