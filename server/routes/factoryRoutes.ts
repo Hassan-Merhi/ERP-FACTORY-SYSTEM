@@ -46,12 +46,45 @@ import {
 import { chooseAuthorizedFactoryCompany } from "../services/security/factoryCompanyScopePolicy";
 import { isFactoryCompanyOptionalRoute } from "../services/security/companyResourceRoutePolicy";
 
+function isActiveCompanyAttendanceRequest(req: import("express").Request): boolean {
+  const method = req.method.toUpperCase();
+  const path = req.path;
+
+  if (method === "GET" && path === "/staff-tracking" && String(req.query.page || "") === "attendance") {
+    return true;
+  }
+  if (method === "POST" && path === "/staff-tracking/bulk" && req.body?.page === "attendance") {
+    return true;
+  }
+  if ((method === "GET" || method === "PUT") && path === "/settings" && req.query.scope === "attendance") {
+    return true;
+  }
+  if (
+    method === "POST" &&
+    path === "/send-mix-batch-image-whatsapp" &&
+    (req.body?.destination === "attendance" || req.body?.recipient === "attendance")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   app.use("/api/factory", async (req: import("express").Request, res: import("express").Response, next) => {
     try {
       const session = req.session;
       if (!session?.userId) return next();
       if (isFactoryCompanyOptionalRoute(req.path)) return next();
+
+      // Attendance belongs to the company the user is actively viewing, even
+      // when that company is not typed as a dedicated Factory company. Do not
+      // let an older pinned factory company leak into Attendance Register reads,
+      // saves, image sends, or its dedicated WhatsApp setting.
+      if (isActiveCompanyAttendanceRequest(req)) {
+        delete session.factoryCompanyId;
+        return next();
+      }
 
       const assignedFactories = await db
         .select({ id: companies.id, companyType: companies.companyType, active: companies.active })

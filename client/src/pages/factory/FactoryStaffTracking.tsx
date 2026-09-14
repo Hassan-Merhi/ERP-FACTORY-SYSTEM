@@ -61,6 +61,16 @@ interface TrackingCategoryGroup {
   rows: TrackingRow[];
 }
 
+interface AttendanceWhatsappSettings {
+  attendanceWhatsappGroupId?: string | null;
+}
+
+interface WhatsappChat {
+  id: string;
+  name: string;
+  type: string;
+}
+
 function localDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -170,10 +180,13 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<TrackingRow[]>([]);
+  const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
+  const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
+  const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
   const attendanceReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
-  const { data, isLoading, isFetching } = useQuery<TrackingResponse>({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery<TrackingResponse>({
     queryKey: ["/api/factory/staff-tracking", mode, periodType, period.start, period.end],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -186,6 +199,27 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
       if (!res.ok) throw new Error(tr("loadFailed"));
       return res.json();
     },
+    retry: false,
+    retryOnMount: false,
+    staleTime: 30_000,
+  });
+
+  const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
+    queryKey: ["/api/factory/settings?scope=attendance"],
+    enabled: mode === "attendance",
+    staleTime: 30_000,
+  });
+
+  const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WhatsappChat[]>({
+    queryKey: ["/api/whatsapp/chats"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
+      if (!res.ok) throw new Error("Failed to load WhatsApp groups");
+      return res.json();
+    },
+    enabled: mode === "attendance" && attendanceWaPickerOpen,
+    staleTime: 60_000,
+    retry: false,
   });
 
   useEffect(() => {
@@ -195,6 +229,43 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   useEffect(() => {
     if (data) setRows(data.rows);
   }, [data]);
+
+  useEffect(() => {
+    if (mode === "attendance" && attendanceWhatsappSettings) {
+      setAttendanceWaGroupId(attendanceWhatsappSettings.attendanceWhatsappGroupId ?? "");
+    }
+  }, [attendanceWhatsappSettings, mode]);
+
+  const saveAttendanceWaGroupMutation = useMutation({
+    mutationFn: async (chatId: string) => {
+      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
+        attendanceWhatsappGroupId: chatId,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to save Attendance WhatsApp group");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
+      setAttendanceWaPickerOpen(false);
+      setAttendanceWaSearch("");
+      toast({ title: "Attendance WhatsApp group updated" });
+    },
+    onError: (saveError: Error) => {
+      toast({ title: "Failed to save WhatsApp group", description: saveError.message, variant: "destructive" });
+    },
+  });
+
+  const filteredAttendanceWaChats = useMemo(() => {
+    const needle = attendanceWaSearch.trim().toLowerCase();
+    return attendanceWaChats.filter((chat) => {
+      const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
+      const matches = !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
+      return isGroup && matches;
+    });
+  }, [attendanceWaChats, attendanceWaSearch]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -223,8 +294,8 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking"] });
       toast({ title: mode === "production" ? tr("productionSaved") : tr("attendanceSaved") });
     },
-    onError: (error: Error) => {
-      toast({ title: tr("saveFailed"), description: error.message, variant: "destructive" });
+    onError: (saveError: Error) => {
+      toast({ title: tr("saveFailed"), description: saveError.message, variant: "destructive" });
     },
   });
 
@@ -262,6 +333,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
         fileName: `Attendance_${referenceDate}.png`,
         caption: title,
         reportLabel: title,
+        destination: "attendance",
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -272,8 +344,8 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
     onSuccess: () => {
       toast({ title: tr("whatsappImageSent") });
     },
-    onError: (error: Error) => {
-      toast({ title: tr("whatsappImageFailed"), description: error.message, variant: "destructive" });
+    onError: (sendError: Error) => {
+      toast({ title: tr("whatsappImageFailed"), description: sendError.message, variant: "destructive" });
     },
   });
 
@@ -397,8 +469,20 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
           {mode === "attendance" && (
             <Button
               variant="outline"
+              onClick={() => setAttendanceWaPickerOpen((current) => !current)}
+              data-testid="button-change-attendance-whatsapp-group"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
+            </Button>
+          )}
+          {mode === "attendance" && (
+            <Button
+              variant="outline"
               onClick={() => sendWhatsappImageMutation.mutate()}
-              disabled={rows.length === 0 || isFetching || sendWhatsappImageMutation.isPending}
+              disabled={
+                !attendanceWaGroupId || rows.length === 0 || isFetching || sendWhatsappImageMutation.isPending
+              }
               data-testid="button-send-attendance-whatsapp-image"
             >
               {sendWhatsappImageMutation.isPending ? (
@@ -426,6 +510,77 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
         {period.end !== period.start ? ` — ${period.end}` : ""}
         {isFetching && !isLoading ? ` · ${tr("refreshing")}` : ""}
       </div>
+
+      {mode === "attendance" && attendanceWaPickerOpen && (
+        <Card className="shadow-none">
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <p className="text-sm font-semibold">Attendance WhatsApp Group</p>
+              <p className="text-xs text-muted-foreground">
+                This group is used only for Attendance Register images. It does not change production or weekly report groups.
+              </p>
+            </div>
+            <Input
+              value={attendanceWaSearch}
+              onChange={(event) => setAttendanceWaSearch(event.target.value)}
+              placeholder="Search WhatsApp groups..."
+              data-testid="input-attendance-wa-search"
+            />
+            <div className="max-h-48 overflow-y-auto rounded-md border text-sm">
+              {attendanceWaChatsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-5 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading WhatsApp groups...
+                </div>
+              ) : filteredAttendanceWaChats.length === 0 ? (
+                <p className="py-5 text-center text-muted-foreground">No WhatsApp groups found.</p>
+              ) : (
+                filteredAttendanceWaChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    onClick={() => setAttendanceWaGroupId(chat.id)}
+                    className={`w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60 ${
+                      attendanceWaGroupId === chat.id ? "bg-primary/10 text-primary" : ""
+                    }`}
+                    data-testid={`option-attendance-wa-chat-${chat.id}`}
+                  >
+                    <div className="font-medium">{chat.name || chat.id}</div>
+                    <div className="text-xs text-muted-foreground">{chat.id}</div>
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {attendanceWaGroupId ? `Selected group: ${attendanceWaGroupId}` : "No Attendance WhatsApp group selected."}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAttendanceWaGroupId(attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "");
+                    setAttendanceWaPickerOpen(false);
+                    setAttendanceWaSearch("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => saveAttendanceWaGroupMutation.mutate(attendanceWaGroupId)}
+                  disabled={!attendanceWaGroupId || saveAttendanceWaGroupMutation.isPending}
+                  data-testid="button-save-attendance-wa-group"
+                >
+                  {saveAttendanceWaGroupMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Group
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {mode === "production" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -477,6 +632,20 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
               <TableRow>
                 <TableCell colSpan={tableColumnCount} className="py-12 text-center text-muted-foreground">
                   {tr("loadingStaff")}
+                </TableCell>
+              </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={tableColumnCount} className="py-10 text-center">
+                  <div className="mx-auto flex max-w-lg flex-col items-center gap-3">
+                    <p className="text-sm font-medium text-destructive">Could not load factory staff.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {error instanceof Error ? error.message : tr("loadFailed")}
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                      Retry
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : groupedVisibleRows.length === 0 ? (
