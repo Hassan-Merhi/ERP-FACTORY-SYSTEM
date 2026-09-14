@@ -65,10 +65,16 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
   it("keeps large-catalog paths bounded and images lazy", () => {
     const migration = read("migrations/0019_retail_reporting_audit.sql");
     const reporting = read("server/services/retail/retailReporting.ts");
+    const catalog = read("server/routes/retailCatalogRoutes.ts");
     const inventory = read("client/src/pages/retail/RetailInventory.tsx");
     const pos = read("client/src/pages/pos/RetailPOS.tsx");
 
     expect(reporting).toContain("Math.min(Math.max(filters.limit ?? 10, 1), 50)");
+    expect(catalog).toContain("Math.min(positiveInteger(req.query.pageSize) ?? 60, 100)");
+    expect(catalog).toContain("LIMIT ${limitParam} OFFSET ${offsetParam}");
+    expect(catalog).toContain("p.id = ANY($2::int[])");
+    expect(inventory).toContain("/api/retail/products-page?");
+    expect(inventory).toContain("setDebouncedSearch(search.trim())");
     expect(inventory).toContain('loading="lazy"');
     expect(inventory).toContain('decoding="async"');
     expect(pos).toContain('loading="lazy"');
@@ -99,11 +105,14 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
 
   it("exposes authenticated dashboard, audit and production-readiness endpoints", () => {
     const routes = read("server/routes/retailReportingRoutes.ts");
+    const catalog = read("server/routes/retailCatalogRoutes.ts");
     expect(routes).toContain("/api/retail/reporting/dashboard");
     expect(routes).toContain("/api/retail/reporting/audit");
     expect(routes).toContain("/api/retail/reporting/readiness");
     expect(routes.match(/requireAuth, requireNonPOS/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(routes).toContain("res.status(audit.ready ? 200 : 409)");
+    expect(catalog).toContain("/api/retail/products-page");
+    expect(catalog).toContain("/api/retail/catalog-facets");
   });
 
   it("records imports and manual product stock edits in movement history", () => {
