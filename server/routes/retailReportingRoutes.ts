@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { companies, locations } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
@@ -42,15 +42,9 @@ async function validateLocation(companyId: number, locationId?: number): Promise
   const [location] = await db
     .select({ id: locations.id })
     .from(locations)
-    .where(eq(locations.id, locationId))
+    .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId), eq(locations.active, true)))
     .limit(1);
-  if (!location) throw new Error("Retail report location was not found");
-
-  const [ownedLocation] = await db
-    .select({ id: locations.id })
-    .from(locations)
-    .where(eq(locations.companyId, companyId));
-  if (!ownedLocation) throw new Error("Retail report location does not belong to the selected company");
+  if (!location) throw new Error("Retail report location is not active or does not belong to the selected company");
 }
 
 export function registerRetailReportingRoutes(app: Express): void {
