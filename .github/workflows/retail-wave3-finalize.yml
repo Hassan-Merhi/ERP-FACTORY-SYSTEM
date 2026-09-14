@@ -4,9 +4,10 @@ on:
   push:
     branches:
       - feat/retail-reporting-audit-wave3
-  pull_request:
-    branches:
-      - feat/retail-pos-stock-movement-wave2
+
+concurrency:
+  group: retail-wave3-finalize
+  cancel-in-progress: true
 
 permissions:
   contents: read
