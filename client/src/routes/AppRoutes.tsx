@@ -7,6 +7,7 @@ import type { AuthMe } from "@shared/apiTypes";
 
 const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
 const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
+const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
 
 interface RouterProps {
   user: AuthMe;
@@ -37,6 +38,10 @@ export function Router({ user, posImportEnabled }: RouterProps) {
 
   if (location === "/sp/golden-coast") {
     return <SpGoldenCoast />;
+  }
+
+  if (location === "/retail/pos") {
+    return <RetailPOS />;
   }
 
   if (location === "/retail" || location.startsWith("/retail/")) {

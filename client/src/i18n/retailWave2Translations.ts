@@ -9,6 +9,7 @@ export const retailWave2Translations: readonly Phase3SharedUiEntry[] = [
     fr: "Scannez le code-barres ou recherchez produit / SKU / marque / taille",
   },
   { en: "Retail POS", ar: "نقطة بيع التجزئة", fr: "PDV de détail" },
+  { en: "Open POS", ar: "فتح نقطة البيع", fr: "Ouvrir le PDV" },
   { en: "Selling location", ar: "موقع البيع", fr: "Emplacement de vente" },
   { en: "Find item", ar: "البحث عن صنف", fr: "Rechercher un article" },
   { en: "Loading variants…", ar: "جارٍ تحميل المتغيرات…", fr: "Chargement des variantes…" },

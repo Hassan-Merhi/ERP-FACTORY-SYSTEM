@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, ImageIcon, Pencil, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, Boxes, ImageIcon, Pencil, Plus, ShoppingCart, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -801,6 +801,10 @@ export default function RetailInventory() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate("/retail/pos")}>
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Open POS
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Import
