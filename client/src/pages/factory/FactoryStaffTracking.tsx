@@ -205,7 +205,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   });
 
   const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
-    queryKey: ["/api/factory/settings"],
+    queryKey: ["/api/factory/settings?scope=attendance"],
     enabled: mode === "attendance",
     staleTime: 30_000,
   });
@@ -238,7 +238,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
 
   const saveAttendanceWaGroupMutation = useMutation({
     mutationFn: async (chatId: string) => {
-      const res = await factoryApiRequest("PUT", "/api/factory/settings", {
+      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
         attendanceWhatsappGroupId: chatId,
       });
       if (!res.ok) {
@@ -248,7 +248,7 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
       setAttendanceWaPickerOpen(false);
       setAttendanceWaSearch("");
       toast({ title: "Attendance WhatsApp group updated" });
