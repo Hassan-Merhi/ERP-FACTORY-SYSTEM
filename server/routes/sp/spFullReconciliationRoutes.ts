@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { buildFinalMigrationVerification } from "./spMigrationPhase4Verification";
 
 function num(value: unknown): number {
   const parsed = Number(value ?? 0);
@@ -12,6 +13,7 @@ function num(value: unknown): number {
 }
 
 type Tolerance = { absolute?: number; relative?: number };
+type EvidenceStatus = "PASS" | "WARN" | "FAIL" | "NOT_APPLICABLE" | "UNAVAILABLE";
 
 /**
  * Two independently computed totals agree when they are within tolerance.
@@ -35,20 +37,82 @@ type Surface = {
   pass: boolean;
   /** The two independent sources being compared, so a FAIL can be judged. */
   basis: string;
+  /** Used when a surface has evidence semantics beyond a simple numeric pass/fail. */
+  evidenceStatus?: EvidenceStatus;
+  detail?: string;
+};
+
+type MigrationEvidence = {
+  pass: boolean;
+  status: EvidenceStatus;
+  issueCount: number;
+  detail: string;
 };
 
 /**
- * Every surface compares two totals that are computed from different tables by
- * different code paths.
+ * Migration verification must never silently pass because a query failed.
  *
- * This report used to fill `databaseValue` and `reportValue` from the same row
- * and hard-code `pass: true` for five of its twelve surfaces, so it reported
- * PASS for a company whose stock, goods-in-transit, payable, supplier statement
- * and opening balances disagreed with the ledger — the one report whose job is
- * to catch that could not fail. Two surfaces also queried source_type values
- * that no writer produces (`reversed_offload`, `opening_stock`), which made the
- * reversal exclusion dead and the opening-balance total permanently zero, and
- * one divided a cartesian join by two instead of joining correctly.
+ * The old closeout queried sp_migration_verification_results, a table no current
+ * migration path writes, and converted every query failure into 0 failures. We
+ * now discover the latest real rehearsal run and invoke the same final verifier
+ * used by Phase 4. A company with no migration history is explicitly N/A; a
+ * schema/query failure is UNAVAILABLE and makes the report NOT_VERIFIED.
+ */
+async function loadMigrationEvidence(companyId: number): Promise<MigrationEvidence> {
+  try {
+    const runs = await db.execute(sql`
+      SELECT source_company_id, action, status
+      FROM sp_migration_rehearsal_runs
+      WHERE target_company_id = ${companyId}
+        AND status <> 'rolled_back'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+    const latest = resultRows(runs)[0];
+    if (!latest) {
+      return {
+        pass: true,
+        status: "NOT_APPLICABLE",
+        issueCount: 0,
+        detail: "No non-rolled-back migration rehearsal exists for this target company.",
+      };
+    }
+
+    const sourceCompanyId = num(latest.source_company_id);
+    const runStatus = String(latest.status ?? "").toLowerCase();
+    if (!sourceCompanyId || runStatus !== "completed") {
+      return {
+        pass: false,
+        status: "FAIL",
+        issueCount: 1,
+        detail: `Latest migration rehearsal action ${String(latest.action ?? "unknown")} is ${runStatus || "unknown"}.`,
+      };
+    }
+
+    const verification = await buildFinalMigrationVerification(sourceCompanyId, companyId);
+    const blockerCount = verification.blockers?.length ?? 0;
+    const deltaCount = verification.deltas?.length ?? 0;
+    const status = verification.overall as "PASS" | "WARN" | "FAIL";
+    return {
+      pass: status === "PASS",
+      status,
+      issueCount: blockerCount + deltaCount,
+      detail: `Phase 4 final verification for source ${sourceCompanyId}: ${blockerCount} blocker(s), ${deltaCount} delta(s).`,
+    };
+  } catch (error: unknown) {
+    return {
+      pass: false,
+      status: "UNAVAILABLE",
+      issueCount: 1,
+      detail: `Migration evidence unavailable: ${getErrorMessage(error)}`,
+    };
+  }
+}
+
+/**
+ * Every accounting surface compares totals derived from different rows, tables,
+ * or source-document paths. A surface is not allowed to compare a formula with
+ * itself and call that reconciliation.
  */
 async function buildFullReconciliation(companyId: number) {
   const [
@@ -58,19 +122,22 @@ async function buildFullReconciliation(companyId: number) {
     otwAsset,
     otwClearing,
     payable,
+    payableCounterparty,
     saleRegister,
     saleVoucherCredits,
     statements,
+    statementCounterparty,
     profit,
+    saleVoucherHeaders,
     splits,
     openings,
     openingVouchers,
     containers,
     offloadCosts,
     prepaid,
+    prepaidPosted,
     parentAgent,
     parentAgentPosted,
-    migration,
   ] = await Promise.all([
     // SP lot ledger: what is still on hand, at SP's own final unit cost.
     db.execute(sql`
@@ -80,14 +147,7 @@ async function buildFullReconciliation(companyId: number) {
         WHERE company_id = ${companyId}
           AND COALESCE(source_type, 'offload') NOT IN ('reversed_offload', 'offload_reversed')
       `),
-    // The ERP side of the same stock: the inventory table (what the Location
-    // Inventory page reads) for every item SP has ever moved. SP writers keep the
-    // two in step through adjustSpInventoryAtomic.
-    //
-    // This used to select FROM location_inventory, a table that does not exist in
-    // any environment — the name belongs to the page, not the schema. The query
-    // threw, Promise.all rejected, and the whole report answered 500, so no
-    // surface of the SP full reconciliation was ever evaluated.
+    // ERP inventory for the stock items touched by SP.
     db.execute(sql`
         SELECT COALESCE(SUM(i.quantity::numeric), 0) qty,
                COALESCE(SUM(i.quantity::numeric * i.average_rate::numeric), 0) value
@@ -105,9 +165,7 @@ async function buildFullReconciliation(companyId: number) {
                COALESCE(SUM(CASE WHEN c.status = 'cancelled' THEN c.invoice_total_usd::numeric ELSE 0 END), 0) cancelled_total
         FROM sp_containers c WHERE c.company_id = ${companyId}
       `),
-    // Goods in transit per the general ledger. SP debits this account when a
-    // container is created and credits it back when the container is offloaded or
-    // cancelled, so its balance is the open register seen from the other side.
+    // Goods in transit per the general ledger.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.debit_amount::numeric - ve.credit_amount::numeric), 0) balance
         FROM voucher_entries ve
@@ -115,8 +173,7 @@ async function buildFullReconciliation(companyId: number) {
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.deleted_at IS NULL
         WHERE v.company_id = ${companyId} AND la.sub_type = 'sp_goods_otw'
       `),
-    // The liability leg SP posts opposite the goods-OTW asset, on every container
-    // voucher and its reversal.
+    // Liability leg posted opposite Goods OTW.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.credit_amount::numeric - ve.debit_amount::numeric), 0) balance
         FROM voucher_entries ve
@@ -124,7 +181,7 @@ async function buildFullReconciliation(companyId: number) {
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.deleted_at IS NULL
         WHERE v.company_id = ${companyId} AND la.sub_type = 'sp_otw_clearing'
       `),
-    // Supplier Cash Payable control account.
+    // Complete Supplier Cash Payable control balance, including both credits and payments/debits.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.credit_amount::numeric - ve.debit_amount::numeric), 0) balance
         FROM voucher_entries ve
@@ -132,15 +189,31 @@ async function buildFullReconciliation(companyId: number) {
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.sub_type = 'sp_payable' AND la.deleted_at IS NULL
         WHERE v.company_id = ${companyId}
       `),
-    // What the sale register says was credited to the payable: an SP sale voucher
-    // is Dr Bank/Cash and Cr Supplier Cash Payable for the full sale price.
+    // Independently derive the same payable balance from every *other* line on
+    // vouchers that touch sp_payable. Balanced vouchers require the counterparty
+    // net debit to equal the payable's credit-normal balance.
+    db.execute(sql`
+        SELECT COALESCE(SUM(ve.debit_amount::numeric - ve.credit_amount::numeric), 0) balance
+        FROM voucher_entries ve
+        JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL
+        LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.deleted_at IS NULL
+        WHERE v.company_id = ${companyId}
+          AND COALESCE(la.sub_type, '') <> 'sp_payable'
+          AND EXISTS (
+            SELECT 1
+            FROM voucher_entries pe
+            JOIN ledger_accounts pla ON pla.id = pe.ledger_account_id AND pla.deleted_at IS NULL
+            WHERE pe.voucher_id = v.id AND pla.sub_type = 'sp_payable'
+          )
+      `),
+    // Source-document total for SP sales.
     db.execute(sql`
         SELECT COALESCE(SUM(total_sale_price_usd::numeric), 0) register_total,
                COUNT(*) sale_count
         FROM sp_sales
         WHERE company_id = ${companyId} AND status = 'posted' AND voucher_id IS NOT NULL
       `),
-    // What the ledger actually credited, restricted to exactly those vouchers.
+    // Ledger credits restricted to exactly the posted SP sale vouchers.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.credit_amount::numeric), 0) credited
         FROM voucher_entries ve
@@ -152,21 +225,45 @@ async function buildFullReconciliation(companyId: number) {
             WHERE company_id = ${companyId} AND status = 'posted' AND voucher_id IS NOT NULL
           )
       `),
+    // Supplier statement side: entries explicitly tagged to a supplier.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.credit_amount::numeric - ve.debit_amount::numeric), 0) balance,
-               COUNT(DISTINCT v.supplier_id) supplier_count
+               COUNT(DISTINCT ve.supplier_id) supplier_count
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL
-        WHERE v.company_id = ${companyId} AND v.supplier_id IS NOT NULL
+        WHERE v.company_id = ${companyId} AND ve.supplier_id IS NOT NULL
       `),
+    // Counterparty side of those same supplier-tagged vouchers. This is derived
+    // from different rows, so a missing/altered supplier statement line can fail.
     db.execute(sql`
-        SELECT COALESCE(SUM(total_sales::numeric), 0) revenue,
-               COALESCE(SUM(total_cost::numeric), 0) cogs,
-               COALESCE(SUM(total_sales::numeric - total_cost::numeric), 0) gross_profit,
-               COALESCE(SUM(v.total_amount::numeric), 0) voucher_total
+        SELECT COALESCE(SUM(ve.debit_amount::numeric - ve.credit_amount::numeric), 0) balance
+        FROM voucher_entries ve
+        JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL
+        WHERE v.company_id = ${companyId}
+          AND ve.supplier_id IS NULL
+          AND EXISTS (
+            SELECT 1 FROM voucher_entries se
+            WHERE se.voucher_id = v.id AND se.supplier_id IS NOT NULL
+          )
+      `),
+    // Sales-item revenue/cost is intentionally isolated from voucher headers.
+    db.execute(sql`
+        SELECT COALESCE(SUM(si.total_sales::numeric), 0) revenue,
+               COALESCE(SUM(si.total_cost::numeric), 0) cogs,
+               COALESCE(SUM(si.total_sales::numeric - si.total_cost::numeric), 0) gross_profit
         FROM sales_items si
         JOIN vouchers v ON v.id = si.voucher_id
         WHERE v.company_id = ${companyId} AND v.voucher_type = 'Sales' AND v.deleted_at IS NULL
+      `),
+    // Each Sales voucher header is counted once, regardless of how many item
+    // lines it owns. The previous joined SUM(v.total_amount) multiplied headers.
+    db.execute(sql`
+        SELECT COALESCE(SUM(v.total_amount::numeric), 0) voucher_total
+        FROM vouchers v
+        WHERE v.company_id = ${companyId}
+          AND v.voucher_type = 'Sales'
+          AND v.deleted_at IS NULL
+          AND EXISTS (SELECT 1 FROM sales_items si WHERE si.voucher_id = v.id)
       `),
     db.execute(sql`
         SELECT COALESCE(SUM(gross_profit::numeric), 0) gross_profit,
@@ -197,8 +294,7 @@ async function buildFullReconciliation(companyId: number) {
         FROM sp_offloads o JOIN sp_containers c ON c.id = o.container_id AND c.company_id = o.company_id
         WHERE o.company_id = ${companyId}
       `),
-    // Offload cost as recorded against the same cost recomputed from the rows it
-    // is built from: container lines at the invoice discount, plus landed charges.
+    // Offload cost as recorded against its independently recomputed components.
     db.execute(sql`
         SELECT COALESCE(SUM(o.total_final_cost_usd::numeric), 0) recorded_cost,
                COALESCE(SUM(o.total_qty::numeric), 0) active_offload_qty,
@@ -220,6 +316,7 @@ async function buildFullReconciliation(companyId: number) {
         ) charges ON true
         WHERE o.company_id = ${companyId}
       `),
+    // Prepaid operational register.
     db.execute(sql`
         SELECT COALESCE(SUM(amount_paid_usd::numeric), 0) paid,
                COALESCE(SUM(amount_used_usd::numeric), 0) used,
@@ -227,18 +324,35 @@ async function buildFullReconciliation(companyId: number) {
                COUNT(*) FILTER (WHERE amount_used_usd::numeric < 0 OR amount_used_usd::numeric > amount_paid_usd::numeric) invalid_count
         FROM sp_prepaid_charges WHERE company_id = ${companyId}
       `),
-    // Parent-agent charges are credited to Prepaid Expenses inside the offload's
-    // own stock voucher, so joining through that voucher counts each charge once.
-    // The previous query joined charges to every entry on the credit account and
-    // halved the cartesian product, which could not fail for any data.
+    // Independent accounting evidence for prepaid paid/used amounts. Paid comes
+    // from debit entries on each linked prepaid voucher (and therefore supports a
+    // permitted custom debit account); used comes from credits to the canonical
+    // sp_prepaid account on actual offload stock vouchers.
+    db.execute(sql`
+        SELECT
+          COALESCE((
+            SELECT SUM(ve.debit_amount::numeric)
+            FROM sp_prepaid_charges p
+            JOIN vouchers v ON v.id = p.voucher_id AND v.deleted_at IS NULL
+            JOIN voucher_entries ve ON ve.voucher_id = v.id
+            WHERE p.company_id = ${companyId} AND ve.debit_amount::numeric > 0
+          ), 0) paid,
+          COALESCE((
+            SELECT SUM(ve.credit_amount::numeric)
+            FROM voucher_entries ve
+            JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL
+            JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.deleted_at IS NULL
+            JOIN sp_offloads o ON o.voucher_id_stock = v.id AND o.company_id = v.company_id
+            WHERE v.company_id = ${companyId} AND la.sub_type = 'sp_prepaid'
+          ), 0) used
+      `),
+    // Parent-agent source register.
     db.execute(sql`
         SELECT COALESCE(SUM(oc.amount_usd::numeric), 0) charge_total
         FROM sp_offload_charges oc
         WHERE oc.company_id = ${companyId} AND oc.charge_type = 'parent_agent'
       `),
-    // The matching credits, counted once per entry: an offload's stock voucher is
-    // the only place a parent-agent charge is posted, and only parent-agent
-    // charges credit Prepaid Expenses inside it.
+    // Matching credits to Prepaid Expenses on offload stock vouchers.
     db.execute(sql`
         SELECT COALESCE(SUM(ve.credit_amount::numeric), 0) posted_total
         FROM voucher_entries ve
@@ -252,17 +366,9 @@ async function buildFullReconciliation(companyId: number) {
             WHERE oc.offload_id = o.id AND oc.charge_type = 'parent_agent'
           )
       `),
-    db
-      .execute(
-        sql`
-        SELECT COUNT(*) FILTER (WHERE status = 'FAIL') fail_count,
-               COUNT(*) total_count
-        FROM sp_migration_verification_results
-        WHERE target_company_id = ${companyId}
-      `
-      )
-      .catch(() => ({ rows: [{ fail_count: 0, total_count: 0 }] })),
   ]);
+
+  const migration = await loadMigrationEvidence(companyId);
 
   const stockRow = resultRows(stock)[0] ?? {};
   const inventoryRow = resultRows(inventory)[0] ?? {};
@@ -270,19 +376,22 @@ async function buildFullReconciliation(companyId: number) {
   const otwAssetRow = resultRows(otwAsset)[0] ?? {};
   const otwClearingRow = resultRows(otwClearing)[0] ?? {};
   const payableRow = resultRows(payable)[0] ?? {};
+  const payableCounterpartyRow = resultRows(payableCounterparty)[0] ?? {};
   const saleRegisterRow = resultRows(saleRegister)[0] ?? {};
   const saleCreditRow = resultRows(saleVoucherCredits)[0] ?? {};
   const statementRow = resultRows(statements)[0] ?? {};
+  const statementCounterpartyRow = resultRows(statementCounterparty)[0] ?? {};
   const profitRow = resultRows(profit)[0] ?? {};
+  const saleVoucherHeaderRow = resultRows(saleVoucherHeaders)[0] ?? {};
   const splitRow = resultRows(splits)[0] ?? {};
   const openingRow = resultRows(openings)[0] ?? {};
   const openingVoucherRow = resultRows(openingVouchers)[0] ?? {};
   const containerRow = resultRows(containers)[0] ?? {};
   const offloadCostRow = resultRows(offloadCosts)[0] ?? {};
   const prepaidRow = resultRows(prepaid)[0] ?? {};
+  const prepaidPostedRow = resultRows(prepaidPosted)[0] ?? {};
   const parentRow = resultRows(parentAgent)[0] ?? {};
   const parentPostedRow = resultRows(parentAgentPosted)[0] ?? {};
-  const migrationRow = resultRows(migration)[0] ?? {};
 
   const stockValue = num(stockRow.value);
   const inventoryValue = num(inventoryRow.value);
@@ -291,10 +400,15 @@ async function buildFullReconciliation(companyId: number) {
   const saleRegisterTotal = num(saleRegisterRow.register_total);
   const lineGrossProfit = num(profitRow.gross_profit);
   const lineCost = num(profitRow.cogs);
+  const saleVoucherTotal = num(saleVoucherHeaderRow.voucher_total);
   const splitGrossProfit = num(splitRow.gross_profit);
   const openingValue = num(openingRow.opening_value);
   const recordedOffloadCost = num(offloadCostRow.recorded_cost);
   const recomputedOffloadCost = num(offloadCostRow.recomputed_cost);
+  const prepaidPaid = num(prepaidRow.paid);
+  const prepaidUsed = num(prepaidRow.used);
+  const prepaidPostedPaid = num(prepaidPostedRow.paid);
+  const prepaidPostedUsed = num(prepaidPostedRow.used);
   const parentChargeTotal = num(parentRow.charge_total);
   const parentPostedTotal = num(parentPostedRow.posted_total);
 
@@ -303,8 +417,6 @@ async function buildFullReconciliation(companyId: number) {
       key: "stock_on_hand",
       databaseValue: stockValue,
       reportValue: inventoryValue,
-      // ERP inventory carries a weighted average rate while SP carries the lot's
-      // final unit cost, so only proportional drift is a mismatch.
       pass: close(stockValue, inventoryValue, { absolute: 0.01, relative: 0.01 }),
       basis: "sp_stock_movements remaining value vs ERP inventory value for SP-linked stock items",
     },
@@ -323,6 +435,23 @@ async function buildFullReconciliation(companyId: number) {
       basis: "open sp_containers invoice total vs the Goods OTW (sp_goods_otw) ledger balance",
     },
     {
+      // Kept for response compatibility; the canonical supplier-entry check is
+      // supplier_statement_control below.
+      key: "supplier_statements",
+      databaseValue: num(otwClearingRow.balance),
+      reportValue: otwAssetBalance,
+      pass: close(num(otwClearingRow.balance), otwAssetBalance),
+      basis: "Goods OTW Clearing liability vs the Goods OTW asset — compatibility surface for the paired OTW posting",
+    },
+    {
+      key: "supplier_statement_control",
+      databaseValue: num(statementRow.balance),
+      reportValue: num(statementCounterpartyRow.balance),
+      pass: close(num(statementRow.balance), num(statementCounterpartyRow.balance)),
+      basis: "supplier-tagged voucher-entry net balance vs the non-supplier counterparty entries on those same vouchers",
+    },
+    {
+      // Source-document check for SP sales specifically.
       key: "supplier_payable",
       databaseValue: saleRegisterTotal,
       reportValue: num(saleCreditRow.credited),
@@ -330,18 +459,19 @@ async function buildFullReconciliation(companyId: number) {
       basis: "posted sp_sales total vs credits to Supplier Cash Payable on exactly those sale vouchers",
     },
     {
-      key: "supplier_statements",
-      databaseValue: num(otwClearingRow.balance),
-      reportValue: otwAssetBalance,
-      pass: close(num(otwClearingRow.balance), otwAssetBalance),
-      basis: "Goods OTW Clearing liability vs the Goods OTW asset — the two legs SP always posts together",
+      // Full control-account check, including payments and non-sp_sales origins.
+      key: "supplier_payable_control",
+      databaseValue: num(payableRow.balance),
+      reportValue: num(payableCounterpartyRow.balance),
+      pass: close(num(payableRow.balance), num(payableCounterpartyRow.balance)),
+      basis: "complete sp_payable credit-normal balance vs net debit of all non-payable lines on every voucher that touches sp_payable",
     },
     {
       key: "gross_profit",
       databaseValue: lineGrossProfit,
-      reportValue: num(profitRow.voucher_total) - lineCost,
-      pass: close(lineGrossProfit, num(profitRow.voucher_total) - lineCost),
-      basis: "sales_items (revenue - cost) vs Sales voucher header totals less the same item costs",
+      reportValue: saleVoucherTotal - lineCost,
+      pass: close(lineGrossProfit, saleVoucherTotal - lineCost),
+      basis: "sales_items revenue less cost vs each distinct Sales voucher header counted once less the same item costs",
     },
     {
       key: "profit_split",
@@ -368,7 +498,6 @@ async function buildFullReconciliation(companyId: number) {
       key: "container_costs",
       databaseValue: recordedOffloadCost,
       reportValue: recomputedOffloadCost,
-      // Recomputed from float-multiplied source rows, so allow proportional drift.
       pass:
         close(recordedOffloadCost, recomputedOffloadCost, { absolute: 0.01, relative: 0.001 }) &&
         num(containerRow.status_mismatches) === 0,
@@ -377,12 +506,15 @@ async function buildFullReconciliation(companyId: number) {
     },
     {
       key: "prepaid_balances",
-      databaseValue: num(prepaidRow.paid) - num(prepaidRow.used),
-      reportValue: num(prepaidRow.balance),
+      databaseValue: prepaidPaid - prepaidUsed,
+      reportValue: prepaidPostedPaid - prepaidPostedUsed,
       pass:
-        close(num(prepaidRow.paid) - num(prepaidRow.used), num(prepaidRow.balance)) &&
+        close(prepaidPaid, prepaidPostedPaid) &&
+        close(prepaidUsed, prepaidPostedUsed) &&
+        close(prepaidPaid - prepaidUsed, prepaidPostedPaid - prepaidPostedUsed) &&
         num(prepaidRow.invalid_count) === 0,
-      basis: "sp_prepaid_charges paid less used vs its stored balance; also fails on used < 0 or used > paid",
+      basis: "sp_prepaid_charges paid/used register vs debit entries on linked prepaid vouchers and credits on actual offload stock vouchers",
+      detail: `register paid/used ${prepaidPaid.toFixed(2)}/${prepaidUsed.toFixed(2)}; accounting paid/used ${prepaidPostedPaid.toFixed(2)}/${prepaidPostedUsed.toFixed(2)}`,
     },
     {
       key: "parent_agent_balances",
@@ -394,19 +526,23 @@ async function buildFullReconciliation(companyId: number) {
     },
     {
       key: "migration_balances",
-      databaseValue: num(migrationRow.total_count),
-      reportValue: num(migrationRow.fail_count),
-      pass: num(migrationRow.fail_count) === 0,
-      basis: "sp_migration_verification_results rows vs the subset marked FAIL",
+      databaseValue: migration.issueCount,
+      reportValue: 0,
+      pass: migration.pass,
+      evidenceStatus: migration.status,
+      basis: "latest real sp_migration_rehearsal_runs evidence evaluated through the Phase 4 final migration verifier",
+      detail: migration.detail,
     },
   ];
 
   const mismatchCount = surfaces.filter((surface) => !surface.pass).length;
+  const unavailableCount = surfaces.filter((surface) => surface.evidenceStatus === "UNAVAILABLE").length;
   return {
-    status: mismatchCount === 0 ? "PASS" : "FAIL",
+    status: unavailableCount > 0 ? "NOT_VERIFIED" : mismatchCount === 0 ? "PASS" : "FAIL",
     companyId,
     generatedAt: new Date().toISOString(),
     mismatchCount,
+    unavailableCount,
     surfaces,
     summary: {
       stockQty: num(stockRow.qty),
@@ -418,8 +554,9 @@ async function buildFullReconciliation(companyId: number) {
       grossProfit: lineGrossProfit,
       openingStockQty: num(openingRow.opening_qty),
       activeOffloadQty: num(offloadCostRow.active_offload_qty),
-      prepaidBalance: num(prepaidRow.balance),
+      prepaidBalance: prepaidPaid - prepaidUsed,
       supplierCount: num(statementRow.supplier_count),
+      migrationEvidence: migration.status,
     },
   };
 }
@@ -455,9 +592,17 @@ export function registerSpFullReconciliationRoutes(app: Express): void {
         if (!companyId) return;
         const report = await buildFullReconciliation(companyId);
         const csv = [
-          ["surface", "database_value", "independent_value", "status", "basis"].join(","),
+          ["surface", "database_value", "independent_value", "status", "evidence_status", "basis", "detail"].join(","),
           ...report.surfaces.map((surface) =>
-            [surface.key, surface.databaseValue, surface.reportValue, surface.pass ? "PASS" : "FAIL", surface.basis]
+            [
+              surface.key,
+              surface.databaseValue,
+              surface.reportValue,
+              surface.pass ? "PASS" : "FAIL",
+              surface.evidenceStatus ?? "",
+              surface.basis,
+              surface.detail ?? "",
+            ]
               .map(csvEscape)
               .join(",")
           ),
