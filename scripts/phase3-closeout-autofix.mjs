@@ -1,5 +1,6 @@
 import fs from "node:fs";
 
+// Temporary closeout helper: apply deterministic Phase 3 fixes and let CI verify them.
 const file = "server/services/accounting/phase3HistoricalRepair.ts";
 let source = fs.readFileSync(file, "utf8");
 
@@ -41,6 +42,14 @@ const replacement = `  const old = await client.query<{ id: number }>(
       duplicateIds,
     ]);
   }
+
+  // Historical repair owns the survivor voucher transactionally. Retire any
+  // stale posting marker before changing its payload so future retries cannot
+  // validate against an obsolete request fingerprint.
+  await client.query(
+    \`DELETE FROM accounting_posting_requests WHERE company_id=$1 AND voucher_id=$2\`,
+    [companyId, voucherId]
+  );
 
   const totalGrossCents = totalNetCents + totalAdvanceCents;
   const description = \`Payroll expense: \${payrolls.rows.length} worker\${payrolls.rows.length === 1 ? "" : "s"} (\${periodStart} – \${periodEnd})\`;
