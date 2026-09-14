@@ -16,7 +16,7 @@ describe("retail company type", () => {
         name: "Retail Shop",
         companyType: "retail",
         parentCompanyId: null,
-      }).companyType,
+      }).companyType
     ).toBe("retail");
     expect(companyTypeSchema.parse("retail")).toBe("retail");
   });

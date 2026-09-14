@@ -192,7 +192,7 @@ function ProductEditor({
                   : [{ locationId: "", quantity: 0 }],
               })),
             }
-          : blankDraft(),
+          : blankDraft()
       );
     }
   } else if (loadedProductId !== null) {
@@ -233,7 +233,11 @@ function ProductEditor({
         active: draft.active,
         variants,
       };
-      const response = await apiRequest(product ? "PATCH" : "POST", product ? `/api/retail/products/${product.id}` : "/api/retail/products", payload);
+      const response = await apiRequest(
+        product ? "PATCH" : "POST",
+        product ? `/api/retail/products/${product.id}` : "/api/retail/products",
+        payload
+      );
       return response.json();
     },
     onSuccess: () => {
@@ -243,7 +247,8 @@ function ProductEditor({
       toast({ title: product ? "Product updated" : "Product created" });
       onOpenChange(false);
     },
-    onError: (error: Error) => toast({ title: "Could not save product", description: error.message, variant: "destructive" }),
+    onError: (error: Error) =>
+      toast({ title: "Could not save product", description: error.message, variant: "destructive" }),
   });
 
   const updateVariant = (index: number, patch: Partial<DraftVariant>) => {
@@ -277,7 +282,9 @@ function ProductEditor({
             >
               <option value="">Other / No Brand or custom brand</option>
               {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>{brand.name}</option>
+                <option key={brand.id} value={brand.id}>
+                  {brand.name}
+                </option>
               ))}
             </select>
           </div>
@@ -313,9 +320,15 @@ function ProductEditor({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold">Sizes / Variants</h3>
-              <p className="text-xs text-muted-foreground">Each size has its own barcode, price, cost and location stock.</p>
+              <p className="text-xs text-muted-foreground">
+                Each size has its own barcode, price, cost and location stock.
+              </p>
             </div>
-            <Button type="button" variant="outline" onClick={() => setDraft((current) => ({ ...current, variants: [...current.variants, blankVariant()] }))}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDraft((current) => ({ ...current, variants: [...current.variants, blankVariant()] }))}
+            >
               <Plus className="h-4 w-4 mr-1" /> Add size
             </Button>
           </div>
@@ -324,16 +337,64 @@ function ProductEditor({
             <Card key={variant.id ?? `new-${variantIndex}`}>
               <CardContent className="p-4 space-y-4">
                 <div className="grid gap-3 md:grid-cols-6">
-                  <div className="space-y-1"><Label>Size *</Label><Input value={variant.size} onChange={(e) => updateVariant(variantIndex, { size: e.target.value })} /></div>
-                  <div className="space-y-1 md:col-span-2"><Label>Barcode *</Label><Input value={variant.barcode} onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })} /></div>
-                  <div className="space-y-1"><Label>Cost</Label><Input type="number" min="0" step="0.01" value={variant.cost} onChange={(e) => updateVariant(variantIndex, { cost: Number(e.target.value) })} /></div>
-                  <div className="space-y-1"><Label>Selling price</Label><Input type="number" min="0" step="0.01" value={variant.sellingPrice} onChange={(e) => updateVariant(variantIndex, { sellingPrice: Number(e.target.value) })} /></div>
-                  <div className="space-y-1"><Label>Low stock</Label><Input type="number" min="0" step="1" value={variant.lowStockThreshold} onChange={(e) => updateVariant(variantIndex, { lowStockThreshold: Number(e.target.value) })} /></div>
+                  <div className="space-y-1">
+                    <Label>Size *</Label>
+                    <Input
+                      value={variant.size}
+                      onChange={(e) => updateVariant(variantIndex, { size: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Barcode *</Label>
+                    <Input
+                      value={variant.barcode}
+                      onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Cost</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.cost}
+                      onChange={(e) => updateVariant(variantIndex, { cost: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Selling price</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.sellingPrice}
+                      onChange={(e) => updateVariant(variantIndex, { sellingPrice: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Low stock</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={variant.lowStockThreshold}
+                      onChange={(e) => updateVariant(variantIndex, { lowStockThreshold: Number(e.target.value) })}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Stock by location</Label>
-                    <Button type="button" size="sm" variant="ghost" onClick={() => updateVariant(variantIndex, { stocks: [...variant.stocks, { locationId: "", quantity: 0 }] })}>+ Location</Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        updateVariant(variantIndex, { stocks: [...variant.stocks, { locationId: "", quantity: 0 }] })
+                      }
+                    >
+                      + Location
+                    </Button>
                   </div>
                   {variant.stocks.map((stock, stockIndex) => (
                     <div key={`${variantIndex}-${stockIndex}`} className="flex gap-2">
@@ -341,12 +402,22 @@ function ProductEditor({
                         className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
                         value={stock.locationId}
                         onChange={(e) => {
-                          const stocks = variant.stocks.map((item, i) => i === stockIndex ? { ...item, locationId: e.target.value ? Number(e.target.value) : "" as const } : item);
+                          const stocks = variant.stocks.map((item, i) =>
+                            i === stockIndex
+                              ? { ...item, locationId: e.target.value ? Number(e.target.value) : ("" as const) }
+                              : item
+                          );
                           updateVariant(variantIndex, { stocks });
                         }}
                       >
                         <option value="">Select location</option>
-                        {locations.filter((location) => location.active !== false).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                        {locations
+                          .filter((location) => location.active !== false)
+                          .map((location) => (
+                            <option key={location.id} value={location.id}>
+                              {location.name}
+                            </option>
+                          ))}
                       </select>
                       <Input
                         className="w-36"
@@ -354,18 +425,39 @@ function ProductEditor({
                         step="0.001"
                         value={stock.quantity}
                         onChange={(e) => {
-                          const stocks = variant.stocks.map((item, i) => i === stockIndex ? { ...item, quantity: Number(e.target.value) } : item);
+                          const stocks = variant.stocks.map((item, i) =>
+                            i === stockIndex ? { ...item, quantity: Number(e.target.value) } : item
+                          );
                           updateVariant(variantIndex, { stocks });
                         }}
                       />
                       {variant.stocks.length > 1 && (
-                        <Button type="button" size="icon" variant="ghost" onClick={() => updateVariant(variantIndex, { stocks: variant.stocks.filter((_, i) => i !== stockIndex) })}><X className="h-4 w-4" /></Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            updateVariant(variantIndex, { stocks: variant.stocks.filter((_, i) => i !== stockIndex) })
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
                   ))}
                 </div>
                 {draft.variants.length > 1 && !variant.id && (
-                  <Button type="button" variant="ghost" className="text-destructive" onClick={() => setDraft((current) => ({ ...current, variants: current.variants.filter((_, i) => i !== variantIndex) }))}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        variants: current.variants.filter((_, i) => i !== variantIndex),
+                      }))
+                    }
+                  >
                     Remove size
                   </Button>
                 )}
@@ -375,8 +467,12 @@ function ProductEditor({
         </div>
 
         <div className="flex justify-end gap-2 border-t pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>{saveMutation.isPending ? "Saving…" : "Save product"}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            {saveMutation.isPending ? "Saving…" : "Save product"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -390,8 +486,30 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
   const downloadTemplate = async () => {
     const sheet = utils.json_to_sheet([
-      { Code: "SHOE-001", Name: "Runner", Brand: "Acme", Size: "42", Barcode: "6001234567890", Cost: 25, Price: 49.99, Qty: 12, Location: "MAIN", Category: "Shoes" },
-      { Code: "SHOE-001", Name: "Runner", Brand: "Acme", Size: "43", Barcode: "6001234567891", Cost: 25, Price: 49.99, Qty: 8, Location: "MAIN", Category: "Shoes" },
+      {
+        Code: "SHOE-001",
+        Name: "Runner",
+        Brand: "Acme",
+        Size: "42",
+        Barcode: "6001234567890",
+        Cost: 25,
+        Price: 49.99,
+        Qty: 12,
+        Location: "MAIN",
+        Category: "Shoes",
+      },
+      {
+        Code: "SHOE-001",
+        Name: "Runner",
+        Brand: "Acme",
+        Size: "43",
+        Barcode: "6001234567891",
+        Cost: 25,
+        Price: 49.99,
+        Qty: 8,
+        Location: "MAIN",
+        Category: "Shoes",
+      },
     ]);
     const book = utils.book_new();
     utils.book_append_sheet(book, sheet, "Retail Products");
@@ -407,7 +525,10 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["retail-products"] });
       queryClient.invalidateQueries({ queryKey: ["retail-brands"] });
-      toast({ title: "Retail import complete", description: `${result.rowsProcessed} rows · ${result.productsCreated} new products · ${result.variantsCreated} new variants` });
+      toast({
+        title: "Retail import complete",
+        description: `${result.rowsProcessed} rows · ${result.productsCreated} new products · ${result.variantsCreated} new variants`,
+      });
       onOpenChange(false);
       setRows([]);
       setFileName("");
@@ -446,19 +567,43 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       toast({ title: "File ready", description: `${mapped.length} rows validated for import` });
     } catch (error) {
       setRows([]);
-      toast({ title: "Could not read file", description: error instanceof Error ? error.message : "Invalid Excel file", variant: "destructive" });
+      toast({
+        title: "Could not read file",
+        description: error instanceof Error ? error.message : "Invalid Excel file",
+        variant: "destructive",
+      });
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>Import Retail Products</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">Required columns: Code | Name | Brand | Size | Barcode | Cost | Price | Qty | Location. Multiple sizes with the same Code are grouped under one product.</p>
-        <div className="flex gap-2"><Button variant="outline" onClick={downloadTemplate}>Download template</Button></div>
+        <DialogHeader>
+          <DialogTitle>Import Retail Products</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Required columns: Code | Name | Brand | Size | Barcode | Cost | Price | Qty | Location. Multiple sizes with
+          the same Code are grouped under one product.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={downloadTemplate}>
+            Download template
+          </Button>
+        </div>
         <Input type="file" accept=".xlsx,.xls" onChange={(e) => handleFile(e.target.files?.[0])} />
-        {fileName && <p className="text-sm">{fileName}: <strong>{rows.length}</strong> rows ready</p>}
-        <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button disabled={!rows.length || importMutation.isPending} onClick={() => importMutation.mutate()}>{importMutation.isPending ? "Importing…" : "Import"}</Button></div>
+        {fileName && (
+          <p className="text-sm">
+            {fileName}: <strong>{rows.length}</strong> rows ready
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={!rows.length || importMutation.isPending} onClick={() => importMutation.mutate()}>
+            {importMutation.isPending ? "Importing…" : "Import"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -480,14 +625,36 @@ export default function RetailInventory() {
 
   const retailEnabled = selectedCompany?.companyType === "retail";
   const companyKey = selectedCompany?.id ?? 0;
-  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["retail-brands", companyKey], queryFn: () => getJson("/api/retail/brands"), enabled: retailEnabled });
-  const { data: locations = [] } = useQuery<Location[]>({ queryKey: ["retail-locations", companyKey], queryFn: () => getJson("/api/locations"), enabled: retailEnabled });
-  const { data: products = [], isLoading } = useQuery<RetailProduct[]>({ queryKey: ["retail-products", companyKey], queryFn: () => getJson("/api/retail/products"), enabled: retailEnabled });
+  const { data: brands = [] } = useQuery<Brand[]>({
+    queryKey: ["retail-brands", companyKey],
+    queryFn: () => getJson("/api/retail/brands"),
+    enabled: retailEnabled,
+  });
+  const { data: locations = [] } = useQuery<Location[]>({
+    queryKey: ["retail-locations", companyKey],
+    queryFn: () => getJson("/api/locations"),
+    enabled: retailEnabled,
+  });
+  const { data: products = [], isLoading } = useQuery<RetailProduct[]>({
+    queryKey: ["retail-products", companyKey],
+    queryFn: () => getJson("/api/retail/products"),
+    enabled: retailEnabled,
+  });
   const productId = detailMatch ? Number(detailParams?.id) : 0;
-  const { data: detailProduct } = useQuery<RetailProduct>({ queryKey: ["retail-product", companyKey, productId], queryFn: () => getJson(`/api/retail/products/${productId}`), enabled: retailEnabled && productId > 0 });
+  const { data: detailProduct } = useQuery<RetailProduct>({
+    queryKey: ["retail-product", companyKey, productId],
+    queryFn: () => getJson(`/api/retail/products/${productId}`),
+    enabled: retailEnabled && productId > 0,
+  });
 
   const sizes = useMemo(() => [...new Set(products.flatMap((product) => product.availableSizes))].sort(), [products]);
-  const categories = useMemo(() => [...new Set(products.map((product) => product.category).filter((value): value is string => Boolean(value)))].sort(), [products]);
+  const categories = useMemo(
+    () =>
+      [
+        ...new Set(products.map((product) => product.category).filter((value): value is string => Boolean(value))),
+      ].sort(),
+    [products]
+  );
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((product) => {
@@ -495,16 +662,32 @@ export default function RetailInventory() {
       if (brandId && product.brand.id !== Number(brandId)) return false;
       if (size && !product.availableSizes.includes(size)) return false;
       if (category && product.category !== category) return false;
-      if (locationId && !product.variants.some((variant) => variant.stocks.some((stock) => stock.locationId === Number(locationId)))) return false;
+      if (
+        locationId &&
+        !product.variants.some((variant) => variant.stocks.some((stock) => stock.locationId === Number(locationId)))
+      )
+        return false;
       if (stockStatus === "out" && product.totalQuantity !== 0) return false;
       if (stockStatus === "in" && product.totalQuantity <= 0) return false;
-      if (stockStatus === "low" && !product.variants.some((variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold)) return false;
+      if (
+        stockStatus === "low" &&
+        !product.variants.some((variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold)
+      )
+        return false;
       return true;
     });
   }, [products, search, brandId, size, category, locationId, stockStatus]);
 
   if (!retailEnabled) {
-    return <div className="p-6"><Card><CardContent className="p-6">Retail inventory is only available when a Retail / Variant Inventory company is selected.</CardContent></Card></div>;
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            Retail inventory is only available when a Retail / Variant Inventory company is selected.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (detailMatch) {
@@ -512,21 +695,88 @@ export default function RetailInventory() {
     return (
       <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/retail")}><ArrowLeft className="h-4 w-4 mr-2" />Inventory</Button>
-          <Button onClick={() => { setEditingProduct(detailProduct); setEditorOpen(true); }}><Pencil className="h-4 w-4 mr-2" />Edit product</Button>
+          <Button variant="ghost" onClick={() => navigate("/retail")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Inventory
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingProduct(detailProduct);
+              setEditorOpen(true);
+            }}
+          >
+            <Pencil className="h-4 w-4 mr-2" />
+            Edit product
+          </Button>
         </div>
         <div className="flex gap-5 items-start">
           <ProductImage product={detailProduct} className="h-32 w-32 rounded-lg border" />
-          <div><p className="text-sm text-muted-foreground">{detailProduct.code}</p><h1 className="text-3xl font-bold">{detailProduct.name}</h1><p className="mt-1">{detailProduct.brand.name}{detailProduct.category ? ` · ${detailProduct.category}` : ""}</p><p className="mt-2 text-sm text-muted-foreground max-w-2xl">{detailProduct.description}</p></div>
+          <div>
+            <p className="text-sm text-muted-foreground">{detailProduct.code}</p>
+            <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
+            <p className="mt-1">
+              {detailProduct.brand.name}
+              {detailProduct.category ? ` · ${detailProduct.category}` : ""}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">{detailProduct.description}</p>
+          </div>
         </div>
-        {detailProduct.imageUrls.length > 1 && <div className="flex gap-2 overflow-x-auto">{detailProduct.imageUrls.map((src) => <img key={src} src={src} alt="" loading="lazy" decoding="async" className="h-20 w-20 rounded border object-cover" />)}</div>}
+        {detailProduct.imageUrls.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto">
+            {detailProduct.imageUrls.map((src) => (
+              <img
+                key={src}
+                src={src}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="h-20 w-20 rounded border object-cover"
+              />
+            ))}
+          </div>
+        )}
         <Card>
-          <CardHeader><CardTitle>Stock by size</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Stock by size</CardTitle>
+          </CardHeader>
           <CardContent className="overflow-x-auto">
-            <table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">Size</th><th>Barcode</th><th>Cost</th><th>Selling price</th><th>Total Qty</th><th>Locations</th></tr></thead><tbody>{detailProduct.variants.map((variant) => <tr key={variant.id} className="border-b last:border-0"><td className="py-3 font-medium">{variant.size}</td><td className="font-mono text-xs">{variant.barcode}</td><td>{money(variant.cost)}</td><td>{money(variant.sellingPrice)}</td><td>{variant.quantity}</td><td>{variant.stocks.length ? variant.stocks.map((stock) => `${stock.locationName}: ${stock.quantity}`).join(" · ") : "—"}</td></tr>)}</tbody></table>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Size</th>
+                  <th>Barcode</th>
+                  <th>Cost</th>
+                  <th>Selling price</th>
+                  <th>Total Qty</th>
+                  <th>Locations</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detailProduct.variants.map((variant) => (
+                  <tr key={variant.id} className="border-b last:border-0">
+                    <td className="py-3 font-medium">{variant.size}</td>
+                    <td className="font-mono text-xs">{variant.barcode}</td>
+                    <td>{money(variant.cost)}</td>
+                    <td>{money(variant.sellingPrice)}</td>
+                    <td>{variant.quantity}</td>
+                    <td>
+                      {variant.stocks.length
+                        ? variant.stocks.map((stock) => `${stock.locationName}: ${stock.quantity}`).join(" · ")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
-        <ProductEditor open={editorOpen} onOpenChange={setEditorOpen} product={editingProduct} brands={brands} locations={locations} />
+        <ProductEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          product={editingProduct}
+          brands={brands}
+          locations={locations}
+        />
       </div>
     );
   }
@@ -534,40 +784,173 @@ export default function RetailInventory() {
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><div className="flex items-center gap-2"><Boxes className="h-6 w-6" /><h1 className="text-2xl font-bold">Retail Inventory</h1></div><p className="text-sm text-muted-foreground mt-1">Products grouped by brand with independent stock and barcodes for every size.</p></div>
-        <div className="flex gap-2"><Button variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4 mr-2" />Import</Button><Button onClick={() => { setEditingProduct(null); setEditorOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Product</Button></div>
+        <div>
+          <div className="flex items-center gap-2">
+            <Boxes className="h-6 w-6" />
+            <h1 className="text-2xl font-bold">Retail Inventory</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Products grouped by brand with independent stock and barcodes for every size.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingProduct(null);
+              setEditorOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-2 md:grid-cols-6">
-        <Input placeholder="Search product, code or brand…" value={search} onChange={(e) => setSearch(e.target.value)} className="md:col-span-2" />
-        <select className="h-10 rounded-md border bg-background px-2 text-sm" value={brandId} onChange={(e) => setBrandId(e.target.value)}><option value="">All brands</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select>
-        <select className="h-10 rounded-md border bg-background px-2 text-sm" value={size} onChange={(e) => setSize(e.target.value)}><option value="">All sizes</option>{sizes.map((value) => <option key={value}>{value}</option>)}</select>
-        <select className="h-10 rounded-md border bg-background px-2 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select>
-        <select className="h-10 rounded-md border bg-background px-2 text-sm" value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">All locations</option>{locations.filter((location) => location.active !== false).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select>
-        <select className="h-10 rounded-md border bg-background px-2 text-sm" value={stockStatus} onChange={(e) => setStockStatus(e.target.value)}><option value="all">All stock</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>
+        <Input
+          placeholder="Search product, code or brand…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="md:col-span-2"
+        />
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={brandId}
+          onChange={(e) => setBrandId(e.target.value)}
+        >
+          <option value="">All brands</option>
+          {brands.map((brand) => (
+            <option key={brand.id} value={brand.id}>
+              {brand.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+        >
+          <option value="">All sizes</option>
+          {sizes.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">All categories</option>
+          {categories.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={locationId}
+          onChange={(e) => setLocationId(e.target.value)}
+        >
+          <option value="">All locations</option>
+          {locations
+            .filter((location) => location.active !== false)
+            .map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+        </select>
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={stockStatus}
+          onChange={(e) => setStockStatus(e.target.value)}
+        >
+          <option value="all">All stock</option>
+          <option value="in">In stock</option>
+          <option value="low">Low stock</option>
+          <option value="out">Out of stock</option>
+        </select>
       </div>
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm min-w-[850px]">
-            <thead><tr className="border-b bg-muted/40 text-left"><th className="p-3 w-16">Image</th><th>Product</th><th>Brand</th><th>Available sizes</th><th className="text-right">Total quantity</th><th className="text-right">Selling price</th><th className="w-24"></th></tr></thead>
+            <thead>
+              <tr className="border-b bg-muted/40 text-left">
+                <th className="p-3 w-16">Image</th>
+                <th>Product</th>
+                <th>Brand</th>
+                <th>Available sizes</th>
+                <th className="text-right">Total quantity</th>
+                <th className="text-right">Selling price</th>
+                <th className="w-24"></th>
+              </tr>
+            </thead>
             <tbody>
-              {isLoading ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Loading retail inventory…</td></tr> : filteredProducts.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No products match these filters.</td></tr> : filteredProducts.map((product) => (
-                <tr key={product.id} className="border-b last:border-0 hover:bg-muted/20 cursor-pointer" onClick={() => navigate(`/retail/products/${product.id}`)}>
-                  <td className="p-3"><ProductImage product={product} className="h-11 w-11 rounded-md border" /></td>
-                  <td><div className="font-medium">{product.name}</div><div className="text-xs text-muted-foreground">{product.code}</div></td>
-                  <td>{product.brand.name}</td>
-                  <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>
-                  <td className="text-right font-medium">{product.totalQuantity}</td>
-                  <td className="text-right">{product.minSellingPrice === product.maxSellingPrice ? money(product.minSellingPrice) : `${money(product.minSellingPrice)} – ${money(product.maxSellingPrice)}`}</td>
-                  <td className="text-right"><Button size="sm" variant="ghost" onClick={(event) => { event.stopPropagation(); setEditingProduct(product); setEditorOpen(true); }}><Pencil className="h-4 w-4" /></Button></td>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    Loading retail inventory…
+                  </td>
                 </tr>
-              ))}
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No products match these filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((product) => (
+                  <tr
+                    key={product.id}
+                    className="border-b last:border-0 hover:bg-muted/20 cursor-pointer"
+                    onClick={() => navigate(`/retail/products/${product.id}`)}
+                  >
+                    <td className="p-3">
+                      <ProductImage product={product} className="h-11 w-11 rounded-md border" />
+                    </td>
+                    <td>
+                      <div className="font-medium">{product.name}</div>
+                      <div className="text-xs text-muted-foreground">{product.code}</div>
+                    </td>
+                    <td>{product.brand.name}</td>
+                    <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>
+                    <td className="text-right font-medium">{product.totalQuantity}</td>
+                    <td className="text-right">
+                      {product.minSellingPrice === product.maxSellingPrice
+                        ? money(product.minSellingPrice)
+                        : `${money(product.minSellingPrice)} – ${money(product.maxSellingPrice)}`}
+                    </td>
+                    <td className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingProduct(product);
+                          setEditorOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </CardContent>
       </Card>
-      <ProductEditor open={editorOpen} onOpenChange={setEditorOpen} product={editingProduct} brands={brands} locations={locations} />
+      <ProductEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        product={editingProduct}
+        brands={brands}
+        locations={locations}
+      />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );

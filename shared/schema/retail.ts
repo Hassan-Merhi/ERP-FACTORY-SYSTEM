@@ -34,7 +34,7 @@ export const retailBrands = pgTable(
   (t) => ({
     companyIdx: index("retail_brands_company_idx").on(t.companyId),
     companyNameUnique: uniqueIndex("retail_brands_company_name_unique").on(t.companyId, t.normalizedName),
-  }),
+  })
 );
 
 export const retailProducts = pgTable(
@@ -58,7 +58,7 @@ export const retailProducts = pgTable(
     companyIdx: index("retail_products_company_idx").on(t.companyId),
     companyCodeUnique: uniqueIndex("retail_products_company_code_unique").on(t.companyId, t.code),
     brandIdx: index("retail_products_brand_idx").on(t.brandId),
-  }),
+  })
 );
 
 export const retailProductVariants = pgTable(
@@ -87,7 +87,7 @@ export const retailProductVariants = pgTable(
     companyBarcodeUnique: uniqueIndex("retail_product_variants_company_barcode_unique").on(t.companyId, t.barcode),
     companySkuUnique: uniqueIndex("retail_product_variants_company_sku_unique").on(t.companyId, t.sku),
     productSizeUnique: uniqueIndex("retail_product_variants_product_size_unique").on(t.productId, t.size),
-  }),
+  })
 );
 
 export const retailVariantInventory = pgTable(
@@ -112,8 +112,11 @@ export const retailVariantInventory = pgTable(
     companyIdx: index("retail_variant_inventory_company_idx").on(t.companyId),
     variantIdx: index("retail_variant_inventory_variant_idx").on(t.variantId),
     locationIdx: index("retail_variant_inventory_location_idx").on(t.locationId),
-    variantLocationUnique: uniqueIndex("retail_variant_inventory_variant_location_unique").on(t.variantId, t.locationId),
-  }),
+    variantLocationUnique: uniqueIndex("retail_variant_inventory_variant_location_unique").on(
+      t.variantId,
+      t.locationId
+    ),
+  })
 );
 
 export const insertRetailBrandSchema = createInsertSchema(retailBrands)
@@ -149,7 +152,7 @@ export const retailVariantInputSchema = z.object({
       z.object({
         locationId: z.number().int().positive(),
         quantity: z.coerce.number().finite(),
-      }),
+      })
     )
     .optional()
     .default([]),

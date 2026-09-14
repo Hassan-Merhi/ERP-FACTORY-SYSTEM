@@ -1,13 +1,6 @@
 import { z, type ZodType } from "zod";
 
-export const companyTypeSchema = z.enum([
-  "erp",
-  "factory",
-  "factory_v2",
-  "properties",
-  "supplier_partner",
-  "retail",
-]);
+export const companyTypeSchema = z.enum(["erp", "factory", "factory_v2", "properties", "supplier_partner", "retail"]);
 
 export type CompanyType = z.infer<typeof companyTypeSchema>;
 
@@ -18,7 +11,7 @@ const optionalBoolean = z.boolean().nullable().optional();
 export class SessionContractError extends Error {
   constructor(
     public readonly contract: "authenticated-user" | "user-companies" | "session-company",
-    public readonly issues: readonly string[],
+    public readonly issues: readonly string[]
   ) {
     super(`Invalid ${contract} response`);
     this.name = "SessionContractError";
@@ -30,7 +23,7 @@ function parseContract<T>(contract: SessionContractError["contract"], schema: Zo
   if (parsed.success) return parsed.data;
   throw new SessionContractError(
     contract,
-    parsed.error.issues.map((issue) => `${issue.path.join(".") || "response"}: ${issue.message}`),
+    parsed.error.issues.map((issue) => `${issue.path.join(".") || "response"}: ${issue.message}`)
   );
 }
 
@@ -46,7 +39,13 @@ export const authenticatedUserSchema = z
     active: z.boolean().optional(),
     assignedLocationId: optionalPositiveInteger,
     posStation: z
-      .union([z.string().min(1), z.number().int().transform((value) => String(value))])
+      .union([
+        z.string().min(1),
+        z
+          .number()
+          .int()
+          .transform((value) => String(value)),
+      ])
       .nullable()
       .optional(),
     cashAccountId: optionalPositiveInteger,

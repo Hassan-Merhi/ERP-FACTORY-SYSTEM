@@ -146,7 +146,7 @@ function getTextMemory(node: Text, currentValue: string): TranslationMemory {
 function getAttributeMemory(
   element: Element,
   attribute: TranslatableAttribute,
-  currentValue: string,
+  currentValue: string
 ): TranslationMemory {
   let attributes = attributeTranslationMemory.get(element);
   if (!attributes) {

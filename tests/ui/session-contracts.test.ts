@@ -106,9 +106,7 @@ describe("session API contracts", () => {
   });
 
   it("rejects authenticated-user responses without a username", () => {
-    expect(() => parseAuthenticatedUser({ id: 1, role: "Admin" })).toThrow(
-      "Invalid authenticated-user response",
-    );
+    expect(() => parseAuthenticatedUser({ id: 1, role: "Admin" })).toThrow("Invalid authenticated-user response");
   });
 
   it("coerces valid session company identifiers and accepts null", () => {

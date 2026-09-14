@@ -44,11 +44,7 @@ async function requireRetailCompany(req: Request, res: Response): Promise<number
   return companyId;
 }
 
-async function getOrCreateBrand(
-  executor: RetailQueryExecutor,
-  companyId: number,
-  requestedName?: string | null,
-) {
+async function getOrCreateBrand(executor: RetailQueryExecutor, companyId: number, requestedName?: string | null) {
   const name = requestedName?.trim() || RETAIL_NO_BRAND_NAME;
   const normalizedName = normalize(name);
   const [existing] = await executor
@@ -112,11 +108,7 @@ function validateVariantPayload(input: RetailProductWrite) {
   }
 }
 
-async function validateLocations(
-  executor: RetailQueryExecutor,
-  companyId: number,
-  input: RetailProductWrite,
-) {
+async function validateLocations(executor: RetailQueryExecutor, companyId: number, input: RetailProductWrite) {
   const ids = [...new Set(input.variants.flatMap((variant) => variant.stocks.map((stock) => stock.locationId)))];
   if (!ids.length) return;
 
@@ -133,7 +125,7 @@ async function validateLocations(
 async function assertUniqueBarcodes(
   executor: RetailQueryExecutor,
   companyId: number,
-  variants: RetailProductWrite["variants"],
+  variants: RetailProductWrite["variants"]
 ) {
   const barcodes = variants.map((variant) => variant.barcode.trim());
   if (!barcodes.length) return;
@@ -303,9 +295,7 @@ function filterProducts(products: Awaited<ReturnType<typeof loadProducts>>, quer
     if (stockStatus === "out" && product.totalQuantity !== 0) return false;
     if (
       stockStatus === "low" &&
-      !product.variants.some(
-        (variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold,
-      )
+      !product.variants.some((variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold)
     ) {
       return false;
     }
@@ -462,7 +452,7 @@ export function registerRetailRoutes(app: Express) {
                 locationId: stock.locationId,
                 quantity: String(stock.quantity),
                 averageCost: String(variantInput.cost),
-              })),
+              }))
             );
           }
         }
@@ -573,7 +563,9 @@ export function registerRetailRoutes(app: Express) {
 
           await tx
             .delete(retailVariantInventory)
-            .where(and(eq(retailVariantInventory.variantId, variantId), eq(retailVariantInventory.companyId, companyId)));
+            .where(
+              and(eq(retailVariantInventory.variantId, variantId), eq(retailVariantInventory.companyId, companyId))
+            );
 
           if (variantInput.stocks.length) {
             await tx.insert(retailVariantInventory).values(
@@ -583,7 +575,7 @@ export function registerRetailRoutes(app: Express) {
                 locationId: stock.locationId,
                 quantity: String(stock.quantity),
                 averageCost: String(variantInput.cost),
-              })),
+              }))
             );
           }
         }
@@ -659,13 +651,11 @@ export function registerRetailRoutes(app: Express) {
               eq(retailProductVariants.companyId, companyId),
               inArray(
                 retailProductVariants.barcode,
-                rows.map((row) => row.barcode),
-              ),
-            ),
+                rows.map((row) => row.barcode)
+              )
+            )
           );
-        const existingByBarcode = new Map(
-          existingBarcodeRows.map((row) => [normalize(row.barcode), row]),
-        );
+        const existingByBarcode = new Map(existingBarcodeRows.map((row) => [normalize(row.barcode), row]));
 
         const productCache = new Map<string, { id: number; name: string }>();
         const existingProducts = await tx
