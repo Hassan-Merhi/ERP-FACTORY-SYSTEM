@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { ArrowLeft, Boxes, ImageIcon, Pencil, Plus, ShoppingCart, Upload, X } from "lucide-react";
@@ -59,6 +59,19 @@ interface RetailProduct {
   totalQuantity: number;
   minSellingPrice: number;
   maxSellingPrice: number;
+}
+
+interface RetailCatalogPage {
+  items: RetailProduct[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+interface RetailCatalogFacets {
+  sizes: string[];
+  categories: string[];
 }
 
 interface DraftStock {
@@ -629,6 +642,17 @@ export default function RetailInventory() {
   const [category, setCategory] = useState("");
   const [locationId, setLocationId] = useState("");
   const [stockStatus, setStockStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, brandId, size, category, locationId, stockStatus]);
 
   const retailEnabled = selectedCompany?.companyType === "retail";
   const companyKey = selectedCompany?.id ?? 0;
@@ -642,48 +666,40 @@ export default function RetailInventory() {
     queryFn: () => getJson("/api/locations"),
     enabled: retailEnabled,
   });
-  const { data: products = [], isLoading } = useQuery<RetailProduct[]>({
-    queryKey: ["retail-products", companyKey],
-    queryFn: () => getJson("/api/retail/products"),
+  const { data: catalogFacets } = useQuery<RetailCatalogFacets>({
+    queryKey: ["retail-catalog-facets", companyKey],
+    queryFn: () => getJson("/api/retail/catalog-facets"),
     enabled: retailEnabled,
+    staleTime: 60_000,
   });
+
+  const catalogParams = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), pageSize: "60", stockStatus });
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (brandId) params.set("brandId", brandId);
+    if (size) params.set("size", size);
+    if (category) params.set("category", category);
+    if (locationId) params.set("locationId", locationId);
+    return params.toString();
+  }, [page, debouncedSearch, brandId, size, category, locationId, stockStatus]);
+
+  const { data: catalogPage, isLoading } = useQuery<RetailCatalogPage>({
+    queryKey: ["retail-products", "page", companyKey, catalogParams],
+    queryFn: () => getJson(`/api/retail/products-page?${catalogParams}`),
+    enabled: retailEnabled,
+    placeholderData: (previous) => previous,
+  });
+  const products = catalogPage?.items ?? [];
+  const filteredProducts = products;
+  const sizes = catalogFacets?.sizes ?? [];
+  const categories = catalogFacets?.categories ?? [];
+
   const productId = detailMatch ? Number(detailParams?.id) : 0;
   const { data: detailProduct } = useQuery<RetailProduct>({
     queryKey: ["retail-product", companyKey, productId],
     queryFn: () => getJson(`/api/retail/products/${productId}`),
     enabled: retailEnabled && productId > 0,
   });
-
-  const sizes = useMemo(() => [...new Set(products.flatMap((product) => product.availableSizes))].sort(), [products]);
-  const categories = useMemo(
-    () =>
-      [
-        ...new Set(products.map((product) => product.category).filter((value): value is string => Boolean(value))),
-      ].sort(),
-    [products]
-  );
-  const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return products.filter((product) => {
-      if (q && !`${product.code} ${product.name} ${product.brand.name}`.toLowerCase().includes(q)) return false;
-      if (brandId && product.brand.id !== Number(brandId)) return false;
-      if (size && !product.availableSizes.includes(size)) return false;
-      if (category && product.category !== category) return false;
-      if (
-        locationId &&
-        !product.variants.some((variant) => variant.stocks.some((stock) => stock.locationId === Number(locationId)))
-      )
-        return false;
-      if (stockStatus === "out" && product.totalQuantity !== 0) return false;
-      if (stockStatus === "in" && product.totalQuantity <= 0) return false;
-      if (
-        stockStatus === "low" &&
-        !product.variants.some((variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold)
-      )
-        return false;
-      return true;
-    });
-  }, [products, search, brandId, size, category, locationId, stockStatus]);
 
   if (!retailEnabled) {
     return (
@@ -955,6 +971,36 @@ export default function RetailInventory() {
           </table>
         </CardContent>
       </Card>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          {catalogPage?.total ?? 0} product{(catalogPage?.total ?? 0) === 1 ? "" : "s"}
+          {(catalogPage?.totalPages ?? 0) > 0 ? ` · Page ${catalogPage?.page ?? page} of ${catalogPage?.totalPages}` : ""}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={(catalogPage?.page ?? page) <= 1 || isLoading}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={
+              isLoading ||
+              (catalogPage?.totalPages ?? 0) === 0 ||
+              (catalogPage?.page ?? page) >= (catalogPage?.totalPages ?? 0)
+            }
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
       <ProductEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}
