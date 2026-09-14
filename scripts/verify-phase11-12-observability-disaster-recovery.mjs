@@ -87,20 +87,17 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 ]);
 
-// The rehearsal used to name every observability and disaster-recovery file in a
-// `pull_request` paths filter. "Run checks only on main" (#1320) removed that
-// trigger, so those path markers no longer exist anywhere. The guarantee they
-// encoded — a change to those files always rehearses — is now carried by running
-// on every push to main with no paths filter, which is strictly broader coverage.
-// Assert that trigger instead, so the guarantee stays enforced rather than dropped.
+// Wave 3 keeps resilience behavior unchanged. Wave 4 will deliberately move
+// this specialist rehearsal to scheduled/manual ownership. Until then, retain
+// the existing every-main guarantee and keep the contract explicit.
 if (!/^on:\n\s*push:\n\s*branches:\s*\[\s*main\s*\]/m.test(resilienceWorkflow)) {
   failures.push(
-    ".github/workflows/resilience-rehearsal.yml must run on every push to main so observability and disaster-recovery changes always rehearse."
+    ".github/workflows/resilience-rehearsal.yml must run on every push to main until specialist workflow consolidation is applied."
   );
 }
 if (/^\s*paths(?:-ignore)?:/m.test(resilienceWorkflow)) {
   failures.push(
-    ".github/workflows/resilience-rehearsal.yml must not narrow its triggers with a paths filter; every main commit must rehearse."
+    ".github/workflows/resilience-rehearsal.yml must not narrow its triggers with a paths filter before specialist workflow consolidation."
   );
 }
 
@@ -112,15 +109,20 @@ if (!/retention-days:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(resilienceWorkflow)) {
   failures.push("Resilience evidence must be retained for at least 30 days.");
 }
 
-requireMarkers(".github/workflows/exact-main-certification.yml", [
+// Main Certification proves the exact merged application commit and owns the
+// observability/stabilization application contracts. Disaster-recovery evidence
+// remains in resilience-rehearsal.yml rather than being duplicated here.
+requireMarkers(".github/workflows/main-certification.yml", [
+  "name: Main Certification",
+  "Verify exact merged main SHA",
+  "verify:observability",
   "verify-phase11-12-observability-disaster-recovery.mjs",
-  'DR_REHEARSAL_RTO_SECONDS: "300"',
-  "exact-main-source-critical-counts.tsv",
-  "exact-main-restore-critical-counts.tsv",
-  "diff -u",
+  "verify:stabilization",
+  "context='Main Certification'",
 ]);
 
 requireMarkers("scripts/verify-final-production-readiness.mjs", [
+  ".github/workflows/main-certification.yml",
   "verify-phase11-12-observability-disaster-recovery.mjs",
   "source-critical-counts.tsv",
   "resilience-evidence.json",
