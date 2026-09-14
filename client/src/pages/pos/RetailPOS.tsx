@@ -14,9 +14,9 @@ interface Location {
   id: number;
   code: string;
   name: string;
-  city?: string | null;
-  state?: string | null;
-  country?: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
 }
 
 interface RetailPosItem {
@@ -67,7 +67,8 @@ async function readJson<T>(url: string): Promise<T> {
 }
 
 function makeKey(prefix: string): string {
-  const uuid = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  const uuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
   return `${prefix}-${uuid}`.slice(0, 191);
 }
 
@@ -84,7 +85,15 @@ function ItemImage({ item }: { item: Pick<RetailPosItem, "imageUrls" | "name"> }
       </div>
     );
   }
-  return <img src={src} alt={item.name} loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-md object-cover" />;
+  return (
+    <img
+      src={src}
+      alt={item.name}
+      loading="lazy"
+      decoding="async"
+      className="h-14 w-14 shrink-0 rounded-md object-cover"
+    />
+  );
 }
 
 function useBarcodeScanner(onScan: (barcode: string) => void) {
@@ -127,6 +136,8 @@ export default function RetailPOS() {
   const [transferVariantId, setTransferVariantId] = useState<number | "">("");
   const [transferToLocationId, setTransferToLocationId] = useState<number | "">("");
   const [transferQuantity, setTransferQuantity] = useState(1);
+  const saleAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const transferAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const locationsQuery = useQuery({
     queryKey: ["retail-pos-locations", selectedCompany?.id],
@@ -193,7 +204,11 @@ export default function RetailPOS() {
       addItem(item);
       toast({ title: `${item.name} · ${item.size}`, description: "Scanned into cart" });
     } catch (error) {
-      toast({ title: "Barcode not found", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
+      toast({
+        title: "Barcode not found",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -202,14 +217,23 @@ export default function RetailPOS() {
   const saleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedLocation?.id || !cart.length) throw new Error("Select a location and add at least one item");
+      const items = cart.map((line) => ({ variantId: line.variantId, quantity: line.cartQuantity }));
+      const fingerprint = `${selectedLocation.id}|${items
+        .map((item) => `${item.variantId}:${item.quantity}`)
+        .sort()
+        .join("|")}`;
+      if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {
+        saleAttemptRef.current = { fingerprint, key: makeKey("retail-sale") };
+      }
       const response = await apiRequest("POST", "/api/pos/retail/sales", {
         locationId: selectedLocation.id,
-        idempotencyKey: makeKey("retail-sale"),
-        items: cart.map((line) => ({ variantId: line.variantId, quantity: line.cartQuantity })),
+        idempotencyKey: saleAttemptRef.current.key,
+        items,
       });
       return response.json();
     },
     onSuccess: async () => {
+      saleAttemptRef.current = null;
       setCart([]);
       await refreshRetailPos();
       toast({ title: "Sale completed", description: "Exact variant stock was deducted." });
@@ -218,9 +242,19 @@ export default function RetailPOS() {
   });
 
   const returnMutation = useMutation({
-    mutationFn: async ({ saleId, saleItemId }: { saleId: number; saleItemId: number }) => {
+    mutationFn: async ({
+      saleId,
+      saleItemId,
+      returnedQuantity,
+    }: {
+      saleId: number;
+      saleItemId: number;
+      returnedQuantity: number;
+    }) => {
+      if (!selectedLocation?.id) throw new Error("Select a location first");
       const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/returns`, {
-        idempotencyKey: makeKey("retail-return"),
+        locationId: selectedLocation.id,
+        idempotencyKey: `retail-return-${saleId}-${saleItemId}-${returnedQuantity}`,
         items: [{ saleItemId, quantity: 1 }],
       });
       return response.json();
@@ -234,8 +268,10 @@ export default function RetailPOS() {
 
   const cancelMutation = useMutation({
     mutationFn: async (saleId: number) => {
+      if (!selectedLocation?.id) throw new Error("Select a location first");
       const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/cancel`, {
-        idempotencyKey: makeKey("retail-cancel"),
+        locationId: selectedLocation.id,
+        idempotencyKey: `retail-cancel-${saleId}`,
         reason: "POS sale cancellation",
       });
       return response.json();
@@ -252,8 +288,12 @@ export default function RetailPOS() {
       if (!selectedLocation?.id || !transferVariantId || !transferToLocationId || transferQuantity <= 0) {
         throw new Error("Choose an item, destination and quantity");
       }
+      const fingerprint = `${selectedLocation.id}|${transferToLocationId}|${transferVariantId}|${transferQuantity}`;
+      if (!transferAttemptRef.current || transferAttemptRef.current.fingerprint !== fingerprint) {
+        transferAttemptRef.current = { fingerprint, key: makeKey("retail-transfer") };
+      }
       const response = await apiRequest("POST", "/api/pos/retail/transfers", {
-        idempotencyKey: makeKey("retail-transfer"),
+        idempotencyKey: transferAttemptRef.current.key,
         variantId: Number(transferVariantId),
         fromLocationId: selectedLocation.id,
         toLocationId: Number(transferToLocationId),
@@ -262,6 +302,7 @@ export default function RetailPOS() {
       return response.json();
     },
     onSuccess: async () => {
+      transferAttemptRef.current = null;
       setTransferVariantId("");
       setTransferToLocationId("");
       setTransferQuantity(1);
@@ -271,10 +312,7 @@ export default function RetailPOS() {
     onError: (error) => toast({ title: "Transfer failed", description: error.message, variant: "destructive" }),
   });
 
-  const total = useMemo(
-    () => cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0),
-    [cart]
-  );
+  const total = useMemo(() => cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0), [cart]);
 
   if (selectedCompany?.companyType !== "retail") return null;
 
@@ -283,7 +321,9 @@ export default function RetailPOS() {
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Retail POS</h1>
-          <p className="text-sm text-muted-foreground">Scan a barcode or search by name, SKU, barcode, brand, or size.</p>
+          <p className="text-sm text-muted-foreground">
+            Scan a barcode or search by name, SKU, barcode, brand, or size.
+          </p>
         </div>
         <div className="w-full md:w-72">
           <Label htmlFor="retail-pos-location">Selling location</Label>
@@ -298,7 +338,9 @@ export default function RetailPOS() {
           >
             <option value="">Select location</option>
             {locations.map((location) => (
-              <option key={location.id} value={location.id}>{location.name}</option>
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
             ))}
           </select>
         </div>
@@ -328,7 +370,9 @@ export default function RetailPOS() {
           </CardHeader>
           <CardContent>
             {!selectedLocation ? (
-              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Select a location to load retail stock.</div>
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Select a location to load retail stock.
+              </div>
             ) : itemsQuery.isLoading ? (
               <div className="p-8 text-center text-sm text-muted-foreground">Loading variants…</div>
             ) : (
@@ -343,16 +387,22 @@ export default function RetailPOS() {
                     <ItemImage item={item} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{item.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{item.brand} · Size {item.size}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {item.brand} · Size {item.size}
+                      </span>
                       <span className="mt-1 flex items-center justify-between text-sm">
                         <strong>${money(item.price)}</strong>
-                        <span className={item.quantity <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}>Qty {item.quantity}</span>
+                        <span className={item.quantity <= 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
+                          Qty {item.quantity}
+                        </span>
                       </span>
                     </span>
                   </button>
                 ))}
                 {!itemsQuery.isLoading && !(itemsQuery.data ?? []).length && (
-                  <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">No matching retail variants.</div>
+                  <div className="col-span-full rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    No matching retail variants.
+                  </div>
                 )}
               </div>
             )}
@@ -361,7 +411,9 @@ export default function RetailPOS() {
 
         <Card className="h-fit xl:sticky xl:top-3">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg"><ShoppingCart className="h-5 w-5" /> Cart</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ShoppingCart className="h-5 w-5" /> Cart
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {cart.map((line) => (
@@ -369,75 +421,192 @@ export default function RetailPOS() {
                 <ItemImage item={line} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{line.name}</div>
-                  <div className="text-xs text-muted-foreground">{line.brand} · {line.size} · {line.barcode}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {line.brand} · {line.size} · {line.barcode}
+                  </div>
                   <div className="mt-2 flex items-center gap-2">
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setCart((current) => current.map((item) => item.variantId === line.variantId ? { ...item, cartQuantity: Math.max(1, item.cartQuantity - 1) } : item))}><Minus className="h-3.5 w-3.5" /></Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-7 w-7"
+                      onClick={() =>
+                        setCart((current) =>
+                          current.map((item) =>
+                            item.variantId === line.variantId
+                              ? { ...item, cartQuantity: Math.max(1, item.cartQuantity - 1) }
+                              : item
+                          )
+                        )
+                      }
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </Button>
                     <span className="w-8 text-center text-sm font-medium">{line.cartQuantity}</span>
-                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => addItem(line)}><Plus className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => addItem(line)}>
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
                     <span className="ml-auto text-sm font-semibold">${money(line.price * line.cartQuantity)}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               </div>
             ))}
-            {!cart.length && <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Scan or select an exact size to start a sale.</div>}
-            <div className="flex items-center justify-between border-t pt-3 text-lg font-semibold"><span>Total</span><span>${money(total)}</span></div>
-            <Button className="w-full" size="lg" disabled={!cart.length || saleMutation.isPending} onClick={() => saleMutation.mutate()}>{saleMutation.isPending ? "Completing sale…" : "Complete Sale"}</Button>
+            {!cart.length && (
+              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                Scan or select an exact size to start a sale.
+              </div>
+            )}
+            <div className="flex items-center justify-between border-t pt-3 text-lg font-semibold">
+              <span>Total</span>
+              <span>${money(total)}</span>
+            </div>
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={!cart.length || saleMutation.isPending}
+              onClick={() => saleMutation.mutate()}
+            >
+              {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
+            </Button>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-lg">Recent retail sales & returns</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-lg">Recent retail sales & returns</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             {(salesQuery.data ?? []).map((sale) => (
               <div key={sale.id} className="rounded-lg border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div><strong>Sale #{sale.id}</strong><span className="ml-2 text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleString()}</span></div>
-                  <div className="flex items-center gap-2"><span className="font-semibold">${money(sale.totalAmount)}</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{sale.status}</span></div>
+                  <div>
+                    <strong>Sale #{sale.id}</strong>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {new Date(sale.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">${money(sale.totalAmount)}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{sale.status}</span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   {sale.items.map((item) => {
                     const remaining = Math.max(0, item.quantity - item.returnedQuantity);
                     return (
                       <div key={item.id} className="flex items-center gap-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate">{item.name} · {item.size} <span className="text-muted-foreground">× {item.quantity}</span></span>
-                        {item.returnedQuantity > 0 && <span className="text-xs text-muted-foreground">Returned {item.returnedQuantity}</span>}
-                        <Button size="sm" variant="outline" disabled={sale.status !== "completed" || remaining < 1 || returnMutation.isPending} onClick={() => returnMutation.mutate({ saleId: sale.id, saleItemId: item.id })}><RotateCcw className="mr-1 h-3.5 w-3.5" />Return 1</Button>
+                        <span className="min-w-0 flex-1 truncate">
+                          {item.name} · {item.size} <span className="text-muted-foreground">× {item.quantity}</span>
+                        </span>
+                        {item.returnedQuantity > 0 && (
+                          <span className="text-xs text-muted-foreground">Returned {item.returnedQuantity}</span>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={sale.status !== "completed" || remaining < 1 || returnMutation.isPending}
+                          onClick={() =>
+                            returnMutation.mutate({
+                              saleId: sale.id,
+                              saleItemId: item.id,
+                              returnedQuantity: item.returnedQuantity,
+                            })
+                          }
+                        >
+                          <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                          Return 1
+                        </Button>
                       </div>
                     );
                   })}
                 </div>
-                {sale.status === "completed" && <div className="mt-3 flex justify-end"><Button size="sm" variant="ghost" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate(sale.id)}>Cancel / reverse sale</Button></div>}
+                {sale.status === "completed" && (
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={cancelMutation.isPending}
+                      onClick={() => cancelMutation.mutate(sale.id)}
+                    >
+                      Cancel / reverse sale
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
-            {!salesQuery.isLoading && !(salesQuery.data ?? []).length && <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>}
+            {!salesQuery.isLoading && !(salesQuery.data ?? []).length && (
+              <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             <div>
               <Label>Variant</Label>
-              <select value={transferVariantId} onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select
+                value={transferVariantId}
+                onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
+                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
                 <option value="">Choose exact product + size</option>
-                {(itemsQuery.data ?? []).map((item) => <option key={item.variantId} value={item.variantId}>{item.name} · {item.brand} · {item.size} · Qty {item.quantity}</option>)}
+                {(itemsQuery.data ?? []).map((item) => (
+                  <option key={item.variantId} value={item.variantId}>
+                    {item.name} · {item.brand} · {item.size} · Qty {item.quantity}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <Label>Destination</Label>
-              <select value={transferToLocationId} onChange={(event) => setTransferToLocationId(event.target.value ? Number(event.target.value) : "")} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select
+                value={transferToLocationId}
+                onChange={(event) => setTransferToLocationId(event.target.value ? Number(event.target.value) : "")}
+                className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
                 <option value="">Choose destination</option>
-                {locations.filter((location) => location.id !== selectedLocation?.id).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                {locations
+                  .filter((location) => location.id !== selectedLocation?.id)
+                  .map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
               <Label htmlFor="retail-transfer-qty">Quantity</Label>
-              <Input id="retail-transfer-qty" type="number" min="0.000001" step="1" value={transferQuantity} onChange={(event) => setTransferQuantity(Number(event.target.value))} />
+              <Input
+                id="retail-transfer-qty"
+                type="number"
+                min="0.000001"
+                step="1"
+                value={transferQuantity}
+                onChange={(event) => setTransferQuantity(Number(event.target.value))}
+              />
             </div>
-            <Button variant="outline" className="w-full" disabled={transferMutation.isPending || !transferVariantId || !transferToLocationId} onClick={() => transferMutation.mutate()}>{transferMutation.isPending ? "Transferring…" : "Transfer exact variant"}</Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={transferMutation.isPending || !transferVariantId || !transferToLocationId}
+              onClick={() => transferMutation.mutate()}
+            >
+              {transferMutation.isPending ? "Transferring…" : "Transfer exact variant"}
+            </Button>
           </CardContent>
         </Card>
       </div>

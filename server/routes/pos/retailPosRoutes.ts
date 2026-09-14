@@ -17,6 +17,13 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  aggregateRetailCartItems,
+  nextRetailReturnQuantity,
+  nextRetailSaleQuantity,
+  nextRetailTransferQuantities,
+  validateRetailReturnQuantity,
+} from "../../services/retail/retailStockMath";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
@@ -37,6 +44,7 @@ const saleSchema = z.object({
 });
 
 const returnSchema = z.object({
+  locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
   items: z
@@ -63,11 +71,15 @@ const adjustmentSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   variantId: z.coerce.number().int().positive(),
   locationId: z.coerce.number().int().positive(),
-  quantityDelta: z.coerce.number().finite().refine((value) => value !== 0, "Adjustment cannot be zero"),
+  quantityDelta: z.coerce
+    .number()
+    .finite()
+    .refine((value) => value !== 0, "Adjustment cannot be zero"),
   reason: z.string().trim().min(1).max(500),
 });
 
 const cancelSchema = z.object({
+  locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   reason: z.string().trim().min(1).max(500).optional(),
 });
@@ -84,8 +96,10 @@ function currentCompanyId(req: Request): number | null {
   return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
 }
 
-function currentUserId(req: Request): number {
-  return Number(req.user?.id ?? req.session.userId ?? 0);
+function currentUserId(req: Request): string {
+  const userId = req.user?.id ?? req.session.userId;
+  if (!userId) throw new Error("Authenticated user is required");
+  return String(userId);
 }
 
 async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
@@ -207,7 +221,7 @@ async function addMovement(
     eventKey: string;
     referenceType?: string;
     referenceId?: string | number;
-    createdBy: number;
+    createdBy: string;
     metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
@@ -225,12 +239,6 @@ async function addMovement(
     createdBy: input.createdBy,
     metadata: input.metadata ?? {},
   });
-}
-
-function aggregateSaleItems(items: z.infer<typeof saleSchema>["items"]) {
-  const aggregate = new Map<number, number>();
-  for (const item of items) aggregate.set(item.variantId, (aggregate.get(item.variantId) ?? 0) + item.quantity);
-  return [...aggregate.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));
 }
 
 async function loadSaleResponse(companyId: number, saleId: number) {
@@ -279,7 +287,8 @@ export function registerRetailPosRoutes(app: Express): void {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const locationId = Number(req.query.locationId);
-      if (!Number.isInteger(locationId) || locationId <= 0) return res.status(400).json({ message: "Location is required" });
+      if (!Number.isInteger(locationId) || locationId <= 0)
+        return res.status(400).json({ message: "Location is required" });
       await ensureCompanyLocation(companyId, locationId);
       const search = String(req.query.search ?? "").trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
@@ -349,7 +358,8 @@ export function registerRetailPosRoutes(app: Express): void {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const locationId = Number(req.query.locationId);
-      if (!Number.isInteger(locationId) || locationId <= 0) return res.status(400).json({ message: "Location is required" });
+      if (!Number.isInteger(locationId) || locationId <= 0)
+        return res.status(400).json({ message: "Location is required" });
       await ensureCompanyLocation(companyId, locationId);
       const barcode = String(req.params.barcode ?? "").trim();
       if (!barcode) return res.status(400).json({ message: "Barcode is required" });
@@ -389,7 +399,12 @@ export function registerRetailPosRoutes(app: Express): void {
         )
         .limit(1);
       if (!row) return res.status(404).json({ message: "Barcode not found" });
-      res.json({ ...row, brand: row.brand ?? "Other / No Brand", price: toNumber(row.price), quantity: toNumber(row.quantity) });
+      res.json({
+        ...row,
+        brand: row.brand ?? "Other / No Brand",
+        price: toNumber(row.price),
+        quantity: toNumber(row.quantity),
+      });
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
@@ -403,7 +418,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const body = saleSchema.parse(req.body);
       await ensureCompanyLocation(companyId, body.locationId);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
-      const items = aggregateSaleItems(body.items);
+      const items = aggregateRetailCartItems(body.items);
 
       const result = await db.transaction(async (tx) => {
         const [createdSale] = await tx
@@ -433,9 +448,13 @@ export function registerRetailPosRoutes(app: Express): void {
         for (const item of items) {
           const variant = await ensureVariant(companyId, item.variantId);
           const stock = await lockInventoryRow(tx, companyId, item.variantId, body.locationId);
-          const after = stock.quantity - item.quantity;
-          if (!canSellNegativeStock && after < 0) {
-            throw new Error(`Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`);
+          let after: number;
+          try {
+            after = nextRetailSaleQuantity(stock.quantity, item.quantity, canSellNegativeStock);
+          } catch {
+            throw new Error(
+              `Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`
+            );
           }
           await setInventoryQuantity(tx, companyId, item.variantId, body.locationId, after);
           const unitPrice = toNumber(variant.sellingPrice);
@@ -488,7 +507,8 @@ export function registerRetailPosRoutes(app: Express): void {
       if (!companyId) return;
       const locationId = Number(req.query.locationId);
       const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
-      if (!Number.isInteger(locationId) || locationId <= 0) return res.status(400).json({ message: "Location is required" });
+      if (!Number.isInteger(locationId) || locationId <= 0)
+        return res.status(400).json({ message: "Location is required" });
       await ensureCompanyLocation(companyId, locationId);
       const sales = await db
         .select({ id: retailPosSales.id })
@@ -510,38 +530,54 @@ export function registerRetailPosRoutes(app: Express): void {
       const saleId = Number(req.params.saleId);
       if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
       const body = returnSchema.parse(req.body);
+      await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
 
       const result = await db.transaction(async (tx) => {
         const [createdReturn] = await tx
           .insert(retailPosReturns)
-          .values({ companyId, saleId, idempotencyKey: body.idempotencyKey, createdBy: userId, notes: body.notes ?? null })
+          .values({
+            companyId,
+            saleId,
+            idempotencyKey: body.idempotencyKey,
+            createdBy: userId,
+            notes: body.notes ?? null,
+          })
           .onConflictDoNothing({ target: [retailPosReturns.companyId, retailPosReturns.idempotencyKey] })
           .returning({ id: retailPosReturns.id });
         if (!createdReturn) {
           const [existing] = await tx
             .select({ id: retailPosReturns.id })
             .from(retailPosReturns)
-            .where(and(eq(retailPosReturns.companyId, companyId), eq(retailPosReturns.idempotencyKey, body.idempotencyKey)))
+            .where(
+              and(eq(retailPosReturns.companyId, companyId), eq(retailPosReturns.idempotencyKey, body.idempotencyKey))
+            )
             .limit(1);
           if (!existing) throw new Error("Return retry could not be resolved");
           return { returnId: existing.id, replayed: true };
         }
 
-        await tx.execute(sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`);
+        await tx.execute(
+          sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`
+        );
         const [sale] = await tx
           .select({ id: retailPosSales.id, locationId: retailPosSales.locationId, status: retailPosSales.status })
           .from(retailPosSales)
           .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
           .limit(1);
         if (!sale) throw new Error("Retail sale not found");
+        if (sale.locationId !== body.locationId)
+          throw new Error("Return location must match the original sale location");
         if (sale.status !== "completed") throw new Error("Canceled sales cannot receive additional returns");
 
         const aggregate = new Map<number, number>();
-        for (const item of body.items) aggregate.set(item.saleItemId, (aggregate.get(item.saleItemId) ?? 0) + item.quantity);
+        for (const item of body.items)
+          aggregate.set(item.saleItemId, (aggregate.get(item.saleItemId) ?? 0) + item.quantity);
 
         for (const [saleItemId, quantity] of aggregate) {
-          await tx.execute(sql`select id from retail_pos_sale_items where id = ${saleItemId} and sale_id = ${saleId} for update`);
+          await tx.execute(
+            sql`select id from retail_pos_sale_items where id = ${saleItemId} and sale_id = ${saleId} for update`
+          );
           const [saleItem] = await tx
             .select({
               id: retailPosSaleItems.id,
@@ -562,14 +598,14 @@ export function registerRetailPosRoutes(app: Express): void {
           if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
           const sold = toNumber(saleItem.quantity);
           const alreadyReturned = toNumber(saleItem.returnedQuantity);
-          if (quantity > sold - alreadyReturned + 0.000001) throw new Error("Return quantity exceeds the remaining sold quantity");
+          const nextReturnedQuantity = validateRetailReturnQuantity(sold, alreadyReturned, quantity);
 
           const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);
-          const after = stock.quantity + quantity;
+          const after = nextRetailReturnQuantity(stock.quantity, quantity);
           await setInventoryQuantity(tx, companyId, saleItem.variantId, sale.locationId, after);
           await tx
             .update(retailPosSaleItems)
-            .set({ returnedQuantity: String(alreadyReturned + quantity) })
+            .set({ returnedQuantity: String(nextReturnedQuantity) })
             .where(eq(retailPosSaleItems.id, saleItem.id));
           const [returnItem] = await tx
             .insert(retailPosReturnItems)
@@ -612,7 +648,9 @@ export function registerRetailPosRoutes(app: Express): void {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const body = transferSchema.parse(req.body);
-      if (body.fromLocationId === body.toLocationId) return res.status(400).json({ message: "Transfer locations must be different" });
+      if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot transfer retail stock" });
+      if (body.fromLocationId === body.toLocationId)
+        return res.status(400).json({ message: "Transfer locations must be different" });
       await Promise.all([
         ensureCompanyLocation(companyId, body.fromLocationId),
         ensureCompanyLocation(companyId, body.toLocationId),
@@ -629,7 +667,11 @@ export function registerRetailPosRoutes(app: Express): void {
             operationType: "transfer",
             idempotencyKey: body.idempotencyKey,
             createdBy: userId,
-            metadata: { fromLocationId: body.fromLocationId, toLocationId: body.toLocationId, notes: body.notes ?? null },
+            metadata: {
+              fromLocationId: body.fromLocationId,
+              toLocationId: body.toLocationId,
+              notes: body.notes ?? null,
+            },
           })
           .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
           .returning({ id: retailStockOperations.id });
@@ -639,9 +681,18 @@ export function registerRetailPosRoutes(app: Express): void {
         for (const locationId of orderedLocationIds) await lockInventoryRow(tx, companyId, body.variantId, locationId);
         const source = await lockInventoryRow(tx, companyId, body.variantId, body.fromLocationId);
         const destination = await lockInventoryRow(tx, companyId, body.variantId, body.toLocationId);
-        const sourceAfter = source.quantity - body.quantity;
-        if (!canSellNegativeStock && sourceAfter < 0) throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);
-        const destinationAfter = destination.quantity + body.quantity;
+        let sourceAfter: number;
+        let destinationAfter: number;
+        try {
+          ({ sourceAfter, destinationAfter } = nextRetailTransferQuantities(
+            source.quantity,
+            destination.quantity,
+            body.quantity,
+            canSellNegativeStock
+          ));
+        } catch {
+          throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);
+        }
         await setInventoryQuantity(tx, companyId, body.variantId, body.fromLocationId, sourceAfter);
         await setInventoryQuantity(tx, companyId, body.variantId, body.toLocationId, destinationAfter);
         await addMovement(tx, {
@@ -672,7 +723,12 @@ export function registerRetailPosRoutes(app: Express): void {
           createdBy: userId,
           metadata: { fromLocationId: body.fromLocationId },
         });
-        return { replayed: false, operationId: operation.id, sourceQuantity: sourceAfter, destinationQuantity: destinationAfter };
+        return {
+          replayed: false,
+          operationId: operation.id,
+          sourceQuantity: sourceAfter,
+          destinationQuantity: destinationAfter,
+        };
       });
       res.status(result.replayed ? 200 : 201).json(result);
     } catch (error) {
@@ -734,6 +790,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const saleId = Number(req.params.saleId);
       if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
       const body = cancelSchema.parse(req.body);
+      await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
       const result = await db.transaction(async (tx) => {
         const [operation] = await tx
@@ -750,13 +807,17 @@ export function registerRetailPosRoutes(app: Express): void {
           .returning({ id: retailStockOperations.id });
         if (!operation) return { replayed: true };
 
-        await tx.execute(sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`);
+        await tx.execute(
+          sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`
+        );
         const [sale] = await tx
           .select({ id: retailPosSales.id, locationId: retailPosSales.locationId, status: retailPosSales.status })
           .from(retailPosSales)
           .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
           .limit(1);
         if (!sale) throw new Error("Retail sale not found");
+        if (sale.locationId !== body.locationId)
+          throw new Error("Cancellation location must match the original sale location");
         if (sale.status === "canceled") return { replayed: true };
 
         const saleItems = await tx

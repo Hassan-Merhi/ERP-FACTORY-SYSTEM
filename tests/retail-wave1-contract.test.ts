@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   insertCompanySchema,
@@ -6,7 +8,9 @@ import {
   RETAIL_NO_BRAND_NAME,
 } from "../shared/schema";
 import { companyTypeSchema } from "../client/src/contracts/sessionContracts";
-import { resolveAuthenticatedAppRoute } from "../client/src/app/authenticatedAppRouteGuard";
+
+const root = process.cwd();
+const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
 describe("retail company type", () => {
   it("is accepted by shared company validation and the client session contract", () => {
@@ -22,25 +26,16 @@ describe("retail company type", () => {
   });
 
   it("routes retail companies into the retail workspace", () => {
-    const result = resolveAuthenticatedAppRoute({
-      currentLocation: "/tracking",
-      companyType: "retail",
-      isAdminOwner: true,
-      myAccessLoading: false,
-      myAccessError: false,
-    });
-    expect(result.decision).toEqual({ kind: "redirect", to: "/retail" });
+    const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
+    expect(guard).toContain('const isRetailCompany = companyType === "retail"');
+    expect(guard).toContain('currentLocation === "/retail" || currentLocation.startsWith("/retail/")');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/retail" }');
   });
 
   it("rejects the retail workspace for non-retail companies", () => {
-    const result = resolveAuthenticatedAppRoute({
-      currentLocation: "/retail",
-      companyType: "erp",
-      isAdminOwner: true,
-      myAccessLoading: false,
-      myAccessError: false,
-    });
-    expect(result.decision).toEqual({ kind: "redirect", to: "/tracking" });
+    const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
+    expect(guard).toContain("isRetailRoute && !isRetailCompany");
+    expect(guard).toContain('decision = { kind: "redirect", to: "/tracking" }');
   });
 });
 

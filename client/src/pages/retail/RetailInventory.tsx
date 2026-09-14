@@ -519,7 +519,14 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   const importMutation = useMutation({
     mutationFn: async () => {
       if (!rows.length) throw new Error("Choose a populated Excel file first");
-      const response = await apiRequest("POST", "/api/retail/import", { rows });
+      const response = await apiRequest("POST", "/api/retail/import", {
+        rows,
+        idempotencyKey: `retail-import-${
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random()}`
+        }`,
+      });
       return response.json();
     },
     onSuccess: (result) => {
