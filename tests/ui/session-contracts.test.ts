@@ -9,7 +9,7 @@ import {
 
 describe("session API contracts", () => {
   it("accepts the supported company types", () => {
-    for (const companyType of ["erp", "factory", "factory_v2", "properties", "supplier_partner"]) {
+    for (const companyType of ["erp", "retail", "factory", "factory_v2", "properties", "supplier_partner"]) {
       expect(companyTypeSchema.parse(companyType)).toBe(companyType);
     }
   });
