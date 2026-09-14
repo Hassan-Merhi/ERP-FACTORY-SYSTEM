@@ -27,13 +27,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Format the four Phase 1 blockers
+      - name: Format Phase 1 blockers
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
             tests/backend-coverage-maersk-parser-branches.test.ts \
             tests/backend-coverage-maintenance-failure-workflows.test.ts \
             tests/backend-coverage-properties-deep-reads.test.ts \
-            tests/phase7-backend-messages-translations.test.ts
+            tests/phase7-backend-messages-translations.test.ts \
+            client/src/i18n/retailWave2Translations.ts
 
       - name: Upload exact formatted files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -44,5 +45,6 @@ jobs:
             tests/backend-coverage-maintenance-failure-workflows.test.ts
             tests/backend-coverage-properties-deep-reads.test.ts
             tests/phase7-backend-messages-translations.test.ts
+            client/src/i18n/retailWave2Translations.ts
           if-no-files-found: error
           retention-days: 1
