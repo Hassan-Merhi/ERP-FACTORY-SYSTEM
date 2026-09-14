@@ -140,7 +140,9 @@ afterAll(async () => {
     await pool
       .query(`DELETE FROM factory_staff_tracking_entries WHERE company_id = $1`, [ctx.companyId])
       .catch(() => undefined);
-    await pool.query(`DELETE FROM factory_worker_categories WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM factory_worker_categories WHERE company_id = $1`, [ctx.companyId])
+      .catch(() => undefined);
     await pool
       .query(`DELETE FROM factory_production_position_rules WHERE company_id = $1`, [ctx.companyId])
       .catch(() => undefined);
@@ -381,12 +383,14 @@ describe.sequential("Phase 17 Factory production flows", () => {
     });
     expect(snapshot.status).toBe(200);
     expect(snapshot.body.finalized).toBe(true);
-    const savedWorker = (snapshot.body.rows as Array<{
-      personId: number;
-      producedBales: number;
-      targetBales: number;
-      groupName: string;
-    }>).find((row) => row.personId === workerId);
+    const savedWorker = (
+      snapshot.body.rows as Array<{
+        personId: number;
+        producedBales: number;
+        targetBales: number;
+        groupName: string;
+      }>
+    ).find((row) => row.personId === workerId);
     expect(savedWorker).toMatchObject({
       producedBales: 3,
       targetBales: 5,
