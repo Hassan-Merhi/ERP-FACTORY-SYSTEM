@@ -1,0 +1,321 @@
+name: UI Quality
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ui-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect UI quality changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mobile: ${{ steps.classify.outputs.mobile }}
+      rtl: ${{ steps.classify.outputs.rtl }}
+      i18n: ${{ steps.classify.outputs.i18n }}
+    steps:
+      - name: Classify specialist paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mobile=false
+          rtl=false
+          i18n=false
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            mobile=true
+            rtl=true
+            i18n=true
+          else
+            mapfile -t files < <(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+                --jq '.[].filename'
+            )
+
+            if [[ "${#files[@]}" -eq 0 ]]; then
+              echo "::error::Could not resolve changed files for PR #${PR_NUMBER}."
+              exit 1
+            fi
+
+            for file in "${files[@]}"; do
+              case "$file" in
+                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                  mobile=true
+                  ;;
+              esac
+
+              case "$file" in
+                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                  rtl=true
+                  ;;
+              esac
+
+              case "$file" in
+                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|.github/workflows/ui-quality.yml)
+                  i18n=true
+                  ;;
+              esac
+            done
+          fi
+
+          {
+            echo "mobile=${mobile}"
+            echo "rtl=${rtl}"
+            echo "i18n=${i18n}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "UI quality selection: mobile=${mobile} rtl=${rtl} i18n=${i18n}"
+
+  i18n-audit:
+    name: Classified untranslated-text audit
+    needs: changes
+    if: always() && needs.changes.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24.21.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+
+      - name: Run classified i18n gate when relevant
+        env:
+          I18N_RELEVANT: ${{ needs.changes.outputs.i18n }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$I18N_RELEVANT" != "true" ]]; then
+            echo "No UI/i18n paths changed; preserving the required untranslated-text context without rerunning an unrelated audit."
+            exit 0
+          fi
+          node scripts/verify-i18n-audit-classifier.mjs
+          node scripts/audit-i18n-phase14.mjs \
+            --json-out artifacts/i18n-audit/report.json \
+            --markdown-out artifacts/i18n-audit/report.md
+          cat artifacts/i18n-audit/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload classified audit report
+        if: always() && needs.changes.outputs.i18n == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: classified-i18n-audit
+          path: artifacts/i18n-audit
+          if-no-files-found: warn
+          retention-days: 7
+
+  rtl-accessibility:
+    name: RTL / Accessibility
+    needs: changes
+    if: needs.changes.outputs.rtl == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24.21.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Normalize registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Check RTL/accessibility formatting
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/app/ErpShell.tsx \
+            client/src/app/FactoryShell.tsx \
+            client/src/app/PosShell.tsx \
+            client/src/app/PropertiesShell.tsx \
+            client/src/components/AppTopBar.tsx \
+            client/src/components/ApplicationInterfaceTranslator.tsx \
+            client/src/components/ui/dialog.tsx \
+            client/src/components/ui/responsive-accessibility.tsx \
+            client/src/components/ui/sheet.tsx \
+            client/src/contexts/ApplicationLanguageContext.tsx \
+            client/src/i18n/applicationDirection.test.ts \
+            client/src/i18n/applicationDirection.ts \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/styles/rtl-hardening.css \
+            scripts/audit-i18n-phase14.mjs \
+            scripts/verify-program7d-accessibility-responsive.mjs \
+            tests/phase14-i18n-release-gate.test.ts \
+            tests/phase8-rtl-responsive-accessibility.test.ts \
+            vitest.config.i18n-contracts.ts
+
+      - name: Accessibility and RTL verifier
+        run: node scripts/verify-program7d-accessibility-responsive.mjs
+
+      - name: Trilingual RTL/accessibility contracts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.i18n-contracts.ts
+
+  mobile-responsive:
+    name: Mobile Responsiveness
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: heliumdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/heliumdb
+      PGSSLMODE: disable
+      NODE_ENV: test
+      SESSION_SECRET: ux-regression-browser-secret
+      CSRF_ENFORCE: "0"
+      ENABLE_SCHEDULERS: "false"
+      PORT: "5000"
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
+      ERP_SMOKE_BASE_URL: http://127.0.0.1:5000
+      ERP_SMOKE_OUTPUT_DIR: artifacts/ux-regression-browser
+      ERP_SMOKE_USERNAME: ux_ci_${{ github.run_id }}
+      ERP_SMOKE_PASSWORD: ux-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      ERP_SMOKE_REQUIRE_AUTHENTICATED: "1"
+      ERP_SMOKE_REQUIRE_EXACT_ROUTES: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24.21.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Chrome for rendered smoke
+        run: node node_modules/puppeteer/lib/puppeteer/node/cli.js browsers install chrome
+
+      - name: Build rendered-smoke server
+        run: npm run build
+
+      - name: Cross-module UX consistency audit
+        run: npm run audit:ux-consistency
+
+      - name: Prepare disposable browser fixture
+        run: |
+          node node_modules/drizzle-kit/bin.cjs push --force
+          node scripts/prepare-phase9-browser-smoke-fixture.mjs
+
+      - name: Authenticated responsive and multilingual browser smoke
+        run: |
+          mkdir -p artifacts/ux-regression-startup
+          : > artifacts/ux-regression-startup/server.log
+          app_pid=""
+
+          stop_app() {
+            if [ -n "${app_pid:-}" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=""
+            fi
+          }
+
+          start_app() {
+            local suite="$1"
+            stop_app
+            printf '\n=== %s ===\n' "$suite" >> artifacts/ux-regression-startup/server.log
+            node --expose-gc \
+              --import ./server/factoryContainerSchemaBridge.mjs \
+              --import ./server/supplierCompanyScopeBridge.mjs \
+              --import ./server/exportBufferBridge.mjs \
+              --import ./server/scheduledAttachmentBridge.mjs \
+              --import ./server/apiPaginationBridge.mjs \
+              --import ./server/runtimeMemoryGuard.mjs \
+              dist/index.js >> artifacts/ux-regression-startup/server.log 2>&1 &
+            app_pid=$!
+
+            for attempt in $(seq 1 180); do
+              if curl --fail --silent --show-error "http://127.0.0.1:${PORT}/api/health/db" \
+                > artifacts/ux-regression-startup/health-db.json; then
+                return
+              fi
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat artifacts/ux-regression-startup/server.log
+                exit 1
+              fi
+              if [ "$attempt" = "180" ]; then
+                cat artifacts/ux-regression-startup/server.log
+                exit 1
+              fi
+              sleep 1
+            done
+          }
+
+          run_smoke() {
+            local script="$1"
+            start_app "$script"
+            node "$script"
+          }
+
+          cleanup() {
+            stop_app
+          }
+          trap cleanup EXIT
+
+          run_smoke scripts/run-phase9-language-browser-smoke.mjs
+          run_smoke scripts/verify-mobile-responsive-phase1-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave2-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave3-browser.mjs
+          run_smoke scripts/verify-mobile-responsive-wave4-browser.mjs
+
+      - name: Full responsive contract matrix
+        run: node scripts/verify-mobile-responsive-phase11-regression.mjs
+
+      - name: Focused responsive tests
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts
+
+      - name: Upload rendered UX evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ux-regression-browser
+          path: |
+            artifacts/ux-regression-browser
+            artifacts/ux-regression-startup
+          if-no-files-found: warn
+          retention-days: 7
