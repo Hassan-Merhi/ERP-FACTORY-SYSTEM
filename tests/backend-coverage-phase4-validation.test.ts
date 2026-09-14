@@ -59,6 +59,61 @@ describe("Phase 4 validation branches", () => {
     expect(response.body.message).toMatch(/date|yyyy-mm-dd/i);
   });
 
+  it("returns 400 for malformed dates on canonical accounting creates", async () => {
+    const badDate = "2026-02-31";
+    const [journal, payment, generic, note] = await Promise.all([
+      agent.post("/api/vouchers/journal").send({
+        voucherDate: badDate,
+        clientRequestId: `${TEST_PREFIX}-bad-date-journal`,
+        entries: [
+          { type: "DR", accountType: "ledger", accountId: ctx.cashAccountId, amount: "10" },
+          { type: "CR", accountType: "ledger", accountId: ctx.salesAccountId, amount: "10" },
+        ],
+      }),
+      agent.post("/api/vouchers/payment-receipt").send({
+        voucherType: "Payment",
+        voucherDate: badDate,
+        paymentAccountType: "ledger",
+        paymentAccountId: ctx.cashAccountId,
+        clientRequestId: `${TEST_PREFIX}-bad-date-payment`,
+        entries: [{ accountType: "ledger", accountId: ctx.salesAccountId, amount: "10" }],
+      }),
+      agent.post("/api/vouchers/with-entries").send({
+        clientRequestId: `${TEST_PREFIX}-bad-date-generic`,
+        voucher: {
+          voucherNumber: `P4-BAD-DATE-${Date.now()}`,
+          voucherType: "Contra",
+          voucherDate: badDate,
+          currency: "USD",
+        },
+        entries: [
+          { ledgerAccountId: ctx.cashAccountId, debitAmount: "10", creditAmount: "0" },
+          { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "10" },
+        ],
+      }),
+      agent.post("/api/credit-notes").send({
+        noteType: "Credit Note",
+        voucherDate: badDate,
+        cashAccountType: "ledger",
+        cashAccountId: ctx.cashAccountId,
+        items: [
+          {
+            stockItemId: ctx.stockItemIds[0],
+            locationId: ctx.locationId,
+            quantity: "1",
+            refundRate: "10",
+            inventoryCost: "10",
+          },
+        ],
+      }),
+    ]);
+
+    for (const response of [journal, payment, generic, note]) {
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/date|yyyy-mm-dd/i);
+    }
+  });
+
   it("returns 400 for invalid accounting amounts before persistence", async () => {
     const response = await agent.post("/api/vouchers/payment-receipt").send({
       voucherType: "Payment",
