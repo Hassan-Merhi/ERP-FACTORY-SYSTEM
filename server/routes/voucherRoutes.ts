@@ -14,6 +14,7 @@ import { registerCentralPaymentReceiptDeleteRoute } from "./vouchers/centralPaym
 import { registerCentralJournalCreateRoute } from "./vouchers/centralJournalCreateRoute";
 import { registerCentralJournalLifecycleRoutes } from "./vouchers/centralJournalLifecycleRoute";
 import { registerCentralStockTransferDeleteRoutes } from "./vouchers/centralStockTransferDeleteRoute";
+import { registerExactStockAdjustmentLifecycleRoutes } from "./vouchers/exactStockAdjustmentLifecycleRoute";
 import { registerVoucherJournalRoutes } from "./vouchers/voucherJournalRoutes";
 import { registerVoucherSalesUpdateRoutes } from "./vouchers/sales-update";
 import { registerVoucherPurchaseUpdateRoutes } from "./vouchers/voucherPurchaseUpdateRoutes";
@@ -55,6 +56,10 @@ export function registerVoucherRoutes(app: Express) {
   // Native SQL pagination shadows the legacy array reader while preserving its
   // array response for callers that do not explicitly request pagination.
   registerVoucherPaginationRoutes(app);
+
+  // Stock adjustments reverse and reapply the exact persisted quantity/value.
+  // Register before both the legacy adjustment editor and generic voucher delete.
+  registerExactStockAdjustmentLifecycleRoutes(app);
 
   // Stock-transfer lifecycle routes must shadow the older direct transfer editor.
   registerStockTransferLifecycleRoutes(app);
