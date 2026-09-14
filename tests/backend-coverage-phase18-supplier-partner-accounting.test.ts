@@ -170,8 +170,12 @@ afterAll(async () => {
     await pool
       .query(`DELETE FROM sp_container_lines WHERE company_id = ANY($1::int[])`, [companyIds])
       .catch(() => undefined);
-    await pool.query(`DELETE FROM sp_containers WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM bank_accounts WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_containers WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM bank_accounts WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
     await teardownGoldenCoastPhase5Fixture(fixture);
   }
 }, 120000);
