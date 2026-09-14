@@ -29,7 +29,7 @@ describe("retail company type", () => {
     const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
     expect(guard).toContain('const isRetailCompany = companyType === "retail"');
     expect(guard).toContain('currentLocation === "/retail" || currentLocation.startsWith("/retail/")');
-    expect(guard).toContain('decision = { kind: "redirect", to: "/retail" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/dashboard" }');
   });
 
   it("rejects the retail workspace for non-retail companies", () => {
