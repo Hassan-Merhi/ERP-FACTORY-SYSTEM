@@ -14,6 +14,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and, sql, inArray, ne, isNull } from "drizzle-orm";
 import { ledgerAccounts, vouchers, voucherEntries, factoryPayrolls, factoryWorkers } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
+import { allocatePayrollAccountingAmounts, moneyFromCents } from "../../services/accounting/payrollAccountingAmounts";
 
 /** Normalize a USD voucher entry (IDENTITY convention). */
 function normUsd(debit: string | number, credit: string | number) {
@@ -109,12 +110,6 @@ export async function findOrCreateLedger(
  *
  * Must be called BEFORE the payroll row being deleted is actually removed from the DB
  * (pass its id as `excludePayrollId`) so the remaining-payroll query excludes it.
- *
- * @param tx             Drizzle transaction handle
- * @param companyId      Company scope
- * @param periodStart    Period start date string (YYYY-MM-DD)
- * @param periodEnd      Period end date string (YYYY-MM-DD)
- * @param excludePayrollId  The payroll id being deleted (excluded from "remaining" query)
  */
 export async function rebuildPayrollGenVoucher(
   tx: DatabaseOrTransaction,
@@ -123,7 +118,6 @@ export async function rebuildPayrollGenVoucher(
   periodEnd: string,
   excludePayrollId?: number
 ): Promise<void> {
-  // ── Step 1: delete existing PAYROLL-GEN vouchers for this period ──────────
   const existingGenVouchers = await tx
     .select({ id: vouchers.id })
     .from(vouchers)
@@ -145,14 +139,10 @@ export async function rebuildPayrollGenVoucher(
     await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
   }
 
-  // ── Step 2: remaining payrolls for this period ────────────────────────────
   const remaining = await tx
     .select({
       workerId: factoryPayrolls.workerId,
-      baseSalary: factoryPayrolls.baseSalary,
-      transport: factoryPayrolls.transport,
       bonuses: factoryPayrolls.bonuses,
-      deductions: factoryPayrolls.deductions,
       advances: factoryPayrolls.advances,
       netSalary: factoryPayrolls.netSalary,
       fullName: factoryWorkers.fullName,
@@ -168,34 +158,37 @@ export async function rebuildPayrollGenVoucher(
       )
     );
 
-  if (remaining.length === 0) return; // nothing left → no voucher needed
+  if (remaining.length === 0) return;
 
-  // ── Step 3: aggregate totals and per-worker expense amounts ──────────────
-  let totalNet = 0;
-  let totalAdvances = 0;
-  const workerRows: { workerId: number; workerName: string; salAmt: number; bonAmt: number }[] = [];
+  let totalNetCents = 0;
+  let totalAdvancesCents = 0;
+  const workerRows: { workerId: number; workerName: string; salAmt: string; bonAmt: string }[] = [];
 
   for (const p of remaining) {
     const workerName = (p.fullName as string | null) || `Worker #${p.workerId}`;
-    const salAmt = parseFloat(p.baseSalary || "0") + parseFloat(p.transport || "0") - parseFloat(p.deductions || "0");
-    const bonAmt = parseFloat(p.bonuses || "0");
-    workerRows.push({ workerId: p.workerId, workerName, salAmt, bonAmt });
-    totalNet += parseFloat(p.netSalary || "0");
-    totalAdvances += parseFloat(p.advances || "0");
+    const accounting = allocatePayrollAccountingAmounts({
+      netSalary: p.netSalary || "0",
+      advances: p.advances || "0",
+      bonus: p.bonuses || "0",
+    });
+    workerRows.push({
+      workerId: p.workerId,
+      workerName,
+      salAmt: accounting.salaryExpense,
+      bonAmt: accounting.bonusExpense,
+    });
+    totalNetCents += accounting.netCents;
+    totalAdvancesCents += accounting.advanceCents;
   }
 
-  const totalGross = totalNet + totalAdvances;
-  if (totalGross <= 0) return;
+  const totalGrossCents = totalNetCents + totalAdvancesCents;
+  if (totalGrossCents <= 0) return;
 
-  // ── Step 4: resolve per-worker ledger accounts (outside tx) ──────────────
   const payableAcc = await findOrCreateLedger(companyId, "Payroll Payable", "Liability");
   const advancesAcc = await findOrCreateLedger(companyId, "Factory Worker Advances", "Asset");
-
-  // Ensure salary/bonus group parents exist
   const salaryGroup = await findOrCreateLedger(companyId, "Salary Expense - Workers", "Expense", { subType: "Group" });
   const bonusGroup = await findOrCreateLedger(companyId, "Bonus Expense - Workers", "Expense", { subType: "Group" });
 
-  // Ensure both headers carry subType="Group" even if they existed without it
   await globalDb.execute(
     sql`UPDATE ledger_accounts SET sub_type='Group' WHERE id IN (${salaryGroup.id}, ${bonusGroup.id}) AND (sub_type IS NULL OR sub_type <> 'Group')`
   );
@@ -209,7 +202,6 @@ export async function rebuildPayrollGenVoucher(
     const ba = await findOrCreateLedger(companyId, `Bonus Expense - ${workerName}`, "Expense", {
       parentId: bonusGroup.id,
     });
-    // Ensure parentId is set even for pre-existing accounts that were created without it
     await globalDb.execute(
       sql`UPDATE ledger_accounts SET parent_id = ${salaryGroup.id} WHERE id = ${sa.id} AND (parent_id IS NULL OR parent_id <> ${salaryGroup.id})`
     );
@@ -219,9 +211,10 @@ export async function rebuildPayrollGenVoucher(
     workerAccCache.set(workerId, { salaryId: sa.id, bonusId: ba.id });
   }
 
-  // ── Step 5: create replacement voucher ───────────────────────────────────
   const count = remaining.length;
   const desc = `Payroll expense: ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`;
+  const totalNet = moneyFromCents(totalNetCents);
+  const totalAdvances = moneyFromCents(totalAdvancesCents);
 
   const { voucher: genVoucher } = await insertInfrastructureVoucherTx(
     tx,
@@ -231,7 +224,7 @@ export async function rebuildPayrollGenVoucher(
       voucherType: "Journal",
       voucherDate: periodStart,
       description: desc,
-      totalAmount: totalGross.toFixed(2),
+      totalAmount: moneyFromCents(totalGrossCents),
       currency: "USD",
       sourceModule: "FACTORY",
     },
@@ -243,38 +236,38 @@ export async function rebuildPayrollGenVoucher(
 
   for (const { workerId, workerName, salAmt, bonAmt } of workerRows) {
     const accs = workerAccCache.get(workerId)!;
-    if (salAmt > 0) {
+    if (Number(salAmt) > 0) {
       journalEntries.push({
         voucherId: genVoucher.id,
         ledgerAccountId: accs.salaryId,
-        ...normUsd(salAmt.toFixed(2), "0"),
+        ...normUsd(salAmt, "0"),
         narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
       });
     }
-    if (bonAmt > 0) {
+    if (Number(bonAmt) > 0) {
       journalEntries.push({
         voucherId: genVoucher.id,
         ledgerAccountId: accs.bonusId,
-        ...normUsd(bonAmt.toFixed(2), "0"),
+        ...normUsd(bonAmt, "0"),
         narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
       });
     }
   }
 
-  if (totalNet > 0) {
+  if (totalNetCents > 0) {
     journalEntries.push({
       voucherId: genVoucher.id,
       ledgerAccountId: payableAcc.id,
-      ...normUsd("0", totalNet.toFixed(2)),
+      ...normUsd("0", totalNet),
       narration: desc,
     });
   }
 
-  if (totalAdvances > 0) {
+  if (totalAdvancesCents > 0) {
     journalEntries.push({
       voucherId: genVoucher.id,
       ledgerAccountId: advancesAcc.id,
-      ...normUsd("0", totalAdvances.toFixed(2)),
+      ...normUsd("0", totalAdvances),
       narration: `Advance deductions settled - ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`,
     });
   }

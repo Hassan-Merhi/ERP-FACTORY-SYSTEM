@@ -54,9 +54,9 @@ const bundles = [
     parts: 12,
     translatorImport: "translatePhase7BackendMessageText",
     test: "tests/phase7-backend-messages-translations.test.ts",
-    // The current mainline catalogue contains the reviewed backend-message
-    // entries recorded by the Phase 7 translation contract.
-    expectedCount: 643,
+    // Includes the reviewed Phase 3 accounting/payroll/loading/inventory
+    // compatibility entries added during the accounting closeout.
+    expectedCount: 678,
   },
 ];
 
