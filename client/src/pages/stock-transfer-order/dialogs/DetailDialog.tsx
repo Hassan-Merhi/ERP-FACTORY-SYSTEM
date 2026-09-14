@@ -9,7 +9,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Location, StockItemData, StockMovementDetailData } from "../../stocktransferorder/types";
+import type {
+  Location,
+  StockItemData,
+  StockMovementDetailData,
+  StockMovementTransaction,
+} from "../../stocktransferorder/types";
 
 type DetailDialogProps = {
   detailData: unknown;
@@ -50,9 +55,24 @@ export function DetailDialog({
     return "bg-muted text-muted-foreground";
   };
 
+  const displayRate = (transaction: StockMovementTransaction) => {
+    if (detailDirection === "out" && transaction.type === "Sale") {
+      return transaction.sellingRate ?? transaction.rate ?? 0;
+    }
+    return transaction.rate || 0;
+  };
+
+  const displayValue = (transaction: StockMovementTransaction) => {
+    if (detailDirection === "out" && transaction.type === "Sale") {
+      return transaction.sellingValue ?? transaction.value ?? 0;
+    }
+    return transaction.value || 0;
+  };
+
   const totalQty = rows.reduce((sum, row) => sum + (row.qty || 0), 0);
-  const totalValue = rows.reduce((sum, row) => sum + (row.value || 0), 0);
+  const totalValue = rows.reduce((sum, row) => sum + displayValue(row), 0);
   const avgRate = totalQty > 0 ? totalValue / totalQty : 0;
+  const showReference = detailDirection === "in";
 
   return (
     <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -91,7 +111,7 @@ export function DetailDialog({
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Type</th>
                   <th className="text-left px-3 py-2 font-medium">Date</th>
-                  <th className="text-left px-3 py-2 font-medium">Reference</th>
+                  {showReference && <th className="text-left px-3 py-2 font-medium">Reference</th>}
                   <th className="text-right px-3 py-2 font-medium">Qty</th>
                   <th className="text-right px-3 py-2 font-medium">Rate</th>
                   <th className="text-right px-3 py-2 font-medium">Value</th>
@@ -108,25 +128,27 @@ export function DetailDialog({
                       </span>
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{transaction.date}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{transaction.reference}</td>
+                    {showReference && (
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{transaction.reference}</td>
+                    )}
                     <td className="text-right px-3 py-2 tabular-nums font-medium">
                       {(transaction.qty || 0).toLocaleString(undefined, {
                         maximumFractionDigits: 2,
                       })}
                     </td>
                     <td className="text-right px-3 py-2 tabular-nums text-muted-foreground">
-                      {(transaction.rate || 0).toLocaleString(undefined, {
+                      {displayRate(transaction).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
                     </td>
-                    <td className="text-right px-3 py-2 tabular-nums">{formatAmount(transaction.value || 0)}</td>
+                    <td className="text-right px-3 py-2 tabular-nums">{formatAmount(displayValue(transaction))}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="sticky bottom-0 bg-muted border-t-2 font-semibold">
                 <tr>
-                  <td colSpan={3} className="px-3 py-2 text-xs text-muted-foreground">
+                  <td colSpan={showReference ? 3 : 2} className="px-3 py-2 text-xs text-muted-foreground">
                     {rows.length} transaction{rows.length !== 1 ? "s" : ""} · Avg rate:{" "}
                     {avgRate.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
