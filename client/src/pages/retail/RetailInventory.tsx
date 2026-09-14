@@ -7,11 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { read, utils, writeFile } from "@/lib/excelHelper";
+
+const NO_BRAND = "Other / No Brand";
+const MAX_PRODUCT_IMAGES = 8;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 interface Brand {
   id: number;
@@ -50,7 +54,6 @@ interface RetailProduct {
   code: string;
   name: string;
   category: string | null;
-  description: string | null;
   imageUrls: string[];
   active: boolean;
   brand: { id: number | null; name: string };
@@ -95,10 +98,8 @@ interface ProductDraft {
   code: string;
   name: string;
   brandId: number | "";
-  brandName: string;
   category: string;
-  description: string;
-  imageUrls: string;
+  imageUrls: string[];
   active: boolean;
   variants: DraftVariant[];
 }
@@ -118,10 +119,8 @@ const blankDraft = (): ProductDraft => ({
   code: "",
   name: "",
   brandId: "",
-  brandName: "",
   category: "",
-  description: "",
-  imageUrls: "",
+  imageUrls: [],
   active: true,
   variants: [blankVariant()],
 });
@@ -137,6 +136,18 @@ async function getJson<T>(url: string): Promise<T> {
 
 function money(value: number) {
   return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+}
+
+function buildInternalProductCode(name: string, brand: string) {
+  const identity = `${brand}-${name}`
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `RTL-${identity || "item"}`.slice(0, 100);
 }
 
 function ProductImage({ product, className }: { product: RetailProduct; className?: string }) {
@@ -174,50 +185,118 @@ function ProductEditor({
 }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState<ProductDraft>(() => blankDraft());
-  const [loadedProductId, setLoadedProductId] = useState<number | null>(null);
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [uploadingImages, setUploadingImages] = useState(false);
 
-  if (open) {
-    const targetId = product?.id ?? 0;
-    if (loadedProductId !== targetId) {
-      setLoadedProductId(targetId);
-      setDraft(
-        product
-          ? {
-              code: product.code,
-              name: product.name,
-              brandId: product.brand.id ?? "",
-              brandName: "",
-              category: product.category ?? "",
-              description: product.description ?? "",
-              imageUrls: (product.imageUrls ?? []).join("\n"),
-              active: product.active,
-              variants: product.variants.map((variant) => ({
-                id: variant.id,
-                size: variant.size,
-                barcode: variant.barcode,
-                sku: variant.sku ?? "",
-                cost: variant.cost,
-                sellingPrice: variant.sellingPrice,
-                lowStockThreshold: variant.lowStockThreshold,
-                active: variant.active,
-                stocks: variant.stocks.length
-                  ? variant.stocks.map((stock) => ({ locationId: stock.locationId, quantity: stock.quantity }))
-                  : [{ locationId: "", quantity: 0 }],
-              })),
-            }
-          : blankDraft()
-      );
+  useEffect(() => {
+    if (!open) return;
+    setDraft(
+      product
+        ? {
+            code: product.code,
+            name: product.name,
+            brandId: product.brand.name === NO_BRAND ? "" : (product.brand.id ?? ""),
+            category: product.category ?? "",
+            imageUrls: [...(product.imageUrls ?? [])],
+            active: product.active,
+            variants: product.variants.map((variant) => ({
+              id: variant.id,
+              size: variant.size,
+              barcode: variant.barcode,
+              sku: variant.sku ?? "",
+              cost: variant.cost,
+              sellingPrice: variant.sellingPrice,
+              lowStockThreshold: variant.lowStockThreshold,
+              active: variant.active,
+              stocks: variant.stocks.length
+                ? variant.stocks.map((stock) => ({ locationId: stock.locationId, quantity: stock.quantity }))
+                : [{ locationId: "", quantity: 0 }],
+            })),
+          }
+        : blankDraft()
+    );
+    setAddingBrand(false);
+    setNewBrandName("");
+  }, [open, product]);
+
+  const createBrandMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const response = await apiRequest("POST", "/api/retail/brands", { name });
+      return response.json() as Promise<Brand>;
+    },
+    onSuccess: (brand) => {
+      queryClient.invalidateQueries({ queryKey: ["retail-brands"] });
+      setDraft((current) => ({ ...current, brandId: brand.id }));
+      setNewBrandName("");
+      setAddingBrand(false);
+      toast({ title: "Brand added", description: brand.name });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Could not add brand", description: error.message, variant: "destructive" }),
+  });
+
+  const uploadImages = async (files?: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = MAX_PRODUCT_IMAGES - draft.imageUrls.length;
+    if (remaining <= 0) {
+      toast({ title: "Image limit reached", description: `You can upload up to ${MAX_PRODUCT_IMAGES} images.` });
+      return;
     }
-  } else if (loadedProductId !== null) {
-    setLoadedProductId(null);
-  }
+
+    const selected = Array.from(files).slice(0, remaining);
+    const invalidType = selected.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type));
+    if (invalidType) {
+      toast({
+        title: "Unsupported image",
+        description: "Use JPG, PNG, WEBP or GIF images.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const tooLarge = selected.find((file) => file.size > MAX_IMAGE_BYTES);
+    if (tooLarge) {
+      toast({
+        title: "Image too large",
+        description: `${tooLarge.name} is larger than 10 MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImages(true);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${file.name}`);
+        uploadedUrls.push(new URL(`/api/files/${body.id}/preview`, window.location.origin).toString());
+      }
+      setDraft((current) => ({
+        ...current,
+        imageUrls: [...current.imageUrls, ...uploadedUrls].slice(0, MAX_PRODUCT_IMAGES),
+      }));
+      toast({ title: selected.length === 1 ? "Image uploaded" : `${selected.length} images uploaded` });
+    } catch (error) {
+      toast({
+        title: "Image upload failed",
+        description: error instanceof Error ? error.message : "Could not upload image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImages(false);
+    }
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const imageUrls = draft.imageUrls
-        .split(/\n|,/)
-        .map((url) => url.trim())
-        .filter(Boolean);
       const variants = draft.variants.map((variant) => ({
         id: variant.id,
         size: variant.size.trim(),
@@ -231,18 +310,23 @@ function ProductEditor({
           .filter((stock) => stock.locationId !== "")
           .map((stock) => ({ locationId: Number(stock.locationId), quantity: Number(stock.quantity) })),
       }));
-      if (!draft.name.trim() || !draft.code.trim()) throw new Error("Product code and name are required");
+
+      if (!draft.name.trim()) throw new Error("Item name is required");
       if (!variants.length || variants.some((variant) => !variant.size || !variant.barcode)) {
-        throw new Error("Every variant needs a size and barcode");
+        throw new Error("Every size needs a size value and barcode");
       }
+
+      const selectedBrandName =
+        draft.brandId === "" ? NO_BRAND : brands.find((brand) => brand.id === Number(draft.brandId))?.name || NO_BRAND;
+      const internalCode = draft.code.trim() || buildInternalProductCode(draft.name, selectedBrandName);
       const payload = {
-        code: draft.code.trim(),
+        code: internalCode,
         name: draft.name.trim(),
         brandId: draft.brandId === "" ? undefined : Number(draft.brandId),
-        brandName: draft.brandId === "" ? draft.brandName.trim() || "Other / No Brand" : undefined,
+        brandName: draft.brandId === "" ? NO_BRAND : undefined,
         category: draft.category.trim() || null,
-        description: draft.description.trim() || null,
-        imageUrls,
+        description: null,
+        imageUrls: draft.imageUrls,
         active: draft.active,
         variants,
       };
@@ -277,55 +361,102 @@ function ProductEditor({
         <DialogHeader>
           <DialogTitle>{product ? `Edit ${product.name}` : "Add Retail Product"}</DialogTitle>
         </DialogHeader>
+
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-2">
             <Label>Item name *</Label>
             <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </div>
+
           <div className="space-y-2">
-            <Label>SKU / Item code *</Label>
-            <Input value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <Label>Brand</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Brand</Label>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setAddingBrand((current) => !current)}>
+                <Plus className="mr-1 h-4 w-4" /> Add brand
+              </Button>
+            </div>
             <select
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
               value={draft.brandId}
               onChange={(e) => setDraft({ ...draft, brandId: e.target.value ? Number(e.target.value) : "" })}
             >
-              <option value="">Other / No Brand or custom brand</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.name}
-                </option>
-              ))}
+              <option value="">{NO_BRAND}</option>
+              {brands
+                .filter((brand) => !brand.isNoBrand)
+                .map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </option>
+                ))}
             </select>
+            {addingBrand && (
+              <div className="flex gap-2">
+                <Input
+                  value={newBrandName}
+                  placeholder="New brand name"
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newBrandName.trim()) createBrandMutation.mutate(newBrandName.trim());
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  disabled={!newBrandName.trim() || createBrandMutation.isPending}
+                  onClick={() => createBrandMutation.mutate(newBrandName.trim())}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
           </div>
-          {draft.brandId === "" && (
-            <div className="space-y-2">
-              <Label>Custom brand (optional)</Label>
-              <Input
-                value={draft.brandName}
-                placeholder="Leave empty for Other / No Brand"
-                onChange={(e) => setDraft({ ...draft, brandName: e.target.value })}
-              />
-            </div>
-          )}
+
           <div className="space-y-2">
             <Label>Category</Label>
             <Input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
           </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Product image URLs</Label>
-            <Textarea
-              value={draft.imageUrls}
-              placeholder="One image URL per line (up to 8)"
-              onChange={(e) => setDraft({ ...draft, imageUrls: e.target.value })}
+
+          <div className="space-y-3 md:col-span-2">
+            <div>
+              <Label>Product images</Label>
+              <p className="mt-1 text-xs text-muted-foreground">Upload JPG, PNG, WEBP or GIF images. Up to 8 images.</p>
+            </div>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              disabled={uploadingImages || draft.imageUrls.length >= MAX_PRODUCT_IMAGES}
+              onChange={(e) => {
+                void uploadImages(e.target.files);
+                e.currentTarget.value = "";
+              }}
             />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Description</Label>
-            <Textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+            {uploadingImages && <p className="text-sm text-muted-foreground">Uploading image…</p>}
+            {draft.imageUrls.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {draft.imageUrls.map((src, index) => (
+                  <div key={`${src}-${index}`} className="group relative h-24 w-24 overflow-hidden rounded-lg border bg-muted">
+                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      className="absolute right-1 top-1 h-7 w-7"
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          imageUrls: current.imageUrls.filter((_, imageIndex) => imageIndex !== index),
+                        }))
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -334,7 +465,7 @@ function ProductEditor({
             <div>
               <h3 className="font-semibold">Sizes / Variants</h3>
               <p className="text-xs text-muted-foreground">
-                Each size has its own barcode, price, cost and location stock.
+                Each size has its own barcode, selling price, cost and location stock.
               </p>
             </div>
             <Button
@@ -342,13 +473,13 @@ function ProductEditor({
               variant="outline"
               onClick={() => setDraft((current) => ({ ...current, variants: [...current.variants, blankVariant()] }))}
             >
-              <Plus className="h-4 w-4 mr-1" /> Add size
+              <Plus className="mr-1 h-4 w-4" /> Add size
             </Button>
           </div>
 
           {draft.variants.map((variant, variantIndex) => (
             <Card key={variant.id ?? `new-${variantIndex}`}>
-              <CardContent className="p-4 space-y-4">
+              <CardContent className="space-y-4 p-4">
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="space-y-1">
                     <Label>Size *</Label>
@@ -395,6 +526,7 @@ function ProductEditor({
                     />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Stock by location</Label>
@@ -459,6 +591,7 @@ function ProductEditor({
                     </div>
                   ))}
                 </div>
+
                 {draft.variants.length > 1 && !variant.id && (
                   <Button
                     type="button"
@@ -483,7 +616,7 @@ function ProductEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || uploadingImages}>
             {saveMutation.isPending ? "Saving…" : "Save product"}
           </Button>
         </div>
@@ -500,7 +633,6 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   const downloadTemplate = async () => {
     const sheet = utils.json_to_sheet([
       {
-        Code: "SHOE-001",
         Name: "Runner",
         Brand: "Acme",
         Size: "42",
@@ -512,7 +644,6 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
         Category: "Shoes",
       },
       {
-        Code: "SHOE-001",
         Name: "Runner",
         Brand: "Acme",
         Size: "43",
@@ -564,10 +695,13 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       const raw = utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
       const mapped = raw.map((source) => {
         const row = new Map(Object.entries(source).map(([key, value]) => [key.trim().toLowerCase(), value]));
+        const name = String(row.get("name") ?? "").trim();
+        const brand = String(row.get("brand") ?? NO_BRAND).trim() || NO_BRAND;
+        const suppliedCode = String(row.get("code") ?? "").trim();
         return {
-          code: String(row.get("code") ?? "").trim(),
-          name: String(row.get("name") ?? "").trim(),
-          brand: String(row.get("brand") ?? "Other / No Brand").trim() || "Other / No Brand",
+          code: suppliedCode || buildInternalProductCode(name, brand),
+          name,
+          brand,
           size: String(row.get("size") ?? "").trim(),
           barcode: String(row.get("barcode") ?? "").trim(),
           cost: Number(row.get("cost") ?? 0),
@@ -575,13 +709,11 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           qty: Number(row.get("qty") ?? 0),
           location: String(row.get("location") ?? "").trim(),
           category: String(row.get("category") ?? "").trim() || undefined,
-          description: String(row.get("description") ?? "").trim() || undefined,
-          imageUrl: String(row.get("image url") ?? row.get("imageurl") ?? "").trim() || undefined,
         };
       });
-      const required = ["code", "name", "size", "barcode", "location"] as const;
+      const required = ["name", "size", "barcode", "location"] as const;
       const badIndex = mapped.findIndex((row) => required.some((key) => !String(row[key] ?? "").trim()));
-      if (badIndex >= 0) throw new Error(`Row ${badIndex + 2} is missing Code, Name, Size, Barcode or Location`);
+      if (badIndex >= 0) throw new Error(`Row ${badIndex + 2} is missing Name, Size, Barcode or Location`);
       setRows(mapped);
       setFileName(file.name);
       toast({ title: "File ready", description: `${mapped.length} rows validated for import` });
@@ -602,8 +734,8 @@ function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           <DialogTitle>Import Retail Products</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Required columns: Code | Name | Brand | Size | Barcode | Cost | Price | Qty | Location. Multiple sizes with
-          the same Code are grouped under one product.
+          Columns: Name | Brand | Size | Barcode | Cost | Price | Qty | Location | Category. Brand can be left blank
+          for Other / No Brand. Rows with the same product name and brand are grouped together automatically.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadTemplate}>
@@ -690,7 +822,6 @@ export default function RetailInventory() {
     placeholderData: (previous) => previous,
   });
   const products = catalogPage?.items ?? [];
-  const filteredProducts = products;
   const sizes = catalogFacets?.sizes ?? [];
   const categories = catalogFacets?.categories ?? [];
 
@@ -716,11 +847,10 @@ export default function RetailInventory() {
   if (detailMatch) {
     if (!detailProduct) return <div className="p-6 text-sm text-muted-foreground">Loading product…</div>;
     return (
-      <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/retail")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Inventory
+          <Button variant="ghost" onClick={() => navigate("/retail/inventory")}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
           </Button>
           <Button
             onClick={() => {
@@ -728,22 +858,21 @@ export default function RetailInventory() {
               setEditorOpen(true);
             }}
           >
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit product
+            <Pencil className="mr-2 h-4 w-4" /> Edit product
           </Button>
         </div>
-        <div className="flex gap-5 items-start">
+
+        <div className="flex items-start gap-5">
           <ProductImage product={detailProduct} className="h-32 w-32 rounded-lg border" />
           <div>
-            <p className="text-sm text-muted-foreground">{detailProduct.code}</p>
             <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
             <p className="mt-1">
               {detailProduct.brand.name}
               {detailProduct.category ? ` · ${detailProduct.category}` : ""}
             </p>
-            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">{detailProduct.description}</p>
           </div>
         </div>
+
         {detailProduct.imageUrls.length > 1 && (
           <div className="flex gap-2 overflow-x-auto">
             {detailProduct.imageUrls.map((src) => (
@@ -758,6 +887,7 @@ export default function RetailInventory() {
             ))}
           </div>
         )}
+
         <Card>
           <CardHeader>
             <CardTitle>Stock by size</CardTitle>
@@ -793,6 +923,7 @@ export default function RetailInventory() {
             </table>
           </CardContent>
         </Card>
+
         <ProductEditor
           open={editorOpen}
           onOpenChange={setEditorOpen}
@@ -805,25 +936,23 @@ export default function RetailInventory() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Boxes className="h-6 w-6" />
             <h1 className="text-2xl font-bold">Retail Inventory</h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Products grouped by brand with independent stock and barcodes for every size.
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => navigate("/retail/pos")}>
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Open POS
+            <ShoppingCart className="mr-2 h-4 w-4" /> Open POS
           </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import
+            <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
           <Button
             onClick={() => {
@@ -831,15 +960,14 @@ export default function RetailInventory() {
               setEditorOpen(true);
             }}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
+            <Plus className="mr-2 h-4 w-4" /> Add Product
           </Button>
         </div>
       </div>
 
       <div className="grid gap-2 md:grid-cols-6">
         <Input
-          placeholder="Search product, code or brand…"
+          placeholder="Search product or brand…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="md:col-span-2"
@@ -903,11 +1031,11 @@ export default function RetailInventory() {
       </div>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm min-w-[850px]">
+        <CardContent className="overflow-x-auto p-0">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left">
-                <th className="p-3 w-16">Image</th>
+                <th className="w-16 p-3">Image</th>
                 <th>Product</th>
                 <th>Brand</th>
                 <th>Available sizes</th>
@@ -923,17 +1051,17 @@ export default function RetailInventory() {
                     Loading retail inventory…
                   </td>
                 </tr>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted-foreground">
                     No products match these filters.
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                products.map((product) => (
                   <tr
                     key={product.id}
-                    className="border-b last:border-0 hover:bg-muted/20 cursor-pointer"
+                    className="cursor-pointer border-b last:border-0 hover:bg-muted/20"
                     onClick={() => navigate(`/retail/products/${product.id}`)}
                   >
                     <td className="p-3">
@@ -941,7 +1069,6 @@ export default function RetailInventory() {
                     </td>
                     <td>
                       <div className="font-medium">{product.name}</div>
-                      <div className="text-xs text-muted-foreground">{product.code}</div>
                     </td>
                     <td>{product.brand.name}</td>
                     <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>
