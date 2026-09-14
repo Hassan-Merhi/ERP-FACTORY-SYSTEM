@@ -17,6 +17,7 @@ export interface OperationalPermissionRouteMatch {
   permissionKey: string;
   developerOnly?: boolean;
   deniedRoles?: readonly string[];
+  permissionBypassRoles?: readonly string[];
 }
 
 function normalizePath(path: string): string {
@@ -170,15 +171,17 @@ export function classifyOperationalPermissionRoute(
   const shiftPermission = posShiftPermission(method, path);
   if (shiftPermission) return shiftPermission;
 
-  // POS Excel imports are intentional sales workflows when enabled for the company.
-  // This includes both cash/normal POS sales and customer/credit sales. POS roles are
-  // allowed by default for action permissions, while View Only stays blocked.
+  // POS Excel imports are intentional sales workflows. POS users must be able to
+  // import both normal/cash sales and customer/credit sales even when the broad
+  // "Import Data" restriction is disabled for their role. Other roles still use
+  // the normal act_import_data permission, and View Only remains blocked.
   if (isPosSalesImportRoute(path)) {
     return {
       operation: "import",
       permissionType: "action",
       permissionKey: "act_import_data",
       deniedRoles: ["View Only"],
+      permissionBypassRoles: ["POS"],
     };
   }
 
