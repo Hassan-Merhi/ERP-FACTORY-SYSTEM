@@ -161,8 +161,10 @@ function mergeCoverage() {
 }
 
 function requireCoverage() {
-  // This is a transitive dependency of the locked V8 coverage provider and is
-  // intentionally loaded only by the coverage verification path.
+  // Declared as a direct devDependency rather than relied on transitively:
+  // @vitest/coverage-v8 v5 vendors this under the @vitest scope, so the bare
+  // package stopped resolving and this merge could not run at all. Still loaded
+  // only by the coverage verification path.
   return require("istanbul-lib-coverage");
 }
 
