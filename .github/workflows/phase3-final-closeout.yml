@@ -26,7 +26,7 @@ jobs:
           cache: npm
 
       - name: Install supported TypeScript API compatibility package
-        run: npm install --save-dev --save-exact typescript@npm:@typescript/typescript6@6.0.3
+        run: npm install --save-dev --save-exact typescript@npm:@typescript/typescript6@6.0.2
 
       - name: Format changed source inherited by the PR merge base
         run: |
@@ -50,8 +50,8 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const r = JSON.parse(fs.readFileSync('/tmp/i18n.json','utf8'));
-          for (const f of r.findings.filter(x => x.status === 'actionable')) {
-            console.log(JSON.stringify({module:f.module,file:f.file,line:f.line,kind:f.kind,text:f.text}));
+          for (const f of (r.findings || []).filter(x => x.status === 'actionable')) {
+            console.log(JSON.stringify({module:f.module,file:f.file,line:f.line,kind:f.kind,text:f.text,value:f.value}));
           }
           NODE
 
