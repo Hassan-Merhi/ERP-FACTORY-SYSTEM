@@ -26,6 +26,7 @@ import type { CompanyScopedTable } from "../../types/companyScopedTable";
 
 const LEGACY_IDEMPOTENCY_TABLE = "accounting_posting_idempotency";
 const POSTING_AUDIT_TABLE = "accounting_postings";
+const SERVER_NUMBERED_RETRY_SOURCES = new Set(["manual-journal", "payment-receipt"]);
 
 const TARGET_FIELDS = [
   "ledgerAccountId",
@@ -134,15 +135,16 @@ function assertStoredIdentityMatches(input: {
   source: PostingSourceIdentity;
   requestFingerprint: string;
   stored: StoredPostingIdentity;
+  allowFingerprintMismatch?: boolean;
 }) {
-  const { source, requestFingerprint, stored } = input;
+  const { source, requestFingerprint, stored, allowFingerprintMismatch = false } = input;
   if (stored.sourceType !== source.sourceType || stored.sourceId !== source.sourceId) {
     throw new PostingValidationError(
       "POSTING_IDEMPOTENCY_CONFLICT",
       `Idempotency key ${source.idempotencyKey} is already bound to ${stored.sourceType}:${stored.sourceId}`
     );
   }
-  if (stored.requestFingerprint !== requestFingerprint) {
+  if (!allowFingerprintMismatch && stored.requestFingerprint !== requestFingerprint) {
     throw new PostingValidationError(
       "POSTING_IDEMPOTENCY_CONFLICT",
       `Idempotency key ${source.idempotencyKey} was already used for a different posting payload`
@@ -293,6 +295,12 @@ export function createDatabasePostingDependencies(): CentralPostingDependencies 
               requestFingerprint: marker.requestFingerprint,
               voucherId: Number(marker.voucherId),
             },
+            // Before Phase 9, these two routes included their server-generated
+            // display voucher number in the stored fingerprint. The logical
+            // idempotency key already contains the financial-payload digest, so
+            // an exact key match is enough to safely replay those historical
+            // markers after the retry-stable fingerprint change.
+            allowFingerprintMismatch: SERVER_NUMBERED_RETRY_SOURCES.has(source.sourceType),
           });
           return loadVoucherWithEntries({
             tx,
