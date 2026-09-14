@@ -26,6 +26,8 @@ import {
   isPosItemReplacementText,
   translatePosItemReplacementLiteral,
 } from "@/i18n/posItemReplacement.applicationTranslations";
+import { isRetailWave1Text, translateRetailWave1Text } from "@/i18n/retailWave1Translations";
+import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailWave2Translations";
 
 const HARD_EXCLUDED_SELECTOR = [
   "code",
@@ -108,7 +110,9 @@ function isApprovedNonVisualText(value: string): boolean {
     isPhase5PropertiesRentalsText(value) ||
     isPhase6ReportsExportsText(value) ||
     isPhase7BackendMessageText(value) ||
-    isPosItemReplacementText(value)
+    isPosItemReplacementText(value) ||
+    isRetailWave1Text(value) ||
+    isRetailWave2Text(value)
   );
 }
 
@@ -116,6 +120,8 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
   return (
     translateFinalCloseoutText(value, language) ??
     translateApplicationLiteral(value, language) ??
+    translateRetailWave1Text(value, language) ??
+    translateRetailWave2Text(value, language) ??
     translateTabsFiltersText(value, language) ??
     translateVoucherKpiText(value, language) ??
     translatePhase7BackendMessageText(value, language) ??

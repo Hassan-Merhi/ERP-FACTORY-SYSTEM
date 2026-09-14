@@ -7,7 +7,7 @@
  */
 import { useState, useRef, useCallback, useEffect, type KeyboardEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -39,6 +39,7 @@ export type ProformaLineStatus = "fulfilled" | "overloaded" | "short" | "none";
 export function useContainerLoadingScanModel() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
 
@@ -67,18 +68,29 @@ export function useContainerLoadingScanModel() {
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
-  // On mount: check for ?orderId= resume param
+  // Keep the active loading synchronized with the URL. Removing ?orderId must
+  // reset the old loading instead of silently keeping it alive in component state.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(search);
     const resumeOrderId = params.get("orderId");
-    if (resumeOrderId) {
-      const id = parseInt(resumeOrderId);
-      if (!isNaN(id)) {
-        setOrderId(id);
-        setIsResuming(true);
-      }
+    if (!resumeOrderId) {
+      setOrderId(null);
+      setIsResuming(false);
+      setSelectedCustomerId("");
+      setSelectedLocationId("");
+      setLoadingNote("");
+      setLastScannedRef(null);
+      setPendingBypassBaleRef(null);
+      setPendingBypassOverloadRef(null);
+      return;
     }
-  }, []);
+
+    const id = parseInt(resumeOrderId);
+    if (!isNaN(id)) {
+      setOrderId(id);
+      setIsResuming(true);
+    }
+  }, [search]);
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ["/api/factory/customers"],
@@ -126,7 +138,11 @@ export function useContainerLoadingScanModel() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch proforma capacity");
-      return res.json();
+      const snapshot = (await res.json()) as ProformaCapacitySnapshot;
+      if (orderId && snapshot.currentOrderId !== orderId) {
+        throw new Error("Proforma capacity returned for the wrong loading order");
+      }
+      return snapshot;
     },
     enabled: !!capacityProformaId,
     staleTime: 0,
@@ -165,7 +181,9 @@ export function useContainerLoadingScanModel() {
     },
     onSuccess: (data) => {
       setOrderId(data.id);
-      toast({ title: "Loading order created", description: "You can now start scanning bales" });
+      setIsResuming(false);
+      navigate(`/factory/sales/loading/new?orderId=${data.id}`);
+      toast({ title: "Loading order created", description: `Loading #${data.id} is separate and ready for scanning` });
       setTimeout(() => scannerRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
@@ -324,14 +342,8 @@ export function useContainerLoadingScanModel() {
 
   const handleStartLoading = useCallback(() => {
     if (!customerId || !selectedLocationId) return;
-    if (
-      activeProforma &&
-      proformaCapacity?.proformaId === activeProforma.id &&
-      proformaCapacity.remainingTotalQty <= 0
-    ) {
-      toast({ title: "Proforma fully consumed", description: "No remaining quantity is available for a new loading." });
-      return;
-    }
+    // Reusable proformas are independent per loading; aggregate use by older
+    // loadings must never prevent a new order from being created.
     createOrderMutation.mutate({
       customerId,
       proformaIdUsed: activeProforma?.id || null,
@@ -339,16 +351,7 @@ export function useContainerLoadingScanModel() {
       orderDate,
       containerNotes: loadingNote.trim() || undefined,
     });
-  }, [
-    customerId,
-    selectedLocationId,
-    activeProforma,
-    proformaCapacity,
-    orderDate,
-    loadingNote,
-    createOrderMutation,
-    toast,
-  ]);
+  }, [customerId, selectedLocationId, activeProforma, orderDate, loadingNote, createOrderMutation]);
 
   const handleScan = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {

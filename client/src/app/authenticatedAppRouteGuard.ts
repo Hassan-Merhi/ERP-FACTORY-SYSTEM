@@ -12,6 +12,8 @@ const SUPPLIER_PARTNER_PATHS = new Set([
   "/sp/gc-migration",
 ]);
 
+const RETAIL_INVENTORY_ALIASES = new Set(["/inventory", "/stock", "/location-inventory", "/stock-items"]);
+
 export type AuthenticatedAppRouteDecision =
   { kind: "continue" } | { kind: "loading" } | { kind: "bootstrap-error" } | { kind: "redirect"; to: string };
 
@@ -38,6 +40,8 @@ export function resolveAuthenticatedAppRoute({
   const isPropertiesRoute = currentLocation.startsWith("/properties/");
   const isSupplierPartnerCompany = companyType === "supplier_partner";
   const isSupplierPartnerRoute = currentLocation === "/sp" || currentLocation.startsWith("/sp/");
+  const isRetailCompany = companyType === "retail";
+  const isRetailRoute = currentLocation === "/retail" || currentLocation.startsWith("/retail/");
   const isFactoryCompany = companyType === "factory" || companyType === "factory_v2";
   const isFactoryRoute = currentLocation.startsWith("/factory/");
   const hasErpAccess = !isFactoryCompany || !myAccess || myAccess.hasErpAccess;
@@ -66,17 +70,24 @@ export function resolveAuthenticatedAppRoute({
     decision = { kind: "redirect", to: "/sp/setup" };
   } else if (isSupplierPartnerCompany && isSupplierPartnerRoute && !SUPPLIER_PARTNER_PATHS.has(currentLocation)) {
     decision = { kind: "redirect", to: "/sp" };
+  } else if (isRetailRoute && !isRetailCompany) {
+    decision = { kind: "redirect", to: "/tracking" };
+  } else if (isRetailCompany && (currentLocation === "/" || currentLocation === "/retail/dashboard")) {
+    // Retail is still a normal ERP company. Its landing page is the standard ERP dashboard.
+    decision = { kind: "redirect", to: "/financial-overview" };
+  } else if (isRetailCompany && currentLocation === "/pos") {
+    // Retail uses the variant-aware POS rather than the legacy stock-item POS.
+    decision = { kind: "redirect", to: "/retail/pos" };
+  } else if (isRetailCompany && RETAIL_INVENTORY_ALIASES.has(currentLocation)) {
+    // Only inventory is specialized; accounting, vouchers, parties, daybook, etc. stay on normal ERP routes.
+    decision = { kind: "redirect", to: "/retail/inventory" };
   } else if (isFactoryRoute && !isFactoryCompany) {
-    // Factory-only bootstrap data must never gate an ERP/non-Factory company.
-    // The company type alone is enough to reject a stale /factory/* route.
     decision = { kind: "redirect", to: "/" };
   } else if (isFactoryBootstrapRoute && myAccessLoading && myAccess === undefined) {
     decision = { kind: "loading" };
   } else if (isFactoryBootstrapRoute && myAccess === undefined && !myAccessError) {
     decision = { kind: "loading" };
   } else if (isFactoryBootstrapRoute && myAccess === undefined && myAccessError) {
-    // React Query has exhausted its configured retries before any usable access
-    // data was loaded. A background refetch error must not evict cached access.
     decision = { kind: "bootstrap-error" };
   } else if (
     isFactoryCompany &&
@@ -105,6 +116,8 @@ export function resolveAuthenticatedAppRoute({
     decision,
     isPropertiesCompany,
     isPropertiesRoute,
+    isRetailCompany,
+    isRetailRoute,
     isFactoryCompany,
     isFactoryRoute,
     hasErpAccess,

@@ -15,6 +15,7 @@ import {
   stockAdjustmentVouchers,
   stockAdjustmentItems,
   creditNoteItems,
+  containers,
 } from "@shared/schema";
 
 /**
@@ -97,6 +98,7 @@ export async function fetchStockMovements(
       voucherNumber: vouchers.voucherNumber,
       voucherType: vouchers.voucherType,
       voucherId: vouchers.id,
+      locationName: vouchers.locationName,
       qty: salesItems.quantity,
       costPrice: salesItems.costPrice,
       totalCost: salesItems.totalCost,
@@ -119,10 +121,9 @@ export async function fetchStockMovements(
     const qty = parseFloat(r.qty || "0");
     const value = parseFloat(r.totalCost || "0");
     const vt = r.voucherType || "Sales";
-    const isPOS = vt.toLowerCase().includes("pos");
     results.push({
       date: r.date,
-      particulars: isPOS ? "Cash" : r.voucherNumber,
+      particulars: r.locationName || "Unassigned",
       vchType: vt,
       voucherId: r.voucherId,
       poId: null,
@@ -327,6 +328,7 @@ export async function fetchStockMovements(
       voucherType: vouchers.voucherType,
       voucherId: vouchers.id,
       poId: purchaseOrders.id,
+      containerNumber: containers.containerNumber,
       qty: poLineItems.quantity,
       rate: poLineItems.rate,
       lineTotal: poLineItems.lineTotal,
@@ -334,6 +336,7 @@ export async function fetchStockMovements(
     .from(poLineItems)
     .innerJoin(purchaseOrders, eq(poLineItems.poId, purchaseOrders.id))
     .innerJoin(vouchers, eq(purchaseOrders.voucherId, vouchers.id))
+    .leftJoin(containers, eq(purchaseOrders.containerId, containers.id))
     .where(
       and(
         eq(purchaseOrders.companyId, companyId),
@@ -351,7 +354,7 @@ export async function fetchStockMovements(
     const lineTotal = parseFloat(r.lineTotal || "0");
     results.push({
       date: r.date,
-      particulars: r.voucherNumber,
+      particulars: r.containerNumber || r.voucherNumber,
       vchType: r.voucherType || "Purchase Import",
       voucherId: r.voucherId,
       poId: r.poId,

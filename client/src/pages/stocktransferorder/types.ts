@@ -144,6 +144,8 @@ export interface StockMovementTransaction {
   qty: number;
   rate: number;
   value: number;
+  sellingRate?: number;
+  sellingValue?: number;
 }
 
 export interface StockMovementDetailData {

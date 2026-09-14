@@ -15,9 +15,9 @@ const proforma = {
   status: "ACTIVE",
 };
 
-function snapshot(options?: { active?: boolean; consumed?: number }) {
+function globalSnapshot(options?: { active?: boolean; consumed?: number }) {
   return buildProformaCapacitySnapshot(
-    { companyId: 12, proformaId: 71, currentOrderId: 170 },
+    { companyId: 12, proformaId: 71 },
     { ...proforma, isActive: options?.active ?? true },
     [
       { articleCode: "HMD12630", quantity: 2 },
@@ -32,7 +32,7 @@ function snapshot(options?: { active?: boolean; consumed?: number }) {
 
 describe("Phase 2 proforma capacity enforcement", () => {
   it("keeps explicit global capacity available for aggregate historical checks", () => {
-    const decision = evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), " HmD12630 ", 1, "global");
+    const decision = evaluateProformaArticleCapacity(globalSnapshot({ consumed: 4 }), " HmD12630 ", 1, "global");
 
     expect(decision).toEqual(
       expect.objectContaining({
@@ -49,7 +49,7 @@ describe("Phase 2 proforma capacity enforcement", () => {
   });
 
   it("rejects an article outside the proforma when an explicit global check is requested", () => {
-    expect(evaluateProformaArticleCapacity(snapshot(), "EXTRA", 1, "global")).toEqual(
+    expect(evaluateProformaArticleCapacity(globalSnapshot(), "EXTRA", 1, "global")).toEqual(
       expect.objectContaining({
         allowed: false,
         reason: "not_in_proforma",
@@ -62,7 +62,7 @@ describe("Phase 2 proforma capacity enforcement", () => {
   });
 
   it("keeps explicit global quantity-exceeded checks available", () => {
-    expect(evaluateProformaArticleCapacity(snapshot({ consumed: 4 }), "HMD12630", 2, "global")).toEqual(
+    expect(evaluateProformaArticleCapacity(globalSnapshot({ consumed: 4 }), "HMD12630", 2, "global")).toEqual(
       expect.objectContaining({
         allowed: false,
         reason: "quantity_exceeded",
@@ -78,7 +78,7 @@ describe("Phase 2 proforma capacity enforcement", () => {
 
   it("groups duplicate/case-variant additions before an explicit global check", () => {
     const validation = validateProformaCapacityAdditions(
-      snapshot({ consumed: 3 }),
+      globalSnapshot({ consumed: 3 }),
       [
         { articleCode: "HMD12630", quantity: 1 },
         { articleCode: " hmd12630 ", quantity: 2 },
@@ -101,13 +101,13 @@ describe("Phase 2 proforma capacity enforcement", () => {
   });
 
   it("permits an independent new loading for the same customer while the proforma is active", () => {
-    expect(evaluateProformaLoadingAvailability(snapshot({ consumed: 4 }), 23)).toEqual({
+    expect(evaluateProformaLoadingAvailability(globalSnapshot({ consumed: 4 }), 23)).toEqual({
       allowed: true,
       reason: null,
       remainingTotalQty: 7,
     });
-    expect(evaluateProformaLoadingAvailability(snapshot({ consumed: 4 }), 999).reason).toBe("customer_mismatch");
-    expect(evaluateProformaLoadingAvailability(snapshot({ active: false }), 23).reason).toBe("inactive");
+    expect(evaluateProformaLoadingAvailability(globalSnapshot({ consumed: 4 }), 999).reason).toBe("customer_mismatch");
+    expect(evaluateProformaLoadingAvailability(globalSnapshot({ active: false }), 23).reason).toBe("inactive");
   });
 
   it("does not let sibling loadings exhaust a new loading", () => {
@@ -148,7 +148,7 @@ describe("Phase 2 proforma capacity enforcement", () => {
   });
 });
 
-describe("Phase 2 per-loading reference scope", () => {
+describe("Phase 2 per-loading enforcement scope", () => {
   const buildScoped = (contributions: Array<{ orderId: number; loadedQty: number }>) =>
     buildProformaCapacitySnapshot(
       { companyId: 12, proformaId: 71, currentOrderId: 170 },
@@ -162,8 +162,8 @@ describe("Phase 2 per-loading reference scope", () => {
       }))
     );
 
-  it("treats a live loading as reference-only and ignores sibling consumption", () => {
-    const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
+  it("ignores sibling consumption while allowing a below-limit scan", () => {
+    const capacity = buildScoped([{ orderId: 154, loadedQty: 99 }]);
 
     const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
 
@@ -180,18 +180,35 @@ describe("Phase 2 per-loading reference scope", () => {
     );
   });
 
-  it("does not hard-block a live loading that exceeds the master proforma quantity", () => {
+  it("allows the scan that exactly reaches this loading's proforma quantity", () => {
     const capacity = buildScoped([
-      { orderId: 154, loadedQty: 5 },
-      { orderId: 170, loadedQty: 2 },
+      { orderId: 154, loadedQty: 99 },
+      { orderId: 170, loadedQty: 1 },
     ]);
 
-    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1);
-
-    expect(decision).toEqual(
+    expect(evaluateProformaArticleCapacity(capacity, "HMD12630", 1)).toEqual(
       expect.objectContaining({
         allowed: true,
         reason: null,
+        validationMode: "reference",
+        requestedQty: 2,
+        consumedQty: 1,
+        remainingQty: 1,
+        projectedConsumedQty: 2,
+      })
+    );
+  });
+
+  it("soft-rejects the first scan that would overload this loading", () => {
+    const capacity = buildScoped([
+      { orderId: 154, loadedQty: 99 },
+      { orderId: 170, loadedQty: 2 },
+    ]);
+
+    expect(evaluateProformaArticleCapacity(capacity, "HMD12630", 1)).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "quantity_exceeded",
         validationMode: "reference",
         requestedQty: 2,
         consumedQty: 2,
@@ -201,13 +218,13 @@ describe("Phase 2 per-loading reference scope", () => {
     );
   });
 
-  it("does not hard-block a live loading for an article outside the reusable proforma", () => {
+  it("soft-rejects an item outside the proforma so the existing second-scan bypass can confirm it", () => {
     const capacity = buildScoped([]);
 
     expect(evaluateProformaArticleCapacity(capacity, "EXTRA", 1)).toEqual(
       expect.objectContaining({
-        allowed: true,
-        reason: null,
+        allowed: false,
+        reason: "not_in_proforma",
         validationMode: "reference",
         normalizedArticleCode: "extra",
         requestedQty: 0,
@@ -217,16 +234,24 @@ describe("Phase 2 per-loading reference scope", () => {
     );
   });
 
-  it("validates grouped additions as informational for a live loading", () => {
-    const capacity = buildScoped([{ orderId: 154, loadedQty: 20 }]);
+  it("enforces grouped additions against this loading only", () => {
+    const capacity = buildScoped([
+      { orderId: 154, loadedQty: 20 },
+      { orderId: 170, loadedQty: 1 },
+    ]);
 
-    expect(
-      validateProformaCapacityAdditions(capacity, [
-        { articleCode: "HMD12630", quantity: 1 },
-        { articleCode: " hmd12630 ", quantity: 1 },
-        { articleCode: "EXTRA", quantity: 5 },
+    const validation = validateProformaCapacityAdditions(capacity, [
+      { articleCode: "HMD12630", quantity: 2 },
+      { articleCode: "EXTRA", quantity: 1 },
+    ]);
+
+    expect(validation.allowed).toBe(false);
+    expect(validation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ reason: "quantity_exceeded", normalizedArticleCode: "hmd12630" }),
+        expect.objectContaining({ reason: "not_in_proforma", normalizedArticleCode: "extra" }),
       ])
-    ).toEqual({ allowed: true, issues: [] });
+    );
   });
 
   it("allocates remaining lines from the current loading only for reporting helpers", () => {
@@ -242,9 +267,7 @@ describe("Phase 2 per-loading reference scope", () => {
   });
 
   it("keeps explicit global scope available for historical reporting", () => {
-    const capacity = buildScoped([{ orderId: 154, loadedQty: 2 }]);
-
-    const decision = evaluateProformaArticleCapacity(capacity, "HMD12630", 1, "global");
+    const decision = evaluateProformaArticleCapacity(globalSnapshot({ consumed: 2 }), "HMD12630", 4, "global");
 
     expect(decision).toEqual(
       expect.objectContaining({
@@ -252,7 +275,7 @@ describe("Phase 2 per-loading reference scope", () => {
         reason: "quantity_exceeded",
         validationMode: "global",
         consumedQty: 2,
-        projectedConsumedQty: 3,
+        projectedConsumedQty: 6,
       })
     );
   });

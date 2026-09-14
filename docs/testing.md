@@ -95,8 +95,12 @@ A change is complete only when all of the following apply to the same commit:
 - CircleCI `static-build`, `postgres-regression`,
   `backend-core-regression`, `frontend-regression`, and
   `security-readiness` are green;
-- `phase3/exact-main-certification` is green on the exact merged `main` SHA;
+- the `Main Certification` status is green on the exact merged `main` SHA;
 - coverage floors and all repository ratchets pass without widened allowances.
+
+Normal `CI` is a pre-merge PR gate and does not rerun automatically after a
+`main` push. `.github/workflows/main-certification.yml` is the authoritative
+post-merge application certification for the exact resulting `main` SHA.
 
 For Phase 6 and other final-cleanup work, certify only a branch head whose merge
 base is the current `main`; if `main` advances, resync first and restart the

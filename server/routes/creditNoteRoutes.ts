@@ -13,6 +13,7 @@ import {
 } from "../lib/inventoryMath";
 import { db, type DatabaseOrTransaction } from "../db";
 import { normalizeVoucherEntryAmounts } from "../services/accounting/currencyAmounts";
+import { getOrCreateInventoryControlAccount } from "../services/accounting/inventoryControlAccount";
 import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
 import { logAudit, buildItemLevelChanges } from "./_helpers";
@@ -182,6 +183,11 @@ export function registerCreditNoteRoutes(app: Express) {
           });
         }
 
+        // Resolve once per note. The old route queried for an account inside the
+        // item loop and silently skipped the inventory leg when none existed,
+        // which produced live unbalanced Credit/Debit Notes.
+        const inventoryAccount = await getOrCreateInventoryControlAccount(tx, companyId);
+
         for (const item of items) {
           const {
             stockItemId,
@@ -204,11 +210,6 @@ export function registerCreditNoteRoutes(app: Express) {
             await adjustInventory(tx, locationId, stockItemId, qty.negated().toNumber(), companyId);
           }
 
-          // Canonical evidence for the return, on the same transaction that
-          // moved the stock. A credit note takes a customer's goods back into
-          // the location; a debit note sends goods back out to a supplier. The
-          // unit cost is the inventory cost the note itself carries, which is
-          // what the accounting entries below are built from.
           if (!qty.isZero()) {
             await postStockMovementTx(
               tx,
@@ -232,28 +233,15 @@ export function registerCreditNoteRoutes(app: Express) {
             );
           }
 
-          const inventoryAccount = await tx
-            .select()
-            .from(ledgerAccounts)
-            .where(
-              and(
-                eq(ledgerAccounts.companyId, companyId),
-                or(ilike(ledgerAccounts.name, "%inventory%"), ilike(ledgerAccounts.name, "%stock in hand%"))
-              )
-            )
-            .limit(1);
-
-          if (inventoryAccount.length > 0) {
-            await tx.insert(voucherEntries).values({
-              voucherId: createdVoucher.id,
-              ledgerAccountId: inventoryAccount[0].id,
-              ...normEntryAmounts(
-                noteType === "Credit Note" ? inventoryValue : 0,
-                noteType === "Debit Note" ? inventoryValue : 0
-              ),
-              narration: `Inventory ${noteType === "Credit Note" ? "restored" : "reduced"} - ${noteType}`,
-            });
-          }
+          await tx.insert(voucherEntries).values({
+            voucherId: createdVoucher.id,
+            ledgerAccountId: inventoryAccount.id,
+            ...normEntryAmounts(
+              noteType === "Credit Note" ? inventoryValue : 0,
+              noteType === "Debit Note" ? inventoryValue : 0
+            ),
+            narration: `Inventory ${noteType === "Credit Note" ? "restored" : "reduced"} - ${noteType}`,
+          });
 
           await tx.insert(creditNoteItems).values({
             voucherId: createdVoucher.id,
@@ -543,6 +531,8 @@ export function registerCreditNoteRoutes(app: Express) {
           });
         }
 
+        const inventoryAccount = await getOrCreateInventoryControlAccount(tx, companyId);
+
         for (const item of items) {
           const {
             stockItemId,
@@ -567,28 +557,15 @@ export function registerCreditNoteRoutes(app: Express) {
             companyId
           );
 
-          const inventoryAccount = await tx
-            .select()
-            .from(ledgerAccounts)
-            .where(
-              and(
-                eq(ledgerAccounts.companyId, companyId),
-                or(ilike(ledgerAccounts.name, "%inventory%"), ilike(ledgerAccounts.name, "%stock in hand%"))
-              )
-            )
-            .limit(1);
-
-          if (inventoryAccount.length > 0) {
-            await tx.insert(voucherEntries).values({
-              voucherId,
-              ledgerAccountId: inventoryAccount[0].id,
-              ...normEntryAmounts(
-                noteType === "Credit Note" ? inventoryValue : 0,
-                noteType === "Debit Note" ? inventoryValue : 0
-              ),
-              narration: `Inventory ${noteType === "Credit Note" ? "restored" : "reduced"} - ${noteType}`,
-            });
-          }
+          await tx.insert(voucherEntries).values({
+            voucherId,
+            ledgerAccountId: inventoryAccount.id,
+            ...normEntryAmounts(
+              noteType === "Credit Note" ? inventoryValue : 0,
+              noteType === "Debit Note" ? inventoryValue : 0
+            ),
+            narration: `Inventory ${noteType === "Credit Note" ? "restored" : "reduced"} - ${noteType}`,
+          });
 
           await tx.insert(creditNoteItems).values({
             voucherId,

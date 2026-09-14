@@ -7,10 +7,10 @@ import {
 
 describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
-    // 648 previously reviewed phrases plus twelve unique Phase 2 validation
-    // messages added while hardening the broad backend coverage route sweeps.
-    expect(backendMessagesPhase7Translations).toHaveLength(660);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(660);
+    // 658 reviewed entries plus the 20 Phase 3 accounting/payroll/loading/inventory
+    // compatibility entries added during the accounting closeout.
+    expect(backendMessagesPhase7Translations).toHaveLength(678);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(678);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -65,6 +65,24 @@ describe("Phase 7 backend-message translations", () => {
     ).toBe("العامل Nadia ينتمي إلى عدة مناصب إنتاج بتاريخ 2026-08-07. اختر منصب الإنتاج قبل حفظ إدخال المخزون.");
   });
 
+  it("translates Phase 3 accounting, payroll, loading and inventory messages", () => {
+    expect(translatePhase7BackendMessageText("Proforma capacity returned for the wrong loading order", "fr")).toBe(
+      "La capacité de la proforma a été renvoyée pour le mauvais ordre de chargement"
+    );
+    expect(translatePhase7BackendMessageText("Only months with movement are shown", "ar")).toBe(
+      "يتم عرض الأشهر التي تحتوي على حركة فقط"
+    );
+    expect(
+      translatePhase7BackendMessageText("Unable to create Inventory control account for company 7", "fr")
+    ).toBe("Impossible de créer le compte de contrôle des stocks pour la société 7");
+    expect(
+      translatePhase7BackendMessageText("Phase 3 could not create ledger Payroll Expense for company 7", "ar")
+    ).toBe("تعذر على المرحلة 3 إنشاء دفتر الأستاذ Payroll Expense للشركة 7");
+    expect(translatePhase7BackendMessageText("cashAccountId is required for non-zero payroll payment", "fr")).toBe(
+      "cashAccountId est requis pour un paiement de paie non nul"
+    );
+  });
+
   it("preserves business values while translating nested operational fragments", () => {
     expect(translatePhase7BackendMessageText("Import job JOB-42 not found", "ar")).toBe(
       "لم يتم العثور على مهمة الاستيراد JOB-42"
@@ -86,6 +104,20 @@ describe("Phase 7 backend-message translations", () => {
   it("switches directly between Arabic and French", () => {
     expect(translatePhase7BackendMessageText("تم رفض الوصول", "fr")).toBe("Accès refusé");
     expect(translatePhase7BackendMessageText("Compte introuvable", "ar")).toBe("لم يتم العثور على الحساب");
+  });
+
+  it("translates the route-sweep validation messages", () => {
+    expect(translatePhase7BackendMessageText("enabled must be a boolean", "ar")).toBe(
+      "يجب أن تكون enabled قيمة منطقية (true أو false)"
+    );
+    expect(translatePhase7BackendMessageText("date is required and must be a valid date", "fr")).toBe(
+      "La date est requise et doit être une date valide"
+    );
+    expect(translatePhase7BackendMessageText("Metric not found", "ar")).toBe("لم يتم العثور على المقياس");
+    expect(translatePhase7BackendMessageText("Invalid archive ID", "fr")).toBe("Identifiant d’archive non valide");
+    expect(translatePhase7BackendMessageText("voucherType is required", "ar")).toBe("الحقل voucherType مطلوب");
+    expect(translatePhase7BackendMessageText("totalAmount is required", "fr")).toBe("Le champ totalAmount est requis");
+    expect(isPhase7BackendMessageText("each entry requires an integer metricId")).toBe(true);
   });
 
   it("recognizes reviewed messages without translating stored business values", () => {

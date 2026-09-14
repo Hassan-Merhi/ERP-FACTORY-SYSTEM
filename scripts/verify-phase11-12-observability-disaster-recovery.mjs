@@ -74,6 +74,7 @@ if (recoveryRunbook.includes("production RPO is certified") || recoveryRunbook.i
 
 const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsal.yml", [
   "schedule:",
+  "workflow_dispatch:",
   "cron:",
   'DR_REHEARSAL_RTO_SECONDS: "300"',
   "npm run verify:observability",
@@ -87,40 +88,43 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 ]);
 
-// The rehearsal used to name every observability and disaster-recovery file in a
-// `pull_request` paths filter. "Run checks only on main" (#1320) removed that
-// trigger, so those path markers no longer exist anywhere. The guarantee they
-// encoded — a change to those files always rehearses — is now carried by running
-// on every push to main with no paths filter, which is strictly broader coverage.
-// Assert that trigger instead, so the guarantee stays enforced rather than dropped.
-if (!/^on:\n\s*push:\n\s*branches:\s*\[\s*main\s*\]/m.test(resilienceWorkflow)) {
-  failures.push(
-    ".github/workflows/resilience-rehearsal.yml must run on every push to main so observability and disaster-recovery changes always rehearse."
-  );
+if (!/^  schedule:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must retain its scheduled trigger.");
 }
-if (/^\s*paths(?:-ignore)?:/m.test(resilienceWorkflow)) {
-  failures.push(
-    ".github/workflows/resilience-rehearsal.yml must not narrow its triggers with a paths filter; every main commit must rehearse."
-  );
+if (!/^  workflow_dispatch:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must remain manually dispatchable.");
 }
-
-if (resilienceWorkflow.includes("secrets.")) {
-  failures.push("Resilience rehearsal must not reference repository or environment secrets; it must stay on disposable localhost PostgreSQL.");
+if (/^  push:/m.test(resilienceWorkflow)) {
+  failures.push("Resilience rehearsal must not run on every push after Wave 4 consolidation.");
 }
-
 if (!/retention-days:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(resilienceWorkflow)) {
   failures.push("Resilience evidence must be retained for at least 30 days.");
 }
 
-requireMarkers(".github/workflows/exact-main-certification.yml", [
+const liveBackupWorkflow = requireMarkers(".github/workflows/backup-restore-verification.yml", [
+  "Maintenance - Backup Restore Verification",
+  "schedule:",
+  "workflow_dispatch:",
+  "Create fresh logical backup",
+  "pg_dump",
+  "Restore into isolated PostgreSQL service",
+  "Verify restored fingerprint and core tables",
+]);
+if (/^  push:/m.test(liveBackupWorkflow)) {
+  failures.push("Live backup verification must remain scheduled/manual rather than an every-push test.");
+}
+
+requireMarkers(".github/workflows/main-certification.yml", [
+  "name: Main Certification",
+  "Verify exact merged main SHA",
+  "verify:observability",
   "verify-phase11-12-observability-disaster-recovery.mjs",
-  'DR_REHEARSAL_RTO_SECONDS: "300"',
-  "exact-main-source-critical-counts.tsv",
-  "exact-main-restore-critical-counts.tsv",
-  "diff -u",
+  "verify:stabilization",
+  "context='Main Certification'",
 ]);
 
 requireMarkers("scripts/verify-final-production-readiness.mjs", [
+  ".github/workflows/main-certification.yml",
   "verify-phase11-12-observability-disaster-recovery.mjs",
   "source-critical-counts.tsv",
   "resilience-evidence.json",

@@ -17,6 +17,7 @@ import { enqueueRequest } from "@/lib/offlineQueue";
 
 const TYPE_META: Record<CompanyType, { color: string; label: string }> = {
   erp: { color: "#3b82f6", label: "ERP" },
+  retail: { color: "#0ea5e9", label: "Retail" },
   factory: { color: "#f97316", label: "Factory" },
   factory_v2: { color: "#f97316", label: "Factory V2" },
   properties: { color: "#6366f1", label: "Properties" },

@@ -34,6 +34,20 @@ describe("account migration POS control safety", () => {
     expect(controlReferences).toContain("insert(userLocationCashAccounts)");
   });
 
+  it("opens a transaction-local RLS scope for the authorized source and destination companies", () => {
+    expect(safeRoutes).toContain("assertCompaniesAccess(context.userId, [sourceCompanyId, destinationCompanyId])");
+    expect(safeRoutes).toContain("set_config('app.company_scope_maintenance', 'off', true)");
+    expect(safeRoutes).toContain("set_config('app.current_company_id'");
+    expect(safeRoutes).toContain("set_config('app.authorized_company_ids'");
+    expect(safeRoutes).not.toContain("set_config('app.company_scope_maintenance', 'on', true)");
+    expect(safeRoutes.match(/applyAccountMigrationDatabaseScope\(tx, databaseScope\)/g)).toHaveLength(2);
+  });
+
+  it("returns canonical company-access failures instead of exposing an RLS database error", () => {
+    expect(safeRoutes).toContain("error instanceof CompanyAccessError");
+    expect(safeRoutes).toContain("code: error.code");
+  });
+
   it("keeps legacy undo compatibility for migrations made before the safety fix", () => {
     expect(safeRoutes).toContain("if (!audit) return next()");
     expect(safeRoutes).toContain("if (!saved) return next()");

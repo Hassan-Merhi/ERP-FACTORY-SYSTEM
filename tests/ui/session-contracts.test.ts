@@ -9,7 +9,7 @@ import {
 
 describe("session API contracts", () => {
   it("accepts the supported company types", () => {
-    for (const companyType of ["erp", "factory", "factory_v2", "properties", "supplier_partner"]) {
+    for (const companyType of ["erp", "retail", "factory", "factory_v2", "properties", "supplier_partner"]) {
       expect(companyTypeSchema.parse(companyType)).toBe(companyType);
     }
   });
@@ -106,9 +106,7 @@ describe("session API contracts", () => {
   });
 
   it("rejects authenticated-user responses without a username", () => {
-    expect(() => parseAuthenticatedUser({ id: 1, role: "Admin" })).toThrow(
-      "Invalid authenticated-user response",
-    );
+    expect(() => parseAuthenticatedUser({ id: 1, role: "Admin" })).toThrow("Invalid authenticated-user response");
   });
 
   it("coerces valid session company identifiers and accepts null", () => {

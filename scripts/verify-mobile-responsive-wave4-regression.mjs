@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const browser = read("scripts/verify-mobile-responsive-wave4-browser.mjs");
-const workflow = read(".github/workflows/mobile-responsive.yml");
+const workflow = read(".github/workflows/ui-quality.yml");
 const phase11 = read("scripts/verify-mobile-responsive-phase11-regression.mjs");
 const erpRoutes = read("client/src/routes/ErpRoutes.tsx");
 const factoryRoutes = read("client/src/components/FactoryRoutes.tsx");
@@ -97,7 +97,7 @@ for (const contract of [
 requireText(
   workflow,
   "run_smoke scripts/verify-mobile-responsive-wave4-browser.mjs",
-  "Mobile Responsiveness workflow",
+  "UI Quality mobile workflow",
 );
 requireText(phase11, "scripts/verify-mobile-responsive-wave4-regression.mjs", "Phase 11 responsive matrix");
 

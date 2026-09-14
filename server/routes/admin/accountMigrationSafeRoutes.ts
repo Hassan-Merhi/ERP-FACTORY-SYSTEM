@@ -4,6 +4,11 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
+import {
+  assertCompaniesAccess,
+  CompanyAccessError,
+  getCompanyAccessContext,
+} from "../../security/companyAccessBoundary";
 import { auditLog, companies, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
 import {
   assertDestinationControlReferencesAreClear,
@@ -16,6 +21,13 @@ const EXECUTE_ACTION = "ACCOUNT_MIGRATION_EXECUTE_SAFE";
 const UNDO_ACTION = "ACCOUNT_MIGRATION_UNDO_SAFE";
 const MAX_BATCH = 200;
 const MAX_CODE_LENGTH = 50;
+
+type AccountMigrationTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type AccountMigrationDatabaseScope = {
+  activeCompanyId: number;
+  authorizedCompanyIds: string;
+};
 
 class AccountMigrationConflict extends Error {
   status: number;
@@ -72,8 +84,31 @@ function uniqueDestinationCode(code: string, occupied: Set<string>): string {
   throw new AccountMigrationConflict(`Could not generate a unique destination code for ${code}.`);
 }
 
+async function resolveAccountMigrationDatabaseScope(
+  req: Request,
+  sourceCompanyId: number,
+  destinationCompanyId: number
+): Promise<AccountMigrationDatabaseScope> {
+  const context = getCompanyAccessContext(req);
+  await assertCompaniesAccess(context.userId, [sourceCompanyId, destinationCompanyId]);
+  const authorizedCompanyIds = [...new Set([sourceCompanyId, destinationCompanyId])]
+    .sort((left, right) => left - right)
+    .join(",");
+  return { activeCompanyId: context.activeCompanyId, authorizedCompanyIds };
+}
+
+async function applyAccountMigrationDatabaseScope(
+  tx: AccountMigrationTransaction,
+  scope: AccountMigrationDatabaseScope
+): Promise<void> {
+  await tx.execute(sql`SELECT
+    set_config('app.company_scope_maintenance', 'off', true),
+    set_config('app.current_company_id', ${String(scope.activeCompanyId)}, true),
+    set_config('app.authorized_company_ids', ${scope.authorizedCompanyIds}, true)`);
+}
+
 async function lockCompanies(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: AccountMigrationTransaction,
   sourceCompanyId: number,
   destinationCompanyId: number
 ) {
@@ -97,13 +132,16 @@ function deepestError(error: unknown): PgErrorLike {
   let current = asPgError(error);
   const seen = new Set<unknown>();
   while (current.cause && !seen.has(current.cause)) {
-    seen.add(current);
+    seen.add(current.cause);
     current = asPgError(current.cause);
   }
   return current;
 }
 
 function respondWithError(res: import("express").Response, error: unknown) {
+  if (error instanceof CompanyAccessError) {
+    return res.status(error.status).json({ message: error.message, code: error.code });
+  }
   if (error instanceof AccountMigrationConflict) {
     return res.status(error.status).json({ message: error.message });
   }
@@ -155,7 +193,9 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       }
 
       try {
+        const databaseScope = await resolveAccountMigrationDatabaseScope(req, srcCompanyId, destCompanyId);
         const result = await db.transaction(async (tx) => {
+          await applyAccountMigrationDatabaseScope(tx, databaseScope);
           await lockCompanies(tx, srcCompanyId, destCompanyId);
 
           const companyRows = await tx
@@ -328,7 +368,9 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
     requireRole("Admin", "Developer"),
     async (req, res, next) => {
       const accountIds = idArray(
-        Array.isArray(req.body?.accounts) ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId) : null
+        Array.isArray(req.body?.accounts)
+          ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId)
+          : null
       );
       const movedVoucherIds = idArray(req.body?.movedVoucherIds, true);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);
@@ -338,6 +380,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       }
 
       try {
+        const databaseScope = await resolveAccountMigrationDatabaseScope(req, srcCompanyId, destCompanyId);
         const recentLogs = await db
           .select()
           .from(auditLog)
@@ -367,6 +410,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
         }
 
         await db.transaction(async (tx) => {
+          await applyAccountMigrationDatabaseScope(tx, databaseScope);
           await lockCompanies(tx, srcCompanyId, destCompanyId);
           const currentAccounts = await tx
             .select({ id: ledgerAccounts.id, companyId: ledgerAccounts.companyId })

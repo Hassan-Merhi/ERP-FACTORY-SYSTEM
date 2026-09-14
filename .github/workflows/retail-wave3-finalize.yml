@@ -1,0 +1,59 @@
+name: Retail Wave 3 Finalize
+
+on:
+  push:
+    branches:
+      - feat/retail-reporting-audit-wave3
+
+concurrency:
+  group: retail-wave3-finalize
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Wave 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+          cache: npm
+
+      - name: Normalize registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Verify migration registry
+        run: npm run verify:migrations
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Run focused retail regression tests
+        run: node node_modules/vitest/vitest.mjs run tests/retail-wave1-contract.test.ts tests/retail-wave2-pos-transactions.test.ts tests/retail-wave3-reporting-audit.test.ts
+
+      - name: Run full backend and frontend regression suite
+        run: npm test
+
+      - name: Run API smoke sweep
+        run: npm run test:smoke-sweep
+
+      - name: Build production bundles
+        run: npm run build
+
+      - name: Verify production readiness
+        run: npm run verify:final-production-readiness
+
+      - name: Verify mobile and web routing contracts
+        run: npm run verify:mobile-web-routing
+
+      - name: Run focused security checks
+        run: npm run check:security
