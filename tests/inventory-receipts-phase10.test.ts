@@ -102,6 +102,9 @@ afterAll(async () => {
       WHERE bale_id IN (SELECT id FROM factory_bales WHERE company_id = $1)`,
     [ctx.companyId]
   );
+  await pool.query(`DELETE FROM factory_bales WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM factory_bale_sequences WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM factory_bale_products WHERE company_id = $1`, [ctx.companyId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 60_000);
