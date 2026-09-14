@@ -68,8 +68,16 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
         const sellingPrice = parseFloat(r.sellingPrice || "0");
         const totalSales = parseFloat(r.totalSales || "0");
 
-        // Keep cost valuation for the stock/accounting movement contract.
-        const inventoryValue = totalCost > 0 ? totalCost : costPrice > 0 ? costPrice * qty : 0;
+        // Preserve the inventory-valuation contract used by other consumers.
+        // Legacy rows may not have cost fields, so retain the existing sale-value fallback.
+        const inventoryValue =
+          totalCost > 0
+            ? totalCost
+            : costPrice > 0
+              ? costPrice * qty
+              : totalSales > 0
+                ? totalSales
+                : sellingPrice * qty;
         const inventoryRate = qty > 0 ? inventoryValue / qty : 0;
 
         // Stock-out sale detail should display what the item actually sold for,
