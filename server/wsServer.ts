@@ -231,6 +231,18 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
         delivered += 1;
       });
       recordBroadcast(delivered, skipped);
+      if (process.env.NODE_ENV === "test") {
+        logger.info("[WS] Test broadcast delivery", {
+          messageType:
+            "type" in message && typeof (message as { type?: unknown }).type === "string"
+              ? (message as { type: string }).type
+              : "unknown",
+          companyId: options.companyId ?? null,
+          delivered,
+          skipped,
+          connectedClients: wss?.clients.size ?? 0,
+        });
+      }
     }
   );
 }
