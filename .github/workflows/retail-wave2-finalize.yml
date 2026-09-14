@@ -1,0 +1,147 @@
+name: Retail Wave 2 Finalize
+
+on:
+  push:
+    branches:
+      - feat/retail-pos-stock-movement-wave2
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/retail-pos-stock-movement-wave2
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+          cache: npm
+
+      - name: Normalize registry URLs
+        run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Finish Wave 2 wiring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f"target not found in {path}: {old[:120]!r}")
+              p.write_text(s.replace(old, new, 1))
+
+          # Production route uses the same stock invariant functions covered by tests.
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              'import { getErrorMessage } from "../../lib/httpHandlers";\n',
+              'import { getErrorMessage } from "../../lib/httpHandlers";\nimport {\n  aggregateRetailCartItems,\n  nextRetailReturnQuantity,\n  nextRetailSaleQuantity,\n  nextRetailTransferQuantities,\n  validateRetailReturnQuantity,\n} from "../../services/retail/retailStockMath";\n'
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              '''function aggregateSaleItems(items: z.infer<typeof saleSchema>["items"]) {\n  const aggregate = new Map<number, number>();\n  for (const item of items) aggregate.set(item.variantId, (aggregate.get(item.variantId) ?? 0) + item.quantity);\n  return [...aggregate.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));\n}\n\n''',
+              ''
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              'const items = aggregateSaleItems(body.items);',
+              'const items = aggregateRetailCartItems(body.items);'
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              '''          const after = stock.quantity - item.quantity;\n          if (!canSellNegativeStock && after < 0) {\n            throw new Error(`Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`);\n          }''',
+              '''          let after: number;\n          try {\n            after = nextRetailSaleQuantity(stock.quantity, item.quantity, canSellNegativeStock);\n          } catch {\n            throw new Error(\n              `Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`\n            );\n          }'''
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              '''          const sold = toNumber(saleItem.quantity);\n          const alreadyReturned = toNumber(saleItem.returnedQuantity);\n          if (quantity > sold - alreadyReturned + 0.000001) throw new Error("Return quantity exceeds the remaining sold quantity");\n\n          const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);\n          const after = stock.quantity + quantity;''',
+              '''          const sold = toNumber(saleItem.quantity);\n          const alreadyReturned = toNumber(saleItem.returnedQuantity);\n          const nextReturnedQuantity = validateRetailReturnQuantity(sold, alreadyReturned, quantity);\n\n          const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);\n          const after = nextRetailReturnQuantity(stock.quantity, quantity);'''
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              '.set({ returnedQuantity: String(alreadyReturned + quantity) })',
+              '.set({ returnedQuantity: String(nextReturnedQuantity) })'
+          )
+          replace(
+              'server/routes/pos/retailPosRoutes.ts',
+              '''        const sourceAfter = source.quantity - body.quantity;\n        if (!canSellNegativeStock && sourceAfter < 0) throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);\n        const destinationAfter = destination.quantity + body.quantity;''',
+              '''        let sourceAfter: number;\n        let destinationAfter: number;\n        try {\n          ({ sourceAfter, destinationAfter } = nextRetailTransferQuantities(\n            source.quantity,\n            destination.quantity,\n            body.quantity,\n            canSellNegativeStock\n          ));\n        } catch {\n          throw new Error(`Insufficient stock for transfer. Available: ${source.quantity}`);\n        }'''
+          )
+
+          # Every Excel import writes an exact stock movement row, with retry-safe event keys.
+          replace(
+              'server/routes/retailRoutes.ts',
+              '  retailProductWriteSchema,\n  retailVariantInventory,',
+              '  retailProductWriteSchema,\n  retailStockMovements,\n  retailVariantInventory,'
+          )
+          replace(
+              'server/routes/retailRoutes.ts',
+              '''      const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];\n      if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });''',
+              '''      const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];\n      const importBatchKey = String(\n        req.body?.idempotencyKey || `retail-import-${Date.now()}-${req.user?.id ?? req.session.userId ?? 0}`\n      ).slice(0, 191);\n      if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });'''
+          )
+          replace(
+              'server/routes/retailRoutes.ts',
+              '''          await tx\n            .insert(retailVariantInventory)''',
+              '''          const [previousInventory] = await tx\n            .select({ quantity: retailVariantInventory.quantity })\n            .from(retailVariantInventory)\n            .where(\n              and(\n                eq(retailVariantInventory.companyId, companyId),\n                eq(retailVariantInventory.variantId, variant.id),\n                eq(retailVariantInventory.locationId, locationId)\n              )\n            )\n            .limit(1);\n          const quantityBefore = asNumber(previousInventory?.quantity);\n\n          await tx\n            .insert(retailVariantInventory)'''
+          )
+          replace(
+              'server/routes/retailRoutes.ts',
+              '''          await tx\n            .update(retailProductVariants)\n            .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })''',
+              '''          await tx\n            .insert(retailStockMovements)\n            .values({\n              companyId,\n              variantId: variant.id,\n              locationId,\n              movementType: "import",\n              quantityDelta: String(row.qty - quantityBefore),\n              quantityBefore: String(quantityBefore),\n              quantityAfter: String(row.qty),\n              eventKey: `import:${importBatchKey}:${variant.id}:${locationId}`.slice(0, 255),\n              referenceType: "retail_import",\n              referenceId: importBatchKey,\n              createdBy: req.user?.id ?? req.session.userId ?? 0,\n              metadata: { productCode: row.code, size: row.size, barcode: row.barcode },\n            })\n            .onConflictDoNothing({\n              target: [retailStockMovements.companyId, retailStockMovements.eventKey],\n            });\n\n          await tx\n            .update(retailProductVariants)\n            .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })'''
+          )
+
+          # Frontend supplies a stable idempotency key per import submission.
+          replace(
+              'client/src/pages/retail/RetailInventory.tsx',
+              'const response = await apiRequest("POST", "/api/retail/import", { rows });',
+              '''const response = await apiRequest("POST", "/api/retail/import", {\n        rows,\n        idempotencyKey: `retail-import-${\n          typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`\n        }`,\n      });'''
+          )
+          PY
+
+      - name: Format Wave 2 files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            shared/schema/retailPos.ts \
+            shared/schema/index.ts \
+            server/routes/pos/retailPosRoutes.ts \
+            server/services/retail/retailStockMath.ts \
+            server/routes/retailRoutes.ts \
+            client/src/pages/pos/RetailPOS.tsx \
+            client/src/pages/pos/POSPage.tsx \
+            client/src/pages/retail/RetailInventory.tsx \
+            tests/retail-wave2-pos-transactions.test.ts \
+            migrations/meta/_journal.json
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Run Retail Wave 2 tests
+        run: node node_modules/vitest/vitest.mjs run tests/retail-wave2-pos-transactions.test.ts tests/retail-wave1-contract.test.ts
+
+      - name: Verify migrations
+        run: npm run verify:migrations
+
+      - name: Commit finalized Wave 2
+        run: |
+          git checkout -- package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shared/schema/retailPos.ts shared/schema/index.ts server/routes/pos/retailPosRoutes.ts server/services/retail/retailStockMath.ts server/routes/retailRoutes.ts client/src/pages/pos/RetailPOS.tsx client/src/pages/pos/POSPage.tsx client/src/pages/retail/RetailInventory.tsx tests/retail-wave2-pos-transactions.test.ts migrations/meta/_journal.json
+          if git diff --cached --quiet; then
+            echo "No finalization changes needed"
+          else
+            git commit -m "Complete Retail Wave 2 transaction wiring"
+            git push origin HEAD:feat/retail-pos-stock-movement-wave2
+          fi
