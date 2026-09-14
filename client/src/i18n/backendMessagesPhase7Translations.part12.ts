@@ -130,4 +130,56 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "طلبات كثيرة جدًا. يرجى التمهّل والمحاولة مرة أخرى بعد قليل.",
     fr: "Trop de requêtes. Veuillez ralentir et réessayer dans un instant.",
   },
+  {
+    // Route-sweep validation messages: the backend answers 400 with these
+    // literals instead of letting unvalidated input fail as a 500.
+    en: "enabled must be a boolean",
+    ar: "يجب أن تكون enabled قيمة منطقية (true أو false)",
+    fr: "enabled doit être un booléen",
+  },
+  {
+    en: "date is required and must be a valid date",
+    ar: "التاريخ مطلوب ويجب أن يكون تاريخًا صالحًا",
+    fr: "La date est requise et doit être une date valide",
+  },
+  {
+    en: "kgWaste is required and must be a number",
+    ar: "قيمة kgWaste مطلوبة ويجب أن تكون رقمًا",
+    fr: "kgWaste est requis et doit être un nombre",
+  },
+  {
+    en: "templateId is required and must be an integer",
+    ar: "معرّف القالب templateId مطلوب ويجب أن يكون عددًا صحيحًا",
+    fr: "templateId est requis et doit être un entier",
+  },
+  {
+    en: "Metric not found",
+    ar: "لم يتم العثور على المقياس",
+    fr: "Métrique introuvable",
+  },
+  {
+    en: "each entry requires an integer metricId",
+    ar: "يتطلب كل إدخال metricId عددًا صحيحًا",
+    fr: "Chaque entrée requiert un metricId entier",
+  },
+  {
+    en: "date must be a valid date",
+    ar: "يجب أن يكون التاريخ تاريخًا صالحًا",
+    fr: "La date doit être une date valide",
+  },
+  {
+    en: "availableContainers must be a number",
+    ar: "يجب أن تكون availableContainers رقمًا",
+    fr: "availableContainers doit être un nombre",
+  },
+  {
+    en: "Invalid archive ID",
+    ar: "معرّف الأرشيف غير صالح",
+    fr: "Identifiant d’archive non valide",
+  },
+  {
+    en: "${missingVoucherField[0]} is required",
+    ar: "الحقل {0} مطلوب",
+    fr: "Le champ {0} est requis",
+  },
 ];
