@@ -57,7 +57,7 @@ export function registerShippingAvailabilityRoutes(app: Express) {
         // A blank or unparseable date passed the !== undefined check and
         // reached the date column as-is, failing the query as a 500.
         if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
-          return res.status(400).json({ message: "date must be a valid date" });
+          return res.status(400).json({ message: "Invalid request data", field: "date" });
         }
         updates.date = date;
       }
@@ -67,7 +67,7 @@ export function registerShippingAvailabilityRoutes(app: Express) {
         // integer column straight from the request body.
         const parsed = Number(availableContainers);
         if (!Number.isFinite(parsed)) {
-          return res.status(400).json({ message: "availableContainers must be a number" });
+          return res.status(400).json({ message: "Invalid request data", field: "availableContainers" });
         }
         updates.availableContainers = parsed;
       }

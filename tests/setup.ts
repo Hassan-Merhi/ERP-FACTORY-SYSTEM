@@ -73,6 +73,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "canonfse",
   "custload",
   "phase4cap",
+  "ordfin",
 ]);
 
 function testCompanyType(prefix: string): "erp" | "factory" {
@@ -227,6 +228,21 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // its fixture alive. The journal is append-only in production — there is no
     // delete path in the application — which is precisely why the fixture has to
     // clear it explicitly here.
+    // container_offload_items.stock_item_id is ON DELETE RESTRICT against
+    // stock_items, so an offload fixture blocks the stock_items delete below.
+    // It has to be cleared here rather than with the rest of the container
+    // teardown, which runs after stock_items and locations are already gone.
+    await pool.query(
+      "DELETE FROM container_offload_items WHERE offload_id IN (SELECT id FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1))",
+      [company.id]
+    );
+    // container_offloads.location_id is ON DELETE RESTRICT against locations for
+    // the same reason, so the offload header has to go here too; the rest of the
+    // container teardown below still clears the containers themselves.
+    await pool.query(
+      "DELETE FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
+      [company.id]
+    );
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
@@ -242,20 +258,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
 
     // Normal container records are also created by PO tests. Remove their
     // restricting child rows before deleting the containers themselves.
-    await pool.query(
-      "DELETE FROM container_offload_items WHERE offload_id IN (SELECT id FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1))",
-      [company.id]
-    );
+    // container_offload_items and container_offloads were already cleared above,
+    // ahead of the stock_items and locations deletes they reference.
     await pool.query(
       "DELETE FROM container_freight_payments WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
       [company.id]
     );
     await pool.query(
       "DELETE FROM container_freight_payments WHERE container_freight_id IN (SELECT id FROM container_freight WHERE company_id = $1)",
-      [company.id]
-    );
-    await pool.query(
-      "DELETE FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = $1)",
       [company.id]
     );
     await pool.query(
@@ -327,6 +337,10 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // POST /api/bale-label-prints/allocate-pool allocates from this table, so a
     // suite that printed labels leaves a row here holding the company down.
     await pool.query("DELETE FROM reference_sequences WHERE company_id = $1", [company.id]);
+    // Finalizing a customer order allocates from this sequence, and its
+    // company_id is ON DELETE RESTRICT, so a suite that finalized an invoice
+    // leaves the fixture company undeletable without this.
+    await pool.query("DELETE FROM customer_invoice_sequences WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM bale_sequences WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM factory_bale_sequences WHERE company_id = $1", [company.id]);
 

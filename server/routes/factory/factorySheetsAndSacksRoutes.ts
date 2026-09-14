@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
+import { getErrorMessage, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
@@ -201,16 +201,32 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
       // string through to a numeric column — "invalid input syntax for type
       // numeric" as a 500. Treat blank as absent like the text fields, and
       // reject a value that is present but not a number.
-      const numericParam = (value: unknown, field: string): number | null => {
-        if (value === undefined || value === null || value === "") return null;
+      //
+      // pack_qty and pcs_per_pack are INTEGER columns, so they need the
+      // integer check too: a finite 1.5 would otherwise reach them and fail
+      // the query the same way, which the parseInt these replaced did not do.
+      type ParsedNumber = { ok: true; value: number | null } | { ok: false };
+      const parseNumber = (value: unknown, integerOnly: boolean): ParsedNumber => {
+        if (value === undefined || value === null || value === "") return { ok: true, value: null };
         const parsed = Number(value);
-        if (!Number.isFinite(parsed)) throw new HttpError(400, `${field} must be a number`);
-        return parsed;
+        if (!Number.isFinite(parsed)) return { ok: false };
+        if (integerOnly && !Number.isInteger(parsed)) return { ok: false };
+        return { ok: true, value: parsed };
       };
-      const quantityParam = numericParam(quantity, "quantity");
-      const unitPriceParam = numericParam(unitPrice, "unitPrice");
-      const packQtyParam = numericParam(packQty, "packQty");
-      const pcsPerPackParam = numericParam(pcsPerPack, "pcsPerPack");
+      const parsedQuantity = parseNumber(quantity, false);
+      const parsedUnitPrice = parseNumber(unitPrice, false);
+      const parsedPackQty = parseNumber(packQty, true);
+      const parsedPcsPerPack = parseNumber(pcsPerPack, true);
+      if (!parsedQuantity.ok) return res.status(400).json({ message: "Invalid quantity", field: "quantity" });
+      if (!parsedUnitPrice.ok) return res.status(400).json({ message: "Invalid request data", field: "unitPrice" });
+      if (!parsedPackQty.ok) return res.status(400).json({ message: "Invalid request data", field: "packQty" });
+      if (!parsedPcsPerPack.ok) {
+        return res.status(400).json({ message: "Invalid request data", field: "pcsPerPack" });
+      }
+      const quantityParam = parsedQuantity.value;
+      const unitPriceParam = parsedUnitPrice.value;
+      const packQtyParam = parsedPackQty.value;
+      const pcsPerPackParam = parsedPcsPerPack.value;
 
       const { rows } = await pool.query(
         `UPDATE factory_sheets_sacks

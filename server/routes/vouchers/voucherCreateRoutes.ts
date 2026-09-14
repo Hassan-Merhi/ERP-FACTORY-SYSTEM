@@ -51,7 +51,7 @@ export function registerVoucherCreateRoutes(app: Express) {
         ([, value]) => value === undefined || value === null || value === ""
       );
       if (missingVoucherField) {
-        return res.status(400).json({ message: `${missingVoucherField[0]} is required` });
+        return res.status(400).json({ message: "Invalid request data", field: missingVoucherField[0] });
       }
 
       const companyId = req.session.currentCompanyId;

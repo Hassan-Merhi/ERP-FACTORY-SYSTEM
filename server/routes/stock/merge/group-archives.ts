@@ -92,7 +92,7 @@ export function registerStockGroupArchiveRoutes(app: Express) {
       // and the storage layer keeps no knowledge of HTTP status codes.
       const id = parseInt(req.params.id);
       if (!Number.isInteger(id)) {
-        return res.status(400).json({ message: "Invalid archive ID" });
+        return res.status(400).json({ message: "Invalid id" });
       }
       const existing = await storage.getStockGroupLocationArchiveById(id, req.session.currentCompanyId);
       if (!existing) {

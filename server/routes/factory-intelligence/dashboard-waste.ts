@@ -117,11 +117,11 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
       // blank date reached the date column and String("") reached the numeric
       // column, so the insert failed as a 500 rather than a 400.
       if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
-        return res.status(400).json({ message: "date is required and must be a valid date" });
+        return res.status(400).json({ message: "Date is required", field: "date" });
       }
       const kgWasteValue = Number(kgWaste);
       if (kgWaste === undefined || kgWaste === null || kgWaste === "" || !Number.isFinite(kgWasteValue)) {
-        return res.status(400).json({ message: "kgWaste is required and must be a number" });
+        return res.status(400).json({ message: "Invalid quantity", field: "kgWaste" });
       }
 
       const [entry] = await db

@@ -130,7 +130,7 @@ export function registerChatbotAlertRoutes(app: Express) {
       // set, which drizzle rejects and the catch below reported as an opaque
       // 500 "Internal server error".
       if (typeof enabled !== "boolean") {
-        return res.status(400).json({ message: "enabled must be a boolean" });
+        return res.status(400).json({ message: "Invalid request data", field: "enabled" });
       }
 
       const [updated] = await db

@@ -143,7 +143,7 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       // template_id and name are both NOT NULL and neither was validated, so a
       // body without them failed the insert as a 500 instead of a 400.
       if (!Number.isInteger(templateId)) {
-        return res.status(400).json({ error: "templateId is required and must be an integer" });
+        return res.status(400).json({ error: "Invalid request data", field: "templateId" });
       }
       if (typeof name !== "string" || name.trim() === "") {
         return res.status(400).json({ error: "name is required" });
@@ -188,7 +188,7 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
         return res.status(400).json({ message: "No fields to update" });
       }
       const [updated] = await db.update(statusMetrics).set(updates).where(eq(statusMetrics.id, id)).returning();
-      if (!updated) return res.status(404).json({ message: "Metric not found" });
+      if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);
     } catch (err: unknown) {
       res.status(500).json({ error: getErrorMessage(err) });
@@ -352,7 +352,7 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
         return res.status(400).json({ message: "entries must be an array" });
       }
       if (entries.some((entry) => !Number.isInteger(entry?.metricId))) {
-        return res.status(400).json({ message: "each entry requires an integer metricId" });
+        return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
       }
       const now = new Date();
 
