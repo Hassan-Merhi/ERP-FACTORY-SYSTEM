@@ -22,7 +22,8 @@ import {
 export function registerLocationMonthlyDetailRoutes(app: Express) {
   // Per-month drill-down: individual transactions for a stock item at a location
   // Returns inTransactions and outTransactions arrays for the given year+month.
-  // Out-value for sales uses cost price (totalCost); transfers use totalAmount.
+  // Inventory valuation remains in rate/value; sale rows also expose the recorded
+  // selling rate/value so sales-oriented stock-out UIs can show the actual sale price.
   app.get("/api/locations/:locationId/stock-items/:stockItemId/monthly-detail", requireAuth, async (req, res) => {
     try {
       const locationId = parseInt(req.params.locationId);
@@ -66,10 +67,10 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
         const costPrice = parseFloat(r.costPrice || "0");
         const sellingPrice = parseFloat(r.sellingPrice || "0");
         const totalSales = parseFloat(r.totalSales || "0");
-        // Keep the inventory valuation as the primary value. Some legacy/imported
-        // sales have totalCost=0 even though costPrice or the recorded sale amount
-        // is populated, so do not make the drill-down look blank in that case.
-        const val =
+
+        // Preserve the inventory-valuation contract used by other consumers.
+        // Legacy rows may not have cost fields, so retain the existing sale-value fallback.
+        const inventoryValue =
           totalCost > 0
             ? totalCost
             : costPrice > 0
@@ -77,7 +78,24 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
               : totalSales > 0
                 ? totalSales
                 : sellingPrice * qty;
-        outTx.push({ type: "Sale", date: r.date, reference: r.ref, qty, rate: qty > 0 ? val / qty : 0, value: val });
+        const inventoryRate = qty > 0 ? inventoryValue / qty : 0;
+
+        // Stock-out sale detail should display what the item actually sold for,
+        // not its inventory cost. Prefer the recorded unit selling price, with
+        // totalSales as the legacy fallback when a unit price is missing.
+        const sellingRate = sellingPrice > 0 ? sellingPrice : qty > 0 && totalSales > 0 ? totalSales / qty : 0;
+        const sellingValue = totalSales > 0 ? totalSales : sellingRate * qty;
+
+        outTx.push({
+          type: "Sale",
+          date: r.date,
+          reference: r.ref,
+          qty,
+          rate: inventoryRate,
+          value: inventoryValue,
+          sellingRate,
+          sellingValue,
+        });
       }
 
       // ── Stock Transfers (In and Out) ─────────────────────────────────────────
