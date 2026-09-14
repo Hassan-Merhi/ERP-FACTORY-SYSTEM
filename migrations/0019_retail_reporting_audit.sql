@@ -41,6 +41,7 @@ BEFORE INSERT ON retail_pos_sale_items
 FOR EACH ROW
 EXECUTE FUNCTION retail_snapshot_sale_item_cost();
 
+-- Reporting and reconciliation indexes.
 CREATE INDEX IF NOT EXISTS retail_pos_sales_company_created_idx
   ON retail_pos_sales (company_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS retail_pos_sales_company_location_created_idx
@@ -57,3 +58,17 @@ CREATE INDEX IF NOT EXISTS retail_stock_movements_company_variant_location_creat
   ON retail_stock_movements (company_id, variant_id, location_id, created_at, id);
 CREATE INDEX IF NOT EXISTS retail_stock_movements_company_reference_idx
   ON retail_stock_movements (company_id, reference_type, reference_id);
+
+-- Large-catalog inventory browsing indexes. The retail inventory page filters
+-- product ids first and hydrates only the requested page of variants/images.
+CREATE INDEX IF NOT EXISTS retail_products_company_brand_id_idx
+  ON retail_products (company_id, brand_id, id);
+CREATE INDEX IF NOT EXISTS retail_products_company_category_lower_idx
+  ON retail_products (company_id, LOWER(category), id);
+CREATE INDEX IF NOT EXISTS retail_products_company_name_lower_idx
+  ON retail_products (company_id, LOWER(name), id);
+CREATE INDEX IF NOT EXISTS retail_product_variants_company_product_active_idx
+  ON retail_product_variants (company_id, product_id, active, id);
+CREATE INDEX IF NOT EXISTS retail_product_variants_company_size_lower_idx
+  ON retail_product_variants (company_id, LOWER(size), product_id)
+  WHERE active = true;
