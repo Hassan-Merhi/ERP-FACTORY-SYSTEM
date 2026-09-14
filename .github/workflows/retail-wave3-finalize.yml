@@ -4,20 +4,19 @@ on:
   push:
     branches:
       - feat/retail-reporting-audit-wave3
+  pull_request:
+    branches:
+      - feat/retail-pos-stock-movement-wave2
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   finalize:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Wave 3
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: feat/retail-reporting-audit-wave3
-          persist-credentials: true
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -30,81 +29,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
-
-      - name: Finalize audited manual stock writes and dashboard counts
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new):
-              p = Path(path)
-              s = p.read_text()
-              if new in s:
-                  return
-              if old not in s:
-                  raise SystemExit(f"target not found in {path}: {old[:180]!r}")
-              p.write_text(s.replace(old, new, 1))
-
-          route = "server/routes/retailRoutes.ts"
-          replace_once(
-              route,
-              'const asNumber = (value: unknown) => Number(value ?? 0);\n',
-              '''const asNumber = (value: unknown) => Number(value ?? 0);\n\ntype RetailTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];\n\nasync function writeVariantInventoryWithMovement(\n  tx: RetailTransaction,\n  input: {\n    companyId: number;\n    variantId: number;\n    cost: number;\n    stocks: RetailProductWrite["variants"][number]["stocks"];\n    createdBy: string;\n    referenceType: "retail_product_create" | "retail_product_edit";\n    referenceId: string;\n    eventPrefix: string;\n  }\n) {\n  const existingRows = await tx\n    .select({ locationId: retailVariantInventory.locationId, quantity: retailVariantInventory.quantity })\n    .from(retailVariantInventory)\n    .where(\n      and(\n        eq(retailVariantInventory.companyId, input.companyId),\n        eq(retailVariantInventory.variantId, input.variantId)\n      )\n    );\n  const existing = new Map(existingRows.map((row) => [row.locationId, asNumber(row.quantity)]));\n  const desired = new Map(input.stocks.map((stock) => [stock.locationId, Number(stock.quantity)]));\n  const locationIds = [...new Set([...existing.keys(), ...desired.keys()])].sort((a, b) => a - b);\n\n  for (const locationId of locationIds) {\n    const before = existing.get(locationId) ?? 0;\n    const after = desired.get(locationId) ?? 0;\n\n    await tx\n      .insert(retailVariantInventory)\n      .values({\n        companyId: input.companyId,\n        variantId: input.variantId,\n        locationId,\n        quantity: String(after),\n        averageCost: String(input.cost),\n      })\n      .onConflictDoUpdate({\n        target: [retailVariantInventory.variantId, retailVariantInventory.locationId],\n        set: { quantity: String(after), averageCost: String(input.cost), updatedAt: new Date() },\n      });\n\n    const delta = after - before;\n    if (Math.abs(delta) <= 0.000001) continue;\n\n    await tx.insert(retailStockMovements).values({\n      companyId: input.companyId,\n      variantId: input.variantId,\n      locationId,\n      movementType: "adjustment",\n      quantityDelta: String(delta),\n      quantityBefore: String(before),\n      quantityAfter: String(after),\n      eventKey: `${input.eventPrefix}:${input.variantId}:${locationId}`.slice(0, 255),\n      referenceType: input.referenceType,\n      referenceId: input.referenceId,\n      createdBy: input.createdBy,\n      metadata: { source: input.referenceType },\n    });\n  }\n}\n''',
-          )
-
-          replace_once(
-              route,
-              '''          if (variantInput.stocks.length) {\n            await tx.insert(retailVariantInventory).values(\n              variantInput.stocks.map((stock) => ({\n                companyId,\n                variantId: variant.id,\n                locationId: stock.locationId,\n                quantity: String(stock.quantity),\n                averageCost: String(variantInput.cost),\n              }))\n            );\n          }''',
-              '''          if (variantInput.stocks.length) {\n            await writeVariantInventoryWithMovement(tx, {\n              companyId,\n              variantId: variant.id,\n              cost: variantInput.cost,\n              stocks: variantInput.stocks,\n              createdBy: req.user!.id,\n              referenceType: "retail_product_create",\n              referenceId: String(product.id),\n              eventPrefix: `product-create:${product.id}`,\n            });\n          }''',
-          )
-
-          replace_once(
-              route,
-              '''      await db.transaction(async (tx) => {\n        const [existingProduct] = await tx''',
-              '''      const productEditKey = `product-edit:${productId}:${Date.now()}:${req.user!.id}`;\n\n      await db.transaction(async (tx) => {\n        const [existingProduct] = await tx''',
-          )
-
-          replace_once(
-              route,
-              '''          await tx\n            .delete(retailVariantInventory)\n            .where(\n              and(eq(retailVariantInventory.variantId, variantId), eq(retailVariantInventory.companyId, companyId))\n            );\n\n          if (variantInput.stocks.length) {\n            await tx.insert(retailVariantInventory).values(\n              variantInput.stocks.map((stock) => ({\n                companyId,\n                variantId,\n                locationId: stock.locationId,\n                quantity: String(stock.quantity),\n                averageCost: String(variantInput.cost),\n              }))\n            );\n          }''',
-              '''          await writeVariantInventoryWithMovement(tx, {\n            companyId,\n            variantId,\n            cost: variantInput.cost,\n            stocks: variantInput.stocks,\n            createdBy: req.user!.id,\n            referenceType: "retail_product_edit",\n            referenceId: String(productId),\n            eventPrefix: productEditKey,\n          });''',
-          )
-
-          dashboard = "client/src/pages/retail/RetailDashboard.tsx"
-          replace_once(
-              dashboard,
-              'import { useMemo, useState } from "react";',
-              'import { type ReactNode, useMemo, useState } from "react";',
-          )
-          replace_once(dashboard, '  icon: React.ReactNode;', '  icon: ReactNode;')
-          replace_once(
-              dashboard,
-              '''    variant_count: number;\n    revenue: number;''',
-              '''    variant_count: number;\n    low_stock_count: number;\n    out_of_stock_count: number;\n    revenue: number;''',
-          )
-          replace_once(
-              dashboard,
-              '''        <SummaryCard title="Low stock" value={quantity(data?.lowStock.length)} subtitle="Variant/location rows at threshold" icon={<AlertTriangle className="h-5 w-5" />} />\n        <SummaryCard title="Out of stock" value={quantity(data?.outOfStock.length)} subtitle="Active variants with no stock" icon={<PackageX className="h-5 w-5" />} />''',
-              '''        <SummaryCard title="Low stock" value={quantity(summary?.low_stock_count)} subtitle="Variant/location rows at threshold" icon={<AlertTriangle className="h-5 w-5" />} />\n        <SummaryCard title="Out of stock" value={quantity(summary?.out_of_stock_count)} subtitle="Active variants with no stock" icon={<PackageX className="h-5 w-5" />} />''',
-          )
-          PY
-
-          node node_modules/prettier/bin/prettier.cjs --write \
-            server/routes/retailRoutes.ts \
-            server/services/retail/retailReporting.ts \
-            server/routes/retailReportingRoutes.ts \
-            client/src/pages/retail/RetailDashboard.tsx \
-            tests/retail-wave3-reporting-audit.test.ts
-
-      - name: Commit finalized Wave 3 source
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add server/routes/retailRoutes.ts server/services/retail/retailReporting.ts server/routes/retailReportingRoutes.ts client/src/pages/retail/RetailDashboard.tsx tests/retail-wave3-reporting-audit.test.ts
-            git commit -m "fix(retail): finalize Wave 3 stock audit contracts"
-            git push origin HEAD:feat/retail-reporting-audit-wave3
-          fi
 
       - name: Verify migration registry
         run: npm run verify:migrations
