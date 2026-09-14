@@ -52,7 +52,7 @@ function registerVoucherCreateDateValidation(app: Express): void {
       if (req.method !== "POST" || !req.session?.userId) return next();
 
       const rawDate =
-        req.path === "/api/vouchers/with-entries" ? req.body?.voucher?.voucherDate : req.body?.voucherDate;
+        req.baseUrl === "/api/vouchers/with-entries" ? req.body?.voucher?.voucherDate : req.body?.voucherDate;
       if (rawDate !== undefined && !isValidIsoDate(rawDate)) {
         return res.status(400).json({ message: "voucherDate must be a valid YYYY-MM-DD date" });
       }
