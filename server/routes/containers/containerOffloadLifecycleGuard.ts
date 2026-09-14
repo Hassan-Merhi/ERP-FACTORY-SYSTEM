@@ -300,6 +300,15 @@ async function guardContainerOffload(req: Request, res: Response, next: NextFunc
       }
     }
 
+    // Keep the session-level advisory lock through the response, but release all
+    // row/table locks taken during preflight before the lifecycle service opens
+    // its own atomic transaction. Otherwise this connection's FOR KEY SHARE on
+    // the container blocks the lifecycle's FOR UPDATE and the request self-times
+    // out. The advisory lock still serializes concurrent offload/edit requests
+    // for the same company/container across the handoff.
+    await client.query("COMMIT");
+    transactionOpen = false;
+
     next();
   } catch (error: unknown) {
     await release(false);
