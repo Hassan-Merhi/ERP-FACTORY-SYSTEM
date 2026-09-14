@@ -651,11 +651,16 @@ export function registerRetailRoutes(app: Express) {
               eq(retailProductVariants.companyId, companyId),
               inArray(
                 retailProductVariants.barcode,
-                rows.map((row) => row.barcode)
+                rows.map((row: { barcode: string }) => row.barcode)
               )
             )
           );
-        const existingByBarcode = new Map(existingBarcodeRows.map((row) => [normalize(row.barcode), row]));
+        const existingByBarcode = new Map(
+          existingBarcodeRows.map((row: { id: number; barcode: string; productId: number; size: string }) => [
+            normalize(row.barcode),
+            row,
+          ])
+        );
 
         const productCache = new Map<string, { id: number; name: string }>();
         const existingProducts = await tx
