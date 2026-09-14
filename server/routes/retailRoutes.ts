@@ -1,8 +1,5 @@
 import type { Express, Request, Response } from "express";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { requireAuth, requireNonPOS } from "../auth";
-import { db } from "../db";
-import { getErrorMessage } from "../lib/httpHandlers";
 import {
   companies,
   locations,
@@ -15,6 +12,11 @@ import {
   retailVariantInventory,
   type RetailProductWrite,
 } from "@shared/schema";
+import { requireAuth, requireNonPOS } from "../auth";
+import { db } from "../db";
+import { getErrorMessage } from "../lib/httpHandlers";
+
+type RetailQueryExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
@@ -25,28 +27,39 @@ async function requireRetailCompany(req: Request, res: Response): Promise<number
     res.status(400).json({ message: "No company selected" });
     return null;
   }
+
   const [company] = await db
     .select({ companyType: companies.companyType })
     .from(companies)
     .where(eq(companies.id, companyId))
     .limit(1);
+
   if (!company || company.companyType !== "retail") {
-    res.status(403).json({ message: "Retail inventory is only available for Retail / Variant Inventory companies" });
+    res.status(403).json({
+      message: "Retail inventory is only available for Retail / Variant Inventory companies",
+    });
     return null;
   }
+
   return companyId;
 }
 
-async function getOrCreateBrand(tx: typeof db, companyId: number, requestedName?: string | null) {
+async function getOrCreateBrand(
+  executor: RetailQueryExecutor,
+  companyId: number,
+  requestedName?: string | null,
+) {
   const name = requestedName?.trim() || RETAIL_NO_BRAND_NAME;
   const normalizedName = normalize(name);
-  const [existing] = await tx
+  const [existing] = await executor
     .select()
     .from(retailBrands)
     .where(and(eq(retailBrands.companyId, companyId), eq(retailBrands.normalizedName, normalizedName)))
     .limit(1);
+
   if (existing) return existing;
-  const [created] = await tx
+
+  const [created] = await executor
     .insert(retailBrands)
     .values({
       companyId,
@@ -56,63 +69,80 @@ async function getOrCreateBrand(tx: typeof db, companyId: number, requestedName?
       active: true,
     })
     .returning();
+
   return created;
 }
 
-async function resolveBrand(tx: typeof db, companyId: number, input: RetailProductWrite) {
+async function resolveBrand(executor: RetailQueryExecutor, companyId: number, input: RetailProductWrite) {
   if (input.brandId) {
-    const [brand] = await tx
+    const [brand] = await executor
       .select()
       .from(retailBrands)
       .where(and(eq(retailBrands.id, input.brandId), eq(retailBrands.companyId, companyId)))
       .limit(1);
+
     if (!brand) throw new Error("Brand not found for this company");
     return brand;
   }
-  return getOrCreateBrand(tx, companyId, input.brandName);
+
+  return getOrCreateBrand(executor, companyId, input.brandName);
 }
 
 function validateVariantPayload(input: RetailProductWrite) {
   const barcodes = new Set<string>();
   const sizes = new Set<string>();
+
   for (const variant of input.variants) {
     const barcode = normalize(variant.barcode);
     const size = normalize(variant.size);
+
     if (barcodes.has(barcode)) throw new Error(`Duplicate barcode in product: ${variant.barcode}`);
     if (sizes.has(size)) throw new Error(`Duplicate size in product: ${variant.size}`);
+
     barcodes.add(barcode);
     sizes.add(size);
+
     const locationIds = new Set<number>();
     for (const stock of variant.stocks) {
-      if (locationIds.has(stock.locationId)) throw new Error(`Location ${stock.locationId} is repeated for size ${variant.size}`);
+      if (locationIds.has(stock.locationId)) {
+        throw new Error(`Location ${stock.locationId} is repeated for size ${variant.size}`);
+      }
       locationIds.add(stock.locationId);
     }
   }
 }
 
-async function validateLocations(tx: typeof db, companyId: number, input: RetailProductWrite) {
+async function validateLocations(
+  executor: RetailQueryExecutor,
+  companyId: number,
+  input: RetailProductWrite,
+) {
   const ids = [...new Set(input.variants.flatMap((variant) => variant.stocks.map((stock) => stock.locationId)))];
   if (!ids.length) return;
-  const valid = await tx
+
+  const valid = await executor
     .select({ id: locations.id })
     .from(locations)
     .where(and(eq(locations.companyId, companyId), inArray(locations.id, ids)));
   const validIds = new Set(valid.map((row) => row.id));
   const invalid = ids.find((id) => !validIds.has(id));
+
   if (invalid) throw new Error(`Location ${invalid} does not belong to the selected company`);
 }
 
 async function assertUniqueBarcodes(
-  tx: typeof db,
+  executor: RetailQueryExecutor,
   companyId: number,
   variants: RetailProductWrite["variants"],
 ) {
   const barcodes = variants.map((variant) => variant.barcode.trim());
   if (!barcodes.length) return;
-  const existing = await tx
+
+  const existing = await executor
     .select({ id: retailProductVariants.id, barcode: retailProductVariants.barcode })
     .from(retailProductVariants)
     .where(and(eq(retailProductVariants.companyId, companyId), inArray(retailProductVariants.barcode, barcodes)));
+
   for (const row of existing) {
     const incoming = variants.find((variant) => variant.barcode.trim() === row.barcode);
     if (!incoming || incoming.id !== row.id) throw new Error(`Barcode already exists: ${row.barcode}`);
@@ -184,6 +214,7 @@ async function loadProducts(companyId: number, productId?: number) {
 
   const products = new Map<number, ProductResult>();
   const variantMaps = new Map<number, Map<number, ProductResult["variants"][number]>>();
+
   for (const row of rows) {
     let product = products.get(row.productId);
     if (!product) {
@@ -205,7 +236,9 @@ async function loadProducts(companyId: number, productId?: number) {
       products.set(row.productId, product);
       variantMaps.set(row.productId, new Map());
     }
+
     if (!row.variantId) continue;
+
     const productVariantMap = variantMaps.get(row.productId)!;
     let variant = productVariantMap.get(row.variantId);
     if (!variant) {
@@ -224,10 +257,15 @@ async function loadProducts(companyId: number, productId?: number) {
       productVariantMap.set(row.variantId, variant);
       product.variants.push(variant);
     }
+
     if (row.locationId) {
       const quantity = asNumber(row.quantity);
       variant.quantity += quantity;
-      variant.stocks.push({ locationId: row.locationId, locationName: row.locationName ?? "", quantity });
+      variant.stocks.push({
+        locationId: row.locationId,
+        locationName: row.locationName ?? "",
+        quantity,
+      });
     }
   }
 
@@ -239,6 +277,7 @@ async function loadProducts(companyId: number, productId?: number) {
     product.minSellingPrice = prices.length ? Math.min(...prices) : 0;
     product.maxSellingPrice = prices.length ? Math.max(...prices) : 0;
   }
+
   return [...products.values()];
 }
 
@@ -255,12 +294,21 @@ function filterProducts(products: Awaited<ReturnType<typeof loadProducts>>, quer
     if (brandId && product.brand.id !== brandId) return false;
     if (category && normalize(product.category ?? "") !== category) return false;
     if (size && !product.variants.some((variant) => normalize(variant.size) === size)) return false;
-    if (locationId && !product.variants.some((variant) => variant.stocks.some((stock) => stock.locationId === locationId))) return false;
+    if (
+      locationId &&
+      !product.variants.some((variant) => variant.stocks.some((stock) => stock.locationId === locationId))
+    ) {
+      return false;
+    }
     if (stockStatus === "out" && product.totalQuantity !== 0) return false;
     if (
       stockStatus === "low" &&
-      !product.variants.some((variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold)
-    ) return false;
+      !product.variants.some(
+        (variant) => variant.quantity > 0 && variant.quantity <= variant.lowStockThreshold,
+      )
+    ) {
+      return false;
+    }
     if (stockStatus === "in" && product.totalQuantity <= 0) return false;
     return true;
   });
@@ -271,6 +319,7 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const brands = await db
         .select()
         .from(retailBrands)
@@ -286,8 +335,10 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const name = String(req.body?.name ?? "").trim();
       if (!name) return res.status(400).json({ message: "Brand name is required" });
+
       const brand = await getOrCreateBrand(db, companyId, name);
       res.status(201).json(brand);
     } catch (error) {
@@ -299,6 +350,7 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const products = await loadProducts(companyId);
       res.json(filterProducts(products, req.query));
     } catch (error) {
@@ -310,8 +362,12 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const id = Number(req.params.id);
-      if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid product ID" });
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+
       const [product] = await loadProducts(companyId, id);
       if (!product) return res.status(404).json({ message: "Retail product not found" });
       res.json(product);
@@ -324,6 +380,7 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const barcode = String(req.params.barcode ?? "").trim();
       const [row] = await db
         .select({
@@ -339,6 +396,7 @@ export function registerRetailRoutes(app: Express) {
         .innerJoin(retailProducts, eq(retailProducts.id, retailProductVariants.productId))
         .where(and(eq(retailProductVariants.companyId, companyId), eq(retailProductVariants.barcode, barcode)))
         .limit(1);
+
       if (!row) return res.status(404).json({ message: "Barcode not found" });
       res.json({ ...row, sellingPrice: asNumber(row.sellingPrice) });
     } catch (error) {
@@ -350,19 +408,22 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const input = retailProductWriteSchema.parse(req.body);
       validateVariantPayload(input);
 
       const productId = await db.transaction(async (tx) => {
-        await validateLocations(tx as typeof db, companyId, input);
-        await assertUniqueBarcodes(tx as typeof db, companyId, input.variants);
+        await validateLocations(tx, companyId, input);
+        await assertUniqueBarcodes(tx, companyId, input.variants);
+
         const [duplicateCode] = await tx
           .select({ id: retailProducts.id })
           .from(retailProducts)
           .where(and(eq(retailProducts.companyId, companyId), eq(retailProducts.code, input.code)))
           .limit(1);
         if (duplicateCode) throw new Error(`Product code already exists: ${input.code}`);
-        const brand = await resolveBrand(tx as typeof db, companyId, input);
+
+        const brand = await resolveBrand(tx, companyId, input);
         const [product] = await tx
           .insert(retailProducts)
           .values({
@@ -392,6 +453,7 @@ export function registerRetailRoutes(app: Express) {
               active: variantInput.active,
             })
             .returning({ id: retailProductVariants.id });
+
           if (variantInput.stocks.length) {
             await tx.insert(retailVariantInventory).values(
               variantInput.stocks.map((stock) => ({
@@ -404,8 +466,10 @@ export function registerRetailRoutes(app: Express) {
             );
           }
         }
+
         return product.id;
       });
+
       const [product] = await loadProducts(companyId, productId);
       res.status(201).json(product);
     } catch (error) {
@@ -417,8 +481,12 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const productId = Number(req.params.id);
-      if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ message: "Invalid product ID" });
+      if (!Number.isInteger(productId) || productId <= 0) {
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+
       const input = retailProductWriteSchema.parse(req.body);
       validateVariantPayload(input);
 
@@ -429,16 +497,20 @@ export function registerRetailRoutes(app: Express) {
           .where(and(eq(retailProducts.id, productId), eq(retailProducts.companyId, companyId)))
           .limit(1);
         if (!existingProduct) throw new Error("Retail product not found");
-        await validateLocations(tx as typeof db, companyId, input);
-        await assertUniqueBarcodes(tx as typeof db, companyId, input.variants);
+
+        await validateLocations(tx, companyId, input);
+        await assertUniqueBarcodes(tx, companyId, input.variants);
+
         const [duplicateCode] = await tx
           .select({ id: retailProducts.id })
           .from(retailProducts)
           .where(and(eq(retailProducts.companyId, companyId), eq(retailProducts.code, input.code)))
           .limit(1);
-        if (duplicateCode && duplicateCode.id !== productId) throw new Error(`Product code already exists: ${input.code}`);
+        if (duplicateCode && duplicateCode.id !== productId) {
+          throw new Error(`Product code already exists: ${input.code}`);
+        }
 
-        const brand = await resolveBrand(tx as typeof db, companyId, input);
+        const brand = await resolveBrand(tx, companyId, input);
         await tx
           .update(retailProducts)
           .set({
@@ -461,8 +533,11 @@ export function registerRetailRoutes(app: Express) {
 
         for (const variantInput of input.variants) {
           let variantId = variantInput.id;
+
           if (variantId) {
-            if (!existingVariants.some((variant) => variant.id === variantId)) throw new Error("Variant does not belong to this product");
+            if (!existingVariants.some((variant) => variant.id === variantId)) {
+              throw new Error("Variant does not belong to this product");
+            }
             submittedIds.add(variantId);
             await tx
               .update(retailProductVariants)
@@ -496,12 +571,15 @@ export function registerRetailRoutes(app: Express) {
             submittedIds.add(variantId);
           }
 
-          await tx.delete(retailVariantInventory).where(eq(retailVariantInventory.variantId, variantId));
+          await tx
+            .delete(retailVariantInventory)
+            .where(and(eq(retailVariantInventory.variantId, variantId), eq(retailVariantInventory.companyId, companyId)));
+
           if (variantInput.stocks.length) {
             await tx.insert(retailVariantInventory).values(
               variantInput.stocks.map((stock) => ({
                 companyId,
-                variantId: variantId!,
+                variantId,
                 locationId: stock.locationId,
                 quantity: String(stock.quantity),
                 averageCost: String(variantInput.cost),
@@ -515,7 +593,7 @@ export function registerRetailRoutes(app: Express) {
           await tx
             .update(retailProductVariants)
             .set({ active: false, updatedAt: new Date() })
-            .where(eq(retailProductVariants.id, variant.id));
+            .where(and(eq(retailProductVariants.id, variant.id), eq(retailProductVariants.companyId, companyId)));
         }
       });
 
@@ -530,20 +608,30 @@ export function registerRetailRoutes(app: Express) {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
+
       const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
       if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });
-      if (rawRows.length > 5000) return res.status(400).json({ message: "Import is limited to 5,000 rows per file" });
+      if (rawRows.length > 5000) {
+        return res.status(400).json({ message: "Import is limited to 5,000 rows per file" });
+      }
+
       const rows = rawRows.map((row: unknown) => retailImportRowSchema.parse(row));
       const uploadBarcodes = new Map<string, string>();
       const uploadVariantLocations = new Set<string>();
+
       for (const row of rows) {
         const barcodeKey = normalize(row.barcode);
         const variantKey = `${normalize(row.code)}|${normalize(row.size)}`;
         const previousVariant = uploadBarcodes.get(barcodeKey);
-        if (previousVariant && previousVariant !== variantKey) throw new Error(`Barcode ${row.barcode} is assigned to more than one product/size in the file`);
+        if (previousVariant && previousVariant !== variantKey) {
+          throw new Error(`Barcode ${row.barcode} is assigned to more than one product/size in the file`);
+        }
         uploadBarcodes.set(barcodeKey, variantKey);
+
         const stockKey = `${variantKey}|${normalize(row.location)}`;
-        if (uploadVariantLocations.has(stockKey)) throw new Error(`Duplicate product/size/location row: ${row.code} / ${row.size} / ${row.location}`);
+        if (uploadVariantLocations.has(stockKey)) {
+          throw new Error(`Duplicate product/size/location row: ${row.code} / ${row.size} / ${row.location}`);
+        }
         uploadVariantLocations.add(stockKey);
       }
 
@@ -559,10 +647,25 @@ export function registerRetailRoutes(app: Express) {
         }
 
         const existingBarcodeRows = await tx
-          .select({ id: retailProductVariants.id, barcode: retailProductVariants.barcode, productId: retailProductVariants.productId, size: retailProductVariants.size })
+          .select({
+            id: retailProductVariants.id,
+            barcode: retailProductVariants.barcode,
+            productId: retailProductVariants.productId,
+            size: retailProductVariants.size,
+          })
           .from(retailProductVariants)
-          .where(and(eq(retailProductVariants.companyId, companyId), inArray(retailProductVariants.barcode, rows.map((row) => row.barcode))));
-        const existingByBarcode = new Map(existingBarcodeRows.map((row) => [normalize(row.barcode), row]));
+          .where(
+            and(
+              eq(retailProductVariants.companyId, companyId),
+              inArray(
+                retailProductVariants.barcode,
+                rows.map((row) => row.barcode),
+              ),
+            ),
+          );
+        const existingByBarcode = new Map(
+          existingBarcodeRows.map((row) => [normalize(row.barcode), row]),
+        );
 
         const productCache = new Map<string, { id: number; name: string }>();
         const existingProducts = await tx
@@ -573,10 +676,20 @@ export function registerRetailRoutes(app: Express) {
 
         const variantCache = new Map<string, { id: number; barcode: string }>();
         const allVariants = await tx
-          .select({ id: retailProductVariants.id, productId: retailProductVariants.productId, size: retailProductVariants.size, barcode: retailProductVariants.barcode })
+          .select({
+            id: retailProductVariants.id,
+            productId: retailProductVariants.productId,
+            size: retailProductVariants.size,
+            barcode: retailProductVariants.barcode,
+          })
           .from(retailProductVariants)
           .where(eq(retailProductVariants.companyId, companyId));
-        for (const variant of allVariants) variantCache.set(`${variant.productId}|${normalize(variant.size)}`, { id: variant.id, barcode: variant.barcode });
+        for (const variant of allVariants) {
+          variantCache.set(`${variant.productId}|${normalize(variant.size)}`, {
+            id: variant.id,
+            barcode: variant.barcode,
+          });
+        }
 
         let productsCreated = 0;
         let variantsCreated = 0;
@@ -585,9 +698,11 @@ export function registerRetailRoutes(app: Express) {
         for (const row of rows) {
           const locationId = locationMap.get(normalize(row.location));
           if (!locationId) throw new Error(`Unknown location for this company: ${row.location}`);
+
           const productKey = normalize(row.code);
           let product = productCache.get(productKey);
-          const brand = await getOrCreateBrand(tx as typeof db, companyId, row.brand);
+          const brand = await getOrCreateBrand(tx, companyId, row.brand);
+
           if (!product) {
             const [created] = await tx
               .insert(retailProducts)
@@ -610,10 +725,14 @@ export function registerRetailRoutes(app: Express) {
           const variantKey = `${product.id}|${normalize(row.size)}`;
           let variant = variantCache.get(variantKey);
           const barcodeOwner = existingByBarcode.get(normalize(row.barcode));
+
           if (variant) {
-            if (normalize(variant.barcode) !== normalize(row.barcode)) throw new Error(`Size ${row.size} on ${row.code} already uses barcode ${variant.barcode}`);
+            if (normalize(variant.barcode) !== normalize(row.barcode)) {
+              throw new Error(`Size ${row.size} on ${row.code} already uses barcode ${variant.barcode}`);
+            }
           } else {
             if (barcodeOwner) throw new Error(`Barcode already exists on another variant: ${row.barcode}`);
+
             const [createdVariant] = await tx
               .insert(retailProductVariants)
               .values({
@@ -629,6 +748,12 @@ export function registerRetailRoutes(app: Express) {
               .returning({ id: retailProductVariants.id, barcode: retailProductVariants.barcode });
             variant = createdVariant;
             variantCache.set(variantKey, variant);
+            existingByBarcode.set(normalize(row.barcode), {
+              id: createdVariant.id,
+              barcode: createdVariant.barcode,
+              productId: product.id,
+              size: row.size,
+            });
             variantsCreated += 1;
           }
 
@@ -643,16 +768,23 @@ export function registerRetailRoutes(app: Express) {
             })
             .onConflictDoUpdate({
               target: [retailVariantInventory.variantId, retailVariantInventory.locationId],
-              set: { quantity: String(row.qty), averageCost: String(row.cost), updatedAt: new Date() },
+              set: {
+                quantity: String(row.qty),
+                averageCost: String(row.cost),
+                updatedAt: new Date(),
+              },
             });
+
           await tx
             .update(retailProductVariants)
             .set({ cost: String(row.cost), sellingPrice: String(row.price), updatedAt: new Date() })
-            .where(eq(retailProductVariants.id, variant.id));
+            .where(and(eq(retailProductVariants.id, variant.id), eq(retailProductVariants.companyId, companyId)));
           stockRowsWritten += 1;
         }
+
         return { rowsProcessed: rows.length, productsCreated, variantsCreated, stockRowsWritten };
       });
+
       res.json(result);
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
