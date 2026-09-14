@@ -100,4 +100,9 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "تم إرجاع سعة البروفرما لأمر تحميل غير صحيح",
     fr: "La capacité de la proforma a été renvoyée pour un ordre de chargement incorrect",
   },
+  {
+    en: "Only months with movement are shown",
+    ar: "يتم عرض الأشهر التي تحتوي على حركة فقط",
+    fr: "Seuls les mois avec des mouvements sont affichés",
+  },
 ];
