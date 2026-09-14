@@ -1,0 +1,58 @@
+name: Phase 14-16 Autofmt
+
+on:
+  push:
+    branches:
+      - test/phase14-16-offload-costing-loading-20260914
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase14-16-autofmt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: test/phase14-16-offload-costing-loading-20260914
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Format exact coverage files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            tests/costing-edge-cases-phase15.test.ts \
+            tests/inventory-receipts-phase10.test.ts \
+            tests/offload-lifecycle-phase14.test.ts
+
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            tests/costing-edge-cases-phase15.test.ts \
+            tests/inventory-receipts-phase10.test.ts \
+            tests/offload-lifecycle-phase14.test.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: format phase 14-16 coverage"
+          git push origin HEAD:test/phase14-16-offload-costing-loading-20260914
