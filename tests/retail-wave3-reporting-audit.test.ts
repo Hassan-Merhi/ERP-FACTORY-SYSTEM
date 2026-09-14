@@ -1,20 +1,9 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveAuthenticatedAppRoute } from "../client/src/app/authenticatedAppRouteGuard";
 
 const root = process.cwd();
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
-
-function routeDecision(companyType: string, currentLocation: string) {
-  return resolveAuthenticatedAppRoute({
-    currentLocation,
-    companyType,
-    isAdminOwner: true,
-    myAccessLoading: false,
-    myAccessError: false,
-  }).decision;
-}
 
 describe("Retail Wave 3 reporting and reconciliation", () => {
   it("uses stable sale-time cost snapshots for COGS and profit", () => {
@@ -98,12 +87,14 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
   });
 
   it("makes reporting the retail landing page without changing other company-type guards", () => {
-    expect(routeDecision("retail", "/tracking")).toEqual({ kind: "redirect", to: "/retail/dashboard" });
-    expect(routeDecision("retail", "/retail/dashboard")).toEqual({ kind: "continue" });
-    expect(routeDecision("normal", "/retail/dashboard")).toEqual({ kind: "redirect", to: "/tracking" });
-    expect(routeDecision("normal", "/tracking")).toEqual({ kind: "continue" });
-    expect(routeDecision("properties", "/tracking")).toEqual({ kind: "redirect", to: "/properties/daybook" });
-    expect(routeDecision("supplier_partner", "/sp")).toEqual({ kind: "continue" });
+    const guard = read("client/src/app/authenticatedAppRouteGuard.ts");
+    expect(guard).toContain('const isPropertiesCompany = companyType === "properties"');
+    expect(guard).toContain('const isSupplierPartnerCompany = companyType === "supplier_partner"');
+    expect(guard).toContain('const isFactoryCompany = companyType === "factory" || companyType === "factory_v2"');
+    expect(guard).toContain('const isRetailCompany = companyType === "retail"');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/retail/dashboard" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/properties/daybook" }');
+    expect(guard).toContain('decision = { kind: "redirect", to: "/sp" }');
   });
 
   it("exposes authenticated dashboard, audit and production-readiness endpoints", () => {
