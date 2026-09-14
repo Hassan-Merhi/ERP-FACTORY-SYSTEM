@@ -40,8 +40,9 @@ async function repairCompany(
             AND x.reference_table='factory_payrolls'
             AND x.reference_id=p.id
         )
-      RETURNING d.id`
-  , [companyId]);
+      RETURNING d.id`,
+    [companyId]
+  );
 
   // Old bulk mark-paid wrote one zero-value marker for the whole batch. Those
   // rows do not represent money movement and have no source identity; once the

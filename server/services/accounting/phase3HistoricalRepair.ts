@@ -17,10 +17,6 @@ type LedgerOptions = {
   parentId?: number | null;
 };
 
-function dateText(value: unknown): string {
-  return String(value ?? "").slice(0, 10);
-}
-
 async function scopeCompany(client: PoolClient, companyId: number): Promise<void> {
   await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`phase3-historical-repair:${companyId}`]);
@@ -123,7 +119,9 @@ async function assertVoucherBalanced(client: PoolClient, companyId: number, vouc
   );
   const row = checked.rows[0];
   if (!row || row.debit !== row.credit) {
-    throw new Error(`Phase 3 repair left voucher ${voucherId} unbalanced (${row?.debit ?? "missing"}/${row?.credit ?? "missing"})`);
+    throw new Error(
+      `Phase 3 repair left voucher ${voucherId} unbalanced (${row?.debit ?? "missing"}/${row?.credit ?? "missing"})`
+    );
   }
 }
 
@@ -201,11 +199,19 @@ async function repairKnownDuplicatePosImport(client: PoolClient, companyId: numb
     [[8965, 8966, 8967, 8968]]
   );
   const expected = Number(voucher.rows[0].total_amount).toFixed(2);
-  if (!remainder.rows[0] || Number(remainder.rows[0].debit).toFixed(2) !== expected || Number(remainder.rows[0].credit).toFixed(2) !== expected) {
-    throw new Error("Phase 3 refused duplicate-sale repair: the preserved voucher 3000 entries do not equal its source total");
+  if (
+    !remainder.rows[0] ||
+    Number(remainder.rows[0].debit).toFixed(2) !== expected ||
+    Number(remainder.rows[0].credit).toFixed(2) !== expected
+  ) {
+    throw new Error(
+      "Phase 3 refused duplicate-sale repair: the preserved voucher 3000 entries do not equal its source total"
+    );
   }
 
-  await client.query(`DELETE FROM voucher_entries WHERE voucher_id = 3000 AND id = ANY($1::int[])`, [[8965, 8966, 8967, 8968]]);
+  await client.query(`DELETE FROM voucher_entries WHERE voucher_id = 3000 AND id = ANY($1::int[])`, [
+    [8965, 8966, 8967, 8968],
+  ]);
   await assertVoucherBalanced(client, companyId, 3000);
   return 4;
 }
@@ -307,7 +313,8 @@ async function rebuildPayrollPeriod(
       ORDER BY p.id`,
     [companyId, periodStart, periodEnd]
   );
-  if (payrolls.rows.length === 0) throw new Error(`Phase 3 payroll repair found no source payrolls for ${periodStart}..${periodEnd}`);
+  if (payrolls.rows.length === 0)
+    throw new Error(`Phase 3 payroll repair found no source payrolls for ${periodStart}..${periodEnd}`);
 
   let totalNetCents = 0;
   let totalAdvanceCents = 0;
@@ -344,27 +351,50 @@ async function rebuildPayrollPeriod(
   const old = await client.query<{ id: number }>(
     `SELECT id FROM vouchers
       WHERE company_id=$1 AND voucher_number LIKE 'PAYROLL-GEN-%'
-        AND voucher_date=$2::date AND description LIKE ('%' || $3 || '%')`,
+        AND voucher_date=$2::date AND description LIKE ('%' || $3 || '%')
+      ORDER BY id`,
     [companyId, periodStart, periodEnd]
   );
   const oldIds = old.rows.map((row) => row.id);
-  if (oldIds.length > 0) {
-    await client.query(`DELETE FROM accounting_posting_requests WHERE company_id=$1 AND voucher_id=ANY($2::int[])`, [companyId, oldIds]);
-    await client.query(`DELETE FROM voucher_entries WHERE voucher_id=ANY($1::int[])`, [oldIds]);
-    await client.query(`DELETE FROM vouchers WHERE company_id=$1 AND id=ANY($2::int[])`, [companyId, oldIds]);
+  const voucherId = oldIds[0];
+  if (!voucherId) {
+    throw new Error(`Phase 3 payroll repair found no existing generation voucher for ${periodStart}..${periodEnd}`);
   }
+
+  const duplicateIds = oldIds.slice(1);
+  if (duplicateIds.length > 0) {
+    await client.query(`DELETE FROM accounting_posting_requests WHERE company_id=$1 AND voucher_id=ANY($2::int[])`, [
+      companyId,
+      duplicateIds,
+    ]);
+    await client.query(`DELETE FROM voucher_entries WHERE voucher_id=ANY($1::int[])`, [duplicateIds]);
+    await client.query(`DELETE FROM vouchers WHERE company_id=$1 AND id=ANY($2::int[])`, [companyId, duplicateIds]);
+  }
+
+  // Historical repair owns the survivor voucher transactionally. Retire any
+  // stale posting marker before changing its payload so future retries cannot
+  // validate against an obsolete request fingerprint.
+  await client.query(`DELETE FROM accounting_posting_requests WHERE company_id=$1 AND voucher_id=$2`, [
+    companyId,
+    voucherId,
+  ]);
 
   const totalGrossCents = totalNetCents + totalAdvanceCents;
   const description = `Payroll expense: ${payrolls.rows.length} worker${payrolls.rows.length === 1 ? "" : "s"} (${periodStart} – ${periodEnd})`;
-  const created = await client.query<{ id: number }>(
-    `INSERT INTO vouchers
-       (company_id,voucher_number,voucher_type,voucher_date,description,total_amount,currency,source_module,optional)
-     VALUES ($1,$2,'Journal',$3::date,$4,$5,'USD','FACTORY',false)
-     RETURNING id`,
-    [companyId, `PH3-PAYROLL-GEN-${periodStart}-${periodEnd}`, periodStart, description, moneyFromCents(totalGrossCents)]
+  await client.query(
+    `UPDATE vouchers
+        SET voucher_type='Journal',
+            voucher_date=$3::date,
+            description=$4,
+            total_amount=$5,
+            currency='USD',
+            source_module='FACTORY',
+            optional=false,
+            deleted_at=NULL
+      WHERE company_id=$1 AND id=$2`,
+    [companyId, voucherId, periodStart, description, moneyFromCents(totalGrossCents)]
   );
-  const voucherId = created.rows[0]?.id;
-  if (!voucherId) throw new Error(`Phase 3 payroll repair could not create ${periodStart}..${periodEnd}`);
+  await client.query(`DELETE FROM voucher_entries WHERE voucher_id=$1`, [voucherId]);
 
   for (const row of workerRows) {
     if (Number(row.salary) > 0) {
@@ -444,7 +474,13 @@ async function retireLegacyHeaderOnlyMarker(client: PoolClient, companyId: numbe
 }
 
 async function validateTrueDoubleEntry(client: PoolClient, companyId: number): Promise<void> {
-  const broken = await client.query<{ id: number; voucher_number: string; voucher_type: string; debit: string; credit: string }>(
+  const broken = await client.query<{
+    id: number;
+    voucher_number: string;
+    voucher_type: string;
+    debit: string;
+    credit: string;
+  }>(
     `WITH totals AS (
        SELECT v.id,v.voucher_number,v.voucher_type,v.currency,v.total_amount,
               COALESCE(SUM(COALESCE(ve.base_debit_amount,ve.debit_amount,0)),0) AS debit,

@@ -112,10 +112,9 @@ async function scopeCompany(client: PoolClient, companyId: number): Promise<void
  */
 async function ensureCompanyBaseline(client: PoolClient, companyId: number): Promise<boolean> {
   await scopeCompany(client, companyId);
-  const existing = await client.query(
-    `SELECT 1 FROM phase3_inventory_valuation_cutovers WHERE company_id=$1 LIMIT 1`,
-    [companyId]
-  );
+  const existing = await client.query(`SELECT 1 FROM phase3_inventory_valuation_cutovers WHERE company_id=$1 LIMIT 1`, [
+    companyId,
+  ]);
   if (existing.rows.length > 0) return false;
 
   await client.query("LOCK TABLE canonical_stock_movements IN SHARE ROW EXCLUSIVE MODE");

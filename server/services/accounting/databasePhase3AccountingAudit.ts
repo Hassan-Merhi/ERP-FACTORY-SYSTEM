@@ -330,7 +330,10 @@ export async function loadDatabasePhase3AccountingAudit(input: {
       payrollId,
       status: String(row.status ?? ""),
       netSalary: asDecimal(row.net_salary, `payroll:${payrollId}.netSalary`),
-      cashAccountId: row.cash_account_id == null ? null : asPositiveInteger(row.cash_account_id, `payroll:${payrollId}.cashAccountId`),
+      cashAccountId:
+        row.cash_account_id == null
+          ? null
+          : asPositiveInteger(row.cash_account_id, `payroll:${payrollId}.cashAccountId`),
       paymentVoucherCount: asNonNegativeInteger(row.payment_voucher_count, `payroll:${payrollId}.paymentVoucherCount`),
       paymentVoucherTotal: asDecimal(row.payment_voucher_total, `payroll:${payrollId}.paymentVoucherTotal`),
       paymentLedgerDebit: asDecimal(row.payment_debit, `payroll:${payrollId}.paymentDebit`),
@@ -388,13 +391,19 @@ export async function loadDatabasePhase3AccountingAudit(input: {
   `);
   const stockRow = resultRows<StockRow>(stockResult)[0];
   if (!stockRow) {
-    throw new Phase3AccountingAuditError("PHASE3_DATABASE_ROW_INVALID", `Company ${companyId} stock snapshot is missing`);
+    throw new Phase3AccountingAuditError(
+      "PHASE3_DATABASE_ROW_INVALID",
+      `Company ${companyId} stock snapshot is missing`
+    );
   }
   const stock: StockAccountingAuditSnapshot = {
     companyId,
     operationalInventoryValue: asDecimal(stockRow.operational_value, "stock.operationalInventoryValue"),
     accountingInventoryValue: asDecimal(stockRow.accounting_value, "stock.accountingInventoryValue"),
-    accountingInventoryAccountCount: asNonNegativeInteger(stockRow.inventory_account_count, "stock.inventoryAccountCount"),
+    accountingInventoryAccountCount: asNonNegativeInteger(
+      stockRow.inventory_account_count,
+      "stock.inventoryAccountCount"
+    ),
   };
 
   // Repeated lines can be legitimate. Surface duplicate signatures only when

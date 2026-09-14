@@ -14,10 +14,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and, sql, inArray, ne, isNull } from "drizzle-orm";
 import { ledgerAccounts, vouchers, voucherEntries, factoryPayrolls, factoryWorkers } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
-import {
-  allocatePayrollAccountingAmounts,
-  moneyFromCents,
-} from "../../services/accounting/payrollAccountingAmounts";
+import { allocatePayrollAccountingAmounts, moneyFromCents } from "../../services/accounting/payrollAccountingAmounts";
 
 /** Normalize a USD voucher entry (IDENTITY convention). */
 function normUsd(debit: string | number, credit: string | number) {

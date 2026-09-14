@@ -19,12 +19,7 @@
  *                   reconciled separately.
  */
 export type VoucherLedgerExpectation =
-  | "balanced"
-  | "balanced-only"
-  | "single-sided"
-  | "inventory-sided"
-  | "none"
-  | "unclassified";
+  "balanced" | "balanced-only" | "single-sided" | "inventory-sided" | "none" | "unclassified";
 
 /**
  * Evidence for each classification comes from the writers, not from whichever

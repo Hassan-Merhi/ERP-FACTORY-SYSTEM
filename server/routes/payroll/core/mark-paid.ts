@@ -192,7 +192,12 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
               .returning();
             await tx.insert(voucherEntries).values([
               { voucherId: pVoucher.id, ledgerAccountId: payableAcc.id, ...normUsd(netAmt.toFixed(2), "0"), narration },
-              { voucherId: pVoucher.id, ledgerAccountId: cashAccountId!, ...normUsd("0", netAmt.toFixed(2)), narration },
+              {
+                voucherId: pVoucher.id,
+                ledgerAccountId: cashAccountId!,
+                ...normUsd("0", netAmt.toFixed(2)),
+                narration,
+              },
             ]);
           }
 
@@ -242,7 +247,8 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           .from(factoryPayrolls)
           .where(and(eq(factoryPayrolls.id, id), eq(factoryPayrolls.companyId, companyId)));
         if (!payroll) throw new Error("Payroll not found");
-        if (!["PAID", "APPROVED"].includes(payroll.status)) throw new Error("Payroll must be in PAID or APPROVED status");
+        if (!["PAID", "APPROVED"].includes(payroll.status))
+          throw new Error("Payroll must be in PAID or APPROVED status");
         if (payroll.cashAccountId) throw new Error("Accounting entry already exists for this payroll");
 
         const [worker] = await tx
@@ -311,7 +317,10 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
     } catch (error: unknown) {
       const message = getErrorMessage(error);
       if (message === "Payroll not found") return res.status(404).json({ message });
-      if (message === "Payroll must be in PAID or APPROVED status" || message === "Accounting entry already exists for this payroll")
+      if (
+        message === "Payroll must be in PAID or APPROVED status" ||
+        message === "Accounting entry already exists for this payroll"
+      )
         return res.status(400).json({ message });
       res.status(500).json({ message });
     }
@@ -353,7 +362,8 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
             .select()
             .from(factoryPayrolls)
             .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
-          if (payrollsToMark.length !== normalizedIds.length) throw new Error("One or more payroll records were not found");
+          if (payrollsToMark.length !== normalizedIds.length)
+            throw new Error("One or more payroll records were not found");
           if (!cashId && payrollsToMark.some((payroll) => parseFloat(payroll.netSalary || "0") > 0)) {
             throw new Error("cashAccountId is required for non-zero payroll payment");
           }
@@ -372,7 +382,10 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
 
           for (const payroll of payrollsToMark) {
             const netAmt = parseFloat(payroll.netSalary || "0");
-            const workerName = workerDisplayName(workerMap.get(payroll.workerId) as string | null | undefined, payroll.workerId);
+            const workerName = workerDisplayName(
+              workerMap.get(payroll.workerId) as string | null | undefined,
+              payroll.workerId
+            );
             const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
 
             if (netAmt > 0 && cashId && payableAccBulk) {
@@ -390,7 +403,12 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
                 })
                 .returning();
               await tx.insert(voucherEntries).values([
-                { voucherId: pVoucher.id, ledgerAccountId: payableAccBulk.id, ...normUsd(netAmt.toFixed(2), "0"), narration },
+                {
+                  voucherId: pVoucher.id,
+                  ledgerAccountId: payableAccBulk.id,
+                  ...normUsd(netAmt.toFixed(2), "0"),
+                  narration,
+                },
                 { voucherId: pVoucher.id, ledgerAccountId: cashId, ...normUsd("0", netAmt.toFixed(2)), narration },
               ]);
             }
@@ -415,8 +433,7 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
       const message = getErrorMessage(error);
       if (message === "cashAccountId is required for non-zero payroll payment")
         return res.status(400).json({ message });
-      if (message === "One or more payroll records were not found")
-        return res.status(404).json({ message });
+      if (message === "One or more payroll records were not found") return res.status(404).json({ message });
       res.status(financialOperationErrorStatus(error)).json({ message });
     }
   });

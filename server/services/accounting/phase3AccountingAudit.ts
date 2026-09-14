@@ -214,7 +214,14 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
     const expectation = voucher.ledgerExpectation;
 
     if (expectation === "unclassified") {
-      addIssue(issues, "vouchers", identity, "VOUCHER_TYPE_UNCLASSIFIED", "classified voucher type", voucher.voucherType);
+      addIssue(
+        issues,
+        "vouchers",
+        identity,
+        "VOUCHER_TYPE_UNCLASSIFIED",
+        "classified voucher type",
+        voucher.voucherType
+      );
       continue;
     }
 
@@ -258,7 +265,14 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
 
     if (expectation === "inventory-sided") {
       if (baseDebit.isZero() && baseCredit.isZero()) {
-        addIssue(issues, "vouchers", identity, "INVENTORY_SIDED_VOUCHER_EMPTY", "at least one GL side", "no ledger side");
+        addIssue(
+          issues,
+          "vouchers",
+          identity,
+          "INVENTORY_SIDED_VOUCHER_EMPTY",
+          "at least one GL side",
+          "no ledger side"
+        );
       }
       continue;
     }
@@ -352,22 +366,46 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
       addIssue(issues, "payroll", identity, "PAYROLL_PAYMENT_VOUCHER_COUNT_MISMATCH", "1", String(paymentVoucherCount));
     }
 
-    compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_TOTAL_MISMATCH", netSalary, decimal(payroll.paymentVoucherTotal, `${identity}.paymentVoucherTotal`));
+    compareMoney(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_PAYMENT_TOTAL_MISMATCH",
+      netSalary,
+      decimal(payroll.paymentVoucherTotal, `${identity}.paymentVoucherTotal`)
+    );
     const paymentDebit = decimal(payroll.paymentLedgerDebit, `${identity}.paymentLedgerDebit`);
     const paymentCredit = decimal(payroll.paymentLedgerCredit, `${identity}.paymentLedgerCredit`);
     compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_DEBIT_MISMATCH", netSalary, paymentDebit);
     compareMoney(issues, "payroll", identity, "PAYROLL_PAYMENT_CREDIT_MISMATCH", netSalary, paymentCredit);
-    compareMoney(issues, "payroll", identity, "PAYROLL_CASH_CREDIT_MISMATCH", netSalary, decimal(payroll.paymentCashCredit, `${identity}.paymentCashCredit`));
+    compareMoney(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_CASH_CREDIT_MISMATCH",
+      netSalary,
+      decimal(payroll.paymentCashCredit, `${identity}.paymentCashCredit`)
+    );
 
     if (daybookCount !== 1) {
       addIssue(issues, "payroll", identity, "PAYROLL_DAYBOOK_COUNT_MISMATCH", "1", String(daybookCount));
     }
-    compareMoney(issues, "payroll", identity, "PAYROLL_DAYBOOK_AMOUNT_MISMATCH", netSalary, decimal(payroll.daybookAmount, `${identity}.daybookAmount`));
+    compareMoney(
+      issues,
+      "payroll",
+      identity,
+      "PAYROLL_DAYBOOK_AMOUNT_MISMATCH",
+      netSalary,
+      decimal(payroll.daybookAmount, `${identity}.daybookAmount`)
+    );
   }
 
   const operationalInventoryValue = decimal(input.stock.operationalInventoryValue, "stock.operationalInventoryValue");
   const accountingInventoryValue = decimal(input.stock.accountingInventoryValue, "stock.accountingInventoryValue");
-  const inventoryAccountCount = nonNegativeInteger(input.stock.accountingInventoryAccountCount, "stock.accountingInventoryAccountCount");
+  const inventoryAccountCount = nonNegativeInteger(
+    input.stock.accountingInventoryAccountCount,
+    "stock.accountingInventoryAccountCount"
+  );
   if (inventoryAccountCount === 0 && !operationalInventoryValue.isZero()) {
     addIssue(
       issues,
@@ -378,7 +416,14 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
       "0"
     );
   } else if (inventoryAccountCount > 0) {
-    compareMoney(issues, "stock", `company:${companyId}`, "STOCK_ACCOUNTING_VALUE_MISMATCH", operationalInventoryValue, accountingInventoryValue);
+    compareMoney(
+      issues,
+      "stock",
+      `company:${companyId}`,
+      "STOCK_ACCOUNTING_VALUE_MISMATCH",
+      operationalInventoryValue,
+      accountingInventoryValue
+    );
   }
 
   for (const duplicate of input.duplicateEntries) {
