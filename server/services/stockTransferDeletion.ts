@@ -1,6 +1,6 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db, type DbTransaction } from "../db";
-import { adjustInventory } from "../inventoryHelper";
+import { reverseInventoryByExactValue } from "../inventoryHelper";
 import {
   interCompanyTransfers,
   intercompanyPaymentRequests,
@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
+import { restoreInventoryByExactValue } from "./inventory/exactValueInventory";
 import { applyEmployeeBalanceDeltasTx } from "./accounting/employeeBalancePosting";
 
 export class StockTransferDeletionError extends Error {
@@ -199,20 +200,44 @@ export async function deleteStockTransferVoucher(input: {
         for (const item of scopedItems) {
           const quantity = Number(item.row.quantity);
           const rate = Number(item.row.rate ?? 0);
-          if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(rate) || rate < 0) {
+          const storedValue = Math.abs(Number(item.row.totalAmount ?? quantity * rate));
+          if (
+            !Number.isFinite(quantity) ||
+            quantity <= 0 ||
+            !Number.isFinite(rate) ||
+            rate < 0 ||
+            !Number.isFinite(storedValue) ||
+            storedValue < 0
+          ) {
             throw new StockTransferDeletionError(
               "STOCK_TRANSFER_ITEM_INVALID",
-              `Stock transfer item ${item.row.id} has invalid quantity or rate`,
+              `Stock transfer item ${item.row.id} has invalid quantity, rate, or value`,
               409
             );
           }
 
-          await adjustInventory(tx, item.sourceLocationId, item.stockItemId, quantity, companyId, rate);
-          await adjustInventory(tx, destinationLocationId, item.stockItemId, -quantity, companyId);
+          // Undo the transfer's exact historical effect. Reconstructing the
+          // destination issue from its blended current average can restore the
+          // right quantity while leaving the wrong asset value behind.
+          await restoreInventoryByExactValue(
+            tx,
+            companyId,
+            item.sourceLocationId,
+            item.stockItemId,
+            quantity,
+            storedValue
+          );
+          await reverseInventoryByExactValue(
+            tx,
+            destinationLocationId,
+            item.stockItemId,
+            quantity,
+            storedValue,
+            companyId,
+            "stock_transfer_delete_reverse",
+            voucherId
+          );
 
-          // Deleting a posted transfer moves the stock back, and until now the
-          // journal recorded only the outbound half. The document is removed
-          // below, so this row is the sole surviving account of the return.
           await journalStockTransferLeg(tx, {
             companyId,
             transferId: Number(transfer.id),
