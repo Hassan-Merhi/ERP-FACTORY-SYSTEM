@@ -232,16 +232,13 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
       });
       recordBroadcast(delivered, skipped);
       if (process.env.NODE_ENV === "test") {
-        logger.info("[WS] Test broadcast delivery", {
-          messageType:
-            "type" in message && typeof (message as { type?: unknown }).type === "string"
-              ? (message as { type: string }).type
-              : "unknown",
-          companyId: options.companyId ?? null,
-          delivered,
-          skipped,
-          connectedClients: wss?.clients.size ?? 0,
-        });
+        const messageType =
+          "type" in message && typeof (message as { type?: unknown }).type === "string"
+            ? (message as { type: string }).type
+            : "unknown";
+        logger.info(
+          `[WS] Test broadcast delivery type=${messageType} companyId=${options.companyId ?? "none"} delivered=${delivered} skipped=${skipped} connectedClients=${wss?.clients.size ?? 0}`
+        );
       }
     }
   );
