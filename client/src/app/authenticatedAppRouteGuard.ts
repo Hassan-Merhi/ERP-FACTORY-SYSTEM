@@ -76,7 +76,7 @@ export function resolveAuthenticatedAppRoute({
     currentLocation !== "/my-settings" &&
     currentLocation !== "/intercompany-requests"
   ) {
-    decision = { kind: "redirect", to: "/retail" };
+    decision = { kind: "redirect", to: "/retail/dashboard" };
   } else if (isFactoryRoute && !isFactoryCompany) {
     decision = { kind: "redirect", to: "/" };
   } else if (isFactoryBootstrapRoute && myAccessLoading && myAccess === undefined) {
