@@ -86,12 +86,15 @@ describe("Retail POS Wave 2 transaction invariants", () => {
     expect(page).toContain('selectedCompany?.companyType === "retail"');
     expect(page).toContain("return <POSOriginal />");
     expect(posIndex).toContain("registerPosSalesRoutes(app)");
+    const legacySales = read("server/routes/pos/posSalesRoutes.ts");
+    expect(legacySales).toContain('currentCoRow?.companyType === "retail"');
+    expect(legacySales).toContain("RETAIL_POS_ENDPOINT_REQUIRED");
   });
 
   it("supports exact barcode lookup and keyboard wedge scanners", () => {
     const route = read("server/routes/pos/retailPosRoutes.ts");
     const ui = read("client/src/pages/pos/RetailPOS.tsx");
-    expect(route).toContain('/api/pos/retail/barcodes/:barcode');
+    expect(route).toContain("/api/pos/retail/barcodes/:barcode");
     expect(ui).toContain('window.addEventListener("keydown"');
     expect(ui).toContain('event.key === "Enter"');
     expect(ui).toContain("scanBarcode");

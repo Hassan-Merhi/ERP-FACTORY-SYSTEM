@@ -12,6 +12,7 @@ import {
   retailVariantInventory,
   type RetailProductWrite,
 } from "@shared/schema";
+import { retailStockMovements } from "@shared/schema/retailPos";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
@@ -602,6 +603,9 @@ export function registerRetailRoutes(app: Express) {
       if (!companyId) return;
 
       const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const importBatchKey = String(
+        req.body?.idempotencyKey || `retail-import-${Date.now()}-${req.user?.id ?? req.session.userId ?? "unknown"}`
+      ).slice(0, 191);
       if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });
       if (rawRows.length > 5000) {
         return res.status(400).json({ message: "Import is limited to 5,000 rows per file" });
@@ -752,6 +756,19 @@ export function registerRetailRoutes(app: Express) {
             variantsCreated += 1;
           }
 
+          const [previousInventory] = await tx
+            .select({ quantity: retailVariantInventory.quantity })
+            .from(retailVariantInventory)
+            .where(
+              and(
+                eq(retailVariantInventory.companyId, companyId),
+                eq(retailVariantInventory.variantId, variant.id),
+                eq(retailVariantInventory.locationId, locationId)
+              )
+            )
+            .limit(1);
+          const quantityBefore = asNumber(previousInventory?.quantity);
+
           await tx
             .insert(retailVariantInventory)
             .values({
@@ -769,6 +786,25 @@ export function registerRetailRoutes(app: Express) {
                 updatedAt: new Date(),
               },
             });
+
+          const importMovement: typeof retailStockMovements.$inferInsert = {
+            companyId,
+            variantId: variant.id,
+            locationId,
+            movementType: "import",
+            quantityDelta: String(row.qty - quantityBefore),
+            quantityBefore: String(quantityBefore),
+            quantityAfter: String(row.qty),
+            eventKey: `import:${importBatchKey}:${variant.id}:${locationId}`.slice(0, 255),
+            referenceType: "retail_import",
+            referenceId: importBatchKey,
+            createdBy: req.user!.id,
+            metadata: { productCode: row.code, size: row.size, barcode: row.barcode },
+          };
+          await tx
+            .insert(retailStockMovements)
+            .values(importMovement)
+            .onConflictDoNothing({ target: [retailStockMovements.companyId, retailStockMovements.eventKey] });
 
           await tx
             .update(retailProductVariants)
