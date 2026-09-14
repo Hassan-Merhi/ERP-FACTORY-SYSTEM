@@ -71,12 +71,13 @@ again.
 - CircleCI: `static-build`, `postgres-regression`,
   `backend-core-regression`, `frontend-regression`, and
   `security-readiness`.
-- Post-merge commit status: `phase3/exact-main-certification`.
+- Post-merge commit status: `Main Certification`.
 
 Do not merge with a pending, cancelled, skipped-required, or failed gate. Do not
-rely on checks from an older SHA. The exact-main certification is a post-merge
-deployment authority and must succeed on the actual resulting `main` SHA before
-that commit is treated as release-ready.
+rely on checks from an older SHA. Main Certification is the post-merge
+application authority and must succeed on the actual resulting `main` SHA before
+that commit is treated as application-certified. Specialist release, security,
+and resilience checks retain their own authority for the guarantees they test.
 
 ## Database safety
 
@@ -93,7 +94,7 @@ that commit is treated as release-ready.
 ## Deploy and smoke test
 
 1. Confirm the exact `main` SHA is protected-governance compliant and has a
-   successful `phase3/exact-main-certification` status.
+   successful `Main Certification` status.
 2. Confirm Render is deploying that certified `main` SHA.
 3. Confirm the build exits successfully and `npm start` remains healthy.
 4. Confirm `GET /api/health/ready` returns ready and
