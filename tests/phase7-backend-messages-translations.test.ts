@@ -7,10 +7,10 @@ import {
 
 describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
-    // 658 reviewed entries plus the 20 Phase 3 accounting/payroll/loading/inventory
-    // compatibility entries added during the accounting closeout.
-    expect(backendMessagesPhase7Translations).toHaveLength(678);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(678);
+    // Current main's 678 reviewed entries plus 12 Phase 2 validation messages
+    // preserved from the backend-coverage branch during the exact-main sync.
+    expect(backendMessagesPhase7Translations).toHaveLength(690);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(690);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -117,6 +117,7 @@ describe("Phase 7 backend-message translations", () => {
     expect(translatePhase7BackendMessageText("Invalid archive ID", "fr")).toBe("Identifiant d’archive non valide");
     expect(translatePhase7BackendMessageText("voucherType is required", "ar")).toBe("الحقل voucherType مطلوب");
     expect(translatePhase7BackendMessageText("totalAmount is required", "fr")).toBe("Le champ totalAmount est requis");
+    expect(translatePhase7BackendMessageText("No values to update", "fr")).toBe("Aucune valeur à mettre à jour");
     expect(isPhase7BackendMessageText("each entry requires an integer metricId")).toBe(true);
   });
 
