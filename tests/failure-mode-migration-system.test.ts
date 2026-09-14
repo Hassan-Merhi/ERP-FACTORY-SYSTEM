@@ -49,7 +49,8 @@ import {
   getMigrationLockOptions,
   releaseStartupMigrationLock,
 } from "../server/startupMigrationCoordinator";
-import { FACTORY_BILINGUAL_COLUMNS, FACTORY_BILINGUAL_ARTICLE_INDEX } from "../server/factoryBilingualSchemaBridge.mjs";
+// The bilingual-schema contract lives in factory-bilingual-schema-contract.test.ts:
+// this file mocks `pg`, which cannot coexist with the bridge's import-time ensure.
 
 function emptyResult() {
   return { rows: [] as any[], rowCount: 0 };
@@ -262,20 +263,6 @@ describe("Failure-Mode Suite: Migration & Startup System Failures", () => {
       expect(harness.poolQuery).toHaveBeenCalledTimes(3);
       expect(loggerErrorSpy).toHaveBeenCalledWith("✗ DB warmup failed after 3 attempts — queries will connect lazily");
       vi.useRealTimers();
-    });
-  });
-
-  describe("Schema Column and Index Integrity Contract", () => {
-    it("verifies required multilingual columns definition", () => {
-      expect(FACTORY_BILINGUAL_COLUMNS.length).toBeGreaterThan(10);
-      const articleCol = FACTORY_BILINGUAL_COLUMNS.find(
-        ([table, col]) => table === "factory_bales" && col === "product_name_ar"
-      );
-      expect(articleCol).toBeDefined();
-    });
-
-    it("verifies canonical normalized article code index name", () => {
-      expect(FACTORY_BILINGUAL_ARTICLE_INDEX).toBe("factory_bale_products_company_article_code_normalized_idx");
     });
   });
 });

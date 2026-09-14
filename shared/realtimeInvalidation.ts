@@ -96,6 +96,49 @@ function locationIdsFromWrite(path: string, body: unknown): number[] | undefined
 }
 
 /**
+ * Machine-cadence telemetry: tab/session heartbeats and screen-feed frame +
+ * pointer ingest. These change no query-backed data (consumers read via SSE or
+ * their own polling), so they must not emit write invalidations — otherwise
+ * every 4s heartbeat broadcasts a topic-less (blanket) invalidate that forces
+ * every connected client to refetch all of its active queries.
+ */
+export function isRealtimeTelemetryWrite(method: string, url: string): boolean {
+  if (method !== "POST") return false;
+  const path = requestPath(url);
+  return (
+    path === "/api/screen-feed" ||
+    path === "/api/screen-feed/pointer" ||
+    path === "/api/screen-feed/control/tab-heartbeat" ||
+    /^\/api\/screen-feed\/control\/sessions\/[^/]+\/heartbeat$/.test(path)
+  );
+}
+
+const WRITE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+function usesDedicatedRealtimeEvents(url: string): boolean {
+  const path = requestPath(url);
+  return (
+    path === "/api/chat" ||
+    path.startsWith("/api/chat/") ||
+    path === "/api/user-presence" ||
+    path.startsWith("/api/user-presence/")
+  );
+}
+
+/**
+ * Whether a successful API write should emit a realtime invalidation.
+ * Chat/presence have dedicated realtime events and machine-cadence telemetry
+ * changes no query-backed data, so neither may broadcast here.
+ */
+export function shouldEmitWriteInvalidation(method: string, url: string): boolean {
+  return (
+    WRITE_METHODS.has(method) &&
+    !usesDedicatedRealtimeEvents(url) &&
+    !isRealtimeTelemetryWrite(method, url)
+  );
+}
+
+/**
  * Classify a successful API write into the smallest safe realtime topic set.
  * Unknown paths intentionally return no topics, which keeps the legacy blanket
  * invalidation fallback instead of risking stale data.
