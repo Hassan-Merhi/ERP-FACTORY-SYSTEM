@@ -1,7 +1,7 @@
 name: Semgrep
 
 on:
-  push:
+  pull_request:
     branches: [main]
   schedule:
     - cron: "41 5 * * 3"
@@ -11,30 +11,26 @@ permissions:
   contents: read
 
 concurrency:
-  group: semgrep-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: semgrep-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   regression-scan:
     name: Semgrep CE new-findings gate
-    if: >-
-      github.actor != 'dependabot[bot]' &&
-      (github.event_name == 'pull_request' || github.event_name == 'push')
+    if: github.actor != 'dependabot[bot]' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
       image: semgrep/semgrep:1.177.0@sha256:acaac22ffc7b7cc5926de0751b223bce0b2491c33d18422fa72f632c78d81198
     env:
-      SEMGREP_BASELINE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+      SEMGREP_BASELINE_COMMIT: ${{ github.event.pull_request.base.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The regression scan must be able to resolve the exact PR base SHA.
-          # A shallow checkout can omit it on long-lived/diverged branches,
-          # causing the gate to fail before Semgrep scans any code.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate baseline commit
         shell: sh
@@ -69,6 +65,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Audit complete repository
         run: semgrep scan --config auto
