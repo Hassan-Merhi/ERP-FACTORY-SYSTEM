@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "canonicalPullRequestApplicationWorkflow": ".github/workflows/ci.yml",
+  "retiredDuplicatePullRequestWorkflows": [
+    ".github/workflows/pr-tests.yml"
+  ],
+  "coveragePolicy": "unchanged",
+  "migrationAndStartupVerification": "owned by CI backend-tests",
+  "frontendCoverageVerification": "owned by CI frontend-tests",
+  "backendCoverageVerification": "owned by CI backend-tests",
+  "aggregateRequiredContext": "Check / Build / Lint / Test",
+  "wave": 2
+}

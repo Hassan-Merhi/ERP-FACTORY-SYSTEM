@@ -223,7 +223,7 @@ export default function FactoryProductionTargets() {
   const productionReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
-  const { data, isLoading, isFetching, refetch } = useQuery<ProductionResponse>({
+  const { data, isLoading } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", periodType, period.start, period.end],
     queryFn: () => fetchProduction(periodType, period.start, period.end),
   });
@@ -266,9 +266,11 @@ export default function FactoryProductionTargets() {
       }
       return response.json();
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking"] });
-      await refetch();
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/staff-tracking"],
+        refetchType: "active",
+      });
       toast({ title: tr("productionSaved") });
     },
     onError: (error: Error) => {
@@ -328,6 +330,7 @@ export default function FactoryProductionTargets() {
       fileName: `Production_${endedDate}.png`,
       caption: title,
       reportLabel: title,
+      recipient: "production",
     });
 
     if (!response.ok) {
@@ -367,7 +370,10 @@ export default function FactoryProductionTargets() {
           variant: "destructive",
         });
       } finally {
-        await queryClient.invalidateQueries({ queryKey: ["/api/factory/staff-tracking"] });
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/staff-tracking"],
+          refetchType: "active",
+        });
         setReferenceDate(addIsoDays(endedDate, 1));
       }
     },
@@ -445,7 +451,7 @@ export default function FactoryProductionTargets() {
             <Button
               variant="outline"
               onClick={() => copyYesterdayMutation.mutate()}
-              disabled={finalized || rows.length === 0 || isFetching || busy}
+              disabled={finalized || rows.length === 0 || busy}
               data-testid="button-copy-yesterday-production"
             >
               {copyYesterdayMutation.isPending ? (
@@ -459,7 +465,7 @@ export default function FactoryProductionTargets() {
 
           <Button
             onClick={() => saveMutation.mutate()}
-            disabled={finalized || rows.length === 0 || isFetching || busy}
+            disabled={finalized || rows.length === 0 || busy}
             data-testid="button-save-production"
           >
             {saveMutation.isPending ? (
@@ -474,7 +480,7 @@ export default function FactoryProductionTargets() {
             <Button
               variant="outline"
               onClick={() => endProductionMutation.mutate()}
-              disabled={finalized || rows.length === 0 || isFetching || busy}
+              disabled={finalized || rows.length === 0 || busy}
               data-testid="button-end-production"
             >
               {endProductionMutation.isPending ? (
@@ -492,7 +498,6 @@ export default function FactoryProductionTargets() {
         <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
         {period.start}
         {period.end !== period.start ? ` — ${period.end}` : ""}
-        {isFetching && !isLoading ? ` · ${tr("refreshing")}` : ""}
       </div>
 
       {finalized && (
