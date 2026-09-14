@@ -7,7 +7,8 @@ export const globalCompanyTypeFilter = or(
   eq(companies.companyType, "properties"),
   eq(companies.companyType, "factory"),
   eq(companies.companyType, "factory_v2"),
-  eq(companies.companyType, "supplier_partner")
+  eq(companies.companyType, "supplier_partner"),
+  eq(companies.companyType, "retail")
 );
 
 export async function resolveAllowedGlobalCompanyIds(
