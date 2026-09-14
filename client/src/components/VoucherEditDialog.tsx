@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
-import { z } from "zod";
-import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +20,30 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { CalendarIcon, Plus, X, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Voucher } from "@shared/schema";
+import {
+  voucherSchema,
+  type VoucherEntry,
+  type VoucherFormData,
+  type LedgerAccount,
+  type BankAccount,
+  type Supplier,
+  type Employee,
+  type FixedAsset,
+} from "./vouchers/voucherEditSchema";
+import {
+  emptyVoucherEntry,
+  voucherDataToFormValues,
+  voucherFormToPayload,
+  computeEntryTotals,
+  parseConsumptionNarration,
+  parseConsumptionNarrationQty,
+} from "./vouchers/voucherEditMapping";
+import { VoucherEntryRow } from "./vouchers/VoucherEntryRow";
 
 // Types
 interface VoucherEditDialogProps {
@@ -34,86 +51,6 @@ interface VoucherEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-interface LedgerAccount {
-  id: number;
-  code: string;
-  name: string;
-  accountType: string;
-}
-
-interface BankAccount {
-  id: number;
-  accountNumber: string;
-  bankName: string;
-}
-
-interface Supplier {
-  id: number;
-  code: string;
-  name: string;
-  legalName: string;
-}
-
-interface Employee {
-  id: number;
-  code: string;
-  firstName: string;
-  lastName: string;
-}
-
-interface FixedAsset {
-  id: number;
-  assetCode: string;
-  assetName: string;
-}
-
-interface VoucherEntry {
-  ledgerAccountId: number | null;
-  bankAccountId: number | null;
-  fixedAssetId: number | null;
-  supplierId: number | null;
-  employeeId: number | null;
-  debitAmount: string;
-  creditAmount: string;
-  narration: string;
-  // Multi-currency fields (read-only during edit — preserved from stored entry)
-  transactionCurrency?: string | null;
-  transactionDebitAmount?: string | null;
-  transactionCreditAmount?: string | null;
-  historicalExchangeRate?: string | null;
-  rateConvention?: string | null;
-}
-
-const voucherEntrySchema = z.object({
-  ledgerAccountId: z.number().nullable(),
-  bankAccountId: z.number().nullable(),
-  fixedAssetId: z.number().nullable(),
-  supplierId: z.number().nullable(),
-  employeeId: z.number().nullable(),
-  debitAmount: z.string(),
-  creditAmount: z.string(),
-  narration: z.string(),
-  // ── Multi-currency fields (read-only — preserved from stored entry) ────────
-  // These are carried through the form state and re-submitted on save so the
-  // server can keep them consistent when the user edits USD amounts.
-  transactionCurrency: z.string().nullable().optional(),
-  transactionDebitAmount: z.string().nullable().optional(),
-  transactionCreditAmount: z.string().nullable().optional(),
-  historicalExchangeRate: z.string().nullable().optional(),
-  rateConvention: z.string().nullable().optional(),
-});
-
-const voucherSchema = z.object({
-  voucherNumber: z.string().min(1, "Voucher number is required"),
-  voucherType: z.string().min(1, "Voucher type is required"),
-  voucherDate: z.date(),
-  description: z.string(),
-  optional: z.boolean(),
-  entries: z.array(voucherEntrySchema).min(1, "At least one entry is required"),
-});
-
-type VoucherFormData = z.infer<typeof voucherSchema>;
 
 export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEditDialogProps) {
   const { toast } = useToast();
@@ -157,18 +94,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
       voucherDate: new Date(),
       description: "",
       optional: false,
-      entries: [
-        {
-          ledgerAccountId: null,
-          bankAccountId: null,
-          fixedAssetId: null,
-          supplierId: null,
-          employeeId: null,
-          debitAmount: "0",
-          creditAmount: "0",
-          narration: "",
-        },
-      ],
+      entries: [emptyVoucherEntry],
     },
   });
 
@@ -180,45 +106,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
   // Load voucher data into form
   useEffect(() => {
     if (voucherData && open) {
-      const voucherDate = new Date(voucherData.voucherDate);
-
-      form.reset({
-        voucherNumber: voucherData.voucherNumber || "",
-        voucherType: voucherData.voucherType || "Journal",
-        voucherDate: voucherDate,
-        description: voucherData.description || "",
-        optional: voucherData.optional || false,
-        entries:
-          voucherData.entries && voucherData.entries.length > 0
-            ? voucherData.entries.map((entry) => ({
-                ledgerAccountId: entry.ledgerAccountId || null,
-                bankAccountId: entry.bankAccountId || null,
-                fixedAssetId: entry.fixedAssetId || null,
-                supplierId: entry.supplierId || null,
-                employeeId: entry.employeeId || null,
-                debitAmount: entry.debitAmount || "0",
-                creditAmount: entry.creditAmount || "0",
-                narration: entry.narration || "",
-                // Preserve historical multi-currency fields so they survive the round-trip
-                transactionCurrency: entry.transactionCurrency ?? null,
-                transactionDebitAmount: entry.transactionDebitAmount ?? null,
-                transactionCreditAmount: entry.transactionCreditAmount ?? null,
-                historicalExchangeRate: entry.historicalExchangeRate ?? null,
-                rateConvention: entry.rateConvention ?? null,
-              }))
-            : [
-                {
-                  ledgerAccountId: null,
-                  bankAccountId: null,
-                  fixedAssetId: null,
-                  supplierId: null,
-                  employeeId: null,
-                  debitAmount: "0",
-                  creditAmount: "0",
-                  narration: "",
-                },
-              ],
-      });
+      form.reset(voucherDataToFormValues(voucherData));
     }
   }, [voucherData, open, form]);
 
@@ -226,33 +114,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
     mutationFn: async (data: VoucherFormData) => {
       if (!voucherId) throw new Error("Voucher ID is required");
 
-      const voucherPayload = {
-        voucherType: data.voucherType,
-        voucherDate: format(data.voucherDate, "yyyy-MM-dd"),
-        description: data.description,
-        optional: data.optional,
-      };
-
-      const entriesPayload = data.entries.map((entry) => ({
-        ledgerAccountId: entry.ledgerAccountId,
-        bankAccountId: entry.bankAccountId,
-        fixedAssetId: entry.fixedAssetId,
-        supplierId: entry.supplierId,
-        employeeId: entry.employeeId,
-        debitAmount: entry.debitAmount,
-        creditAmount: entry.creditAmount,
-        narration: entry.narration,
-        // Preserve historical multi-currency fields so the server can keep
-        // baseDebitAmount / baseCreditAmount consistent after an edit.
-        transactionCurrency: entry.transactionCurrency ?? undefined,
-        historicalExchangeRate: entry.historicalExchangeRate ?? undefined,
-        rateConvention: entry.rateConvention ?? undefined,
-      }));
-
-      return await apiRequest("PUT", `/api/vouchers/${voucherId}/with-entries`, {
-        voucher: voucherPayload,
-        entries: entriesPayload,
-      });
+      return await apiRequest("PUT", `/api/vouchers/${voucherId}/with-entries`, voucherFormToPayload(data));
     },
     onSuccess: () => {
       toast({
@@ -276,9 +138,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
   });
 
   const onSubmit = (data: VoucherFormData) => {
-    // Calculate totals
-    const totalDebits = data.entries.reduce((sum, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-    const totalCredits = data.entries.reduce((sum, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
+    const { totalDebits, totalCredits } = computeEntryTotals(data.entries);
 
     // Show warning for optional vouchers with mismatched debits/credits
     if (data.optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
@@ -292,34 +152,8 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
 
   // Calculate totals
   const entries = form.watch("entries");
-  const totalDebits = entries.reduce((sum, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-  const totalCredits = entries.reduce((sum, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
-  const isBalanced = Math.abs(totalDebits - totalCredits) < 0.01;
+  const { totalDebits, totalCredits, isBalanced } = computeEntryTotals(entries);
   const isOptional = form.watch("optional");
-
-  const _getAccountName = (entry: VoucherEntry) => {
-    if (entry.ledgerAccountId) {
-      const account = ledgerAccounts.find((a) => a.id === entry.ledgerAccountId);
-      return account ? account.name : "";
-    }
-    if (entry.bankAccountId) {
-      const account = bankAccounts.find((a) => a.id === entry.bankAccountId);
-      return account ? account.bankName : "";
-    }
-    if (entry.supplierId) {
-      const supplier = suppliers.find((s) => s.id === entry.supplierId);
-      return supplier ? supplier.legalName : "";
-    }
-    if (entry.employeeId) {
-      const employee = employees.find((e) => e.id === entry.employeeId);
-      return employee ? `${employee.firstName} ${employee.lastName}` : "";
-    }
-    if (entry.fixedAssetId) {
-      const asset = fixedAssets.find((a) => a.id === entry.fixedAssetId);
-      return asset ? asset.assetName : "";
-    }
-    return "";
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -452,18 +286,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      append({
-                        ledgerAccountId: null,
-                        bankAccountId: null,
-                        fixedAssetId: null,
-                        supplierId: null,
-                        employeeId: null,
-                        debitAmount: "0",
-                        creditAmount: "0",
-                        narration: "",
-                      })
-                    }
+                    onClick={() => append({ ...emptyVoucherEntry })}
                     data-testid="button-add-entry"
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -500,256 +323,22 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
                       </tr>
                     </thead>
                     <tbody>
-                      {fields.map((field, index) => {
-                        // For Payment/Receipt, hide cash source entries and zero-amount entries
-                        const voucherType = form.watch("voucherType");
-                        const debitAmount = parseFloat(form.watch(`entries.${index}.debitAmount`) || "0");
-                        const creditAmount = parseFloat(form.watch(`entries.${index}.creditAmount`) || "0");
-
-                        if (voucherType === "Payment" || voucherType === "Receipt") {
-                          // Hide entries where both amounts are 0 (empty/removed entries)
-                          if (debitAmount === 0 && creditAmount === 0) {
-                            return null;
-                          }
-                          // Hide cash source entries for Payment (credit entries with no debit)
-                          if (voucherType === "Payment" && creditAmount > 0 && debitAmount === 0) {
-                            return null;
-                          }
-                          // Hide cash source entries for Receipt (debit entries with no credit)
-                          if (voucherType === "Receipt" && debitAmount > 0 && creditAmount === 0) {
-                            return null;
-                          }
-                        }
-
-                        const isConsumptionOrProduction = voucherType === "Consumption" || voucherType === "Production";
-
-                        // For Consumption/Production, parse narration to extract item name, qty, and rate
-                        let itemName = "",
-                          qty = 0,
-                          rate = 0;
-                        if (isConsumptionOrProduction) {
-                          const narration = form.watch(`entries.${index}.narration`) || "";
-                          // Parse pattern: "Consumption of -1.000 x ITEM NAME @ $98.62"
-                          const match = narration.match(/of\s+([-\d.]+)\s+x\s+(.+?)\s+@\s+\$?([\d.]+)/);
-                          if (match) {
-                            qty = Math.abs(parseFloat(match[1]));
-                            itemName = match[2];
-                            rate = parseFloat(match[3]);
-                          }
-                        }
-
-                        return (
-                          <tr key={field.id} className="border-b">
-                            {isConsumptionOrProduction ? (
-                              <>
-                                <td className="py-2 px-2">{itemName || "-"}</td>
-                                <td className="py-2 px-2 text-right font-mono">{qty.toFixed(3)}</td>
-                                <td className="py-2 px-2 text-right font-mono">{formatAmount(rate)}</td>
-                                <td className="py-2 px-2 text-right font-mono">{formatAmount(qty * rate)}</td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="py-2 px-2">
-                                  {/* Historical-rate info badge — shown for non-USD entries */}
-                                  {(() => {
-                                    const txCcy = form.watch(`entries.${index}.transactionCurrency`);
-                                    const rate = form.watch(`entries.${index}.historicalExchangeRate`);
-                                    if (!txCcy || txCcy === "USD" || !rate) return null;
-                                    const txDebit = parseFloat(
-                                      form.watch(`entries.${index}.transactionDebitAmount`) || "0"
-                                    );
-                                    const txCredit = parseFloat(
-                                      form.watch(`entries.${index}.transactionCreditAmount`) || "0"
-                                    );
-                                    const txAmt = Math.max(txDebit, txCredit);
-                                    const rateNum = parseFloat(rate);
-                                    return (
-                                      <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-0.5">
-                                        <span className="font-medium text-amber-700 dark:text-amber-400">{txCcy}</span>
-                                        {txAmt > 0 && (
-                                          <span>
-                                            {txCcy === "CFA" ? Math.round(txAmt).toLocaleString() : txAmt.toFixed(2)}
-                                          </span>
-                                        )}
-                                        {rateNum > 0 && (
-                                          <span className="text-muted-foreground">
-                                            @{" "}
-                                            {rateNum.toLocaleString(undefined, {
-                                              minimumFractionDigits: 2,
-                                              maximumFractionDigits: 4,
-                                            })}
-                                          </span>
-                                        )}
-                                        <span className="text-xs opacity-60">(historical)</span>
-                                      </div>
-                                    );
-                                  })()}
-                                  <div className="space-y-1">
-                                    <Select
-                                      value={
-                                        form.watch(`entries.${index}.ledgerAccountId`)?.toString() ||
-                                        form.watch(`entries.${index}.bankAccountId`)?.toString() ||
-                                        form.watch(`entries.${index}.supplierId`)?.toString() ||
-                                        form.watch(`entries.${index}.employeeId`)?.toString() ||
-                                        form.watch(`entries.${index}.fixedAssetId`)?.toString() ||
-                                        ""
-                                      }
-                                      onValueChange={(value) => {
-                                        const [type, id] = value.split("-");
-                                        form.setValue(`entries.${index}.ledgerAccountId`, null);
-                                        form.setValue(`entries.${index}.bankAccountId`, null);
-                                        form.setValue(`entries.${index}.supplierId`, null);
-                                        form.setValue(`entries.${index}.employeeId`, null);
-                                        form.setValue(`entries.${index}.fixedAssetId`, null);
-
-                                        if (type === "ledger")
-                                          form.setValue(`entries.${index}.ledgerAccountId`, parseInt(id));
-                                        if (type === "bank")
-                                          form.setValue(`entries.${index}.bankAccountId`, parseInt(id));
-                                        if (type === "supplier")
-                                          form.setValue(`entries.${index}.supplierId`, parseInt(id));
-                                        if (type === "employee")
-                                          form.setValue(`entries.${index}.employeeId`, parseInt(id));
-                                        if (type === "asset")
-                                          form.setValue(`entries.${index}.fixedAssetId`, parseInt(id));
-                                      }}
-                                    >
-                                      <SelectTrigger data-testid={`select-account-${index}`}>
-                                        <SelectValue placeholder="Select account" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <div className="text-xs font-semibold px-2 py-1 text-muted-foreground">
-                                          Ledger Accounts
-                                        </div>
-                                        {ledgerAccounts.map((acc) => (
-                                          <SelectItem key={`ledger-${acc.id}`} value={`ledger-${acc.id}`}>
-                                            {acc.code} - {acc.name}
-                                          </SelectItem>
-                                        ))}
-                                        <div className="text-xs font-semibold px-2 py-1 text-muted-foreground mt-2">
-                                          Bank Accounts
-                                        </div>
-                                        {bankAccounts.map((acc) => (
-                                          <SelectItem key={`bank-${acc.id}`} value={`bank-${acc.id}`}>
-                                            {acc.accountNumber} - {acc.bankName}
-                                          </SelectItem>
-                                        ))}
-                                        <div className="text-xs font-semibold px-2 py-1 text-muted-foreground mt-2">
-                                          Suppliers
-                                        </div>
-                                        {suppliers.map((sup) => (
-                                          <SelectItem key={`supplier-${sup.id}`} value={`supplier-${sup.id}`}>
-                                            {sup.code} - {sup.name}
-                                          </SelectItem>
-                                        ))}
-                                        <div className="text-xs font-semibold px-2 py-1 text-muted-foreground mt-2">
-                                          Employees
-                                        </div>
-                                        {employees.map((emp) => (
-                                          <SelectItem key={`employee-${emp.id}`} value={`employee-${emp.id}`}>
-                                            {emp.code} - {emp.firstName} {emp.lastName}
-                                          </SelectItem>
-                                        ))}
-                                        <div className="text-xs font-semibold px-2 py-1 text-muted-foreground mt-2">
-                                          Fixed Assets
-                                        </div>
-                                        {fixedAssets.map((asset) => (
-                                          <SelectItem key={`asset-${asset.id}`} value={`asset-${asset.id}`}>
-                                            {asset.assetCode} - {asset.assetName}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </td>
-                                {form.watch("voucherType") === "Payment" || form.watch("voucherType") === "Receipt" ? (
-                                  <td className="py-2 px-2">
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      value={
-                                        parseFloat(form.watch(`entries.${index}.debitAmount`) || "0") > 0
-                                          ? form.watch(`entries.${index}.debitAmount`)
-                                          : form.watch(`entries.${index}.creditAmount`) || ""
-                                      }
-                                      onChange={(e) => {
-                                        const voucherType = form.watch("voucherType");
-                                        if (voucherType === "Payment") {
-                                          form.setValue(`entries.${index}.debitAmount`, e.target.value);
-                                          form.setValue(`entries.${index}.creditAmount`, "0");
-                                        } else {
-                                          form.setValue(`entries.${index}.creditAmount`, e.target.value);
-                                          form.setValue(`entries.${index}.debitAmount`, "0");
-                                        }
-                                      }}
-                                      className="text-right"
-                                      data-testid={`input-amount-${index}`}
-                                    />
-                                  </td>
-                                ) : (
-                                  <>
-                                    <td className="py-2 px-2">
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        {...form.register(`entries.${index}.debitAmount`)}
-                                        className="text-right"
-                                        data-testid={`input-debit-${index}`}
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Tab") {
-                                            e.preventDefault();
-                                            const creditInput = document.querySelector(
-                                              `[data-testid="input-credit-${index}"]`
-                                            ) as HTMLInputElement;
-                                            if (creditInput) creditInput.focus();
-                                          }
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        {...form.register(`entries.${index}.creditAmount`)}
-                                        className="text-right"
-                                        data-testid={`input-credit-${index}`}
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Tab") {
-                                            e.preventDefault();
-                                            const narrationInput = document.querySelector(
-                                              `[data-testid="input-narration-${index}"]`
-                                            ) as HTMLInputElement;
-                                            if (narrationInput) narrationInput.focus();
-                                          }
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="py-2 px-2">
-                                      <Input
-                                        {...form.register(`entries.${index}.narration`)}
-                                        data-testid={`input-narration-${index}`}
-                                      />
-                                    </td>
-                                  </>
-                                )}
-                              </>
-                            )}
-                            <td className="py-2 px-2 text-center">
-                              {fields.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => remove(index)}
-                                  data-testid={`button-remove-entry-${index}`}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {fields.map((field, index) => (
+                        <VoucherEntryRow
+                          key={field.id}
+                          form={form}
+                          field={field}
+                          index={index}
+                          fieldsLength={fields.length}
+                          remove={remove}
+                          ledgerAccounts={ledgerAccounts}
+                          bankAccounts={bankAccounts}
+                          suppliers={suppliers}
+                          employees={employees}
+                          fixedAssets={fixedAssets}
+                          formatAmount={formatAmount}
+                        />
+                      ))}
                     </tbody>
                     <tfoot className="border-t-2 font-semibold">
                       <tr>
@@ -760,8 +349,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
                               {fields
                                 .reduce((sum, _, index) => {
                                   const narration = form.watch(`entries.${index}.narration`) || "";
-                                  const match = narration.match(/of\s+([-\d.]+)\s+x/);
-                                  return sum + (match ? Math.abs(parseFloat(match[1])) : 0);
+                                  return sum + (parseConsumptionNarrationQty(narration) ?? 0);
                                 }, 0)
                                 .toFixed(3)}
                             </td>
@@ -770,13 +358,8 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
                               {formatAmount(
                                 fields.reduce((sum, _, index) => {
                                   const narration = form.watch(`entries.${index}.narration`) || "";
-                                  const match = narration.match(/of\s+([-\d.]+)\s+x\s+.+?\s+@\s+\$?([\d.]+)/);
-                                  if (match) {
-                                    const qty = Math.abs(parseFloat(match[1]));
-                                    const rate = parseFloat(match[2]);
-                                    return sum + qty * rate;
-                                  }
-                                  return sum;
+                                  const parsed = parseConsumptionNarration(narration);
+                                  return parsed ? sum + parsed.qty * parsed.rate : sum;
                                 }, 0)
                               )}
                             </td>
