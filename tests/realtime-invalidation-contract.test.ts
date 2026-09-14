@@ -1,6 +1,8 @@
 import {
   classifyRealtimeWrite,
+  isRealtimeTelemetryWrite,
   parseRealtimeInvalidationMessage,
+  shouldEmitWriteInvalidation,
 } from "../shared/realtimeInvalidation";
 
 describe("realtime invalidation contract", () => {
@@ -121,5 +123,35 @@ describe("realtime invalidation contract", () => {
         destinationLocationId: 2.5,
       })
     ).toEqual({ topics: ["inventory"] });
+  });
+
+  it("flags machine-cadence telemetry writes so heartbeats never broadcast invalidations", () => {
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/tab-heartbeat")).toBe(true);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/sessions/abc-123/heartbeat")).toBe(true);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed")).toBe(true);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/pointer")).toBe(true);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/tab-heartbeat?tabId=x")).toBe(true);
+  });
+
+  it("emits write invalidations only for real data writes", () => {
+    expect(shouldEmitWriteInvalidation("POST", "/api/pos/sales")).toBe(true);
+    expect(shouldEmitWriteInvalidation("PATCH", "/api/vouchers/3")).toBe(true);
+    expect(shouldEmitWriteInvalidation("DELETE", "/api/containers/9")).toBe(true);
+    expect(shouldEmitWriteInvalidation("GET", "/api/pos/sales")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/chat/messages")).toBe(false);
+    expect(shouldEmitWriteInvalidation("PATCH", "/api/user-presence")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/user-presence/leave")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/screen-feed/control/tab-heartbeat")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/screen-feed/pointer")).toBe(false);
+  });
+
+  it("keeps real writes and control-plane actions broadcasting invalidations", () => {
+    expect(isRealtimeTelemetryWrite("POST", "/api/pos/sales")).toBe(false);
+    expect(isRealtimeTelemetryWrite("POST", "/api/vouchers")).toBe(false);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/sessions")).toBe(false);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/sessions/abc-123/commands")).toBe(false);
+    expect(isRealtimeTelemetryWrite("POST", "/api/screen-feed/control/sessions/abc-123/stop")).toBe(false);
+    expect(isRealtimeTelemetryWrite("PATCH", "/api/screen-feed/admin/runtime")).toBe(false);
+    expect(isRealtimeTelemetryWrite("GET", "/api/screen-feed/control/tab-heartbeat")).toBe(false);
   });
 });

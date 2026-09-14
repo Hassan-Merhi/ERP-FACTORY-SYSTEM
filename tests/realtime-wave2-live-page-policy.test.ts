@@ -12,7 +12,7 @@ describe("Wave 2 live-page policy", () => {
     expect(chat).not.toContain("useWsInvalidation();");
     expect(chat).not.toContain("new WebSocket(");
     expect(chat).not.toContain("refetchInterval:");
-    expect(chat).not.toContain('fetch(`/api/chat/typing/${selectedUserId}`');
+    expect(chat).not.toContain("fetch(`/api/chat/typing/${selectedUserId}`");
   });
 
   it("throttles typing to one start and one stop signal per typing burst", () => {
@@ -24,10 +24,14 @@ describe("Wave 2 live-page policy", () => {
 
   it("keeps presence heartbeats silent in generic invalidation middleware", () => {
     const applicationRoutes = source("server/routes/applicationRoutes.ts");
+    const realtimePolicy = source("shared/realtimeInvalidation.ts");
     const presenceRoutes = source("server/routes/userPresenceRoutes.ts");
 
-    expect(applicationRoutes).toContain('path === "/api/user-presence"');
-    expect(applicationRoutes).toContain('path.startsWith("/api/user-presence/")');
+    // The write-signal policy lives next to the classifier; the generic
+    // middleware must keep delegating the write/no-write decision to it.
+    expect(applicationRoutes.includes("shouldEmitWriteInvalidation(req.method, url)")).toBe(true);
+    expect(realtimePolicy).toContain('path === "/api/user-presence"');
+    expect(realtimePolicy).toContain('path.startsWith("/api/user-presence/")');
     expect(presenceRoutes).toContain('if (type === "route_change")');
     expect(presenceRoutes).toContain("broadcastPresenceChange();");
     expect(presenceRoutes).not.toContain('if (type === "heartbeat")');
