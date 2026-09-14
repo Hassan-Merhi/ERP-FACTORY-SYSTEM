@@ -22,18 +22,22 @@ describe("operational permission route policy", () => {
         permissionType: "action",
         permissionKey: "act_import_data",
         deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
       });
       expect(classifyOperationalPermissionRoute("POST", `${prefix}/parse`)).toMatchObject({
         operation: "import",
         permissionType: "action",
         permissionKey: "act_import_data",
         deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
       });
       expect(classifyOperationalPermissionRoute("POST", `${prefix}/validate`)).toMatchObject({
         deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
       });
       expect(classifyOperationalPermissionRoute("POST", `${prefix}/import`)).toMatchObject({
         deniedRoles: ["View Only"],
+        permissionBypassRoles: ["POS"],
       });
     }
   });
