@@ -186,7 +186,10 @@ describe("Phase 10 inventory receive and stock-in", () => {
     await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
     expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
 
-    const stockItem = await pool.query<{ code: string }>(`SELECT code FROM stock_items WHERE id = $1`, [ctx.stockItemIds[0]]);
+    const stockItem = await pool.query<{ code: string }>(
+      `SELECT code FROM stock_items WHERE id = $1`,
+      [ctx.stockItemIds[0]]
+    );
     const product = await pool.query<{ id: number }>(
       `INSERT INTO factory_bale_products (company_id, code, name, article_code, production_price)
        VALUES ($1, $2, $3, $4, '4.00')
