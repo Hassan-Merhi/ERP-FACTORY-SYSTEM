@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "p12xfer";
@@ -271,14 +271,15 @@ describe("Phase 12 — stock transfer quantity/value lifecycle", () => {
   );
 
   it("records only one transfer document for a duplicate client request key", async () => {
-    const markerCount = await db.execute(sql`
-      SELECT COUNT(*)::int AS count
-      FROM audit_log
-      WHERE company_id = ${ctx.companyId}
-        AND table_name = 'stock_document_idempotency'
-        AND record_identifier = ${`stock-transfer:${ctx.companyId}:${TEST_PREFIX}-duplicate-create`}
-    `);
-    const rows = (markerCount as unknown as { rows?: Array<{ count: number }> }).rows ?? [];
-    expect(Number(rows[0]?.count ?? 0)).toBe(1);
+    const idempotencyKey = `stock-transfer:${ctx.companyId}:${TEST_PREFIX}-duplicate-create`;
+    const markerCount = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM audit_log
+        WHERE company_id = $1
+          AND table_name = 'stock_document_idempotency'
+          AND record_identifier = $2`,
+      [ctx.companyId, idempotencyKey]
+    );
+    expect(Number(markerCount.rows[0]?.count ?? 0)).toBe(1);
   });
 });
