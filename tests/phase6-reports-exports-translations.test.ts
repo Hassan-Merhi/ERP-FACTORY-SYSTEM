@@ -7,8 +7,8 @@ import {
 
 describe("Phase 6 Reports and Exports translations", () => {
   it("covers every reviewed reports and exports phrase exactly once", () => {
-    expect(reportsExportsPhase6Translations).toHaveLength(254);
-    expect(new Set(reportsExportsPhase6Translations.map((entry) => entry.en)).size).toBe(254);
+    expect(reportsExportsPhase6Translations).toHaveLength(257);
+    expect(new Set(reportsExportsPhase6Translations.map((entry) => entry.en)).size).toBe(257);
 
     for (const entry of reportsExportsPhase6Translations) {
       expect(entry.en.trim()).not.toBe("");
