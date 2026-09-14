@@ -666,7 +666,9 @@ export default function FactoryProductionTargets() {
             <div style={{ fontSize: "28px", fontWeight: 700 }}>{tr("productionTargets")}</div>
             <div style={{ marginTop: "6px", color: "#a1a1aa", fontSize: "16px" }}>{referenceDate}</div>
           </div>
-          <div style={{ color: "#a1a1aa", fontSize: "15px" }}>{rows.length} {tr("people")}</div>
+          <div style={{ color: "#a1a1aa", fontSize: "15px" }}>
+            {rows.length} {tr("people")}
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "20px" }}>
@@ -676,8 +678,13 @@ export default function FactoryProductionTargets() {
             [tr("difference"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
             [tr("people"), rows.length],
           ].map(([label, value]) => (
-            <div key={String(label)} style={{ border: "1px solid #34383e", borderRadius: "10px", padding: "14px 16px", background: "#181a1e" }}>
-              <div style={{ color: "#a1a1aa", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+            <div
+              key={String(label)}
+              style={{ border: "1px solid #34383e", borderRadius: "10px", padding: "14px 16px", background: "#181a1e" }}
+            >
+              <div style={{ color: "#a1a1aa", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {label}
+              </div>
               <div style={{ marginTop: "5px", fontSize: "25px", fontWeight: 800 }}>{value}</div>
             </div>
           ))}
@@ -686,14 +693,30 @@ export default function FactoryProductionTargets() {
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "15px" }}>
           <thead>
             <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
-              <th style={{ width: "115px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("code")}</th>
-              <th style={{ width: "245px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("worker")}</th>
-              <th style={{ width: "180px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>Group</th>
-              <th style={{ width: "190px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>{tr("category")}</th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("target")}</th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("produced")}</th>
-              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>{tr("difference")}</th>
-              <th style={{ width: "130px", padding: "13px 10px", textAlign: "center", border: "1px solid #3f444b" }}>{tr("status")}</th>
+              <th style={{ width: "115px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+                {tr("code")}
+              </th>
+              <th style={{ width: "245px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+                {tr("worker")}
+              </th>
+              <th style={{ width: "180px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+                Group
+              </th>
+              <th style={{ width: "190px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+                {tr("category")}
+              </th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
+                {tr("target")}
+              </th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
+                {tr("produced")}
+              </th>
+              <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
+                {tr("difference")}
+              </th>
+              <th style={{ width: "130px", padding: "13px 10px", textAlign: "center", border: "1px solid #3f444b" }}>
+                {tr("status")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -701,7 +724,8 @@ export default function FactoryProductionTargets() {
               <Fragment key={`report-${group.label.toLocaleLowerCase() || "blank"}`}>
                 <tr style={{ background: "#202328" }}>
                   <td colSpan={8} style={{ padding: "11px 12px", border: "1px solid #3f444b", fontWeight: 700 }}>
-                    {group.label || "—"} <span style={{ marginLeft: "8px", color: "#a1a1aa", fontWeight: 400 }}>({group.rows.length})</span>
+                    {group.label || "—"}{" "}
+                    <span style={{ marginLeft: "8px", color: "#a1a1aa", fontWeight: 400 }}>({group.rows.length})</span>
                   </td>
                 </tr>
                 {group.rows.map((row, index) => {
@@ -712,15 +736,61 @@ export default function FactoryProductionTargets() {
                         ? "#fbbf24"
                         : "#34d399";
                   return (
-                    <tr key={`production-report-${row.personId}`} style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}>
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.code || "—"}</td>
-                      <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.groupName || "—"}</td>
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>{row.category || "—"}</td>
-                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{row.targetBales ?? "—"}</td>
-                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{row.producedBales ?? 0}</td>
-                      <td style={{ padding: "12px 10px", textAlign: "right", border: "1px solid #34383e", fontWeight: 700 }}>{differenceText(row.targetBales, row.producedBales)}</td>
-                      <td style={{ padding: "12px 10px", textAlign: "center", border: "1px solid #34383e", color: statusColor, fontWeight: 700 }}>
+                    <tr
+                      key={`production-report-${row.personId}`}
+                      style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
+                    >
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                        {row.code || "—"}
+                      </td>
+                      <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>
+                        {row.name}
+                      </td>
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                        {row.groupName || "—"}
+                      </td>
+                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                        {row.category || "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 10px",
+                          textAlign: "right",
+                          border: "1px solid #34383e",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {row.targetBales ?? "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 10px",
+                          textAlign: "right",
+                          border: "1px solid #34383e",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {row.producedBales ?? 0}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 10px",
+                          textAlign: "right",
+                          border: "1px solid #34383e",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {differenceText(row.targetBales, row.producedBales)}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 10px",
+                          textAlign: "center",
+                          border: "1px solid #34383e",
+                          color: statusColor,
+                          fontWeight: 700,
+                        }}
+                      >
                         {tr(statusTranslationKey(row.status))}
                       </td>
                     </tr>
@@ -729,11 +799,56 @@ export default function FactoryProductionTargets() {
               </Fragment>
             ))}
             <tr style={{ background: "#292c31" }}>
-              <td colSpan={4} style={{ padding: "16px 12px", border: "1px solid #3f444b", fontWeight: 800, fontSize: "17px" }}>{tr("dailyTotal")}</td>
-              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.target}</td>
-              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.produced}</td>
-              <td style={{ padding: "14px 10px", textAlign: "right", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{totals.difference > 0 ? `+${totals.difference}` : totals.difference}</td>
-              <td style={{ padding: "14px 10px", textAlign: "center", border: "1px solid #3f444b", fontWeight: 800, fontSize: "18px" }}>{rows.length}</td>
+              <td
+                colSpan={4}
+                style={{ padding: "16px 12px", border: "1px solid #3f444b", fontWeight: 800, fontSize: "17px" }}
+              >
+                {tr("dailyTotal")}
+              </td>
+              <td
+                style={{
+                  padding: "14px 10px",
+                  textAlign: "right",
+                  border: "1px solid #3f444b",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                }}
+              >
+                {totals.target}
+              </td>
+              <td
+                style={{
+                  padding: "14px 10px",
+                  textAlign: "right",
+                  border: "1px solid #3f444b",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                }}
+              >
+                {totals.produced}
+              </td>
+              <td
+                style={{
+                  padding: "14px 10px",
+                  textAlign: "right",
+                  border: "1px solid #3f444b",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                }}
+              >
+                {totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+              </td>
+              <td
+                style={{
+                  padding: "14px 10px",
+                  textAlign: "center",
+                  border: "1px solid #3f444b",
+                  fontWeight: 800,
+                  fontSize: "18px",
+                }}
+              >
+                {rows.length}
+              </td>
             </tr>
           </tbody>
         </table>

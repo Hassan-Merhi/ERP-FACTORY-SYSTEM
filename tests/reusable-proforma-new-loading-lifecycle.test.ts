@@ -6,8 +6,7 @@ function read(relativePath: string): string {
   return readFileSync(resolve(process.cwd(), relativePath), "utf8");
 }
 
-const factoryModelPath =
-  "client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts";
+const factoryModelPath = "client/src/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel.ts";
 const erpModelPath = "client/src/pages/containerloadingscan/useContainerLoadingScanModel.ts";
 
 describe("reusable proforma new-loading lifecycle", () => {
@@ -16,7 +15,7 @@ describe("reusable proforma new-loading lifecycle", () => {
     (path) => {
       const source = read(path);
       expect(source).toContain("useSearch");
-      expect(source).toContain('if (!resumeOrderId)');
+      expect(source).toContain("if (!resumeOrderId)");
       expect(source).toContain("setOrderId(null)");
       expect(source).toContain("setIsResuming(false)");
     }
@@ -26,7 +25,7 @@ describe("reusable proforma new-loading lifecycle", () => {
     "%s canonicalizes every newly-created loading to its own orderId URL",
     (path) => {
       const source = read(path);
-      expect(source).toContain('navigate(`/factory/sales/loading/new?orderId=${data.id}`)');
+      expect(source).toContain("navigate(`/factory/sales/loading/new?orderId=${data.id}`)");
       expect(source).toContain("setOrderId(data.id)");
     }
   );
@@ -40,14 +39,11 @@ describe("reusable proforma new-loading lifecycle", () => {
     }
   );
 
-  it.each([factoryModelPath, erpModelPath])(
-    "%s rejects a capacity response scoped to a different loading",
-    (path) => {
-      const source = read(path);
-      expect(source).toContain("snapshot.currentOrderId !== orderId");
-      expect(source).toContain("Proforma capacity returned for the wrong loading order");
-    }
-  );
+  it.each([factoryModelPath, erpModelPath])("%s rejects a capacity response scoped to a different loading", (path) => {
+    const source = read(path);
+    expect(source).toContain("snapshot.currentOrderId !== orderId");
+    expect(source).toContain("Proforma capacity returned for the wrong loading order");
+  });
 
   it("preserves the new loading note when the factory warning offers a separate loading", () => {
     const source = read(factoryModelPath);
