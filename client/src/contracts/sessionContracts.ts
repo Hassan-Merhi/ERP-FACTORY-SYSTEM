@@ -6,6 +6,7 @@ export const companyTypeSchema = z.enum([
   "factory_v2",
   "properties",
   "supplier_partner",
+  "retail",
 ]);
 
 export type CompanyType = z.infer<typeof companyTypeSchema>;
