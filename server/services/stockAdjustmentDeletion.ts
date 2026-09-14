@@ -59,7 +59,9 @@ export async function deleteStockAdjustmentVoucher(input: {
 
   return db.transaction(async (tx) => {
     const [voucher] = await tx.select().from(vouchers).where(eq(vouchers.id, voucherId)).for("update");
-    if (!voucher) throw new StockAdjustmentDeletionError("VOUCHER_NOT_FOUND", "Voucher not found", 404);
+    if (!voucher) {
+      throw new StockAdjustmentDeletionError("VOUCHER_NOT_FOUND", "Voucher not found", 404);
+    }
     if (voucher.companyId !== companyId) {
       throw new StockAdjustmentDeletionError(
         "VOUCHER_COMPANY_MISMATCH",
@@ -69,7 +71,9 @@ export async function deleteStockAdjustmentVoucher(input: {
     }
 
     const blockedReason = voucherMutationBlockReason(voucher);
-    if (blockedReason) throw new StockAdjustmentDeletionError("MIGRATED_VOUCHER_READONLY", blockedReason, 403);
+    if (blockedReason) {
+      throw new StockAdjustmentDeletionError("MIGRATED_VOUCHER_READONLY", blockedReason, 403);
+    }
 
     const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
     if (voucher.deletedAt) {
