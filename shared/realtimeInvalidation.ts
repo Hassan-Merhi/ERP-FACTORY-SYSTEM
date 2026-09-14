@@ -131,11 +131,7 @@ function usesDedicatedRealtimeEvents(url: string): boolean {
  * changes no query-backed data, so neither may broadcast here.
  */
 export function shouldEmitWriteInvalidation(method: string, url: string): boolean {
-  return (
-    WRITE_METHODS.has(method) &&
-    !usesDedicatedRealtimeEvents(url) &&
-    !isRealtimeTelemetryWrite(method, url)
-  );
+  return WRITE_METHODS.has(method) && !usesDedicatedRealtimeEvents(url) && !isRealtimeTelemetryWrite(method, url);
 }
 
 /**

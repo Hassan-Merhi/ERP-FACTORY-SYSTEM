@@ -242,4 +242,104 @@ export const backendMessagesPhase7TranslationsPart12: readonly Phase7BackendMess
     ar: "تم إرسال صورة أهداف الإنتاج إلى مجموعة واتساب للإنتاج المُعدة.",
     fr: "L’image des objectifs de production a été envoyée au groupe WhatsApp de production configuré.",
   },
+  {
+    en: "Loading #${data.id} is separate and ready for scanning",
+    ar: "التحميل رقم {0} منفصل وجاهز للمسح",
+    fr: "Le chargement n° {0} est séparé et prêt à être scanné",
+  },
+  {
+    en: "Proforma capacity returned for the wrong loading order",
+    ar: "تم إرجاع سعة الفاتورة الأولية لطلب تحميل غير صحيح",
+    fr: "La capacité de la proforma a été renvoyée pour le mauvais ordre de chargement",
+  },
+  {
+    en: "Only months with movement are shown",
+    ar: "يتم عرض الأشهر التي تحتوي على حركة فقط",
+    fr: "Seuls les mois comportant des mouvements sont affichés",
+  },
+  {
+    en: "Payroll paid: ${input.workerName} – ${input.netSalary.toFixed(2)} (${input.periodStart} – ${input.periodEnd})",
+    ar: "تم دفع الراتب: {0} – {1} ({2} – {3})",
+    fr: "Paie versée : {0} – {1} ({2} – {3})",
+  },
+  {
+    en: "cashAccountId is required for non-zero payroll payment",
+    ar: "cashAccountId مطلوب لدفعة رواتب غير صفرية",
+    fr: "cashAccountId est requis pour un paiement de paie non nul",
+  },
+  {
+    en: "Unable to create Inventory control account for company ${companyId}",
+    ar: "تعذر إنشاء حساب مراقبة المخزون للشركة {0}",
+    fr: "Impossible de créer le compte de contrôle des stocks pour la société {0}",
+  },
+  {
+    en: "${field} must be finite",
+    ar: "يجب أن تكون قيمة {0} عددًا محدودًا",
+    fr: "{0} doit être une valeur finie",
+  },
+  {
+    en: "${field} is outside safe accounting range",
+    ar: "قيمة {0} خارج النطاق المحاسبي الآمن",
+    fr: "{0} est hors de la plage comptable sûre",
+  },
+  {
+    en: "money cents must be a safe integer",
+    ar: "يجب أن تكون السنتات مبلغًا صحيحًا آمنًا",
+    fr: "Les centimes monétaires doivent être un entier sûr",
+  },
+  {
+    en: "Payroll net salary and advances must not be negative",
+    ar: "يجب ألا يكون صافي راتب الرواتب والسلف سالبًا",
+    fr: "Le salaire net et les avances de paie ne doivent pas être négatifs",
+  },
+  {
+    en: "Phase 3 could not create ledger ${name} for company ${companyId}",
+    ar: "تعذر على المرحلة 3 إنشاء دفتر الأستاذ {0} للشركة {1}",
+    fr: "La phase 3 n’a pas pu créer le grand livre {0} pour la société {1}",
+  },
+  {
+    en: "Phase 3 repair left voucher ${voucherId} unbalanced (${row?.debit ?? \"missing\"}/${row?.credit ?? \"missing\"})",
+    ar: "ترك إصلاح المرحلة 3 السند {0} غير متوازن ({1}/{2})",
+    fr: "La réparation de la phase 3 a laissé la pièce {0} déséquilibrée ({1}/{2})",
+  },
+  {
+    en: "Phase 3 refused duplicate-sale repair: voucher 3000 matched ${bad.rows.length}/4 corrupt entries",
+    ar: "رفضت المرحلة 3 إصلاح البيع المكرر: طابق السند 3000 عدد {0}/4 من القيود التالفة",
+    fr: "La phase 3 a refusé la réparation de la vente dupliquée : la pièce 3000 correspondait à {0}/4 écritures corrompues",
+  },
+  {
+    en: "Phase 3 refused duplicate-sale repair: the preserved voucher 3000 entries do not equal its source total",
+    ar: "رفضت المرحلة 3 إصلاح البيع المكرر: قيود السند 3000 المحفوظة لا تساوي إجمالي المصدر",
+    fr: "La phase 3 a refusé la réparation de la vente dupliquée : les écritures conservées de la pièce 3000 ne correspondent pas au total source",
+  },
+  {
+    en: "Phase 3 payroll repair found no source payrolls for ${periodStart}..${periodEnd}",
+    ar: "لم يعثر إصلاح الرواتب في المرحلة 3 على رواتب مصدر للفترة {0}..{1}",
+    fr: "La réparation de paie de la phase 3 n’a trouvé aucune paie source pour {0}..{1}",
+  },
+  {
+    en: "Phase 3 payroll repair found no existing generation voucher for ${periodStart}..${periodEnd}",
+    ar: "لم يعثر إصلاح الرواتب في المرحلة 3 على سند إنشاء موجود للفترة {0}..{1}",
+    fr: "La réparation de paie de la phase 3 n’a trouvé aucune pièce de génération existante pour {0}..{1}",
+  },
+  {
+    en: "Phase 3 could not parse payroll period from: ${row.description}",
+    ar: "تعذر على المرحلة 3 تحليل فترة الرواتب من: {0}",
+    fr: "La phase 3 n’a pas pu analyser la période de paie depuis : {0}",
+  },
+  {
+    en: "Phase 3 historical repair left ${broken.rows.length} true double-entry exception(s) in company ${companyId}:",
+    ar: "ترك الإصلاح التاريخي للمرحلة 3 عدد {0} من استثناءات القيد المزدوج الحقيقية في الشركة {1}:",
+    fr: "La réparation historique de la phase 3 a laissé {0} exception(s) réelle(s) en partie double dans la société {1} :",
+  },
+  {
+    en: "Phase 3 payroll Daybook repair could not prove ${unresolved.rows.length} payroll mirror(s) in company ${companyId}:",
+    ar: "تعذر على إصلاح دفتر اليومية للرواتب في المرحلة 3 إثبات {0} من مرايا الرواتب في الشركة {1}:",
+    fr: "La réparation du journal de paie de la phase 3 n’a pas pu valider {0} miroir(s) de paie dans la société {1} :",
+  },
+  {
+    en: "Phase 3 payroll Daybook repair found amount mismatch(es) in company ${companyId}:",
+    ar: "وجد إصلاح دفتر اليومية للرواتب في المرحلة 3 اختلافات في المبالغ في الشركة {0}:",
+    fr: "La réparation du journal de paie de la phase 3 a trouvé des écarts de montant dans la société {0} :",
+  },
 ];

@@ -241,8 +241,8 @@ let migrationsDone = false;
     .then(async () => {
       // Always-running schema repairs (exchange-rate index, multi-currency
       // columns, fiscal/factory tables) — see startup/ensureRuntimeSchema.ts.
-      await ensureRuntimeSchema(pool);
       await ensureCanonicalStockMovementJournal(pool);
+      await ensureRuntimeSchema(pool);
       await ensureFinancialOperationRequests(pool);
       try {
         // Factory Production Targets and Attendance Register must be available
