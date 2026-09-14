@@ -133,105 +133,133 @@ afterAll(async () => {
 }, 60000);
 
 describe("Phase 13 — stock adjustment quantity/value lifecycle", () => {
-  it("keeps a Production adjustment exact through create, edit, repeated edit, cancel and retry", async () => {
-    const stockItemId = ctx.stockItemIds[0];
-    await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
-    const voucherId = await createVoucher("Production");
+  it(
+    "keeps a Production adjustment exact through create, edit, repeated edit, cancel and retry",
+    async () => {
+      const stockItemId = ctx.stockItemIds[0];
+      await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+      const voucherId = await createVoucher("Production");
 
-    const created = await agent
-      .post("/api/stock-adjustments")
-      .send(adjustmentBody(voucherId, "Production", stockItemId, 10, 20));
-    expect(created.status).toBe(201);
-    expect(await adjustmentCount(voucherId)).toBe(1);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), {
-      quantity: 110,
-      totalValue: 1200,
-      averageRate: 1200 / 110,
-    });
+      const created = await agent
+        .post("/api/stock-adjustments")
+        .send(adjustmentBody(voucherId, "Production", stockItemId, 10, 20));
+      expect(created.status).toBe(201);
+      expect(await adjustmentCount(voucherId)).toBe(1);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 110,
+        totalValue: 1200,
+        averageRate: 1200 / 110,
+      });
 
-    const editBody = {
-      voucherDate: "2026-09-15",
-      description: "Phase 13 edited production",
-      locationId: ctx.locationId,
-      adjustmentType: "Production" as const,
-      items: [{ stockItemId, quantity: 5, rate: 30 }],
-    };
-    const edited = await agent.patch(`/api/vouchers/${voucherId}/adjustment`).send(editBody);
-    expect(edited.status).toBe(200);
-    expect(Number(edited.body.totalAmount)).toBeCloseTo(150, 2);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), {
-      quantity: 105,
-      totalValue: 1150,
-      averageRate: 1150 / 105,
-    });
+      const editBody = {
+        voucherDate: "2026-09-15",
+        description: "Phase 13 edited production",
+        locationId: ctx.locationId,
+        adjustmentType: "Production" as const,
+        items: [{ stockItemId, quantity: 5, rate: 30 }],
+      };
+      const edited = await agent.patch(`/api/vouchers/${voucherId}/adjustment`).send(editBody);
+      expect(edited.status).toBe(200);
+      expect(Number(edited.body.totalAmount)).toBeCloseTo(150, 2);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 105,
+        totalValue: 1150,
+        averageRate: 1150 / 105,
+      });
 
-    const repeated = await agent.patch(`/api/vouchers/${voucherId}/adjustment`).send(editBody);
-    expect(repeated.status).toBe(200);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), {
-      quantity: 105,
-      totalValue: 1150,
-      averageRate: 1150 / 105,
-    });
+      const repeated = await agent.patch(`/api/vouchers/${voucherId}/adjustment`).send(editBody);
+      expect(repeated.status).toBe(200);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 105,
+        totalValue: 1150,
+        averageRate: 1150 / 105,
+      });
 
-    const cancelled = await agent.delete(`/api/vouchers/${voucherId}`);
-    expect(cancelled.status).toBe(200);
-    expect(cancelled.body.replayed).toBe(false);
-    expect(cancelled.body.reversedInventory).toBe(true);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), { quantity: 100, totalValue: 1000, averageRate: 10 });
+      const cancelled = await agent.delete(`/api/vouchers/${voucherId}`);
+      expect(cancelled.status).toBe(200);
+      expect(cancelled.body.replayed).toBe(false);
+      expect(cancelled.body.reversedInventory).toBe(true);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 100,
+        totalValue: 1000,
+        averageRate: 10,
+      });
 
-    const retry = await agent.delete(`/api/vouchers/${voucherId}`);
-    expect(retry.status).toBe(200);
-    expect(retry.body.replayed).toBe(true);
-    expect(retry.body.reversedInventory).toBe(false);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), { quantity: 100, totalValue: 1000, averageRate: 10 });
-  }, 120000);
+      const retry = await agent.delete(`/api/vouchers/${voucherId}`);
+      expect(retry.status).toBe(200);
+      expect(retry.body.replayed).toBe(true);
+      expect(retry.body.reversedInventory).toBe(false);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 100,
+        totalValue: 1000,
+        averageRate: 10,
+      });
+    },
+    120000
+  );
 
-  it("uses the live inventory value for Consumption and restores that exact value on cancel", async () => {
-    const stockItemId = ctx.stockItemIds[1];
-    await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
-    const voucherId = await createVoucher("Consumption");
+  it(
+    "uses the live inventory value for Consumption and restores that exact value on cancel",
+    async () => {
+      const stockItemId = ctx.stockItemIds[1];
+      await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+      const voucherId = await createVoucher("Consumption");
 
-    // Client rate is intentionally different. Consumption must use the locked
-    // inventory cost (10), not the browser-supplied 99.
-    const created = await agent
-      .post("/api/stock-adjustments")
-      .send(adjustmentBody(voucherId, "Consumption", stockItemId, -10, 99));
-    expect(created.status).toBe(201);
-    expect(Number(created.body.items[0].rate)).toBeCloseTo(10, 2);
-    expect(Number(created.body.items[0].totalAmount)).toBeCloseTo(100, 2);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), { quantity: 90, totalValue: 900, averageRate: 10 });
+      // Client rate is intentionally different. Consumption must use the locked
+      // inventory cost (10), not the browser-supplied 99.
+      const created = await agent
+        .post("/api/stock-adjustments")
+        .send(adjustmentBody(voucherId, "Consumption", stockItemId, -10, 99));
+      expect(created.status).toBe(201);
+      expect(Number(created.body.items[0].rate)).toBeCloseTo(10, 2);
+      expect(Number(created.body.items[0].totalAmount)).toBeCloseTo(100, 2);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 90,
+        totalValue: 900,
+        averageRate: 10,
+      });
 
-    const cancelled = await agent.delete(`/api/vouchers/${voucherId}`);
-    expect(cancelled.status).toBe(200);
-    expect(cancelled.body.replayed).toBe(false);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), { quantity: 100, totalValue: 1000, averageRate: 10 });
-  }, 120000);
+      const cancelled = await agent.delete(`/api/vouchers/${voucherId}`);
+      expect(cancelled.status).toBe(200);
+      expect(cancelled.body.replayed).toBe(false);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 100,
+        totalValue: 1000,
+        averageRate: 10,
+      });
+    },
+    120000
+  );
 
-  it("applies one Production adjustment when duplicate submissions race and preserves value on sequential retry", async () => {
-    const stockItemId = ctx.stockItemIds[0];
-    await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
-    const voucherId = await createVoucher("Production");
-    const body = adjustmentBody(voucherId, "Production", stockItemId, 5, 20);
+  it(
+    "applies one Production adjustment when duplicate submissions race and preserves value on sequential retry",
+    async () => {
+      const stockItemId = ctx.stockItemIds[0];
+      await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+      const voucherId = await createVoucher("Production");
+      const body = adjustmentBody(voucherId, "Production", stockItemId, 5, 20);
 
-    const [first, second] = await Promise.all([
-      agent.post("/api/stock-adjustments").send(body),
-      agent.post("/api/stock-adjustments").send(body),
-    ]);
-    expect([first.status, second.status].sort()).toEqual([201, 409]);
-    expect(await adjustmentCount(voucherId)).toBe(1);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), {
-      quantity: 105,
-      totalValue: 1100,
-      averageRate: 1100 / 105,
-    });
+      const [first, second] = await Promise.all([
+        agent.post("/api/stock-adjustments").send(body),
+        agent.post("/api/stock-adjustments").send(body),
+      ]);
+      expect([first.status, second.status].sort()).toEqual([201, 409]);
+      expect(await adjustmentCount(voucherId)).toBe(1);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 105,
+        totalValue: 1100,
+        averageRate: 1100 / 105,
+      });
 
-    const sequentialRetry = await agent.post("/api/stock-adjustments").send(body);
-    expect(sequentialRetry.status).toBe(409);
-    expect(await adjustmentCount(voucherId)).toBe(1);
-    expectInventory(await inventoryState(ctx.locationId, stockItemId), {
-      quantity: 105,
-      totalValue: 1100,
-      averageRate: 1100 / 105,
-    });
-  }, 120000);
+      const sequentialRetry = await agent.post("/api/stock-adjustments").send(body);
+      expect(sequentialRetry.status).toBe(409);
+      expect(await adjustmentCount(voucherId)).toBe(1);
+      expectInventory(await inventoryState(ctx.locationId, stockItemId), {
+        quantity: 105,
+        totalValue: 1100,
+        averageRate: 1100 / 105,
+      });
+    },
+    120000
+  );
 });
