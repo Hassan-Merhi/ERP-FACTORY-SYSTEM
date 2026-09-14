@@ -32,13 +32,13 @@ function isStockTransferType(value: string | null | undefined): boolean {
 /**
  * Posted stock-transfer edits must reverse and reapply the exact persisted value.
  *
- * The older voucher editor reconstructs a reversal through adjustInventory(),
- * which removes destination stock at its blended current average rate. When the
- * destination already held stock at another cost, an edit could therefore keep
- * quantity correct while silently changing total_value. The storage updater is
- * already the canonical exact-value implementation, so posted voucher edits are
- * routed through it here. Optional/draft transfers still fall through to the
- * dedicated draft/finalize lifecycle registered immediately after this route.
+ * The older voucher editor reconstructed a reversal from the destination's
+ * blended current average rate. When the destination already held stock at
+ * another cost, an edit could therefore keep quantity correct while silently
+ * changing total_value. The storage updater is already the canonical exact-value
+ * implementation, so posted voucher edits are routed through it here.
+ * Optional/draft transfers still fall through to the dedicated draft/finalize
+ * lifecycle registered immediately after this route.
  */
 export function registerExactStockTransferEditRoute(app: Express): void {
   app.patch(
