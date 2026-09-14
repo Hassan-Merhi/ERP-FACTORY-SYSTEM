@@ -4,6 +4,7 @@ export * from "./users";
 export * from "./security";
 export * from "./inventory";
 export * from "./retail";
+export * from "./retailPos";
 export * from "./erp";
 export * from "./containers";
 export * from "./supplierTrackingDefaults";
