@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   certify:
-    name: Main Certification
+    name: Application Certification
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     services:
@@ -50,8 +50,7 @@ jobs:
         with:
           persist-credentials: false
           # The changed-file format check compares the merged commit to its
-          # first parent, so retain both commits while still keeping checkout
-          # intentionally shallow.
+          # first parent, so retain both commits while keeping checkout shallow.
           fetch-depth: 2
 
       - name: Verify exact merged main SHA
@@ -89,6 +88,7 @@ jobs:
 
       - name: Mark certification pending
         if: always() && steps.exact_sha.outcome == 'success'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -101,19 +101,27 @@ jobs:
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Set up Node
+        id: node_setup
         if: always() && steps.exact_sha.outcome == 'success'
+        continue-on-error: true
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24.21.0"
           cache: npm
 
       - name: Normalize package registry URLs
-        if: always() && steps.exact_sha.outcome == 'success'
+        id: registry
+        if: always() && steps.exact_sha.outcome == 'success' && steps.node_setup.outcome == 'success'
+        continue-on-error: true
         run: sed -i 's#http://package-firewall.replit.local/npm/#https://registry.npmjs.org/#g' package-lock.json
 
       - name: Install dependencies
         id: install
-        if: always() && steps.exact_sha.outcome == 'success'
+        if: >-
+          always() &&
+          steps.exact_sha.outcome == 'success' &&
+          steps.node_setup.outcome == 'success' &&
+          steps.registry.outcome == 'success'
         continue-on-error: true
         env:
           SKIP_GIT_HOOKS: "1"
@@ -135,7 +143,7 @@ jobs:
 
       - name: Prepare PostgreSQL and run startup migrations
         id: schema
-        if: always() && steps.install.outcome == 'success'
+        if: always() && steps.install.outcome == 'success' && steps.static.outcome == 'success'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -198,7 +206,7 @@ jobs:
 
       - name: Verify server bundle
         id: server_bundle
-        if: always() && steps.install.outcome == 'success'
+        if: always() && steps.static.outcome == 'success'
         continue-on-error: true
         run: npm run verify:server-bundle
 
@@ -228,11 +236,12 @@ jobs:
           npm run verify:bandwidth
           node scripts/verify-program7d-accessibility-responsive.mjs
 
-      - name: Publish authoritative certification status
+      - name: Evaluate certification components
         if: always()
         env:
-          GH_TOKEN: ${{ github.token }}
           EXACT_SHA: ${{ steps.exact_sha.outcome }}
+          NODE_SETUP: ${{ steps.node_setup.outcome }}
+          REGISTRY: ${{ steps.registry.outcome }}
           INSTALL: ${{ steps.install.outcome }}
           STATIC: ${{ steps.static.outcome }}
           SCHEMA: ${{ steps.schema.outcome }}
@@ -246,19 +255,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          state='success'
           failed_checks=()
           check_result() {
             local label="$1"
             local result="$2"
             printf '%s=%s\n' "$label" "$result"
             if [[ "$result" != 'success' ]]; then
-              state='failure'
               failed_checks+=("${label}:${result}")
             fi
           }
 
           check_result exact_sha "$EXACT_SHA"
+          check_result node_setup "$NODE_SETUP"
+          check_result registry "$REGISTRY"
           check_result install "$INSTALL"
           check_result static "$STATIC"
           check_result schema "$SCHEMA"
@@ -270,16 +279,50 @@ jobs:
           check_result observability "$OBSERVABILITY"
           check_result routing "$ROUTING"
 
-          if [[ "$state" == 'success' ]]; then
-            description='Main certification passed'
-          else
-            description='Main certification failed'
-            printf 'Failed certification components: %s\n' "${failed_checks[*]}"
+          {
+            echo '## Main Certification application suite'
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            if [[ "${#failed_checks[@]}" -eq 0 ]]; then
+              echo '- Result: **success**'
+            else
+              echo '- Result: **failure**'
+              echo "- Failed components: \`${failed_checks[*]}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${#failed_checks[@]}" -ne 0 ]]; then
+            echo "::error::Main Certification failed components: ${failed_checks[*]}"
+            exit 1
           fi
 
-          # Publish one stable status context for the exact SHA this workflow
-          # actually checked. Using gh api avoids hand-built JSON and quoting
-          # errors that previously broke the authoritative status publisher.
+          echo 'All Main Certification application components passed.'
+
+  publish:
+    name: Publish authoritative certification status
+    needs: certify
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Publish authoritative certification status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CERTIFICATION_RESULT: ${{ needs.certify.result }}
+        run: |
+          set -euo pipefail
+
+          state='failure'
+          description='Main certification failed'
+          if [[ "$CERTIFICATION_RESULT" == 'success' ]]; then
+            state='success'
+            description='Main certification passed'
+          fi
+
+          # This publisher is deliberately a separate job with no PostgreSQL
+          # service. It still runs if the application job cannot start, so the
+          # exact SHA never gets stranded with a stale/pending authoritative
+          # status because a service or runner setup failed before test steps.
           gh api --method POST \
             "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$state" \
@@ -288,13 +331,11 @@ jobs:
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           {
-            echo '## Main Certification'
+            echo '## Authoritative Main Certification status'
             echo
             echo "- SHA: \`${GITHUB_SHA}\`"
-            echo "- Result: **${state}**"
-            if [[ "${#failed_checks[@]}" -gt 0 ]]; then
-              echo "- Failed components: \`${failed_checks[*]}\`"
-            fi
+            echo "- Application job result: \`${CERTIFICATION_RESULT}\`"
+            echo "- Published status: **${state}**"
           } >> "$GITHUB_STEP_SUMMARY"
 
           test "$state" = 'success'
