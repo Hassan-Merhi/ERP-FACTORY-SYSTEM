@@ -28,9 +28,7 @@ describe("Developer cross-company role administration regression", () => {
   });
 
   it("keeps tenant role visibility restricted to the active company", () => {
-    expect(filterRolesForCompany(roleRows, 1)).toEqual([
-      { userId: "target-user", companyId: 1, role: "Admin" },
-    ]);
+    expect(filterRolesForCompany(roleRows, 1)).toEqual([{ userId: "target-user", companyId: 1, role: "Admin" }]);
     expect(canAccessTargetUser(roleRows, "target-user", 1, "Admin")).toBe(true);
     expect(canAccessTargetUser(roleRows, "target-user", 3, "Admin")).toBe(false);
   });
@@ -41,9 +39,7 @@ describe("Developer cross-company role administration regression", () => {
       userId: "target-user",
       companyId: 2,
     });
-    expect(
-      classifyUserLocationConfigurationRoute("/api/user-location-cash-accounts/target-user/2")
-    ).toEqual({
+    expect(classifyUserLocationConfigurationRoute("/api/user-location-cash-accounts/target-user/2")).toEqual({
       kind: "cash-accounts",
       userId: "target-user",
       companyId: 2,
