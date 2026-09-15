@@ -15,7 +15,7 @@ import { registerBarcodeImageBandwidthMiddleware } from "./barcodeImageBandwidth
 import { registerBankAssetRoutes } from "./bankAssetRoutes";
 import { registerBusinessAlertRoutes } from "./businessAlertsRoutes";
 import { registerContainerRoutes } from "./containerRoutes";
-import { registerCreditNoteRoutes } from "./creditNoteRoutes";
+import { registerCreditNoteRoutes } from "./creditNoteRouteRegistry";
 import { registerCustomerRoutes } from "./customerRoutes";
 import { registerDebugRoutes } from "./debugRoutes";
 import { registerEmployeeRoutes } from "./employeeRoutes";
