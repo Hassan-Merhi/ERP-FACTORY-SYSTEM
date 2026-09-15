@@ -81,7 +81,10 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
             }
 
             const session = (request as SessionUpgradeRequest).session;
-            const companyIds = normalizeBroadcastCompanyIds([session?.currentCompanyId, session?.factoryCompanyId]);
+            const companyIds = normalizeBroadcastCompanyIds([
+              session?.currentCompanyId,
+              session?.factoryCompanyId,
+            ]);
             const userId = normalizeBroadcastUserId(session?.userId);
             if (companyIds.length > 0 || userId) {
               finish({ status: "resolved", companyIds, userId });
@@ -228,15 +231,6 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
         delivered += 1;
       });
       recordBroadcast(delivered, skipped);
-      if (process.env.NODE_ENV === "test") {
-        const messageType =
-          "type" in message && typeof (message as { type?: unknown }).type === "string"
-            ? (message as { type: string }).type
-            : "unknown";
-        logger.info(
-          `[WS] Test broadcast delivery type=${messageType} companyId=${options.companyId ?? "none"} delivered=${delivered} skipped=${skipped} connectedClients=${wss?.clients.size ?? 0}`
-        );
-      }
     }
   );
 }
