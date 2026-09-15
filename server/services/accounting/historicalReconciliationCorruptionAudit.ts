@@ -59,7 +59,7 @@ const MONEY_TOLERANCE = new Decimal("0.005");
 function positiveInteger(value: unknown, field: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Phase3AccountingAuditError("PHASE29_ID_INVALID", `${field} must be a positive integer`);
+    throw new Phase3AccountingAuditError("PHASE29_ID_INVALID", `phase29_id_invalid:${field}`);
   }
   return parsed;
 }
@@ -67,10 +67,10 @@ function positiveInteger(value: unknown, field: string): number {
 function decimal(value: unknown, field: string): Decimal {
   try {
     const parsed = new Decimal(String(value ?? ""));
-    if (!parsed.isFinite()) throw new Error("not finite");
+    if (!parsed.isFinite()) throw new Error("not_finite");
     return parsed;
   } catch {
-    throw new Phase3AccountingAuditError("PHASE29_DECIMAL_INVALID", `${field} is not a finite decimal`);
+    throw new Phase3AccountingAuditError("PHASE29_DECIMAL_INVALID", `phase29_decimal_invalid:${field}`);
   }
 }
 
@@ -134,8 +134,8 @@ export function auditHistoricalReconciliationCorruption(
       "invariants",
       `voucher-group:${duplicate.signature}`,
       "DUPLICATE_VOUCHER",
-      "1 voucher",
-      `${uniqueVoucherIds.length} vouchers (${uniqueVoucherIds.join(",")})`
+      "unique_voucher",
+      `${uniqueVoucherIds.length}:${uniqueVoucherIds.join(",")}`
     );
   }
 
@@ -168,7 +168,7 @@ export function auditHistoricalReconciliationCorruption(
         "intercompany",
         identity,
         "INTERCOMPANY_COMPANY_PAIR_INVALID",
-        "different source and destination companies",
+        "distinct_company_pair",
         String(fromCompanyId)
       );
       continue;
