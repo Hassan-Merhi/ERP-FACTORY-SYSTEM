@@ -137,6 +137,10 @@ export function usePayrollModel() {
     empStatusFilter,
   });
   const { locations, allCompanyLocations, employeeStaff, workerPayments, selectedPayments } = data;
+  const employeeGroups = useMemo(
+    () => data.employeeGroups.filter((group) => group.groupType !== "Worker"),
+    [data.employeeGroups]
+  );
 
   // Forms
   const depositForm = useForm<DepositFormData>({ resolver: zodResolver(depositSchema) });
@@ -166,51 +170,94 @@ export function usePayrollModel() {
     if (statementEmployee) setStatementExpanded(false);
   }, [setStatementExpanded, statementEmployee]);
 
-  // Pre-populate edit employee form + load bale rates when editingEmployee changes
+  // Pre-populate every editable employee field so opening the dialog never
+  // replaces persisted values with react-hook-form defaults on save.
   useEffect(() => {
     if (!editingEmployee) return;
-    const employeeGroupId = (editingEmployee as Employee & { employeeGroupId?: number | null }).employeeGroupId;
+    let cancelled = false;
+
     editEmployeeForm.reset({
-      firstName: editingEmployee.firstName || "",
-      lastName: editingEmployee.lastName || "",
-      code: editingEmployee.code || "",
-      monthlySalary: editingEmployee.monthlySalary || "",
-      employeeGroupId: employeeGroupId ? String(employeeGroupId) : "",
-      salesBonusPct: editingEmployee.salesBonusPct ? String(editingEmployee.salesBonusPct) : "",
-      salesBonusPctLocationId: editingEmployee.salesBonusPctLocationId
-        ? String(editingEmployee.salesBonusPctLocationId)
-        : "",
-      salesBonusPctSourceCompanyId: editingEmployee.salesBonusPctSourceCompanyId
-        ? String(editingEmployee.salesBonusPctSourceCompanyId)
-        : "",
+      firstName: editingEmployee.firstName ?? "",
+      lastName: editingEmployee.lastName ?? "",
+      code: editingEmployee.code ?? "",
+      monthlySalary: editingEmployee.monthlySalary ?? "0",
+      department: editingEmployee.department ?? "",
+      joinDate: editingEmployee.joinDate ? String(editingEmployee.joinDate).slice(0, 10) : "",
+      active: editingEmployee.active ?? true,
+      employeeGroupId: "none",
+      salesBonusPct:
+        editingEmployee.salesBonusPct !== null && editingEmployee.salesBonusPct !== undefined
+          ? String(editingEmployee.salesBonusPct)
+          : "",
+      salesBonusPctLocationId:
+        editingEmployee.salesBonusPctLocationId !== null && editingEmployee.salesBonusPctLocationId !== undefined
+          ? String(editingEmployee.salesBonusPctLocationId)
+          : "",
+      salesBonusPctSourceCompanyId:
+        editingEmployee.salesBonusPctSourceCompanyId !== null &&
+        editingEmployee.salesBonusPctSourceCompanyId !== undefined
+          ? String(editingEmployee.salesBonusPctSourceCompanyId)
+          : "",
     });
+
+    // Employee group membership lives in employee_group_members rather than on
+    // the employees row. Resolve the selected employee's current group through
+    // the existing group-members API so the edit dropdown reflects saved data.
+    void Promise.all(
+      employeeGroups.map(async (group) => {
+        const response = await fetch(`/api/employee-groups/${group.id}/members`, { credentials: "include" });
+        if (!response.ok) return null;
+        const members = (await response.json()) as Array<{ employeeId?: number | null }>;
+        return members.some((member) => member.employeeId === editingEmployee.id) ? group.id : null;
+      })
+    )
+      .then((groupIds) => {
+        if (cancelled) return;
+        const groupId = groupIds.find((value): value is number => value !== null);
+        editEmployeeForm.setValue("employeeGroupId", groupId ? String(groupId) : "none");
+      })
+      .catch(() => {
+        if (!cancelled) editEmployeeForm.setValue("employeeGroupId", "none");
+      });
+
     // Load bale rates
     fetch(`/api/employees/${editingEmployee.id}/bale-rates`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : []))
-      .then((data: BaleRateResponse[]) =>
+      .then((rateRows: BaleRateResponse[]) => {
+        if (cancelled) return;
         setEditBaleRates(
-          data.map((r) => ({
-            locationId: String(r.locationId),
-            rate: String(r.rate),
-            sourceCompanyId: r.sourceCompanyId ? String(r.sourceCompanyId) : "",
+          rateRows.map((rateRow) => ({
+            locationId: String(rateRow.locationId),
+            rate: String(rateRow.rate),
+            sourceCompanyId: rateRow.sourceCompanyId ? String(rateRow.sourceCompanyId) : "",
           }))
-        )
-      )
-      .catch(() => setEditBaleRates([]));
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEditBaleRates([]);
+      });
+
     // Load pct rates
     fetch(`/api/employees/${editingEmployee.id}/bale-pct-rates`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : []))
-      .then((data: BaleRateResponse[]) =>
+      .then((rateRows: BaleRateResponse[]) => {
+        if (cancelled) return;
         setEditBalePctRates(
-          data.map((r) => ({
-            locationId: String(r.locationId),
-            pct: String(r.pct),
-            sourceCompanyId: r.sourceCompanyId ? String(r.sourceCompanyId) : "",
+          rateRows.map((rateRow) => ({
+            locationId: String(rateRow.locationId),
+            pct: String(rateRow.pct),
+            sourceCompanyId: rateRow.sourceCompanyId ? String(rateRow.sourceCompanyId) : "",
           }))
-        )
-      )
-      .catch(() => setEditBalePctRates([]));
-  }, [editEmployeeForm, editingEmployee, setEditBalePctRates, setEditBaleRates]);
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEditBalePctRates([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editEmployeeForm, editingEmployee, employeeGroups, setEditBalePctRates, setEditBaleRates]);
 
   // Mutations (Logic simplified for orchestrator)
   const depositMutation = useMutation({
@@ -629,40 +676,51 @@ export function usePayrollModel() {
   const editEmployeeMutation = useMutation({
     mutationFn: async (data: EmployeeFormData) => {
       if (!editingEmployee) throw new Error("No employee selected");
-      await modeApiRequest("PATCH", `/api/employees/${editingEmployee.id}`, data);
-      // Save bale rates
-      await fetch(`/api/employees/${editingEmployee.id}/bale-rates`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(
-          editBaleRates
-            .filter((r) => r.locationId && r.rate)
-            .map((r) => ({
-              locationId: parseInt(r.locationId),
-              rate: parseFloat(r.rate),
-              sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
-            }))
-        ),
-      });
-      // Save pct rates
-      await fetch(`/api/employees/${editingEmployee.id}/bale-pct-rates`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(
-          editBalePctRates
-            .filter((r) => r.locationId && r.pct)
-            .map((r) => ({
-              locationId: parseInt(r.locationId),
-              pct: parseFloat(r.pct),
-              sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
-            }))
-        ),
-      });
+      const { employeeGroupId, ...employeeDetails } = data;
+
+      // employeeGroupId is not a column on employees; membership is stored in
+      // employee_group_members. Sending it through the employee PATCH caused
+      // the entire details update to fail at the database layer.
+      await modeApiRequest("PATCH", `/api/employees/${editingEmployee.id}`, employeeDetails);
+
+      const baleRates = editBaleRates
+        .filter((row) => row.locationId && row.rate)
+        .map((row) => ({
+          locationId: parseInt(row.locationId),
+          rate: parseFloat(row.rate),
+          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
+        }));
+      const balePctRates = editBalePctRates
+        .filter((row) => row.locationId && row.pct)
+        .map((row) => ({
+          locationId: parseInt(row.locationId),
+          pct: parseFloat(row.pct),
+          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
+        }));
+
+      // These endpoints expect an object containing `rates`. Using the shared
+      // request helper also makes a failed rate save reject the mutation instead
+      // of closing the dialog and falsely reporting success.
+      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-rates`, { rates: baleRates });
+      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-pct-rates`, { rates: balePctRates });
+
+      // The employee editor models one employee group. Remove stale membership
+      // from employee groups, then add the selected group when one is chosen.
+      await Promise.all(
+        employeeGroups.map((group) =>
+          modeApiRequest("DELETE", `/api/employee-groups/${group.id}/members/${editingEmployee.id}`, undefined)
+        )
+      );
+      if (employeeGroupId && employeeGroupId !== "none") {
+        const groupId = Number(employeeGroupId);
+        if (!Number.isInteger(groupId) || !employeeGroups.some((group) => group.id === groupId)) {
+          throw new Error("Invalid employee group");
+        }
+        await modeApiRequest("POST", `/api/employee-groups/${groupId}/members/${editingEmployee.id}`, undefined);
+      }
     },
     onSuccess: () => {
-      toast({ title: "Employee updated" });
+      toast({ title: "Employee updated", description: "All employee details were saved successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setEditEmployeeDialogOpen(false);
       setEditingEmployee(null);
@@ -849,6 +907,7 @@ export function usePayrollModel() {
     ...data,
     ...state,
     selectedCompany,
+    employeeGroups,
     depositForm,
     withdrawalForm,
     bulkPaymentForm,
