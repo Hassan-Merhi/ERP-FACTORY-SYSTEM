@@ -7,8 +7,16 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Banknote,
   CheckCheck,
+  ChevronDown,
   Pencil,
   Plus,
   Search,
@@ -225,14 +233,43 @@ export function WorkersTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={handleSelectAll} disabled={workersOnly.length === 0} data-testid="button-select-all-workers">
+            <Button
+              variant="outline"
+              onClick={handleSelectAll}
+              disabled={workersOnly.length === 0}
+              data-testid="button-select-all-workers"
+            >
               <CheckCheck className="mr-2 h-4 w-4" />
               {allSelected ? "Deselect All" : "Select All"}
             </Button>
-            <Button variant="outline" onClick={() => setCreateWorkerGroupDialogOpen(true)} data-testid="button-create-worker-group">
-              <Plus className="mr-2 h-4 w-4" />
-              New Group
-            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" data-testid="button-worker-groups">
+                  <Users className="mr-2 h-4 w-4" />
+                  Groups
+                  <ChevronDown className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setCreateWorkerGroupDialogOpen(true)} data-testid="button-create-worker-group">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Group
+                </DropdownMenuItem>
+                {workerGroupsOnly.length > 0 && <DropdownMenuSeparator />}
+                {workerGroupsOnly.map((group) => (
+                  <DropdownMenuItem
+                    key={group.id}
+                    onClick={() => openGroupManager(group)}
+                    data-testid={`button-open-worker-group-${group.id}`}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    <span className="truncate">{group.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button variant="outline" onClick={() => setNewWorkerDialogOpen(true)} data-testid="button-create-worker">
               <UserRoundPlus className="mr-2 h-4 w-4" />
               New Worker
@@ -303,13 +340,23 @@ export function WorkersTab({
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openGroupManager(group)} data-testid={`button-manage-group-${group.id}`}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openGroupManager(group)}
+                      data-testid={`button-manage-group-${group.id}`}
+                    >
                       <Pencil className="mr-2 h-3.5 w-3.5" />
                       Manage
                     </Button>
                     <ConfirmationDialog
                       trigger={
-                        <Button size="icon" variant="ghost" className="text-destructive" data-testid={`button-delete-group-${group.id}`}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive"
+                          data-testid={`button-delete-group-${group.id}`}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       }

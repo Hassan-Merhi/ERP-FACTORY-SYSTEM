@@ -4,20 +4,6 @@ import { voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../../db";
 import { storage } from "../../storage";
 
-type CurrencyBalance = Record<string, { debit: number; credit: number; net: number }>;
-
-function addCurrencyBalance(balances: Map<number, CurrencyBalance>, key: number, entry: ({ ledgerAccountId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; }) | ({ customerId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; })): void {
-  const currency = entry.transactionCurrency || "USD";
-  const debit = Number.parseFloat(entry.transactionDebitAmount ?? entry.debitAmount ?? "0");
-  const credit = Number.parseFloat(entry.transactionCreditAmount ?? entry.creditAmount ?? "0");
-  const currencyMap = balances.get(key) ?? {};
-  if (!currencyMap[currency]) currencyMap[currency] = { debit: 0, credit: 0, net: 0 };
-  currencyMap[currency].debit += debit;
-  currencyMap[currency].credit += credit;
-  currencyMap[currency].net = currencyMap[currency].debit - currencyMap[currency].credit;
-  balances.set(key, currencyMap);
-}
-
 function addNetBalance(balances: Map<number, number>, key: number, entry: ({ ledgerAccountId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; }) | ({ customerId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; })): void {
   const debit = Number.parseFloat(entry.debitAmount || "0");
   const credit = Number.parseFloat(entry.creditAmount || "0");
@@ -95,23 +81,19 @@ export async function getCustomersWithBalances(companyId: number) {
   ]);
 
   const ledgerNet = new Map<number, number>();
-  const ledgerCurrency = new Map<number, CurrencyBalance>();
   const ledgerBase = new Map<number, number>();
   for (const entry of ledgerEntries) {
     if (!entry.ledgerAccountId) continue;
     addNetBalance(ledgerNet, entry.ledgerAccountId, entry);
-    addCurrencyBalance(ledgerCurrency, entry.ledgerAccountId, entry);
     addHistoricalBaseBalance(ledgerBase, entry.ledgerAccountId, entry);
   }
 
   const customerNet = new Map<number, number>();
-  const customerCurrency = new Map<number, CurrencyBalance>();
   const customerBase = new Map<number, number>();
   for (const entry of customerEntries) {
     const customerId = entry.customerId;
     if (!customerId) continue;
     addNetBalance(customerNet, customerId, entry);
-    addCurrencyBalance(customerCurrency, customerId, entry);
     addHistoricalBaseBalance(customerBase, customerId, entry);
   }
 
@@ -126,9 +108,6 @@ export async function getCustomersWithBalances(companyId: number) {
       ...customer,
       balance: Math.abs(balance),
       balanceSide: balance >= 0 ? "Dr" : "Cr",
-      balancesByCurrency: customer.ledgerAccountId
-        ? (ledgerCurrency.get(customer.ledgerAccountId) ?? {})
-        : (customerCurrency.get(customer.id) ?? {}),
       historicalBaseBalance:
         openingNet +
         (customer.ledgerAccountId
