@@ -1,7 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
   buildSpOffloadChargeSignature,
@@ -328,7 +328,7 @@ async function guardSpOffload(req: Request, res: Response, next: NextFunction): 
   } catch (error: unknown) {
     await release(false);
     logger.error("SP offload concurrency guard failed", { companyId, containerId, error });
-    res.status(500).json({ message: getErrorMessage(error) });
+    sendHttpError(res, error);
   }
 }
 
