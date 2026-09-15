@@ -103,6 +103,61 @@ export const retailWave3Translations: readonly Phase3SharedUiEntry[] = [
     ar: "الصف {{0}} ينقصه الاسم أو المقاس أو الباركود أو الموقع",
     fr: "La ligne {{0}} n’a pas de nom, taille, code-barres ou emplacement",
   },
+
+  // Payroll employee-management refresh (#1511). These entries are part of
+  // the exact-string application translator used by the shared UI runtime.
+  { en: "Employee details", ar: "تفاصيل الموظف", fr: "Détails de l’employé" },
+  { en: "e.g. Warehouse", ar: "مثال: المستودع", fr: "ex. Entrepôt" },
+  { en: "Employment settings", ar: "إعدادات التوظيف", fr: "Paramètres d’emploi" },
+  { en: "Sales bonus", ar: "مكافأة المبيعات", fr: "Prime sur les ventes" },
+  { en: "Location bonus rules", ar: "قواعد المكافآت حسب الموقع", fr: "Règles de prime par emplacement" },
+  { en: "Remove bale rate", ar: "إزالة معدل البالات", fr: "Supprimer le tarif des balles" },
+  {
+    en: "Remove percentage bale rate",
+    ar: "إزالة نسبة مكافأة البالات",
+    fr: "Supprimer le pourcentage de prime des balles",
+  },
+  { en: "Bale Bonus Rates", ar: "معدلات مكافأة البالات", fr: "Tarifs de prime des balles" },
+  { en: "Fixed amount per bale.", ar: "مبلغ ثابت لكل بالة.", fr: "Montant fixe par balle." },
+  { en: "Add Location", ar: "إضافة موقع", fr: "Ajouter un emplacement" },
+  {
+    en: "Percentage-based bale bonus.",
+    ar: "مكافأة بالات على أساس النسبة المئوية.",
+    fr: "Prime de balles basée sur un pourcentage.",
+  },
+  {
+    en: "Changes are saved to this employee only.",
+    ar: "تُحفظ التغييرات لهذا الموظف فقط.",
+    fr: "Les modifications sont enregistrées uniquement pour cet employé.",
+  },
+  {
+    en: "No fixed bale rates configured.",
+    ar: "لا توجد معدلات ثابتة للبالات.",
+    fr: "Aucun tarif fixe de balles n’est configuré.",
+  },
+  {
+    en: "No percentage bale rates configured.",
+    ar: "لا توجد نسب مكافآت بالات مهيأة.",
+    fr: "Aucun pourcentage de prime des balles n’est configuré.",
+  },
+  {
+    en: "Search by employee name, code, or department...",
+    ar: "ابحث باسم الموظف أو الرمز أو القسم...",
+    fr: "Rechercher par nom, code ou service...",
+  },
+  { en: "Monthly payroll", ar: "الرواتب الشهرية", fr: "Paie mensuelle" },
+  { en: "No employees yet", ar: "لا يوجد موظفون بعد", fr: "Aucun employé pour le moment" },
+  { en: "No matching employees", ar: "لا يوجد موظفون مطابقون", fr: "Aucun employé correspondant" },
+  {
+    en: "Try a different search or status filter.",
+    ar: "جرّب بحثًا أو عامل تصفية حالة مختلفًا.",
+    fr: "Essayez une autre recherche ou un autre filtre d’état.",
+  },
+  {
+    en: "All employee details were saved successfully.",
+    ar: "تم حفظ جميع تفاصيل الموظف بنجاح.",
+    fr: "Tous les détails de l’employé ont été enregistrés avec succès.",
+  },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();
