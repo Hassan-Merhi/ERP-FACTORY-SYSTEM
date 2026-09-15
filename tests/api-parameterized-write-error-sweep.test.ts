@@ -4,7 +4,12 @@ import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
+import {
+  cleanupTestData,
+  closeTestServer,
+  seedTestData,
+  type TestContext,
+} from "./setup";
 import type { SerializedRouteManifest } from "./helpers/routeManifest";
 
 const ERP_PREFIX = "phase33write";
@@ -30,7 +35,9 @@ interface SweptWriteRoute {
 }
 
 function loadManifest(): SerializedRouteManifest {
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as SerializedRouteManifest;
+  return JSON.parse(
+    fs.readFileSync(MANIFEST_PATH, "utf8"),
+  ) as SerializedRouteManifest;
 }
 
 function fixtureFor(routePath: string): "erp" | "factory" {
@@ -52,11 +59,13 @@ function missingValueFor(name: string): string {
 
 export function materializeMissingWritePath(routePath: string): string {
   return routePath.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) =>
-    encodeURIComponent(missingValueFor(name))
+    encodeURIComponent(missingValueFor(name)),
   );
 }
 
-export function selectParameterizedWriteRoutes(manifest: SerializedRouteManifest): SweptWriteRoute[] {
+export function selectParameterizedWriteRoutes(
+  manifest: SerializedRouteManifest,
+): SweptWriteRoute[] {
   const seen = new Set<string>();
   const selected: SweptWriteRoute[] = [];
 
@@ -65,7 +74,9 @@ export function selectParameterizedWriteRoutes(manifest: SerializedRouteManifest
     if (!routePath?.startsWith("/api/")) continue;
     if (!routePath.includes(":")) continue;
     if (routePath.includes("*")) continue;
-    if (!(["POST", "PUT", "PATCH", "DELETE"] as string[]).includes(rawMethod)) continue;
+    if (!(["POST", "PUT", "PATCH", "DELETE"] as string[]).includes(rawMethod)) {
+      continue;
+    }
     if (EXCLUDED_PATTERNS.some((pattern) => pattern.test(routePath))) continue;
 
     const method = rawMethod as SweptWriteRoute["method"];
@@ -84,7 +95,10 @@ export function selectParameterizedWriteRoutes(manifest: SerializedRouteManifest
   return selected;
 }
 
-async function authenticatedAgent(ctx: TestContext, prefix: string): Promise<request.SuperAgentTest> {
+async function authenticatedAgent(
+  ctx: TestContext,
+  prefix: string,
+): Promise<request.SuperAgentTest> {
   const agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
     username: `${prefix}_testuser`,
@@ -92,7 +106,9 @@ async function authenticatedAgent(ctx: TestContext, prefix: string): Promise<req
   });
   expect(login.status).toBe(200);
 
-  const company = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+  const company = await agent
+    .post("/api/auth/set-company")
+    .send({ companyId: ctx.companyId });
   expect(company.status).toBe(200);
   return agent;
 }
@@ -100,7 +116,7 @@ async function authenticatedAgent(ctx: TestContext, prefix: string): Promise<req
 function issueWrite(
   agent: request.SuperAgentTest,
   route: SweptWriteRoute,
-  ctx: TestContext
+  ctx: TestContext,
 ): request.Test {
   const test =
     route.method === "POST"
