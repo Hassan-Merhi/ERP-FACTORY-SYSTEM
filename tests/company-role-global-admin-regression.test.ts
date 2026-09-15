@@ -1,34 +1,52 @@
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  canAccessTargetUser,
+  canAssignCompany,
+  canAssignExistingTargetUser,
+  canAssignRole,
+  canMutateGlobalUserAccount,
+  filterRolesForCompany,
+  type CompanyUserRoleRow,
+} from "../server/services/security/companyUserAdminScopePolicy";
+import { classifyUserLocationConfigurationRoute } from "../server/services/security/userLocationConfigurationPolicy";
 
-function read(relativePath: string): string {
-  return fs.readFileSync(path.resolve(process.cwd(), relativePath), "utf8");
-}
+const roleRows: CompanyUserRoleRow[] = [
+  { userId: "target-user", companyId: 1, role: "Admin" },
+  { userId: "target-user", companyId: 2, role: "POS" },
+];
 
 describe("Developer cross-company role administration regression", () => {
-  it("lets Developer requests with an explicit target company reach the role/configuration policies", () => {
-    const auth = read("server/auth.ts");
+  it("allows Developer to administer a target company while tenant admins stay scoped", () => {
+    expect(canAssignCompany("Developer", 2, 1)).toBe(true);
+    expect(canAssignCompany("Admin", 2, 1)).toBe(false);
+    expect(canAssignCompany("Admin", 1, 1)).toBe(true);
 
-    expect(auth).toContain('if (role === "Developer") return true;');
-    expect(auth).toContain("assertRequestCompanyMatchesSession(");
+    expect(canAssignExistingTargetUser(roleRows, "target-user", "Developer")).toBe(true);
+    expect(canMutateGlobalUserAccount(roleRows, "target-user", 1, "Developer")).toBe(true);
+    expect(canAssignRole("Developer", "Developer")).toBe(true);
+    expect(canAssignRole("Admin", "Developer")).toBe(false);
   });
 
-  it("returns all company-role assignments to Developer while tenant admins remain active-company scoped", () => {
-    const scope = read("server/middleware/companyUserRoleScope.ts");
-
-    expect(scope).toContain('if (actorRole !== "Developer") {');
-    expect(scope).toContain("filterRolesForCompany(rows.filter(hasCompanyId), companyId)");
-    expect(scope).toContain('actorRole !== "Developer" && targetRole.companyId !== companyId');
+  it("keeps tenant role visibility restricted to the active company", () => {
+    expect(filterRolesForCompany(roleRows, 1)).toEqual([
+      { userId: "target-user", companyId: 1, role: "Admin" },
+    ]);
+    expect(canAccessTargetUser(roleRows, "target-user", 1, "Admin")).toBe(true);
+    expect(canAccessTargetUser(roleRows, "target-user", 3, "Admin")).toBe(false);
   });
 
-  it("validates Developer POS locations and cash mappings against the target company, not the open company", () => {
-    const scope = read("server/middleware/userLocationConfigurationScope.ts");
-
-    expect(scope).toContain(
-      'const scopeCompanyId = actorRole === "Developer" ? route.companyId : activeCompanyId;'
-    );
-    expect(scope).toContain("eq(locations.companyId, scopeCompanyId)");
-    expect(scope).toContain("eq(ledgerAccounts.companyId, scopeCompanyId)");
+  it("classifies location and cash mappings with their explicit target company", () => {
+    expect(classifyUserLocationConfigurationRoute("/api/user-locations/target-user/2")).toEqual({
+      kind: "locations",
+      userId: "target-user",
+      companyId: 2,
+    });
+    expect(
+      classifyUserLocationConfigurationRoute("/api/user-location-cash-accounts/target-user/2")
+    ).toEqual({
+      kind: "cash-accounts",
+      userId: "target-user",
+      companyId: 2,
+    });
   });
 });
