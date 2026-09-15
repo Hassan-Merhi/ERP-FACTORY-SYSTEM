@@ -133,12 +133,14 @@ beforeEach(() => {
     ["OFFLOADED", "RECEIVED", "PARTIALLY_RECEIVED"].includes(String(c.status || "").toUpperCase())
   );
   harness.isSupplierPaidFreight.mockImplementation((c: any) => c.freightPaidBy !== "own");
-  harness.resolveDisplayFx.mockImplementation((cc: string, configured?: number, stored?: string, confirmed?: boolean) => {
-    if ((cc || "USD").toUpperCase() === "USD") return 1;
-    if (typeof configured === "number") return configured;
-    const parsed = Number(stored || 0);
-    return confirmed && Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  });
+  harness.resolveDisplayFx.mockImplementation(
+    (cc: string, configured?: number, stored?: string, confirmed?: boolean) => {
+      if ((cc || "USD").toUpperCase() === "USD") return 1;
+      if (typeof configured === "number") return configured;
+      const parsed = Number(stored || 0);
+      return confirmed && Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+  );
   harness.resolveStoredFxRate.mockImplementation((cc: string, stored?: string, confirmed?: boolean) => {
     if ((cc || "USD").toUpperCase() === "USD") return { fxRate: 1, looksSet: true };
     const parsed = Number(stored || 0);
