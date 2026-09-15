@@ -278,6 +278,16 @@ try {
     });
     expectStatus(sale, "POS sale");
     const mutationFinishedAt = Date.now();
+
+    // The production policy deliberately defers invalidation refetches while a
+    // tab is hidden. Driving the POS page in a second browser context can make
+    // headless Chrome background the watcher. Return it to the foreground so an
+    // invalidation received while hidden exercises the normal visibility catch-up
+    // path instead of making the test demand background network traffic.
+    await watcherPage.bringToFront();
+    await watcherPage.waitForFunction(() => document.visibilityState === "visible", { timeout: timeoutMs });
+    const visibilityAfterMutation = await watcherPage.evaluate(() => document.visibilityState);
+
     const refreshed = await autoRefreshPromise;
     await sleep(700);
     watcherPage.off("request", onRequest);
@@ -301,6 +311,7 @@ try {
       realtimeStatus,
       visibilityState,
       visibilityBeforeMutation,
+      visibilityAfterMutation,
       initialQuantity,
       refreshedQuantity,
       automaticInventoryRequests: watchedRequests.length,
