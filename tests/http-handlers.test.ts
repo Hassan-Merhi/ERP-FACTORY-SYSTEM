@@ -2,7 +2,7 @@
  * Unit tests for server/lib/httpHandlers.ts — the shared HTTP error primitives.
  * getErrorMessage/getErrorStack are now used across the whole server (after the
  * catch(unknown) migration), so their contract is pinned down here, along with
- * HttpError, getAuthenticatedUserId, and sendHttpError's status mapping.
+ * HttpError, getAuthenticatedUserId, database translation, and sendHttpError.
  */
 import {
   HttpError,
@@ -10,6 +10,7 @@ import {
   getErrorStack,
   getAuthenticatedUserId,
   sendHttpError,
+  translateDatabaseError,
 } from "../server/lib/httpHandlers";
 
 describe("getErrorMessage", () => {
@@ -62,6 +63,37 @@ describe("getAuthenticatedUserId", () => {
   });
 });
 
+describe("translateDatabaseError", () => {
+  it.each([
+    ["23502", 400],
+    ["23514", 400],
+    ["22P02", 400],
+    ["22003", 400],
+    ["23503", 409],
+    ["23505", 409],
+    ["40001", 409],
+    ["40P01", 409],
+    ["55P03", 409],
+    ["LOCKED_PERIOD", 409],
+    ["ACCOUNTING_PERIOD_LOCKED", 409],
+    ["STALE_RECORD", 409],
+    ["STALE_WRITE", 409],
+    ["NO_DATA_FOUND", 404],
+    ["P0002", 404],
+  ])("maps database code %s to HTTP %i", (code, status) => {
+    expect(translateDatabaseError({ code })?.statusCode).toBe(status);
+  });
+
+  it("unwraps driver errors carried as cause", () => {
+    expect(translateDatabaseError({ cause: { code: "23505" } })?.statusCode).toBe(409);
+  });
+
+  it("does not translate unknown database codes", () => {
+    expect(translateDatabaseError({ code: "XX000" })).toBeNull();
+    expect(translateDatabaseError(new Error("plain"))).toBeNull();
+  });
+});
+
 describe("sendHttpError", () => {
   function fakeRes() {
     const res = {
@@ -84,6 +116,26 @@ describe("sendHttpError", () => {
     sendHttpError(res as never, new HttpError(422, "invalid"));
     expect(res.statusCode).toBe(422);
     expect(res.body).toEqual({ message: "invalid" });
+  });
+
+  it("maps database uniqueness conflicts to 409 without leaking constraint details", () => {
+    const res = fakeRes();
+    sendHttpError(res as never, {
+      code: "23505",
+      constraint: "secret_internal_constraint_name",
+      detail: "Key (company_id, code) already exists",
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ message: "A record with the same unique value already exists." });
+  });
+
+  it("maps serialization/deadlock conflicts to retryable 409 responses", () => {
+    for (const code of ["40001", "40P01", "55P03"]) {
+      const res = fakeRes();
+      sendHttpError(res as never, { code });
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({ message: "The record changed concurrently. Reload and try again." });
+    }
   });
 
   it("maps unknown errors to 500 with a safe message", () => {

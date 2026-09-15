@@ -1,6 +1,6 @@
 import type { Express, Request, Response, RequestHandler } from "express";
 import { getClientDate } from "../../lib/dateUtils";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, sendHttpError, translateDatabaseError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { checkFactoryAdmin } from "../factory/_helpers";
 import { logAudit } from "../helpers/auditHelpers";
@@ -61,6 +61,11 @@ export function registerCentralFactoryPayrollGenerationRoute(app: Express, requi
 
       res.json(result.payrolls);
     } catch (error: unknown) {
+      if (translateDatabaseError(error)) {
+        sendHttpError(res, error);
+        return;
+      }
+
       const status = statusForGenerationError(error);
       if (status === 500) logger.error("Atomic payroll generation failed", { error });
       res.status(status).json({ message: getErrorMessage(error) });

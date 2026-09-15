@@ -234,7 +234,7 @@ export const backendMessagesPhase7TranslationsPart1: readonly Phase7BackendMessa
   {
     en: "You can only create or modify records for today's date",
     ar: "يمكنك إنشاء السجلات أو تعديلها لتاريخ اليوم فقط",
-    fr: "Vous ne pouvez créer ou modifier des enregistrements que pour la date du jour",
+    fr: "Vous ne pouvez créer ou modifier les enregistrements que pour la date du jour",
   },
   {
     en: "You can only modify records within ${editDays} day(s) of today",
@@ -250,5 +250,20 @@ export const backendMessagesPhase7TranslationsPart1: readonly Phase7BackendMessa
     en: "View Only accounts cannot make changes",
     ar: "لا يمكن لحسابات العرض فقط إجراء تغييرات",
     fr: "Les comptes en lecture seule ne peuvent pas effectuer de modifications",
+  },
+  {
+    en: "voucherDate must be a valid YYYY-MM-DD date",
+    ar: "يجب أن يكون تاريخ السند تاريخًا صالحًا بالتنسيق YYYY-MM-DD",
+    fr: "La date du bon doit être une date valide au format YYYY-MM-DD",
+  },
+  {
+    en: "Deleted stock adjustments cannot be changed",
+    ar: "لا يمكن تغيير تسويات المخزون المحذوفة",
+    fr: "Les ajustements de stock supprimés ne peuvent pas être modifiés",
+  },
+  {
+    en: "Invalid stock adjustment data",
+    ar: "بيانات تسوية المخزون غير صالحة",
+    fr: "Données d’ajustement de stock non valides",
   },
 ];
