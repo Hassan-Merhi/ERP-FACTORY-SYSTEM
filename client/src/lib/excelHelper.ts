@@ -348,7 +348,7 @@ function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
   });
   totalRow.getCell(4).numFmt = "#,##0.##";
 
-  worksheet.pageSetup.orientation = "landscape";
+  worksheet.pageSetup.orientation = "portrait";
   worksheet.pageSetup.fitToPage = true;
   worksheet.pageSetup.fitToWidth = 1;
   worksheet.pageSetup.fitToHeight = 0;
