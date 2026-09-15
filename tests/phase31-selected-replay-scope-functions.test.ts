@@ -209,9 +209,7 @@ describe("phase 31 selected historical replay scope function gaps", () => {
 
     const changedPreview = {
       ...reorderedPreview,
-      supplierRows: supplierRows.map((row) =>
-        row.supplierId === 2 ? { ...row, endingExpectedRate: 0.52 } : row
-      ),
+      supplierRows: supplierRows.map((row) => (row.supplierId === 2 ? { ...row, endingExpectedRate: 0.52 } : row)),
     };
     const changed = computeReplayFingerprint(
       7,
