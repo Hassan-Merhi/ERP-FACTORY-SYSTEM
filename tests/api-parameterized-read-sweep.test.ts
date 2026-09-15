@@ -20,6 +20,10 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(export|download|template)/i,
   /\.(xlsx|pdf|csv|zip)$/i,
   /(whatsapp|email|openai|gemini|ai-validation|track|trace)/i,
+  // This endpoint is a long-lived live feed, not a finite request/response GET.
+  // Exercising it in a bounded sweep can only end by timeout, which is not a
+  // useful server-error signal and stalls every full backend verification run.
+  /\/api\/screen-feed\/live\//i,
 ];
 
 interface SweptRoute {
@@ -66,14 +70,14 @@ function replacementFor(name: string, ctx: TestContext): string {
 
 export function materializeParameterizedPath(routePath: string, ctx: TestContext): string {
   return routePath.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) =>
-    encodeURIComponent(replacementFor(name, ctx))
+    encodeURIComponent(replacementFor(name, ctx)),
   );
 }
 
 export function selectParameterizedReadRoutes(
   manifest: SerializedRouteManifest,
   erpCtx: TestContext,
-  factoryCtx: TestContext
+  factoryCtx: TestContext,
 ): SweptRoute[] {
   const seen = new Set<string>();
   const selected: SweptRoute[] = [];
