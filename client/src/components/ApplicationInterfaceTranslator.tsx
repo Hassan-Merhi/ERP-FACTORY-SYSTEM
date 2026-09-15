@@ -29,6 +29,7 @@ import {
 import { isRetailWave1Text, translateRetailWave1Text } from "@/i18n/retailWave1Translations";
 import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailWave2Translations";
 import { isRetailWave3Text, translateRetailWave3Text } from "@/i18n/retailWave3Translations";
+import { isPayrollUiText, translatePayrollUiText } from "@/i18n/payrollUiTranslations";
 
 const HARD_EXCLUDED_SELECTOR = [
   "code",
@@ -114,7 +115,8 @@ function isApprovedNonVisualText(value: string): boolean {
     isPosItemReplacementText(value) ||
     isRetailWave1Text(value) ||
     isRetailWave2Text(value) ||
-    isRetailWave3Text(value)
+    isRetailWave3Text(value) ||
+    isPayrollUiText(value)
   );
 }
 
@@ -125,6 +127,7 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
     translateRetailWave1Text(value, language) ??
     translateRetailWave2Text(value, language) ??
     translateRetailWave3Text(value, language) ??
+    translatePayrollUiText(value, language) ??
     translateTabsFiltersText(value, language) ??
     translateVoucherKpiText(value, language) ??
     translatePhase7BackendMessageText(value, language) ??
