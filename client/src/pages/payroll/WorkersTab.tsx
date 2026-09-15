@@ -111,17 +111,12 @@ export function WorkersTab({
     return matchesSearch && matchesStatus;
   };
 
-  const filteredWorkers = useMemo(() => workersOnly.filter(matchesFilters), [workersOnly, normalizedSearch, statusFilter]);
-  const filteredGroups = useMemo(
-    () =>
-      workerGroupsOnly
-        .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
-        .filter((group) => group.members.length > 0),
-    [workerGroupsOnly, normalizedSearch, statusFilter]
-  );
-  const filteredUngroupedWorkers = useMemo(
-    () => ungroupedWorkers.filter((worker) => worker.employeeType === "Worker" && matchesFilters(worker)),
-    [ungroupedWorkers, normalizedSearch, statusFilter]
+  const filteredWorkers = workersOnly.filter(matchesFilters);
+  const filteredGroups = workerGroupsOnly
+    .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
+    .filter((group) => group.members.length > 0);
+  const filteredUngroupedWorkers = ungroupedWorkers.filter(
+    (worker) => worker.employeeType === "Worker" && matchesFilters(worker)
   );
 
   const allSelected = workersOnly.length > 0 && workersOnly.every((worker) => workerPayments[worker.id]?.selected);
