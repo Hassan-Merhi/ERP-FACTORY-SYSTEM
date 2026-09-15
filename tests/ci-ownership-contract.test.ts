@@ -13,6 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const GITHUB_CI = ".github/workflows/ci.yml";
+const MAIN_CERTIFICATION = ".github/workflows/main-certification.yml";
 const CIRCLECI = ".circleci/config.yml";
 const SHADOW_CIRCLECI = ".github/workflows/circleci-parity.yml";
 
@@ -56,5 +57,15 @@ describe("CI ownership", () => {
     // main-only on purpose, alongside the same move for GitHub Actions. Assert the
     // filters are present rather than absent, so the policy stays deliberate.
     expect(circle).toMatch(/branches:\s*\n\s*only:\s*main/);
+  });
+
+  it("bridges CircleCI to the exact-head workflow that runs on main", () => {
+    const certification = read(MAIN_CERTIFICATION);
+    const circle = read(CIRCLECI);
+
+    expect(certification).toMatch(/^name: Main Certification$/m);
+    expect(certification).toMatch(/push:\s*\n\s*branches: \[main\]/);
+    expect(circle).toContain('run.name === "Main Certification"');
+    expect(circle).not.toContain('run.name === "CI"');
   });
 });

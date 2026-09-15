@@ -4,7 +4,17 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
-import { isGoldenCoastProgrammeVoucher, isReadonlyMigratedVoucher } from "../../lib/migratedVoucherGuard";
+import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import {
+  DurableFinancialOperationError,
+  financialOperationFingerprint,
+  withDurableFinancialOperation,
+} from "../../services/accounting/durableFinancialOperation";
+import {
+  financialOperationErrorStatus,
+  financialOperationRequestPayload,
+  resolveFinancialOperationKey,
+} from "../../services/accounting/financialOperationRequest";
 import {
   assertCompaniesAccess,
   CompanyAccessError,
@@ -125,18 +135,15 @@ async function getOrCreateMigrationClearingAccount(
     name: string;
     accountType: "Asset" | "Liability";
     selectedAccountIds: ReadonlySet<number>;
-  },
+  }
 ) {
-  const rows = await tx
-    .select()
-    .from(ledgerAccounts)
-    .where(eq(ledgerAccounts.companyId, params.companyId));
+  const rows = await tx.select().from(ledgerAccounts).where(eq(ledgerAccounts.companyId, params.companyId));
 
   const exact = rows.find((row) => row.code === params.code && row.subType === MIGRATION_CLEARING_SUBTYPE);
   if (exact) {
     if (params.selectedAccountIds.has(exact.id)) {
       throw new AccountMigrationConflict(
-        `Account ${exact.code} is the account-migration clearing account and cannot be migrated in the same batch.`,
+        `Account ${exact.code} is the account-migration clearing account and cannot be migrated in the same batch.`
       );
     }
     if (exact.deletedAt) {
@@ -172,7 +179,7 @@ async function getOrCreateMigrationClearingAccount(
 async function resolveAccountMigrationDatabaseScope(
   req: Request,
   sourceCompanyId: number,
-  destinationCompanyId: number,
+  destinationCompanyId: number
 ): Promise<AccountMigrationDatabaseScope> {
   const context = getCompanyAccessContext(req);
   await assertCompaniesAccess(context.userId, [sourceCompanyId, destinationCompanyId]);
@@ -184,7 +191,7 @@ async function resolveAccountMigrationDatabaseScope(
 
 async function applyAccountMigrationDatabaseScope(
   tx: AccountMigrationTransaction,
-  scope: AccountMigrationDatabaseScope,
+  scope: AccountMigrationDatabaseScope
 ): Promise<void> {
   await tx.execute(sql`SELECT
     set_config('app.company_scope_maintenance', 'off', true),
@@ -192,11 +199,7 @@ async function applyAccountMigrationDatabaseScope(
     set_config('app.authorized_company_ids', ${scope.authorizedCompanyIds}, true)`);
 }
 
-async function lockCompanies(
-  tx: AccountMigrationTransaction,
-  sourceCompanyId: number,
-  destinationCompanyId: number,
-) {
+async function lockCompanies(tx: AccountMigrationTransaction, sourceCompanyId: number, destinationCompanyId: number) {
   const ids = [sourceCompanyId, destinationCompanyId].sort((a, b) => a - b);
   for (const companyId of ids) {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('account-migration'), ${companyId})`);
@@ -223,6 +226,9 @@ function deepestError(error: unknown): PgErrorLike {
 }
 
 function respondWithError(res: Response, error: unknown) {
+  if (error instanceof DurableFinancialOperationError) {
+    return res.status(financialOperationErrorStatus(error)).json({ message: error.message, code: error.code });
+  }
   if (error instanceof CompanyAccessError) {
     return res.status(error.status).json({ message: error.message, code: error.code });
   }
@@ -246,7 +252,7 @@ function respondWithError(res: Response, error: unknown) {
 
 function savedMigration(value: unknown): SavedMigration | null {
   if (!value || typeof value !== "object") return null;
-  const item = value as Partial<SavedMigrationV1 & SavedMigrationV2>;
+  const item = value as Partial<SavedMigrationV1> | Partial<SavedMigrationV2>;
   if (
     (item.version !== 1 && item.version !== 2) ||
     typeof item.migrationId !== "string" ||
@@ -284,280 +290,311 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
 
       try {
         const databaseScope = await resolveAccountMigrationDatabaseScope(req, srcCompanyId, destCompanyId);
-        const result = await db.transaction(async (tx) => {
-          await applyAccountMigrationDatabaseScope(tx, databaseScope);
-          await lockCompanies(tx, srcCompanyId, destCompanyId);
+        const operationKey = resolveFinancialOperationKey(req);
+        const operation = await withDurableFinancialOperation(
+          {
+            companyId: srcCompanyId,
+            operationName: "account-migration.execute",
+            idempotencyKey: operationKey,
+            requestFingerprint: financialOperationFingerprint({
+              method: req.method,
+              path: req.path,
+              companyId: srcCompanyId,
+              body: financialOperationRequestPayload(req.body),
+            }),
+          },
+          async (tx) => {
+            await applyAccountMigrationDatabaseScope(tx, databaseScope);
+            await lockCompanies(tx, srcCompanyId, destCompanyId);
 
-          const companyRows = await tx
-            .select({ id: companies.id, code: companies.code, name: companies.name })
-            .from(companies)
-            .where(inArray(companies.id, [srcCompanyId, destCompanyId]));
-          if (companyRows.length !== 2) {
-            throw new AccountMigrationConflict("Source or destination company no longer exists.", 404);
-          }
-          const sourceCompany = companyRows.find((company) => company.id === srcCompanyId)!;
-          const destinationCompany = companyRows.find((company) => company.id === destCompanyId)!;
-
-          const sourceAccounts = await tx
-            .select()
-            .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, srcCompanyId), inArray(ledgerAccounts.id, accountIds)));
-          const sourceById = new Map(sourceAccounts.map((account) => [account.id, account]));
-          const missingId = accountIds.find((id) => !sourceById.has(id));
-          if (missingId) {
-            throw new AccountMigrationConflict(
-              `Account ${missingId} is no longer in the source company. Refresh and preview again.`,
-              404,
-            );
-          }
-
-          const destinationAccounts = await tx
-            .select({ code: ledgerAccounts.code })
-            .from(ledgerAccounts)
-            .where(eq(ledgerAccounts.companyId, destCompanyId));
-          const occupiedCodes = new Set(destinationAccounts.map((account) => account.code));
-
-          const selectedEntries = await tx
-            .select()
-            .from(voucherEntries)
-            .where(inArray(voucherEntries.ledgerAccountId, accountIds));
-          const entryCount = new Map<number, number>();
-          const voucherIdsByAccount = new Map<number, Set<number>>();
-          for (const entry of selectedEntries) {
-            if (entry.ledgerAccountId === null) continue;
-            entryCount.set(entry.ledgerAccountId, (entryCount.get(entry.ledgerAccountId) ?? 0) + 1);
-            const voucherIds = voucherIdsByAccount.get(entry.ledgerAccountId) ?? new Set<number>();
-            voucherIds.add(entry.voucherId);
-            voucherIdsByAccount.set(entry.ledgerAccountId, voucherIds);
-          }
-
-          const accountPlans = accountIds.map((accountId) => {
-            const account = sourceById.get(accountId)!;
-            return {
-              account,
-              originalCode: account.code,
-              finalCode: uniqueDestinationCode(account.code, occupiedCodes),
-              entryCount: entryCount.get(accountId) ?? 0,
-              touchedVoucherIds: [...(voucherIdsByAccount.get(accountId) ?? new Set<number>())],
-            };
-          });
-
-          const touchedVoucherIds = [...new Set(accountPlans.flatMap((plan) => plan.touchedVoucherIds))];
-          const selectedAccountSet = new Set(accountIds);
-          const migrationId = randomUUID();
-          let exclusiveVoucherIds: number[] = [];
-          const splitSnapshots: SplitVoucherSnapshot[] = [];
-
-          if (touchedVoucherIds.length > 0) {
-            const [touchedVoucherRows, touchedEntries] = await Promise.all([
-              tx.select().from(vouchers).where(inArray(vouchers.id, touchedVoucherIds)),
-              tx.select().from(voucherEntries).where(inArray(voucherEntries.voucherId, touchedVoucherIds)),
-            ]);
-            if (touchedVoucherRows.length !== touchedVoucherIds.length) {
-              throw new AccountMigrationConflict("One or more historical vouchers no longer exist. Refresh and retry.");
+            const companyRows = await tx
+              .select({ id: companies.id, code: companies.code, name: companies.name })
+              .from(companies)
+              .where(inArray(companies.id, [srcCompanyId, destCompanyId]));
+            if (companyRows.length !== 2) {
+              throw new AccountMigrationConflict("Source or destination company no longer exists.", 404);
             }
-            const foreignVoucher = touchedVoucherRows.find((voucher) => voucher.companyId !== srcCompanyId);
-            if (foreignVoucher) {
+            const sourceCompany = companyRows.find((company) => company.id === srcCompanyId)!;
+            const destinationCompany = companyRows.find((company) => company.id === destCompanyId)!;
+
+            const sourceAccounts = await tx
+              .select()
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, srcCompanyId), inArray(ledgerAccounts.id, accountIds)));
+            const sourceById = new Map(sourceAccounts.map((account) => [account.id, account]));
+            const missingId = accountIds.find((id) => !sourceById.has(id));
+            if (missingId) {
               throw new AccountMigrationConflict(
-                `Voucher ${foreignVoucher.voucherNumber} belongs to another company. This account contains history from an older cross-company migration; move it back to its original company before migrating it again.`,
-              );
-            }
-            const protectedVoucher = touchedVoucherRows.find((voucher) => isGoldenCoastProgrammeVoucher(voucher));
-            if (protectedVoucher) {
-              throw new AccountMigrationConflict(
-                `Voucher ${protectedVoucher.voucherNumber} is controlled by the Golden Coast accounting programme and cannot be moved by account migration.`,
+                `Account ${missingId} is no longer in the source company. Refresh and preview again.`,
+                404
               );
             }
 
-            const entriesByVoucher = new Map<number, MigrationEntryLike[]>();
-            for (const entry of touchedEntries) {
-              const rows = entriesByVoucher.get(entry.voucherId) ?? [];
-              rows.push(entry);
-              entriesByVoucher.set(entry.voucherId, rows);
+            const destinationAccounts = await tx
+              .select({ code: ledgerAccounts.code })
+              .from(ledgerAccounts)
+              .where(eq(ledgerAccounts.companyId, destCompanyId));
+            const occupiedCodes = new Set(destinationAccounts.map((account) => account.code));
+
+            const selectedEntries = await tx
+              .select()
+              .from(voucherEntries)
+              .where(inArray(voucherEntries.ledgerAccountId, accountIds));
+            const entryCount = new Map<number, number>();
+            const voucherIdsByAccount = new Map<number, Set<number>>();
+            for (const entry of selectedEntries) {
+              if (entry.ledgerAccountId === null) continue;
+              entryCount.set(entry.ledgerAccountId, (entryCount.get(entry.ledgerAccountId) ?? 0) + 1);
+              const voucherIds = voucherIdsByAccount.get(entry.ledgerAccountId) ?? new Set<number>();
+              voucherIds.add(entry.voucherId);
+              voucherIdsByAccount.set(entry.ledgerAccountId, voucherIds);
             }
-            const voucherById = new Map(touchedVoucherRows.map((voucher) => [voucher.id, voucher]));
-            const voucherPlans = touchedVoucherIds.map((voucherId) => {
-              const plan = buildMigrationVoucherPlan(voucherId, entriesByVoucher.get(voucherId) ?? [], selectedAccountSet);
-              const sourceVoucher = voucherById.get(voucherId)!;
+
+            const accountPlans = accountIds.map((accountId) => {
+              const account = sourceById.get(accountId)!;
               return {
-                plan,
-                sourceVoucher,
-                moveIntact: plan.isExclusive && !isReadonlyMigratedVoucher(sourceVoucher),
+                account,
+                originalCode: account.code,
+                finalCode: uniqueDestinationCode(account.code, occupiedCodes),
+                entryCount: entryCount.get(accountId) ?? 0,
+                touchedVoucherIds: [...(voucherIdsByAccount.get(accountId) ?? new Set<number>())],
               };
             });
-            exclusiveVoucherIds = voucherPlans.filter((item) => item.moveIntact).map((item) => item.plan.voucherId);
-            const sharedPlans = voucherPlans.filter((item) => !item.moveIntact);
 
-            let sourceClearingAccountId: number | null = null;
-            let destinationClearingAccountId: number | null = null;
-            if (sharedPlans.length > 0) {
-              const sourceClearing = await getOrCreateMigrationClearingAccount(tx, {
-                companyId: srcCompanyId,
-                code: migrationClearingCode("AM-TO", destinationCompany.code),
-                name: `Account Migration Clearing - ${destinationCompany.name}`,
-                accountType: "Asset",
-                selectedAccountIds: selectedAccountSet,
-              });
-              const destinationClearing = await getOrCreateMigrationClearingAccount(tx, {
-                companyId: destCompanyId,
-                code: migrationClearingCode("AM-FROM", sourceCompany.code),
-                name: `Account Migration Clearing - ${sourceCompany.name}`,
-                accountType: "Liability",
-                selectedAccountIds: selectedAccountSet,
-              });
-              sourceClearingAccountId = sourceClearing.id;
-              destinationClearingAccountId = destinationClearing.id;
-            }
+            const touchedVoucherIds = [...new Set(accountPlans.flatMap((plan) => plan.touchedVoucherIds))];
+            const selectedAccountSet = new Set(accountIds);
+            const migrationId = randomUUID();
+            let exclusiveVoucherIds: number[] = [];
+            const splitSnapshots: SplitVoucherSnapshot[] = [];
 
-            for (const item of sharedPlans) {
-              if (sourceClearingAccountId === null || destinationClearingAccountId === null) {
-                throw new AccountMigrationConflict("Account-migration clearing accounts were not initialized.");
+            if (touchedVoucherIds.length > 0) {
+              const [touchedVoucherRows, touchedEntries] = await Promise.all([
+                tx.select().from(vouchers).where(inArray(vouchers.id, touchedVoucherIds)),
+                tx.select().from(voucherEntries).where(inArray(voucherEntries.voucherId, touchedVoucherIds)),
+              ]);
+              if (touchedVoucherRows.length !== touchedVoucherIds.length) {
+                throw new AccountMigrationConflict(
+                  "One or more historical vouchers no longer exist. Refresh and retry."
+                );
               }
-              const { plan, sourceVoucher } = item;
-              const voucherNumber = `AM-${migrationId.slice(0, 8)}-${sourceVoucher.id}`;
-              const [destinationVoucher] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId: destCompanyId,
-                  locationId: null,
-                  locationName: sourceVoucher.locationName,
-                  voucherNumber,
-                  voucherType: "Journal",
-                  voucherDate: sourceVoucher.voucherDate,
-                  description: `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
-                  totalAmount: migrationDestinationTotal(plan),
-                  currency: sourceVoucher.currency || "USD",
-                  optional: false,
-                  exchangeRate: sourceVoucher.exchangeRate,
-                  sourceModule: "ERP",
-                  isCreditSale: false,
-                  effectiveDate: sourceVoucher.effectiveDate,
-                })
-                .returning({ id: vouchers.id });
-              if (!destinationVoucher) {
-                throw new AccountMigrationConflict(`Could not create destination history for ${sourceVoucher.voucherNumber}.`);
+              const foreignVoucher = touchedVoucherRows.find((voucher) => voucher.companyId !== srcCompanyId);
+              if (foreignVoucher) {
+                throw new AccountMigrationConflict(
+                  `Voucher ${foreignVoucher.voucherNumber} belongs to another company. This account contains history from an older cross-company migration; move it back to its original company before migrating it again.`
+                );
               }
-
-              if (plan.selectedEntries.length > 0) {
-                await tx.insert(voucherEntries).values(
-                  plan.selectedEntries.map((entry) => ({
-                    voucherId: destinationVoucher.id,
-                    ledgerAccountId: entry.ledgerAccountId,
-                    debitAmount: entry.debitAmount ?? "0",
-                    creditAmount: entry.creditAmount ?? "0",
-                    narration: entry.narration
-                      ? `Moved from ${sourceVoucher.voucherNumber} - ${entry.narration}`
-                      : `Moved from ${sourceVoucher.voucherNumber}`,
-                    transactionCurrency: entry.transactionCurrency,
-                    transactionDebitAmount: entry.transactionDebitAmount,
-                    transactionCreditAmount: entry.transactionCreditAmount,
-                    baseDebitAmount: entry.baseDebitAmount ?? baseAmount(entry.debitAmount),
-                    baseCreditAmount: entry.baseCreditAmount ?? baseAmount(entry.creditAmount),
-                    historicalExchangeRate: entry.historicalExchangeRate,
-                    rateConvention: entry.rateConvention,
-                  })),
+              const protectedVoucher = touchedVoucherRows.find((voucher) => voucherMutationBlockReason(voucher));
+              if (protectedVoucher) {
+                throw new AccountMigrationConflict(
+                  `Voucher ${protectedVoucher.voucherNumber} ${voucherMutationBlockReason(protectedVoucher)}`
                 );
               }
 
-              const clearing = migrationClearingAmounts(plan);
-              if (clearing) {
-                await tx.insert(voucherEntries).values({
-                  voucherId: destinationVoucher.id,
-                  ledgerAccountId: destinationClearingAccountId,
-                  debitAmount: clearing.debitAmount,
-                  creditAmount: clearing.creditAmount,
-                  narration: `Account migration clearing for ${sourceVoucher.voucherNumber}`,
-                  transactionCurrency: "USD",
-                  transactionDebitAmount: baseAmount(clearing.debitAmount),
-                  transactionCreditAmount: baseAmount(clearing.creditAmount),
-                  baseDebitAmount: baseAmount(clearing.debitAmount),
-                  baseCreditAmount: baseAmount(clearing.creditAmount),
-                  historicalExchangeRate: "1.0000000000",
-                  rateConvention: "IDENTITY",
+              const entriesByVoucher = new Map<number, MigrationEntryLike[]>();
+              for (const entry of touchedEntries) {
+                const rows = entriesByVoucher.get(entry.voucherId) ?? [];
+                rows.push(entry);
+                entriesByVoucher.set(entry.voucherId, rows);
+              }
+              const voucherById = new Map(touchedVoucherRows.map((voucher) => [voucher.id, voucher]));
+              const voucherPlans = touchedVoucherIds.map((voucherId) => {
+                const plan = buildMigrationVoucherPlan(
+                  voucherId,
+                  entriesByVoucher.get(voucherId) ?? [],
+                  selectedAccountSet
+                );
+                const sourceVoucher = voucherById.get(voucherId)!;
+                return {
+                  plan,
+                  sourceVoucher,
+                  moveIntact: plan.isExclusive && !voucherMutationBlockReason(sourceVoucher),
+                };
+              });
+              exclusiveVoucherIds = voucherPlans.filter((item) => item.moveIntact).map((item) => item.plan.voucherId);
+              const sharedPlans = voucherPlans.filter((item) => !item.moveIntact);
+
+              let sourceClearingAccountId: number | null = null;
+              let destinationClearingAccountId: number | null = null;
+              if (sharedPlans.length > 0) {
+                const sourceClearing = await getOrCreateMigrationClearingAccount(tx, {
+                  companyId: srcCompanyId,
+                  code: migrationClearingCode("AM-TO", destinationCompany.code),
+                  name: `Account Migration Clearing - ${destinationCompany.name}`,
+                  accountType: "Asset",
+                  selectedAccountIds: selectedAccountSet,
+                });
+                const destinationClearing = await getOrCreateMigrationClearingAccount(tx, {
+                  companyId: destCompanyId,
+                  code: migrationClearingCode("AM-FROM", sourceCompany.code),
+                  name: `Account Migration Clearing - ${sourceCompany.name}`,
+                  accountType: "Liability",
+                  selectedAccountIds: selectedAccountSet,
+                });
+                sourceClearingAccountId = sourceClearing.id;
+                destinationClearingAccountId = destinationClearing.id;
+              }
+
+              for (const item of sharedPlans) {
+                if (sourceClearingAccountId === null || destinationClearingAccountId === null) {
+                  throw new AccountMigrationConflict("Account-migration clearing accounts were not initialized.");
+                }
+                const { plan, sourceVoucher } = item;
+                const voucherNumber = `AM-${migrationId.slice(0, 8)}-${sourceVoucher.id}`;
+                const [destinationVoucher] = await tx
+                  .insert(vouchers)
+                  .values({
+                    companyId: destCompanyId,
+                    locationId: null,
+                    locationName: sourceVoucher.locationName,
+                    voucherNumber,
+                    voucherType: "Journal",
+                    voucherDate: sourceVoucher.voucherDate,
+                    description: `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
+                    totalAmount: migrationDestinationTotal(plan),
+                    currency: sourceVoucher.currency || "USD",
+                    optional: false,
+                    exchangeRate: sourceVoucher.exchangeRate,
+                    sourceModule: "ERP",
+                    isCreditSale: false,
+                    effectiveDate: sourceVoucher.effectiveDate,
+                  })
+                  .returning({ id: vouchers.id });
+                if (!destinationVoucher) {
+                  throw new AccountMigrationConflict(
+                    `Could not create destination history for ${sourceVoucher.voucherNumber}.`
+                  );
+                }
+
+                if (plan.selectedEntries.length > 0) {
+                  await tx.insert(voucherEntries).values(
+                    plan.selectedEntries.map((entry) => ({
+                      voucherId: destinationVoucher.id,
+                      ledgerAccountId: entry.ledgerAccountId,
+                      debitAmount: entry.debitAmount ?? "0",
+                      creditAmount: entry.creditAmount ?? "0",
+                      narration: entry.narration
+                        ? `Moved from ${sourceVoucher.voucherNumber} - ${entry.narration}`
+                        : `Moved from ${sourceVoucher.voucherNumber}`,
+                      transactionCurrency: entry.transactionCurrency,
+                      transactionDebitAmount: entry.transactionDebitAmount,
+                      transactionCreditAmount: entry.transactionCreditAmount,
+                      baseDebitAmount: entry.baseDebitAmount ?? baseAmount(entry.debitAmount),
+                      baseCreditAmount: entry.baseCreditAmount ?? baseAmount(entry.creditAmount),
+                      historicalExchangeRate: entry.historicalExchangeRate,
+                      rateConvention: entry.rateConvention,
+                    }))
+                  );
+                }
+
+                const clearing = migrationClearingAmounts(plan);
+                if (clearing) {
+                  await tx.insert(voucherEntries).values({
+                    voucherId: destinationVoucher.id,
+                    ledgerAccountId: destinationClearingAccountId,
+                    debitAmount: clearing.debitAmount,
+                    creditAmount: clearing.creditAmount,
+                    narration: `Account migration clearing for ${sourceVoucher.voucherNumber}`,
+                    transactionCurrency: "USD",
+                    transactionDebitAmount: baseAmount(clearing.debitAmount),
+                    transactionCreditAmount: baseAmount(clearing.creditAmount),
+                    baseDebitAmount: baseAmount(clearing.debitAmount),
+                    baseCreditAmount: baseAmount(clearing.creditAmount),
+                    historicalExchangeRate: "1.0000000000",
+                    rateConvention: "IDENTITY",
+                  });
+                }
+
+                const remappedEntries = plan.selectedEntries.map((entry) => ({
+                  entryId: entry.id,
+                  originalLedgerAccountId: entry.ledgerAccountId!,
+                }));
+                if (remappedEntries.length > 0) {
+                  await tx
+                    .update(voucherEntries)
+                    .set({ ledgerAccountId: sourceClearingAccountId })
+                    .where(
+                      inArray(
+                        voucherEntries.id,
+                        remappedEntries.map((entry) => entry.entryId)
+                      )
+                    );
+                }
+                splitSnapshots.push({
+                  sourceVoucherId: sourceVoucher.id,
+                  destinationVoucherId: destinationVoucher.id,
+                  sourceClearingAccountId,
+                  remappedEntries,
                 });
               }
-
-              const remappedEntries = plan.selectedEntries.map((entry) => ({
-                entryId: entry.id,
-                originalLedgerAccountId: entry.ledgerAccountId!,
-              }));
-              if (remappedEntries.length > 0) {
-                await tx
-                  .update(voucherEntries)
-                  .set({ ledgerAccountId: sourceClearingAccountId })
-                  .where(inArray(voucherEntries.id, remappedEntries.map((entry) => entry.entryId)));
-              }
-              splitSnapshots.push({
-                sourceVoucherId: sourceVoucher.id,
-                destinationVoucherId: destinationVoucher.id,
-                sourceClearingAccountId,
-                remappedEntries,
-              });
             }
+
+            const controls = await detachAccountMigrationControlReferences(tx, srcCompanyId, accountIds);
+
+            for (const plan of accountPlans) {
+              await tx
+                .update(ledgerAccounts)
+                .set({ companyId: destCompanyId, code: plan.finalCode, parentId: null })
+                .where(and(eq(ledgerAccounts.id, plan.account.id), eq(ledgerAccounts.companyId, srcCompanyId)));
+            }
+            if (exclusiveVoucherIds.length > 0) {
+              await tx
+                .update(vouchers)
+                .set({ companyId: destCompanyId })
+                .where(and(eq(vouchers.companyId, srcCompanyId), inArray(vouchers.id, exclusiveVoucherIds)));
+            }
+
+            const changes: SavedMigrationV2 = {
+              version: 2,
+              migrationId,
+              srcCompanyId,
+              destCompanyId,
+              accountIds,
+              movedVoucherIds: exclusiveVoucherIds,
+              accounts: accountPlans.map((plan) => ({
+                accountId: plan.account.id,
+                originalCode: plan.originalCode,
+                finalCode: plan.finalCode,
+              })),
+              controls,
+              splitVouchers: splitSnapshots,
+            };
+            await tx.insert(auditLog).values({
+              userId: String(req.session?.userId ?? "system"),
+              username: String(req.session?.username ?? "system"),
+              companyId: srcCompanyId,
+              action: EXECUTE_ACTION,
+              tableName: "ledger_accounts",
+              recordIdentifier: migrationId,
+              changes,
+            });
+
+            return {
+              value: {
+                success: true,
+                migrationId,
+                srcCompanyId,
+                destCompanyId,
+                totalEntries: accountPlans.reduce((sum, plan) => sum + plan.entryCount, 0),
+                movedVoucherIds: exclusiveVoucherIds,
+                movedVoucherCount: exclusiveVoucherIds.length + splitSnapshots.length,
+                sharedVoucherCount: splitSnapshots.length,
+                splitVoucherCount: splitSnapshots.length,
+                detachedRoleCashAccountCount: controls.roleCashAccounts.length,
+                detachedLocationCashAccountCount: controls.locationCashAccounts.length,
+                accounts: accountPlans.map((plan) => ({
+                  accountId: plan.account.id,
+                  accountName: plan.account.name,
+                  originalCode: plan.originalCode,
+                  finalCode: plan.finalCode,
+                  entryCount: plan.entryCount,
+                  wasRenamed: plan.originalCode !== plan.finalCode,
+                })),
+              },
+              resultReference: migrationId,
+            };
           }
-
-          const controls = await detachAccountMigrationControlReferences(tx, srcCompanyId, accountIds);
-
-          for (const plan of accountPlans) {
-            await tx
-              .update(ledgerAccounts)
-              .set({ companyId: destCompanyId, code: plan.finalCode, parentId: null })
-              .where(and(eq(ledgerAccounts.id, plan.account.id), eq(ledgerAccounts.companyId, srcCompanyId)));
-          }
-          if (exclusiveVoucherIds.length > 0) {
-            await tx
-              .update(vouchers)
-              .set({ companyId: destCompanyId })
-              .where(and(eq(vouchers.companyId, srcCompanyId), inArray(vouchers.id, exclusiveVoucherIds)));
-          }
-
-          const changes: SavedMigrationV2 = {
-            version: 2,
-            migrationId,
-            srcCompanyId,
-            destCompanyId,
-            accountIds,
-            movedVoucherIds: exclusiveVoucherIds,
-            accounts: accountPlans.map((plan) => ({
-              accountId: plan.account.id,
-              originalCode: plan.originalCode,
-              finalCode: plan.finalCode,
-            })),
-            controls,
-            splitVouchers: splitSnapshots,
-          };
-          await tx.insert(auditLog).values({
-            userId: String(req.session?.userId ?? "system"),
-            username: String(req.session?.username ?? "system"),
-            companyId: srcCompanyId,
-            action: EXECUTE_ACTION,
-            tableName: "ledger_accounts",
-            recordIdentifier: migrationId,
-            changes,
-          });
-
-          return {
-            success: true,
-            migrationId,
-            srcCompanyId,
-            destCompanyId,
-            totalEntries: accountPlans.reduce((sum, plan) => sum + plan.entryCount, 0),
-            movedVoucherIds: exclusiveVoucherIds,
-            movedVoucherCount: exclusiveVoucherIds.length + splitSnapshots.length,
-            sharedVoucherCount: splitSnapshots.length,
-            splitVoucherCount: splitSnapshots.length,
-            detachedRoleCashAccountCount: controls.roleCashAccounts.length,
-            detachedLocationCashAccountCount: controls.locationCashAccounts.length,
-            accounts: accountPlans.map((plan) => ({
-              accountId: plan.account.id,
-              accountName: plan.account.name,
-              originalCode: plan.originalCode,
-              finalCode: plan.finalCode,
-              entryCount: plan.entryCount,
-              wasRenamed: plan.originalCode !== plan.finalCode,
-            })),
-          };
-        });
+        );
+        const result = operation.value;
 
         logger.info("[AccountMigration] Safe migration completed", {
           migrationId: result.migrationId,
@@ -571,7 +608,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       } catch (error: unknown) {
         return respondWithError(res, error);
       }
-    },
+    }
   );
 
   app.post(
@@ -582,7 +619,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       const accountIds = idArray(
         Array.isArray(req.body?.accounts)
           ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId)
-          : null,
+          : null
       );
       const movedVoucherIds = idArray(req.body?.movedVoucherIds, true);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);
@@ -645,7 +682,9 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
           for (const account of saved.accounts) {
             const owner = sourceCodeOwners.get(account.originalCode);
             if (owner !== undefined && owner !== account.accountId) {
-              throw new AccountMigrationConflict(`Another source-company account now uses code ${account.originalCode}.`);
+              throw new AccountMigrationConflict(
+                `Another source-company account now uses code ${account.originalCode}.`
+              );
             }
           }
 
@@ -655,13 +694,18 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                 const currentRows = await tx
                   .select({ id: voucherEntries.id, ledgerAccountId: voucherEntries.ledgerAccountId })
                   .from(voucherEntries)
-                  .where(inArray(voucherEntries.id, split.remappedEntries.map((entry) => entry.entryId)));
+                  .where(
+                    inArray(
+                      voucherEntries.id,
+                      split.remappedEntries.map((entry) => entry.entryId)
+                    )
+                  );
                 if (
                   currentRows.length !== split.remappedEntries.length ||
                   currentRows.some((entry) => entry.ledgerAccountId !== split.sourceClearingAccountId)
                 ) {
                   throw new AccountMigrationConflict(
-                    `Source voucher ${split.sourceVoucherId} changed after migration and cannot be undone automatically.`,
+                    `Source voucher ${split.sourceVoucherId} changed after migration and cannot be undone automatically.`
                   );
                 }
                 for (const remapped of split.remappedEntries) {
@@ -701,7 +745,8 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             changes: {
               restoredAccountIds: accountIds,
               restoredVoucherIds: saved.movedVoucherIds,
-              restoredSplitVoucherIds: saved.version === 2 ? saved.splitVouchers.map((item) => item.destinationVoucherId) : [],
+              restoredSplitVoucherIds:
+                saved.version === 2 ? saved.splitVouchers.map((item) => item.destinationVoucherId) : [],
               restoredRoleCashAccounts: saved.controls.roleCashAccounts.length,
               restoredLocationCashAccounts: saved.controls.locationCashAccounts.length,
             },
@@ -712,6 +757,6 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       } catch (error: unknown) {
         return respondWithError(res, error);
       }
-    },
+    }
   );
 }

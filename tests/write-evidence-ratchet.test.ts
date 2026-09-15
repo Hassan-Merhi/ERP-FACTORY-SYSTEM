@@ -174,6 +174,7 @@ describe("write evidence ratchet", () => {
       "phase-6-intrinsic-replay-safe-writers": 5,
       "phase-7-post-review-safe-writers": 1,
       "phase-8-request-identity-writers": 1,
+      "phase-9-post-review-request-identity-writers": 1,
     };
 
     for (const [groupName, expectedCount] of Object.entries(expectedCounts)) {
@@ -192,6 +193,7 @@ describe("write evidence ratchet", () => {
     expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(11);
     expect(voucherReview.summary.phase7PostReviewSafeWriters).toBe(1);
     expect(voucherReview.summary.phase8RequestIdentityCompleted).toBe(1);
+    expect(voucherReview.summary.phase9PostReviewRequestIdentityWriters).toBe(1);
   });
 
   it("keeps the original 81-path review accounting honest", () => {
