@@ -39,9 +39,15 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
   const activeCompanyId = resolveActiveCompanyId(req);
   if (!sessionUserId || !actorRole || !activeCompanyId) return true;
 
-  if (route.companyId !== activeCompanyId) {
+  // Developer administers roles globally from Settings -> Users. For that role,
+  // the company encoded in the configuration route is the authoritative target
+  // scope. Every location/account lookup below is still company-owned and is
+  // validated against that target company. All other roles stay pinned to the
+  // active company exactly as before.
+  if (route.companyId !== activeCompanyId && actorRole !== "Developer") {
     return deny(req, res, "USER_LOCATION_COMPANY_MISMATCH");
   }
+  const scopeCompanyId = actorRole === "Developer" ? route.companyId : activeCompanyId;
 
   const targetRoles = await db
     .select({
@@ -52,7 +58,7 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
     .from(userCompanyRoles)
     .where(eq(userCompanyRoles.userId, route.userId));
 
-  if (!canAccessTargetUser(targetRoles, route.userId, activeCompanyId, actorRole)) {
+  if (!canAccessTargetUser(targetRoles, route.userId, scopeCompanyId, actorRole)) {
     return deny(req, res, "USER_LOCATION_TARGET_SCOPE_DENIED");
   }
 
@@ -75,7 +81,7 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
     const rows = await db
       .select({ id: locations.id })
       .from(locations)
-      .where(and(inArray(locations.id, ids), eq(locations.companyId, activeCompanyId), isNull(locations.deletedAt)));
+      .where(and(inArray(locations.id, ids), eq(locations.companyId, scopeCompanyId), isNull(locations.deletedAt)));
     if (rows.length !== ids.length) {
       return deny(req, res, "USER_LOCATION_OWNERSHIP_INVALID", 400, "Invalid location selection");
     }
@@ -97,7 +103,7 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
       .select({ id: locations.id })
       .from(locations)
       .where(
-        and(inArray(locations.id, locationIds), eq(locations.companyId, activeCompanyId), isNull(locations.deletedAt))
+        and(inArray(locations.id, locationIds), eq(locations.companyId, scopeCompanyId), isNull(locations.deletedAt))
       ),
     db
       .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
@@ -105,7 +111,7 @@ export async function enforceUserLocationConfigurationScope(req: Request, res: R
       .where(
         and(
           inArray(ledgerAccounts.id, cashAccountIds),
-          eq(ledgerAccounts.companyId, activeCompanyId),
+          eq(ledgerAccounts.companyId, scopeCompanyId),
           isNull(ledgerAccounts.deletedAt)
         )
       ),

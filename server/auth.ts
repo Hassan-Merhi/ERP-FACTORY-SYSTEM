@@ -122,6 +122,14 @@ function authorizeExplicitCompanyScope(req: Request, res: Response): boolean {
 
   const userId = req.session.userId;
   const role = req.session.currentRole;
+
+  // Developer is the system-wide support/admin role. Its company access is
+  // already constrained by the role-specific route policies and canonical
+  // company lookups, so it must be able to send an explicit target company
+  // when managing roles, locations, ledgers, and other cross-company settings.
+  // This restores the intended behavior that was lost during later hardening.
+  if (role === "Developer") return true;
+
   const companyId = req.session.currentCompanyId ?? null;
 
   try {
