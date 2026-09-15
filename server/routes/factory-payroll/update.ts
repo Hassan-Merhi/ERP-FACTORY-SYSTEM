@@ -247,43 +247,63 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
       if (!existing) return res.status(404).json({ message: "Payroll record not found" });
 
       await db.transaction(async (tx) => {
-        const advDeducted = parseFloat(existing.advances || "0");
-        if (advDeducted > 0) {
-          const repayments = await tx
-            .select()
-            .from(factoryAdvanceRepayments)
-            .where(
-              and(
-                eq(factoryAdvanceRepayments.companyId, companyId),
-                eq(factoryAdvanceRepayments.workerId, existing.workerId),
-                eq(factoryAdvanceRepayments.payrollId, id)
-              )
-            );
-          for (const repayment of repayments) {
-            const [advance] = await tx
+        // Advance deductions belong to payroll generation, not payment. A paid
+        // undo keeps the generated payroll as DRAFT, so its repayments must stay
+        // applied. Restore them only when the generated payroll itself is removed.
+        if (existing.status !== "PAID") {
+          const advDeducted = parseFloat(existing.advances || "0");
+          if (advDeducted > 0) {
+            const repayments = await tx
               .select()
-              .from(factoryWorkerAdvances)
-              .where(eq(factoryWorkerAdvances.id, repayment.advanceId));
-            if (!advance) continue;
-            const currentBalance = parseFloat(advance.remainingBalance || "0");
-            const repaymentAmount = parseFloat(repayment.amount || "0");
-            await tx
-              .update(factoryWorkerAdvances)
-              .set({ remainingBalance: (currentBalance + repaymentAmount).toFixed(2), fullyPaid: false })
-              .where(eq(factoryWorkerAdvances.id, advance.id));
+              .from(factoryAdvanceRepayments)
+              .where(
+                and(
+                  eq(factoryAdvanceRepayments.companyId, companyId),
+                  eq(factoryAdvanceRepayments.workerId, existing.workerId),
+                  eq(factoryAdvanceRepayments.payrollId, id)
+                )
+              );
+            for (const repayment of repayments) {
+              const [advance] = await tx
+                .select()
+                .from(factoryWorkerAdvances)
+                .where(eq(factoryWorkerAdvances.id, repayment.advanceId));
+              if (!advance) continue;
+              const currentBalance = parseFloat(advance.remainingBalance || "0");
+              const repaymentAmount = parseFloat(repayment.amount || "0");
+              await tx
+                .update(factoryWorkerAdvances)
+                .set({ remainingBalance: (currentBalance + repaymentAmount).toFixed(2), fullyPaid: false })
+                .where(eq(factoryWorkerAdvances.id, advance.id));
+            }
+            await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.payrollId, id));
           }
-          await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.payrollId, id));
         }
 
-        await tx
-          .delete(factoryDaybookEntries)
-          .where(
-            and(
-              eq(factoryDaybookEntries.companyId, companyId),
-              eq(factoryDaybookEntries.referenceId, id),
-              eq(factoryDaybookEntries.referenceTable, "factory_payrolls")
-            )
-          );
+        if (existing.status === "PAID") {
+          // Payment reversal keeps the generated DRAFT. Remove payment/status
+          // history but preserve the authoritative PAYROLL_GENERATED evidence.
+          await tx
+            .delete(factoryDaybookEntries)
+            .where(
+              and(
+                eq(factoryDaybookEntries.companyId, companyId),
+                eq(factoryDaybookEntries.referenceId, id),
+                eq(factoryDaybookEntries.referenceTable, "factory_payrolls"),
+                sql`${factoryDaybookEntries.txType} <> 'PAYROLL_GENERATED'`
+              )
+            );
+        } else {
+          await tx
+            .delete(factoryDaybookEntries)
+            .where(
+              and(
+                eq(factoryDaybookEntries.companyId, companyId),
+                eq(factoryDaybookEntries.referenceId, id),
+                eq(factoryDaybookEntries.referenceTable, "factory_payrolls")
+              )
+            );
+        }
 
         const paymentVouchers = await tx
           .select({ id: vouchers.id })
@@ -303,11 +323,12 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
           await tx
             .update(factoryPayrolls)
             .set({
-              // paymentSource/paymentReference are not columns on factory_payrolls;
-              // they live in the daybook entry metaJson written when the run is paid.
+              // Payment reversal returns the generated run to an unpaid draft.
+              // Clear the selected payment account together with paid/approval state.
               status: "DRAFT",
               paidAt: null,
               approvedAt: null,
+              cashAccountId: null,
             })
             .where(eq(factoryPayrolls.id, id));
           await rebuildPayrollGenVoucher(tx, companyId, existing.periodStart, existing.periodEnd);
