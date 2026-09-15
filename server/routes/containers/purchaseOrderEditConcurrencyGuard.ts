@@ -2,7 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 
 import { requireAuth } from "../../auth";
 import { pool } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { parseId } from "../../lib/parseId";
 
@@ -112,7 +112,7 @@ async function guardPurchaseOrderEdit(req: Request, res: Response, next: NextFun
       containerId,
       error,
     });
-    res.status(500).json({ message: getErrorMessage(error) });
+    sendHttpError(res, error);
   }
 }
 
