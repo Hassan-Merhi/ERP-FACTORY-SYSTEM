@@ -76,6 +76,11 @@ const entries: Entry[] = [
   },
   { en: "Changes saved successfully", ar: "تم حفظ التغييرات بنجاح", fr: "Modifications enregistrées" },
   { en: "Document generated successfully", ar: "تم إنشاء المستند بنجاح", fr: "Document généré avec succès" },
+  {
+    en: "Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}",
+    ar: "ترحيل الحساب من {0}: {1}",
+    fr: "Migration du compte depuis {0} : {1}",
+  },
 ];
 
 const lookup = new Map<string, Entry>();

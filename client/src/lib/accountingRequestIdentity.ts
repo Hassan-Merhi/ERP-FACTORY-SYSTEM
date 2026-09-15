@@ -80,6 +80,14 @@ function isCompanyTransfer(method: string, pathname: string, data: unknown): dat
   );
 }
 
+function isAccountMigrationExecution(
+  method: string,
+  pathname: string,
+  data: unknown
+): data is AccountingRequestPayload {
+  return method.toUpperCase() === "POST" && pathname === "/api/admin/account-migration/execute" && isRecord(data);
+}
+
 function isActiveStockTransfer(method: string, pathname: string, data: unknown): data is AccountingRequestPayload {
   return (
     method.toUpperCase() === "POST" && pathname === "/api/stock-transfers" && isRecord(data) && data.voucherId == null
@@ -132,6 +140,7 @@ export function isProtectedAccountingRequest(
     isActiveDirectVoucher(method, pathname, data) ||
     isActiveGenericVoucher(method, pathname, data) ||
     isCompanyTransfer(method, pathname, data) ||
+    isAccountMigrationExecution(method, pathname, data) ||
     isActiveStockTransfer(method, pathname, data) ||
     isPhase4OperationalAccountingRequest(method, pathname, data)
   );
