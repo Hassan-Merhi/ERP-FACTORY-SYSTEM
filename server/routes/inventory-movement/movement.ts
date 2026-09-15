@@ -7,13 +7,13 @@
 import type { Express } from "express";
 import { rateLimit } from "express-rate-limit";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { calculateHistoricalLocationInventory } from "../helpers/inventoryHistoryHelpers";
-import { stockItems } from "@shared/schema";
+import { inventory, locations } from "@shared/schema";
 
-import { MONTH_NAMES_INV, dayBefore, fetchStockMovements } from "./_helpers";
+import { MONTH_NAMES_INV, dayBefore, fetchStockMovements, type StockMovementTx } from "./_helpers";
 
 const inventoryMovementLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -21,6 +21,74 @@ const inventoryMovementLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+type InventoryBalance = {
+  quantity: number;
+  totalValue: number;
+};
+
+function movementDelta(movements: StockMovementTx[]): InventoryBalance {
+  return movements.reduce(
+    (total, movement) => ({
+      quantity: total.quantity + movement.inwardQty - movement.outwardQty,
+      totalValue: total.totalValue + movement.inwardValue - movement.outwardValue,
+    }),
+    { quantity: 0, totalValue: 0 }
+  );
+}
+
+/**
+ * All Locations must use the live inventory ledger as the authoritative close.
+ * Summing stored value (rather than quantity * a rounded rate) preserves the exact
+ * asset value, and dividing the summed value by summed quantity gives the true
+ * weighted average rate across locations.
+ */
+async function getLiveCompanyInventoryBalance(companyId: number, stockItemId: number): Promise<InventoryBalance> {
+  const [row] = await db
+    .select({
+      quantity: sql<string>`COALESCE(SUM(CAST(${inventory.quantity} AS numeric)), 0)`,
+      totalValue: sql<string>`COALESCE(SUM(CAST(${inventory.totalValue} AS numeric)), 0)`,
+    })
+    .from(inventory)
+    .innerJoin(locations, eq(inventory.locationId, locations.id))
+    .where(
+      and(
+        eq(inventory.companyId, companyId),
+        eq(inventory.stockItemId, stockItemId),
+        isNull(locations.deletedAt)
+      )
+    );
+
+  return {
+    quantity: Number.parseFloat(row?.quantity ?? "0") || 0,
+    totalValue: Number.parseFloat(row?.totalValue ?? "0") || 0,
+  };
+}
+
+/**
+ * Reconstruct an All Locations balance at a historical date by starting from the
+ * authoritative current inventory total and reversing movements after the cutoff.
+ * Internal location transfers are intentionally absent from fetchStockMovements
+ * when locationId is null because they do not change company-wide stock.
+ */
+async function getCompanyInventoryBalanceAsOf(
+  companyId: number,
+  stockItemId: number,
+  asOfDate: string,
+  today: string
+): Promise<InventoryBalance> {
+  const current = await getLiveCompanyInventoryBalance(companyId, stockItemId);
+  if (asOfDate >= today) return current;
+
+  const movementsFromCutoff = await fetchStockMovements(companyId, stockItemId, null, asOfDate, null);
+  const afterCutoff = movementsFromCutoff.filter((movement) => movement.date > asOfDate);
+  const delta = movementDelta(afterCutoff);
+
+  return {
+    quantity: current.quantity - delta.quantity,
+    totalValue: current.totalValue - delta.totalValue,
+  };
+}
 
 export function registerInventoryMovementReportRoutes(app: Express) {
   // GET /api/inventory/movement — monthly summary
@@ -71,37 +139,7 @@ export function registerInventoryMovementReportRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid inventory movement date range" });
       }
 
-      // Opening balance for the period.
-      // NOTE: stockItems.openingQty/openingRate are COMPANY-WIDE master fields, not
-      // location-specific — adding them to location-filtered prior movements produces
-      // wrong (sometimes negative) results when a locationId is given. When a location
-      // is specified, derive the true opening balance for that item+location by
-      // reconstructing the historical balance backward from current live inventory
-      // (same approach used by Location Inventory "as of" reports), anchored to the
-      // day before the period start.
-      let baseQty = 0;
-      let baseRate = 0;
-      if (locationId !== null) {
-        const historical = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(sd));
-        const row = historical.find((r) => r.stockItemId === stockItemId);
-        baseQty = row ? parseFloat(row.quantity) || 0 : 0;
-        baseRate = row ? parseFloat(row.averageRate) || 0 : 0;
-      } else {
-        const [item] = await db
-          .select({ openingQty: stockItems.openingQty, openingRate: stockItems.openingRate })
-          .from(stockItems)
-          .where(eq(stockItems.id, stockItemId));
-        baseQty = parseFloat(item?.openingQty ?? "0");
-        baseRate = parseFloat(item?.openingRate ?? "0");
-      }
-
-      const priorMovements =
-        locationId !== null ? [] : await fetchStockMovements(companyId, stockItemId, locationId, null, sd, true);
       const periodMovements = await fetchStockMovements(companyId, stockItemId, locationId, sd, ed);
-
-      let runQty = baseQty + priorMovements.reduce((s, m) => s + m.inwardQty - m.outwardQty, 0);
-      let runValue = baseQty * baseRate + priorMovements.reduce((s, m) => s + m.inwardValue - m.outwardValue, 0);
-
       periodMovements.sort((a, b) => a.date.localeCompare(b.date));
 
       // Build list of months in the range. The date format is already validated above,
@@ -124,47 +162,115 @@ export function registerInventoryMovementReportRoutes(app: Express) {
         }
       }
 
-      const monthlySummary = months.map(({ year, month, monthName }) => {
-        const mStart = `${year}-${String(month).padStart(2, "0")}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-        const mTx = periodMovements.filter((t) => t.date >= mStart && t.date <= mEnd);
-        const inQty = mTx.reduce((s, t) => s + t.inwardQty, 0);
-        const inVal = mTx.reduce((s, t) => s + t.inwardValue, 0);
-        const outQty = mTx.reduce((s, t) => s + t.outwardQty, 0);
-        const outVal = mTx.reduce((s, t) => s + t.outwardValue, 0);
-        const oQty = runQty,
-          oVal = runValue;
-        const cQty = oQty + inQty - outQty;
-        const cVal = oVal + inVal - outVal;
-        runQty = cQty;
-        runValue = cVal;
-        return {
-          year,
-          month,
-          monthName,
-          openingQty: oQty,
-          openingRate: oQty !== 0 ? oVal / oQty : 0,
-          openingValue: oVal,
-          inwardQty: inQty,
-          inwardRate: inQty > 0 ? inVal / inQty : 0,
-          inwardValue: inVal,
-          outwardQty: outQty,
-          outwardRate: outQty > 0 ? outVal / outQty : 0,
-          outwardValue: outVal,
-          closingQty: cQty,
-          closingRate: cQty !== 0 ? cVal / cQty : 0,
-          closingValue: cVal,
-        };
-      });
+      let monthlySummary;
+      let closingQtyForPeriod = 0;
+      let closingValueForPeriod = 0;
+
+      if (locationId === null) {
+        // All Locations: inventory rows are the source of truth for the ending
+        // quantity/value. Reconstruct older month closes backward from that anchor.
+        // This prevents sales/movement history from inventing a negative inventory
+        // value while the real inventory table still has positive stock and value.
+        const endBalance = await getCompanyInventoryBalanceAsOf(companyId, stockItemId, ed, today);
+        closingQtyForPeriod = endBalance.quantity;
+        closingValueForPeriod = endBalance.totalValue;
+
+        let runQty = endBalance.quantity;
+        let runValue = endBalance.totalValue;
+        const rows = [];
+
+        for (let index = months.length - 1; index >= 0; index--) {
+          const { year, month, monthName } = months[index];
+          const mStart = `${year}-${String(month).padStart(2, "0")}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+          const mTx = periodMovements.filter((t) => t.date >= mStart && t.date <= mEnd);
+          const inQty = mTx.reduce((s, t) => s + t.inwardQty, 0);
+          const inVal = mTx.reduce((s, t) => s + t.inwardValue, 0);
+          const outQty = mTx.reduce((s, t) => s + t.outwardQty, 0);
+          const outVal = mTx.reduce((s, t) => s + t.outwardValue, 0);
+          const cQty = runQty;
+          const cVal = runValue;
+          const oQty = cQty - inQty + outQty;
+          const oVal = cVal - inVal + outVal;
+
+          rows.push({
+            year,
+            month,
+            monthName,
+            openingQty: oQty,
+            openingRate: oQty !== 0 ? oVal / oQty : 0,
+            openingValue: oVal,
+            inwardQty: inQty,
+            inwardRate: inQty > 0 ? inVal / inQty : 0,
+            inwardValue: inVal,
+            outwardQty: outQty,
+            outwardRate: outQty > 0 ? outVal / outQty : 0,
+            outwardValue: outVal,
+            closingQty: cQty,
+            closingRate: cQty !== 0 ? cVal / cQty : 0,
+            closingValue: cVal,
+          });
+
+          runQty = oQty;
+          runValue = oVal;
+        }
+
+        monthlySummary = rows.reverse();
+      } else {
+        // A specific location already has a location-aware historical inventory
+        // reconstruction. Keep that behavior and roll the selected period forward.
+        const historical = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(sd));
+        const row = historical.find((historicalRow) => historicalRow.stockItemId === stockItemId);
+        let runQty = row ? Number.parseFloat(row.quantity) || 0 : 0;
+        let runValue = row ? Number.parseFloat(row.totalValue) || 0 : 0;
+
+        monthlySummary = months.map(({ year, month, monthName }) => {
+          const mStart = `${year}-${String(month).padStart(2, "0")}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+          const mTx = periodMovements.filter((t) => t.date >= mStart && t.date <= mEnd);
+          const inQty = mTx.reduce((s, t) => s + t.inwardQty, 0);
+          const inVal = mTx.reduce((s, t) => s + t.inwardValue, 0);
+          const outQty = mTx.reduce((s, t) => s + t.outwardQty, 0);
+          const outVal = mTx.reduce((s, t) => s + t.outwardValue, 0);
+          const oQty = runQty;
+          const oVal = runValue;
+          const cQty = oQty + inQty - outQty;
+          const cVal = oVal + inVal - outVal;
+          runQty = cQty;
+          runValue = cVal;
+
+          return {
+            year,
+            month,
+            monthName,
+            openingQty: oQty,
+            openingRate: oQty !== 0 ? oVal / oQty : 0,
+            openingValue: oVal,
+            inwardQty: inQty,
+            inwardRate: inQty > 0 ? inVal / inQty : 0,
+            inwardValue: inVal,
+            outwardQty: outQty,
+            outwardRate: outQty > 0 ? outVal / outQty : 0,
+            outwardValue: outVal,
+            closingQty: cQty,
+            closingRate: cQty !== 0 ? cVal / cQty : 0,
+            closingValue: cVal,
+          };
+        });
+
+        closingQtyForPeriod = runQty;
+        closingValueForPeriod = runValue;
+      }
 
       const gt = {
-        inwardQty: monthlySummary.reduce((s, m) => s + m.inwardQty, 0),
-        inwardValue: monthlySummary.reduce((s, m) => s + m.inwardValue, 0),
-        outwardQty: monthlySummary.reduce((s, m) => s + m.outwardQty, 0),
-        outwardValue: monthlySummary.reduce((s, m) => s + m.outwardValue, 0),
-        closingQty: runQty,
-        closingValue: runValue,
+        inwardQty: monthlySummary.reduce((s, month) => s + month.inwardQty, 0),
+        inwardValue: monthlySummary.reduce((s, month) => s + month.inwardValue, 0),
+        outwardQty: monthlySummary.reduce((s, month) => s + month.outwardQty, 0),
+        outwardValue: monthlySummary.reduce((s, month) => s + month.outwardValue, 0),
+        closingQty: closingQtyForPeriod,
+        closingValue: closingValueForPeriod,
       };
 
       res.json({ months: monthlySummary, grandTotal: gt });
@@ -212,35 +318,22 @@ export function registerInventoryMovementReportRoutes(app: Express) {
       const mStart = `${year}-${String(month).padStart(2, "0")}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const mEnd = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const today = new Date().toISOString().slice(0, 10);
 
-      // See /api/inventory/movement above for why this can't simply add the
-      // company-wide stockItems.openingQty to location-filtered prior movements.
-      let baseQty = 0;
-      let baseRate = 0;
+      let runQty = 0;
+      let runValue = 0;
       if (locationId !== null) {
         const historical = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(mStart));
-        const row = historical.find((r) => r.stockItemId === stockItemId);
-        baseQty = row ? parseFloat(row.quantity) || 0 : 0;
-        baseRate = row ? parseFloat(row.averageRate) || 0 : 0;
+        const row = historical.find((historicalRow) => historicalRow.stockItemId === stockItemId);
+        runQty = row ? Number.parseFloat(row.quantity) || 0 : 0;
+        runValue = row ? Number.parseFloat(row.totalValue) || 0 : 0;
       } else {
-        const [item] = await db
-          .select({ openingQty: stockItems.openingQty, openingRate: stockItems.openingRate })
-          .from(stockItems)
-          .where(eq(stockItems.id, stockItemId));
-        baseQty = parseFloat(item?.openingQty ?? "0");
-        baseRate = parseFloat(item?.openingRate ?? "0");
+        const openingBalance = await getCompanyInventoryBalanceAsOf(companyId, stockItemId, dayBefore(mStart), today);
+        runQty = openingBalance.quantity;
+        runValue = openingBalance.totalValue;
       }
 
-      const [priorMovements, monthMovements] = await Promise.all([
-        locationId !== null
-          ? Promise.resolve([])
-          : fetchStockMovements(companyId, stockItemId, locationId, null, mStart, true),
-        fetchStockMovements(companyId, stockItemId, locationId, mStart, mEnd),
-      ]);
-
-      let runQty = baseQty + priorMovements.reduce((s, m) => s + m.inwardQty - m.outwardQty, 0);
-      let runValue = baseQty * baseRate + priorMovements.reduce((s, m) => s + m.inwardValue - m.outwardValue, 0);
-
+      const monthMovements = await fetchStockMovements(companyId, stockItemId, locationId, mStart, mEnd);
       monthMovements.sort((a, b) => a.date.localeCompare(b.date) || a.vchType.localeCompare(b.vchType));
 
       const transactions = [];
@@ -271,15 +364,15 @@ export function registerInventoryMovementReportRoutes(app: Express) {
         totInVal = 0,
         totOutQty = 0,
         totOutVal = 0;
-      for (const m of monthMovements) {
-        runQty += m.inwardQty - m.outwardQty;
-        runValue += m.inwardValue - m.outwardValue;
-        totInQty += m.inwardQty;
-        totInVal += m.inwardValue;
-        totOutQty += m.outwardQty;
-        totOutVal += m.outwardValue;
+      for (const movement of monthMovements) {
+        runQty += movement.inwardQty - movement.outwardQty;
+        runValue += movement.inwardValue - movement.outwardValue;
+        totInQty += movement.inwardQty;
+        totInVal += movement.inwardValue;
+        totOutQty += movement.outwardQty;
+        totOutVal += movement.outwardValue;
         transactions.push({
-          ...m,
+          ...movement,
           closingQty: runQty,
           closingRate: runQty !== 0 ? runValue / runQty : 0,
           closingValue: runValue,

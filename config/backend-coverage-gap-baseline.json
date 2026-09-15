@@ -1,0 +1,52 @@
+{
+  "snapshotNote": "Last successful full backend coverage artifact recovered from CI. Regenerate with scripts/rank-backend-coverage-gaps.mjs after the next successful backend coverage run.",
+  "capturedAt": "2026-09-07T17:55:55Z",
+  "sourceSha": "5a5d6aee43b9b49b5c7d3b22ac5e40051cc44707",
+  "totalCoverage": {
+    "lines": { "total": 97164, "covered": 36648, "skipped": 0, "pct": 37.71 },
+    "branches": { "total": 80453, "covered": 21128, "skipped": 0, "pct": 26.26 }
+  },
+  "rankingOrder": "uncoveredLines desc, uncoveredBranches desc, path asc",
+  "categoryTotals": {
+    "Accounting": { "files": 276, "uncoveredLines": 9950, "uncoveredBranches": 10725 },
+    "Inventory": { "files": 230, "uncoveredLines": 9324, "uncoveredBranches": 9102 },
+    "Factory": { "files": 159, "uncoveredLines": 9190, "uncoveredBranches": 9844 },
+    "ERP routes": { "files": 207, "uncoveredLines": 9944, "uncoveredBranches": 9344 },
+    "Auth/Security": { "files": 83, "uncoveredLines": 1370, "uncoveredBranches": 1342 },
+    "Imports/Exports": { "files": 102, "uncoveredLines": 6986, "uncoveredBranches": 5600 },
+    "Supplier Partner": { "files": 65, "uncoveredLines": 4726, "uncoveredBranches": 3859 },
+    "Miscellaneous": { "files": 288, "uncoveredLines": 8689, "uncoveredBranches": 9324 }
+  },
+  "top30": [
+    { "rank": 1, "category": "Factory", "path": "server/routes/factory/suppliers/balance/with-balances.ts", "uncoveredLines": 263, "lineTotal": 264, "lineCoveragePct": 0.37, "uncoveredBranches": 395, "branchTotal": 395, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 2, "category": "Imports/Exports", "path": "server/routes/git/gitImportRoutes.ts", "uncoveredLines": 261, "lineTotal": 265, "lineCoveragePct": 1.5, "uncoveredBranches": 185, "branchTotal": 185, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 3, "category": "Imports/Exports", "path": "server/routes/factory/customers-core/statement-pdf.ts", "uncoveredLines": 253, "lineTotal": 254, "lineCoveragePct": 0.39, "uncoveredBranches": 196, "branchTotal": 196, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 4, "category": "Imports/Exports", "path": "server/routes/stock/stockPriceListImportRoutes.ts", "uncoveredLines": 251, "lineTotal": 259, "lineCoveragePct": 3.08, "uncoveredBranches": 155, "branchTotal": 155, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 5, "category": "Inventory", "path": "server/routes/factory/bales/balesReportRoutes.ts", "uncoveredLines": 249, "lineTotal": 255, "lineCoveragePct": 2.35, "uncoveredBranches": 204, "branchTotal": 204, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 6, "category": "Imports/Exports", "path": "server/routes/factory/docs-users/companyImportRoutes.ts", "uncoveredLines": 247, "lineTotal": 254, "lineCoveragePct": 2.75, "uncoveredBranches": 173, "branchTotal": 175, "branchCoveragePct": 1.14, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 7, "category": "Supplier Partner", "path": "server/routes/sp-migration/spMigrationSalesRoutes.ts", "uncoveredLines": 237, "lineTotal": 240, "lineCoveragePct": 1.25, "uncoveredBranches": 216, "branchTotal": 216, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 8, "category": "Inventory", "path": "server/routes/container-loaded-items/reports.ts", "uncoveredLines": 237, "lineTotal": 239, "lineCoveragePct": 0.83, "uncoveredBranches": 179, "branchTotal": 179, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 9, "category": "Accounting", "path": "server/routes/accountStatementRoutes.ts", "uncoveredLines": 227, "lineTotal": 386, "lineCoveragePct": 41.19, "uncoveredBranches": 231, "branchTotal": 319, "branchCoveragePct": 27.58, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 10, "category": "Imports/Exports", "path": "server/routes/factory/bale-exports/_helpers.ts", "uncoveredLines": 227, "lineTotal": 228, "lineCoveragePct": 0.43, "uncoveredBranches": 164, "branchTotal": 164, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 11, "category": "ERP routes", "path": "server/routes/whatsappFastSendRoutes.ts", "uncoveredLines": 225, "lineTotal": 275, "lineCoveragePct": 18.18, "uncoveredBranches": 169, "branchTotal": 200, "branchCoveragePct": 15.5, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 12, "category": "Inventory", "path": "server/routes/productionBaleRoutes.ts", "uncoveredLines": 223, "lineTotal": 311, "lineCoveragePct": 28.29, "uncoveredBranches": 155, "branchTotal": 201, "branchCoveragePct": 22.88, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 13, "category": "Inventory", "path": "server/routes/factory/raw-stock/rawStockContainerRoutes.ts", "uncoveredLines": 222, "lineTotal": 231, "lineCoveragePct": 3.89, "uncoveredBranches": 261, "branchTotal": 261, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 14, "category": "Miscellaneous", "path": "server/services/container-tracking/parcels-app.ts", "uncoveredLines": 220, "lineTotal": 220, "lineCoveragePct": 0, "uncoveredBranches": 309, "branchTotal": 309, "branchCoveragePct": 0, "zeroLineCoverage": true, "zeroBranchCoverage": true },
+    { "rank": 15, "category": "Imports/Exports", "path": "server/routes/factory/customer-proformas/exports.ts", "uncoveredLines": 214, "lineTotal": 216, "lineCoveragePct": 0.92, "uncoveredBranches": 109, "branchTotal": 109, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 16, "category": "Accounting", "path": "server/routes/containers/accounting/costing.ts", "uncoveredLines": 212, "lineTotal": 213, "lineCoveragePct": 0.46, "uncoveredBranches": 293, "branchTotal": 293, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 17, "category": "Miscellaneous", "path": "server/lib/trackTraceScraper.ts", "uncoveredLines": 210, "lineTotal": 210, "lineCoveragePct": 0, "uncoveredBranches": 205, "branchTotal": 205, "branchCoveragePct": 0, "zeroLineCoverage": true, "zeroBranchCoverage": true },
+    { "rank": 18, "category": "Imports/Exports", "path": "server/routes/factory/factoryBilingualDocumentRoutes.ts", "uncoveredLines": 209, "lineTotal": 216, "lineCoveragePct": 3.24, "uncoveredBranches": 122, "branchTotal": 122, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 19, "category": "Factory", "path": "server/routes/factory/customer-orders/orderPricingRoutes.ts", "uncoveredLines": 204, "lineTotal": 209, "lineCoveragePct": 2.39, "uncoveredBranches": 175, "branchTotal": 175, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 20, "category": "ERP routes", "path": "server/routes/transporterStatementRoutes.ts", "uncoveredLines": 204, "lineTotal": 216, "lineCoveragePct": 5.55, "uncoveredBranches": 166, "branchTotal": 167, "branchCoveragePct": 0.59, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 21, "category": "Imports/Exports", "path": "server/routes/factory/stock/locationInventoryExportRoutes.ts", "uncoveredLines": 204, "lineTotal": 205, "lineCoveragePct": 0.48, "uncoveredBranches": 143, "branchTotal": 143, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 22, "category": "Inventory", "path": "server/routes/baleLookupRoutes.ts", "uncoveredLines": 201, "lineTotal": 235, "lineCoveragePct": 14.46, "uncoveredBranches": 190, "branchTotal": 206, "branchCoveragePct": 7.76, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 23, "category": "Miscellaneous", "path": "server/lib/maerskDirectScraper.ts", "uncoveredLines": 200, "lineTotal": 274, "lineCoveragePct": 27, "uncoveredBranches": 295, "branchTotal": 356, "branchCoveragePct": 17.13, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 24, "category": "Factory", "path": "server/services/factory-container-tracking/parcels-app.ts", "uncoveredLines": 198, "lineTotal": 198, "lineCoveragePct": 0, "uncoveredBranches": 294, "branchTotal": 294, "branchCoveragePct": 0, "zeroLineCoverage": true, "zeroBranchCoverage": true },
+    { "rank": 25, "category": "Factory", "path": "server/routes/factory/containers/update.ts", "uncoveredLines": 197, "lineTotal": 198, "lineCoveragePct": 0.5, "uncoveredBranches": 314, "branchTotal": 314, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 26, "category": "Supplier Partner", "path": "server/routes/sp/spGoldenCoastPhase8ContainerOffloadRoutes.ts", "uncoveredLines": 195, "lineTotal": 203, "lineCoveragePct": 3.94, "uncoveredBranches": 128, "branchTotal": 128, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 27, "category": "Accounting", "path": "server/routes/stock-summary-location/monthly-vouchers.ts", "uncoveredLines": 195, "lineTotal": 196, "lineCoveragePct": 0.51, "uncoveredBranches": 92, "branchTotal": 92, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 28, "category": "Miscellaneous", "path": "server/chat/prompts.ts", "uncoveredLines": 193, "lineTotal": 213, "lineCoveragePct": 9.38, "uncoveredBranches": 185, "branchTotal": 201, "branchCoveragePct": 7.96, "zeroLineCoverage": false, "zeroBranchCoverage": false },
+    { "rank": 29, "category": "Inventory", "path": "server/routes/stock/stockItemManageRoutes.ts", "uncoveredLines": 191, "lineTotal": 200, "lineCoveragePct": 4.5, "uncoveredBranches": 152, "branchTotal": 152, "branchCoveragePct": 0, "zeroLineCoverage": false, "zeroBranchCoverage": true },
+    { "rank": 30, "category": "ERP routes", "path": "server/routes/whatsappRoutes.ts", "uncoveredLines": 190, "lineTotal": 275, "lineCoveragePct": 30.9, "uncoveredBranches": 158, "branchTotal": 204, "branchCoveragePct": 22.54, "zeroLineCoverage": false, "zeroBranchCoverage": false }
+  ]
+}
