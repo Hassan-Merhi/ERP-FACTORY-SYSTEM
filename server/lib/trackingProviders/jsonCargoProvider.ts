@@ -165,13 +165,34 @@ export async function track(containerNumber: string, carrier: JsonCargoCarrier):
         return emptyResult("http_error", `JSONCargo returned HTTP ${response.status}`);
       }
 
-      const body = await response.json().catch(() => null);
-      const rawEta = body?.data?.eta_final_destination ?? null;
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        return emptyResult("unexpected_response", "JSONCargo returned malformed JSON");
+      }
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return emptyResult(
+          "unexpected_response",
+          "JSONCargo returned an unexpected response shape"
+        );
+      }
+      const data = (body as { data?: unknown }).data;
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        return emptyResult(
+          "unexpected_response",
+          "JSONCargo returned an unexpected response shape"
+        );
+      }
+
+      const rawEta =
+        (data as { eta_final_destination?: unknown }).eta_final_destination ?? null;
       const eta = extractEtaDate(rawEta);
 
       return { success: true, eta, errorCategory: null, errorMessage: null };
     } catch (err: unknown) {
-      const isTimeout = (err as { name?: string }).name === "TimeoutError" || (err as { name?: string }).name === "AbortError";
+      const isTimeout =
+        (err as { name?: string }).name === "TimeoutError" || (err as { name?: string }).name === "AbortError";
       lastError = isTimeout
         ? emptyResult("timeout", "JSONCargo request timed out")
         : emptyResult("network_error", "Network error contacting JSONCargo");
