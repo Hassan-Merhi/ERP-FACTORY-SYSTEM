@@ -114,14 +114,19 @@ describe("retail product and import contracts", () => {
   });
 
   it("keeps SKU/item code and description out of the product form and uses real image uploads", () => {
+    // The product form moved into RetailProductEditor.tsx when RetailInventory.tsx was
+    // split to stay under the 900-line repository limit. The negative assertions run
+    // against both halves so the contract holds wherever the form ends up living.
+    const editor = read("client/src/pages/retail/RetailProductEditor.tsx");
     const inventory = read("client/src/pages/retail/RetailInventory.tsx");
-    expect(inventory).not.toContain("SKU / Item code");
-    expect(inventory).not.toContain("Product image URLs");
-    expect(inventory).not.toContain("<Label>Description</Label>");
-    expect(inventory).toContain("Add brand");
-    expect(inventory).toContain('type="file"');
-    expect(inventory).toContain('accept="image/jpeg,image/png,image/webp,image/gif"');
-    expect(inventory).toContain('fetch("/api/files/upload"');
-    expect(inventory).toContain("buildInternalProductCode");
+    const productForm = `${editor}\n${inventory}`;
+    expect(productForm).not.toContain("SKU / Item code");
+    expect(productForm).not.toContain("Product image URLs");
+    expect(productForm).not.toContain("<Label>Description</Label>");
+    expect(editor).toContain("Add brand");
+    expect(editor).toContain('type="file"');
+    expect(editor).toContain('accept="image/jpeg,image/png,image/webp,image/gif"');
+    expect(editor).toContain('fetch("/api/files/upload"');
+    expect(editor).toContain("buildInternalProductCode");
   });
 });

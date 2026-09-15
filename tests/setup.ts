@@ -248,13 +248,16 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
     await db.delete(schema.stockItems).where(eq(schema.stockItems.companyId, company.id));
     await db.delete(schema.stockGroups).where(eq(schema.stockGroups.companyId, company.id));
+    // user_company_roles.assigned_location_id and user_locations.location_id both
+    // restrict against locations, so any fixture that pins a user to a location
+    // (a POS user, for example) blocks the locations delete. Clear them first.
+    await db.delete(schema.userCompanyRoles).where(eq(schema.userCompanyRoles.companyId, company.id));
+    await db.delete(schema.userLocations).where(eq(schema.userLocations.companyId, company.id));
     await db.delete(schema.locations).where(eq(schema.locations.companyId, company.id));
     await pool.query("DELETE FROM factory_transporters WHERE company_id = $1", [company.id]);
     await db.delete(schema.companySettings).where(eq(schema.companySettings.companyId, company.id));
     await db.delete(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.companyId, company.id));
     await db.delete(schema.userSecurityPermissions).where(eq(schema.userSecurityPermissions.companyId, company.id));
-    await db.delete(schema.userCompanyRoles).where(eq(schema.userCompanyRoles.companyId, company.id));
-    await db.delete(schema.userLocations).where(eq(schema.userLocations.companyId, company.id));
 
     // Normal container records are also created by PO tests. Remove their
     // restricting child rows before deleting the containers themselves.
