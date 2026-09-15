@@ -34,26 +34,29 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("server/routes/admin/accountMigrationSafeRoutes.ts")
           source = path.read_text()
 
-          old = '''  if (item.version === 1) return item as SavedMigrationV1;
-          if (!Array.isArray(item.splitVouchers)) return null;
-          return item as SavedMigrationV2;'''
-          new = '''  if (item.version === 1) return item as SavedMigrationV1;
-          const v2 = item as Partial<SavedMigrationV2>;
-          if (!Array.isArray(v2.splitVouchers)) return null;
-          return v2 as SavedMigrationV2;'''
-          if old not in source:
-              raise SystemExit("savedMigration target not found")
-          source = source.replace(old, new, 1)
+          source, count = re.subn(
+              r'if \(item\.version === 1\) return item as SavedMigrationV1;\s*if \(!Array\.isArray\(item\.splitVouchers\)\) return null;\s*return item as SavedMigrationV2;',
+              'if (item.version === 1) return item as SavedMigrationV1;\n  const v2 = item as Partial<SavedMigrationV2>;\n  if (!Array.isArray(v2.splitVouchers)) return null;\n  return v2 as SavedMigrationV2;',
+              source,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"savedMigration replacement count={count}")
 
-          old_description = '''                  description: `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,'''
-          new_description = '''                  description: /* data-business-value */ `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,'''
-          if old_description not in source:
-              raise SystemExit("migration description target not found")
-          source = source.replace(old_description, new_description, 1)
+          source, count = re.subn(
+              r'description:\s*`Account migration from \$\{sourceCompany\.name\}: \$\{sourceVoucher\.description \|\| sourceVoucher\.voucherNumber\}`',
+              'description: /* data-business-value */ `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`',
+              source,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f"migration description replacement count={count}")
+
           path.write_text(source)
           PY
 
