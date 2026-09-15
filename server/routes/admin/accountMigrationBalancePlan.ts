@@ -10,6 +10,7 @@ export type MigrationEntryLike = {
   factorySupplierId?: number | null;
   debitAmount: string | null;
   creditAmount: string | null;
+  narration?: string | null;
   transactionCurrency?: string | null;
   transactionDebitAmount?: string | null;
   transactionCreditAmount?: string | null;
