@@ -1,18 +1,24 @@
 import Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 import type { DbTransaction } from "../../db";
-import { firstRow } from "../../lib/queryResult";
+import { firstRow, resultRows } from "../../lib/queryResult";
 
 const ZERO = new Decimal(0);
 const QTY_DP = 3;
 const RATE_DP = 2;
 const VALUE_DP = 2;
+const QTY_EPSILON = new Decimal("0.0005");
 
 type InventoryRow = {
   id: number;
   quantity: string | number | null;
   average_rate: string | number | null;
   total_value: string | number | null;
+};
+
+type NegativeLayerRow = {
+  id: number;
+  qty: string | number | null;
 };
 
 function decimal(value: string | number | null | undefined): Decimal {
@@ -31,12 +37,59 @@ export interface ExactInventoryRestoreResult {
 }
 
 /**
+ * Release only the shortage quantity that an incoming historical reversal
+ * actually resolves. A historical reversal is not a new receipt, so no cost
+ * variance is booked; this only keeps the shortage ledger quantity aligned with
+ * the live negative inventory balance.
+ */
+async function releaseResolvedNegativeLayers(
+  tx: DbTransaction,
+  companyId: number,
+  locationId: number,
+  stockItemId: number,
+  quantityToRelease: Decimal
+): Promise<void> {
+  if (quantityToRelease.lte(QTY_EPSILON)) return;
+
+  const result = await tx.execute(sql`
+    SELECT id, qty
+    FROM inventory_negative_layers
+    WHERE company_id = ${companyId}
+      AND location_id = ${locationId}
+      AND stock_item_id = ${stockItemId}
+    ORDER BY id ASC
+    FOR UPDATE
+  `);
+
+  let remaining = quantityToRelease;
+  for (const layer of resultRows<NegativeLayerRow>(result)) {
+    if (remaining.lte(QTY_EPSILON)) break;
+
+    const layerQty = Decimal.max(decimal(layer.qty), ZERO);
+    const consume = Decimal.min(layerQty, remaining);
+    const layerRemainder = layerQty.minus(consume);
+    remaining = remaining.minus(consume);
+
+    if (layerRemainder.lt(QTY_EPSILON)) {
+      await tx.execute(sql`DELETE FROM inventory_negative_layers WHERE id = ${layer.id}`);
+    } else {
+      await tx.execute(sql`
+        UPDATE inventory_negative_layers
+        SET qty = ${layerRemainder.toFixed(QTY_DP)}, updated_at = NOW()
+        WHERE id = ${layer.id}
+      `);
+    }
+  }
+}
+
+/**
  * Restore a historical inventory issue using its exact stored quantity and value.
  *
- * This is intentionally different from a normal receipt. A receipt may settle
- * FIFO negative-stock layers; reversing an existing document must not consume
- * unrelated shortage layers or rebuild historical value from today's rounded
- * average rate.
+ * This is intentionally different from a normal receipt. It does not recost the
+ * historical issue or rebuild value from today's rounded average. If live stock
+ * is negative, however, increasing quantity necessarily resolves part of that
+ * shortage, so the matching aggregate quantity is released from the negative
+ * layer ledger as part of the same transaction.
  */
 export async function restoreInventoryByExactValue(
   tx: DbTransaction,
@@ -96,6 +149,9 @@ export async function restoreInventoryByExactValue(
   const currentRate = Decimal.max(decimal(existing.average_rate), ZERO);
   const currentValue = Decimal.max(decimal(existing.total_value), ZERO);
   const newQty = currentQty.plus(restoreQty);
+  const shortageResolved = currentQty.isNegative() ? Decimal.min(currentQty.abs(), restoreQty) : ZERO;
+
+  await releaseResolvedNegativeLayers(tx, companyId, locationId, stockItemId, shortageResolved);
 
   let newValue = ZERO;
   let newRate = restoreRate.gt(ZERO) ? restoreRate : currentRate;

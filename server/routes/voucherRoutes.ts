@@ -20,6 +20,7 @@ import { registerVoucherJournalRoutes } from "./vouchers/voucherJournalRoutes";
 import { registerVoucherSalesUpdateRoutes } from "./vouchers/sales-update";
 import { registerVoucherPurchaseUpdateRoutes } from "./vouchers/voucherPurchaseUpdateRoutes";
 import { registerVoucherTransferRoutes } from "./vouchers/transfer";
+import { registerExactStockTransferEditRoute } from "./vouchers/exactStockTransferEditRoute";
 import { registerSmartTransferPreviewRoutes } from "./vouchers/smartTransferPreviewRoutes";
 import { registerStockTransferLifecycleRoutes } from "./vouchers/stockTransferLifecycleRoutes";
 import { registerStockTransferRevisionLifecycleRoutes } from "./vouchers/stockTransferRevisionLifecycleRoutes";
@@ -78,6 +79,10 @@ export function registerVoucherRoutes(app: Express) {
   // Stock adjustments reverse and reapply the exact persisted quantity/value.
   // Register before both the legacy adjustment editor and generic voucher delete.
   registerExactStockAdjustmentLifecycleRoutes(app);
+
+  // Posted transfer edits use the exact persisted quantity/value lifecycle.
+  // Draft/optional edits fall through to the dedicated save/finalize flow.
+  registerExactStockTransferEditRoute(app);
 
   // Stock-transfer lifecycle routes must shadow the older direct transfer editor.
   registerStockTransferLifecycleRoutes(app);
