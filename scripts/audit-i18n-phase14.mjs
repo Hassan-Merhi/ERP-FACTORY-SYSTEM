@@ -80,6 +80,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/retailWave1Translations.ts",
   "client/src/i18n/retailWave2Translations.ts",
   "client/src/i18n/retailWave3Translations.ts",
+  "client/src/i18n/payrollUiTranslations.ts",
 ];
 
 const reviewedTechnicalValues = new Set([
