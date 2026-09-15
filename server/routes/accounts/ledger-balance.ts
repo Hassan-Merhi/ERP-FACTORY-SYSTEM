@@ -9,7 +9,15 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { bankAccounts, vouchers, voucherEntries, customers, customerBalances, customerOrders } from "@shared/schema";
+import {
+  bankAccounts,
+  ledgerAccounts,
+  vouchers,
+  voucherEntries,
+  customers,
+  customerBalances,
+  customerOrders,
+} from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 
 export function registerAccountLedgerBalanceRoutes(app: Express) {
@@ -18,25 +26,38 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
     res.set("Cache-Control", "no-store");
     try {
       const ledgerAccountId = parseInt(req.params.id);
+      const companyId = req.session.currentCompanyId;
 
       if (isNaN(ledgerAccountId)) {
         return res.status(400).json({ message: "Invalid ledger account ID" });
       }
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
 
-      const account = await storage.getLedgerAccountById(ledgerAccountId);
+      // Resolve the account inside the active tenant. Looking up by global ID
+      // first leaked balances for accounts owned by another company.
+      const [account] = await db
+        .select({
+          openingBalance: ledgerAccounts.openingBalance,
+          openingBalanceSide: ledgerAccounts.openingBalanceSide,
+        })
+        .from(ledgerAccounts)
+        .where(and(eq(ledgerAccounts.id, ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
+        .limit(1);
 
-      // If not found as a ledger account, it may be a bank account ID (entries stored
-      // in voucherEntries.bankAccountId, not ledgerAccountId). Compute balance from
-      // the bankAccounts table + getVoucherEntriesByBankAccount so the Daybook entry
-      // balance display shows the correct value instead of $0.
+      // If not found as a ledger account in this company, it may be a bank account
+      // ID in this company (entries are stored in voucherEntries.bankAccountId).
       if (!account) {
         const [bankAcct] = await db
           .select({ openingBalance: bankAccounts.openingBalance, openingBalanceSide: bankAccounts.openingBalanceSide })
           .from(bankAccounts)
-          .where(eq(bankAccounts.id, ledgerAccountId))
+          .where(and(eq(bankAccounts.id, ledgerAccountId), eq(bankAccounts.companyId, companyId)))
           .limit(1);
 
         if (!bankAcct) {
+          // Use 404 for wrong-company IDs as well as genuinely missing IDs so the
+          // route does not disclose that another tenant owns the resource.
           return res.status(404).json({ message: "Account not found" });
         }
 
@@ -53,17 +74,17 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         return res.json({ balance: bankBalance });
       }
 
-      // Check if this ledger account is linked to a customer
+      // Check if this ledger account is linked to a customer in the same tenant.
       const [linkedCustomer] = await db
         .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
         .from(customers)
-        .where(eq(customers.ledgerAccountId, ledgerAccountId))
+        .where(and(eq(customers.ledgerAccountId, ledgerAccountId), eq(customers.companyId, companyId)))
         .limit(1);
 
       // For factory customer-linked ledger accounts, use the same combined formula
       // as /api/factory/customers so the Accounts page balance matches the Customers page.
       if (linkedCustomer) {
-        const currentCompany = await storage.getCompanyById(req.session?.currentCompanyId || 0);
+        const currentCompany = await storage.getCompanyById(companyId);
         if (currentCompany?.companyType === "factory") {
           const custId = linkedCustomer.id;
           const [salesRows, cbRows, lVoucherRows, cVoucherRows] = await Promise.all([
@@ -75,7 +96,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
               .where(
                 and(
                   eq(customerOrders.customerId, custId),
-                  eq(customerOrders.companyId, req.session?.currentCompanyId || 0),
+                  eq(customerOrders.companyId, companyId),
                   eq(customerOrders.status, "FINALIZED")
                 )
               ),
@@ -88,7 +109,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
               .where(
                 and(
                   eq(customerBalances.customerId, custId),
-                  eq(customerBalances.companyId, req.session?.currentCompanyId || 0),
+                  eq(customerBalances.companyId, companyId),
                   sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`
                 )
               ),
@@ -102,6 +123,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
                 vouchers,
                 and(
                   eq(voucherEntries.voucherId, vouchers.id),
+                  eq(vouchers.companyId, companyId),
                   eq(vouchers.optional, false),
                   isNull(vouchers.deletedAt),
                   sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
@@ -118,6 +140,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
                 vouchers,
                 and(
                   eq(voucherEntries.voucherId, vouchers.id),
+                  eq(vouchers.companyId, companyId),
                   eq(vouchers.optional, false),
                   isNull(vouchers.deletedAt),
                   sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
@@ -136,13 +159,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         }
       }
 
-      const companyIdForBalance = req.session.currentCompanyId as number | undefined;
-      const transactions = await storage.getVoucherEntriesByLedger(
-        ledgerAccountId,
-        undefined,
-        undefined,
-        companyIdForBalance
-      );
+      const transactions = await storage.getVoucherEntriesByLedger(ledgerAccountId, undefined, undefined, companyId);
       let debits = 0;
       let credits = 0;
       for (const tx of transactions) {
@@ -152,8 +169,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
 
       // Some bank accounts have a linkedLedgerId pointing to this ledger account.
       // Their voucher entries are stored under bankAccountId (not ledgerAccountId),
-      // so getVoucherEntriesByLedger misses them. Mirror the factoryWorkerPayrollRoutes
-      // pattern: find linked banks and fold in their entries + opening balances.
+      // so getVoucherEntriesByLedger misses them. Keep those bank lookups tenant-scoped.
       const linkedBanks = await db
         .select({
           id: bankAccounts.id,
@@ -161,7 +177,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
           openingBalanceSide: bankAccounts.openingBalanceSide,
         })
         .from(bankAccounts)
-        .where(eq(bankAccounts.linkedLedgerId, ledgerAccountId));
+        .where(and(eq(bankAccounts.linkedLedgerId, ledgerAccountId), eq(bankAccounts.companyId, companyId)));
 
       let linkedBankOB = 0;
       for (const bank of linkedBanks) {
@@ -189,8 +205,21 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
   app.get("/api/accounts/ledger/:id/currency-balances", requireAuth, async (req, res) => {
     try {
       const ledgerAccountId = parseInt(req.params.id);
+      const companyId = req.session.currentCompanyId;
       if (isNaN(ledgerAccountId)) {
         return res.status(400).json({ message: "Invalid ledger account ID" });
+      }
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
+
+      const [ownedAccount] = await db
+        .select({ id: ledgerAccounts.id })
+        .from(ledgerAccounts)
+        .where(and(eq(ledgerAccounts.id, ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
+        .limit(1);
+      if (!ownedAccount) {
+        return res.status(404).json({ message: "Account not found" });
       }
 
       const rows = await db
@@ -204,6 +233,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         .where(
           and(
             eq(voucherEntries.ledgerAccountId, ledgerAccountId),
+            eq(vouchers.companyId, companyId),
             eq(vouchers.optional, false),
             isNull(vouchers.deletedAt)
           )
