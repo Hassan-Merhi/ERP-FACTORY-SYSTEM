@@ -206,7 +206,10 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
       .where(eq(userCompanyRoles.id, roleId))
       .limit(1);
 
-    if (!targetRole || (actorRole !== "Developer" && targetRole.companyId !== companyId)) {
+    if (
+      !targetRole ||
+      (actorRole !== "Developer" && targetRole.companyId !== companyId)
+    ) {
       return deny(req, res, companyId, "ROLE_RECORD_SCOPE_DENIED", "Role not found");
     }
 
