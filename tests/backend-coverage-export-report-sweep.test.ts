@@ -162,7 +162,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 read-only export/report sweep", () => {
+describe("Phase 1 read-only export/report sweep", () => {
   it("executes safe report and export generators without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(10);
     const failures: Array<{ route: string; status: number; detail: string }> = [];

@@ -163,7 +163,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 company-mode read sweep", () => {
+describe("Phase 1 company-mode read sweep", () => {
   it("executes parameterless reads inside their actual company modes", async () => {
     expect(routes.length).toBeGreaterThan(100);
     const failures: Array<{ route: string; status: number; detail: string }> = [];
