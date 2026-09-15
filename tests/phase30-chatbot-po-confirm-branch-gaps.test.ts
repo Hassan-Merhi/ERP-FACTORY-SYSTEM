@@ -236,10 +236,13 @@ describe("Phase 30 chatbot PO confirm branch gaps", () => {
   });
 
   it("blocks an existing container that already has imported purchase orders", async () => {
-    queueQueries([], [
-      { id: 1, poNumber: "PO-OLD-1" },
-      { id: 2, poNumber: "PO-OLD-2" },
-    ]);
+    queueQueries(
+      [],
+      [
+        { id: 1, poNumber: "PO-OLD-1" },
+        { id: 2, poNumber: "PO-OLD-2" },
+      ]
+    );
     harness.getContainerByNumber.mockResolvedValue({ id: 321, containerNumber: "MSKU1234567" });
     const handler = captureConfirmHandler();
     const res = responseHarness();
@@ -308,7 +311,13 @@ describe("Phase 30 chatbot PO confirm branch gaps", () => {
     expect(harness.insertValues).toHaveBeenCalledTimes(3);
     expect(harness.insertValues).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ stockItemId: 20, itemName: "Widget", quantity: "2.000", rate: "3.50", lineTotal: "7.00" })
+      expect.objectContaining({
+        stockItemId: 20,
+        itemName: "Widget",
+        quantity: "2.000",
+        rate: "3.50",
+        lineTotal: "7.00",
+      })
     );
     expect(harness.insertValues).toHaveBeenNthCalledWith(2, expect.objectContaining({ itemName: "Raw Bale" }));
     expect(harness.insertValues).toHaveBeenNthCalledWith(3, expect.objectContaining({ itemName: "Unknown Item" }));
