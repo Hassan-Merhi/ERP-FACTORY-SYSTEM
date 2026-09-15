@@ -76,9 +76,7 @@ function richContext(): ERPContext {
   return makeContext({
     inventory: [{ id: 1 }],
     locations: [{ id: 1, name: "Main" }],
-    inventoryValueByLocation: [
-      { locationId: 1, locationName: "Main", totalValue: 1250, itemCount: 2 },
-    ],
+    inventoryValueByLocation: [{ locationId: 1, locationName: "Main", totalValue: 1250, itemCount: 2 }],
     stockItems: [{ id: 1 }],
     suppliers: [
       {
@@ -89,9 +87,7 @@ function richContext(): ERPContext {
         email: "s@example.com",
       },
     ],
-    customers: [
-      { id: 1, code: "CUS-1", legalName: "Customer One", phone: "456" },
-    ],
+    customers: [{ id: 1, code: "CUS-1", legalName: "Customer One", phone: "456" }],
     profitAnalysis: {
       totalSales: "15000",
       totalCost: "9000",
@@ -142,9 +138,7 @@ function richContext(): ERPContext {
         isOverdue: false,
       },
     ],
-    employeeBalances: [
-      { employeeName: "Worker One", employeeCode: "E1", balance: 150 },
-    ],
+    employeeBalances: [{ employeeName: "Worker One", employeeCode: "E1", balance: 150 }],
     topSellingItems: [
       {
         itemName: "Top Item",
@@ -242,9 +236,7 @@ function richContext(): ERPContext {
         groupName: "Group One",
         totalQuantity: 10,
         totalValue: 500,
-        locations: [
-          { locationName: "Main", quantity: 10, averageRate: 50 },
-        ],
+        locations: [{ locationName: "Main", quantity: 10, averageRate: 50 }],
       },
     ],
     recentSalesHistory: [
@@ -301,14 +293,14 @@ describe("Phase 33 chat prompt behavior", () => {
     ["create a new stock item called Blue Bale", "create_stock_item"],
     ["transfer stock item A from Main to Store", "create_stock_transfer"],
     ["find voucher 1042", "search_voucher"],
-    ["show ledger account cash", "account_query"],
+    ["show account balance for cash", "account_query"],
     ["update selling price for item A", "price_update"],
     ["download excel template", "excel_import"],
     ["give me a monthly business summary", "business_summary"],
     ["show sales revenue and profit", "sales_query"],
     ["how much inventory is in stock", "inventory_query"],
     ["show supplier balances", "supplier_query"],
-    ["which customers owe us", "customer_query"],
+    ["show customer outstanding balances", "customer_query"],
     ["hello", "general_knowledge"],
   ])("classifies %s as %s", (message, expected) => {
     expect(classifyChatIntent(message)).toBe(expected);
@@ -367,9 +359,7 @@ describe("Phase 33 chat prompt behavior", () => {
             status: "LOW",
           },
         ],
-        locationBreakdown: [
-          { location: "Main", quantity: 10, avgCost: 12, totalValue: 120 },
-        ],
+        locationBreakdown: [{ location: "Main", quantity: 10, avgCost: 12, totalValue: 120 }],
       } as never,
       { currentRoute: "/stock" },
     );
@@ -404,9 +394,7 @@ describe("Phase 33 chat prompt behavior", () => {
     const customer = buildToolSystemPrompt(
       "customer_query",
       {
-        customers: [
-          { id: 1, name: "Customer One", code: "C1", phone: null },
-        ],
+        customers: [{ id: 1, name: "Customer One", code: "C1", phone: null }],
       } as never,
     );
     expect(customer).toContain("CUSTOMER DATA");
@@ -430,9 +418,7 @@ describe("Phase 33 chat prompt behavior", () => {
         margin: 40,
         transactions: 10,
       },
-      topItemsThisMonth: [
-        { name: "Item A", revenue: 500, profit: 200, qty: 5 },
-      ],
+      topItemsThisMonth: [{ name: "Item A", revenue: 500, profit: 200, qty: 5 }],
       openPurchaseOrders: 2,
     };
 
