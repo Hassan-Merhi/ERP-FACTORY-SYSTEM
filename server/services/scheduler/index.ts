@@ -13,11 +13,29 @@ import { createSchedulerTick } from "./schedulerTickGuard";
 let locationStockCronStarted = false;
 
 /**
+ * Scheduler disabling is a process-wide safety switch, not merely a convention
+ * for server/index.ts. Keeping the check here means tests, scripts, or future
+ * startup paths cannot accidentally register cron jobs when the deployment has
+ * explicitly disabled them.
+ */
+export function schedulersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENABLE_SCHEDULERS !== "false";
+}
+
+/**
  * Register the existing schedules without eagerly evaluating their report,
  * export, WhatsApp, or accounting dependency graphs. The actual job module is
  * loaded on the tick that needs it; schedules and job behavior are unchanged.
  */
 export function startScheduler(): void {
+  if (!schedulersEnabled()) {
+    logger.info("Schedulers disabled; cron registration skipped", {
+      module: "scheduler",
+      action: "start",
+    });
+    return;
+  }
+
   startCoreScheduler();
   if (locationStockCronStarted) return;
   locationStockCronStarted = true;
