@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -27,6 +28,7 @@ import {
 import { ConfirmationDialog } from "@/components/ConfirmationDialog";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import type { Employee } from "@shared/schema";
+import type { EmployeeGroup } from "./payrollTypes";
 import { getEmpAvatarColor, getEmpInitials } from "./payrollSchemas";
 
 interface EmployeesTabProps {
@@ -37,6 +39,10 @@ interface EmployeesTabProps {
   setCreateEmployeeDialogOpen: (val: boolean) => void;
   employeeStaff: (Employee & { calculatedBalance: string })[];
   filteredEmployeeStaff: (Employee & { calculatedBalance: string })[];
+  employeeGroups: EmployeeGroup[];
+  setCreateGroupDialogOpen: (val: boolean) => void;
+  setSelectedGroupForMembers: (group: EmployeeGroup | null) => void;
+  setGroupMembersDialogOpen: (val: boolean) => void;
   pendingBonuses: Record<number, { amount: number; description: string; employeeName: string }>;
   setBulkDepositSelections: (val: Record<number, boolean>) => void;
   setBulkDepositDialogOpen: (val: boolean) => void;
@@ -63,6 +69,10 @@ export function EmployeesTab({
   setCreateEmployeeDialogOpen,
   employeeStaff,
   filteredEmployeeStaff,
+  employeeGroups,
+  setCreateGroupDialogOpen,
+  setSelectedGroupForMembers,
+  setGroupMembersDialogOpen,
   pendingBonuses,
   setBulkDepositSelections,
   setBulkDepositDialogOpen,
@@ -154,6 +164,36 @@ export function EmployeesTab({
                 </Button>
               ))}
             </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-10" data-testid="button-employee-groups">
+                  <Users className="mr-2 h-4 w-4" />
+                  Groups
+                  <ChevronDown className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setCreateGroupDialogOpen(true)} data-testid="button-create-employee-group">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Group
+                </DropdownMenuItem>
+                {employeeGroups.length > 0 && <DropdownMenuSeparator />}
+                {employeeGroups.map((group) => (
+                  <DropdownMenuItem
+                    key={group.id}
+                    onClick={() => {
+                      setSelectedGroupForMembers(group);
+                      setGroupMembersDialogOpen(true);
+                    }}
+                    data-testid={`button-manage-employee-group-${group.id}`}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    <span className="truncate">{group.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {employeeStaff.length > 0 && (
               <DropdownMenu>
