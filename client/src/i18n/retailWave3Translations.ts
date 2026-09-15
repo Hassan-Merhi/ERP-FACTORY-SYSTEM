@@ -159,6 +159,24 @@ export const retailWave3Translations: readonly Phase3SharedUiEntry[] = [
     fr: "Tous les détails de l’employé ont été enregistrés avec succès.",
   },
   { en: "Invalid employee group", ar: "مجموعة الموظف غير صالحة", fr: "Groupe d’employé non valide" },
+
+  // Current-main user-facing validation messages surfaced by the same full
+  // classified audit. Cover them rather than loosening the reviewed baseline.
+  {
+    en: "voucherDate must be a valid YYYY-MM-DD date",
+    ar: "يجب أن يكون تاريخ القسيمة تاريخًا صالحًا بالتنسيق YYYY-MM-DD",
+    fr: "La date du justificatif doit être une date valide au format YYYY-MM-DD",
+  },
+  {
+    en: "Deleted stock adjustments cannot be changed",
+    ar: "لا يمكن تغيير تسويات المخزون المحذوفة",
+    fr: "Les ajustements de stock supprimés ne peuvent pas être modifiés",
+  },
+  {
+    en: "Invalid stock adjustment data",
+    ar: "بيانات تسوية المخزون غير صالحة",
+    fr: "Données d’ajustement de stock non valides",
+  },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();
