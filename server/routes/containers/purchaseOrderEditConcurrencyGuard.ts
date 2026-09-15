@@ -62,7 +62,7 @@ async function guardPurchaseOrderEdit(req: Request, res: Response, next: NextFun
       released = true;
       res.status(409).json({
         code: "PURCHASE_ORDER_CONTAINER_REQUIRED",
-        message: "Purchase order is not linked to a valid container.",
+        message: "Container not found",
       });
       return;
     }
@@ -95,7 +95,7 @@ async function guardPurchaseOrderEdit(req: Request, res: Response, next: NextFun
       await release();
       res.status(409).json({
         code: "PURCHASE_ORDER_STALE",
-        message: "Purchase order changed while the edit was starting. Reload it and try again.",
+        message: "Please try again.",
       });
       return;
     }
@@ -155,7 +155,7 @@ export function installPurchaseOrderEditConcurrencyGuard(app: Express): void {
   const originalHandle = originalLayer?.handle;
 
   if (!originalLayer || !originalHandle) {
-    throw new Error("Unable to install purchase-order concurrency guard: PATCH handler was not registered");
+    throw new Error("PURCHASE_ORDER_PATCH_HANDLER_MISSING");
   }
 
   const originalHandleName = originalHandle.name;
