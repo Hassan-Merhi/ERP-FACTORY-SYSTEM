@@ -166,23 +166,33 @@ export function usePayrollModel() {
     if (statementEmployee) setStatementExpanded(false);
   }, [setStatementExpanded, statementEmployee]);
 
-  // Pre-populate edit employee form + load bale rates when editingEmployee changes
+  // Pre-populate every editable employee field so opening the dialog never
+  // replaces persisted values with react-hook-form defaults on save.
   useEffect(() => {
     if (!editingEmployee) return;
     const employeeGroupId = (editingEmployee as Employee & { employeeGroupId?: number | null }).employeeGroupId;
     editEmployeeForm.reset({
-      firstName: editingEmployee.firstName || "",
-      lastName: editingEmployee.lastName || "",
-      code: editingEmployee.code || "",
-      monthlySalary: editingEmployee.monthlySalary || "",
-      employeeGroupId: employeeGroupId ? String(employeeGroupId) : "",
-      salesBonusPct: editingEmployee.salesBonusPct ? String(editingEmployee.salesBonusPct) : "",
-      salesBonusPctLocationId: editingEmployee.salesBonusPctLocationId
-        ? String(editingEmployee.salesBonusPctLocationId)
-        : "",
-      salesBonusPctSourceCompanyId: editingEmployee.salesBonusPctSourceCompanyId
-        ? String(editingEmployee.salesBonusPctSourceCompanyId)
-        : "",
+      firstName: editingEmployee.firstName ?? "",
+      lastName: editingEmployee.lastName ?? "",
+      code: editingEmployee.code ?? "",
+      monthlySalary: editingEmployee.monthlySalary ?? "0",
+      department: editingEmployee.department ?? "",
+      joinDate: editingEmployee.joinDate ? String(editingEmployee.joinDate).slice(0, 10) : "",
+      active: editingEmployee.active ?? true,
+      employeeGroupId: employeeGroupId ? String(employeeGroupId) : "none",
+      salesBonusPct:
+        editingEmployee.salesBonusPct !== null && editingEmployee.salesBonusPct !== undefined
+          ? String(editingEmployee.salesBonusPct)
+          : "",
+      salesBonusPctLocationId:
+        editingEmployee.salesBonusPctLocationId !== null && editingEmployee.salesBonusPctLocationId !== undefined
+          ? String(editingEmployee.salesBonusPctLocationId)
+          : "",
+      salesBonusPctSourceCompanyId:
+        editingEmployee.salesBonusPctSourceCompanyId !== null &&
+        editingEmployee.salesBonusPctSourceCompanyId !== undefined
+          ? String(editingEmployee.salesBonusPctSourceCompanyId)
+          : "",
     });
     // Load bale rates
     fetch(`/api/employees/${editingEmployee.id}/bale-rates`, { credentials: "include" })
@@ -630,39 +640,30 @@ export function usePayrollModel() {
     mutationFn: async (data: EmployeeFormData) => {
       if (!editingEmployee) throw new Error("No employee selected");
       await modeApiRequest("PATCH", `/api/employees/${editingEmployee.id}`, data);
-      // Save bale rates
-      await fetch(`/api/employees/${editingEmployee.id}/bale-rates`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(
-          editBaleRates
-            .filter((r) => r.locationId && r.rate)
-            .map((r) => ({
-              locationId: parseInt(r.locationId),
-              rate: parseFloat(r.rate),
-              sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
-            }))
-        ),
-      });
-      // Save pct rates
-      await fetch(`/api/employees/${editingEmployee.id}/bale-pct-rates`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(
-          editBalePctRates
-            .filter((r) => r.locationId && r.pct)
-            .map((r) => ({
-              locationId: parseInt(r.locationId),
-              pct: parseFloat(r.pct),
-              sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
-            }))
-        ),
-      });
+
+      const baleRates = editBaleRates
+        .filter((row) => row.locationId && row.rate)
+        .map((row) => ({
+          locationId: parseInt(row.locationId),
+          rate: parseFloat(row.rate),
+          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
+        }));
+      const balePctRates = editBalePctRates
+        .filter((row) => row.locationId && row.pct)
+        .map((row) => ({
+          locationId: parseInt(row.locationId),
+          pct: parseFloat(row.pct),
+          sourceCompanyId: row.sourceCompanyId ? parseInt(row.sourceCompanyId) : null,
+        }));
+
+      // These endpoints expect an object containing `rates`. Using the shared
+      // request helper also makes a failed rate save reject the mutation instead
+      // of closing the dialog and falsely reporting success.
+      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-rates`, { rates: baleRates });
+      await modeApiRequest("PUT", `/api/employees/${editingEmployee.id}/bale-pct-rates`, { rates: balePctRates });
     },
     onSuccess: () => {
-      toast({ title: "Employee updated" });
+      toast({ title: "Employee updated", description: "All employee details were saved successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setEditEmployeeDialogOpen(false);
       setEditingEmployee(null);
