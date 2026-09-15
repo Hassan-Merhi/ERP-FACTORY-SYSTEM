@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   companies,
@@ -15,6 +15,7 @@ import {
   retailStockOperations,
   retailVariantInventory,
 } from "@shared/schema";
+import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
@@ -282,7 +283,7 @@ async function loadSaleResponse(companyId: number, saleId: number) {
 }
 
 export function registerRetailPosRoutes(app: Express): void {
-  app.get("/api/pos/retail/items", async (req, res) => {
+  app.get("/api/pos/retail/items", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -353,7 +354,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/barcodes/:barcode", async (req, res) => {
+  app.get("/api/pos/retail/barcodes/:barcode", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -410,7 +411,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales", async (req, res) => {
+  app.post("/api/pos/retail/sales", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -501,7 +502,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/sales", async (req, res) => {
+  app.get("/api/pos/retail/sales", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -523,7 +524,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/returns", async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/returns", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -574,27 +575,31 @@ export function registerRetailPosRoutes(app: Express): void {
         for (const item of body.items)
           aggregate.set(item.saleItemId, (aggregate.get(item.saleItemId) ?? 0) + item.quantity);
 
-        for (const [saleItemId, quantity] of aggregate) {
-          await tx.execute(
-            sql`select id from retail_pos_sale_items where id = ${saleItemId} and sale_id = ${saleId} for update`
-          );
-          const [saleItem] = await tx
-            .select({
-              id: retailPosSaleItems.id,
-              variantId: retailPosSaleItems.variantId,
-              quantity: retailPosSaleItems.quantity,
-              returnedQuantity: retailPosSaleItems.returnedQuantity,
-              unitPrice: retailPosSaleItems.unitPrice,
-            })
-            .from(retailPosSaleItems)
-            .where(
-              and(
-                eq(retailPosSaleItems.id, saleItemId),
-                eq(retailPosSaleItems.saleId, saleId),
-                eq(retailPosSaleItems.companyId, companyId)
-              )
+        // Lock and preload every referenced sale item in one statement. Locking in a
+        // deterministic id order also keeps concurrent returns from deadlocking each other.
+        const saleItemIds = [...aggregate.keys()].sort((a, b) => a - b);
+        const saleItemRows = await tx
+          .select({
+            id: retailPosSaleItems.id,
+            variantId: retailPosSaleItems.variantId,
+            quantity: retailPosSaleItems.quantity,
+            returnedQuantity: retailPosSaleItems.returnedQuantity,
+            unitPrice: retailPosSaleItems.unitPrice,
+          })
+          .from(retailPosSaleItems)
+          .where(
+            and(
+              inArray(retailPosSaleItems.id, saleItemIds),
+              eq(retailPosSaleItems.saleId, saleId),
+              eq(retailPosSaleItems.companyId, companyId)
             )
-            .limit(1);
+          )
+          .orderBy(retailPosSaleItems.id)
+          .for("update");
+        const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
+
+        for (const [saleItemId, quantity] of aggregate) {
+          const saleItem = saleItemsById.get(saleItemId);
           if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
           const sold = toNumber(saleItem.quantity);
           const alreadyReturned = toNumber(saleItem.returnedQuantity);
@@ -643,7 +648,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/transfers", async (req, res) => {
+  app.post("/api/pos/retail/transfers", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -737,7 +742,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/adjustments", async (req, res) => {
+  app.post("/api/pos/retail/adjustments", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -783,7 +788,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/cancel", async (req, res) => {
+  app.post("/api/pos/retail/sales/:saleId/cancel", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
@@ -863,7 +868,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/pos/retail/movements", async (req, res) => {
+  app.get("/api/pos/retail/movements", requireAuth, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;

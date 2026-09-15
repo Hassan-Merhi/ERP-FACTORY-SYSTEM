@@ -17,6 +17,7 @@ export interface OperationalPermissionRouteMatch {
   permissionKey: string;
   developerOnly?: boolean;
   deniedRoles?: readonly string[];
+  permissionBypassRoles?: readonly string[];
 }
 
 function normalizePath(path: string): string {
@@ -38,7 +39,7 @@ const IMPORT_PREFIXES = [
   "/api/import",
 ];
 
-const POS_IMPORT_PREFIX = "/api/pos-import";
+const POS_SALES_IMPORT_PREFIXES = ["/api/pos-import", "/api/credit-sales-import"] as const;
 const ARABIC_TRANSLATION_TEMPLATE_PATH = "/api/factory/bale-products/arabic-template";
 
 function posShiftPermission(method: string, path: string): OperationalPermissionRouteMatch | null {
@@ -54,10 +55,7 @@ function posShiftPermission(method: string, path: string): OperationalPermission
     };
   }
 
-  if (
-    normalizedMethod === "GET" &&
-    (path === "/api/pos/shifts/history" || /^\/api\/pos\/shifts\/\d+$/.test(path))
-  ) {
+  if (normalizedMethod === "GET" && (path === "/api/pos/shifts/history" || /^\/api\/pos\/shifts\/\d+$/.test(path))) {
     return {
       operation: "pos-shift-summary",
       permissionType: "pos",
@@ -68,8 +66,8 @@ function posShiftPermission(method: string, path: string): OperationalPermission
   return null;
 }
 
-function isPosImportRoute(path: string): boolean {
-  return path === POS_IMPORT_PREFIX || path.startsWith(`${POS_IMPORT_PREFIX}/`);
+function isPosSalesImportRoute(path: string): boolean {
+  return POS_SALES_IMPORT_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function isImportRoute(method: string, path: string): boolean {
@@ -85,9 +83,7 @@ function isImportRoute(method: string, path: string): boolean {
 
 function isBulkMaintenanceRoute(method: string, path: string): boolean {
   if (!isMutation(method)) return false;
-  return /(?:^|[-/])(repair|recalculate|rebuild|cleanup|backfill|reconcile|resync|fix)(?:[-/]|$)/.test(
-    path
-  );
+  return /(?:^|[-/])(repair|recalculate|rebuild|cleanup|backfill|reconcile|resync|fix)(?:[-/]|$)/.test(path);
 }
 
 function exportPermission(path: string): OperationalPermissionRouteMatch | null {
@@ -168,14 +164,17 @@ export function classifyOperationalPermissionRoute(
   const shiftPermission = posShiftPermission(method, path);
   if (shiftPermission) return shiftPermission;
 
-  // POS Excel import is an intentional POS workflow when enabled for the company.
-  // POS roles are allowed by default for action permissions, while View Only stays blocked.
-  if (isPosImportRoute(path)) {
+  // POS Excel imports are intentional sales workflows. POS users must be able to
+  // import both normal/cash sales and customer/credit sales even when the broad
+  // "Import Data" restriction is disabled for their role. Other roles still use
+  // the normal act_import_data permission, and View Only remains blocked.
+  if (isPosSalesImportRoute(path)) {
     return {
       operation: "import",
       permissionType: "action",
       permissionKey: "act_import_data",
       deniedRoles: ["View Only"],
+      permissionBypassRoles: ["POS"],
     };
   }
 
