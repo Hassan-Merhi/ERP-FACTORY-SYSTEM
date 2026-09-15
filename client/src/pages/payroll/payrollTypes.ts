@@ -14,6 +14,7 @@ export interface EmployeeGroup {
   id: number;
   name: string;
   description?: string | null;
+  groupType?: string | null;
 }
 
 export interface WorkerGroup {

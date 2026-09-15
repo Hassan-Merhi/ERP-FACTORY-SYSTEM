@@ -111,17 +111,12 @@ export function WorkersTab({
     return matchesSearch && matchesStatus;
   };
 
-  const filteredWorkers = useMemo(() => workersOnly.filter(matchesFilters), [workersOnly, normalizedSearch, statusFilter]);
-  const filteredGroups = useMemo(
-    () =>
-      workerGroupsOnly
-        .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
-        .filter((group) => group.members.length > 0),
-    [workerGroupsOnly, normalizedSearch, statusFilter]
-  );
-  const filteredUngroupedWorkers = useMemo(
-    () => ungroupedWorkers.filter((worker) => worker.employeeType === "Worker" && matchesFilters(worker)),
-    [ungroupedWorkers, normalizedSearch, statusFilter]
+  const filteredWorkers = workersOnly.filter(matchesFilters);
+  const filteredGroups = workerGroupsOnly
+    .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
+    .filter((group) => group.members.length > 0);
+  const filteredUngroupedWorkers = ungroupedWorkers.filter(
+    (worker) => worker.employeeType === "Worker" && matchesFilters(worker)
   );
 
   const allSelected = workersOnly.length > 0 && workersOnly.every((worker) => workerPayments[worker.id]?.selected);
@@ -252,7 +247,10 @@ export function WorkersTab({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setCreateWorkerGroupDialogOpen(true)} data-testid="button-create-worker-group">
+                <DropdownMenuItem
+                  onClick={() => setCreateWorkerGroupDialogOpen(true)}
+                  data-testid="button-create-worker-group"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Create Group
                 </DropdownMenuItem>
@@ -336,7 +334,8 @@ export function WorkersTab({
                       {groupSelected > 0 && <Badge>{groupSelected} selected</Badge>}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Worker-only group · {groupSelected > 0 ? `${formatAmount(groupPayTotal)} selected pay` : "No workers selected"}
+                      Worker-only group ·{" "}
+                      {groupSelected > 0 ? `${formatAmount(groupPayTotal)} selected pay` : "No workers selected"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
