@@ -51,9 +51,7 @@ function missingValueFor(name: string): string {
 }
 
 export function materializeMissingWritePath(routePath: string): string {
-  return routePath.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) =>
-    encodeURIComponent(missingValueFor(name))
-  );
+  return routePath.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) => encodeURIComponent(missingValueFor(name)));
 }
 
 export function selectParameterizedWriteRoutes(manifest: SerializedRouteManifest): SweptWriteRoute[] {

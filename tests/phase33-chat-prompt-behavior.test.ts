@@ -366,37 +366,31 @@ describe("Phase 33 chat prompt behavior", () => {
     expect(inventory).toContain("LOCATION BREAKDOWN");
     expect(inventory).toContain("LOW STOCK ALERTS");
 
-    const supplier = buildToolSystemPrompt(
-      "supplier_query",
-      {
-        suppliers: [
-          {
-            id: 1,
-            name: "Supplier One",
-            code: "S1",
-            phone: null,
-            email: null,
-            openingBalance: "0",
-          },
-        ],
-        supplierBalances: [
-          {
-            supplierName: "Supplier One",
-            supplierCode: "S1",
-            balance: 100,
-            status: "Payable",
-          },
-        ],
-      } as never
-    );
+    const supplier = buildToolSystemPrompt("supplier_query", {
+      suppliers: [
+        {
+          id: 1,
+          name: "Supplier One",
+          code: "S1",
+          phone: null,
+          email: null,
+          openingBalance: "0",
+        },
+      ],
+      supplierBalances: [
+        {
+          supplierName: "Supplier One",
+          supplierCode: "S1",
+          balance: 100,
+          status: "Payable",
+        },
+      ],
+    } as never);
     expect(supplier).toContain("SUPPLIER BALANCES");
 
-    const customer = buildToolSystemPrompt(
-      "customer_query",
-      {
-        customers: [{ id: 1, name: "Customer One", code: "C1", phone: null }],
-      } as never
-    );
+    const customer = buildToolSystemPrompt("customer_query", {
+      customers: [{ id: 1, name: "Customer One", code: "C1", phone: null }],
+    } as never);
     expect(customer).toContain("CUSTOMER DATA");
   });
 
@@ -422,64 +416,58 @@ describe("Phase 33 chat prompt behavior", () => {
       openPurchaseOrders: 2,
     };
 
-    const sales = buildToolSystemPrompt(
-      "sales_query",
-      {
-        summary,
-        matchedItems: [
-          {
-            id: 1,
-            name: "Item A",
-            code: "A",
-            totalQty: 10,
-            sellingPrice: 20,
-            avgCost: 12,
-            totalValue: 120,
-            pricingStatus: "PROFITABLE",
-          },
-        ],
-        salesHistory: [
-          {
-            date: "2026-09-15",
-            voucherNumber: "V1",
-            qty: 1,
-            sellingPrice: 20,
-            costPrice: 12,
-            profit: 8,
-          },
-        ],
-      } as never
-    );
+    const sales = buildToolSystemPrompt("sales_query", {
+      summary,
+      matchedItems: [
+        {
+          id: 1,
+          name: "Item A",
+          code: "A",
+          totalQty: 10,
+          sellingPrice: 20,
+          avgCost: 12,
+          totalValue: 120,
+          pricingStatus: "PROFITABLE",
+        },
+      ],
+      salesHistory: [
+        {
+          date: "2026-09-15",
+          voucherNumber: "V1",
+          qty: 1,
+          sellingPrice: 20,
+          costPrice: 12,
+          profit: 8,
+        },
+      ],
+    } as never);
     expect(sales).toContain("MATCHED ITEM");
     expect(sales).toContain("Recent sales history");
 
-    const business = buildToolSystemPrompt(
-      "business_summary",
-      {
-        summary,
-        lowStock: [
-          {
-            id: 1,
-            name: "Low",
-            code: "L",
-            qty: 1,
-            reorderLevel: 5,
-            status: "LOW",
-          },
-        ],
-        pricingHealth: [
-          {
-            id: 1,
-            name: "Loss",
-            code: "LOSS",
-            sellingPrice: 5,
-            avgCost: 7,
-            priceGap: -2,
-            status: "LOSING",
-          },
-        ],
-      } as never
-    );
+    const business = buildToolSystemPrompt("business_summary", {
+      summary,
+      lowStock: [
+        {
+          id: 1,
+          name: "Low",
+          code: "L",
+          qty: 1,
+          reorderLevel: 5,
+          status: "LOW",
+        },
+      ],
+      pricingHealth: [
+        {
+          id: 1,
+          name: "Loss",
+          code: "LOSS",
+          sellingPrice: 5,
+          avgCost: 7,
+          priceGap: -2,
+          status: "LOSING",
+        },
+      ],
+    } as never);
     expect(business).toContain("Low stock alerts");
     expect(business).toContain("selling below cost");
   });
