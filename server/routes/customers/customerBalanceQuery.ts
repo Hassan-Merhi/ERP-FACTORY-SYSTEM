@@ -126,9 +126,6 @@ export async function getCustomersWithBalances(companyId: number) {
       ...customer,
       balance: Math.abs(balance),
       balanceSide: balance >= 0 ? "Dr" : "Cr",
-      balancesByCurrency: customer.ledgerAccountId
-        ? (ledgerCurrency.get(customer.ledgerAccountId) ?? {})
-        : (customerCurrency.get(customer.id) ?? {}),
       historicalBaseBalance:
         openingNet +
         (customer.ledgerAccountId
