@@ -262,7 +262,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 parameterized backend route matrix", () => {
+describe("Phase 1 parameterized backend route matrix", () => {
   it("executes the broad parameterized API surface without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(250);
     const failures: Array<{ route: string; status: number; detail: string }> = [];

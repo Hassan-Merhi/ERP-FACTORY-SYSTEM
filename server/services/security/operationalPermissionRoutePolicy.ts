@@ -55,10 +55,7 @@ function posShiftPermission(method: string, path: string): OperationalPermission
     };
   }
 
-  if (
-    normalizedMethod === "GET" &&
-    (path === "/api/pos/shifts/history" || /^\/api\/pos\/shifts\/\d+$/.test(path))
-  ) {
+  if (normalizedMethod === "GET" && (path === "/api/pos/shifts/history" || /^\/api\/pos\/shifts\/\d+$/.test(path))) {
     return {
       operation: "pos-shift-summary",
       permissionType: "pos",
@@ -70,9 +67,7 @@ function posShiftPermission(method: string, path: string): OperationalPermission
 }
 
 function isPosSalesImportRoute(path: string): boolean {
-  return POS_SALES_IMPORT_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
-  );
+  return POS_SALES_IMPORT_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function isImportRoute(method: string, path: string): boolean {
@@ -88,9 +83,7 @@ function isImportRoute(method: string, path: string): boolean {
 
 function isBulkMaintenanceRoute(method: string, path: string): boolean {
   if (!isMutation(method)) return false;
-  return /(?:^|[-/])(repair|recalculate|rebuild|cleanup|backfill|reconcile|resync|fix)(?:[-/]|$)/.test(
-    path
-  );
+  return /(?:^|[-/])(repair|recalculate|rebuild|cleanup|backfill|reconcile|resync|fix)(?:[-/]|$)/.test(path);
 }
 
 function exportPermission(path: string): OperationalPermissionRouteMatch | null {

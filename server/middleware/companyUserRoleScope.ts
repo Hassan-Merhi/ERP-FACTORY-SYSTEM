@@ -130,9 +130,14 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
     if (!canAccessTargetUser(targetRows, targetUserId, companyId, actorRole)) {
       return deny(req, res, companyId, "USER_COMPANY_SCOPE_DENIED", "User not found");
     }
-    // Rows without a numeric companyId could never match the active company, so
-    // dropping them in the guard leaves the filtered result unchanged.
-    installJsonArrayFilter(res, (rows) => filterRolesForCompany(rows.filter(hasCompanyId), companyId));
+    // Developer is the global support/admin role and must be able to see every
+    // assignment for a user from the shared Settings -> Users screen. Tenant
+    // admins remain limited to the active company exactly as before.
+    if (actorRole !== "Developer") {
+      // Rows without a numeric companyId could never match the active company,
+      // so dropping them in the guard leaves the filtered result unchanged.
+      installJsonArrayFilter(res, (rows) => filterRolesForCompany(rows.filter(hasCompanyId), companyId));
+    }
     return true;
   }
 
@@ -201,12 +206,12 @@ export async function enforceCompanyUserRoleScope(req: Request, res: Response): 
       .where(eq(userCompanyRoles.id, roleId))
       .limit(1);
 
-    if (!targetRole || targetRole.companyId !== companyId) {
+    if (!targetRole || (actorRole !== "Developer" && targetRole.companyId !== companyId)) {
       return deny(req, res, companyId, "ROLE_RECORD_SCOPE_DENIED", "Role not found");
     }
 
     const targetRows = await loadRoleRows(targetRole.userId);
-    if (!canAccessTargetUser(targetRows, targetRole.userId, companyId, actorRole)) {
+    if (actorRole !== "Developer" && !canAccessTargetUser(targetRows, targetRole.userId, companyId, actorRole)) {
       return deny(req, res, companyId, "ROLE_TARGET_SCOPE_DENIED", "Role not found");
     }
 

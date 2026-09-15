@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
 import path from "path";
 
 /**
@@ -13,6 +14,12 @@ import path from "path";
  *     npm run test:smoke-sweep
  */
 export default defineConfig({
+  // tsconfig sets jsx "preserve" for the Vite React build, so without this esbuild
+  // leaves JSX in its output and import analysis cannot parse it. These suites run in
+  // node and never render, but a few reach client modules whose import graph includes
+  // a .tsx - the route guards pull in FactorySidebar's nav tables - so they still need
+  // the transform. Same plugin the frontend config already uses.
+  plugins: [react()],
   test: {
     globals: true,
     environment: "node",

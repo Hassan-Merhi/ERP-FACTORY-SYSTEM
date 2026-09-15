@@ -2,6 +2,7 @@ import { isAbortError } from "./abortError";
 import {
   BANDWIDTH_INVALIDATION_CHANNEL,
   getBandwidthInvalidationScope,
+  registerBandwidthCacheInvalidator,
   shouldClearBandwidthEntry,
   type BandwidthCacheScope,
   type BandwidthInvalidationMessage,
@@ -320,6 +321,14 @@ export function installBandwidthPhase1HotspotGuard(): void {
     clearCache(scope);
     invalidationChannel?.postMessage({ type: "invalidate", scope } satisfies BandwidthInvalidationMessage);
   };
+
+  // Writes from other sessions reach this tab as a realtime message, never as a
+  // local request. Let that path drop these snapshots synchronously, before the
+  // refetch it triggers would otherwise be served from them.
+  registerBandwidthCacheInvalidator((scope) => {
+    bumpWriteGeneration(scope);
+    clearCache(scope);
+  });
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = requestMethod(input, init);

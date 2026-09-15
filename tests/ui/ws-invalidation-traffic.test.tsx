@@ -7,6 +7,7 @@ import {
   useWsInvalidation,
 } from "@/hooks/use-ws-invalidation";
 import type { RealtimeInvalidationMessage } from "@shared/realtimeInvalidation";
+import { registerBandwidthCacheInvalidator } from "@/lib/bandwidthInvalidationPolicy";
 
 /**
  * Realtime writes should refresh only dependent active queries, while bursts,
@@ -349,6 +350,41 @@ describe("WebSocket invalidation traffic", () => {
 
     sockets[1].onopen?.();
     expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops the cached read snapshots before refetching a write from another session", () => {
+    const client = new QueryClient();
+    const order: string[] = [];
+    const unregister = registerBandwidthCacheInvalidator((scope) => order.push(`cache:${scope}`));
+    vi.spyOn(client, "invalidateQueries").mockImplementation(() => {
+      order.push("queries");
+      return Promise.resolve();
+    });
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["inventory"], locationIds: [7] });
+    vi.advanceTimersByTime(400);
+    unregister();
+
+    // A snapshot cached by this tab answers the refetch without a request, so it
+    // has to be gone before the refetch starts or the screen keeps stale numbers.
+    expect(order).toEqual(["cache:live", "queries"]);
+  });
+
+  it("keeps long-lived reference snapshots until reference data itself changes", () => {
+    const client = new QueryClient();
+    const scopes: string[] = [];
+    const unregister = registerBandwidthCacheInvalidator((scope) => scopes.push(scope));
+    vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["reference"] });
+    vi.advanceTimersByTime(400);
+    sockets[0].receiveInvalidate({ type: "invalidate" });
+    vi.advanceTimersByTime(400);
+    unregister();
+
+    expect(scopes).toEqual(["all", "all"]);
   });
 
   it("caps reconnect backoff at thirty seconds", () => {

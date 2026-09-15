@@ -208,7 +208,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 ERP and partner write validation matrix", () => {
+describe("Phase 1 ERP and partner write validation matrix", () => {
   it("executes domain validation paths without 5xx or lost authentication", async () => {
     expect(routes.length).toBeGreaterThan(30);
     const failures: Array<{ route: string; status: number; detail: string }> = [];
