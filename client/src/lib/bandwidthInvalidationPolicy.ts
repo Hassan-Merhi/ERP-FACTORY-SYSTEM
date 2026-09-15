@@ -49,3 +49,30 @@ export function shouldClearBandwidthEntry(
 ): boolean {
   return invalidationScope === "all" || entryScope === "live";
 }
+
+/**
+ * The read caches above are cleared by writes this browser tab makes itself.
+ * A write made by another user in another session never passes through this
+ * tab's fetch wrapper, so its realtime invalidation used to refetch straight
+ * out of a snapshot that the write had just made wrong — the query refreshed
+ * without a request and the screen kept the old numbers until the TTL expired.
+ *
+ * Each installed guard registers its own synchronous clear here so the
+ * realtime path can drop those snapshots before React Query refetches. The
+ * BroadcastChannel the guards already use delivers asynchronously, which is
+ * fine between tabs but too late for the refetch that follows in this one.
+ */
+export type BandwidthCacheInvalidator = (scope: BandwidthInvalidationScope) => void;
+
+const bandwidthCacheInvalidators = new Set<BandwidthCacheInvalidator>();
+
+export function registerBandwidthCacheInvalidator(invalidator: BandwidthCacheInvalidator): () => void {
+  bandwidthCacheInvalidators.add(invalidator);
+  return () => {
+    bandwidthCacheInvalidators.delete(invalidator);
+  };
+}
+
+export function invalidateBandwidthReadCaches(scope: BandwidthInvalidationScope): void {
+  for (const invalidator of [...bandwidthCacheInvalidators]) invalidator(scope);
+}
