@@ -58,7 +58,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 3 report workflow coverage", () => {
+describe("Phase 3 report workflow coverage", () => {
   it("keeps every registered report query mapped to an implementation", () => {
     expect(implementedReportQueryTypes.length).toBe(71);
     expect(new Set(implementedReportQueryTypes).size).toBe(implementedReportQueryTypes.length);
