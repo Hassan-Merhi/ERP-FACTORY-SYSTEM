@@ -12,7 +12,6 @@ import { EmployeeStatementDialog } from "./EmployeeStatementDialog";
 import { EditEmployeeDialog } from "./EditEmployeeDialog";
 import { EmployeesTab } from "./EmployeesTab";
 import { WorkersTab } from "./WorkersTab";
-import { GroupsTab } from "./GroupsTab";
 import { AdvancesTab } from "./AdvancesTab";
 import { WorkerDeductionDialog } from "./PayrollDialogs";
 import type { usePayrollModel } from "./usePayrollModel";
@@ -142,10 +141,12 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
     createGroupDialogOpen,
     setCreateGroupDialogOpen,
     selectedGroupForMembers,
+    setSelectedGroupForMembers,
     groupMembersDialogOpen,
     setGroupMembersDialogOpen,
     workerGroupsExpanded,
     setWorkerGroupsExpanded,
+    createWorkerGroupDialogOpen,
     setCreateWorkerGroupDialogOpen,
     selectedWorkerGroupForMembers,
     setSelectedWorkerGroupForMembers,
@@ -217,17 +218,19 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
     removeWorkerFromWorkerGroupMutation,
     workerDeductionMutation,
   } = model;
+
+  const visibleTab = selectedTab === "groups" ? "employees" : selectedTab;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <PageHeader title="Payroll Management" />
 
       <div className="flex-1 overflow-y-auto p-4">
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid grid-cols-5 w-full">
+        <Tabs value={visibleTab} onValueChange={setSelectedTab}>
+          <TabsList className="grid grid-cols-4 w-full">
             <TabsTrigger value="employees">Employees</TabsTrigger>
             <TabsTrigger value="workers">Workers</TabsTrigger>
             <TabsTrigger value="advances">Advances + Deductions</TabsTrigger>
-            <TabsTrigger value="groups">Groups</TabsTrigger>
             <TabsTrigger value="run-payroll">Run Payroll</TabsTrigger>
           </TabsList>
 
@@ -240,6 +243,10 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
               setCreateEmployeeDialogOpen={setCreateEmployeeDialogOpen}
               employeeStaff={employeeStaff}
               filteredEmployeeStaff={filteredEmployeeStaff}
+              employeeGroups={employeeGroups}
+              setCreateGroupDialogOpen={setCreateGroupDialogOpen}
+              setSelectedGroupForMembers={setSelectedGroupForMembers}
+              setGroupMembersDialogOpen={setGroupMembersDialogOpen}
               pendingBonuses={pendingBonuses}
               setBulkDepositSelections={setBulkDepositSelections}
               setBulkDepositDialogOpen={setBulkDepositDialogOpen}
@@ -291,10 +298,6 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
 
           <TabsContent value="advances">
             <AdvancesTab cashAccounts={cashAccounts} />
-          </TabsContent>
-
-          <TabsContent value="groups">
-            <GroupsTab />
           </TabsContent>
 
           <TabsContent value="run-payroll">
@@ -466,6 +469,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
           deleteWorkerConflict={deleteWorkerConflict}
           setDeleteWorkerConflict={setDeleteWorkerConflict}
           handleForceDeleteWorker={handleForceDeleteWorker}
+          createWorkerGroupDialogOpen={createWorkerGroupDialogOpen}
+          setCreateWorkerGroupDialogOpen={setCreateWorkerGroupDialogOpen}
           workerGroupMembersDialogOpen={workerGroupMembersDialogOpen}
           setWorkerGroupMembersDialogOpen={setWorkerGroupMembersDialogOpen}
           selectedWorkerGroupForMembers={selectedWorkerGroupForMembers}

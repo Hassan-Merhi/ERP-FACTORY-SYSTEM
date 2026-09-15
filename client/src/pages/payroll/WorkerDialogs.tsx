@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import type { ClientErrorLike } from "@/lib/clientError";
 import type { usePayrollModel } from "./usePayrollModel";
 
 type PayrollModel = ReturnType<typeof usePayrollModel>;
@@ -18,6 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useAppMode } from "@/contexts/AppModeContext";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
+import { getApiRequest } from "@/lib/factoryApi";
+import { queryClient } from "@/lib/queryClient";
 import type { Employee } from "@shared/schema";
 
 interface WorkerDialogsProps {
@@ -33,6 +41,8 @@ interface WorkerDialogsProps {
   deleteWorkerConflict: PayrollModel["deleteWorkerConflict"];
   setDeleteWorkerConflict: PayrollModel["setDeleteWorkerConflict"];
   handleForceDeleteWorker: () => void;
+  createWorkerGroupDialogOpen: boolean;
+  setCreateWorkerGroupDialogOpen: (open: boolean) => void;
   workerGroupMembersDialogOpen: boolean;
   setWorkerGroupMembersDialogOpen: (open: boolean) => void;
   selectedWorkerGroupForMembers: PayrollModel["selectedWorkerGroupForMembers"];
@@ -55,6 +65,8 @@ export function WorkerDialogs({
   deleteWorkerConflict,
   setDeleteWorkerConflict,
   handleForceDeleteWorker,
+  createWorkerGroupDialogOpen,
+  setCreateWorkerGroupDialogOpen,
   workerGroupMembersDialogOpen,
   setWorkerGroupMembersDialogOpen,
   selectedWorkerGroupForMembers,
@@ -64,6 +76,30 @@ export function WorkerDialogs({
   removeWorkerFromWorkerGroupMutation,
 }: WorkerDialogsProps) {
   const { formatAmount } = useCurrencyContext();
+  const appMode = useAppMode();
+  const modeApiRequest = getApiRequest(appMode);
+  const { selectedCompany } = useCompany();
+  const { toast } = useToast();
+  const [workerGroupName, setWorkerGroupName] = useState("");
+  const [workerGroupDescription, setWorkerGroupDescription] = useState("");
+
+  const createWorkerGroupMutation = useMutation({
+    mutationFn: async () =>
+      modeApiRequest("POST", "/api/worker-groups", {
+        name: workerGroupName.trim(),
+        description: workerGroupDescription.trim(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompany?.id] });
+      setWorkerGroupName("");
+      setWorkerGroupDescription("");
+      setCreateWorkerGroupDialogOpen(false);
+      toast({ title: "Group created" });
+    },
+    onError: (error: ClientErrorLike) => {
+      toast({ title: "Error", description: error.message || "Failed to create group", variant: "destructive" });
+    },
+  });
 
   return (
     <>
@@ -316,6 +352,59 @@ export function WorkerDialogs({
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Worker Group Dialog */}
+      <Dialog open={createWorkerGroupDialogOpen} onOpenChange={setCreateWorkerGroupDialogOpen}>
+        <DialogContent data-testid="dialog-create-worker-group">
+          <DialogHeader>
+            <DialogTitle>Create Group</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="worker-group-name">
+                Group Name
+              </label>
+              <Input
+                id="worker-group-name"
+                value={workerGroupName}
+                onChange={(event) => setWorkerGroupName(event.target.value)}
+                placeholder="e.g. Lubumbashi Workers"
+                data-testid="input-worker-group-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="worker-group-description">
+                Description (Optional)
+              </label>
+              <Input
+                id="worker-group-description"
+                value={workerGroupDescription}
+                onChange={(event) => setWorkerGroupDescription(event.target.value)}
+                placeholder="Brief description of the group"
+                data-testid="input-worker-group-description"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateWorkerGroupDialogOpen(false)}
+                data-testid="button-cancel-worker-group"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => createWorkerGroupMutation.mutate()}
+                disabled={!workerGroupName.trim() || createWorkerGroupMutation.isPending}
+                data-testid="button-submit-worker-group"
+              >
+                Create Group
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
