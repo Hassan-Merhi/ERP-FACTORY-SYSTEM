@@ -153,7 +153,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 positive Factory read matrix", () => {
+describe("Phase 1 positive Factory read matrix", () => {
   it("walks real supplier, container, location and account resources without 5xx", async () => {
     expect(routes.length).toBeGreaterThan(15);
     const failures: Array<{ route: string; status: number; detail: string }> = [];
