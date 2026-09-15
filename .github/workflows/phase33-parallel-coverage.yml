@@ -100,6 +100,7 @@ jobs:
           name: phase33-shard-${{ matrix.shard }}
           path: |
             coverage/backend-shards/shard-${{ matrix.shard }}/coverage-final.json
+            .artifacts/backend-verification/shard-${{ matrix.shard }}.json
             phase33-shard-${{ matrix.shard }}.log
           if-no-files-found: warn
           retention-days: 7
