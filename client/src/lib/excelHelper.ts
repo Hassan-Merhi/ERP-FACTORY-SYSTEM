@@ -281,7 +281,9 @@ function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
   if (!isNoCostContainerItemsSheet(worksheet)) return;
 
   const existingLastRow = worksheet.rowCount;
-  const hasTotalRow = worksheet.getCell(`A${existingLastRow}`).text.trim().toUpperCase() === "TOTAL Q'TY";
+  const hasTotalRow =
+    worksheet.getCell(`A${existingLastRow}`).text.trim().toUpperCase() ===
+    "TOTAL Q'TY";
   const dataEndRow = hasTotalRow ? existingLastRow - 1 : existingLastRow;
 
   const rows: Array<{
@@ -327,7 +329,11 @@ function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
     rows.length > 0 ? { formula: `SUM(D4:D${3 + rows.length})` } : 0;
   totalRow.height = 24;
   totalRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B2A4A" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1B2A4A" },
+    };
     cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
     cell.alignment = {
       horizontal: colNum === 4 ? "center" : "right",
@@ -366,7 +372,10 @@ class ExportAwareWorkbook extends OriginalWorkbook {
   private containerItemsWorksheet: ExcelJS.Worksheet | null = null;
   private containerItemsWriteHookInstalled = false;
 
-  override addWorksheet(name?: string, options?: Partial<ExcelJS.AddWorksheetOptions>): ExcelJS.Worksheet {
+  override addWorksheet(
+    name?: string,
+    options?: Partial<ExcelJS.AddWorksheetOptions>
+  ): ExcelJS.Worksheet {
     const worksheet = super.addWorksheet(name, options);
     if (name === "Container Items") {
       this.containerItemsWorksheet = worksheet;
@@ -389,7 +398,8 @@ class ExportAwareWorkbook extends OriginalWorkbook {
   }
 }
 
-(ExcelJS as unknown as { Workbook: WorkbookConstructor }).Workbook = ExportAwareWorkbook as WorkbookConstructor;
+(ExcelJS as unknown as { Workbook: WorkbookConstructor }).Workbook =
+  ExportAwareWorkbook as WorkbookConstructor;
 
 export async function writeFile(workbook: ExcelJS.Workbook, filename: string): Promise<void> {
   const buffer = await workbook.xlsx.writeBuffer();
