@@ -191,16 +191,18 @@ describe("Phase 30 chatbot PO import branch gaps", () => {
 
   it("matches supplier by partial name and stock item by in-memory name after code lookup misses", async () => {
     harness.getStockItemByCodeOrAlias.mockResolvedValue(null);
-    const csv = [
-      "Supplier,Barcode,Description,Qty,Unit Price",
-      "Beta,UNKNOWN,Widget,3,4",
-    ].join("\n");
+    const csv = ["Supplier,Barcode,Description,Qty,Unit Price", "Beta,UNKNOWN,Widget,3,4"].join("\n");
     const handler = captureRoutes().get("/api/chatbot/parse-po-file")!;
     const res = responseHarness();
 
     await handler(parseRequest({ file: { originalname: "po.csv", buffer: Buffer.from(csv) } }), res);
 
-    expect(res.body).toMatchObject({ supplierId: 11, supplierName: "Beta Trading", itemsTotal: "12.00", grandTotal: "12.00" });
+    expect(res.body).toMatchObject({
+      supplierId: 11,
+      supplierName: "Beta Trading",
+      itemsTotal: "12.00",
+      grandTotal: "12.00",
+    });
     expect(res.body.lines[0]).toMatchObject({ stockItemId: 20, stockItemName: "Widget" });
   });
 
@@ -224,7 +226,10 @@ describe("Phase 30 chatbot PO import branch gaps", () => {
     const handler = captureRoutes().get("/api/chatbot/parse-po-file")!;
     const res = responseHarness();
 
-    await handler(parseRequest({ file: { originalname: "empty.csv", buffer: Buffer.from("Item,Quantity,Rate\n") } }), res);
+    await handler(
+      parseRequest({ file: { originalname: "empty.csv", buffer: Buffer.from("Item,Quantity,Rate\n") } }),
+      res
+    );
 
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({ message: "CSV file has no data rows" });

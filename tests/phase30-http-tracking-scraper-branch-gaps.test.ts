@@ -146,7 +146,9 @@ describe("Phase 30 HTTP tracking scraper branch gaps", () => {
 
   it("uses Hapag fallback move fields and reports missing moves", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse({ moves: [{ date: "2026-09-14", event: "Loaded", location: "Lusaka" }], eta: null }))
+      .mockResolvedValueOnce(
+        jsonResponse({ moves: [{ date: "2026-09-14", event: "Loaded", location: "Lusaka" }], eta: null })
+      )
       .mockResolvedValueOnce(jsonResponse({ moves: [] }));
 
     const success = await httpScrapeTracking("HLXU1234567");
@@ -164,9 +166,7 @@ describe("Phase 30 HTTP tracking scraper branch gaps", () => {
           content: [
             {
               estimatedArrivalDate: "2026-10-04",
-              movementActivities: [
-                { eventDate: "2026-09-14", activity: "Departed", location: "Shanghai" },
-              ],
+              movementActivities: [{ eventDate: "2026-09-14", activity: "Departed", location: "Shanghai" }],
             },
           ],
         },

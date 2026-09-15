@@ -190,7 +190,13 @@ beforeEach(() => {
   harness.cmaApiConfigured.mockReturnValue(false);
 
   harness.httpScrape.mockResolvedValue({ success: false, shipment: null, error: "http-no-data", rawResponse: null });
-  harness.scrapeTracking.mockResolvedValue({ success: false, shipment: null, blocked: false, error: "scrape-no-data", rawResponse: null });
+  harness.scrapeTracking.mockResolvedValue({
+    success: false,
+    shipment: null,
+    blocked: false,
+    error: "scrape-no-data",
+    rawResponse: null,
+  });
   harness.scrapeMaerskDirect.mockResolvedValue(directFailure("direct-no-data"));
   harness.maerskPublicTrack.mockResolvedValue(directFailure("public-no-data"));
   harness.seventeenTrack.mockResolvedValue(directFailure("17-no-data"));
@@ -204,7 +210,13 @@ beforeEach(() => {
   harness.saveParcelsEvents.mockResolvedValue(undefined);
   harness.saveTrackingCheck.mockResolvedValue(undefined);
   harness.cmaFallback.mockResolvedValue(CMA_FALLBACK);
-  harness.trackContainer.mockResolvedValue({ success: false, shipment: null, timedOut: false, error: "api-failure", rawResponse: null });
+  harness.trackContainer.mockResolvedValue({
+    success: false,
+    shipment: null,
+    timedOut: false,
+    error: "api-failure",
+    rawResponse: null,
+  });
 });
 
 afterEach(() => {
@@ -218,7 +230,10 @@ describe("Phase 30 Factory container tracking branch gaps", () => {
     const result = await trackViaParcelsApp(101, "TCNU1234567", "OTHER", null, NOW, null);
 
     expect(result).toMatchObject({ success: false, error: "No tracking provider configured" });
-    expect(harness.updates.at(-1)).toMatchObject({ trackingLastCheckedAt: NOW, trackingError: "No tracking provider configured" });
+    expect(harness.updates.at(-1)).toMatchObject({
+      trackingLastCheckedAt: NOW,
+      trackingError: "No tracking provider configured",
+    });
   });
 
   it("returns immediately when the lightweight HTTP scraper succeeds", async () => {
@@ -428,18 +443,33 @@ describe("Phase 30 Factory container tracking branch gaps", () => {
 
   it("returns a controlled timeout when an unhinted ParcelsApp request times out", async () => {
     process.env.PARCELSAPP_API_KEY = "phase30-key";
-    harness.trackContainer.mockResolvedValue({ success: false, shipment: null, timedOut: true, error: "timeout", rawResponse: null });
+    harness.trackContainer.mockResolvedValue({
+      success: false,
+      shipment: null,
+      timedOut: true,
+      error: "timeout",
+      rawResponse: null,
+    });
 
     const result = await trackViaParcelsApp(118, "OOLU1234567", "OTHER", null, NOW, null, "Congo");
 
     expect(result).toMatchObject({ success: false, error: "Carrier timed out (dest=Congo)" });
     expect(harness.trackContainer).toHaveBeenCalledTimes(1);
-    expect(harness.updates.at(-1)).toMatchObject({ trackingProvider: "parcelsapp", trackingError: "Carrier timed out (dest=Congo)" });
+    expect(harness.updates.at(-1)).toMatchObject({
+      trackingProvider: "parcelsapp",
+      trackingError: "Carrier timed out (dest=Congo)",
+    });
   });
 
   it("returns the provider error for a non-timeout ParcelsApp failure", async () => {
     process.env.PARCELSAPP_API_KEY = "phase30-key";
-    harness.trackContainer.mockResolvedValue({ success: false, shipment: null, timedOut: false, error: "bad-request", rawResponse: null });
+    harness.trackContainer.mockResolvedValue({
+      success: false,
+      shipment: null,
+      timedOut: false,
+      error: "bad-request",
+      rawResponse: null,
+    });
 
     const result = await trackViaParcelsApp(119, "OOLU1234567", "OTHER", null, NOW, null, "Congo");
 

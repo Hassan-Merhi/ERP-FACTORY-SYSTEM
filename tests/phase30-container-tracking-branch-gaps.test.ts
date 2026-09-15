@@ -199,7 +199,13 @@ beforeEach(() => {
   harness.cmaApiConfigured.mockReturnValue(false);
 
   harness.httpScrape.mockResolvedValue({ success: false, shipment: null, error: "http-no-data", rawResponse: null });
-  harness.scrapeTracking.mockResolvedValue({ success: false, shipment: null, blocked: false, error: "scrape-no-data", rawResponse: null });
+  harness.scrapeTracking.mockResolvedValue({
+    success: false,
+    shipment: null,
+    blocked: false,
+    error: "scrape-no-data",
+    rawResponse: null,
+  });
   harness.scrapeMaerskDirect.mockResolvedValue(directFailure("direct-no-data"));
   harness.maerskPublicTrack.mockResolvedValue(directFailure("public-no-data"));
   harness.seventeenTrack.mockResolvedValue(directFailure("17-no-data"));
@@ -241,7 +247,11 @@ describe("Phase 30 ERP container tracking branch gaps", () => {
     const result = await trackViaParcelsApp(2, "TCNU1234567", "OTHER", null, NOW, null, null);
 
     expect(result).toMatchObject({ success: true, lastStatus: "IN_TRANSIT", lastLocation: "Durban" });
-    expect(harness.updates.at(-1)).toMatchObject({ trackingProvider: "http_scraper", eta: "2026-10-01", etaSource: "api" });
+    expect(harness.updates.at(-1)).toMatchObject({
+      trackingProvider: "http_scraper",
+      eta: "2026-10-01",
+      etaSource: "api",
+    });
     expect(harness.genericFinalApi).not.toHaveBeenCalled();
   });
 
@@ -298,7 +308,11 @@ describe("Phase 30 ERP container tracking branch gaps", () => {
     const result = await trackViaParcelsApp(7, "MRKU1234567", "MAERSK", null, NOW, null, null);
 
     expect(result.success).toBe(true);
-    expect(harness.updates.at(-1)).toMatchObject({ trackingProvider: "maersk_scraper", eta: "2026-10-21", etaSource: "api" });
+    expect(harness.updates.at(-1)).toMatchObject({
+      trackingProvider: "maersk_scraper",
+      eta: "2026-10-21",
+      etaSource: "api",
+    });
   });
 
   it("continues from Maersk direct status-only data to the public provider for ETA", async () => {
@@ -427,7 +441,13 @@ describe("Phase 30 ERP container tracking branch gaps", () => {
 
   it("continues from a blocked generic scraper to a successful 17track result", async () => {
     harness.scraperAvailable.mockReturnValue(true);
-    harness.scrapeTracking.mockResolvedValue({ success: false, shipment: null, blocked: true, error: "captcha", rawResponse: null });
+    harness.scrapeTracking.mockResolvedValue({
+      success: false,
+      shipment: null,
+      blocked: true,
+      error: "captcha",
+      rawResponse: null,
+    });
     harness.seventeenConfigured.mockReturnValue(true);
     harness.seventeenTrack.mockResolvedValue(directSuccess({ latestStatus: "GATE_IN" }));
     harness.genericResolveProviderEta.mockReturnValue({ eta: "2026-10-29", source: "events" });
