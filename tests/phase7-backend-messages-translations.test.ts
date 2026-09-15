@@ -7,10 +7,11 @@ import {
 
 describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
-    // 658 reviewed entries plus the 20 Phase 3 accounting/payroll/loading/inventory
-    // compatibility entries added during the accounting closeout.
-    expect(backendMessagesPhase7Translations).toHaveLength(678);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(678);
+    // 658 reviewed entries, plus the 20 Phase 3 accounting/payroll/loading/inventory
+    // compatibility entries added during the accounting closeout, plus the 12 carried
+    // in by the Phase 3 latest-main sync (b86cb44), which did not update this count.
+    expect(backendMessagesPhase7Translations).toHaveLength(690);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(690);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -72,9 +73,9 @@ describe("Phase 7 backend-message translations", () => {
     expect(translatePhase7BackendMessageText("Only months with movement are shown", "ar")).toBe(
       "يتم عرض الأشهر التي تحتوي على حركة فقط"
     );
-    expect(
-      translatePhase7BackendMessageText("Unable to create Inventory control account for company 7", "fr")
-    ).toBe("Impossible de créer le compte de contrôle des stocks pour la société 7");
+    expect(translatePhase7BackendMessageText("Unable to create Inventory control account for company 7", "fr")).toBe(
+      "Impossible de créer le compte de contrôle des stocks pour la société 7"
+    );
     expect(
       translatePhase7BackendMessageText("Phase 3 could not create ledger Payroll Expense for company 7", "ar")
     ).toBe("تعذر على المرحلة 3 إنشاء دفتر الأستاذ Payroll Expense للشركة 7");

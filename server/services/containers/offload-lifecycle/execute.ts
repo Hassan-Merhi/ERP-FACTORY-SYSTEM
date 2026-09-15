@@ -85,6 +85,11 @@ export async function executeContainerOffloadLifecycle(
       );
     }
 
+    // Locked, not just read: PATCH /api/purchase-orders/:id rewrites po_line_items
+    // and updates the parent purchase_orders row in one transaction, so an unlocked
+    // read here can price the offload from a half-rewritten purchase order. Taking
+    // the row lock after the container lock keeps the offload's ordering the same
+    // for both, and makes a concurrent line-item rewrite wait rather than interleave.
     const purchaseOrders = await tx
       .select()
       .from(schema.purchaseOrders)
@@ -93,7 +98,8 @@ export async function executeContainerOffloadLifecycle(
           eq(schema.purchaseOrders.containerId, input.containerId),
           eq(schema.purchaseOrders.companyId, input.companyId)
         )
-      );
+      )
+      .for("update");
     if (purchaseOrders.length === 0) {
       throw new ContainerOffloadLifecycleError(
         "Container has no purchase orders to offload.",
