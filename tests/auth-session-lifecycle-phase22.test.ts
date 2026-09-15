@@ -8,7 +8,7 @@ const PASSWORD = "testpassword123";
 
 let ctx: TestContext;
 
-function sessionCookie(response: request.Response): string | null {
+function sessionCookie(response: { headers: Record<string, string | string[] | undefined> }): string | null {
   const raw = response.headers["set-cookie"];
   const cookies = Array.isArray(raw) ? raw : raw ? [raw] : [];
   const sid = cookies.find((cookie) => cookie.startsWith("connect.sid="));
