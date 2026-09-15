@@ -6,6 +6,7 @@ import {
   type RealtimeInvalidationTopic,
 } from "@shared/realtimeInvalidation";
 import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
+import { invalidateBandwidthReadCaches, type BandwidthInvalidationScope } from "@/lib/bandwidthInvalidationPolicy";
 
 // Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
@@ -19,13 +20,7 @@ const STABLE_QUERY_PREFIXES = [
 ];
 
 const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]> = {
-  inventory: [
-    "/api/locations",
-    "/api/inventory",
-    "/api/stock",
-    "/api/bales",
-    "/api/location-inventory",
-  ],
+  inventory: ["/api/locations", "/api/inventory", "/api/stock", "/api/bales", "/api/location-inventory"],
   pos: ["/api/pos", "/api/sales", "/api/dashboard", "/api/pending-loadings"],
   accounting: [
     "/api/accounts",
@@ -180,8 +175,25 @@ function mergePendingInvalidation(message: RealtimeInvalidationMessage): void {
   for (const locationId of message.locationIds) pendingInvalidation.locationIds.add(locationId);
 }
 
+/**
+ * The bandwidth read caches only see writes this tab makes itself, so a write
+ * from another session leaves them holding a snapshot the write invalidated.
+ * Reference entries are long-lived and are only dropped when the change can
+ * actually have touched reference data.
+ */
+function bandwidthScopeFor(invalidation: PendingInvalidation): BandwidthInvalidationScope {
+  if (invalidation.blanket) return "all";
+  return invalidation.topics.has("reference") ? "all" : "live";
+}
+
 function invalidateActiveQueries(invalidation: PendingInvalidation): void {
   if (!managerRunning) return;
+
+  // Must run before the refetch below: a cached snapshot would otherwise answer
+  // it without a request, and the screen would keep the pre-write numbers until
+  // the entry expired on its own.
+  invalidateBandwidthReadCaches(bandwidthScopeFor(invalidation));
+
   for (const queryClient of subscribers.keys()) {
     void queryClient.invalidateQueries(
       {
@@ -201,6 +213,10 @@ function invalidateChatMetadata(): void {
     missedWhileHidden = true;
     return;
   }
+
+  // The unread-count snapshot is cached for the same reason and by the same
+  // guard, and a message from someone else never clears it locally.
+  invalidateBandwidthReadCaches("live");
 
   for (const queryClient of subscribers.keys()) {
     void queryClient.invalidateQueries(

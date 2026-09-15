@@ -79,7 +79,7 @@ afterAll(async () => {
 }, 60000);
 
 describe("Phase 4 proforma reconciliation", () => {
-  it("exposes requested/current/sibling/total/remaining from the authoritative endpoint", async () => {
+  it("exposes loading-local requested/current/total/remaining from the authoritative endpoint", async () => {
     const response = await agent.get(
       `/api/factory/customer-proformas/${proformaId}/capacity?currentOrderId=${currentOrderId}`
     );
@@ -90,9 +90,11 @@ describe("Phase 4 proforma reconciliation", () => {
         proformaId,
         requestedTotalQty: 5,
         currentOrderLoadedTotalQty: 1,
-        siblingLoadedTotalQty: 3,
-        totalConsumedQty: 4,
-        remainingTotalQty: 1,
+        // Capacity is loading-local: a sibling loading on the same proforma
+        // never consumes this loading's allowance.
+        siblingLoadedTotalQty: 0,
+        totalConsumedQty: 1,
+        remainingTotalQty: 4,
       })
     );
     expect(response.body.articles).toEqual([
@@ -100,9 +102,10 @@ describe("Phase 4 proforma reconciliation", () => {
         normalizedArticleCode: "ph4-a",
         requestedQty: 5,
         currentOrderLoadedQty: 1,
-        siblingLoadedQty: 3,
-        totalConsumedQty: 4,
-        remainingQty: 1,
+        siblingLoadedQty: 0,
+        siblingOrderIds: [],
+        totalConsumedQty: 1,
+        remainingQty: 4,
         productName: "Phase 4 Product",
       }),
     ]);

@@ -40,7 +40,9 @@ interface CatalogProductRow {
 }
 
 function normalize(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function positiveInteger(value: unknown): number | undefined {
@@ -57,9 +59,7 @@ function parseCatalogQuery(req: Request): CatalogQuery {
   const page = positiveInteger(req.query.page) ?? 1;
   const pageSize = Math.min(positiveInteger(req.query.pageSize) ?? 60, 100);
   const stockStatusRaw = String(req.query.stockStatus ?? "all");
-  const stockStatus = (["all", "in", "low", "out"] as const).includes(
-    stockStatusRaw as CatalogQuery["stockStatus"]
-  )
+  const stockStatus = (["all", "in", "low", "out"] as const).includes(stockStatusRaw as CatalogQuery["stockStatus"])
     ? (stockStatusRaw as CatalogQuery["stockStatus"])
     : "all";
 
@@ -107,9 +107,7 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
 
   if (query.search) {
     const token = add(`%${query.search}%`);
-    where.push(
-      `LOWER(CONCAT_WS(' ', p.code, p.name, COALESCE(b.name, ''))) LIKE ${token}`
-    );
+    where.push(`LOWER(CONCAT_WS(' ', p.code, p.name, COALESCE(b.name, ''))) LIKE ${token}`);
   }
   if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
   if (query.category) where.push(`LOWER(COALESCE(p.category, '')) = ${add(query.category)}`);
@@ -210,7 +208,9 @@ function assembleProducts(rows: CatalogProductRow[]) {
         name: row.name,
         category: row.category,
         description: row.description,
-        imageUrls: Array.isArray(row.image_urls) ? row.image_urls.filter((value): value is string => typeof value === "string") : [],
+        imageUrls: Array.isArray(row.image_urls)
+          ? row.image_urls.filter((value): value is string => typeof value === "string")
+          : [],
         active: row.active,
         brand: { id: row.brand_id, name: row.brand_name ?? "Other / No Brand" },
         variants: [],
