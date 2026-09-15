@@ -20,6 +20,9 @@ const EXCLUDED_PATTERNS: RegExp[] = [
   /(export|download|template)/i,
   /\.(xlsx|pdf|csv|zip)$/i,
   /(whatsapp|email|openai|gemini|ai-validation|track|trace|webhook)/i,
+  // Live screen feed requests intentionally keep the connection open. They are
+  // not finite read handlers and would make this bounded coverage sweep timeout.
+  /\/api\/screen-feed\/live\//i,
 ];
 
 interface DeepReadRoute {
@@ -69,14 +72,14 @@ function resourceAwareValue(routePath: string, name: string, ctx: TestContext): 
 
 export function materializeDeepReadPath(routePath: string, ctx: TestContext): string {
   return routePath.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) =>
-    encodeURIComponent(resourceAwareValue(routePath, name, ctx))
+    encodeURIComponent(resourceAwareValue(routePath, name, ctx)),
   );
 }
 
 export function selectDeepReadRoutes(
   manifest: SerializedRouteManifest,
   erpCtx: TestContext,
-  factoryCtx: TestContext
+  factoryCtx: TestContext,
 ): DeepReadRoute[] {
   const seen = new Set<string>();
   const routes: DeepReadRoute[] = [];
