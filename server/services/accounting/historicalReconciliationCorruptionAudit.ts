@@ -142,10 +142,7 @@ export function auditHistoricalReconciliationCorruption(
   for (const supplier of supplierBalances) {
     const supplierId = positiveInteger(supplier.supplierId, "supplier.supplierId");
     const statementBalance = decimal(supplier.statementBalance, `supplier:${supplierId}.statementBalance`);
-    const counterpartyBalance = decimal(
-      supplier.counterpartyBalance,
-      `supplier:${supplierId}.counterpartyBalance`
-    );
+    const counterpartyBalance = decimal(supplier.counterpartyBalance, `supplier:${supplierId}.counterpartyBalance`);
     compareMoney(
       issues,
       "suppliers",
