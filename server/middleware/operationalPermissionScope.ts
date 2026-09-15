@@ -75,6 +75,11 @@ export async function enforceOperationalPermissionScope(
       return;
     }
 
+    if (match.permissionBypassRoles?.includes(context.role)) {
+      next();
+      return;
+    }
+
     const guard = requirePermission(match.permissionKey, match.permissionType);
     await guard(req, res, next);
   } catch (error) {
