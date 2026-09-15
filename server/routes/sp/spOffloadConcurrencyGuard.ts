@@ -1,7 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { pool } from "../../db";
 import { requireAuth } from "../../auth";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
   buildSpOffloadChargeSignature,
@@ -37,14 +37,20 @@ async function guardSpOffload(req: Request, res: Response, next: NextFunction): 
   let released = false;
   let transactionOpen = false;
 
+  // End only the preflight transaction while retaining this pooled connection.
+  // The session-level advisory lock is connection-scoped and therefore remains
+  // held until release() runs after the downstream offload request completes.
+  const endPreflightTransaction = async (commit: boolean) => {
+    if (!transactionOpen) return;
+    await client.query(commit ? "COMMIT" : "ROLLBACK");
+    transactionOpen = false;
+  };
+
   const release = async (commit: boolean) => {
     if (released) return;
     released = true;
     try {
-      if (transactionOpen) {
-        await client.query(commit ? "COMMIT" : "ROLLBACK");
-        transactionOpen = false;
-      }
+      await endPreflightTransaction(commit);
     } catch (error) {
       logger.warn("SP offload ownership-lock transaction cleanup failed", {
         companyId,
@@ -298,6 +304,12 @@ async function guardSpOffload(req: Request, res: Response, next: NextFunction): 
       }
     }
 
+    // The downstream SP handler performs its writes on another pooled connection.
+    // Release every preflight row lock before next() so it cannot block on locks
+    // owned by this request itself. The advisory lock remains held on this session
+    // and continues to serialize same-company/same-container offload requests.
+    await endPreflightTransaction(true);
+
     // The legacy offload handler commits its own write transaction before calling
     // res.json(). Release this guard's advisory lock first, then emit the response.
     // That guarantees the client never observes "request complete" while the lock is
@@ -316,7 +328,7 @@ async function guardSpOffload(req: Request, res: Response, next: NextFunction): 
   } catch (error: unknown) {
     await release(false);
     logger.error("SP offload concurrency guard failed", { companyId, containerId, error });
-    res.status(500).json({ message: getErrorMessage(error) });
+    sendHttpError(res, error);
   }
 }
 
