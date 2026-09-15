@@ -158,6 +158,7 @@ export const retailWave3Translations: readonly Phase3SharedUiEntry[] = [
     ar: "تم حفظ جميع تفاصيل الموظف بنجاح.",
     fr: "Tous les détails de l’employé ont été enregistrés avec succès.",
   },
+  { en: "Invalid employee group", ar: "مجموعة الموظف غير صالحة", fr: "Groupe d’employé non valide" },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();
