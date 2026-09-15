@@ -170,7 +170,7 @@ describe("phase 31 selected historical replay scope function gaps", () => {
       sourceRows,
       batchRows,
       containerRows,
-    } as never;
+    };
     const scope = normalizeReplayWriteScope({
       supplierIds: [9, 2],
       containerIdsToUpdate: [30, 10],
@@ -185,7 +185,7 @@ describe("phase 31 selected historical replay scope function gaps", () => {
     const first = computeReplayFingerprint(
       7,
       [9, 2, 9],
-      preview,
+      preview as never,
       { includeCompletedBatches: true, includeFinalizedBales: false },
       scope
     );
@@ -195,11 +195,11 @@ describe("phase 31 selected historical replay scope function gaps", () => {
       sourceRows: [...sourceRows].reverse(),
       batchRows: [...batchRows].reverse(),
       containerRows: [...containerRows].reverse(),
-    } as never;
+    };
     const second = computeReplayFingerprint(
       7,
       [2, 9],
-      reorderedPreview,
+      reorderedPreview as never,
       { includeCompletedBatches: true, includeFinalizedBales: false },
       { ...scope, supplierIds: [2, 9], sourceIdsToUpdate: [11, 22] }
     );
@@ -207,15 +207,16 @@ describe("phase 31 selected historical replay scope function gaps", () => {
     expect(first).toMatch(/^[a-f0-9]{64}$/);
     expect(second).toBe(first);
 
+    const changedPreview = {
+      ...reorderedPreview,
+      supplierRows: supplierRows.map((row) =>
+        row.supplierId === 2 ? { ...row, endingExpectedRate: 0.52 } : row
+      ),
+    };
     const changed = computeReplayFingerprint(
       7,
       [2, 9],
-      {
-        ...reorderedPreview,
-        supplierRows: supplierRows.map((row) =>
-          row.supplierId === 2 ? { ...row, endingExpectedRate: 0.52 } : row
-        ),
-      } as never,
+      changedPreview as never,
       { includeCompletedBatches: true, includeFinalizedBales: false },
       scope
     );
@@ -231,7 +232,7 @@ describe("phase 31 selected historical replay scope function gaps", () => {
         selectedSupplierIds: new Set<number>(),
         includeCompletedBatches: false,
         includeFinalizedBales: false,
-        executor,
+        executor: executor as never,
       })
     ).resolves.toEqual({
       supplierIds: [],
