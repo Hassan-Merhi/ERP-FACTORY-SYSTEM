@@ -40,9 +40,70 @@ export function getErrorStack(error: unknown): string | undefined {
   return error instanceof Error ? error.stack : undefined;
 }
 
+type DatabaseErrorLike = {
+  code?: unknown;
+  constraint?: unknown;
+  detail?: unknown;
+  cause?: unknown;
+};
+
+function databaseErrorLike(error: unknown): DatabaseErrorLike | null {
+  if (!error || typeof error !== "object") return null;
+  const outer = error as DatabaseErrorLike;
+  const cause = outer.cause;
+  if (cause && typeof cause === "object") {
+    const inner = cause as DatabaseErrorLike;
+    if (typeof inner.code === "string") return inner;
+  }
+  return outer;
+}
+
+/**
+ * Translate database/domain conflicts into stable client-facing HTTP failures.
+ * This intentionally avoids forwarding PostgreSQL details/constraint names.
+ */
+export function translateDatabaseError(error: unknown): HttpError | null {
+  const candidate = databaseErrorLike(error);
+  const code = typeof candidate?.code === "string" ? candidate.code : null;
+  if (!code) return null;
+
+  switch (code) {
+    case "23502": // not_null_violation
+    case "23514": // check_violation
+    case "22P02": // invalid_text_representation
+    case "22003": // numeric_value_out_of_range
+      return new HttpError(400, "The request contains invalid database values.");
+    case "23503": // foreign_key_violation
+      return new HttpError(409, "The request conflicts with an existing or missing related record.");
+    case "23505": // unique_violation
+      return new HttpError(409, "A record with the same unique value already exists.");
+    case "40001": // serialization_failure
+    case "40P01": // deadlock_detected
+    case "55P03": // lock_not_available
+      return new HttpError(409, "The record changed concurrently. Reload and try again.");
+    case "NO_DATA_FOUND":
+    case "P0002":
+      return new HttpError(404, "The requested record was not found.");
+    case "LOCKED_PERIOD":
+    case "ACCOUNTING_PERIOD_LOCKED":
+      return new HttpError(409, "The accounting period is locked.");
+    case "STALE_RECORD":
+    case "STALE_WRITE":
+      return new HttpError(409, "The record is stale. Reload and try again.");
+    default:
+      return null;
+  }
+}
+
 export function sendHttpError(response: Response, error: unknown): void {
   if (error instanceof HttpError) {
     response.status(error.statusCode).json({ message: error.message });
+    return;
+  }
+
+  const translated = translateDatabaseError(error);
+  if (translated) {
+    response.status(translated.statusCode).json({ message: translated.message });
     return;
   }
 
