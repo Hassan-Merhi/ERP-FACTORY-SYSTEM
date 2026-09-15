@@ -179,13 +179,7 @@ describe("phase 32 factory container tracking high-line provider paths", () => {
     });
     expect(harness.ep).toHaveBeenCalledWith(42, "Maersk Puppeteer", "skip", "not available");
     expect(harness.maerskPublicTrack).toHaveBeenCalledWith("MRKU1234567");
-    expect(harness.saveTrackingCheck).toHaveBeenCalledWith(
-      42,
-      "maersk_public",
-      "success",
-      null,
-      providerResult.raw
-    );
+    expect(harness.saveTrackingCheck).toHaveBeenCalledWith(42, "maersk_public", "success", null, providerResult.raw);
     expect(harness.saveDirectEvents).toHaveBeenCalledWith(42, providerResult);
     expect(harness.dbSet).toHaveBeenCalledWith(
       expect.objectContaining({
