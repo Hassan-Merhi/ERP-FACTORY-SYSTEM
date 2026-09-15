@@ -361,7 +361,7 @@ describe("Phase 33 chat prompt behavior", () => {
         ],
         locationBreakdown: [{ location: "Main", quantity: 10, avgCost: 12, totalValue: 120 }],
       } as never,
-      { currentRoute: "/stock" },
+      { currentRoute: "/stock" }
     );
     expect(inventory).toContain("LOCATION BREAKDOWN");
     expect(inventory).toContain("LOW STOCK ALERTS");
@@ -387,7 +387,7 @@ describe("Phase 33 chat prompt behavior", () => {
             status: "Payable",
           },
         ],
-      } as never,
+      } as never
     );
     expect(supplier).toContain("SUPPLIER BALANCES");
 
@@ -395,7 +395,7 @@ describe("Phase 33 chat prompt behavior", () => {
       "customer_query",
       {
         customers: [{ id: 1, name: "Customer One", code: "C1", phone: null }],
-      } as never,
+      } as never
     );
     expect(customer).toContain("CUSTOMER DATA");
   });
@@ -448,7 +448,7 @@ describe("Phase 33 chat prompt behavior", () => {
             profit: 8,
           },
         ],
-      } as never,
+      } as never
     );
     expect(sales).toContain("MATCHED ITEM");
     expect(sales).toContain("Recent sales history");
@@ -478,7 +478,7 @@ describe("Phase 33 chat prompt behavior", () => {
             status: "LOSING",
           },
         ],
-      } as never,
+      } as never
     );
     expect(business).toContain("Low stock alerts");
     expect(business).toContain("selling below cost");
