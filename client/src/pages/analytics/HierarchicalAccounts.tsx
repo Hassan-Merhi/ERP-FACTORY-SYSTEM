@@ -35,6 +35,8 @@ export function HierarchicalAccounts({
         const childrenTotal = hasChildren ? calculateChildrenTotal(parent.accountId, accountMap) : 0;
         const parentBalance = parseBalance(parent.balance);
         const displayBalance = hasChildren ? childrenTotal : parentBalance;
+        const displayBalanceSide =
+          hasChildren && childrenTotal !== 0 ? (childrenTotal > 0 ? "Cr" : "Dr") : parent.balanceSide || "Dr";
         const preservePayrollChildren = keepsZeroBalanceChildren(parent.name);
         const visibleChildren = preservePayrollChildren
           ? children
@@ -68,7 +70,7 @@ export function HierarchicalAccounts({
                   <span className="hover:underline">{parent.name}</span>
                 </div>
               </TableCell>
-              <TableCell className={`text-right font-mono font-medium ${drCrClass(parent.balanceSide || "Dr")}`}>
+              <TableCell className={`text-right font-mono font-medium ${drCrClass(displayBalanceSide)}`}>
                 {formatSmartCurrency(displayBalance)}
               </TableCell>
             </TableRow>
