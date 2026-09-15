@@ -155,7 +155,11 @@ export function installPurchaseOrderEditConcurrencyGuard(app: Express): void {
   const originalHandle = originalLayer?.handle;
 
   if (!originalLayer || !originalHandle) {
-    throw new Error("PURCHASE_ORDER_PATCH_HANDLER_MISSING");
+    logger.error("Purchase-order concurrency guard installation failed", {
+      route: "/api/purchase-orders/:id",
+      method: "PATCH",
+    });
+    throw new Error();
   }
 
   const originalHandleName = originalHandle.name;
