@@ -17,6 +17,57 @@ export function parseAccountValue(val: string): { type: "supplier" | "ledger"; i
   return { type: "ledger", id: parseInt(val) };
 }
 
+function positiveRate(value: string | null | undefined): number | null {
+  const parsed = parseFloat(value || "");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Resolve the material FX rate that will be posted for a first offload.
+ *
+ * A same-currency charge (freight / other charges / commission) and the base
+ * material cannot legitimately use two different USD rates on the same offload.
+ * The form can currently hold an older container/import FX snapshot while a
+ * same-currency charge has already resolved the offload-date FX rate. Prefer the
+ * resolved same-currency charge rate so the estimate and submitted payload stay
+ * consistent. Different-currency charges keep their own independent FX rates.
+ */
+export function resolveOffloadMaterialFxRate(fields: OffloadFormFields): string {
+  const containerCcy = (fields.currencyCode || "USD").toUpperCase();
+  if (containerCcy === "USD") return "1";
+
+  const candidates: Array<{ amount: string; currency: string; rate: string }> = [
+    {
+      amount: fields.freight,
+      currency: fields.freightCurrencyCode,
+      rate: fields.freightFxRate,
+    },
+    {
+      amount: fields.otherCharges,
+      currency: fields.otherChargesCurrencyCode,
+      rate: fields.otherChargesFxRate,
+    },
+  ];
+
+  for (const candidate of candidates) {
+    if (parseFloat(candidate.amount || "0") <= 0) continue;
+    if ((candidate.currency || containerCcy).toUpperCase() !== containerCcy) continue;
+    const rate = positiveRate(candidate.rate);
+    if (rate) return String(rate);
+  }
+
+  if (
+    fields.commissionPersonName.trim() &&
+    parseFloat(fields.commissionRate || "0") > 0 &&
+    fields.containerCommissionCcy.toUpperCase() === containerCcy
+  ) {
+    const rate = positiveRate(fields.commissionFxRate);
+    if (rate) return String(rate);
+  }
+
+  return String(positiveRate(fields.fxRateToUsd) ?? 1);
+}
+
 export interface PartialReceiptInfo {
   declared: number;
   alreadyReceived: number;
@@ -78,7 +129,22 @@ export function computeEstimatedAvgCostKg(inputs: EstimatedAvgCostKgInputs): num
   });
   if (valuationKg <= 0) return null;
 
-  const materialUsd = parseFloat(inputs.costPerKg || "0") * parseFloat(inputs.fxRateToUsd || "1") * valuationKg;
+  const containerCcy = (container.currencyCode || "USD").toUpperCase();
+  const storedMaterialFx = positiveRate(inputs.fxRateToUsd) ?? 1;
+  const freightCcy = (container.freightCurrencyCode || containerCcy).toUpperCase();
+  const sameCurrencyFreightFx = positiveRate(inputs.freightFxRate);
+  const isPrefilledSameCurrencyFreight =
+    parseFloat(inputs.freight || "0") > 0 &&
+    freightCcy === containerCcy &&
+    parseFloat(container.freight || "0") === parseFloat(inputs.freight || "0") &&
+    sameCurrencyFreightFx !== null;
+
+  // When a prefilled freight charge is in the same currency as the material,
+  // use its resolved offload FX for the material as well. This prevents an old
+  // import/container snapshot from being mixed with the current offload rate.
+  const materialFx = containerCcy === "USD" ? 1 : isPrefilledSameCurrencyFreight ? sameCurrencyFreightFx! : storedMaterialFx;
+
+  const materialUsd = parseFloat(inputs.costPerKg || "0") * materialFx * valuationKg;
   const freightUsd = parseFloat(inputs.freight || "0") * parseFloat(inputs.freightFxRate || "1");
   const otherUsd = parseFloat(inputs.otherCharges || "0") * parseFloat(inputs.otherChargesFxRate || "1");
 
@@ -106,7 +172,8 @@ export function buildOffloadPayload(fields: OffloadFormFields, idempotencyKey: s
   // The dialog guards `selectedContainerId` before calling this; the builder
   // itself stays pure and total (no user-facing error string introduced here).
   const dutyStatus = fields.dutyPending ? "PENDING" : parseFloat(fields.dutyAmount || "0") > 0 ? "CONFIRMED" : "NONE";
-  const fxRate = parseFloat(fields.fxRateToUsd || "1");
+  const effectiveFxRateToUsd = resolveOffloadMaterialFxRate(fields);
+  const fxRate = parseFloat(effectiveFxRateToUsd || "1");
 
   const payload: OffloadPayload = {
     containerId: fields.selectedContainerId,
@@ -115,7 +182,7 @@ export function buildOffloadPayload(fields: OffloadFormFields, idempotencyKey: s
     receivedKg: fields.actualReceivedKg,
     costPerKg: fields.costPerKg,
     currencyCode: fields.currencyCode,
-    fxRateToUsd: fields.fxRateToUsd,
+    fxRateToUsd: effectiveFxRateToUsd,
     freight: fields.freight || "0",
     freightCurrencyCode: fields.freightCurrencyCode,
     freightFxRate: fields.freightFxRate,
