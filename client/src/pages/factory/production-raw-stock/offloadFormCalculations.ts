@@ -132,17 +132,28 @@ export function computeEstimatedAvgCostKg(inputs: EstimatedAvgCostKgInputs): num
   const containerCcy = (container.currencyCode || "USD").toUpperCase();
   const storedMaterialFx = positiveRate(inputs.fxRateToUsd) ?? 1;
   const freightCcy = (container.freightCurrencyCode || containerCcy).toUpperCase();
+  const otherChargesCcy = (container.otherChargesCurrencyCode || containerCcy).toUpperCase();
   const sameCurrencyFreightFx = positiveRate(inputs.freightFxRate);
-  const isPrefilledSameCurrencyFreight =
-    parseFloat(inputs.freight || "0") > 0 &&
-    freightCcy === containerCcy &&
-    parseFloat(container.freight || "0") === parseFloat(inputs.freight || "0") &&
-    sameCurrencyFreightFx !== null;
+  const sameCurrencyOtherFx = positiveRate(inputs.otherChargesFxRate);
+  const hasSameCurrencyFreight =
+    parseFloat(inputs.freight || "0") > 0 && freightCcy === containerCcy && sameCurrencyFreightFx !== null;
+  const hasSameCurrencyOtherCharges =
+    parseFloat(inputs.otherCharges || "0") > 0 &&
+    otherChargesCcy === containerCcy &&
+    sameCurrencyOtherFx !== null;
 
-  // When a prefilled freight charge is in the same currency as the material,
-  // use its resolved offload FX for the material as well. This prevents an old
-  // import/container snapshot from being mixed with the current offload rate.
-  const materialFx = containerCcy === "USD" ? 1 : isPrefilledSameCurrencyFreight ? sameCurrencyFreightFx! : storedMaterialFx;
+  // A manually-entered same-currency charge is just as authoritative as a
+  // prefilled one. The previous guard required the entered amount to equal the
+  // container's stored charge, so typing AUD freight into an AUD container left
+  // the material on an older FX snapshot while freight used the current rate.
+  const materialFx =
+    containerCcy === "USD"
+      ? 1
+      : hasSameCurrencyFreight
+        ? sameCurrencyFreightFx!
+        : hasSameCurrencyOtherCharges
+          ? sameCurrencyOtherFx!
+          : storedMaterialFx;
 
   const materialUsd = parseFloat(inputs.costPerKg || "0") * materialFx * valuationKg;
   const freightUsd = parseFloat(inputs.freight || "0") * parseFloat(inputs.freightFxRate || "1");
