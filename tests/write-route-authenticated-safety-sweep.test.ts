@@ -291,7 +291,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("authenticated sensitive write safety sweep", () => {
+describe("authenticated sensitive write safety sweep", () => {
   it("exercises every route that would otherwise be guard-only without mutating sensitive state", async () => {
     // Disable recognition of this file while deriving the inventory it has to
     // execute; otherwise the audit would (correctly) report zero guard-only
