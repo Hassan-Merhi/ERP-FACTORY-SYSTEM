@@ -56,15 +56,20 @@ async function guardContainerOffload(req: Request, res: Response, next: NextFunc
   let released = false;
   let transactionOpen = false;
 
+  // Ends the preflight transaction without giving the connection back, so the
+  // session-level advisory lock taken below stays held.
+  const endPreflightTransaction = async (commit: boolean) => {
+    if (!transactionOpen) return;
+    await client.query(commit ? "COMMIT" : "ROLLBACK");
+    transactionOpen = false;
+  };
+
   const release = async (commit: boolean) => {
     if (released) return;
     released = true;
 
     try {
-      if (transactionOpen) {
-        await client.query(commit ? "COMMIT" : "ROLLBACK");
-        transactionOpen = false;
-      }
+      await endPreflightTransaction(commit);
     } catch (error) {
       logger.warn("Container offload preflight transaction cleanup failed", {
         companyId,
@@ -299,6 +304,15 @@ async function guardContainerOffload(req: Request, res: Response, next: NextFunc
         });
       }
     }
+
+    // The preflight's FOR SHARE / FOR KEY SHARE rows must be unlocked before the
+    // offload handler runs: it executes on a different pooled connection and takes
+    // FOR UPDATE on the same container, purchase orders and location, so holding
+    // these read locks across next() made the request block on itself forever.
+    // Mutual exclusion between concurrent offloads is the advisory lock's job, and
+    // that is session-scoped, so it survives this commit and is only given up when
+    // the response finishes.
+    await endPreflightTransaction(true);
 
     next();
   } catch (error: unknown) {

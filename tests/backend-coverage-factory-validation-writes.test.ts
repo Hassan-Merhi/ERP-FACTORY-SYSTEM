@@ -170,7 +170,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 1 Factory write validation matrix", () => {
+describe("Phase 1 Factory write validation matrix", () => {
   it("exercises broad validation paths without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(20);
     const failures: Array<{ route: string; status: number; detail: string }> = [];
