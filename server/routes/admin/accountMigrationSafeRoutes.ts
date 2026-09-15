@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
-import { isGoldenCoastProgrammeVoucher, isReadonlyMigratedVoucher } from "../../lib/migratedVoucherGuard";
+import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import {
   DurableFinancialOperationError,
   financialOperationFingerprint,
@@ -383,10 +383,10 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                   `Voucher ${foreignVoucher.voucherNumber} belongs to another company. This account contains history from an older cross-company migration; move it back to its original company before migrating it again.`
                 );
               }
-              const protectedVoucher = touchedVoucherRows.find((voucher) => isGoldenCoastProgrammeVoucher(voucher));
+              const protectedVoucher = touchedVoucherRows.find((voucher) => voucherMutationBlockReason(voucher));
               if (protectedVoucher) {
                 throw new AccountMigrationConflict(
-                  `Voucher ${protectedVoucher.voucherNumber} is controlled by the Golden Coast accounting programme and cannot be moved by account migration.`
+                  `Voucher ${protectedVoucher.voucherNumber} ${voucherMutationBlockReason(protectedVoucher)}`
                 );
               }
 
@@ -407,7 +407,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                 return {
                   plan,
                   sourceVoucher,
-                  moveIntact: plan.isExclusive && !isReadonlyMigratedVoucher(sourceVoucher),
+                  moveIntact: plan.isExclusive && !voucherMutationBlockReason(sourceVoucher),
                 };
               });
               exclusiveVoucherIds = voucherPlans.filter((item) => item.moveIntact).map((item) => item.plan.voucherId);
