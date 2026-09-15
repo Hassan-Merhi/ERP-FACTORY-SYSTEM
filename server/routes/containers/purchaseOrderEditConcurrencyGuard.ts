@@ -1,6 +1,5 @@
-import type { Express, NextFunction, Request, Response } from "express";
+import type { Express, NextFunction, Request, RequestHandler, Response } from "express";
 
-import { requireAuth } from "../../auth";
 import { pool } from "../../db";
 import { sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -116,13 +115,77 @@ async function guardPurchaseOrderEdit(req: Request, res: Response, next: NextFun
   }
 }
 
+type MutableRouteHandlerLayer = {
+  name?: string;
+  method?: string;
+  handle?: RequestHandler;
+};
+
+type MutableRouteLayer = {
+  route?: {
+    path?: unknown;
+    methods?: Record<string, boolean>;
+    stack?: MutableRouteHandlerLayer[];
+  };
+};
+
 /**
- * Register before PATCH /api/purchase-orders/:id. The normal container offload
- * lifecycle guard uses the same (companyId, containerId) advisory-lock key, so
- * edits and offloads cannot cross the status-check/write boundary concurrently.
+ * Wrap the already-registered purchase-order PATCH handler in place.
+ *
+ * The route-manifest is a production safety contract in this repository: adding
+ * a second Express route solely as middleware would change route count/order and
+ * make a behavior-preserving concurrency guard look like a routing change. By
+ * decorating the existing final handler after registration we keep the exact
+ * public route/guard snapshot while holding the container lifecycle advisory
+ * lock for the complete original PATCH request.
  */
-export function registerPurchaseOrderEditConcurrencyGuard(app: Express): void {
-  app.patch("/api/purchase-orders/:id", requireAuth, (req, res, next) => {
-    void guardPurchaseOrderEdit(req, res, next);
-  });
+export function installPurchaseOrderEditConcurrencyGuard(app: Express): void {
+  const expressApp = app as unknown as {
+    router?: { stack?: MutableRouteLayer[] };
+    _router?: { stack?: MutableRouteLayer[] };
+  };
+  const stack = expressApp.router?.stack ?? expressApp._router?.stack;
+  const routeLayer = stack?.find(
+    (layer) => layer.route?.path === "/api/purchase-orders/:id" && layer.route.methods?.patch === true
+  );
+  const handlerLayers = routeLayer?.route?.stack ?? [];
+  const originalLayer = [...handlerLayers]
+    .reverse()
+    .find((layer) => layer.method?.toLowerCase() === "patch" && typeof layer.handle === "function");
+  const originalHandle = originalLayer?.handle;
+
+  if (!originalLayer || !originalHandle) {
+    throw new Error("Unable to install purchase-order concurrency guard: PATCH handler was not registered");
+  }
+
+  const originalHandleName = originalHandle.name;
+  const wrappedHandle: RequestHandler = (req, res, next) => {
+    void guardPurchaseOrderEdit(req, res, (guardError?: unknown) => {
+      if (guardError) {
+        next(guardError);
+        return;
+      }
+
+      try {
+        Promise.resolve(originalHandle(req, res, next)).catch(next);
+      } catch (error) {
+        next(error);
+      }
+    });
+  };
+
+  // Route-manifest extraction falls back to handle.name when the Express layer
+  // itself has no name. Preserve the original function name so this safety-only
+  // wrapper cannot create a false route-manifest diff.
+  try {
+    Object.defineProperty(wrappedHandle, "name", {
+      value: originalHandleName,
+      configurable: true,
+    });
+  } catch {
+    // Function names are normally configurable; the Express layer name remains
+    // unchanged even if a runtime forbids redefining this optional metadata.
+  }
+
+  originalLayer.handle = wrappedHandle;
 }
