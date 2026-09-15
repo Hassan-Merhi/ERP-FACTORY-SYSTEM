@@ -10,7 +10,7 @@ export function useContainerFilters(allContainers: Container[], soldContainers: 
   const debouncedSearch = useDebounce(searchTerm, 300);
   const debouncedSoldSearch = useDebounce(soldSearchTerm, 300);
   const debouncedOtwSearch = useDebounce(otwSearchTerm, 300);
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("OTW");
   const [supplierFilter, setSupplierFilter] = useState<string[]>([]);
   // OTW Tracking filters
   const [otwLocationFilter, setOtwLocationFilter] = useState("ALL");
@@ -23,7 +23,7 @@ export function useContainerFilters(allContainers: Container[], soldContainers: 
   const [otwNotesFilter, setOtwNotesFilter] = useState("ALL");
 
   const clearFilters = async () => {
-    setStatusFilter("ALL");
+    setStatusFilter("OTW");
     setSupplierFilter("ALL" as unknown as string[]);
     setSearchTerm("");
   };
