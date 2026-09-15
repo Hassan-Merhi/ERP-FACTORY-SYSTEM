@@ -146,6 +146,7 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
     setGroupMembersDialogOpen,
     workerGroupsExpanded,
     setWorkerGroupsExpanded,
+    createWorkerGroupDialogOpen,
     setCreateWorkerGroupDialogOpen,
     selectedWorkerGroupForMembers,
     setSelectedWorkerGroupForMembers,
@@ -468,6 +469,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
           deleteWorkerConflict={deleteWorkerConflict}
           setDeleteWorkerConflict={setDeleteWorkerConflict}
           handleForceDeleteWorker={handleForceDeleteWorker}
+          createWorkerGroupDialogOpen={createWorkerGroupDialogOpen}
+          setCreateWorkerGroupDialogOpen={setCreateWorkerGroupDialogOpen}
           workerGroupMembersDialogOpen={workerGroupMembersDialogOpen}
           setWorkerGroupMembersDialogOpen={setWorkerGroupMembersDialogOpen}
           selectedWorkerGroupForMembers={selectedWorkerGroupForMembers}
