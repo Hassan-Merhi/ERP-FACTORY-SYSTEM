@@ -1,5 +1,7 @@
 import type ExcelJS from "exceljs";
 
+// prettier-ignore
+(() => {
 interface ContainerExportLineItem {
   stockItemCode?: string | null;
   stockItemName?: string | null;
@@ -295,7 +297,7 @@ function flattenNoCostRows(data: ContainerExportPayload): Array<{ description: s
 
 async function exportNoCostPdf(containerId: string): Promise<void> {
   const data = await fetchContainerExportData(containerId);
-  if (!data) throw new Error("Container export data is unavailable");
+  if (!data) throw new Error();
 
   const rows = flattenNoCostRows(data);
   const totalQuantity = rows.reduce((sum, row) => sum + row.quantity, 0);
@@ -400,3 +402,4 @@ document.addEventListener(
   },
   true
 );
+})();
