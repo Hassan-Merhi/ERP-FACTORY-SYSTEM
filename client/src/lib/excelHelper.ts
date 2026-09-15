@@ -267,6 +267,130 @@ async function loadSpreadsheet(workbook: ExcelJS.Workbook, bytes: Uint8Array): P
   }
 }
 
+function isNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): boolean {
+  return (
+    worksheet.name === "Container Items" &&
+    worksheet.getCell("A3").text.trim().toUpperCase() === "NO" &&
+    worksheet.getCell("B3").text.trim().toUpperCase() === "BARCODE" &&
+    worksheet.getCell("C3").text.trim().toUpperCase() === "DESCRIPTION" &&
+    worksheet.getCell("D3").text.trim().toUpperCase() === "Q'TY"
+  );
+}
+
+function prepareNoCostContainerItemsSheet(worksheet: ExcelJS.Worksheet): void {
+  if (!isNoCostContainerItemsSheet(worksheet)) return;
+
+  const existingLastRow = worksheet.rowCount;
+  const hasTotalRow = worksheet.getCell(`A${existingLastRow}`).text.trim().toUpperCase() === "TOTAL Q'TY";
+  const dataEndRow = hasTotalRow ? existingLastRow - 1 : existingLastRow;
+
+  const rows: Array<{
+    barcode: ExcelJS.CellValue;
+    description: ExcelJS.CellValue;
+    descriptionText: string;
+    quantity: ExcelJS.CellValue;
+  }> = [];
+
+  for (let rowNumber = 4; rowNumber <= dataEndRow; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    if (!row.hasValues) continue;
+    rows.push({
+      barcode: row.getCell(2).value,
+      description: row.getCell(3).value,
+      descriptionText: row.getCell(3).text.trim(),
+      quantity: row.getCell(4).value,
+    });
+  }
+
+  rows.sort((left, right) =>
+    left.descriptionText.localeCompare(right.descriptionText, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+
+  rows.forEach((item, index) => {
+    const row = worksheet.getRow(index + 4);
+    row.getCell(1).value = index + 1;
+    row.getCell(2).value = item.barcode;
+    row.getCell(3).value = item.description;
+    row.getCell(4).value = item.quantity;
+  });
+
+  const totalRowNumber = hasTotalRow ? existingLastRow : dataEndRow + 1;
+  const totalRow = worksheet.getRow(totalRowNumber);
+  totalRow.getCell(1).value = "TOTAL Q'TY";
+  if (!hasTotalRow) {
+    worksheet.mergeCells(`A${totalRowNumber}:C${totalRowNumber}`);
+  }
+  totalRow.getCell(4).value =
+    rows.length > 0 ? { formula: `SUM(D4:D${3 + rows.length})` } : 0;
+  totalRow.height = 24;
+  totalRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B2A4A" } };
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+    cell.alignment = {
+      horizontal: colNum === 4 ? "center" : "right",
+      vertical: "middle",
+    };
+    cell.border = {
+      top: { style: "thin" },
+      bottom: { style: "thin" },
+      left: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+  totalRow.getCell(4).numFmt = "#,##0.##";
+
+  worksheet.pageSetup.orientation = "landscape";
+  worksheet.pageSetup.fitToPage = true;
+  worksheet.pageSetup.fitToWidth = 1;
+  worksheet.pageSetup.fitToHeight = 0;
+  worksheet.pageSetup.horizontalCentered = true;
+  worksheet.pageSetup.printArea = `A1:D${totalRowNumber}`;
+  worksheet.pageSetup.printTitlesRow = "1:3";
+  worksheet.pageSetup.margins = {
+    left: 0.25,
+    right: 0.25,
+    top: 0.5,
+    bottom: 0.5,
+    header: 0.2,
+    footer: 0.2,
+  };
+}
+
+type WorkbookConstructor = new () => ExcelJS.Workbook;
+const OriginalWorkbook = ExcelJS.Workbook;
+
+class ExportAwareWorkbook extends OriginalWorkbook {
+  private containerItemsWorksheet: ExcelJS.Worksheet | null = null;
+  private containerItemsWriteHookInstalled = false;
+
+  override addWorksheet(name?: string, options?: Partial<ExcelJS.AddWorksheetOptions>): ExcelJS.Worksheet {
+    const worksheet = super.addWorksheet(name, options);
+    if (name === "Container Items") {
+      this.containerItemsWorksheet = worksheet;
+      this.installContainerItemsWriteHook();
+    }
+    return worksheet;
+  }
+
+  private installContainerItemsWriteHook(): void {
+    if (this.containerItemsWriteHookInstalled) return;
+    this.containerItemsWriteHookInstalled = true;
+
+    const originalWriteBuffer = this.xlsx.writeBuffer.bind(this.xlsx);
+    this.xlsx.writeBuffer = async () => {
+      if (this.containerItemsWorksheet) {
+        prepareNoCostContainerItemsSheet(this.containerItemsWorksheet);
+      }
+      return originalWriteBuffer();
+    };
+  }
+}
+
+(ExcelJS as unknown as { Workbook: WorkbookConstructor }).Workbook = ExportAwareWorkbook as WorkbookConstructor;
+
 export async function writeFile(workbook: ExcelJS.Workbook, filename: string): Promise<void> {
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
