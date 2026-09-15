@@ -7,13 +7,13 @@ export const parseBalance = (balance: number | string): number => {
   return balance || 0;
 };
 
-export const calculateChildrenTotal = (parentAccountId: number, accountMap: Map<number, Account[]>) => {
-  const children = accountMap.get(parentAccountId) || [];
-  return children.reduce((sum, acc) => sum + parseBalance(acc.balance), 0);
-};
-
 export const signedBalance = (acc: Account) =>
   acc.balanceSide === "Cr" ? parseBalance(acc.balance) : -parseBalance(acc.balance);
+
+export const calculateChildrenTotal = (parentAccountId: number, accountMap: Map<number, Account[]>) => {
+  const children = accountMap.get(parentAccountId) || [];
+  return children.reduce((sum, acc) => sum + signedBalance(acc), 0);
+};
 
 export const calculateTotal = (accountList: Account[]) => {
   const accountIds = new Set(accountList.map((acc) => acc.accountId));
