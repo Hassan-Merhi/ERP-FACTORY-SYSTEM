@@ -183,8 +183,21 @@ describe("PATCH /api/factory/payrolls/:id/mark-paid", () => {
     expect(voucher.voucher_date).toBe("2026-06-05");
   });
 
-  it("writes no voucher when no cash account is nominated", async () => {
+  it("refuses to pay a non-zero payroll with no cash account nominated", async () => {
     const payrollId = await createPayroll("400.00");
+
+    // Paying real cash with no account nominated used to succeed and write no
+    // voucher, which put the payment outside the ledger entirely. Every payment
+    // flow now has to name the account the cash left.
+    const response = await agent.patch(`/api/factory/payrolls/${payrollId}/mark-paid`).send({});
+    expect(response.status).toBe(400);
+
+    expect((await payrollRow(payrollId))?.status).toBe("APPROVED");
+    expect(await payrollVouchers(payrollId)).toHaveLength(0);
+  });
+
+  it("writes no voucher for a zero-value payroll", async () => {
+    const payrollId = await createPayroll("0.00");
 
     const response = await agent.patch(`/api/factory/payrolls/${payrollId}/mark-paid`).send({});
     expect(response.status).toBe(200);
@@ -192,8 +205,7 @@ describe("PATCH /api/factory/payrolls/:id/mark-paid", () => {
     const row = await payrollRow(payrollId);
     expect(row?.status).toBe("PAID");
     expect(row?.cash_account_id).toBeNull();
-    // Cash handed over outside the ledger. A voucher with one leg would be
-    // worse than no voucher at all.
+    // Nothing moved, so a voucher would post two zero legs and nothing else.
     expect(await payrollVouchers(payrollId)).toHaveLength(0);
   });
 
@@ -331,7 +343,7 @@ describe("POST /api/factory/payrolls/mark-paid-bulk", () => {
 
     const response = await agent
       .post("/api/factory/payrolls/mark-paid-bulk")
-      .send({ payrollIds: [payrollId, payrollId, payrollId] });
+      .send({ payrollIds: [payrollId, payrollId, payrollId], cashAccountId: ctx.cashAccountId });
 
     expect(response.status).toBe(200);
     expect(response.body.updated).toBe(1);
