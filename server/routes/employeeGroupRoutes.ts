@@ -131,7 +131,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
       const allGroups = await storage.getAllEmployeeGroups(req.session.currentCompanyId);
-      const workerGroups = allGroups.filter((g) => g.groupType === "Worker");
+      const workerGroups = allGroups.filter((group) => group.groupType === "Worker");
       res.json(workerGroups);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -145,32 +145,28 @@ export function registerEmployeeGroupRoutes(app: Express) {
       }
       const companyId = req.session.currentCompanyId;
       const allGroups = await storage.getAllEmployeeGroups(companyId);
-      const workerGroups = allGroups.filter((g) => g.groupType === "Worker");
+      const workerGroups = allGroups.filter((group) => group.groupType === "Worker");
 
-      // Get members for each group, filtering by company for security
+      // Worker groups are a strict Worker-only boundary. Old bad memberships
+      // may still exist in employee_group_members, so resolve each membership
+      // through employees and omit anything that is not employeeType=Worker.
       const groupsWithMembers = await Promise.all(
         workerGroups.map(async (group) => {
           const memberRecords = await storage.getEmployeeGroupMembers(group.id);
-          // Get full worker details for each member, ensuring they belong to the same company
           const members = await Promise.all(
-            memberRecords.map(async (m) => {
-              // employeeId comes through a LEFT JOIN, so a membership whose
-              // employee row is gone carries null. The lookup below would match
-              // nothing for it anyway; skipping it saves a query and keeps the
-              // filter below as the single place a missing worker is dropped.
-              if (m.employeeId === null) return undefined;
+            memberRecords.map(async (member) => {
+              if (member.employeeId === null) return undefined;
               const [worker] = await db
                 .select()
                 .from(employees)
-                .where(and(eq(employees.id, m.employeeId), eq(employees.companyId, companyId)));
-              return worker;
+                .where(and(eq(employees.id, member.employeeId), eq(employees.companyId, companyId)));
+              return worker?.employeeType === "Worker" ? worker : undefined;
             })
           );
-          const finalResult = {
+          return {
             ...group,
-            members: members.filter(Boolean),
+            members: members.filter((member): member is NonNullable<typeof member> => Boolean(member)),
           };
-          return finalResult;
         })
       );
       res.json(groupsWithMembers);
@@ -207,8 +203,27 @@ export function registerEmployeeGroupRoutes(app: Express) {
 
   app.get("/api/worker-groups/:id/members", requireAuth, async (req, res) => {
     try {
-      const members = await storage.getEmployeeGroupMembers(parseInt(req.params.id));
-      res.json(members);
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const groupId = parseInt(req.params.id);
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+      const group = await storage.getEmployeeGroupById(groupId);
+      if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
+        return res.status(404).json({ message: "Worker group not found" });
+      }
+
+      const memberRecords = await storage.getEmployeeGroupMembers(groupId);
+      const members = await Promise.all(
+        memberRecords.map(async (member) => {
+          if (member.employeeId === null) return undefined;
+          const [worker] = await db
+            .select()
+            .from(employees)
+            .where(and(eq(employees.id, member.employeeId), eq(employees.companyId, companyId)));
+          return worker?.employeeType === "Worker" ? member : undefined;
+        })
+      );
+      res.json(members.filter((member): member is NonNullable<typeof member> => Boolean(member)));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -222,20 +237,23 @@ export function registerEmployeeGroupRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       const groupId = parseInt(req.params.groupId);
       const workerId = parseInt(req.params.workerId);
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+      if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
 
-      // Verify group belongs to company
       const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId) {
-        return res.status(403).json({ message: "Group not found or access denied" });
+      if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
+        return res.status(403).json({ message: "Worker group not found or access denied" });
       }
 
-      // Verify worker belongs to company
       const [worker] = await db
         .select()
         .from(employees)
         .where(and(eq(employees.id, workerId), eq(employees.companyId, companyId)));
       if (!worker) {
         return res.status(404).json({ message: "Worker not found" });
+      }
+      if (worker.employeeType !== "Worker") {
+        return res.status(400).json({ message: "Only Worker records can be added to worker groups" });
       }
 
       await storage.addEmployeeToGroup(groupId, workerId);
@@ -253,11 +271,12 @@ export function registerEmployeeGroupRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       const groupId = parseInt(req.params.groupId);
       const workerId = parseInt(req.params.workerId);
+      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+      if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
 
-      // Verify group belongs to company
       const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId) {
-        return res.status(403).json({ message: "Group not found or access denied" });
+      if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
+        return res.status(403).json({ message: "Worker group not found or access denied" });
       }
 
       await storage.removeEmployeeFromGroup(groupId, workerId);
