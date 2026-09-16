@@ -15,6 +15,7 @@ const transportSource = read("server/routes/screenFeedTransportHardening.ts");
 const routesSource = read("server/routes/applicationRoutes.ts");
 const viewerSource = read("client/src/pages/settings/WatchUserDialog.tsx");
 const captureSource = read("client/src/hooks/use-screen-feed.ts");
+const controllerContextSource = read("client/src/components/RemoteControllerSessionContext.tsx");
 
 describe("Phase 5 faster remote viewing contracts", () => {
   it("keeps fast mode enabled by default with an explicit deployment opt-out", () => {
@@ -60,6 +61,22 @@ describe("Phase 5 faster remote viewing contracts", () => {
     expect(captureSource).toContain("markDirty(");
     expect(captureSource).toContain("startMutationObserver");
     expect(captureSource).toContain("stopMutationObserver");
+  });
+
+  it("treats CSS class and inline-style changes as capture-worthy visual updates", () => {
+    expect(captureSource).toContain("CAPTURE_MUTATION_ATTRIBUTE_FILTER");
+    expect(captureSource).toMatch(/CAPTURE_MUTATION_ATTRIBUTE_FILTER[\s\S]*"class"/);
+    expect(captureSource).toMatch(/CAPTURE_MUTATION_ATTRIBUTE_FILTER[\s\S]*"style"/);
+  });
+
+  it("debounces and scopes remote-viewer target discovery to portal roots", () => {
+    expect(controllerContextSource).toContain("WATCH_TARGET_REFRESH_DEBOUNCE_MS");
+    expect(controllerContextSource).toContain("scheduleTargetRefresh");
+    expect(controllerContextSource).toContain("PORTAL_SCOPE_SELECTOR");
+    expect(controllerContextSource).toContain("scopedObservers");
+    expect(controllerContextSource).not.toContain(
+      "observer.observe(document.body, { childList: true, subtree: true })"
+    );
   });
 
   it("uses a low-impact capture cadence instead of the old 150ms loop", () => {

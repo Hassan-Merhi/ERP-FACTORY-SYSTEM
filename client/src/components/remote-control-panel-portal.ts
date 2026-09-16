@@ -1,4 +1,5 @@
-const WATCH_DIALOG_SELECTOR = "[data-testid='dialog-watch-user'], [data-testid='dialog-watch-user-fast']";
+export const REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR =
+  "[data-testid='dialog-watch-user'], [data-testid='dialog-watch-user-fast']";
 const HOST_SELECTOR = "[data-remote-control-panel-host='true']";
 const DIALOG_RESERVE_CLASSES = ["!pb-[46vh]", "lg:!pb-0", "lg:!pr-[376px]"] as const;
 
@@ -10,7 +11,7 @@ interface HostLease {
 const hostLeases = new WeakMap<HTMLElement, HostLease>();
 
 export function findRemoteSupportWatchDialog(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(WATCH_DIALOG_SELECTOR);
+  return document.querySelector<HTMLElement>(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR);
 }
 
 function configureDialog(dialog: HTMLElement): void {

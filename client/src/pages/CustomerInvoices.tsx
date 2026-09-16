@@ -258,6 +258,7 @@ export default function CustomerInvoices() {
                           size="icon"
                           onClick={() => navigate(`/factory/sales/invoices/${order.id}`)}
                           data-testid={`button-view-order-${order.id}`}
+                          data-remote-control-safe="true"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>

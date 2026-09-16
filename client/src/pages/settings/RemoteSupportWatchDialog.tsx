@@ -28,6 +28,14 @@ interface ScreenCaptureInfo {
   failureReason?: string;
 }
 
+interface ScreenFrameViewport {
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+  visualScale: number;
+}
+
 interface ScreenFrame {
   dataUrl: string;
   capturedAt: string;
@@ -35,6 +43,7 @@ interface ScreenFrame {
   username?: string;
   capture?: ScreenCaptureInfo | null;
   captureFailure?: CaptureFailure | null;
+  viewport?: ScreenFrameViewport | null;
 }
 
 interface ScreenFeedPayload {
@@ -44,6 +53,7 @@ interface ScreenFeedPayload {
   username?: string;
   capture?: ScreenCaptureInfo | null;
   captureFailure?: CaptureFailure | null;
+  viewport?: ScreenFrameViewport | null;
 }
 
 interface FastPollState {
@@ -109,8 +119,11 @@ async function fetchConditionalFrame(
   if (!response.ok) throw new Error("Screen feed request failed.");
 
   const payload = (await response.json()) as ScreenFeedPayload | null;
-  const nextFrame = payload?.dataUrl && payload.capturedAt ? (payload as ScreenFrame) : state.frame;
-  const failure = payload?.captureFailure ?? (payload?.dataUrl ? captureFailureFromFrame(nextFrame) : null);
+  // A 200 response without a frame is a real state transition (for example,
+  // the source frame expired), not an unchanged response. Only a 304 keeps the
+  // prior image in memory; otherwise an old frame could remain visible forever.
+  const nextFrame = payload?.dataUrl && payload.capturedAt ? (payload as ScreenFrame) : null;
+  const failure = payload?.captureFailure ?? (nextFrame ? captureFailureFromFrame(nextFrame) : null);
   return {
     etag: response.headers.get("ETag"),
     frame: nextFrame,
@@ -170,7 +183,7 @@ function ScreenFeedDialog({
     try {
       const next = await fetchConditionalFrame(userId, stateRef.current, controller.signal);
       stateRef.current = next;
-      if (next.frame) setFrame(next.frame);
+      setFrame(next.frame);
       setCaptureFailure(next.failure);
       setError(null);
     } catch (pollError) {
@@ -378,6 +391,12 @@ function ScreenFeedDialog({
                 }
                 draggable={false}
                 data-testid="img-screen-feed"
+                data-frame-viewport-width={frame.viewport?.width ?? ""}
+                data-frame-viewport-height={frame.viewport?.height ?? ""}
+                data-frame-viewport-scroll-x={frame.viewport?.scrollX ?? ""}
+                data-frame-viewport-scroll-y={frame.viewport?.scrollY ?? ""}
+                data-frame-viewport-visual-scale={frame.viewport?.visualScale ?? ""}
+                data-frame-captured-at={frame.capturedAt}
               />
             ) : (
               <div className="m-auto flex max-w-xl flex-col items-center gap-2 px-6 text-center text-sm text-white/70">

@@ -4,6 +4,7 @@ import {
   acquireRemoteControlPanelHost,
   findRemoteSupportWatchDialog,
   releaseRemoteControlPanelHost,
+  REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR,
 } from "@/components/remote-control-panel-portal";
 import type { RemoteControlSessionView } from "@/hooks/use-remote-control-session";
 
@@ -54,6 +55,50 @@ interface RefreshInFlight {
 
 const RemoteControllerSessionContext = createContext<RemoteControllerSessionContextValue | null>(null);
 const SESSION_REFRESH_MS = 5000;
+const WATCH_TARGET_REFRESH_DEBOUNCE_MS = 50;
+const PORTAL_SCOPE_SELECTOR = "[data-radix-portal]";
+const WATCH_TARGET_ATTRIBUTE_FILTER = ["data-testid", "data-watched-user-id", "data-watch-username"];
+
+function nodeContainsWatchDialog(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const element = node as Element;
+  return (
+    element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
+    Boolean(element.querySelector(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR))
+  );
+}
+
+function nodeMayContainWatchScope(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const element = node as Element;
+  return element.matches(PORTAL_SCOPE_SELECTOR) || nodeContainsWatchDialog(element);
+}
+
+function mutationMayAffectWatchTarget(records: readonly MutationRecord[]): boolean {
+  for (const record of records) {
+    if (record.type === "attributes") {
+      const element = record.target instanceof Element ? record.target : null;
+      if (!element) continue;
+      // Attribute observers are scoped to portal roots and only subscribe to
+      // these three lifecycle attributes. A dialog can lose its test id during
+      // a replacement, so retain the old value to notice that removal too.
+      if (
+        element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
+        element.closest(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
+        (record.attributeName === "data-testid" && record.oldValue?.startsWith("dialog-watch-user"))
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    if (record.type !== "childList") continue;
+    for (const node of [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]) {
+      if (nodeContainsWatchDialog(node)) return true;
+    }
+  }
+  return false;
+}
 
 export async function remoteControllerRequestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
@@ -118,14 +163,74 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
   }, [session]);
 
   useEffect(() => {
+    const scopedObservers = new Map<HTMLElement, MutationObserver>();
+    let refreshTimer: number | null = null;
+
     const refreshTarget = () => {
       const next = currentWatchTarget();
       setTarget((current) => (sameTarget(current, next) ? current : next));
     };
+    const scheduleTargetRefresh = () => {
+      if (refreshTimer !== null) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        refreshTarget();
+      }, WATCH_TARGET_REFRESH_DEBOUNCE_MS);
+    };
+    const observeScope = (scope: HTMLElement) => {
+      if (scopedObservers.has(scope)) return;
+      const observer = new MutationObserver((records) => {
+        if (mutationMayAffectWatchTarget(records)) scheduleTargetRefresh();
+      });
+      observer.observe(scope, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: WATCH_TARGET_ATTRIBUTE_FILTER,
+        attributeOldValue: true,
+      });
+      scopedObservers.set(scope, observer);
+    };
+    const syncScopes = () => {
+      // Radix renders dialogs beneath a direct body portal. Keep the persistent
+      // observer at that shallow boundary, then observe only portal roots that
+      // could contain a remote-viewer dialog instead of every ERP DOM update.
+      const scopes = new Set(
+        Array.from(document.body.children).filter(
+          (element): element is HTMLElement => element instanceof HTMLElement && nodeMayContainWatchScope(element)
+        )
+      );
+      for (const [scope, observer] of scopedObservers) {
+        if (scopes.has(scope)) continue;
+        observer.disconnect();
+        scopedObservers.delete(scope);
+      }
+      for (const scope of scopes) observeScope(scope);
+    };
+
     refreshTarget();
-    const observer = new MutationObserver(refreshTarget);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    syncScopes();
+    const bodyObserver = new MutationObserver((records) => {
+      const scopeChanged = records.some((record) => {
+        if (record.type === "attributes") return true;
+        return [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(nodeMayContainWatchScope);
+      });
+      if (!scopeChanged) return;
+      syncScopes();
+      scheduleTargetRefresh();
+    });
+    bodyObserver.observe(document.body, {
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-radix-portal", ...WATCH_TARGET_ATTRIBUTE_FILTER],
+    });
+
+    return () => {
+      bodyObserver.disconnect();
+      for (const observer of scopedObservers.values()) observer.disconnect();
+      scopedObservers.clear();
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+    };
   }, []);
 
   useEffect(() => {
