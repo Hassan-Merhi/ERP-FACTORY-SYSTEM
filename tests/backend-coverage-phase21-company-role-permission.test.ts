@@ -35,7 +35,12 @@ async function grantPermission(userId: string, companyId: number, permission: st
 }
 
 async function roleRows(userId: string) {
-  const result = await pool.query<{ id: number; company_id: number; role: string; assigned_location_id: number | null }>(
+  const result = await pool.query<{
+    id: number;
+    company_id: number;
+    role: string;
+    assigned_location_id: number | null;
+  }>(
     `SELECT id, company_id, role, assigned_location_id
        FROM user_company_roles
       WHERE user_id = $1
@@ -63,16 +68,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (targetUserId) {
-    await pool.query(`DELETE FROM user_location_cash_accounts WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_location_cash_accounts WHERE user_id = $1`, [targetUserId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_locations WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM user_security_permissions WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM users WHERE id = $1`, [targetUserId]).catch(() => undefined);
   }
   if (secondCompanyId) {
-    await pool.query(`DELETE FROM user_location_cash_accounts WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_location_cash_accounts WHERE company_id = $1`, [secondCompanyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_locations WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM user_security_permissions WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_security_permissions WHERE company_id = $1`, [secondCompanyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM audit_log WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM login_history WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
@@ -81,7 +92,12 @@ afterAll(async () => {
     await pool.query(`DELETE FROM companies WHERE id = $1`, [secondCompanyId]).catch(() => undefined);
   }
   if (ctx) {
-    await pool.query(`DELETE FROM user_security_permissions WHERE user_id = $1 AND company_id = $2`, [ctx.userId, ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_security_permissions WHERE user_id = $1 AND company_id = $2`, [
+        ctx.userId,
+        ctx.companyId,
+      ])
+      .catch(() => undefined);
     await cleanupTestData(PREFIX);
   }
   closeTestServer();
@@ -203,7 +219,8 @@ describe("Phase 21 company/role/permission backend", () => {
     expect(catalog.status, catalog.text).toBe(200);
     const permissions = catalog.body.permissions as string[];
     permissionA = permissions.find((value) => value !== "security.permissions.manage") ?? permissions[0];
-    permissionB = permissions.find((value) => value !== "security.permissions.manage" && value !== permissionA) ?? permissionA;
+    permissionB =
+      permissions.find((value) => value !== "security.permissions.manage" && value !== permissionA) ?? permissionA;
     expect(permissionA).toBeTruthy();
 
     const response = await agent
@@ -241,10 +258,10 @@ describe("Phase 21 company/role/permission backend", () => {
   });
 
   it("keeps Developer writes active-company scoped while allowing an authorized company switch", async () => {
-    await pool.query(
-      `UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`,
-      [ctx.userId, ctx.companyId]
-    );
+    await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
+      ctx.userId,
+      ctx.companyId,
+    ]);
     await pool.query(
       `INSERT INTO user_company_roles (user_id, company_id, role)
        VALUES ($1, $2, 'Developer')`,
@@ -299,7 +316,9 @@ describe("Phase 21 company/role/permission backend", () => {
 
     const roles = await agent.get(`/api/users/${targetUserId}/company-roles`);
     expect(roles.status, roles.text).toBe(200);
-    const companyIds = (roles.body as Array<{ companyId: number }>).map((row) => Number(row.companyId)).sort((a, b) => a - b);
+    const companyIds = (roles.body as Array<{ companyId: number }>)
+      .map((row) => Number(row.companyId))
+      .sort((a, b) => a - b);
     expect(companyIds).toEqual([ctx.companyId, secondCompanyId].sort((a, b) => a - b));
   });
 

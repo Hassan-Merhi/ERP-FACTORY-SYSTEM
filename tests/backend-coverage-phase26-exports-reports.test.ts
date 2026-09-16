@@ -12,16 +12,10 @@ import request from "supertest";
 import ExcelJS from "exceljs";
 
 import { pool } from "../server/db";
-import {
-  cleanupTestData,
-  closeTestServer,
-  seedTestData,
-  type TestContext,
-} from "./setup";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = `p26exp-${Date.now().toString(36)}`;
-const XLSX_MIME =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const LARGE_ROW_COUNT = 600;
 
 let ctx: TestContext;
@@ -51,19 +45,12 @@ async function loadWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
   return workbook;
 }
 
-async function createCompany(
-  companyType: "factory" | "supplier_partner",
-  suffix: string
-): Promise<number> {
+async function createCompany(companyType: "factory" | "supplier_partner", suffix: string): Promise<number> {
   const created = await pool.query<{ id: number }>(
     `INSERT INTO companies (code, name, company_type, active, base_currency)
      VALUES ($1, $2, $3, true, 'USD')
      RETURNING id`,
-    [
-      `P26-${suffix}-${Date.now().toString(36)}`.slice(0, 50),
-      `${PREFIX}_${suffix}`,
-      companyType,
-    ]
+    [`P26-${suffix}-${Date.now().toString(36)}`.slice(0, 50), `${PREFIX}_${suffix}`, companyType]
   );
   const companyId = created.rows[0].id;
   await pool.query(
@@ -75,9 +62,7 @@ async function createCompany(
 }
 
 async function selectCompany(companyId: number): Promise<void> {
-  const response = await agent
-    .post("/api/auth/set-company")
-    .send({ companyId });
+  const response = await agent.post("/api/auth/set-company").send({ companyId });
   expect(response.status, response.text).toBe(200);
 }
 
@@ -101,50 +86,28 @@ afterAll(async () => {
   const auxiliaryIds = [factoryCompanyId, spCompanyId].filter((id) => id > 0);
   if (auxiliaryIds.length > 0) {
     await pool
-      .query(`DELETE FROM factory_payrolls WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
+      .query(`DELETE FROM factory_payrolls WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
     await pool
-      .query(`DELETE FROM factory_workers WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
+      .query(`DELETE FROM factory_workers WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
     await pool
-      .query(
-        `DELETE FROM user_location_cash_accounts WHERE company_id = ANY($1::int[])`,
-        [auxiliaryIds]
-      )
+      .query(`DELETE FROM user_location_cash_accounts WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
     await pool
-      .query(`DELETE FROM user_locations WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
+      .query(`DELETE FROM user_locations WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
     await pool
-      .query(
-        `DELETE FROM user_security_permissions WHERE company_id = ANY($1::int[])`,
-        [auxiliaryIds]
-      )
+      .query(`DELETE FROM user_security_permissions WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
     await pool
-      .query(`DELETE FROM user_company_roles WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
+      .query(`DELETE FROM user_company_roles WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
+    await pool.query(`DELETE FROM audit_log WHERE company_id = ANY($1::int[])`, [auxiliaryIds]).catch(() => undefined);
     await pool
-      .query(`DELETE FROM audit_log WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
+      .query(`DELETE FROM login_history WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
-    await pool
-      .query(`DELETE FROM login_history WHERE company_id = ANY($1::int[])`, [
-        auxiliaryIds,
-      ])
-      .catch(() => undefined);
-    await pool
-      .query(`DELETE FROM companies WHERE id = ANY($1::int[])`, [auxiliaryIds])
-      .catch(() => undefined);
+    await pool.query(`DELETE FROM companies WHERE id = ANY($1::int[])`, [auxiliaryIds]).catch(() => undefined);
   }
   await cleanupTestData(PREFIX);
   closeTestServer();
@@ -154,9 +117,7 @@ describe("Phase 26 exports and reports", () => {
   it("generates an accounting XLSX report for an empty period", async () => {
     await selectCompany(ctx.companyId);
     const response = await binary(
-      agent
-        .get("/api/reports/net-position-monthly-excel")
-        .query({ startDate: "2025-01-01", endDate: "2025-03-31" })
+      agent.get("/api/reports/net-position-monthly-excel").query({ startDate: "2025-01-01", endDate: "2025-03-31" })
     );
 
     expect(response.status, response.text).toBe(200);
@@ -170,18 +131,14 @@ describe("Phase 26 exports and reports", () => {
   it("rejects invalid or inaccessible accounting report references cleanly", async () => {
     await selectCompany(ctx.companyId);
 
-    const missingDate = await agent.get(
-      "/api/reports/net-position-monthly-excel"
-    );
+    const missingDate = await agent.get("/api/reports/net-position-monthly-excel");
     expect(missingDate.status).toBe(400);
 
-    const invalidCompany = await agent
-      .get("/api/reports/net-position-monthly-excel")
-      .query({
-        companyId: 999_999_999,
-        startDate: "2026-01-01",
-        endDate: "2026-01-31",
-      });
+    const invalidCompany = await agent.get("/api/reports/net-position-monthly-excel").query({
+      companyId: 999_999_999,
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+    });
     expect(invalidCompany.status).toBe(403);
     expect(invalidCompany.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
   });
@@ -256,13 +213,11 @@ describe("Phase 26 exports and reports", () => {
 
   it("validates Factory export references instead of producing a broken download", async () => {
     await selectCompany(factoryCompanyId);
-    const response = await agent
-      .post("/api/factory/payroll/export-excel")
-      .send({
-        companyId: 0,
-        startDate: "2026-08-01",
-        endDate: "2026-08-31",
-      });
+    const response = await agent.post("/api/factory/payroll/export-excel").send({
+      companyId: 0,
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+    });
     expect(response.status).toBe(400);
   });
 
@@ -270,9 +225,7 @@ describe("Phase 26 exports and reports", () => {
     await selectCompany(spCompanyId);
 
     const response = await binary(
-      agent
-        .get("/api/sp/sales-form/export-v2")
-        .query({ fromDate: "2026-01-01", toDate: "2026-01-02" })
+      agent.get("/api/sp/sales-form/export-v2").query({ fromDate: "2026-01-01", toDate: "2026-01-02" })
     );
     expect(response.status, response.text).toBe(200);
     expect(response.headers["content-type"]).toContain(XLSX_MIME);
@@ -281,13 +234,11 @@ describe("Phase 26 exports and reports", () => {
     const workbook = await loadWorkbook(body);
     expect(workbook.worksheets.length).toBeGreaterThan(0);
 
-    const invalidLocation = await agent
-      .get("/api/sp/sales-form/export-v2")
-      .query({
-        fromDate: "2026-01-01",
-        toDate: "2026-01-02",
-        locationId: -1,
-      });
+    const invalidLocation = await agent.get("/api/sp/sales-form/export-v2").query({
+      fromDate: "2026-01-01",
+      toDate: "2026-01-02",
+      locationId: -1,
+    });
     expect(invalidLocation.status).toBe(400);
     expect(invalidLocation.body.message).toMatch(/locationId/i);
   }, 120_000);
@@ -298,12 +249,8 @@ describe("Phase 26 exports and reports", () => {
 
     expect(response.status, response.text).toBe(200);
     expect(response.headers["content-type"]).toContain("text/csv");
-    expect(response.headers["content-disposition"]).toContain(
-      `sp-reconciliation-${spCompanyId}.csv`
-    );
-    expect(response.text).toContain(
-      "surface,database_value,independent_value,status,evidence_status,basis,detail"
-    );
+    expect(response.headers["content-disposition"]).toContain(`sp-reconciliation-${spCompanyId}.csv`);
+    expect(response.text).toContain("surface,database_value,independent_value,status,evidence_status,basis,detail");
     expect(response.text.split("\n").length).toBeGreaterThan(2);
   }, 120_000);
 });

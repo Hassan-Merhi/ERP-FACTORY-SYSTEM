@@ -5,13 +5,10 @@ const MISSING_ID = 2_147_481_900;
 const moduleLoaders = import.meta.glob("../../server/routes/**/*.ts");
 
 const EXCLUDED_MODULES = /(?:trackTrace|whatsapp|screenFeed|remoteControl|webhook|openai|gemini)/i;
-const EXCLUDED_ROUTES = /(?:\/track|\/trace|whatsapp|webhook|screen-feed|remote-control|\/send(?:\/|$)|\/email(?:\/|$))/i;
+const EXCLUDED_ROUTES =
+  /(?:\/track|\/trace|whatsapp|webhook|screen-feed|remote-control|\/send(?:\/|$)|\/email(?:\/|$))/i;
 
-type Handler = (
-  req: Record<string, any>,
-  res: Record<string, any>,
-  next: (error?: unknown) => void
-) => unknown;
+type Handler = (req: Record<string, any>, res: Record<string, any>, next: (error?: unknown) => void) => unknown;
 
 type Registration = {
   method: string;
@@ -220,7 +217,12 @@ function responseDouble(): Record<string, any> {
   return res;
 }
 
-function requestDouble(route: Registration, ctx: TestContext, sequence: number, variant: ProbeVariant): Record<string, any> {
+function requestDouble(
+  route: Registration,
+  ctx: TestContext,
+  sequence: number,
+  variant: ProbeVariant
+): Record<string, any> {
   const alternate = variant % 2 === 1;
   const params = paramsFor(route.routePath, ctx, alternate);
   const session = {
@@ -370,7 +372,11 @@ async function invokeWithBudget(
   if (timer) clearTimeout(timer);
 }
 
-async function invokeRegistration(route: Registration, req: Record<string, any>, res: Record<string, any>): Promise<number> {
+async function invokeRegistration(
+  route: Registration,
+  req: Record<string, any>,
+  res: Record<string, any>
+): Promise<number> {
   let invoked = 0;
   const lastHandler = route.handlers[route.handlers.length - 1];
   await invokeWithBudget(lastHandler, req, res);
@@ -390,7 +396,10 @@ async function invokeRegistration(route: Registration, req: Record<string, any>,
   return invoked;
 }
 
-export async function runDirectRouteBucket(bucket: number, bucketCount: number): Promise<{
+export async function runDirectRouteBucket(
+  bucket: number,
+  bucketCount: number
+): Promise<{
   importedModules: number;
   registerFunctions: number;
   registrations: number;
@@ -401,10 +410,9 @@ export async function runDirectRouteBucket(bucket: number, bucketCount: number):
   const erpCtx = await seedTestData(prefix);
   const factoryCtx = await seedTestData(factoryPrefix);
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [factoryCtx.companyId]);
-  await pool.query(
-    "UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'",
-    [String(erpCtx.companyId)]
-  );
+  await pool.query("UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'", [
+    String(erpCtx.companyId),
+  ]);
 
   const registrations: Registration[] = [];
   let importedModules = 0;

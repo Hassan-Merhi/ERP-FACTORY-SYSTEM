@@ -24,9 +24,7 @@ for (const shard of reportImplementationShards) {
   for (const queryType of shard.queryTypes) {
     const existing = implementationByQueryType.get(queryType);
     if (existing) {
-      throw new Error(
-        `Duplicate chat report implementation for ${queryType}: ${existing.name} and ${shard.name}`
-      );
+      throw new Error(`Duplicate chat report implementation for ${queryType}: ${existing.name} and ${shard.name}`);
     }
     implementationByQueryType.set(queryType, shard);
   }

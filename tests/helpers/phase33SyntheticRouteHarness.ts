@@ -1,16 +1,15 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { vi } from "vitest";
 
 const MISSING_ID = 2_147_481_900;
 const moduleLoaders = import.meta.glob("../../server/routes/**/*.ts");
 
-const EXCLUDED_MODULES = /(?:\.test\.ts$|\/__tests__\/|trackTrace|whatsapp|screenFeed|remoteControl|webhook|openai|gemini|backup|deployment|serverControl)/i;
-const EXCLUDED_ROUTES = /(?:whatsapp|webhook|screen-feed|remote-control|\/email(?:\/|$)|\/send(?:\/|$)|\/backup(?:\/|$))/i;
+const EXCLUDED_MODULES =
+  /(?:\.test\.ts$|\/__tests__\/|trackTrace|whatsapp|screenFeed|remoteControl|webhook|openai|gemini|backup|deployment|serverControl)/i;
+const EXCLUDED_ROUTES =
+  /(?:whatsapp|webhook|screen-feed|remote-control|\/email(?:\/|$)|\/send(?:\/|$)|\/backup(?:\/|$))/i;
 
-type Handler = (
-  req: Record<string, any>,
-  res: Record<string, any>,
-  next: (error?: unknown) => void
-) => unknown;
+type Handler = (req: Record<string, any>, res: Record<string, any>, next: (error?: unknown) => void) => unknown;
 
 type Registration = {
   method: string;
@@ -25,6 +24,28 @@ type HarnessState = {
   companyType: CompanyMode;
   sequence: number;
 };
+
+type ProbeContext = { queries: number };
+
+// Several routers resolve a free code or number by querying in a loop until the
+// lookup comes back empty ("does PH33-1 exist? then PH33-2..."). The database
+// double answered every one of those with a row, so the loop never ended — and
+// because each iteration only awaited an already-resolved promise, it starved
+// the macrotask queue, so the probe's own budget timer could never fire. A
+// whole shard then sat at 100% CPU inside one handler until the 900s process
+// budget killed it. Giving each probe a query budget makes those lookups run
+// out of rows the way an empty table would, which ends the loop and lets the
+// sweep move on. Real handlers issue a few dozen queries at most, so the budget
+// only ever bites on a runaway loop.
+const PROBE_QUERY_BUDGET = 150;
+const probeContext = new AsyncLocalStorage<ProbeContext>();
+
+function probeRowsExhausted(): boolean {
+  const context = probeContext.getStore();
+  if (!context) return false;
+  context.queries += 1;
+  return context.queries > PROBE_QUERY_BUDGET;
+}
 
 function stableBucket(value: string, buckets: number): number {
   let hash = 2166136261;
@@ -105,7 +126,8 @@ function genericRow(state: HarnessState): Record<string, any> {
       if (key === "companytype" || key === "company_type") return state.companyType;
       if (key === "count" || key.endsWith("_count") || key.endsWith("count")) return 0;
       if (key.endsWith("id") || key.endsWith("_id")) return 1;
-      if (key.startsWith("is") || key.startsWith("can") || key.includes("active") || key.includes("enabled")) return true;
+      if (key.startsWith("is") || key.startsWith("can") || key.includes("active") || key.includes("enabled"))
+        return true;
       if (key.includes("date") || key.includes("time") || key.endsWith("at")) return new Date("2026-09-15T00:00:00Z");
       if (
         key.includes("amount") ||
@@ -142,11 +164,12 @@ function queryBuilder(state: HarnessState, rowsFactory: () => any[] = () => [gen
           return (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
             Promise.resolve(resultFactory()).then(resolve, reject);
         }
-        if (prop === "catch") return (reject: (reason: unknown) => unknown) => Promise.resolve(resultFactory()).catch(reject);
+        if (prop === "catch")
+          return (reject: (reason: unknown) => unknown) => Promise.resolve(resultFactory()).catch(reject);
         if (prop === "finally") return (callback: () => void) => Promise.resolve(resultFactory()).finally(callback);
         if (prop === "execute") return async () => resultFactory();
         if (prop === "returning") return () => queryBuilder(state, () => [genericRow(state)]);
-        if (prop === "get") return async () => genericRow(state);
+        if (prop === "get") return async () => (probeRowsExhausted() ? undefined : genericRow(state));
         if (prop === "all") return async () => resultFactory();
         return (..._args: unknown[]) => proxy;
       },
@@ -157,7 +180,7 @@ function queryBuilder(state: HarnessState, rowsFactory: () => any[] = () => [gen
 
 function makeDatabase(state: HarnessState) {
   let fakeDb: any;
-  const rowResult = () => [genericRow(state)];
+  const rowResult = () => (probeRowsExhausted() ? [] : [genericRow(state)]);
   fakeDb = new Proxy(
     {},
     {
@@ -166,7 +189,11 @@ function makeDatabase(state: HarnessState) {
         if (prop === "insert") return (..._args: unknown[]) => queryBuilder(state, rowResult);
         if (prop === "update") return (..._args: unknown[]) => queryBuilder(state, rowResult);
         if (prop === "delete") return (..._args: unknown[]) => queryBuilder(state, () => []);
-        if (prop === "execute") return async (..._args: unknown[]) => ({ rows: rowResult(), rowCount: 1 });
+        if (prop === "execute")
+          return async (..._args: unknown[]) => {
+            const rows = rowResult();
+            return { rows, rowCount: rows.length };
+          };
         if (prop === "transaction") {
           return async (callback: (tx: any) => unknown) => callback(fakeDb);
         }
@@ -184,7 +211,10 @@ function makeDatabase(state: HarnessState) {
   );
 
   const client = {
-    query: async (..._args: unknown[]) => ({ rows: rowResult(), rowCount: 1 }),
+    query: async (..._args: unknown[]) => {
+      const rows = rowResult();
+      return { rows, rowCount: rows.length };
+    },
     release: () => undefined,
   };
   const fakePool: any = {
@@ -480,15 +510,27 @@ function requestDouble(route: Registration, state: HarnessState, variant: number
     req.body = { ...body, active: false, approved: false, currency: "CDF", exchangeRate: 2800, quantity: 2, amount: 4 };
   } else if (variant === 2) {
     for (const key of Object.keys(req.params)) req.params[key] = String(MISSING_ID);
-    req.query = { ...req.query, id: String(MISSING_ID), stockItemId: String(MISSING_ID), accountId: String(MISSING_ID) };
+    req.query = {
+      ...req.query,
+      id: String(MISSING_ID),
+      stockItemId: String(MISSING_ID),
+      accountId: String(MISSING_ID),
+    };
     req.body = { ...body, id: MISSING_ID, stockItemId: MISSING_ID, accountId: MISSING_ID };
   } else if (variant === 3) {
     for (const key of Object.keys(req.params)) req.params[key] = "not-a-number";
     req.query = { id: "not-a-number", page: "0", limit: "-1", startDate: "bad-date", endDate: "bad-date" };
     req.body = { id: "not-a-number", companyId: "bad", quantity: -1, amount: -1, exchangeRate: 0, date: "bad-date" };
   } else if (variant === 4) {
-    req.session = undefined;
-    req.user = undefined;
+    // Express always installs `req.session` and Passport always installs
+    // `req.user`, so an unauthenticated request carries empty objects rather
+    // than missing ones. Deleting them instead made terminal handlers — which
+    // real routing would never reach unauthenticated, and which several routers
+    // register as floating `void handler(...)` wrappers this harness cannot
+    // catch — reject with `Cannot read properties of undefined`, surfacing as
+    // Vitest unhandled rejections that failed otherwise green shards.
+    req.session = {};
+    req.user = {};
     req.isAuthenticated = () => false;
   } else if (variant === 5) {
     req.session.role = "Staff";
@@ -502,9 +544,11 @@ function requestDouble(route: Registration, state: HarnessState, variant: number
 async function invokeWithBudget(handler: Handler, req: Record<string, any>, res: Record<string, any>, budgetMs = 15) {
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([
-    Promise.resolve()
-      .then(() => handler(req, res, () => undefined))
-      .catch(() => undefined),
+    probeContext.run({ queries: 0 }, () =>
+      Promise.resolve()
+        .then(() => handler(req, res, () => undefined))
+        .catch(() => undefined)
+    ),
     new Promise<void>((resolve) => {
       timer = setTimeout(resolve, budgetMs);
     }),
@@ -512,7 +556,59 @@ async function invokeWithBudget(handler: Handler, req: Record<string, any>, res:
   if (timer) clearTimeout(timer);
 }
 
-export async function runSyntheticRouteBucket(bucket: number, bucketCount: number): Promise<{
+// Probe budgets are wall-clock deadlines, not CPU work: almost every probe waits
+// out its full budget because the handler parks on a mocked awaitable. Sweeping
+// ~2.6k registrations x 6 variants x their handler chains one at a time
+// therefore spends ~6 minutes per bucket sleeping on timers while the process
+// sits near-idle, which is what pushed whole shards past their budget. Probing
+// several routes at once overlaps those deadlines instead of shortening them,
+// so every registration, variant and handler still runs with at least as much
+// wall-clock budget as before.
+const PROBE_CONCURRENCY = Math.max(1, Number(process.env.PHASE33_SYNTHETIC_PROBE_CONCURRENCY ?? 16));
+const PRIMARY_VARIANT_BUDGET_MS = 40;
+const SECONDARY_VARIANT_BUDGET_MS = 20;
+
+async function probeRoute(route: Registration, state: HarnessState): Promise<number> {
+  let invoked = 0;
+  for (let variant = 0; variant < 6; variant += 1) {
+    const req = requestDouble(route, state, variant);
+    for (const handler of route.handlers) {
+      await invokeWithBudget(
+        handler,
+        req,
+        responseDouble(),
+        variant < 2 ? PRIMARY_VARIANT_BUDGET_MS : SECONDARY_VARIANT_BUDGET_MS
+      );
+      invoked += 1;
+    }
+  }
+  return invoked;
+}
+
+// `state.companyType` is read lazily by the shared database double while a
+// handler runs, so routes may only be overlapped with other routes that resolve
+// to the same company mode. Grouping by mode keeps every probe seeing exactly
+// the company shape the serial sweep gave it.
+async function probeRouteGroup(routes: Registration[], state: HarnessState): Promise<number> {
+  let cursor = 0;
+  let invoked = 0;
+  const workerCount = Math.min(PROBE_CONCURRENCY, routes.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < routes.length) {
+        const route = routes[cursor];
+        cursor += 1;
+        invoked += await probeRoute(route, state);
+      }
+    })
+  );
+  return invoked;
+}
+
+export async function runSyntheticRouteBucket(
+  bucket: number,
+  bucketCount: number
+): Promise<{
   importedModules: number;
   registerFunctions: number;
   registrations: number;
@@ -528,11 +624,12 @@ export async function runSyntheticRouteBucket(bucket: number, bucketCount: numbe
   }));
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, data: [], results: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true, data: [], results: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
     )
   );
 
@@ -541,9 +638,16 @@ export async function runSyntheticRouteBucket(bucket: number, bucketCount: numbe
   let registerFunctions = 0;
 
   try {
+    // Every bucket imports and registers every route module, then probes only
+    // the routes that hash into its own slice. Bucketing by module path instead
+    // put the two aggregators that re-register the whole application —
+    // applicationRoutes.ts (1259 registrations) and factoryRoutes.ts (509) —
+    // in one bucket, so a single shard probed 2627 registrations while the
+    // lightest probed 378 and the heavy shards ran out of budget. Registering
+    // everything costs ~20s per bucket and lets the probe work split evenly
+    // (217-255 routes each) without dropping a single route from the sweep.
     const entries = Object.entries(moduleLoaders)
       .filter(([modulePath]) => !EXCLUDED_MODULES.test(modulePath))
-      .filter(([modulePath]) => stableBucket(modulePath, bucketCount) === bucket)
       .sort(([left], [right]) => left.localeCompare(right));
 
     for (const [modulePath, loader] of entries) {
@@ -564,20 +668,36 @@ export async function runSyntheticRouteBucket(bucket: number, bucketCount: numbe
       }
     }
 
-    let invoked = 0;
+    // An aggregator and the module that owns a route register the same route
+    // with freshly built closures, so function identity cannot tell the two
+    // apart. Method, path and the handler chain's function names do: the
+    // duplicate probes they collapse execute identical source, while a
+    // genuinely different chain on the same path keeps its own probe. That
+    // takes the sweep from 6478 registrations to 1874 distinct routes.
+    const seen = new Set<string>();
+    const routesByMode = new Map<CompanyMode, Registration[]>();
+    let probed = 0;
     for (const route of registrations) {
       if (route.handlers.length === 0 || EXCLUDED_ROUTES.test(route.routePath)) continue;
-      state.companyType = modeFor(route);
-      for (let variant = 0; variant < 6; variant += 1) {
-        const req = requestDouble(route, state, variant);
-        for (const handler of route.handlers) {
-          await invokeWithBudget(handler, req, responseDouble(), variant < 2 ? 20 : 10);
-          invoked += 1;
-        }
-      }
+      const chain = route.handlers.map((handler) => handler.name || "anonymous").join(">");
+      const probeKey = `${route.method} ${route.routePath} ${chain}`;
+      if (seen.has(probeKey)) continue;
+      seen.add(probeKey);
+      if (stableBucket(`${route.method} ${route.routePath}`, bucketCount) !== bucket) continue;
+      probed += 1;
+      const mode = modeFor(route);
+      const group = routesByMode.get(mode);
+      if (group) group.push(route);
+      else routesByMode.set(mode, [route]);
     }
 
-    return { importedModules, registerFunctions, registrations: registrations.length, invoked };
+    let invoked = 0;
+    for (const [mode, routes] of routesByMode) {
+      state.companyType = mode;
+      invoked += await probeRouteGroup(routes, state);
+    }
+
+    return { importedModules, registerFunctions, registrations: probed, invoked };
   } finally {
     vi.unstubAllGlobals();
     vi.doUnmock("../../server/db");

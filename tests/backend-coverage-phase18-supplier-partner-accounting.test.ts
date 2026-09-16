@@ -148,13 +148,25 @@ beforeAll(async () => {
 afterAll(async () => {
   if (fixture) {
     const companyIds = [fixture.ctx.companyId, fixture.plainCompanyId, fixture.hadiCompanyId];
-    await pool.query(`DELETE FROM sp_offload_charges WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_stock_movements WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_offload_charges WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_stock_movements WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM sp_offloads WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_prepaid_charges WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_container_lines WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM sp_containers WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
-    await pool.query(`DELETE FROM bank_accounts WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_prepaid_charges WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_container_lines WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_containers WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM bank_accounts WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
     await teardownGoldenCoastPhase5Fixture(fixture);
   }
 }, 120000);
@@ -287,8 +299,16 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);
     const report = reconciliation.body as ReconciliationReport;
-    expect(surface(report, "supplier_statement_control")).toMatchObject({ databaseValue: 75, reportValue: 75, pass: true });
-    expect(surface(report, "supplier_payable_control")).toMatchObject({ databaseValue: 75, reportValue: 75, pass: true });
+    expect(surface(report, "supplier_statement_control")).toMatchObject({
+      databaseValue: 75,
+      reportValue: 75,
+      pass: true,
+    });
+    expect(surface(report, "supplier_payable_control")).toMatchObject({
+      databaseValue: 75,
+      reportValue: 75,
+      pass: true,
+    });
     expect(report.summary.supplierCount).toBe(1);
   }, 120000);
 
@@ -300,12 +320,66 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       netPositionBreakdown: {},
     };
     const gcAccounts = [
-      { id: 1, name: "Fresh Start FZ Equity", code: "GC-FSCAP", accountType: "Equity", subType: "gc_partner_capital", openingBalance: "0", openingBalanceSide: "Cr", active: true },
-      { id: 2, name: "Hassan Dakik Equity", code: "GC-HCAP", accountType: "Equity", subType: "gc_owner_capital", openingBalance: "40", openingBalanceSide: "Cr", active: true },
-      { id: 3, name: "GC Sales Cash", code: "SP-PAY", accountType: "Liability", subType: "sp_payable", openingBalance: "0", openingBalanceSide: "Cr", active: true },
-      { id: 4, name: "Customer Account — must stay out", code: "CUST-001", accountType: "Customer", subType: "Accounts Receivable", openingBalance: "0", openingBalanceSide: "Dr", active: true },
-      { id: 5, name: "HADI Intercompany", code: "GC-IC-HADI", accountType: "Asset", subType: "sp_hadi_intercompany", openingBalance: "0", openingBalanceSide: "Dr", active: true },
-      { id: 6, name: "Prepaid Expenses", code: "GC-PRE", accountType: "Asset", subType: "sp_prepaid", openingBalance: "0", openingBalanceSide: "Dr", active: true },
+      {
+        id: 1,
+        name: "Fresh Start FZ Equity",
+        code: "GC-FSCAP",
+        accountType: "Equity",
+        subType: "gc_partner_capital",
+        openingBalance: "0",
+        openingBalanceSide: "Cr",
+        active: true,
+      },
+      {
+        id: 2,
+        name: "Hassan Dakik Equity",
+        code: "GC-HCAP",
+        accountType: "Equity",
+        subType: "gc_owner_capital",
+        openingBalance: "40",
+        openingBalanceSide: "Cr",
+        active: true,
+      },
+      {
+        id: 3,
+        name: "GC Sales Cash",
+        code: "SP-PAY",
+        accountType: "Liability",
+        subType: "sp_payable",
+        openingBalance: "0",
+        openingBalanceSide: "Cr",
+        active: true,
+      },
+      {
+        id: 4,
+        name: "Customer Account — must stay out",
+        code: "CUST-001",
+        accountType: "Customer",
+        subType: "Accounts Receivable",
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
+        active: true,
+      },
+      {
+        id: 5,
+        name: "HADI Intercompany",
+        code: "GC-IC-HADI",
+        accountType: "Asset",
+        subType: "sp_hadi_intercompany",
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
+        active: true,
+      },
+      {
+        id: 6,
+        name: "Prepaid Expenses",
+        code: "GC-PRE",
+        accountType: "Asset",
+        subType: "sp_prepaid",
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
+        active: true,
+      },
     ];
     const balances = new Map<number, { debit: number; credit: number }>([
       [2, { debit: 0, credit: 0 }],
@@ -335,7 +409,16 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
     const ordinary = projectGoldenCoastResidualEquity({
       body: ordinaryBody,
       companyAccounts: [
-        { id: 9, name: "Supplier Cash Payable", code: "SP-PAY", accountType: "Liability", subType: "sp_payable", openingBalance: "0", openingBalanceSide: "Cr", active: true },
+        {
+          id: 9,
+          name: "Supplier Cash Payable",
+          code: "SP-PAY",
+          accountType: "Liability",
+          subType: "sp_payable",
+          openingBalance: "0",
+          openingBalanceSide: "Cr",
+          active: true,
+        },
       ],
       accountBalances: new Map([[9, { debit: 0, credit: 10 }]]),
     });

@@ -34,12 +34,8 @@ describe("Phase 6 Reports and Exports translations", () => {
   });
 
   it("translates Phase 33 schema-compatibility report messages", () => {
-    expect(translatePhase6ReportsExportsText("Workers / Payroll Rows", "fr")).toBe(
-      "Travailleurs / lignes de paie"
-    );
-    expect(translatePhase6ReportsExportsText("Cost Breakdown: MSKU1234567", "ar")).toBe(
-      "تفصيل التكلفة: MSKU1234567"
-    );
+    expect(translatePhase6ReportsExportsText("Workers / Payroll Rows", "fr")).toBe("Travailleurs / lignes de paie");
+    expect(translatePhase6ReportsExportsText("Cost Breakdown: MSKU1234567", "ar")).toBe("تفصيل التكلفة: MSKU1234567");
     expect(translatePhase6ReportsExportsText("Supplier Containers: BASMA UK", "fr")).toBe(
       "Conteneurs du fournisseur : BASMA UK"
     );

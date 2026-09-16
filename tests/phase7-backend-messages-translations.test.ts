@@ -74,9 +74,9 @@ describe("Phase 7 backend-message translations", () => {
     expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.", "ar")).toBe(
       "يجب أن يكون معدل Factory fxRateToUsd للعملة AUD رقميًا."
     );
-    expect(
-      translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be a positive finite rate.", "ar")
-    ).toBe("يجب أن يكون معدل Factory fxRateToUsd للعملة AUD موجبًا ومحدودًا.");
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be a positive finite rate.", "ar")).toBe(
+      "يجب أن يكون معدل Factory fxRateToUsd للعملة AUD موجبًا ومحدودًا."
+    );
     expect(isPhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.")).toBe(true);
   });
 
