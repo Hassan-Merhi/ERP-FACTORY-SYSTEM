@@ -51,14 +51,18 @@ async function switchRole(role: "Admin" | "POS" | "Normal User"): Promise<void> 
 }
 
 async function sale(voucherSuffix: string, quantity: number, rate: number) {
-  return agent.post("/api/pos/sales").send({
-    locationId: ctx.locationId,
-    items: [{ stockItemId: ctx.stockItemIds[0], quantity, rate }],
-    paymentAccountType: "ledger",
-    paymentAccountId: ctx.cashAccountId,
-    voucherDate: "2026-09-14",
-    clientSaleId: `${TEST_PREFIX}-${voucherSuffix}-${Date.now()}-${Math.random()}`,
-  });
+  const voucherDate = "2026-09-14";
+  return agent
+    .post("/api/pos/sales")
+    .set("x-client-date", voucherDate)
+    .send({
+      locationId: ctx.locationId,
+      items: [{ stockItemId: ctx.stockItemIds[0], quantity, rate }],
+      paymentAccountType: "ledger",
+      paymentAccountId: ctx.cashAccountId,
+      voucherDate,
+      clientSaleId: `${TEST_PREFIX}-${voucherSuffix}-${Date.now()}-${Math.random()}`,
+    });
 }
 
 async function assertSaleEconomics(voucherId: number, quantity: number, sellingRate: number, costRate: number) {
