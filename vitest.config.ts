@@ -29,7 +29,11 @@ export default defineConfig({
     environment: "node",
     testTimeout: 30000,
     hookTimeout: 30000,
-    setupFiles: ["./server/supplierCompanyScopeBridge.mjs", "./tests/voucherRequestIdentityTestBridge.mjs"],
+    setupFiles: [
+      "./server/supplierCompanyScopeBridge.mjs",
+      "./tests/voucherRequestIdentityTestBridge.mjs",
+      "./tests/vitestSequentialCompatibility.mjs",
+    ],
     // Co-located tests under server/ and shared/ are included too. They existed
     // from the initial import but no config matched them, so 78 tests never ran
     // anywhere - including the audit-coverage guards that had silently gone stale.
