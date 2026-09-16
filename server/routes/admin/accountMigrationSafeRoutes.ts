@@ -4,7 +4,16 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
-import { isGoldenCoastProgrammeVoucher, isReadonlyMigratedVoucher } from "../../lib/migratedVoucherGuard";
+import {
+  READONLY_MIGRATED_VOUCHER_MESSAGE,
+  isGoldenCoastProgrammeVoucher,
+  voucherMutationBlockReason,
+} from "../../lib/migratedVoucherGuard";
+import {
+  deleteInfrastructurePostingIdentityForVoucherTx,
+  infrastructurePostingIdentity,
+  insertInfrastructureVoucherTx,
+} from "../../services/accounting/infrastructureVoucherIdentity";
 import {
   assertCompaniesAccess,
   CompanyAccessError,
@@ -125,18 +134,15 @@ async function getOrCreateMigrationClearingAccount(
     name: string;
     accountType: "Asset" | "Liability";
     selectedAccountIds: ReadonlySet<number>;
-  },
+  }
 ) {
-  const rows = await tx
-    .select()
-    .from(ledgerAccounts)
-    .where(eq(ledgerAccounts.companyId, params.companyId));
+  const rows = await tx.select().from(ledgerAccounts).where(eq(ledgerAccounts.companyId, params.companyId));
 
   const exact = rows.find((row) => row.code === params.code && row.subType === MIGRATION_CLEARING_SUBTYPE);
   if (exact) {
     if (params.selectedAccountIds.has(exact.id)) {
       throw new AccountMigrationConflict(
-        `Account ${exact.code} is the account-migration clearing account and cannot be migrated in the same batch.`,
+        `Account ${exact.code} is the account-migration clearing account and cannot be migrated in the same batch.`
       );
     }
     if (exact.deletedAt) {
@@ -172,7 +178,7 @@ async function getOrCreateMigrationClearingAccount(
 async function resolveAccountMigrationDatabaseScope(
   req: Request,
   sourceCompanyId: number,
-  destinationCompanyId: number,
+  destinationCompanyId: number
 ): Promise<AccountMigrationDatabaseScope> {
   const context = getCompanyAccessContext(req);
   await assertCompaniesAccess(context.userId, [sourceCompanyId, destinationCompanyId]);
@@ -184,7 +190,7 @@ async function resolveAccountMigrationDatabaseScope(
 
 async function applyAccountMigrationDatabaseScope(
   tx: AccountMigrationTransaction,
-  scope: AccountMigrationDatabaseScope,
+  scope: AccountMigrationDatabaseScope
 ): Promise<void> {
   await tx.execute(sql`SELECT
     set_config('app.company_scope_maintenance', 'off', true),
@@ -192,11 +198,7 @@ async function applyAccountMigrationDatabaseScope(
     set_config('app.authorized_company_ids', ${scope.authorizedCompanyIds}, true)`);
 }
 
-async function lockCompanies(
-  tx: AccountMigrationTransaction,
-  sourceCompanyId: number,
-  destinationCompanyId: number,
-) {
+async function lockCompanies(tx: AccountMigrationTransaction, sourceCompanyId: number, destinationCompanyId: number) {
   const ids = [sourceCompanyId, destinationCompanyId].sort((a, b) => a - b);
   for (const companyId of ids) {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('account-migration'), ${companyId})`);
@@ -246,7 +248,7 @@ function respondWithError(res: Response, error: unknown) {
 
 function savedMigration(value: unknown): SavedMigration | null {
   if (!value || typeof value !== "object") return null;
-  const item = value as Partial<SavedMigrationV1 & SavedMigrationV2>;
+  const item = value as Partial<SavedMigrationV1> | Partial<SavedMigrationV2>;
   if (
     (item.version !== 1 && item.version !== 2) ||
     typeof item.migrationId !== "string" ||
@@ -257,8 +259,10 @@ function savedMigration(value: unknown): SavedMigration | null {
   ) {
     return null;
   }
-  if (item.version === 2 && !Array.isArray(item.splitVouchers)) return null;
-  return item as SavedMigration;
+  if (item.version === 1) return item as SavedMigrationV1;
+  const v2 = item as Partial<SavedMigrationV2>;
+  if (!Array.isArray(v2.splitVouchers)) return null;
+  return v2 as SavedMigrationV2;
 }
 
 function baseAmount(value: string | null | undefined): string {
@@ -307,7 +311,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
           if (missingId) {
             throw new AccountMigrationConflict(
               `Account ${missingId} is no longer in the source company. Refresh and preview again.`,
-              404,
+              404
             );
           }
 
@@ -344,6 +348,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
 
           const touchedVoucherIds = [...new Set(accountPlans.flatMap((plan) => plan.touchedVoucherIds))];
           const selectedAccountSet = new Set(accountIds);
+          const migrationIdentityAccountIds = [...accountIds].sort((left, right) => left - right).join(",");
           const migrationId = randomUUID();
           let exclusiveVoucherIds: number[] = [];
           const splitSnapshots: SplitVoucherSnapshot[] = [];
@@ -359,13 +364,13 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             const foreignVoucher = touchedVoucherRows.find((voucher) => voucher.companyId !== srcCompanyId);
             if (foreignVoucher) {
               throw new AccountMigrationConflict(
-                `Voucher ${foreignVoucher.voucherNumber} belongs to another company. This account contains history from an older cross-company migration; move it back to its original company before migrating it again.`,
+                `Voucher ${foreignVoucher.voucherNumber} belongs to another company. This account contains history from an older cross-company migration; move it back to its original company before migrating it again.`
               );
             }
             const protectedVoucher = touchedVoucherRows.find((voucher) => isGoldenCoastProgrammeVoucher(voucher));
             if (protectedVoucher) {
               throw new AccountMigrationConflict(
-                `Voucher ${protectedVoucher.voucherNumber} is controlled by the Golden Coast accounting programme and cannot be moved by account migration.`,
+                `Voucher ${protectedVoucher.voucherNumber} is controlled by the Golden Coast accounting programme and cannot be moved by account migration.`
               );
             }
 
@@ -377,12 +382,17 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             }
             const voucherById = new Map(touchedVoucherRows.map((voucher) => [voucher.id, voucher]));
             const voucherPlans = touchedVoucherIds.map((voucherId) => {
-              const plan = buildMigrationVoucherPlan(voucherId, entriesByVoucher.get(voucherId) ?? [], selectedAccountSet);
+              const plan = buildMigrationVoucherPlan(
+                voucherId,
+                entriesByVoucher.get(voucherId) ?? [],
+                selectedAccountSet
+              );
               const sourceVoucher = voucherById.get(voucherId)!;
+              const mutationReason = voucherMutationBlockReason(sourceVoucher);
               return {
                 plan,
                 sourceVoucher,
-                moveIntact: plan.isExclusive && !isReadonlyMigratedVoucher(sourceVoucher),
+                moveIntact: plan.isExclusive && mutationReason !== READONLY_MIGRATED_VOUCHER_MESSAGE,
               };
             });
             exclusiveVoucherIds = voucherPlans.filter((item) => item.moveIntact).map((item) => item.plan.voucherId);
@@ -415,16 +425,21 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
               }
               const { plan, sourceVoucher } = item;
               const voucherNumber = `AM-${migrationId.slice(0, 8)}-${sourceVoucher.id}`;
-              const [destinationVoucher] = await tx
-                .insert(vouchers)
-                .values({
+              const sourceIdentity = infrastructurePostingIdentity(
+                "account-migration",
+                `${srcCompanyId}:${destCompanyId}:${migrationIdentityAccountIds}:${sourceVoucher.id}`,
+                "shared-voucher"
+              );
+              const { voucher: destinationVoucher } = await insertInfrastructureVoucherTx(
+                tx,
+                {
                   companyId: destCompanyId,
                   locationId: null,
                   locationName: sourceVoucher.locationName,
                   voucherNumber,
                   voucherType: "Journal",
                   voucherDate: sourceVoucher.voucherDate,
-                  description: `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
+                  description: /* data-business-value */ `Account migration from ${sourceCompany.name}: ${sourceVoucher.description || sourceVoucher.voucherNumber}`,
                   totalAmount: migrationDestinationTotal(plan),
                   currency: sourceVoucher.currency || "USD",
                   optional: false,
@@ -432,11 +447,13 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                   sourceModule: "ERP",
                   isCreditSale: false,
                   effectiveDate: sourceVoucher.effectiveDate,
-                })
-                .returning({ id: vouchers.id });
-              if (!destinationVoucher) {
-                throw new AccountMigrationConflict(`Could not create destination history for ${sourceVoucher.voucherNumber}.`);
-              }
+                },
+                sourceIdentity,
+                {
+                  selectedEntryIds: plan.selectedEntries.map((entry) => entry.id).sort((left, right) => left - right),
+                  destinationClearingAccountId,
+                }
+              );
 
               if (plan.selectedEntries.length > 0) {
                 await tx.insert(voucherEntries).values(
@@ -455,7 +472,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                     baseCreditAmount: entry.baseCreditAmount ?? baseAmount(entry.creditAmount),
                     historicalExchangeRate: entry.historicalExchangeRate,
                     rateConvention: entry.rateConvention,
-                  })),
+                  }))
                 );
               }
 
@@ -485,7 +502,12 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                 await tx
                   .update(voucherEntries)
                   .set({ ledgerAccountId: sourceClearingAccountId })
-                  .where(inArray(voucherEntries.id, remappedEntries.map((entry) => entry.entryId)));
+                  .where(
+                    inArray(
+                      voucherEntries.id,
+                      remappedEntries.map((entry) => entry.entryId)
+                    )
+                  );
               }
               splitSnapshots.push({
                 sourceVoucherId: sourceVoucher.id,
@@ -571,7 +593,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       } catch (error: unknown) {
         return respondWithError(res, error);
       }
-    },
+    }
   );
 
   app.post(
@@ -582,7 +604,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       const accountIds = idArray(
         Array.isArray(req.body?.accounts)
           ? req.body.accounts.map((account: { accountId?: unknown } | null | undefined) => account?.accountId)
-          : null,
+          : null
       );
       const movedVoucherIds = idArray(req.body?.movedVoucherIds, true);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);
@@ -645,7 +667,9 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
           for (const account of saved.accounts) {
             const owner = sourceCodeOwners.get(account.originalCode);
             if (owner !== undefined && owner !== account.accountId) {
-              throw new AccountMigrationConflict(`Another source-company account now uses code ${account.originalCode}.`);
+              throw new AccountMigrationConflict(
+                `Another source-company account now uses code ${account.originalCode}.`
+              );
             }
           }
 
@@ -655,13 +679,18 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                 const currentRows = await tx
                   .select({ id: voucherEntries.id, ledgerAccountId: voucherEntries.ledgerAccountId })
                   .from(voucherEntries)
-                  .where(inArray(voucherEntries.id, split.remappedEntries.map((entry) => entry.entryId)));
+                  .where(
+                    inArray(
+                      voucherEntries.id,
+                      split.remappedEntries.map((entry) => entry.entryId)
+                    )
+                  );
                 if (
                   currentRows.length !== split.remappedEntries.length ||
                   currentRows.some((entry) => entry.ledgerAccountId !== split.sourceClearingAccountId)
                 ) {
                   throw new AccountMigrationConflict(
-                    `Source voucher ${split.sourceVoucherId} changed after migration and cannot be undone automatically.`,
+                    `Source voucher ${split.sourceVoucherId} changed after migration and cannot be undone automatically.`
                   );
                 }
                 for (const remapped of split.remappedEntries) {
@@ -671,6 +700,7 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
                     .where(eq(voucherEntries.id, remapped.entryId));
                 }
               }
+              await deleteInfrastructurePostingIdentityForVoucherTx(tx, split.destinationVoucherId);
               await tx
                 .delete(vouchers)
                 .where(and(eq(vouchers.id, split.destinationVoucherId), eq(vouchers.companyId, destCompanyId)));
@@ -701,7 +731,8 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             changes: {
               restoredAccountIds: accountIds,
               restoredVoucherIds: saved.movedVoucherIds,
-              restoredSplitVoucherIds: saved.version === 2 ? saved.splitVouchers.map((item) => item.destinationVoucherId) : [],
+              restoredSplitVoucherIds:
+                saved.version === 2 ? saved.splitVouchers.map((item) => item.destinationVoucherId) : [],
               restoredRoleCashAccounts: saved.controls.roleCashAccounts.length,
               restoredLocationCashAccounts: saved.controls.locationCashAccounts.length,
             },
@@ -712,6 +743,6 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
       } catch (error: unknown) {
         return respondWithError(res, error);
       }
-    },
+    }
   );
 }

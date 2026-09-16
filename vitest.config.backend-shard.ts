@@ -17,7 +17,7 @@ export default defineConfig({
     environment: "node",
     testTimeout: 30000,
     hookTimeout: 30000,
-    setupFiles: ["./tests/backendTestSetup.mjs"],
+    setupFiles: ["./tests/backendTestSetup.mjs", "./tests/vitestSequentialCompatibility.mjs"],
     include: ["tests/**/*.test.ts", "server/**/*.test.ts", "shared/**/*.test.ts"],
     exclude: ["tests/ui/**"],
     pool: "forks",
