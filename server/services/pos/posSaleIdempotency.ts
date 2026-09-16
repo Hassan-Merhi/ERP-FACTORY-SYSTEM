@@ -12,6 +12,9 @@ export interface ExistingPosSale {
  * as strings by PostgreSQL; null/undefined/empty values mean the caller did not
  * provide retry identity and therefore do not acquire an advisory lock.
  */
+/** Mirrors the vouchers.client_sale_id column, which is sized for a UUID. */
+export const POS_CLIENT_SALE_ID_MAX_LENGTH = 36;
+
 export function normalizePosClientSaleId(value: unknown): string | null {
   if (value === null || value === undefined || value === "") return null;
   return String(value);

@@ -25,6 +25,21 @@ const EXPLICIT_CURRENCY_FIELDS = [
   "openingBalanceBaseAmount",
 ] as const;
 
+async function accountExistsInCompany(companyId: number, accountId: number): Promise<boolean> {
+  const [ledger] = await db
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
+    .limit(1);
+  if (ledger) return true;
+  const [bank] = await db
+    .select({ id: bankAccounts.id })
+    .from(bankAccounts)
+    .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)))
+    .limit(1);
+  return Boolean(bank);
+}
+
 /** Flat account-payload values at the JSON/row boundary: strings, numbers, or absent. */
 type AccountPayload = Record<string, string | number | null | undefined>;
 type ExistingAccount = typeof ledgerAccounts.$inferSelect | typeof bankAccounts.$inferSelect;
@@ -103,9 +118,7 @@ function normalizedOpeningPayload(
     "0";
   const amount = new Decimal(nativeOpeningBalance || 0);
   const rawCurrency = (body.openingBalanceCurrency ?? existing?.openingBalanceCurrency ?? null) as
-    | string
-    | null
-    | undefined;
+    string | null | undefined;
 
   if (!amount.isFinite() || amount.lt(0)) {
     throw new Error("Opening balance must be a finite non-negative amount.");
@@ -320,7 +333,17 @@ export function registerAccountCurrencyRoutes(app: Express) {
       const summary =
         (await getCashBankAccountSummary(companyId, "ledger", id)) ||
         (await getCashBankAccountSummary(companyId, "bank", id));
-      if (!summary) return res.json([]);
+      if (!summary) {
+        // An empty list is the right answer for an account this tenant owns
+        // that simply has no cash/bank currency balances. It is the wrong
+        // answer for an id the tenant does not own at all: that has to be
+        // indistinguishable from a missing id, like the sibling /balance
+        // route, so the response does not confirm another tenant's account.
+        if (!(await accountExistsInCompany(companyId, id))) {
+          return res.status(404).json({ message: "Account not found" });
+        }
+        return res.json([]);
+      }
       return res.json(
         Object.entries(summary.nativeBalancesByCurrency).map(([currency, net]) => {
           const value = new Decimal(net);

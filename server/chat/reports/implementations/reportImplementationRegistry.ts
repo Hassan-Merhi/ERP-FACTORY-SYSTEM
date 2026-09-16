@@ -6,6 +6,7 @@ import { phase4ReportShard } from "./phase4ReportShard";
 import { phase5ReportShard } from "./phase5ReportShard";
 import { phase6ReportShard } from "./phase6ReportShard";
 import { phase7ReportShard } from "./phase7ReportShard";
+import { schemaCompatibilityReportShard } from "./schemaCompatibilityReportShard";
 
 export const reportImplementationShards: readonly ReportImplementationShard[] = [
   phase1ReportShard,
@@ -23,12 +24,21 @@ for (const shard of reportImplementationShards) {
   for (const queryType of shard.queryTypes) {
     const existing = implementationByQueryType.get(queryType);
     if (existing) {
-      throw new Error(
-        `Duplicate chat report implementation for ${queryType}: ${existing.name} and ${shard.name}`
-      );
+      throw new Error(`Duplicate chat report implementation for ${queryType}: ${existing.name} and ${shard.name}`);
     }
     implementationByQueryType.set(queryType, shard);
   }
+}
+
+// Eight legacy report implementations still referenced columns removed or
+// renamed by the current schema. Override only those mapped query types with
+// their current-schema implementations; all other report routing remains
+// unchanged and the public 71-query registry stays stable.
+for (const queryType of schemaCompatibilityReportShard.queryTypes) {
+  if (!implementationByQueryType.has(queryType)) {
+    throw new Error(`Schema compatibility override references unknown report query type: ${queryType}`);
+  }
+  implementationByQueryType.set(queryType, schemaCompatibilityReportShard);
 }
 
 export const implementedReportQueryTypes = Object.freeze([...implementationByQueryType.keys()]);

@@ -70,6 +70,49 @@ export async function updateCompany(id: number, updates: Partial<InsertCompany>)
   return updated;
 }
 
+/**
+ * Clear whatever still references the company after the ordered deletes above.
+ *
+ * Those deletes exist because some children have to go before their parents in
+ * a specific order. What they cannot do is keep up with the schema: 65 tables
+ * carrying a restricting company_id had been added since the list was last
+ * touched, so deleting any company that had ever been used failed on the first
+ * of them and left the company in place.
+ *
+ * Asking the catalogue which columns still restrict `companies` keeps this
+ * correct as tables are added. A table in the set can itself be restricted by
+ * another one in it, so the sweep repeats until a pass clears nothing new.
+ */
+async function clearRemainingCompanyReferences(id: number): Promise<void> {
+  const referencesResult = await db.execute<{ table_name: string; column_name: string }>(sql`
+    SELECT DISTINCT c.conrelid::regclass::text AS table_name, a.attname AS column_name
+      FROM pg_constraint c
+      JOIN unnest(c.conkey) WITH ORDINALITY k(attnum, ord) ON true
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+     WHERE c.confrelid = 'companies'::regclass
+       AND c.contype = 'f'
+       AND c.confdeltype <> 'c'
+  `);
+
+  let pending = referencesResult.rows;
+  while (pending.length > 0) {
+    const blocked: typeof pending = [];
+    for (const reference of pending) {
+      try {
+        await db.execute(
+          sql`DELETE FROM ${sql.identifier(reference.table_name)} WHERE ${sql.identifier(reference.column_name)} = ${id}`
+        );
+      } catch (error: unknown) {
+        // Still held by one of its own children, which is in this same set.
+        blocked.push(reference);
+        if (blocked.length === pending.length) throw error;
+      }
+    }
+    if (blocked.length === pending.length) return;
+    pending = blocked;
+  }
+}
+
 export async function deleteCompany(id: number): Promise<void> {
   // Each statement is a drizzle SQL fragment; tables that predate a migration
   // may not exist, which is the only error this swallows.
@@ -170,9 +213,11 @@ export async function deleteCompany(id: number): Promise<void> {
   await db.execute(
     sql`DELETE FROM draft_pos_sales WHERE location_id IN (SELECT id FROM locations WHERE company_id = ${id})`
   );
-  await safe(
-    sql`DELETE FROM pos_offline_queue WHERE shift_id IN (SELECT id FROM pos_shifts WHERE location_id IN (SELECT id FROM locations WHERE company_id = ${id}))`
-  );
+  // pos_offline_queue is keyed to the company and the location, not to a
+  // shift; it has never had a shift_id column. Reaching for one made every
+  // deleteCompany call fail here, because `safe` only forgives a table that a
+  // migration has not created yet, not a column that does not exist.
+  await safe(sql`DELETE FROM pos_offline_queue WHERE company_id = ${id}`);
   await safe(sql`DELETE FROM pos_shifts WHERE location_id IN (SELECT id FROM locations WHERE company_id = ${id})`);
 
   await db.execute(
@@ -192,7 +237,7 @@ export async function deleteCompany(id: number): Promise<void> {
     sql`DELETE FROM container_offloads WHERE container_id IN (SELECT id FROM containers WHERE company_id = ${id})`
   );
   await safe(
-    sql`DELETE FROM container_freight_payments WHERE freight_id IN (SELECT cf.id FROM container_freight cf WHERE cf.container_id IN (SELECT id FROM containers WHERE company_id = ${id}))`
+    sql`DELETE FROM container_freight_payments WHERE container_freight_id IN (SELECT cf.id FROM container_freight cf WHERE cf.container_id IN (SELECT id FROM containers WHERE company_id = ${id}))`
   );
   await safe(
     sql`DELETE FROM container_freight WHERE container_id IN (SELECT id FROM containers WHERE company_id = ${id})`
@@ -232,7 +277,7 @@ export async function deleteCompany(id: number): Promise<void> {
   await safe(sql`DELETE FROM bales WHERE company_id = ${id}`);
 
   await safe(
-    sql`DELETE FROM salary_advance_deductions WHERE advance_id IN (SELECT id FROM salary_advances WHERE company_id = ${id})`
+    sql`DELETE FROM salary_advance_deductions WHERE salary_advance_id IN (SELECT id FROM salary_advances WHERE company_id = ${id})`
   );
   await db.delete(schema.salaryAdvances).where(eq(schema.salaryAdvances.companyId, id));
   await db.execute(
@@ -280,6 +325,8 @@ export async function deleteCompany(id: number): Promise<void> {
   await safe(sql`DELETE FROM erp_user_page_access WHERE company_id = ${id}`);
   await safe(sql`DELETE FROM audit_log WHERE company_id = ${id}`);
   await safe(sql`DELETE FROM user_presence WHERE company_id = ${id}`);
+
+  await clearRemainingCompanyReferences(id);
 
   await db.delete(schema.companies).where(eq(schema.companies.id, id));
 }

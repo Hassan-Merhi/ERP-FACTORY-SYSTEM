@@ -40,7 +40,7 @@ import {
 } from "./postSaleAccounting";
 import { insertSaleVoucher } from "./createSaleVoucher";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
-import { lockAndFindExistingPosSaleTx } from "./posSaleIdempotency";
+import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
@@ -104,6 +104,19 @@ export async function createPosSale(
     provided: { paymentAccountType: body.paymentAccountType, paymentAccountId, cashAccountId, isCreditSale },
     resolved: { accountType, accountId },
   });
+
+  // vouchers.client_sale_id is varchar(36) because the retry identity is a
+  // UUID. A longer key used to reach the insert and fail there, turning a
+  // malformed request into a 500 with no usable message.
+  if (typeof clientSaleId === "string" && clientSaleId.length > POS_CLIENT_SALE_ID_MAX_LENGTH) {
+    return {
+      status: 400,
+      body: {
+        code: "POS_CLIENT_SALE_ID_TOO_LONG",
+        message: "clientSaleId must be at most 36 characters",
+      },
+    };
+  }
 
   const idempotentResult = await checkIdempotentSale(currentCompanyId, clientSaleId);
   if (idempotentResult) return idempotentResult;
