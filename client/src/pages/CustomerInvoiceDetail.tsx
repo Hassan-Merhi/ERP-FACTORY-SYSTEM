@@ -306,7 +306,12 @@ export default function CustomerInvoiceDetail() {
               Continue Editing
             </Button>
           )}
-          <Button variant="outline" onClick={() => setShowProfitability(true)} data-testid="button-view-profitability">
+          <Button
+            variant="outline"
+            onClick={() => setShowProfitability(true)}
+            data-testid="button-view-profitability"
+            data-remote-control-safe="true"
+          >
             <TrendingUp className="mr-2 h-4 w-4" />
             Profitability
           </Button>

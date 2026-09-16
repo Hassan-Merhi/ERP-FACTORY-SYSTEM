@@ -10,6 +10,14 @@ import {
 export type RemoteMouseCommandType = "pointer-move" | "click" | "scroll";
 export type RemoteMouseCommandResultStatus = "executed" | "blocked" | "ignored";
 
+export interface RemoteMouseFrameViewport {
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+  visualScale: number;
+}
+
 export interface RemoteMouseCommand {
   id: string;
   sessionId: string;
@@ -21,6 +29,14 @@ export interface RemoteMouseCommand {
   y: number;
   deltaX?: number;
   deltaY?: number;
+  /**
+   * Scroll/viewport state of the screen frame the controller clicked on.
+   * The target tab compares this against its live viewport and ignores
+   * click/scroll commands whose frame has scrolled, resized, or zoomed
+   * since capture, so a stale picture can never land a click on the
+   * wrong control. Absent for legacy controllers and pointer-move.
+   */
+  frameViewport?: RemoteMouseFrameViewport;
   createdAt: number;
 }
 
@@ -100,6 +116,35 @@ function boundedDelta(value: unknown): number | null {
   const delta = finiteNumber(value);
   if (delta === null) return null;
   return Math.max(-1200, Math.min(1200, delta));
+}
+
+const MAX_FRAME_VIEWPORT_DIMENSION = 20_000;
+const MAX_FRAME_VIEWPORT_SCROLL = 200_000;
+
+function boundedFrameNumber(value: unknown, minimum: number, maximum: number): number | null {
+  const number = finiteNumber(value);
+  if (number === null || number < minimum || number > maximum) return null;
+  return number;
+}
+
+export function sanitizeRemoteMouseFrameViewport(value: unknown): RemoteMouseFrameViewport | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const viewport = value as Record<string, unknown>;
+  const width = boundedFrameNumber(viewport.width, 1, MAX_FRAME_VIEWPORT_DIMENSION);
+  const height = boundedFrameNumber(viewport.height, 1, MAX_FRAME_VIEWPORT_DIMENSION);
+  const scrollX = boundedFrameNumber(viewport.scrollX, 0, MAX_FRAME_VIEWPORT_SCROLL);
+  const scrollY = boundedFrameNumber(viewport.scrollY, 0, MAX_FRAME_VIEWPORT_SCROLL);
+  const visualScale = boundedFrameNumber(viewport.visualScale, 0.25, 8);
+  if (width === null || height === null || scrollX === null || scrollY === null || visualScale === null) {
+    return undefined;
+  }
+  return {
+    width: Math.round(width),
+    height: Math.round(height),
+    scrollX: Math.round(scrollX),
+    scrollY: Math.round(scrollY),
+    visualScale,
+  };
 }
 
 function activeSessionForController(
@@ -292,6 +337,7 @@ export function publishRemoteMouseCommand(input: {
   y: unknown;
   deltaX?: unknown;
   deltaY?: unknown;
+  frameViewport?: unknown;
   now?: number;
 }): RemoteMouseCommand {
   const now = input.now ?? Date.now();
@@ -319,6 +365,12 @@ export function publishRemoteMouseCommand(input: {
   const nextSequence = (sequenceBySession.get(session.id) ?? 0) + 1;
   sequenceBySession.set(session.id, nextSequence);
 
+  // An invalid frame snapshot is dropped rather than rejected: legacy
+  // controllers send none at all, and a malformed snapshot must never
+  // block an otherwise valid command — the target simply falls back to
+  // the pre-Phase-11 live-viewport mapping.
+  const frameViewport = sanitizeRemoteMouseFrameViewport(input.frameViewport);
+
   const command: RemoteMouseCommand = {
     id: randomUUID(),
     sessionId: session.id,
@@ -329,6 +381,7 @@ export function publishRemoteMouseCommand(input: {
     x,
     y,
     ...(type === "scroll" ? { deltaX: deltaX as number, deltaY: deltaY as number } : {}),
+    ...(frameViewport ? { frameViewport } : {}),
     createdAt: now,
   };
 

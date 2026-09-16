@@ -6,8 +6,10 @@ import {
   getRemoteMouseViewportMetrics,
   isAllowedRemoteClickElement,
   isRemoteMouseBlockedElement,
+  isRemoteMouseFrameViewportStale,
   mapRemoteMousePoint,
   normalizeRemoteMousePoint,
+  parseFrameViewportFromDataset,
   type RemoteMouseCommandType,
   type RemoteMouseCommandView,
 } from "./remote-mouse-control-policy";
@@ -33,6 +35,8 @@ describe("remote mouse execution policy", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1000 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 600 });
     Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
   });
 
   it("normalizes points only inside the displayed screen image", () => {
@@ -262,6 +266,127 @@ describe("remote mouse execution policy", () => {
     });
     expect(innerScrollBy).not.toHaveBeenCalled();
     expect(outerScrollBy).toHaveBeenCalledWith({ left: 0, top: 120, behavior: "auto" });
+  });
+
+  it("maps clicks against the frame's captured scroll and viewport state", () => {
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    const viewButton = document.createElement("button");
+    viewButton.textContent = "View details";
+    const viewClick = vi.spyOn(viewButton, "click").mockImplementation(() => {});
+    document.body.appendChild(viewButton);
+    document.elementFromPoint = vi.fn(() => viewButton);
+
+    const frameViewport = { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "executed",
+      reason: null,
+    });
+    expect(viewClick).toHaveBeenCalledTimes(1);
+
+    // The employee scrolled after the frame was captured: the normalized
+    // coordinates now point at a different control, so the click must be
+    // ignored instead of landing on whatever is there now.
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 240 });
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "ignored",
+      reason: "stale-frame-viewport",
+    });
+    expect(viewClick).toHaveBeenCalledTimes(1);
+
+    // A resized or zoomed viewport invalidates the frame the same way.
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 800 });
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "ignored",
+      reason: "stale-frame-viewport",
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1000 });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: { offsetLeft: 0, offsetTop: 0, width: 1000, height: 600, scale: 2 },
+    });
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "ignored",
+      reason: "stale-frame-viewport",
+    });
+    expect(viewClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the support pointer smooth when the frame viewport is stale", () => {
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 500 });
+    document.elementFromPoint = vi.fn(() => null);
+    // Pointer movement is display-only: it never activates a control, so it
+    // skips the stale-frame check that gates clicks and scrolls.
+    expect(
+      applyRemoteMouseCommand(
+        command("pointer-move", {
+          x: 0.25,
+          y: 0.75,
+          frameViewport: { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
+        })
+      )
+    ).toEqual({ status: "executed", reason: null, clientX: 250, clientY: 450 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  });
+
+  it("executes legacy commands that carry no frame snapshot", () => {
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 300 });
+    const viewButton = document.createElement("button");
+    viewButton.textContent = "View details";
+    const viewClick = vi.spyOn(viewButton, "click").mockImplementation(() => {});
+    document.body.appendChild(viewButton);
+    document.elementFromPoint = vi.fn(() => viewButton);
+
+    expect(isRemoteMouseFrameViewportStale(undefined)).toBe(false);
+    expect(isRemoteMouseFrameViewportStale(null)).toBe(false);
+    expect(applyRemoteMouseCommand(command("click"))).toMatchObject({ status: "executed" });
+    expect(viewClick).toHaveBeenCalledTimes(1);
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  });
+
+  it("reads the captured-frame snapshot stamped on the viewer image", () => {
+    const image = document.createElement("img");
+    image.dataset.frameViewportWidth = "1280";
+    image.dataset.frameViewportHeight = "720";
+    image.dataset.frameViewportScrollX = "0";
+    image.dataset.frameViewportScrollY = "240";
+    image.dataset.frameViewportVisualScale = "1";
+    expect(parseFrameViewportFromDataset(image.dataset)).toEqual({
+      width: 1280,
+      height: 720,
+      scrollX: 0,
+      scrollY: 240,
+      visualScale: 1,
+    });
+
+    const legacyImage = document.createElement("img");
+    expect(parseFrameViewportFromDataset(legacyImage.dataset)).toBeUndefined();
+
+    const partialImage = document.createElement("img");
+    partialImage.dataset.frameViewportWidth = "1280";
+    partialImage.dataset.frameViewportHeight = "720";
+    expect(parseFrameViewportFromDataset(partialImage.dataset)).toBeUndefined();
+  });
+
+  it("never lets an explicit safe annotation override dangerous or blocked controls", () => {
+    const dangerousSafe = document.createElement("button");
+    dangerousSafe.dataset.remoteControlSafe = "true";
+    dangerousSafe.textContent = "Delete voucher";
+    document.body.appendChild(dangerousSafe);
+
+    const form = document.createElement("form");
+    const formSafe = document.createElement("button");
+    formSafe.dataset.remoteControlSafe = "true";
+    formSafe.textContent = "View details";
+    form.appendChild(formSafe);
+    document.body.appendChild(form);
+
+    expect(isRemoteMouseBlockedElement(dangerousSafe)).toBe(true);
+    expect(isAllowedRemoteClickElement(dangerousSafe)).toBe(false);
+    expect(isAllowedRemoteClickElement(formSafe)).toBe(false);
   });
 
   it("ignores malformed coordinates, empty scrolls, and missing targets", () => {

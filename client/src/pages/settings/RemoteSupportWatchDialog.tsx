@@ -28,6 +28,14 @@ interface ScreenCaptureInfo {
   failureReason?: string;
 }
 
+interface ScreenFrameViewport {
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+  visualScale: number;
+}
+
 interface ScreenFrame {
   dataUrl: string;
   capturedAt: string;
@@ -35,6 +43,7 @@ interface ScreenFrame {
   username?: string;
   capture?: ScreenCaptureInfo | null;
   captureFailure?: CaptureFailure | null;
+  viewport?: ScreenFrameViewport | null;
 }
 
 interface ScreenFeedPayload {
@@ -44,6 +53,7 @@ interface ScreenFeedPayload {
   username?: string;
   capture?: ScreenCaptureInfo | null;
   captureFailure?: CaptureFailure | null;
+  viewport?: ScreenFrameViewport | null;
 }
 
 interface FastPollState {
@@ -378,6 +388,12 @@ function ScreenFeedDialog({
                 }
                 draggable={false}
                 data-testid="img-screen-feed"
+                data-frame-viewport-width={frame.viewport?.width ?? ""}
+                data-frame-viewport-height={frame.viewport?.height ?? ""}
+                data-frame-viewport-scroll-x={frame.viewport?.scrollX ?? ""}
+                data-frame-viewport-scroll-y={frame.viewport?.scrollY ?? ""}
+                data-frame-viewport-visual-scale={frame.viewport?.visualScale ?? ""}
+                data-frame-captured-at={frame.capturedAt}
               />
             ) : (
               <div className="m-auto flex max-w-xl flex-col items-center gap-2 px-6 text-center text-sm text-white/70">

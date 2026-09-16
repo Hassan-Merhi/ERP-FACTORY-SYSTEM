@@ -296,7 +296,12 @@ export function ContainerSpView({
                 )}
                 {rowIsNavigable && (
                   <Link href={detailPath} onClick={(event) => event.stopPropagation()}>
-                    <Button size="sm" variant="outline" data-testid={`button-view-sp-${c.id}`}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid={`button-view-sp-${c.id}`}
+                      data-remote-control-safe="true"
+                    >
                       <Eye className="h-4 w-4 mr-1" />
                       View
                     </Button>

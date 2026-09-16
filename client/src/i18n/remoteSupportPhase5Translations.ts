@@ -38,6 +38,11 @@ export const remoteSupportPhase5Translations: readonly Phase7BackendMessagesEntr
     fr: "Cette commande est protégée et ne peut pas être activée à distance.",
   },
   {
+    en: "The screen changed since this frame was captured. Wait for a fresh frame and try again.",
+    ar: "تغيّرت الشاشة منذ التقاط هذا الإطار. انتظر إطارًا جديدًا ثم حاول مجددًا.",
+    fr: "L’écran a changé depuis la capture de cette image. Attendez une image récente puis réessayez.",
+  },
+  {
     en: "Unable to enable mouse control.",
     ar: "تعذر تفعيل التحكم بالماوس.",
     fr: "Impossible d’activer le contrôle de la souris.",
