@@ -81,7 +81,7 @@ describe("remote mouse command reliability", () => {
       x: 0.5,
       y: 0.5,
       now: now + 1,
-    });
+    }).command;
 
     expect(command.sequence).toBe(1);
   });
@@ -95,7 +95,7 @@ describe("remote mouse command reliability", () => {
       x: 0.25,
       y: 0.25,
       now: now + 1,
-    });
+    }).command;
     const second = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -103,7 +103,7 @@ describe("remote mouse command reliability", () => {
       x: 0.5,
       y: 0.5,
       now: now + 2,
-    });
+    }).command;
     const third = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -113,7 +113,7 @@ describe("remote mouse command reliability", () => {
       deltaX: 0,
       deltaY: 120,
       now: now + 3,
-    });
+    }).command;
 
     const listener = vi.fn();
     subscribeRemoteMouseCommands({
@@ -136,7 +136,7 @@ describe("remote mouse command reliability", () => {
       x: 0.4,
       y: 0.4,
       now: now + 1,
-    });
+    }).command;
     const second = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -144,7 +144,7 @@ describe("remote mouse command reliability", () => {
       x: 0.6,
       y: 0.6,
       now: now + 2,
-    });
+    }).command;
 
     publishRemoteMouseCommandResult({
       sessionId: session.id,
@@ -176,7 +176,7 @@ describe("remote mouse command reliability", () => {
       x: 0.5,
       y: 0.5,
       now: now + 1,
-    });
+    }).command;
 
     const first = publishRemoteMouseCommandResult({
       sessionId: session.id,
@@ -213,7 +213,7 @@ describe("remote mouse command reliability", () => {
       x: 0.5,
       y: 0.5,
       now: now + 1,
-    });
+    }).command;
 
     cleanupRemoteMouseCommandState(now + 15_002);
 
@@ -236,7 +236,7 @@ describe("remote mouse command reliability", () => {
       x: 0.5,
       y: 0.5,
       now: first.now + 1,
-    });
+    }).command;
     publishRemoteMouseCommand({
       sessionId: second.session.id,
       controllerUserId: "1",

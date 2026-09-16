@@ -9,6 +9,15 @@ import {
   useRemoteControllerSession,
 } from "@/components/RemoteControllerSessionContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import {
+  applyRemoteControlRateLimit,
+  clearRemoteControlRateLimit,
+  createRemoteControlRateGate,
+  decideRemoteControlCommand,
+  isRemoteControlRateLimitError,
+  remoteControlSendDelayMs,
+  type RemoteControlRateGate,
+} from "@/hooks/remote-control-command-flow";
 import { normalizeRemoteMousePoint, type RemoteMouseCommandType } from "@/hooks/remote-mouse-control-policy";
 import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
@@ -55,6 +64,7 @@ export function RemoteMouseControllerOverlay() {
   const schedulePointerDrainRef = useRef<() => void>(() => undefined);
   const scrollPendingRef = useRef<{ x: number; y: number; deltaX: number; deltaY: number } | null>(null);
   const scrollTimerRef = useRef<number | null>(null);
+  const rateGateRef = useRef<RemoteControlRateGate>(createRemoteControlRateGate());
   const t = useCallback((value: string) => translateRemoteSupportPhase5Text(value, language), [language]);
 
   const sessionId = session?.id ?? null;
@@ -65,6 +75,7 @@ export function RemoteMouseControllerOverlay() {
   useEffect(() => {
     activeSessionIdRef.current = sessionId;
     commandTailRef.current = Promise.resolve();
+    rateGateRef.current = createRemoteControlRateGate();
     pointerQueueActiveRef.current = false;
     pointerQueueSessionRef.current = null;
     setError(null);
@@ -148,6 +159,22 @@ export function RemoteMouseControllerOverlay() {
   const sendCommandNow = useCallback(
     async (payload: MouseCommandPayload, expectedSessionId: string) => {
       if (activeSessionIdRef.current !== expectedSessionId) return;
+
+      // Phase 10: never ship a command the server is going to refuse. While the
+      // rate gate is closed, continuous samples (pointer moves and scrolls) are
+      // dropped outright and discrete clicks wait for the window to reopen.
+      const decision = decideRemoteControlCommand({
+        kind: payload.type,
+        gate: rateGateRef.current,
+        now: Date.now(),
+      });
+      if (decision === "supersede") return;
+      if (decision === "defer") {
+        const delay = remoteControlSendDelayMs(rateGateRef.current, Date.now());
+        await new Promise((resolve) => window.setTimeout(resolve, delay));
+        if (activeSessionIdRef.current !== expectedSessionId) return;
+      }
+
       try {
         await remoteControllerRequestJson(
           `/api/screen-feed/control/sessions/${encodeURIComponent(expectedSessionId)}/commands`,
@@ -156,14 +183,25 @@ export function RemoteMouseControllerOverlay() {
             body: JSON.stringify(payload),
           }
         );
+        rateGateRef.current = clearRemoteControlRateLimit(rateGateRef.current);
       } catch (requestError) {
         if (activeSessionIdRef.current !== expectedSessionId) return;
-        if (
-          requestError instanceof RemoteControllerRequestError &&
-          (requestError.status === 428 || requestError.code === "MOUSE_AUTHORIZATION_REQUIRED")
-        ) {
-          setPasswordOpen(true);
-          void refreshSession().catch(() => undefined);
+        if (requestError instanceof RemoteControllerRequestError) {
+          if (isRemoteControlRateLimitError(requestError)) {
+            // A refusal is a pacing signal, not a session failure: back off
+            // quietly rather than showing the operator an error for input the
+            // server simply asked us to slow down.
+            rateGateRef.current = applyRemoteControlRateLimit(
+              rateGateRef.current,
+              Date.now(),
+              requestError.retryAfterMs
+            );
+            return;
+          }
+          if (requestError.status === 428 || requestError.code === "MOUSE_AUTHORIZATION_REQUIRED") {
+            setPasswordOpen(true);
+            void refreshSession().catch(() => undefined);
+          }
         }
         setError(requestError instanceof Error ? t(requestError.message) : t("Mouse command failed."));
       }
@@ -195,6 +233,8 @@ export function RemoteMouseControllerOverlay() {
       .catch(() => undefined)
       .then(async () => {
         if (activeSessionIdRef.current !== expectedSessionId) return;
+        // Only the newest sample is read, so every position queued behind a
+        // slow request is superseded here rather than sent and then ignored.
         const point = pointerLatestRef.current;
         pointerLatestRef.current = null;
         if (point) await sendCommandNow({ type: "pointer-move", ...point }, expectedSessionId);

@@ -28,11 +28,24 @@ export class RemoteControllerRequestError extends Error {
   constructor(
     readonly status: number,
     readonly code: string | null,
-    message: string
+    message: string,
+    /** Server-supplied backoff, in milliseconds, for a refused (429) command. */
+    readonly retryAfterMs: number | null = null
   ) {
     super(message);
     this.name = "RemoteControllerRequestError";
   }
+}
+
+/** Reads the backoff a refused request carries, preferring the JSON body over the header. */
+function parseRetryAfterMs(response: Response, payload: { retryAfterMs?: unknown }): number | null {
+  const fromBody = payload?.retryAfterMs;
+  if (typeof fromBody === "number" && Number.isFinite(fromBody) && fromBody > 0) {
+    return Math.min(fromBody, 30_000);
+  }
+  const header = Number(response.headers.get("Retry-After"));
+  if (Number.isFinite(header) && header > 0) return Math.min(header * 1000, 30_000);
+  return null;
 }
 
 interface ControllerActiveResponse {
@@ -70,7 +83,8 @@ export async function remoteControllerRequestJson<T>(url: string, init?: Request
     throw new RemoteControllerRequestError(
       response.status,
       typeof payload?.code === "string" ? payload.code : null,
-      typeof payload?.message === "string" ? payload.message : "Remote control request failed."
+      typeof payload?.message === "string" ? payload.message : "Remote control request failed.",
+      parseRetryAfterMs(response, payload)
     );
   }
   return payload as T;

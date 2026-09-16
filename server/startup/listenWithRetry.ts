@@ -10,6 +10,7 @@ import type { Server } from "node:http";
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { flushRemoteSupportCommandAudits } from "../services/remoteSupportCommandAuditQueue";
 import { log } from "../vite";
 
 export function listenWithRetry(server: Server, port: number, onListening: () => void): void {
@@ -50,6 +51,13 @@ export function registerGracefulShutdown(): void {
   // zombie connections that exhaust max_connections on the next instance.
   const shutdown = async (signal: string) => {
     logger.info(`[Shutdown] ${signal} received — closing DB pool...`);
+    try {
+      // Remote-support command audits are batched off the request path, so a
+      // pending batch must land before the pool goes away.
+      await flushRemoteSupportCommandAudits();
+    } catch (e: unknown) {
+      logger.warn("[Shutdown] remote support audit flush error:", { error: getErrorMessage(e) });
+    }
     try {
       await pool.end();
       logger.info("[Shutdown] DB pool closed cleanly.");
