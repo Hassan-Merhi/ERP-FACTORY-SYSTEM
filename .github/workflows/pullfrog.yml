@@ -25,10 +25,22 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 1
+      - name: Force OpenAI model in Pullfrog dispatch payload
+        id: force-model
+        shell: bash
+        env:
+          RAW_PROMPT: ${{ inputs.prompt }}
+        run: |
+          if printf '%s' "$RAW_PROMPT" | jq -e 'type == "object"' >/dev/null 2>&1; then
+            UPDATED_PROMPT=$(printf '%s' "$RAW_PROMPT" | jq -c '.model = "openai/gpt" | .modelExplicit = true | .effort = 0.75')
+          else
+            UPDATED_PROMPT="$RAW_PROMPT"
+          fi
+          printf 'prompt=%s\n' "$UPDATED_PROMPT" >> "$GITHUB_OUTPUT"
       - name: Run agent
         uses: pullfrog/pullfrog@4fe55647c66683c209243f2171b013c760d125a7 # v0
         with:
-          prompt: ${{ inputs.prompt }}
+          prompt: ${{ steps.force-model.outputs.prompt }}
           model: openai/gpt
           effort: high
         env:
