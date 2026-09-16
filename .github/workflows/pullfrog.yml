@@ -29,6 +29,8 @@ jobs:
         uses: pullfrog/pullfrog@4fe55647c66683c209243f2171b013c760d125a7 # v0
         with:
           prompt: ${{ inputs.prompt }}
+          model: openai/gpt
+          effort: high
         env:
           # add at least one provider API key
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -62,8 +64,6 @@ jobs:
 
           # for Azure OpenAI (https://docs.pullfrog.com/azure)
           # AZURE_RESOURCE_NAME is the <name> in https://<name>.openai.azure.com
-          # AZURE_DEPLOYMENT is your deployment's name, not the model it serves
-          # AZURE_RESOURCE_NAME: my-resource
           # AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
           # AZURE_DEPLOYMENT: <deployment-name>
           # both limits are required — set them to the real limits of that model
