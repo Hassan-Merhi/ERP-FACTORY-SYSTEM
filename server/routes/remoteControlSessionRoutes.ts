@@ -472,6 +472,7 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
         y: req.body?.y,
         deltaX: req.body?.deltaX,
         deltaY: req.body?.deltaY,
+        frameViewport: req.body?.frameViewport,
         admitted: true,
       });
       res.status(202).json({ command: serializeMouseCommand(command), supersededCommandIds });
