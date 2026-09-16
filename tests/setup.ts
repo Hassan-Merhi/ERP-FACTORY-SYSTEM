@@ -100,6 +100,48 @@ export async function setupTestApp(): Promise<express.Express> {
   return app;
 }
 
+/**
+ * Locations are referenced with ON DELETE RESTRICT by more than thirty tables,
+ * and any factory, retail or POS fixture can leave a row in one of them. Naming
+ * those tables by hand has already drifted (factory_bales and
+ * factory_pressing_batches both started failing this teardown once the suites
+ * that write them were added), so ask the database which columns still point at
+ * this company's locations instead.
+ *
+ * A referring table can itself be restricted by another one in the same set, so
+ * the sweep runs a few passes and retries whatever failed; anything still
+ * blocking after that surfaces as the original foreign-key error from the
+ * locations delete, exactly as before.
+ */
+async function clearRestrictingLocationReferences(companyId: number): Promise<void> {
+  const { rows } = await pool.query<{ table_name: string; column_name: string }>(
+    `SELECT DISTINCT c.conrelid::regclass::text AS table_name, a.attname AS column_name
+       FROM pg_constraint c
+       JOIN unnest(c.conkey) WITH ORDINALITY k(attnum, ord) ON true
+       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+      WHERE c.confrelid = 'locations'::regclass
+        AND c.contype = 'f'
+        AND c.confdeltype = 'r'`
+  );
+
+  let pending = rows;
+  for (let pass = 0; pass < 3 && pending.length > 0; pass += 1) {
+    const blocked: typeof pending = [];
+    for (const reference of pending) {
+      try {
+        await pool.query(
+          `DELETE FROM ${reference.table_name}
+            WHERE ${reference.column_name} IN (SELECT id FROM locations WHERE company_id = $1)`,
+          [companyId]
+        );
+      } catch {
+        blocked.push(reference);
+      }
+    }
+    pending = blocked;
+  }
+}
+
 export async function cleanupTestData(prefix: string): Promise<void> {
   const companies = await db
     .select()
@@ -253,6 +295,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // (a POS user, for example) blocks the locations delete. Clear them first.
     await db.delete(schema.userCompanyRoles).where(eq(schema.userCompanyRoles.companyId, company.id));
     await db.delete(schema.userLocations).where(eq(schema.userLocations.companyId, company.id));
+    await clearRestrictingLocationReferences(company.id);
     await db.delete(schema.locations).where(eq(schema.locations.companyId, company.id));
     await pool.query("DELETE FROM factory_transporters WHERE company_id = $1", [company.id]);
     await db.delete(schema.companySettings).where(eq(schema.companySettings.companyId, company.id));

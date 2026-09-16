@@ -235,7 +235,10 @@ export async function updateStockTransfer(
 export async function updateStockAdjustment(
   id: number,
   locationId: number,
-  adjustmentType: "Production" | "Consumption" | "Mixed",
+  // Compared case-insensitively below and persisted verbatim: the column holds
+  // whatever spelling the creating path wrote, and re-editing must not rewrite
+  // it into a different case.
+  adjustmentType: string,
   notes: string,
   items: Array<{ stockItemId: number; quantity: string; rate: string }>
 ) {

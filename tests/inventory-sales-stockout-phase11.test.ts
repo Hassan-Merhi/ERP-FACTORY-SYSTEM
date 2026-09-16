@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -61,7 +63,10 @@ async function sale(voucherSuffix: string, quantity: number, rate: number) {
       paymentAccountType: "ledger",
       paymentAccountId: ctx.cashAccountId,
       voucherDate,
-      clientSaleId: `${TEST_PREFIX}-${voucherSuffix}-${Date.now()}-${Math.random()}`,
+      notes: `${TEST_PREFIX} ${voucherSuffix}`,
+      // vouchers.client_sale_id is varchar(36): a UUID is what a real POS client
+      // sends, and what the retry-identity contract is sized for.
+      clientSaleId: randomUUID(),
     });
 }
 
@@ -185,8 +190,40 @@ describe("Phase 11 inventory sale and stock-out", () => {
     await assertSaleEconomics(voucherId, 2, 15, 7);
   }, 60_000);
 
+  it("refuses a retry identity that cannot fit the stored client sale id", async () => {
+    await switchRole("POS");
+    await setInventory(10, 8, 80);
+
+    const response = await agent
+      .post("/api/pos/sales")
+      .set("x-client-date", "2026-09-14")
+      .send({
+        locationId: ctx.locationId,
+        items: [{ stockItemId: ctx.stockItemIds[0], quantity: 1, rate: 20 }],
+        paymentAccountType: "ledger",
+        paymentAccountId: ctx.cashAccountId,
+        voucherDate: "2026-09-14",
+        clientSaleId: `${randomUUID()}-${randomUUID()}`,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("POS_CLIENT_SALE_ID_TOO_LONG");
+
+    // The oversized key must be refused before anything is posted.
+    const inventory = await inventorySnapshot();
+    expect(Number(inventory.quantity)).toBeCloseTo(10, 3);
+  }, 60_000);
+
   it("rejects insufficient stock when negative selling is not permitted and leaves every layer unchanged", async () => {
+    // A Normal User has no mod_pos permission at all, so it is refused before
+    // the sale service ever weighs the stock. The stock-out branch below
+    // therefore has to be driven by a POS user with negative selling off.
     await switchRole("Normal User");
+    const withoutPosPermission = await sale("no-pos-permission", 3, 20);
+    expect(withoutPosPermission.status).toBe(403);
+    expect(withoutPosPermission.body.key).toBe("mod_pos");
+
+    await switchRole("POS");
     await setInventory(2, 9, 18);
 
     const beforeVouchers = await pool.query<{ count: string }>(

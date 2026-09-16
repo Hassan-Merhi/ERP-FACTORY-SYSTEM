@@ -227,14 +227,28 @@ describe("Phase 8 — exact reversal is balanced, append-only and idempotent", (
     expect(net.rows.length).toBeGreaterThan(0);
     expect(net.rows.every((row) => Math.abs(Number(row.net)) < 0.000001)).toBe(true);
 
-    const second = await agent.post(`/api/vouchers/${originalId}/exact-reversal`).send({
+    // A retry that carries the original payload replays the one reversal that
+    // was already posted rather than posting a second one.
+    const replay = await agent.post(`/api/vouchers/${originalId}/exact-reversal`).send({
+      reversalDate: "2026-09-12",
+      reversalVoucherNumber: `${TEST_PREFIX.toUpperCase()}-REV-${originalId}`,
+      description: "Phase 8 exact reversal",
+    });
+    expect(replay.status).toBe(200);
+    expect(replay.body.replayed).toBe(true);
+    expect(extractVoucherId(replay.body)).toBe(reversalId);
+
+    // A retry that changes the payload under the same reversal identity is a
+    // conflict, not a replay: the posting boundary must not silently discard
+    // the caller's new voucher number, date and description, and it must not
+    // post a competing second reversal either.
+    const conflicting = await agent.post(`/api/vouchers/${originalId}/exact-reversal`).send({
       reversalDate: "2026-09-13",
       reversalVoucherNumber: `${TEST_PREFIX.toUpperCase()}-SHOULD-NOT-DUPLICATE`,
-      description: "retry must replay",
+      description: "retry must not rewrite the posted reversal",
     });
-    expect(second.status).toBe(200);
-    expect(second.body.replayed).toBe(true);
-    expect(extractVoucherId(second.body)).toBe(reversalId);
+    expect(conflicting.status).toBe(400);
+    expect(conflicting.body.code).toBe("POSTING_IDEMPOTENCY_CONFLICT");
 
     const reversalMarkers = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
