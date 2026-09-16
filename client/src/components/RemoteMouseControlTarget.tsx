@@ -16,6 +16,27 @@ interface RemotePointerState {
 const MAX_COMMAND_AGE_MS = 8000;
 const MAX_SEEN_COMMANDS = 256;
 
+function parseFrameViewport(value: unknown): RemoteMouseCommandView["frameViewport"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const viewport = value as Record<string, unknown>;
+  if (
+    typeof viewport.width !== "number" ||
+    typeof viewport.height !== "number" ||
+    typeof viewport.scrollX !== "number" ||
+    typeof viewport.scrollY !== "number" ||
+    typeof viewport.visualScale !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    width: viewport.width,
+    height: viewport.height,
+    scrollX: viewport.scrollX,
+    scrollY: viewport.scrollY,
+    visualScale: viewport.visualScale,
+  };
+}
+
 function parseCommand(value: unknown): RemoteMouseCommandView | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const command = value as Partial<RemoteMouseCommandView>;
@@ -29,7 +50,7 @@ function parseCommand(value: unknown): RemoteMouseCommandView | null {
   ) {
     return null;
   }
-  return command as RemoteMouseCommandView;
+  return { ...command, frameViewport: parseFrameViewport(command.frameViewport) } as RemoteMouseCommandView;
 }
 
 async function reportCommandResult(

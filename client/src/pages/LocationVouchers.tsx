@@ -347,6 +347,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
               setSelectedRowIndex(-1);
             }}
             data-testid="button-show-all-months"
+            data-remote-control-safe="true"
           >
             <Eye className="h-4 w-4 mr-1.5" />
             {showAllMonths ? "This month only" : "Show all months"}

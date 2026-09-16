@@ -6,6 +6,7 @@ import {
   publishRemoteMouseCommandResult,
   resetRemoteMouseCommandStateForTests,
   revokeRemoteMouseControl,
+  sanitizeRemoteMouseFrameViewport,
   subscribeRemoteMouseCommands,
   subscribeRemoteMouseResults,
 } from "../server/services/remoteControlCommandService";
@@ -232,6 +233,70 @@ describe("remote mouse command safety", () => {
       now: now + 3,
     });
     expect(queued.sequence).toBe(1);
+  });
+
+  it("carries the captured frame viewport to the target and drops malformed snapshots", () => {
+    const session = buildSession();
+    const now = Date.now();
+    authorizeRemoteMouseControl({
+      sessionId: session.id,
+      controllerUserId: "1",
+      passwordConfirmedAt: now,
+      now,
+    });
+    const listener = vi.fn();
+    subscribeRemoteMouseCommands({
+      sessionId: session.id,
+      targetUserId: "22",
+      targetTabId: "erp-tab-1",
+      listener,
+    });
+
+    const frameViewport = { width: 1280, height: 720, scrollX: 0, scrollY: 240, visualScale: 1 };
+    const click = publishRemoteMouseCommand({
+      sessionId: session.id,
+      controllerUserId: "1",
+      type: "click",
+      x: 0.5,
+      y: 0.5,
+      frameViewport,
+      now: now + 1,
+    });
+    expect(click.frameViewport).toEqual(frameViewport);
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ frameViewport }));
+
+    // A malformed snapshot must never block an otherwise valid command: the
+    // target falls back to the live-viewport mapping for legacy controllers.
+    const legacy = publishRemoteMouseCommand({
+      sessionId: session.id,
+      controllerUserId: "1",
+      type: "click",
+      x: 0.5,
+      y: 0.5,
+      frameViewport: { width: "wide", scrollY: -50 },
+      now: now + 2,
+    });
+    expect(legacy.frameViewport).toBeUndefined();
+
+    const absent = publishRemoteMouseCommand({
+      sessionId: session.id,
+      controllerUserId: "1",
+      type: "scroll",
+      x: 0.5,
+      y: 0.5,
+      deltaX: 0,
+      deltaY: 120,
+      now: now + 3,
+    });
+    expect(absent.frameViewport).toBeUndefined();
+
+    expect(sanitizeRemoteMouseFrameViewport(null)).toBeUndefined();
+    expect(
+      sanitizeRemoteMouseFrameViewport({ width: 0, height: 720, scrollX: 0, scrollY: 0, visualScale: 1 })
+    ).toBeUndefined();
+    expect(
+      sanitizeRemoteMouseFrameViewport({ width: 1280, height: 720, scrollX: 0, scrollY: 0, visualScale: 99 })
+    ).toBeUndefined();
   });
 
   it("rejects command subscriptions from a different user or browser tab", () => {

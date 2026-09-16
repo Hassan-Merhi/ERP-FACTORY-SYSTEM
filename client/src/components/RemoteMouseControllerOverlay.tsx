@@ -9,7 +9,12 @@ import {
   useRemoteControllerSession,
 } from "@/components/RemoteControllerSessionContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { normalizeRemoteMousePoint, type RemoteMouseCommandType } from "@/hooks/remote-mouse-control-policy";
+import {
+  normalizeRemoteMousePoint,
+  parseFrameViewportFromDataset,
+  type RemoteMouseCommandType,
+  type RemoteMouseFrameViewport,
+} from "@/hooks/remote-mouse-control-policy";
 import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
 
@@ -27,6 +32,7 @@ interface MouseCommandPayload {
   y: number;
   deltaX?: number;
   deltaY?: number;
+  frameViewport?: RemoteMouseFrameViewport;
 }
 
 const POINTER_COALESCE_MS = 125;
@@ -56,6 +62,7 @@ export function RemoteMouseControllerOverlay() {
   const scrollPendingRef = useRef<{ x: number; y: number; deltaX: number; deltaY: number } | null>(null);
   const scrollTimerRef = useRef<number | null>(null);
   const t = useCallback((value: string) => translateRemoteSupportPhase5Text(value, language), [language]);
+  const [screenImage, setScreenImage] = useState<HTMLImageElement | null>(null);
 
   const sessionId = session?.id ?? null;
   const sessionTargetUserId = session?.targetUserId ?? null;
@@ -175,11 +182,16 @@ export function RemoteMouseControllerOverlay() {
     (payload: MouseCommandPayload) => {
       if (!sessionId || !controlEnabled) return;
       const expectedSessionId = sessionId;
+      // Clicks and scrolls are aimed at the frame on screen right now, so the
+      // target can ignore them when its viewport has since scrolled, resized,
+      // or zoomed instead of activating the wrong control.
+      const frameViewport = screenImage ? parseFrameViewportFromDataset(screenImage.dataset) : undefined;
+      const command: MouseCommandPayload = frameViewport ? { ...payload, frameViewport } : payload;
       commandTailRef.current = commandTailRef.current
         .catch(() => undefined)
-        .then(() => sendCommandNow(payload, expectedSessionId));
+        .then(() => sendCommandNow(command, expectedSessionId));
     },
-    [controlEnabled, sendCommandNow, sessionId]
+    [controlEnabled, screenImage, sendCommandNow, sessionId]
   );
 
   const schedulePointerDrain = useCallback(() => {
@@ -228,8 +240,6 @@ export function RemoteMouseControllerOverlay() {
       enqueueOrderedCommand({ type: "scroll", ...pending });
     }
   }, [enqueueOrderedCommand]);
-
-  const [screenImage, setScreenImage] = useState<HTMLImageElement | null>(null);
 
   // The screen image only exists once a frame has arrived, which is usually
   // after control was enabled — and it is replaced whenever the viewer drops
@@ -337,6 +347,8 @@ export function RemoteMouseControllerOverlay() {
           setLastResult(result);
           if (result.status === "blocked") {
             setError(t("That control is protected and cannot be activated remotely."));
+          } else if (result.status === "ignored" && result.reason === "stale-frame-viewport") {
+            setError(t("The screen changed since this frame was captured. Wait for a fresh frame and try again."));
           }
         }
       } catch {
