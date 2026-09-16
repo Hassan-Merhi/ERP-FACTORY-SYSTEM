@@ -499,7 +499,7 @@ function requestDouble(route: Registration, state: HarnessState, variant: number
   return req;
 }
 
-async function invokeWithBudget(handler: Handler, req: Record<string, any>, res: Record<string, any>, budgetMs = 60) {
+async function invokeWithBudget(handler: Handler, req: Record<string, any>, res: Record<string, any>, budgetMs = 15) {
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([
     Promise.resolve()
@@ -571,7 +571,7 @@ export async function runSyntheticRouteBucket(bucket: number, bucketCount: numbe
       for (let variant = 0; variant < 6; variant += 1) {
         const req = requestDouble(route, state, variant);
         for (const handler of route.handlers) {
-          await invokeWithBudget(handler, req, responseDouble(), variant < 2 ? 90 : 45);
+          await invokeWithBudget(handler, req, responseDouble(), variant < 2 ? 20 : 10);
           invoked += 1;
         }
       }
