@@ -281,7 +281,10 @@ describe("Phase 15 costing edge cases", () => {
     );
     expect(Number(container.rows[0].fx_rate_to_usd)).toBeCloseTo(1.23456789, 8);
     expect(Number(container.rows[0].fx_rate_to_usd_offload)).toBeCloseTo(1.23456789, 8);
-    expect(Number(container.rows[0].final_payable_amount_usd)).toBeCloseTo(expectedUsd, 5);
+    // final_payable_amount_usd is persisted at four decimal places; validate the
+    // persisted contract rather than asking the rounded column for more precision
+    // than its schema can represent.
+    expect(Number(container.rows[0].final_payable_amount_usd)).toBeCloseTo(expectedUsd, 4);
     expect(Number(container.rows[0].rate_per_kg_usd)).toBeCloseTo(expectedUsd / 1000, 6);
 
     const raw = await pool.query<{ cost_per_kg_usd: string }>(

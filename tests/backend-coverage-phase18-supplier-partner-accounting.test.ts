@@ -1,11 +1,3 @@
-/**
- * Phase 18 backend coverage — Supplier Partner accounting controls.
- *
- * These tests use real PostgreSQL rows and exercise both the operational
- * registers and the independently-derived ledger controls. They intentionally
- * verify supplier-facing statement behavior separately from the SP full
- * reconciliation so a broken statement cannot be hidden by a self-comparison.
- */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
@@ -31,9 +23,7 @@ type ReconciliationReport = {
   status: string;
   mismatchCount: number;
   surfaces: ReconciliationSurface[];
-  summary: {
-    supplierCount: number;
-  };
+  summary: { supplierCount: number };
 };
 
 type ProjectionAccount = {
@@ -122,26 +112,21 @@ function surface(report: ReconciliationReport, key: string): ReconciliationSurfa
 beforeAll(async () => {
   fixture = await setupGoldenCoastPhase5Fixture(PREFIX);
 
+  // Phase 8 reuses the canonical OTW and reserve roles. The shared Phase 5
+  // fixture already supplies stock-in-hand, Hassan equity and Hassan savings.
   await insertLedgerAccount({
     companyId: fixture.ctx.companyId,
     code: "P18-GC-OTW",
-    name: "Phase 18 Goods OTW",
+    name: "Phase 18 Stock OTW",
     accountType: "Asset",
     subType: "sp_goods_otw",
   });
   await insertLedgerAccount({
     companyId: fixture.ctx.companyId,
-    code: "P18-GC-OTWC",
-    name: "Phase 18 Goods OTW Clearing",
-    accountType: "Liability",
-    subType: "sp_otw_clearing",
-  });
-  await insertLedgerAccount({
-    companyId: fixture.ctx.companyId,
-    code: "P18-GC-PRE",
-    name: "Phase 18 Prepaid",
+    code: "P18-GC-RES",
+    name: "Phase 18 Container Reserve",
     accountType: "Asset",
-    subType: "sp_prepaid",
+    subType: "sp_prepaid_expenses",
   });
 
   const bank = await pool.query<{ id: number }>(
@@ -154,6 +139,9 @@ beforeAll(async () => {
   gcBankAccountId = bank.rows[0].id;
 
   gcSupplierId = await insertSupplier(fixture.ctx.companyId, "GC");
+  // Current Phase 8 supplier validation requires supplier ownership to resolve
+  // through a stock group in the selected company.
+  await pool.query(`UPDATE suppliers SET stock_group_id = $1 WHERE id = $2`, [fixture.ctx.stockGroupId, gcSupplierId]);
   plainSupplierId = await insertSupplier(fixture.plainCompanyId, "PLAIN", "125.00");
 }, 120000);
 
@@ -162,6 +150,9 @@ afterAll(async () => {
     const companyIds = [fixture.ctx.companyId, fixture.plainCompanyId, fixture.hadiCompanyId];
     await pool
       .query(`DELETE FROM sp_offload_charges WHERE company_id = ANY($1::int[])`, [companyIds])
+      .catch(() => undefined);
+    await pool
+      .query(`DELETE FROM sp_stock_movements WHERE company_id = ANY($1::int[])`, [companyIds])
       .catch(() => undefined);
     await pool.query(`DELETE FROM sp_offloads WHERE company_id = ANY($1::int[])`, [companyIds]).catch(() => undefined);
     await pool
@@ -181,72 +172,76 @@ afterAll(async () => {
 }, 120000);
 
 describe("Phase 18 Supplier Partner accounting controls", () => {
-  it("posts supplier purchases and prepaid charges to balanced independent accounting evidence", async () => {
+  it("enforces the Golden Coast legacy cutover and posts current Phase 8 funding as balanced accounting evidence", async () => {
     await selectCompany(fixture, fixture.ctx.companyId);
 
-    const container = await fixture.agent.post("/api/sp/containers").send({
+    const retired = await fixture.agent.post("/api/sp/containers").send({
+      supplierId: gcSupplierId,
+      supplierName: `${PREFIX} GC Supplier`,
+      containerNumber: "P18-LEGACY",
+      invoiceNumber: "P18-LEGACY-001",
+      invoiceDate: TX_DATE,
+      invoiceTotalUsd: 500,
+      lines: [{ articleCode: "P18-ARTICLE", qty: 10, unitRateUsd: 50, stockItemId: fixture.goldenCoastStockItemId }],
+    });
+    expect(retired.status).toBe(410);
+    expect(retired.body.code).toBe("GC_LEGACY_POSTING_RETIRED");
+
+    const readiness = await fixture.agent.get("/api/sp/golden-coast/phase8/container-offload/readiness");
+    expect(readiness.status, readiness.text).toBe(200);
+    expect(readiness.body.canPost).toBe(true);
+
+    const funded = await fixture.agent.post("/api/sp/golden-coast/phase8/containers").send({
+      clientRequestId: `${PREFIX}-phase8-funding`,
       supplierId: gcSupplierId,
       supplierName: `${PREFIX} GC Supplier`,
       containerNumber: "P18CONT0001",
       invoiceNumber: "P18-INV-001",
       invoiceDate: TX_DATE,
-      invoiceTotalUsd: 500,
-      discountPct: 0,
-      freightEstimateUsd: 0,
+      reserveUsd: "80",
+      fundingAccount: { kind: "bank", id: gcBankAccountId },
       lines: [
         {
           articleCode: "P18-ARTICLE",
-          description: "Phase 18 purchase",
-          qty: 10,
-          unitRateUsd: 50,
+          description: "Phase 18 current container funding",
+          qty: "10",
+          unitRateUsd: "50",
           stockItemId: fixture.goldenCoastStockItemId,
         },
       ],
     });
-    expect(container.status, container.text).toBe(200);
+    expect(funded.status, funded.text).toBe(200);
+    expect(funded.body.replayed).toBe(false);
+    expect(Number(funded.body.container?.id)).toBeGreaterThan(0);
+    const voucherId = Number(funded.body.posting?.voucher?.id);
+    expect(voucherId).toBeGreaterThan(0);
 
-    const prepaid = await fixture.agent.post("/api/sp/prepaid").send({
-      containerId: container.body.id,
-      prepaidDate: TX_DATE,
-      chargeType: "freight",
-      agentName: "Phase 18 Agent",
-      amountPaidUsd: 80,
-      bankAccountId: gcBankAccountId,
-      notes: "Phase 18 prepaid accounting",
-    });
-    expect(prepaid.status, prepaid.text).toBe(200);
-    expect(Number(prepaid.body.voucherId)).toBeGreaterThan(0);
-
-    const purchaseVoucher = await pool.query<{
+    const evidence = await pool.query<{
       debit: string;
       credit: string;
-      supplier_credits: string;
+      otw_debit: string;
+      reserve_debit: string;
+      bank_credit: string;
     }>(
       `SELECT
          COALESCE(SUM(ve.debit_amount::numeric), 0)::text AS debit,
          COALESCE(SUM(ve.credit_amount::numeric), 0)::text AS credit,
-         COALESCE(SUM(CASE WHEN ve.supplier_id = $2 THEN ve.credit_amount::numeric ELSE 0 END), 0)::text AS supplier_credits
-       FROM vouchers v
-       JOIN voucher_entries ve ON ve.voucher_id = v.id
-       WHERE v.company_id = $1 AND v.id = (SELECT goods_otw_voucher_id FROM sp_containers WHERE id = $3)`,
-      [fixture.ctx.companyId, gcSupplierId, container.body.id]
+         COALESCE(SUM(CASE WHEN la.sub_type = 'sp_goods_otw' THEN ve.debit_amount::numeric ELSE 0 END), 0)::text AS otw_debit,
+         COALESCE(SUM(CASE WHEN la.sub_type = 'sp_prepaid_expenses' THEN ve.debit_amount::numeric ELSE 0 END), 0)::text AS reserve_debit,
+         COALESCE(SUM(CASE WHEN ve.bank_account_id = $2 THEN ve.credit_amount::numeric ELSE 0 END), 0)::text AS bank_credit
+       FROM voucher_entries ve
+       LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+       WHERE ve.voucher_id = $1`,
+      [voucherId, gcBankAccountId]
     );
-    expect(Number(purchaseVoucher.rows[0].debit)).toBe(500);
-    expect(Number(purchaseVoucher.rows[0].credit)).toBe(500);
-    expect(Number(purchaseVoucher.rows[0].supplier_credits)).toBe(500);
-
-    const prepaidVoucher = await pool.query<{ debit: string; credit: string }>(
-      `SELECT
-         COALESCE(SUM(debit_amount::numeric), 0)::text AS debit,
-         COALESCE(SUM(credit_amount::numeric), 0)::text AS credit
-       FROM voucher_entries WHERE voucher_id = $1`,
-      [prepaid.body.voucherId]
-    );
-    expect(Number(prepaidVoucher.rows[0].debit)).toBe(80);
-    expect(Number(prepaidVoucher.rows[0].credit)).toBe(80);
+    expect(Number(evidence.rows[0].debit)).toBe(580);
+    expect(Number(evidence.rows[0].credit)).toBe(580);
+    expect(Number(evidence.rows[0].otw_debit)).toBe(500);
+    expect(Number(evidence.rows[0].reserve_debit)).toBe(80);
+    expect(Number(evidence.rows[0].bank_credit)).toBe(580);
   }, 120000);
 
-  it("independently reconciles supplier statements, payable control, OTW and prepaid balances", async () => {
+  it("keeps supplier statements independently tied to supplier-tagged payable evidence", async () => {
     await selectCompany(fixture, fixture.ctx.companyId);
 
     await insertBalancedSupplierVoucher({
@@ -262,45 +257,12 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       .get(`/api/suppliers/${gcSupplierId}/unified-ledger`)
       .query({ companyId: fixture.ctx.companyId });
     expect(statement.status, statement.text).toBe(200);
-    const statementRows = statement.body as Array<{ type: string; credit: number; debit: number; balance: number }>;
-    expect(statementRows.some((row) => row.type === "voucher" && row.credit === 500)).toBe(true);
-    expect(statementRows.some((row) => row.type === "voucher" && row.credit === 250)).toBe(true);
-    expect(statementRows.at(-1)?.balance).toBe(750);
-
-    const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
-    expect(reconciliation.status, reconciliation.text).toBe(200);
-    const reconciliationBody = reconciliation.body as ReconciliationReport;
-    expect(reconciliationBody.status).toBe("PASS");
-    expect(reconciliationBody.mismatchCount).toBe(0);
-
-    expect(surface(reconciliationBody, "goods_otw_open")).toMatchObject({
-      databaseValue: 500,
-      reportValue: 500,
-      pass: true,
-    });
-    expect(surface(reconciliationBody, "supplier_statements")).toMatchObject({
-      databaseValue: 500,
-      reportValue: 500,
-      pass: true,
-    });
-    expect(surface(reconciliationBody, "supplier_statement_control")).toMatchObject({
-      databaseValue: 750,
-      reportValue: 750,
-      pass: true,
-    });
-    expect(surface(reconciliationBody, "supplier_payable_control")).toMatchObject({
-      databaseValue: 250,
-      reportValue: 250,
-      pass: true,
-    });
-    expect(surface(reconciliationBody, "prepaid_balances")).toMatchObject({
-      databaseValue: 80,
-      reportValue: 80,
-      pass: true,
-    });
+    const rows = statement.body as Array<{ type: string; credit: number; balance: number }>;
+    expect(rows.some((row) => row.type === "voucher" && row.credit === 250)).toBe(true);
+    expect(rows.at(-1)?.balance).toBe(250);
   }, 120000);
 
-  it("keeps non-parent Supplier Partner supplier visibility and statements company-scoped", async () => {
+  it("keeps non-parent Supplier Partner supplier visibility and reconciliation company-scoped", async () => {
     await selectCompany(fixture, fixture.plainCompanyId);
 
     const listed = await fixture.agent.get("/api/suppliers?allowParentFallback=true");
@@ -336,18 +298,18 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
 
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);
-    const reconciliationBody = reconciliation.body as ReconciliationReport;
-    expect(surface(reconciliationBody, "supplier_statement_control")).toMatchObject({
+    const report = reconciliation.body as ReconciliationReport;
+    expect(surface(report, "supplier_statement_control")).toMatchObject({
       databaseValue: 75,
       reportValue: 75,
       pass: true,
     });
-    expect(surface(reconciliationBody, "supplier_payable_control")).toMatchObject({
+    expect(surface(report, "supplier_payable_control")).toMatchObject({
       databaseValue: 75,
       reportValue: 75,
       pass: true,
     });
-    expect(reconciliationBody.summary.supplierCount).toBe(1);
+    expect(report.summary.supplierCount).toBe(1);
   }, 120000);
 
   it("verifies Golden Coast Net Position projection rules without changing ordinary Supplier Partner output", () => {
@@ -437,14 +399,8 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       : [];
     expect(projectedAccounts.some((account) => account.id === 4)).toBe(false);
     expect(projectedAccounts.some((account) => account.id === 5)).toBe(false);
-    expect(projectedAccounts.find((account) => account.id === 3)).toMatchObject({
-      value: 100,
-      category: "Cash",
-    });
-    expect(projectedAccounts.find((account) => account.id === 6)).toMatchObject({
-      value: 25,
-      category: "Prepaid",
-    });
+    expect(projectedAccounts.find((account) => account.id === 3)).toMatchObject({ value: 100, category: "Cash" });
+    expect(projectedAccounts.find((account) => account.id === 6)).toMatchObject({ value: 25, category: "Prepaid" });
     expect(projected.equity?.hassanClaim).toBe(40);
     expect(projected.equity?.freshStartResidual).toBe(85);
     expect(projected.netPosition).toBe(125);

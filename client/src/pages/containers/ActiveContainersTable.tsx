@@ -184,6 +184,7 @@ export function ActiveContainersTable({
                   className="w-full sm:w-auto"
                   onClick={(e) => e.stopPropagation()}
                   data-testid={`button-view-${container.id}`}
+                  data-remote-control-safe="true"
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   View

@@ -24,6 +24,22 @@ const POINTER_INTERVAL_MS = 250;
 const BACKGROUND_MUTATION_MIN_GAP_MS = 4000;
 const INTERACTION_ACTIVE_WINDOW_MS = 2500;
 
+// React and Radix commonly express a visual update through class/data-state
+// changes, while legacy pages frequently write inline styles. Keep this list
+// narrow enough to avoid observing arbitrary attributes, but include both ways
+// a visible screen can change without an input/click event.
+const CAPTURE_MUTATION_ATTRIBUTE_FILTER = [
+  "class",
+  "style",
+  "value",
+  "checked",
+  "selected",
+  "aria-expanded",
+  "aria-checked",
+  "data-state",
+  "hidden",
+];
+
 export type ClickEvent = ScreenFeedClickEvent;
 
 function trimLabel(el: HTMLElement): string {
@@ -433,7 +449,7 @@ export function useScreenFeed() {
         childList: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ["value", "checked", "selected", "aria-expanded", "aria-checked", "data-state", "hidden"],
+        attributeFilter: CAPTURE_MUTATION_ATTRIBUTE_FILTER,
       });
     };
 

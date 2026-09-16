@@ -5,13 +5,10 @@ const MISSING_ID = 2_147_481_900;
 const moduleLoaders = import.meta.glob("../../server/routes/**/*.ts");
 
 const EXCLUDED_MODULES = /(?:trackTrace|whatsapp|screenFeed|remoteControl|webhook|openai|gemini)/i;
-const EXCLUDED_ROUTES = /(?:\/track|\/trace|whatsapp|webhook|screen-feed|remote-control|\/send(?:\/|$)|\/email(?:\/|$))/i;
+const EXCLUDED_ROUTES =
+  /(?:\/track|\/trace|whatsapp|webhook|screen-feed|remote-control|\/send(?:\/|$)|\/email(?:\/|$))/i;
 
-type Handler = (
-  req: Record<string, any>,
-  res: Record<string, any>,
-  next: (error?: unknown) => void
-) => unknown;
+type Handler = (req: Record<string, any>, res: Record<string, any>, next: (error?: unknown) => void) => unknown;
 
 type Registration = {
   method: string;
@@ -19,6 +16,8 @@ type Registration = {
   handlers: Handler[];
   modulePath: string;
 };
+
+type ProbeVariant = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 function stableBucket(value: string, buckets: number): number {
   let hash = 2166136261;
@@ -218,7 +217,13 @@ function responseDouble(): Record<string, any> {
   return res;
 }
 
-function requestDouble(route: Registration, ctx: TestContext, sequence: number, alternate: boolean): Record<string, any> {
+function requestDouble(
+  route: Registration,
+  ctx: TestContext,
+  sequence: number,
+  variant: ProbeVariant
+): Record<string, any> {
+  const alternate = variant % 2 === 1;
   const params = paramsFor(route.routePath, ctx, alternate);
   const session = {
     userId: ctx.userId,
@@ -231,7 +236,7 @@ function requestDouble(route: Registration, ctx: TestContext, sequence: number, 
     destroy: (callback?: (error?: unknown) => void) => callback?.(),
   };
 
-  return {
+  const req: Record<string, any> = {
     method: route.method,
     path: route.routePath,
     url: route.routePath,
@@ -261,7 +266,7 @@ function requestDouble(route: Registration, ctx: TestContext, sequence: number, 
       dryRun: "true",
       preview: "true",
     },
-    body: bodyFor(ctx, sequence, alternate),
+    body: bodyFor(ctx, sequence * 10 + variant, alternate),
     session,
     user: {
       id: ctx.userId,
@@ -287,13 +292,73 @@ function requestDouble(route: Registration, ctx: TestContext, sequence: number, 
     accepts: () => true,
     is: () => true,
   };
+
+  if (variant === 2) {
+    for (const key of Object.keys(req.params)) req.params[key] = String(MISSING_ID);
+    req.query = { ...req.query, companyId: String(ctx.companyId), id: String(MISSING_ID) };
+    req.body = {
+      ...req.body,
+      id: MISSING_ID,
+      stockItemId: MISSING_ID,
+      itemId: MISSING_ID,
+      productId: MISSING_ID,
+      stockItemIds: [MISSING_ID],
+      accountId: MISSING_ID,
+      userId: MISSING_ID,
+    };
+  } else if (variant === 3) {
+    for (const key of Object.keys(req.params)) req.params[key] = "not-a-number";
+    req.query = {
+      ...req.query,
+      id: "not-a-number",
+      page: "0",
+      limit: "-1",
+      companyId: "not-a-number",
+      locationId: "not-a-number",
+      stockItemId: "not-a-number",
+      accountId: "not-a-number",
+      startDate: "not-a-date",
+      endDate: "not-a-date",
+    };
+    req.body = {
+      ...req.body,
+      id: "not-a-number",
+      companyId: "not-a-number",
+      locationId: "not-a-number",
+      stockItemId: "not-a-number",
+      accountId: "not-a-number",
+      quantity: -1,
+      qty: -1,
+      amount: -1,
+      rate: -1,
+      price: -1,
+      exchangeRate: 0,
+      currency: "INVALID",
+      date: "not-a-date",
+    };
+  } else if (variant === 4) {
+    req.session = {};
+    req.user = {};
+  } else if (variant === 5) {
+    req.session.role = "Staff";
+    req.user.role = "Staff";
+  } else if (variant === 6) {
+    req.query = { ...req.query, companyId: String(MISSING_ID) };
+    req.body = { ...req.body, companyId: MISSING_ID };
+    req.user.selectedCompanyId = MISSING_ID;
+  } else if (variant === 7) {
+    req.query = {};
+    req.body = {};
+  }
+
+  return req;
 }
 
 async function invokeWithBudget(
   handler: Handler,
   req: Record<string, any>,
   res: Record<string, any>,
-  budgetMs = 250
+  budgetMs = 175
 ): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([
@@ -307,7 +372,34 @@ async function invokeWithBudget(
   if (timer) clearTimeout(timer);
 }
 
-export async function runDirectRouteBucket(bucket: number, bucketCount: number): Promise<{
+async function invokeRegistration(
+  route: Registration,
+  req: Record<string, any>,
+  res: Record<string, any>
+): Promise<number> {
+  let invoked = 0;
+  const lastHandler = route.handlers[route.handlers.length - 1];
+  await invokeWithBudget(lastHandler, req, res);
+  invoked += 1;
+
+  // Exercise middleware and pre-handler guards as executable behavior too. Two
+  // representative variants are enough to cover authenticated and unauthenticated
+  // branches without multiplying every database-writing endpoint excessively.
+  const role = req.user?.role;
+  if (role === "Admin" || !req.user?.userId) {
+    for (const handler of route.handlers.slice(0, -1)) {
+      await invokeWithBudget(handler, req, responseDouble(), 100);
+      invoked += 1;
+    }
+  }
+
+  return invoked;
+}
+
+export async function runDirectRouteBucket(
+  bucket: number,
+  bucketCount: number
+): Promise<{
   importedModules: number;
   registerFunctions: number;
   registrations: number;
@@ -318,10 +410,9 @@ export async function runDirectRouteBucket(bucket: number, bucketCount: number):
   const erpCtx = await seedTestData(prefix);
   const factoryCtx = await seedTestData(factoryPrefix);
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [factoryCtx.companyId]);
-  await pool.query(
-    "UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'",
-    [String(erpCtx.companyId)]
-  );
+  await pool.query("UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'", [
+    String(erpCtx.companyId),
+  ]);
 
   const registrations: Registration[] = [];
   let importedModules = 0;
@@ -358,11 +449,10 @@ export async function runDirectRouteBucket(bucket: number, bucketCount: number):
       if (EXCLUDED_ROUTES.test(route.routePath) || route.handlers.length === 0) continue;
       const factoryRoute = route.modulePath.includes("/factory/") || route.routePath.startsWith("/api/factory/");
       const ctx = factoryRoute ? factoryCtx : erpCtx;
-      const handler = route.handlers[route.handlers.length - 1];
 
-      for (const alternate of [false, true]) {
-        await invokeWithBudget(handler, requestDouble(route, ctx, index, alternate), responseDouble());
-        invoked += 1;
+      for (const variant of [0, 1, 2, 3, 4, 5, 6, 7] as const) {
+        const req = requestDouble(route, ctx, index, variant);
+        invoked += await invokeRegistration(route, req, responseDouble());
       }
     }
 

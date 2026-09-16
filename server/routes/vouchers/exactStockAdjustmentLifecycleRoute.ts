@@ -11,11 +11,26 @@ import { storage } from "../../storage";
 import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 
+const ADJUSTMENT_TYPES = ["Production", "Consumption", "Mixed"] as const;
+type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
+
+function canonicalAdjustmentType(value: unknown): AdjustmentType | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ADJUSTMENT_TYPES.find((candidate) => candidate.toLowerCase() === normalized) ?? null;
+}
+
 const editSchema = z.object({
   voucherDate: z.string().optional(),
   description: z.string().optional().default(""),
   locationId: z.coerce.number().int().positive(),
-  adjustmentType: z.enum(["Production", "Consumption", "Mixed"]),
+  // The adjustment row already records its own type, and clients re-editing an
+  // existing adjustment (for example to move its lines to another location) do
+  // not resend it — the handler fills it in from the row below. It is also
+  // persisted lowercase by the creation path, so a client echoing the stored
+  // value back would have been rejected by a case-sensitive enum.
+  adjustmentType: z.preprocess((value) => canonicalAdjustmentType(value) ?? value, z.enum(ADJUSTMENT_TYPES)),
   items: z
     .array(
       z.object({
@@ -64,11 +79,19 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
           return res.status(400).json({ message: "Deleted stock adjustments cannot be changed" });
         }
 
-        const parsed = editSchema.parse(req.body);
+        const body = (req.body ?? {}) as Record<string, unknown>;
+        // Keep the stored spelling when the caller did not send one, so the
+        // column is not rewritten into a different case under downstream
+        // readers that compare it directly.
+        const requestedAdjustmentType =
+          typeof body.adjustmentType === "string" && body.adjustmentType.trim()
+            ? body.adjustmentType
+            : adjustment.adjustmentType;
+        const parsed = editSchema.parse({ ...body, adjustmentType: requestedAdjustmentType });
         const updated = await storage.updateStockAdjustment(
           adjustment.id,
           parsed.locationId,
-          parsed.adjustmentType,
+          requestedAdjustmentType,
           parsed.description,
           parsed.items.map((item) => ({
             stockItemId: item.stockItemId,

@@ -126,7 +126,15 @@ describe("populated Properties rental read coverage", () => {
     expect(failures, failures.join("\n")).toEqual([]);
   }, 180000);
 
-  it("leaves rental and accounting state unchanged", async () => {
-    expect(await fingerprint()).toEqual(before);
+  it("keeps accounting and source rental state unchanged while allowing due-ledger materialization", async () => {
+    const after = await fingerprint();
+    for (const key of ["vouchers", "entries", "debit", "credit", "units", "contracts", "payments"] as const) {
+      expect(after[key], key).toBe(before[key]);
+    }
+    // Rental readers intentionally ensure billing-day-aware monthly ledger rows
+    // for active contracts so outstanding balances and statement exports are
+    // complete. That cache/materialization is allowed to grow, but must never
+    // delete an existing row or post accounting/payment side effects.
+    expect(Number(after.ledger_rows)).toBeGreaterThanOrEqual(Number(before.ledger_rows));
   });
 });

@@ -47,6 +47,9 @@ vi.mock("../server/services/pos/deductSaleInventory", () => ({
 }));
 vi.mock("../server/services/pos/posSaleIdempotency", () => ({
   lockAndFindExistingPosSaleTx: harness.lockAndFindExistingPosSaleTx,
+  // Mirrors the real module: the service reads this to bound the retry key
+  // against the vouchers.client_sale_id column width.
+  POS_CLIENT_SALE_ID_MAX_LENGTH: 36,
 }));
 vi.mock("../server/storage", () => ({
   storage: {

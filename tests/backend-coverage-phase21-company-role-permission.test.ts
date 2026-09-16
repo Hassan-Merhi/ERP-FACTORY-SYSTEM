@@ -3,8 +3,9 @@
  *
  * Exercises the real HTTP middleware/route stack against PostgreSQL. The suite
  * deliberately starts as a tenant Admin, proves cross-company writes are denied,
- * then elevates the fixture actor to Developer and proves the same explicit
- * target-company operations are allowed without weakening ownership validation.
+ * then elevates the fixture actor to Developer and proves Developer can switch
+ * into another authorized company and administer it without weakening active-
+ * company isolation or resource ownership validation.
  */
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -34,7 +35,12 @@ async function grantPermission(userId: string, companyId: number, permission: st
 }
 
 async function roleRows(userId: string) {
-  const result = await pool.query<{ id: number; company_id: number; role: string; assigned_location_id: number | null }>(
+  const result = await pool.query<{
+    id: number;
+    company_id: number;
+    role: string;
+    assigned_location_id: number | null;
+  }>(
     `SELECT id, company_id, role, assigned_location_id
        FROM user_company_roles
       WHERE user_id = $1
@@ -62,16 +68,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (targetUserId) {
-    await pool.query(`DELETE FROM user_location_cash_accounts WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_location_cash_accounts WHERE user_id = $1`, [targetUserId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_locations WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM user_security_permissions WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE user_id = $1`, [targetUserId]).catch(() => undefined);
     await pool.query(`DELETE FROM users WHERE id = $1`, [targetUserId]).catch(() => undefined);
   }
   if (secondCompanyId) {
-    await pool.query(`DELETE FROM user_location_cash_accounts WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_location_cash_accounts WHERE company_id = $1`, [secondCompanyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_locations WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
-    await pool.query(`DELETE FROM user_security_permissions WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_security_permissions WHERE company_id = $1`, [secondCompanyId])
+      .catch(() => undefined);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM audit_log WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
     await pool.query(`DELETE FROM login_history WHERE company_id = $1`, [secondCompanyId]).catch(() => undefined);
@@ -80,7 +92,12 @@ afterAll(async () => {
     await pool.query(`DELETE FROM companies WHERE id = $1`, [secondCompanyId]).catch(() => undefined);
   }
   if (ctx) {
-    await pool.query(`DELETE FROM user_security_permissions WHERE user_id = $1 AND company_id = $2`, [ctx.userId, ctx.companyId]).catch(() => undefined);
+    await pool
+      .query(`DELETE FROM user_security_permissions WHERE user_id = $1 AND company_id = $2`, [
+        ctx.userId,
+        ctx.companyId,
+      ])
+      .catch(() => undefined);
     await cleanupTestData(PREFIX);
   }
   closeTestServer();
@@ -202,7 +219,8 @@ describe("Phase 21 company/role/permission backend", () => {
     expect(catalog.status, catalog.text).toBe(200);
     const permissions = catalog.body.permissions as string[];
     permissionA = permissions.find((value) => value !== "security.permissions.manage") ?? permissions[0];
-    permissionB = permissions.find((value) => value !== "security.permissions.manage" && value !== permissionA) ?? permissionA;
+    permissionB =
+      permissions.find((value) => value !== "security.permissions.manage" && value !== permissionA) ?? permissionA;
     expect(permissionA).toBeTruthy();
 
     const response = await agent
@@ -239,11 +257,11 @@ describe("Phase 21 company/role/permission backend", () => {
     expect((await roleRows(targetUserId)).map((row) => row.company_id)).toEqual([ctx.companyId]);
   });
 
-  it("lets Developer administer the explicit target company without bypassing ownership checks", async () => {
-    await pool.query(
-      `UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`,
-      [ctx.userId, ctx.companyId]
-    );
+  it("keeps Developer writes active-company scoped while allowing an authorized company switch", async () => {
+    await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
+      ctx.userId,
+      ctx.companyId,
+    ]);
     await pool.query(
       `INSERT INTO user_company_roles (user_id, company_id, role)
        VALUES ($1, $2, 'Developer')`,
@@ -251,28 +269,44 @@ describe("Phase 21 company/role/permission backend", () => {
     );
     await grantPermission(ctx.userId, secondCompanyId, "security.permissions.manage");
 
-    // Refresh the session role after the fixture role change.
+    // Refresh the session role after the fixture role change. Even Developer is
+    // not allowed to override the active primary company in a write payload.
     const refresh = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
     expect(refresh.status, refresh.text).toBe(200);
 
-    const crossRole = await agent.post("/api/user-company-roles").send({
+    const blockedCrossRole = await agent.post("/api/user-company-roles").send({
       userId: targetUserId,
       companyId: secondCompanyId,
       role: "POS",
       assignedLocationId: secondLocationId,
       canSellNegativeStock: true,
     });
-    expect(crossRole.status, crossRole.text).toBe(201);
+    expect(blockedCrossRole.status).toBe(403);
+    expect(blockedCrossRole.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
 
-    const crossLocations = await agent
+    // Switch the canonical active company first; writes then run under that
+    // company's tenant/RLS context and remain ownership-checked.
+    const selected = await agent.post("/api/auth/set-company").send({ companyId: secondCompanyId });
+    expect(selected.status, selected.text).toBe(200);
+
+    const role = await agent.post("/api/user-company-roles").send({
+      userId: targetUserId,
+      companyId: secondCompanyId,
+      role: "POS",
+      assignedLocationId: secondLocationId,
+      canSellNegativeStock: true,
+    });
+    expect(role.status, role.text).toBe(201);
+
+    const locations = await agent
       .put(`/api/user-locations/${targetUserId}/${secondCompanyId}`)
       .send({ locationIds: [secondLocationId] });
-    expect(crossLocations.status, crossLocations.text).toBe(200);
+    expect(locations.status, locations.text).toBe(200);
 
-    const crossMappings = await agent
+    const mappings = await agent
       .put(`/api/user-location-cash-accounts/${targetUserId}/${secondCompanyId}`)
       .send({ mappings: [{ locationId: secondLocationId, cashAccountId: secondCashAccountId, posStation: 2 }] });
-    expect(crossMappings.status, crossMappings.text).toBe(200);
+    expect(mappings.status, mappings.text).toBe(200);
 
     // Developer is global, but resource ownership remains target-company strict.
     const wrongCompanyResource = await agent
@@ -282,7 +316,9 @@ describe("Phase 21 company/role/permission backend", () => {
 
     const roles = await agent.get(`/api/users/${targetUserId}/company-roles`);
     expect(roles.status, roles.text).toBe(200);
-    const companyIds = (roles.body as Array<{ companyId: number }>).map((row) => Number(row.companyId)).sort((a, b) => a - b);
+    const companyIds = (roles.body as Array<{ companyId: number }>)
+      .map((row) => Number(row.companyId))
+      .sort((a, b) => a - b);
     expect(companyIds).toEqual([ctx.companyId, secondCompanyId].sort((a, b) => a - b));
   });
 

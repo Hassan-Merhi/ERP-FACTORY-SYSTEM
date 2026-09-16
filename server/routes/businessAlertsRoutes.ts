@@ -114,18 +114,22 @@ export async function runAlertChecks(companyId: number): Promise<void> {
   }
 
   // ── Check 3: Large cash / bank withdrawals in the last 7 days ─────────────
+  // Voucher narration lives on voucher_entries; voucher headers carry description.
+  // Keep the alert query on the canonical current column names so a malformed-write
+  // sweep cannot turn this maintenance endpoint into a 500 after schema changes.
   const LARGE_THRESHOLD = 50000;
   const largeRes = await pool.query(
-    `SELECT v.id, v.voucher_number, v.narration, ve.credit AS amount, la.name AS account
+    `SELECT v.id, v.voucher_number, COALESCE(ve.narration, v.description) AS narration,
+            ve.credit_amount AS amount, la.name AS account
      FROM vouchers v
      JOIN voucher_entries ve ON ve.voucher_id = v.id
-     JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+     JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = v.company_id
      WHERE v.company_id = $1
        AND la.account_type IN ('Cash', 'Bank')
-       AND ve.credit > $2
-       AND v.voucher_date >= NOW() - INTERVAL '7 days'
+       AND COALESCE(ve.credit_amount, 0)::numeric > $2
+       AND v.voucher_date >= CURRENT_DATE - INTERVAL '7 days'
        AND v.deleted_at IS NULL
-     ORDER BY ve.credit DESC
+     ORDER BY COALESCE(ve.credit_amount, 0)::numeric DESC
      LIMIT 10`,
     [companyId, LARGE_THRESHOLD]
   );

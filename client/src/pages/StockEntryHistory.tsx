@@ -310,6 +310,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
               className="h-7 px-2.5 text-xs rounded-md"
               onClick={() => setViewMode("condensed")}
               data-testid="button-view-condensed"
+              data-remote-control-safe="true"
             >
               <AlignJustify className="w-3 h-3 mr-1" /> Condensed
             </Button>
@@ -319,6 +320,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
               className="h-7 px-2.5 text-xs rounded-md"
               onClick={() => setViewMode("detailed")}
               data-testid="button-view-detailed"
+              data-remote-control-safe="true"
             >
               <List className="w-3 h-3 mr-1" /> Detailed
             </Button>

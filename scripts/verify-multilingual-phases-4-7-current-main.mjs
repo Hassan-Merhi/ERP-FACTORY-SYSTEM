@@ -18,6 +18,7 @@ const backendPart9 = requireFile("client/src/i18n/backendMessagesPhase7Translati
 const backendPart10 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part10.ts");
 const backendPart11 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part11.ts");
 const backendPart12 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part12.ts");
+const backendPart13 = requireFile("client/src/i18n/backendMessagesPhase7Translations.part13.ts");
 
 const bundles = [
   {
@@ -42,21 +43,19 @@ const bundles = [
     phase: 6,
     name: "Reports and Exports",
     aggregator: "client/src/i18n/reportsExportsPhase6Translations.ts",
-    parts: 4,
+    parts: 5,
     translatorImport: "translatePhase6ReportsExportsText",
     test: "tests/phase6-reports-exports-translations.test.ts",
-    expectedCount: 254,
+    expectedCount: 262,
   },
   {
     phase: 7,
     name: "Backend Messages",
     aggregator: "client/src/i18n/backendMessagesPhase7Translations.ts",
-    parts: 12,
+    parts: 13,
     translatorImport: "translatePhase7BackendMessageText",
     test: "tests/phase7-backend-messages-translations.test.ts",
-    // Includes the reviewed Phase 3 accounting/payroll/loading/inventory
-    // compatibility entries added during the accounting closeout.
-    expectedCount: 678,
+    expectedCount: 697,
   },
 ];
 
@@ -102,6 +101,8 @@ for (const protectedToken of [
 for (const token of [
   'import { backendMessagesPhase7TranslationsPart9 }',
   '...backendMessagesPhase7TranslationsPart9',
+  'import { backendMessagesPhase7TranslationsPart13 }',
+  '...backendMessagesPhase7TranslationsPart13',
   "MAX_NESTED_CAPTURE_DEPTH",
   "translateCapturedValue",
   "translateNormalizedValue",
@@ -116,6 +117,7 @@ for (const [part, source] of [
   [10, backendPart10],
   [11, backendPart11],
   [12, backendPart12],
+  [13, backendPart13],
 ]) {
   if (!source.includes("export const backendMessagesPhase7TranslationsPart")) {
     failures.push(`Backend Messages part ${part} does not export its reviewed translation bundle`);
@@ -137,8 +139,13 @@ for (const token of [
   }
 }
 
-if (!audit.includes('"client/src/i18n/backendMessagesPhase7Translations.part9.ts"')) {
-  failures.push("Phase 7 part 9 is missing from the multilingual audit coverage list");
+for (const auditPart of [
+  '"client/src/i18n/reportsExportsPhase6Translations.part5.ts"',
+  '"client/src/i18n/backendMessagesPhase7Translations.part13.ts"',
+]) {
+  if (!audit.includes(auditPart)) {
+    failures.push(`Multilingual audit coverage list is missing: ${auditPart}`);
+  }
 }
 
 const backendTest = requireFile("tests/phase7-backend-messages-translations.test.ts");
@@ -146,6 +153,7 @@ for (const token of [
   "(début → aujourd’hui)",
   "(1 ignorée(s))",
   "(السجل الكامل)",
+  "Factory fxRateToUsd for AUD must be numeric.",
 ]) {
   if (!backendTest.includes(token)) {
     failures.push(`Nested backend translation contract missing: ${token}`);

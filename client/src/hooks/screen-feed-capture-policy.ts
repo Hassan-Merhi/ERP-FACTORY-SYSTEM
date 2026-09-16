@@ -16,8 +16,12 @@ export const FAILED_CAPTURE_DELAY_MS = FAILED_CAPTURE_BACKOFF_MS;
  * A full-page render costs the employee's main thread. Spacing captures by a
  * multiple of what the last one actually cost keeps the browser mostly idle on
  * heavy ERP screens instead of rendering back-to-back at the nominal cadence.
+ *
+ * Phase 11 reduced this from 4 to 2: remote clicks are now validated against
+ * the frame's captured scroll/viewport state, so fresher frames directly mean
+ * fewer stale-frame rejections and more accurate control.
  */
-export const CAPTURE_DUTY_CYCLE = 4;
+export const CAPTURE_DUTY_CYCLE = 2;
 export const MAX_ADAPTIVE_CAPTURE_GAP_MS = 15000;
 export const MAX_FAILED_CAPTURE_BACKOFF_MS = 60000;
 
