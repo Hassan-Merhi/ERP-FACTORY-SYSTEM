@@ -12,20 +12,14 @@ vi.mock("../server/lib/permissionMiddleware", () => ({
 }));
 
 const { registerRemoteControlSessionRoutes } = await import("../server/routes/remoteControlSessionRoutes");
-const {
-  authorizeRemoteMouseControl,
-  resetRemoteMouseCommandStateForTests,
-  subscribeRemoteMouseCommands,
-} = await import("../server/services/remoteControlCommandService");
-const { registerRemoteControlTab, resetRemoteControlSessionStateForTests, startRemoteControlSession } = await import(
-  "../server/services/remoteControlSessionService"
-);
-const { resetRemoteSupportRolloutForTests, updateRemoteSupportRollout } = await import(
-  "../server/services/remoteSupportRollout"
-);
-const { restoreRemoteSupportBootDefaults, updateRemoteSupportFlags } = await import(
-  "../server/services/remoteSupportRuntime"
-);
+const { authorizeRemoteMouseControl, resetRemoteMouseCommandStateForTests, subscribeRemoteMouseCommands } =
+  await import("../server/services/remoteControlCommandService");
+const { registerRemoteControlTab, resetRemoteControlSessionStateForTests, startRemoteControlSession } =
+  await import("../server/services/remoteControlSessionService");
+const { resetRemoteSupportRolloutForTests, updateRemoteSupportRollout } =
+  await import("../server/services/remoteSupportRollout");
+const { restoreRemoteSupportBootDefaults, updateRemoteSupportFlags } =
+  await import("../server/services/remoteSupportRuntime");
 const {
   flushRemoteSupportCommandAudits,
   getRemoteSupportCommandAuditHealth,
