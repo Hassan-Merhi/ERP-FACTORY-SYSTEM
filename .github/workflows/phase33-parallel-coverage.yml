@@ -136,14 +136,33 @@ jobs:
         run: |
           set -euo pipefail
           for shard in 0 1 2 3 4 5 6 7; do
-            src="downloaded-shards/phase33-shard-${shard}/coverage-final.json"
-            if [ ! -f "$src" ]; then
-              echo "::error::Missing coverage output for shard ${shard}"
-              find downloaded-shards -maxdepth 3 -type f -print || true
-              exit 1
+            artifact_dir="downloaded-shards/phase33-shard-${shard}"
+            src="${artifact_dir}/coverage-final.json"
+            report="${artifact_dir}/.artifacts/backend-verification/shard-${shard}.json"
+            dest="coverage/backend-shards/shard-${shard}/coverage-final.json"
+            mkdir -p "$(dirname "$dest")"
+
+            if [ -f "$src" ]; then
+              cp "$src" "$dest"
+              continue
             fi
-            mkdir -p "coverage/backend-shards/shard-${shard}"
-            cp "$src" "coverage/backend-shards/shard-${shard}/coverage-final.json"
+
+            if [ -f "$report" ]; then
+              node - "$report" "$dest" <<'NODE'
+          const fs = require('fs');
+          const [reportPath, destPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          if (!report.coverageMap || typeof report.coverageMap !== 'object') {
+            throw new Error(`Missing coverageMap in ${reportPath}`);
+          }
+          fs.writeFileSync(destPath, JSON.stringify(report.coverageMap));
+          NODE
+              continue
+            fi
+
+            echo "::error::Missing both coverage output and JSON reporter coverage for shard ${shard}"
+            find "$artifact_dir" -maxdepth 5 -type f -print || true
+            exit 1
           done
 
       - name: Merge and enforce current floors
@@ -158,9 +177,16 @@ jobs:
           NODE
 
       - name: Upload exact coverage summary
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: phase33-exact-backend-coverage
           path: coverage/backend/coverage-summary.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
+
+      - name: Preserve shard test failures
+        if: ${{ needs.coverage-shard.result != 'success' }}
+        run: |
+          echo "::error::One or more coverage shards failed tests; exact coverage was still merged above for diagnosis."
+          exit 1
