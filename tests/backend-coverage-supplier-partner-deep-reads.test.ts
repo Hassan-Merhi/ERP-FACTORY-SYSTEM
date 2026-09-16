@@ -123,7 +123,7 @@ afterAll(async () => {
   if (fixture) await teardownGoldenCoastPhase5Fixture(fixture);
 }, 120000);
 
-describe.sequential("populated Supplier Partner read coverage", () => {
+describe("populated Supplier Partner read coverage", () => {
   it("executes the real-data SP read surface without unhandled errors", async () => {
     expect(routes.length).toBeGreaterThan(25);
     const failures: Failure[] = [];

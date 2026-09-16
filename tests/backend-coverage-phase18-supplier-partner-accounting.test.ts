@@ -180,7 +180,7 @@ afterAll(async () => {
   }
 }, 120000);
 
-describe.sequential("Phase 18 Supplier Partner accounting controls", () => {
+describe("Phase 18 Supplier Partner accounting controls", () => {
   it("posts supplier purchases and prepaid charges to balanced independent accounting evidence", async () => {
     await selectCompany(fixture, fixture.ctx.companyId);
 

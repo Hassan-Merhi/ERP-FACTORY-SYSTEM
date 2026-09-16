@@ -86,7 +86,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120_000);
 
-describe.sequential("Phase 21 company/role/permission backend", () => {
+describe("Phase 21 company/role/permission backend", () => {
   it("requires an explicit parent decision and creates a standalone company", async () => {
     const missingDecision = await agent.post("/api/companies").send({
       code: `P21BAD-${Date.now()}`,

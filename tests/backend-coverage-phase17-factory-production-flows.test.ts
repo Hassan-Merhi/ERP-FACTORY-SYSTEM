@@ -161,7 +161,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 17 Factory production flows", () => {
+describe("Phase 17 Factory production flows", () => {
   it("covers pressing/finalization and creates canonical stock evidence exactly once", async () => {
     const pressed = await agent.post("/api/factory/pressing/create-and-print").send({
       productId,

@@ -3,8 +3,8 @@ version: 2.1
 # The canonical test/build/security work now runs in GitHub Actions. The five
 # CircleCI job names below are retained only because the main protection policy
 # historically required those exact status contexts. They do not repeat the test
-# suites: one fail-closed bridge waits for the GitHub Actions CI workflow on the
-# exact same commit, then releases the five compatibility statuses.
+# suites: one fail-closed bridge waits for the GitHub Actions Main Certification
+# workflow on the exact same commit, then releases the five compatibility statuses.
 #
 # This repository is public, so the bridge can read GitHub Actions anonymously.
 # An optional GITHUB_TOKEN (or GH_TOKEN) may still be supplied to increase API
@@ -71,19 +71,19 @@ jobs:
 
                 const payload = await response.json();
                 const runs = (payload.workflow_runs ?? [])
-                  .filter((run) => run.name === "CI" && run.head_sha === sha)
+                  .filter((run) => run.name === "Main Certification" && run.head_sha === sha)
                   .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
                 const run = runs[0];
 
                 if (!run) {
-                  console.log(`Attempt ${attempt}/60: GitHub CI run for ${sha} is not visible yet.`);
+                  console.log(`Attempt ${attempt}/60: Main Certification run for ${sha} is not visible yet.`);
                 } else if (run.status === "completed") {
-                  console.log(`GitHub CI completed: ${run.conclusion} (${run.html_url})`);
+                  console.log(`Main Certification completed: ${run.conclusion} (${run.html_url})`);
                   if (run.conclusion === "success") process.exit(0);
-                  console.error("GitHub CI did not succeed; CircleCI compatibility gate is failing closed.");
+                  console.error("Main Certification did not succeed; CircleCI compatibility gate is failing closed.");
                   process.exit(1);
                 } else {
-                  console.log(`Attempt ${attempt}/60: GitHub CI is ${run.status} (${run.html_url}).`);
+                  console.log(`Attempt ${attempt}/60: Main Certification is ${run.status} (${run.html_url}).`);
                 }
 
                 if (attempt < 60) await sleep(120_000);

@@ -56,7 +56,7 @@ afterAll(async () => {
   closeTestServer();
 }, 30_000);
 
-describe.sequential("Phase 23 — aggregate concurrency guards", () => {
+describe("Phase 23 — aggregate concurrency guards", () => {
   it("rejects a purchase-order edit while the same container lifecycle lock is held", async () => {
     const lockClient = await pool.connect();
     try {

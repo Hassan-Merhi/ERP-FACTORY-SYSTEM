@@ -193,7 +193,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("non-Factory validation write coverage", () => {
+describe("non-Factory validation write coverage", () => {
   it("rejects malformed write probes without unhandled server errors", async () => {
     expect(routes.length).toBeGreaterThan(40);
     const failures: Failure[] = [];

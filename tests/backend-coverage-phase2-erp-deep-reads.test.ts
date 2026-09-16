@@ -250,7 +250,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 2 deep ERP reads", () => {
+describe("Phase 2 deep ERP reads", () => {
   it("executes real-resource parameterized reads and statements without 5xx", async () => {
     expect(routes.length).toBeGreaterThan(20);
     const failures: Array<{ route: string; status: number; detail: string }> = [];
