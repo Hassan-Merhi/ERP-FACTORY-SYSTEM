@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useForm } from "react-hook-form";
@@ -10,6 +10,8 @@ import { getApiRequest } from "@/lib/factoryApi";
 import type { Employee } from "@shared/schema";
 import { usePayrollState } from "./usePayrollState";
 import { usePayrollData } from "./usePayrollData";
+import { usePayrollGroupMutations } from "./usePayrollGroupMutations";
+import { usePayrollWorkerMutations } from "./usePayrollWorkerMutations";
 import { cleanTxnDesc, decodeLocationOption, errorMessage } from "./payrollUtils";
 import type { BaleRateResponse, SalesPreview } from "./payrollTypes";
 import {
@@ -744,147 +746,42 @@ export function usePayrollModel() {
     onError: showError,
   });
 
-  const createGroupMutation = useMutation({
-    mutationFn: async () =>
-      modeApiRequest("POST", "/api/employee-groups", {
-        name: newGroupName,
-        description: newGroupDescription,
-        companyId: selectedCompany?.id,
-      }),
-    onSuccess: () => {
-      toast({ title: "Group created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employee-groups", selectedCompany?.id] });
-      setCreateGroupDialogOpen(false);
-      setNewGroupName("");
-      setNewGroupDescription("");
-    },
-    onError: showError,
+  const {
+    createGroupMutation,
+    groupMembers,
+    addWorkerToGroupMutation,
+    removeWorkerFromGroupMutation,
+    deleteWorkerGroupMutation,
+    addWorkerToWorkerGroupMutation,
+    removeWorkerFromWorkerGroupMutation,
+  } = usePayrollGroupMutations({
+    modeApiRequest,
+    selectedCompanyId: selectedCompany?.id,
+    newGroupName,
+    newGroupDescription,
+    setCreateGroupDialogOpen,
+    setNewGroupName,
+    setNewGroupDescription,
+    selectedGroupForMembers,
   });
 
-  const { data: groupMembers = [] } = useQuery<Employee[]>({
-    queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
-    queryFn: async () => {
-      if (!selectedGroupForMembers) return [];
-      const res = await fetch(`/api/employee-groups/${selectedGroupForMembers.id}/members`, {
-        credentials: "include",
-      });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!selectedGroupForMembers,
-  });
-
-  const addWorkerToGroupMutation = useMutation({
-    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) =>
-      modeApiRequest("POST", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
-      });
-    },
-    onError: showError,
-  });
-
-  const removeWorkerFromGroupMutation = useMutation({
-    mutationFn: async ({ groupId, employeeId }: { groupId: number; employeeId: number }) =>
-      modeApiRequest("DELETE", `/api/employee-groups/${groupId}/members/${employeeId}`, undefined),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/employee-groups", selectedGroupForMembers?.id, "members"],
-      });
-    },
-    onError: showError,
-  });
-
-  // Worker tab handlers
-  const handleToggleWorker = (id: number) => {
-    setWorkerOverrides((previous) => ({
-      ...previous,
-      [id]: { ...previous[id], selected: !previous[id]?.selected },
-    }));
-  };
-
-  const handleUpdateAmount = (id: number, val: string) => {
-    setWorkerOverrides((previous) => ({
-      ...previous,
-      [id]: { ...previous[id], amount: val, manuallyEdited: true },
-    }));
-  };
-
-  const handleDeleteWorker = (worker: Employee) => {
-    if (confirm(`Delete worker ${worker.firstName} ${worker.lastName}?`)) {
-      modeApiRequest("DELETE", `/api/employees/${worker.id}`, undefined)
-        .then(() => {
-          toast({ title: "Deleted", description: "Worker deleted" });
-          queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-        })
-        .catch(showError);
-    }
-  };
-
-  const createWorkerMutation = useMutation({
-    mutationFn: async (data: WorkerFormData & { joinDate?: string }) =>
-      modeApiRequest("POST", "/api/employees", {
-        ...data,
-        companyId: selectedCompany?.id,
-        employeeType: "Worker",
-        joinDate: data.joinDate || new Date().toLocaleDateString("en-CA"),
-      }),
-    onSuccess: () => {
-      toast({ title: "Worker created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setNewWorkerDialogOpen(false);
-      newWorkerForm.reset();
-    },
-    onError: showError,
-  });
-
-  const updateWorkerMutation = useMutation({
-    mutationFn: async (data: WorkerFormData) => {
-      if (!selectedWorkerForEdit) throw new Error("No worker selected");
-      return modeApiRequest("PATCH", `/api/employees/${selectedWorkerForEdit.id}`, data);
-    },
-    onSuccess: () => {
-      toast({ title: "Worker updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-      setEditWorkerDialogOpen(false);
-    },
-    onError: showError,
-  });
-
-  const handleForceDeleteWorker = () => {
-    if (!deleteWorkerConflict) return;
-    modeApiRequest("DELETE", `/api/employees/${deleteWorkerConflict.employee.id}?force=true`, undefined)
-      .then(() => {
-        toast({ title: "Deleted", description: "Worker force-deleted" });
-        queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
-        setDeleteWorkerConflict(null);
-      })
-      .catch(showError);
-  };
-
-  const deleteWorkerGroupMutation = useMutation({
-    mutationFn: async (groupId: number) => modeApiRequest("DELETE", `/api/worker-groups/${groupId}`, undefined),
-    onSuccess: () => {
-      toast({ title: "Group deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompany?.id] });
-    },
-  });
-
-  const addWorkerToWorkerGroupMutation = useMutation({
-    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) =>
-      modeApiRequest("POST", `/api/worker-groups/${groupId}/members/${workerId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompany?.id] });
-    },
-  });
-
-  const removeWorkerFromWorkerGroupMutation = useMutation({
-    mutationFn: async ({ groupId, workerId }: { groupId: number; workerId: number }) =>
-      modeApiRequest("DELETE", `/api/worker-groups/${groupId}/members/${workerId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/worker-groups/with-members", selectedCompany?.id] });
-    },
+  const {
+    handleToggleWorker,
+    handleUpdateAmount,
+    handleDeleteWorker,
+    createWorkerMutation,
+    updateWorkerMutation,
+    handleForceDeleteWorker,
+  } = usePayrollWorkerMutations({
+    modeApiRequest,
+    selectedCompanyId: selectedCompany?.id,
+    setWorkerOverrides,
+    setNewWorkerDialogOpen,
+    newWorkerForm,
+    selectedWorkerForEdit,
+    setEditWorkerDialogOpen,
+    deleteWorkerConflict,
+    setDeleteWorkerConflict,
   });
 
   const workerDeductionMutation = useMutation({

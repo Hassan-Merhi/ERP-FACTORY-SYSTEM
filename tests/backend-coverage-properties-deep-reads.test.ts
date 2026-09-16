@@ -94,7 +94,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("populated Properties rental read coverage", () => {
+describe("populated Properties rental read coverage", () => {
   it("executes unit, contract, payment, account and reconciliation readers", async () => {
     const cases = [
       "/api/properties/rental/units",

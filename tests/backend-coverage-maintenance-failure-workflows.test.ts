@@ -204,7 +204,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("maintenance and reconciliation failure coverage", () => {
+describe("maintenance and reconciliation failure coverage", () => {
   it("executes guarded maintenance paths without unhandled errors", async () => {
     expect(routes.length).toBeGreaterThan(20);
     const failures: Failure[] = [];

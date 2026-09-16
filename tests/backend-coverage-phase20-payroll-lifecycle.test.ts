@@ -138,7 +138,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120_000);
 
-describe.sequential("Phase 20 payroll lifecycle", () => {
+describe("Phase 20 payroll lifecycle", () => {
   it("records an advance with balanced cash accounting and Daybook evidence", async () => {
     const response = await agent.post(`/api/factory/workers/${workerId}/advances`).send({
       companyId: ctx.companyId,

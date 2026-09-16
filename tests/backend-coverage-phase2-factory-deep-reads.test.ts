@@ -276,7 +276,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 2 deep Factory reads", () => {
+describe("Phase 2 deep Factory reads", () => {
   it("executes real-resource parameterized reads and report builders without 5xx", async () => {
     expect(routes.length).toBeGreaterThan(25);
     const failures: Array<{ route: string; status: number; detail: string }> = [];

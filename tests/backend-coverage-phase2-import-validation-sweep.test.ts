@@ -203,7 +203,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120000);
 
-describe.sequential("Phase 2 import/upload validation sweep", () => {
+describe("Phase 2 import/upload validation sweep", () => {
   it("rejects empty imports cleanly across every company mode", async () => {
     expect(routes.length).toBeGreaterThan(15);
     const failures: Array<{ route: string; status: number; detail: string }> = [];

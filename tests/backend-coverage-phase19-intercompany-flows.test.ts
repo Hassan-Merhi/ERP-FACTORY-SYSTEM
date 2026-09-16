@@ -173,7 +173,7 @@ afterAll(async () => {
   closeTestServer();
 }, 120_000);
 
-describe.sequential("Phase 19 intercompany flows", () => {
+describe("Phase 19 intercompany flows", () => {
   it("posts equal-and-opposite parent/child settlement with balanced mirrored journals", async () => {
     const beforeParentCash = await accountBalance(fixture.hadiCashAccountId);
     const beforeChildIntercompany = await accountBalance(fixture.goldenCoastIntercompanyAccountId);

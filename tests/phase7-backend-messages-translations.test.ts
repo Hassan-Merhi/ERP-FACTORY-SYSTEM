@@ -9,9 +9,10 @@ describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
     // 658 reviewed entries, plus the 20 Phase 3 accounting/payroll/loading/inventory
     // compatibility entries added during the accounting closeout, plus the 12 carried
-    // in by the Phase 3 latest-main sync (b86cb44), which did not update this count.
-    expect(backendMessagesPhase7Translations).toHaveLength(690);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(690);
+    // in by the Phase 3 latest-main sync (b86cb44), plus 3 more reviewed entries
+    // added since, for a total of 693.
+    expect(backendMessagesPhase7Translations).toHaveLength(693);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(693);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
