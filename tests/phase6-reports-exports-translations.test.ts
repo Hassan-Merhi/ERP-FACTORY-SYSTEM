@@ -7,8 +7,8 @@ import {
 
 describe("Phase 6 Reports and Exports translations", () => {
   it("covers every reviewed reports and exports phrase exactly once", () => {
-    expect(reportsExportsPhase6Translations).toHaveLength(254);
-    expect(new Set(reportsExportsPhase6Translations.map((entry) => entry.en)).size).toBe(254);
+    expect(reportsExportsPhase6Translations).toHaveLength(262);
+    expect(new Set(reportsExportsPhase6Translations.map((entry) => entry.en)).size).toBe(262);
 
     for (const entry of reportsExportsPhase6Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -31,6 +31,24 @@ describe("Phase 6 Reports and Exports translations", () => {
     expect(translatePhase6ReportsExportsText("read: unsupported data type", "ar")).toBe(
       "القراءة: نوع بيانات غير مدعوم"
     );
+  });
+
+  it("translates Phase 33 schema-compatibility report messages", () => {
+    expect(translatePhase6ReportsExportsText("Workers / Payroll Rows", "fr")).toBe(
+      "Travailleurs / lignes de paie"
+    );
+    expect(translatePhase6ReportsExportsText("Cost Breakdown: MSKU1234567", "ar")).toBe(
+      "تفصيل التكلفة: MSKU1234567"
+    );
+    expect(translatePhase6ReportsExportsText("Supplier Containers: BASMA UK", "fr")).toBe(
+      "Conteneurs du fournisseur : BASMA UK"
+    );
+    expect(
+      translatePhase6ReportsExportsText(
+        "Schema compatibility report received unsupported query type: legacy_report",
+        "ar"
+      )
+    ).toBe("تقرير توافق المخطط تلقى نوع استعلام غير مدعوم: legacy_report");
   });
 
   it("preserves dynamic report, export and delivery references", () => {
