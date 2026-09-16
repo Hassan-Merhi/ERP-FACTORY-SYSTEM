@@ -124,8 +124,10 @@ function runShard(index, shard, withCoverage) {
     "vitest.config.backend-shard.ts",
     "--maxWorkers=1",
     "--no-file-parallelism",
+    "--reporter=default",
+    "--reporter=github-actions",
     "--reporter=json",
-    `--outputFile=${reporterPath}`,
+    `--outputFile.json=${reporterPath}`,
     ...shard,
   ];
   const shardCoverageDir = resolve(ROOT, `coverage/backend-shards/shard-${index}`);
