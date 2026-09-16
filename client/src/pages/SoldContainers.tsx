@@ -129,7 +129,12 @@ export default function SoldContainers() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Link href={`/containers/${sale.containerId}`}>
-                        <Button size="sm" variant="outline" data-testid={`button-view-${sale.saleId}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid={`button-view-${sale.saleId}`}
+                          data-remote-control-safe="true"
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View
                         </Button>

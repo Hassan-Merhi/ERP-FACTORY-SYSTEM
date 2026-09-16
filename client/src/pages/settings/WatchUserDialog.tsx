@@ -447,7 +447,19 @@ export function WatchUserDialog({
             >
               {hasScreen ? (
                 <div className="relative shrink-0" style={{ width: displaySize.width, height: displaySize.height }} data-testid="screen-feed-frame-wrapper">
-                  <img src={screenFrame.dataUrl} alt="Live screen of user" className="block w-full h-full object-contain select-none" draggable={false} data-testid="img-screen-feed" />
+                  <img
+                    src={screenFrame.dataUrl}
+                    alt="Live screen of user"
+                    className="block w-full h-full object-contain select-none"
+                    draggable={false}
+                    data-testid="img-screen-feed"
+                    data-frame-viewport-width={screenFrame.viewport?.width ?? ""}
+                    data-frame-viewport-height={screenFrame.viewport?.height ?? ""}
+                    data-frame-viewport-scroll-x={screenFrame.viewport?.scrollX ?? ""}
+                    data-frame-viewport-scroll-y={screenFrame.viewport?.scrollY ?? ""}
+                    data-frame-viewport-visual-scale={screenFrame.viewport?.visualScale ?? ""}
+                    data-frame-captured-at={screenFrame.capturedAt}
+                  />
                   {cursorVisible && cursor && (
                     <div className="absolute pointer-events-none drop-shadow-md" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, transform: "translate(-2px, -2px)" }} data-testid="screen-feed-cursor">
                       <MousePointer2 className="h-5 w-5 fill-white text-black" />

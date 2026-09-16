@@ -3,6 +3,14 @@ import { clearRemoteEditableFocus, focusRemoteEditableElement } from "./remote-k
 export type RemoteMouseCommandType = "pointer-move" | "click" | "scroll";
 export type RemoteMouseExecutionStatus = "executed" | "blocked" | "ignored";
 
+export interface RemoteMouseFrameViewport {
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+  visualScale: number;
+}
+
 export interface RemoteMouseCommandView {
   id: string;
   sessionId: string;
@@ -12,6 +20,7 @@ export interface RemoteMouseCommandView {
   y: number;
   deltaX?: number;
   deltaY?: number;
+  frameViewport?: RemoteMouseFrameViewport;
   createdAt?: string;
 }
 
@@ -193,6 +202,89 @@ export function normalizeRemoteMousePoint(
   return { x, y };
 }
 
+/**
+ * Phase 11 — control accuracy. A normalized click is only meaningful against
+ * the viewport it was aimed at. The controller attaches the captured frame's
+ * scroll/viewport snapshot to click and scroll commands; the target ignores
+ * commands whose frame has since scrolled, resized, or zoomed instead of
+ * landing the pointer on whatever control happens to be there now.
+ *
+ * Tolerances stay tight on purpose: a scrolled page moves every target, so
+ * even a few pixels of drift make the frame untrustworthy. Pointer movement
+ * is display-only and skips this check to keep the support cursor smooth.
+ */
+export const FRAME_VIEWPORT_SIZE_TOLERANCE_PX = 2;
+export const FRAME_VIEWPORT_SCROLL_TOLERANCE_PX = 2;
+export const FRAME_VIEWPORT_SCALE_TOLERANCE = 0.01;
+
+export function isRemoteMouseFrameViewportStale(
+  frame: RemoteMouseFrameViewport | null | undefined,
+  view: Window = window
+): boolean {
+  if (!frame) return false;
+  if (
+    !Number.isFinite(frame.width) ||
+    !Number.isFinite(frame.height) ||
+    !Number.isFinite(frame.scrollX) ||
+    !Number.isFinite(frame.scrollY) ||
+    !Number.isFinite(frame.visualScale)
+  ) {
+    return false;
+  }
+  const live = getRemoteMouseViewportMetrics(view);
+  const scrollX = Number.isFinite(view.scrollX) ? view.scrollX : 0;
+  const scrollY = Number.isFinite(view.scrollY) ? view.scrollY : 0;
+  return (
+    Math.abs(live.width - frame.width) > FRAME_VIEWPORT_SIZE_TOLERANCE_PX ||
+    Math.abs(live.height - frame.height) > FRAME_VIEWPORT_SIZE_TOLERANCE_PX ||
+    Math.abs(scrollX - frame.scrollX) > FRAME_VIEWPORT_SCROLL_TOLERANCE_PX ||
+    Math.abs(scrollY - frame.scrollY) > FRAME_VIEWPORT_SCROLL_TOLERANCE_PX ||
+    Math.abs(live.scale - frame.visualScale) > FRAME_VIEWPORT_SCALE_TOLERANCE
+  );
+}
+
+function finiteFrameNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Reads the captured-frame snapshot the viewer stamps onto the displayed
+ * screen image (`data-frame-viewport-*`). Returns undefined when the image
+ * carries no snapshot (legacy frame) so the command falls back to the
+ * live-viewport mapping instead of failing.
+ */
+export function parseFrameViewportFromDataset(dataset: DOMStringMap): RemoteMouseFrameViewport | undefined {
+  const width = finiteFrameNumber(
+    dataset.frameViewportWidth !== undefined && dataset.frameViewportWidth !== ""
+      ? Number(dataset.frameViewportWidth)
+      : NaN
+  );
+  const height = finiteFrameNumber(
+    dataset.frameViewportHeight !== undefined && dataset.frameViewportHeight !== ""
+      ? Number(dataset.frameViewportHeight)
+      : NaN
+  );
+  const scrollX = finiteFrameNumber(
+    dataset.frameViewportScrollX !== undefined && dataset.frameViewportScrollX !== ""
+      ? Number(dataset.frameViewportScrollX)
+      : NaN
+  );
+  const scrollY = finiteFrameNumber(
+    dataset.frameViewportScrollY !== undefined && dataset.frameViewportScrollY !== ""
+      ? Number(dataset.frameViewportScrollY)
+      : NaN
+  );
+  const visualScale = finiteFrameNumber(
+    dataset.frameViewportVisualScale !== undefined && dataset.frameViewportVisualScale !== ""
+      ? Number(dataset.frameViewportVisualScale)
+      : NaN
+  );
+  if (width === null || height === null || scrollX === null || scrollY === null || visualScale === null) {
+    return undefined;
+  }
+  return { width, height, scrollX, scrollY, visualScale };
+}
+
 // prettier-ignore
 export function getRemoteMouseViewportMetrics(view: Window = window): RemoteMouseViewportMetrics {
   const visualViewport = view.visualViewport;
@@ -297,6 +389,10 @@ export function applyRemoteMouseCommand(
 
   if (command.type === "pointer-move") {
     return { status: "executed", reason: null, clientX, clientY };
+  }
+
+  if (isRemoteMouseFrameViewportStale(command.frameViewport, view)) {
+    return { status: "ignored", reason: "stale-frame-viewport", clientX, clientY };
   }
 
   if (!target) {
