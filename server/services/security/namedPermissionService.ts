@@ -135,8 +135,17 @@ export async function invalidateUserCompanySessions(
   userId: string,
   companyId: number
 ): Promise<void> {
-  await pool.query(
-    `DELETE FROM session WHERE sess->>'userId' = $1 AND COALESCE((sess->>'currentCompanyId')::int, 0) = $2`,
-    [userId, companyId]
-  );
+  try {
+    await pool.query(
+      `DELETE FROM session WHERE sess->>'userId' = $1 AND COALESCE((sess->>'currentCompanyId')::int, 0) = $2`,
+      [userId, companyId]
+    );
+  } catch (error) {
+    // connect-pg-simple creates its table lazily on the first persisted session.
+    // On a fresh database there are therefore no sessions to invalidate yet.
+    // Treat only that exact absence as an empty session store; all other DB
+    // failures still propagate so permission changes do not silently mask them.
+    if (postgresErrorCode(error) === "42P01") return;
+    throw error;
+  }
 }
