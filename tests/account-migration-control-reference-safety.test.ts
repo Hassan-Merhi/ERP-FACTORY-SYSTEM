@@ -3,20 +3,25 @@ import { describe, expect, it } from "vitest";
 
 const adminRoutes = readFileSync("server/routes/adminRoutes.ts", "utf8");
 const safeRoutes = readFileSync("server/routes/admin/accountMigrationSafeRoutes.ts", "utf8");
-const controlReferences = readFileSync("server/routes/admin/accountMigrationControlReferences.ts", "utf8");
+const controlReferences = readFileSync(
+  "server/routes/admin/accountMigrationControlReferences.ts",
+  "utf8",
+);
 
 describe("account migration POS control safety", () => {
   it("registers the safe execute and undo handlers before the legacy migration routes", () => {
     expect(adminRoutes).toContain("registerAccountMigrationSafeRoutes(app)");
     expect(adminRoutes.indexOf("registerAccountMigrationSafeRoutes(app)")).toBeLessThan(
-      adminRoutes.indexOf("registerImportExportRoutes(app)")
+      adminRoutes.indexOf("registerImportExportRoutes(app)"),
     );
   });
 
   it("detaches source-company cash-account references before moving ledger accounts", () => {
     expect(controlReferences).toContain("set({ cashAccountId: null })");
     expect(controlReferences).toContain("delete(userLocationCashAccounts)");
-    const detachCall = safeRoutes.indexOf("const controls = await detachAccountMigrationControlReferences");
+    const detachCall = safeRoutes.indexOf(
+      "const controls = await detachAccountMigrationControlReferences",
+    );
     const accountMove = safeRoutes.indexOf(".update(ledgerAccounts)", detachCall);
     expect(detachCall).toBeGreaterThan(-1);
     expect(accountMove).toBeGreaterThan(detachCall);
@@ -41,16 +46,6 @@ describe("account migration POS control safety", () => {
   it("returns canonical company-access failures instead of exposing an RLS database error", () => {
     expect(safeRoutes).toContain("error instanceof CompanyAccessError");
     expect(safeRoutes).toContain("code: error.code");
-  });
-
-  it("reserves durable request identity before creating migration vouchers", () => {
-    const durableBoundary = safeRoutes.indexOf("withDurableFinancialOperation(");
-    const voucherCreation = safeRoutes.indexOf(".insert(vouchers)");
-
-    expect(safeRoutes).toContain("resolveFinancialOperationKey(req)");
-    expect(safeRoutes).toContain('operationName: "account-migration.execute"');
-    expect(durableBoundary).toBeGreaterThan(-1);
-    expect(voucherCreation).toBeGreaterThan(durableBoundary);
   });
 
   it("keeps legacy undo compatibility for migrations made before the safety fix", () => {

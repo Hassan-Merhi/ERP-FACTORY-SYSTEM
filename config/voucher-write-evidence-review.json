@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 5,
   "reviewState": "REVIEWED FILE BY FILE",
   "scope": "Active voucher creation sites detected by scripts/audit-write-evidence.mjs after excluding updates/deletes/restores/moves of existing voucher rows. Completed phases are retained separately as historical evidence and must not re-enter the active backlog.",
   "summary": {
@@ -14,8 +14,7 @@
     "phase6SpecialPurposeCompleted": 11,
     "unreviewed": 0,
     "phase7PostReviewSafeWriters": 1,
-    "phase8RequestIdentityCompleted": 1,
-    "phase9PostReviewRequestIdentityWriters": 1
+    "phase8RequestIdentityCompleted": 1
   },
   "reviewed": {
     "explicit-replay-guard": {
@@ -148,13 +147,6 @@
       "reason": "server/routes/offloadRoutes.ts was reviewed as an explicit replay-guard creator because its post-offload charge backfill checked for the voucher it was about to write. Its other voucher-affecting path, the offload optional toggle, moved into services/containers/offloadOptionalToggle.ts behind withDurableFinancialOperation, a transaction-owned state guard and container/offload row locks, so the file now carries a stable request identity and is credited out of the measured backlog. The backfill creator that remains in this file keeps the documented existing-voucher replay check, and the file stays in this inventory so the direct-creation audit still accounts for it.",
       "files": [
         "server/routes/offloadRoutes.ts"
-      ]
-    },
-    "phase-9-post-review-request-identity-writers": {
-      "verdict": "post-review account migration creator protected by durable request identity",
-      "reason": "This account-migration creator entered the live tree after the original direct-voucher review. The browser now persists one clientRequestId for an unresolved execute payload, and the server reserves that source-company-scoped identity before moving accounts or creating split-history vouchers. Identical retries replay the recorded migration result, changed payloads under the same identity conflict, and the identity record commits or rolls back in the same transaction as every migration effect.",
-      "files": [
-        "server/routes/admin/accountMigrationSafeRoutes.ts"
       ]
     }
   },

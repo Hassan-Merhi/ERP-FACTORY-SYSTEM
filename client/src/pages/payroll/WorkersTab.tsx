@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { usePayrollModel } from "./usePayrollModel";
 
 type PayrollModel = ReturnType<typeof usePayrollModel>;
@@ -100,31 +100,23 @@ export function WorkersTab({
   );
 
   const normalizedSearch = search.trim().toLowerCase();
-  const matchesFilters = useCallback(
-    (worker: Employee) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        `${worker.firstName} ${worker.lastName}`.toLowerCase().includes(normalizedSearch) ||
-        (worker.code || "").toLowerCase().includes(normalizedSearch) ||
-        (worker.department || "").toLowerCase().includes(normalizedSearch);
-      const matchesStatus =
-        statusFilter === "all" || (statusFilter === "active" ? worker.active !== false : worker.active === false);
-      return matchesSearch && matchesStatus;
-    },
-    [normalizedSearch, statusFilter]
-  );
+  const matchesFilters = (worker: Employee) => {
+    const matchesSearch =
+      !normalizedSearch ||
+      `${worker.firstName} ${worker.lastName}`.toLowerCase().includes(normalizedSearch) ||
+      (worker.code || "").toLowerCase().includes(normalizedSearch) ||
+      (worker.department || "").toLowerCase().includes(normalizedSearch);
+    const matchesStatus =
+      statusFilter === "all" || (statusFilter === "active" ? worker.active !== false : worker.active === false);
+    return matchesSearch && matchesStatus;
+  };
 
-  const filteredWorkers = useMemo(() => workersOnly.filter(matchesFilters), [workersOnly, matchesFilters]);
-  const filteredGroups = useMemo(
-    () =>
-      workerGroupsOnly
-        .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
-        .filter((group) => group.members.length > 0),
-    [workerGroupsOnly, matchesFilters]
-  );
-  const filteredUngroupedWorkers = useMemo(
-    () => ungroupedWorkers.filter((worker) => worker.employeeType === "Worker" && matchesFilters(worker)),
-    [ungroupedWorkers, matchesFilters]
+  const filteredWorkers = workersOnly.filter(matchesFilters);
+  const filteredGroups = workerGroupsOnly
+    .map((group) => ({ ...group, members: group.members.filter(matchesFilters) }))
+    .filter((group) => group.members.length > 0);
+  const filteredUngroupedWorkers = ungroupedWorkers.filter(
+    (worker) => worker.employeeType === "Worker" && matchesFilters(worker)
   );
 
   const allSelected = workersOnly.length > 0 && workersOnly.every((worker) => workerPayments[worker.id]?.selected);

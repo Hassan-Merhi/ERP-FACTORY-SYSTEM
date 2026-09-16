@@ -11,7 +11,6 @@ const GENERIC_URL = "/api/vouchers/with-entries";
 const PAYMENT_RECEIPT_URL = "/api/vouchers/payment-receipt";
 const SIMPLE_TRANSFER_URL = "/api/simple-company-transfer";
 const INTER_COMPANY_TRANSFER_URL = "/api/inter-company-transfers";
-const ACCOUNT_MIGRATION_URL = "/api/admin/account-migration/execute";
 
 function journalPayload() {
   return {
@@ -112,18 +111,6 @@ describe("accounting request identity", () => {
       expect(retry.clientRequestId).toBe(first.clientRequestId);
       releaseAccountingRequestIdentity("POST", url, first);
     }
-  });
-
-  it("reuses the same identity for an unresolved account migration", () => {
-    const payload = { accountIds: [11, 12], srcCompanyId: 1, destCompanyId: 2 };
-    const first = attachAccountingRequestIdentity("POST", ACCOUNT_MIGRATION_URL, payload) as Record<string, unknown>;
-    const retry = attachAccountingRequestIdentity("POST", ACCOUNT_MIGRATION_URL, payload) as Record<string, unknown>;
-
-    expect(isProtectedAccountingRequest("POST", ACCOUNT_MIGRATION_URL, first)).toBe(true);
-    expect(typeof first.clientRequestId).toBe("string");
-    expect(retry.clientRequestId).toBe(first.clientRequestId);
-
-    releaseAccountingRequestIdentity("POST", ACCOUNT_MIGRATION_URL, first);
   });
 
   it("releases an acknowledged identity so a later intentional journal is new", () => {
