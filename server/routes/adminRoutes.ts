@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { registerDataToolsRoutes } from "./admin/dataToolsRoutes";
 import { registerUserManagementRoutes } from "./admin/userManagementRoutes";
 import { registerCompanySettingsRoutes } from "./admin/companySettingsRoutes";
+import { registerAccountMigrationRoundTripRoutes } from "./admin/accountMigrationRoundTripRoutes";
 import { registerAccountMigrationSafeRoutes } from "./admin/accountMigrationSafeRoutes";
 import { registerImportExportRoutes } from "./admin/import-export";
 import { registerAdminPoFixRoutes } from "./admin/adminPoFixRoutes";
@@ -54,6 +55,7 @@ export function registerAdminRoutes(app: Express) {
   registerDataToolsRoutes(app);
   registerUserManagementRoutes(app);
   registerCompanySettingsRoutes(app);
+  registerAccountMigrationRoundTripRoutes(app);
   registerAccountMigrationSafeRoutes(app);
   registerImportExportRoutes(app);
   registerAdminPoFixRoutes(app);
