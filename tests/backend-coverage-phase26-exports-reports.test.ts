@@ -183,7 +183,7 @@ describe("Phase 26 exports and reports", () => {
         endDate: "2026-01-31",
       });
     expect(invalidCompany.status).toBe(403);
-    expect(invalidCompany.body.code).toBe("COMPANY_ACCESS_DENIED");
+    expect(invalidCompany.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
   });
 
   it("generates a valid Factory payroll PDF when there are no payroll rows", async () => {
