@@ -107,6 +107,29 @@ function populatedProbe(ctx: TestContext) {
   };
 }
 
+function malformedProbe(ctx: TestContext) {
+  return {
+    ...populatedProbe(ctx),
+    id: "bad-id",
+    ids: ["bad-id"],
+    locationId: "bad-location",
+    stockItemId: "bad-stock-item",
+    accountId: "bad-account",
+    customerId: "bad-customer",
+    supplierId: "bad-supplier",
+    employeeId: "bad-employee",
+    quantity: "not-a-number",
+    amount: "not-a-number",
+    rate: -1,
+    version: 0,
+    currency: "INVALID",
+    date: "not-a-date",
+    fromDate: "not-a-date",
+    toDate: "not-a-date",
+    name: "",
+  };
+}
+
 describe("Phase 33 safe non-parameterized write-surface sweep", () => {
   let erpCtx: TestContext;
   let factoryCtx: TestContext;
@@ -128,7 +151,7 @@ describe("Phase 33 safe non-parameterized write-surface sweep", () => {
     await closeTestServer();
   }, 120_000);
 
-  it("executes both empty-body and missing-record validation paths without hanging", async () => {
+  it("executes auth, empty-body, malformed-body and missing-record validation branches without hanging", async () => {
     expect(routes.length).toBeGreaterThan(100);
 
     const failures: Array<{ method: string; route: string; variant: string; detail: string }> = [];
@@ -136,8 +159,26 @@ describe("Phase 33 safe non-parameterized write-surface sweep", () => {
     for (const route of routes) {
       const ctx = route.fixture === "factory" ? factoryCtx : erpCtx;
       const agent = route.fixture === "factory" ? factoryAgent : erpAgent;
+
+      try {
+        const unauthenticated = await request(ctx.app)
+          [route.method.toLowerCase() as "post" | "put" | "patch" | "delete"](route.routePath)
+          .send({})
+          .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
+        expect(unauthenticated.status).toBeGreaterThanOrEqual(200);
+        expect(unauthenticated.status).toBeLessThan(600);
+      } catch (error) {
+        failures.push({
+          method: route.method,
+          route: route.routePath,
+          variant: "unauthenticated",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       const variants: Array<[string, Record<string, unknown>]> = [
         ["empty", {}],
+        ["malformed", malformedProbe(ctx)],
         ["missing-record", populatedProbe(ctx)],
       ];
 
@@ -161,5 +202,5 @@ describe("Phase 33 safe non-parameterized write-surface sweep", () => {
     }
 
     expect(failures, JSON.stringify(failures, null, 2)).toEqual([]);
-  }, 420_000);
+  }, 600_000);
 });
