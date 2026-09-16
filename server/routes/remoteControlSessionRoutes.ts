@@ -4,7 +4,6 @@ import { requireActionAccess } from "../lib/permissionMiddleware";
 import { getSessionCompanyId, getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
 import {
   RemoteMouseControlError,
-  assertRemoteMouseCommandAdmission,
   authorizeRemoteMouseControl,
   getRemoteMouseAuthorization,
   publishRemoteMouseCommand,
@@ -35,10 +34,6 @@ import {
   type RemoteKeyboardAuthorization,
 } from "../services/remoteKeyboardCommandService";
 import { remoteSupportCommandAuditDetails, writeRemoteSupportAudit } from "../services/remoteSupportAuditService";
-import {
-  enqueueRemoteSupportCommandAudit,
-  isRemoteSupportCommandAuditAccepting,
-} from "../services/remoteSupportCommandAuditQueue";
 import { isRemoteMouseCommandAllowedOnRoute } from "../services/remoteSupportSensitiveActionPolicy";
 import { isRemoteSupportEnabled } from "../services/remoteSupportRuntime";
 
@@ -143,25 +138,10 @@ function writeHeartbeat(res: Response): void {
 
 function handleSessionError(error: unknown, res: Response): void {
   if (error instanceof RemoteControlSessionError || error instanceof RemoteMouseControlError) {
-    const retryAfterMs = error instanceof RemoteMouseControlError ? error.retryAfterMs : undefined;
-    if (typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)) {
-      // Controllers coalesce input locally; telling them exactly how long the
-      // window has left stops a refused burst from becoming a retry storm.
-      res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
-      res.status(error.statusCode).json({ code: error.code, message: error.message, retryAfterMs });
-      return;
-    }
     res.status(error.statusCode).json({ code: error.code, message: error.message });
     return;
   }
   res.status(500).json({ message: "Unable to manage the support session." });
-}
-
-function respondAuditUnavailable(res: Response): void {
-  res.status(503).json({
-    code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
-    message: "Remote support auditing is temporarily unavailable. Control remains blocked.",
-  });
 }
 
 async function writeAuditOrUnavailable(input: Parameters<typeof writeRemoteSupportAudit>[0], res: Response) {
@@ -169,7 +149,10 @@ async function writeAuditOrUnavailable(input: Parameters<typeof writeRemoteSuppo
     await writeRemoteSupportAudit(input);
     return true;
   } catch {
-    respondAuditUnavailable(res);
+    res.status(503).json({
+      code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
+      message: "Remote support auditing is temporarily unavailable. Control remains blocked.",
+    });
     return false;
   }
 }
@@ -417,8 +400,6 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
         (type !== "pointer-move" && type !== "click" && type !== "scroll") ||
         !isRemoteMouseCommandAllowedOnRoute(session.targetRoute, type)
       ) {
-        // A refusal is rare and terminal for this command, so it is still
-        // worth a synchronous, guaranteed record.
         await writeRemoteSupportAudit({
           event: "command_blocked",
           session,
@@ -437,34 +418,22 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
           message: "Mouse clicks are blocked on this sensitive ERP route.",
         });
       }
-
-      // Phase 10: decide admission before any audit or publication work. Rate
-      // limiting used to run at the end of publication, after an audit row had
-      // already been written for a command that was then thrown away.
-      assertRemoteMouseCommandAdmission({
-        sessionId: session.id,
-        controllerUserId: sessionUserId(req),
-        type,
-      });
-
-      // Auditing is enqueued rather than awaited, but it still fails closed:
-      // when the queue cannot promise the row, the command is refused here
-      // instead of shipping unaudited control.
-      if (!isRemoteSupportCommandAuditAccepting()) return respondAuditUnavailable(res);
-      const accepted = enqueueRemoteSupportCommandAudit({
-        event: "mouse_command",
-        session,
-        actorUserId: sessionUserId(req),
-        actorUsername: sessionUsername(req),
-        details: remoteSupportCommandAuditDetails({
-          capability: "mouse",
-          commandType: type,
-          route: session.targetRoute,
-        }),
-      });
-      if (!accepted) return respondAuditUnavailable(res);
-
-      const { command, supersededCommandIds } = publishRemoteMouseCommand({
+      const audited = await writeAuditOrUnavailable(
+        {
+          event: "mouse_command",
+          session,
+          actorUserId: sessionUserId(req),
+          actorUsername: sessionUsername(req),
+          details: remoteSupportCommandAuditDetails({
+            capability: "mouse",
+            commandType: type,
+            route: session.targetRoute,
+          }),
+        },
+        res
+      );
+      if (!audited) return;
+      const command = publishRemoteMouseCommand({
         sessionId: session.id,
         controllerUserId: sessionUserId(req),
         type,
@@ -473,9 +442,8 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
         deltaX: req.body?.deltaX,
         deltaY: req.body?.deltaY,
         frameViewport: req.body?.frameViewport,
-        admitted: true,
       });
-      res.status(202).json({ command: serializeMouseCommand(command), supersededCommandIds });
+      res.status(202).json({ command: serializeMouseCommand(command) });
     } catch (error) {
       handleSessionError(error, res);
     }
@@ -508,40 +476,41 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     writeEvent(res, "ready", { sessionId: req.params.sessionId });
   });
 
-  app.post("/api/screen-feed/control/sessions/:sessionId/commands/:commandId/result", requireLogin, (req, res) => {
-    try {
-      const result = publishRemoteMouseCommandResult({
-        sessionId: req.params.sessionId,
-        commandId: req.params.commandId,
-        targetUserId: sessionUserId(req),
-        targetTabId: req.body?.tabId,
-        status: req.body?.status,
-        reason: req.body?.reason,
-      });
-      const session = getRemoteControlSession(req.params.sessionId);
-      if (session) {
-        // The acknowledgement path is the employee tab's inner loop: one call
-        // per executed command. Awaiting an insert here made every command
-        // round trip pay for a write twice, so the row is batched instead.
-        enqueueRemoteSupportCommandAudit({
-          event: result.status === "blocked" ? "command_blocked" : "mouse_result",
-          session,
-          actorUserId: sessionUserId(req),
-          actorUsername: sessionUsername(req),
-          details: {
-            capability: "mouse",
-            status: result.status,
-            reason: result.reason,
-            route: session.targetRoute,
-          },
+  app.post(
+    "/api/screen-feed/control/sessions/:sessionId/commands/:commandId/result",
+    requireLogin,
+    async (req, res) => {
+      try {
+        const result = publishRemoteMouseCommandResult({
+          sessionId: req.params.sessionId,
+          commandId: req.params.commandId,
+          targetUserId: sessionUserId(req),
+          targetTabId: req.body?.tabId,
+          status: req.body?.status,
+          reason: req.body?.reason,
         });
+        const session = getRemoteControlSession(req.params.sessionId);
+        if (session) {
+          await writeRemoteSupportAudit({
+            event: result.status === "blocked" ? "command_blocked" : "mouse_result",
+            session,
+            actorUserId: sessionUserId(req),
+            actorUsername: sessionUsername(req),
+            details: {
+              capability: "mouse",
+              status: result.status,
+              reason: result.reason,
+              route: session.targetRoute,
+            },
+          });
+        }
+        res.setHeader("Cache-Control", "no-store");
+        res.json({ result: serializeMouseCommandResult(result) });
+      } catch (error) {
+        handleSessionError(error, res);
       }
-      res.setHeader("Cache-Control", "no-store");
-      res.json({ result: serializeMouseCommandResult(result) });
-    } catch (error) {
-      handleSessionError(error, res);
     }
-  });
+  );
 
   app.post("/api/screen-feed/control/sessions/:sessionId/stop", requireLogin, async (req, res) => {
     const session = getRemoteControlSession(req.params.sessionId);
