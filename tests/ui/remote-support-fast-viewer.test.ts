@@ -19,6 +19,7 @@ describe("remote support fast viewer", () => {
     expect(viewer).toContain('"If-None-Match": state.etag');
     expect(viewer).toContain("if (response.status === 304) return state");
     expect(viewer).toContain('etag: response.headers.get("ETag")');
+    expect(viewer).toContain("setFrame(next.frame)");
   });
 
   it("uses SSE with abortable polling fallback and complete watched-user cleanup", () => {
