@@ -165,7 +165,7 @@ jobs:
             exit 1
           done
 
-      - name: Merge and enforce current floors
+      - name: Merge and enforce repository floors
         run: node scripts/run-backend-verification.mjs --merge-only
 
       - name: Print exact Phase 33 coverage
@@ -174,6 +174,24 @@ jobs:
           const fs = require('fs');
           const s = JSON.parse(fs.readFileSync('coverage/backend/coverage-summary.json','utf8')).total;
           for (const k of ['lines','statements','functions','branches']) console.log(`${k}: ${s[k].pct}% (${s[k].covered}/${s[k].total})`);
+          NODE
+
+      - name: Enforce Phase 33 target
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const total = JSON.parse(fs.readFileSync('coverage/backend/coverage-summary.json', 'utf8')).total;
+          const target = { lines: 80, statements: 80, functions: 80, branches: 70 };
+          const failures = [];
+          for (const [metric, floor] of Object.entries(target)) {
+            const pct = total[metric].pct;
+            if (pct < floor) failures.push(`${metric}: ${pct}% < ${floor}%`);
+          }
+          if (failures.length) {
+            console.error('Phase 33 coverage target not met:\n' + failures.map((x) => ` - ${x}`).join('\n'));
+            process.exit(1);
+          }
+          console.log('Phase 33 coverage target met: 80% lines / 80% statements / 80% functions / 70% branches.');
           NODE
 
       - name: Upload exact coverage summary
