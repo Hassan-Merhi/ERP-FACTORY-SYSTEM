@@ -231,10 +231,15 @@ async function waitForCompletedRequest(
   return loadStoredRequest(companyId, idempotencyKey);
 }
 
+function replayResponseBody(body: unknown): unknown {
+  if (!isRecord(body) || typeof body.replayed !== "boolean") return body ?? null;
+  return { ...body, replayed: true };
+}
+
 function sendStoredResponse(res: Response, stored: StoredOperationalRequest): Response {
   res.setHeader("X-Idempotent-Replay", "true");
   const status = stored.responseStatus ?? 200;
-  return res.status(status).json(stored.responseBody ?? null);
+  return res.status(status).json(replayResponseBody(stored.responseBody));
 }
 
 async function operationalVoucherBoundary(req: Request, res: Response, next: NextFunction): Promise<void> {

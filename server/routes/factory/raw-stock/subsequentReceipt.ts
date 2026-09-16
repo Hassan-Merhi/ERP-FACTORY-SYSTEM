@@ -6,18 +6,18 @@ import { factoryContainers, factoryRawStock, factoryMixBatchSources, factoryCont
 import { db } from "../../../db";
 
 import { writeDaybookEntry } from "../_helpers";
-import { applyOffloadMovingAverage } from "../../../services/factory/rawStockLockedRate";
+import { getLockedSupplierRateReadOnly } from "../../../services/factory/rawStockLockedRate";
 
 /**
  * The continuation-receipt path of POST /api/factory/raw-stock/offload.
  *
  * A PARTIALLY_RECEIVED container can take further kg. When it does, only the
- * stock movement is repeated: the moving average is applied at the rate fixed
- * by the first receipt, raw-stock and container kg are incremented, mix-batch
- * sources are optionally added at that same fixed rate, and the event is
- * recorded. No financial posting happens — commission, freight, other charges
- * and their vouchers were all posted on the first receipt, and repeating them
- * would double-count.
+ * stock movement is repeated: the supplier moving-average remains locked at the
+ * rate established by the first receipt, raw-stock and container kg are
+ * incremented, mix-batch sources are optionally added at that same locked rate,
+ * and the event is recorded. No financial posting happens — commission,
+ * freight, other charges and their vouchers were all posted on the first
+ * receipt, and repeating them would double-count.
  *
  * It runs inside the caller's transaction and returns the raw-stock row the
  * response needs, which is the one value the branch produced for its caller.
@@ -125,19 +125,15 @@ export async function applySubsequentReceipt(
   const newCumulativeKg = dNewCumulativeKg.toDecimalPlaces(3).toNumber();
   const lockedValuationKgNum = lockedValuationKg.toDecimalPlaces(3).toNumber();
 
-  // 0. Moving average with incremental kg + fixed rate (same as first receipt).
-  //    Capture newLockedRate so supplier-backed batch allocations use the
-  //    post-receipt supplier moving-average rate, not the container's own
-  //    individual landed cost.
-  let subseqNewLockedRate = fixedCostPerKgUsd; // fallback for no-supplier containers
+  // 0. A continuation receipt must not reprice the supplier. The first receipt
+  //    is the supplier-cost event; later kg for that same container use the
+  //    already-established supplier moving-average. This preserves the locked
+  //    supplier cost while still letting mix-batch provenance point to this
+  //    container receipt.
+  let supplierLockedRate = fixedCostPerKgUsd; // fallback for no-supplier containers
   if (lockedContainer.supplierId) {
-    const movAvgResult = await applyOffloadMovingAverage(tx, {
-      companyId,
-      supplierId: lockedContainer.supplierId,
-      newReceivedKg: thisReceiptKg,
-      newContainerLandedCostPerKgUsd: fixedCostPerKgUsd,
-    });
-    subseqNewLockedRate = movAvgResult.newLockedRate;
+    const { rate } = await getLockedSupplierRateReadOnly(tx, companyId, lockedContainer.supplierId);
+    if (rate > 0) supplierLockedRate = rate;
   }
 
   // 1. Update raw-stock receivedKg (cumulative) using locked row id
@@ -150,16 +146,14 @@ export async function applySubsequentReceipt(
     receivedKg: dNewCumulativeKg.toDecimalPlaces(3).toFixed(3),
   };
 
-  // 2. Mix-batch sources — supplier-backed allocations must be priced at the
-  //    post-receipt supplier moving-average rate (newLockedRate), not the
-  //    individual container landed cost. FIFO (containerId) is provenance only.
+  // 2. Mix-batch sources use the supplier's already-locked moving-average for
+  //    supplier-backed material. Container-direct material keeps its own fixed
+  //    landed cost. Neither path mutates supplier cost during a continuation.
   for (const alloc of mixBatchAllocationsArr) {
     const allocKg = parseFloat(alloc.weightKg || "0");
     if (!alloc.mixBatchId || allocKg <= 0) continue;
     const dAllocKg = new Decimal(allocKg);
-    // Rate: supplier moving-average for supplier-backed containers;
-    //       container's own USD rate for containers without a supplier.
-    const dAllocRate = lockedContainer.supplierId ? new Decimal(subseqNewLockedRate) : new Decimal(fixedCostPerKgUsd);
+    const dAllocRate = lockedContainer.supplierId ? new Decimal(supplierLockedRate) : new Decimal(fixedCostPerKgUsd);
     // sourceType: SUPPLIER_FIFO when both supplierId + containerId present,
     //             CONTAINER_DIRECT when no supplier.
     const subseqSrcType = lockedContainer.supplierId ? "SUPPLIER_FIFO" : "CONTAINER_DIRECT";

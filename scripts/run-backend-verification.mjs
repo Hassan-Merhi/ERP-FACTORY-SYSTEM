@@ -74,16 +74,21 @@ if (listOnly) {
   process.exit(0);
 }
 
-function run(command, args, label, env = {}) {
+function run(command, args, label, env = {}, timeoutMs = undefined) {
   console.log(`\n$ ${command} ${args.join(" ")}`);
   const started = Date.now();
   const result = spawnSync(command, args, {
     cwd: ROOT,
     stdio: "inherit",
     env: { ...process.env, NODE_ENV: "test", ...env },
+    ...(timeoutMs ? { timeout: timeoutMs, killSignal: "SIGTERM" } : {}),
   });
   const seconds = (Date.now() - started) / 1000;
   console.log(`${label}: ${result.status === 0 ? "passed" : "failed"} in ${seconds.toFixed(1)}s`);
+  if (result.error?.code === "ETIMEDOUT") {
+    console.error(`${label} exceeded its ${(timeoutMs / 1000).toFixed(0)}s process budget and was terminated.`);
+    process.exit(1);
+  }
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
   return seconds;
@@ -124,8 +129,10 @@ function runShard(index, shard, withCoverage) {
     "vitest.config.backend-shard.ts",
     "--maxWorkers=1",
     "--no-file-parallelism",
+    "--reporter=default",
+    "--reporter=github-actions",
     "--reporter=json",
-    `--outputFile=${reporterPath}`,
+    `--outputFile.json=${reporterPath}`,
     ...shard,
   ];
   const shardCoverageDir = resolve(ROOT, `coverage/backend-shards/shard-${index}`);
@@ -133,8 +140,14 @@ function runShard(index, shard, withCoverage) {
     rmSync(shardCoverageDir, { recursive: true, force: true });
     args.splice(4, 0, "--coverage", `--coverage.reportsDirectory=${shardCoverageDir}`);
   }
-  const seconds = run(process.execPath, args, `backend shard ${index + 1}/${SHARD_COUNT}`);
   const budget = shardBudgetSeconds(withCoverage);
+  const seconds = run(
+    process.execPath,
+    args,
+    `backend shard ${index + 1}/${SHARD_COUNT}`,
+    {},
+    budget * 1000
+  );
   if (seconds > budget) {
     console.error(`Shard ${index} exceeded its ${budget}s budget (${seconds.toFixed(1)}s).`);
     process.exit(1);
