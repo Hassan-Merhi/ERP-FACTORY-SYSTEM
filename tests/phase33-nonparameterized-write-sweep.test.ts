@@ -77,6 +77,14 @@ function requestFor(agent: request.SuperAgentTest, route: SweptWriteRoute): requ
   return agent.delete(route.routePath);
 }
 
+function unauthenticatedRequestFor(ctx: TestContext, route: SweptWriteRoute): request.Test {
+  const client = request(ctx.app);
+  if (route.method === "POST") return client.post(route.routePath);
+  if (route.method === "PUT") return client.put(route.routePath);
+  if (route.method === "PATCH") return client.patch(route.routePath);
+  return client.delete(route.routePath);
+}
+
 function populatedProbe(ctx: TestContext) {
   return {
     id: MISSING_ID,
@@ -161,8 +169,7 @@ describe("Phase 33 safe non-parameterized write-surface sweep", () => {
       const agent = route.fixture === "factory" ? factoryAgent : erpAgent;
 
       try {
-        const unauthenticated = await request(ctx.app)
-          [route.method.toLowerCase() as "post" | "put" | "patch" | "delete"](route.routePath)
+        const unauthenticated = await unauthenticatedRequestFor(ctx, route)
           .send({})
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
         expect(unauthenticated.status).toBeGreaterThanOrEqual(200);
