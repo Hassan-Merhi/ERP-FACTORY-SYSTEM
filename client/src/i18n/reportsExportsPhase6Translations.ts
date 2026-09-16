@@ -4,12 +4,14 @@ import { reportsExportsPhase6TranslationsPart1 } from "./reportsExportsPhase6Tra
 import { reportsExportsPhase6TranslationsPart2 } from "./reportsExportsPhase6Translations.part2";
 import { reportsExportsPhase6TranslationsPart3 } from "./reportsExportsPhase6Translations.part3";
 import { reportsExportsPhase6TranslationsPart4 } from "./reportsExportsPhase6Translations.part4";
+import { reportsExportsPhase6TranslationsPart5 } from "./reportsExportsPhase6Translations.part5";
 
 export const reportsExportsPhase6Translations: readonly Phase6ReportsExportsEntry[] = [
   ...reportsExportsPhase6TranslationsPart1,
   ...reportsExportsPhase6TranslationsPart2,
   ...reportsExportsPhase6TranslationsPart3,
   ...reportsExportsPhase6TranslationsPart4,
+  ...reportsExportsPhase6TranslationsPart5,
 ];
 
 const languages = ["en", "ar", "fr"] as const;
