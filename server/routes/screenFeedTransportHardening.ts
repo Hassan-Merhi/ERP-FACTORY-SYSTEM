@@ -41,6 +41,9 @@ function frameEtag(userId: string, frame: ScreenFeedFrame): string {
   const identity = [
     userId,
     frame?.capturedAt ?? "",
+    // Captures are stored as a new frame with a server timestamp, so this keeps
+    // the validator O(1) instead of hashing a potentially megabyte-sized image
+    // again for every poll.
     typeof frame?.dataUrl === "string" ? frame.dataUrl.length : 0,
     Number(frame?.cursor?.ts) || 0,
     latestClickTs,
@@ -86,10 +89,19 @@ function installConditionalFrameResponse(req: Request, res: Response, watchedUse
     }
 
     const etag = frameEtag(watchedUserId, body);
+    // The payload is authorized per watcher. `private` prevents an intermediary
+    // from retaining a captured frame, while `no-cache` lets the browser retain
+    // its validator and revalidate it on every polling request.
     res.setHeader("Cache-Control", "private, no-cache, must-revalidate");
+    // Preserve any response dimensions set by upstream middleware as well.
+    res.vary("Cookie");
     res.setHeader("ETag", etag);
 
-    if (fastEnabled && matchesEtag(req.headers["if-none-match"], etag)) {
+    // The frame endpoint is most valuable as a conditional response while the
+    // viewer is in its legacy/recovery polling mode. Do not tie revalidation to
+    // the SSE flag: disabling fast transport is exactly when this route becomes
+    // the steady-state transport again.
+    if (matchesEtag(req.headers["if-none-match"], etag)) {
       return res.status(304).end();
     }
 

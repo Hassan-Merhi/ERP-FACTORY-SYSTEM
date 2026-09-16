@@ -119,8 +119,11 @@ async function fetchConditionalFrame(
   if (!response.ok) throw new Error("Screen feed request failed.");
 
   const payload = (await response.json()) as ScreenFeedPayload | null;
-  const nextFrame = payload?.dataUrl && payload.capturedAt ? (payload as ScreenFrame) : state.frame;
-  const failure = payload?.captureFailure ?? (payload?.dataUrl ? captureFailureFromFrame(nextFrame) : null);
+  // A 200 response without a frame is a real state transition (for example,
+  // the source frame expired), not an unchanged response. Only a 304 keeps the
+  // prior image in memory; otherwise an old frame could remain visible forever.
+  const nextFrame = payload?.dataUrl && payload.capturedAt ? (payload as ScreenFrame) : null;
+  const failure = payload?.captureFailure ?? (nextFrame ? captureFailureFromFrame(nextFrame) : null);
   return {
     etag: response.headers.get("ETag"),
     frame: nextFrame,
@@ -180,7 +183,7 @@ function ScreenFeedDialog({
     try {
       const next = await fetchConditionalFrame(userId, stateRef.current, controller.signal);
       stateRef.current = next;
-      if (next.frame) setFrame(next.frame);
+      setFrame(next.frame);
       setCaptureFailure(next.failure);
       setError(null);
     } catch (pollError) {
