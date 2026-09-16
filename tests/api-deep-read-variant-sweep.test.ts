@@ -29,6 +29,11 @@ interface DeepReadRoute {
   fixture: "erp" | "factory";
 }
 
+interface QueryVariant {
+  name: string;
+  query: Record<string, string | number | boolean>;
+}
+
 function loadManifest(): SerializedRouteManifest {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as SerializedRouteManifest;
 }
@@ -115,32 +120,69 @@ async function authenticatedAgent(ctx: TestContext, prefix: string): Promise<req
   return agent;
 }
 
-function queryFor(ctx: TestContext): Record<string, string | number | boolean> {
-  return {
-    page: 1,
-    limit: 10,
-    offset: 0,
-    year: 2026,
-    month: 9,
-    startDate: "2026-09-01",
-    endDate: "2026-09-15",
-    fromDate: "2026-09-01",
-    toDate: "2026-09-15",
-    asOfDate: "2026-09-15",
-    date: "2026-09-15",
-    locationId: ctx.locationId,
-    stockItemId: ctx.stockItemIds[0],
-    stockGroupId: ctx.stockGroupId,
-    accountId: ctx.salesAccountId,
-    companyId: ctx.companyId,
-    search: "test",
-    q: "test",
-    status: "all",
-    type: "all",
-    currency: "USD",
-    includeZero: true,
-    includeInactive: true,
-  };
+function queryVariants(ctx: TestContext): QueryVariant[] {
+  return [
+    {
+      name: "defaults",
+      query: {},
+    },
+    {
+      name: "seeded-rich",
+      query: {
+        page: 1,
+        limit: 10,
+        offset: 0,
+        year: 2026,
+        month: 9,
+        startDate: "2026-09-01",
+        endDate: "2026-09-15",
+        fromDate: "2026-09-01",
+        toDate: "2026-09-15",
+        asOfDate: "2026-09-15",
+        date: "2026-09-15",
+        locationId: ctx.locationId,
+        stockItemId: ctx.stockItemIds[0],
+        stockGroupId: ctx.stockGroupId,
+        accountId: ctx.salesAccountId,
+        companyId: ctx.companyId,
+        search: "test",
+        q: "test",
+        status: "all",
+        type: "all",
+        currency: "USD",
+        includeZero: true,
+        includeInactive: true,
+      },
+    },
+    {
+      name: "alternate-filters",
+      query: {
+        page: 2,
+        limit: 1,
+        offset: 1,
+        year: 2025,
+        month: 12,
+        startDate: "2025-12-01",
+        endDate: "2025-12-31",
+        fromDate: "2025-12-01",
+        toDate: "2025-12-31",
+        asOfDate: "2025-12-31",
+        date: "2025-12-31",
+        locationId: MISSING_ID,
+        stockItemId: MISSING_ID,
+        stockGroupId: MISSING_ID,
+        accountId: MISSING_ID,
+        companyId: ctx.companyId,
+        search: "",
+        q: "",
+        status: "inactive",
+        type: "summary",
+        currency: "CDF",
+        includeZero: false,
+        includeInactive: false,
+      },
+    },
+  ];
 }
 
 describe("deep backend read/query variant sweep", () => {
@@ -164,28 +206,46 @@ describe("deep backend read/query variant sweep", () => {
     await closeTestServer();
   }, 120_000);
 
-  it("drives safe GET handlers with valid seeded resource ids and rich query parameters", async () => {
+  it("drives safe GET handlers across auth, default, seeded and alternate filter branches", async () => {
     expect(routes.length).toBeGreaterThan(100);
-    const transportFailures: Array<{ route: string; detail: string }> = [];
+    const transportFailures: Array<{ route: string; variant: string; detail: string }> = [];
 
     for (const route of routes) {
       const ctx = route.fixture === "factory" ? factoryCtx : erpCtx;
       const agent = route.fixture === "factory" ? factoryAgent : erpAgent;
+
       try {
-        const response = await agent
+        const unauthenticated = await request(ctx.app)
           .get(route.requestPath)
-          .query(queryFor(ctx))
           .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(600);
+        expect(unauthenticated.status).toBeGreaterThanOrEqual(200);
+        expect(unauthenticated.status).toBeLessThan(600);
       } catch (error) {
         transportFailures.push({
           route: route.manifestPath,
+          variant: "unauthenticated",
           detail: error instanceof Error ? error.message : String(error),
         });
+      }
+
+      for (const variant of queryVariants(ctx)) {
+        try {
+          const response = await agent
+            .get(route.requestPath)
+            .query(variant.query)
+            .timeout({ response: REQUEST_TIMEOUT_MS, deadline: REQUEST_TIMEOUT_MS });
+          expect(response.status).toBeGreaterThanOrEqual(200);
+          expect(response.status).toBeLessThan(600);
+        } catch (error) {
+          transportFailures.push({
+            route: route.manifestPath,
+            variant: variant.name,
+            detail: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
 
     expect(transportFailures, JSON.stringify(transportFailures, null, 2)).toEqual([]);
-  }, 300_000);
+  }, 600_000);
 });
