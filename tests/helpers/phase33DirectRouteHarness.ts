@@ -335,8 +335,8 @@ function requestDouble(route: Registration, ctx: TestContext, sequence: number, 
       date: "not-a-date",
     };
   } else if (variant === 4) {
-    req.session = undefined;
-    req.user = undefined;
+    req.session = {};
+    req.user = {};
   } else if (variant === 5) {
     req.session.role = "Staff";
     req.user.role = "Staff";
@@ -380,7 +380,7 @@ async function invokeRegistration(route: Registration, req: Record<string, any>,
   // representative variants are enough to cover authenticated and unauthenticated
   // branches without multiplying every database-writing endpoint excessively.
   const role = req.user?.role;
-  if (role === "Admin" || req.user === undefined) {
+  if (role === "Admin" || !req.user?.userId) {
     for (const handler of route.handlers.slice(0, -1)) {
       await invokeWithBudget(handler, req, responseDouble(), 100);
       invoked += 1;
