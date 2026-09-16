@@ -9,10 +9,10 @@ describe("Phase 7 backend-message translations", () => {
   it("covers every reviewed backend phrase exactly once", () => {
     // 658 reviewed entries, plus the 20 Phase 3 accounting/payroll/loading/inventory
     // compatibility entries added during the accounting closeout, plus the 12 carried
-    // in by the Phase 3 latest-main sync (b86cb44), plus 3 more reviewed entries
-    // added since, for a total of 693.
-    expect(backendMessagesPhase7Translations).toHaveLength(693);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(693);
+    // in by the Phase 3 latest-main sync (b86cb44), plus 6 more reviewed entries
+    // added since, for a total of 696.
+    expect(backendMessagesPhase7Translations).toHaveLength(696);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(696);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -65,6 +65,19 @@ describe("Phase 7 backend-message translations", () => {
         "ar"
       )
     ).toBe("العامل Nadia ينتمي إلى عدة مناصب إنتاج بتاريخ 2026-08-07. اختر منصب الإنتاج قبل حفظ إدخال المخزون.");
+  });
+
+  it("translates factory FX validation messages", () => {
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD is required.", "fr")).toBe(
+      "Le taux Factory fxRateToUsd pour AUD est requis."
+    );
+    expect(translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.", "ar")).toBe(
+      "يجب أن يكون معدل Factory fxRateToUsd للعملة AUD رقميًا."
+    );
+    expect(
+      translatePhase7BackendMessageText("Factory fxRateToUsd for AUD must be a positive finite rate.", "ar")
+    ).toBe("يجب أن يكون معدل Factory fxRateToUsd للعملة AUD موجبًا ومحدودًا.");
+    expect(isPhase7BackendMessageText("Factory fxRateToUsd for AUD must be numeric.")).toBe(true);
   });
 
   it("translates Phase 3 accounting, payroll, loading and inventory messages", () => {
