@@ -4,7 +4,7 @@ import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
+import { closeTestServer, seedTestData, type TestContext } from "./setup";
 import type { SerializedRouteManifest } from "./helpers/routeManifest";
 
 const ERP_PREFIX = "phase33create";
@@ -147,8 +147,12 @@ describe("Phase 33 seeded safe-create sweep", () => {
   }, 120_000);
 
   afterAll(async () => {
-    await cleanupTestData(ERP_PREFIX);
-    await cleanupTestData(FACTORY_PREFIX);
+    // This suite intentionally drives many unrelated create handlers. Some of
+    // those handlers can persist records outside setup.ts's generic cleanup
+    // graph, making broad tenant deletion both unsafe and order-dependent.
+    // Phase 33 shards run against disposable PostgreSQL service databases, and
+    // the seeded tenants use dedicated prefixes, so close the shared server and
+    // let the shard database be discarded after the job instead.
     await closeTestServer();
   }, 120_000);
 
