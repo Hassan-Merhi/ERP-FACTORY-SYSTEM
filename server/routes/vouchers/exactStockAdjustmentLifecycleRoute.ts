@@ -11,16 +11,26 @@ import { storage } from "../../storage";
 import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 
+const ADJUSTMENT_TYPES = ["Production", "Consumption", "Mixed"] as const;
+type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
+
+function canonicalAdjustmentType(value: unknown): AdjustmentType | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return ADJUSTMENT_TYPES.find((candidate) => candidate.toLowerCase() === normalized) ?? null;
+}
+
 const editSchema = z.object({
   voucherDate: z.string().optional(),
   description: z.string().optional().default(""),
   locationId: z.coerce.number().int().positive(),
   // The adjustment row already records its own type, and clients re-editing an
   // existing adjustment (for example to move its lines to another location) do
-  // not resend it. It is also persisted lowercase by the creation path, so a
-  // client echoing the stored value back would have been rejected by a
-  // capitalised enum. Accept it in any case, and fall back to the stored value.
-  adjustmentType: z.string().trim().optional(),
+  // not resend it — the handler fills it in from the row below. It is also
+  // persisted lowercase by the creation path, so a client echoing the stored
+  // value back would have been rejected by a case-sensitive enum.
+  adjustmentType: z.preprocess((value) => canonicalAdjustmentType(value) ?? value, z.enum(ADJUSTMENT_TYPES)),
   items: z
     .array(
       z.object({
@@ -31,16 +41,6 @@ const editSchema = z.object({
     )
     .min(1),
 });
-
-const ADJUSTMENT_TYPES = ["Production", "Consumption", "Mixed"] as const;
-type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
-
-function canonicalAdjustmentType(value: string | null | undefined): AdjustmentType | null {
-  const normalized = String(value ?? "")
-    .trim()
-    .toLowerCase();
-  return ADJUSTMENT_TYPES.find((candidate) => candidate.toLowerCase() === normalized) ?? null;
-}
 
 function isAdjustmentVoucherType(value: string | null | undefined): boolean {
   return value === "Production" || value === "Consumption" || value === "Mixed" || value === "Stock Adjustment";
@@ -79,25 +79,15 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
           return res.status(400).json({ message: "Deleted stock adjustments cannot be changed" });
         }
 
-        const parsed = editSchema.parse(req.body);
+        const body = (req.body ?? {}) as Record<string, unknown>;
         // Keep the stored spelling when the caller did not send one, so the
         // column is not rewritten into a different case under downstream
         // readers that compare it directly.
-        const requestedAdjustmentType = parsed.adjustmentType ?? adjustment.adjustmentType;
-        const adjustmentType = canonicalAdjustmentType(requestedAdjustmentType);
-        if (!adjustmentType) {
-          return res.status(400).json({
-            message: "Invalid stock adjustment data",
-            errors: [
-              {
-                code: "invalid_value",
-                values: [...ADJUSTMENT_TYPES],
-                path: ["adjustmentType"],
-                message: `Invalid option: expected one of ${ADJUSTMENT_TYPES.map((value) => `"${value}"`).join("|")}`,
-              },
-            ],
-          });
-        }
+        const requestedAdjustmentType =
+          typeof body.adjustmentType === "string" && body.adjustmentType.trim()
+            ? body.adjustmentType
+            : adjustment.adjustmentType;
+        const parsed = editSchema.parse({ ...body, adjustmentType: requestedAdjustmentType });
         const updated = await storage.updateStockAdjustment(
           adjustment.id,
           parsed.locationId,
@@ -112,7 +102,7 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
 
         const totalAmount = updated.items.reduce((sum, item) => {
           const amount = Math.abs(Number(item.totalAmount || 0));
-          if (adjustmentType !== "Mixed") return sum + amount;
+          if (parsed.adjustmentType !== "Mixed") return sum + amount;
           return sum + (Number(item.quantity) >= 0 ? amount : -amount);
         }, 0);
 

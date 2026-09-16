@@ -55,7 +55,7 @@ const bundles = [
     parts: 13,
     translatorImport: "translatePhase7BackendMessageText",
     test: "tests/phase7-backend-messages-translations.test.ts",
-    expectedCount: 696,
+    expectedCount: 697,
   },
 ];
 

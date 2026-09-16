@@ -113,7 +113,7 @@ export async function createPosSale(
       status: 400,
       body: {
         code: "POS_CLIENT_SALE_ID_TOO_LONG",
-        message: `clientSaleId must be at most ${POS_CLIENT_SALE_ID_MAX_LENGTH} characters`,
+        message: "clientSaleId must be at most 36 characters",
       },
     };
   }
