@@ -56,7 +56,9 @@ export class RemoteKeyboardControlError extends Error {
   constructor(
     readonly code: string,
     readonly statusCode: number,
-    message: string
+    message: string,
+    /** Milliseconds the controller should wait before retrying, when known. */
+    readonly retryAfterMs?: number
   ) {
     super(message);
     this.name = "RemoteKeyboardControlError";
@@ -117,8 +119,14 @@ function cleanInsertText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const codePoints = Array.from(value);
   if (codePoints.length === 0 || codePoints.length > MAX_TEXT_CODE_POINTS) return null;
-  
-  if (Array.from(value).some((character) => { const code = character.charCodeAt(0); return code <= 31 || code === 127; })) return null;
+
+  if (
+    Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })
+  )
+    return null;
   return value;
 }
 
@@ -216,10 +224,45 @@ function assertRateLimit(sessionId: string, now: number): void {
     window = { startedAt: now, count: 0 };
     rateWindows.set(sessionId, window);
   }
-  window.count += 1;
-  if (window.count > RATE_LIMIT) {
-    throw new RemoteKeyboardControlError("KEYBOARD_RATE_LIMITED", 429, "Keyboard commands are being sent too quickly.");
+  if (window.count >= RATE_LIMIT) {
+    // A refused command does not consume budget, so a controller that backs
+    // off is admitted as soon as the window rolls rather than being pushed
+    // further out by its own rejected retries.
+    const retryAfterMs = Math.max(1, window.startedAt + RATE_WINDOW_MS - now);
+    throw new RemoteKeyboardControlError(
+      "KEYBOARD_RATE_LIMITED",
+      429,
+      "Keyboard commands are being sent too quickly.",
+      retryAfterMs
+    );
   }
+  window.count += 1;
+}
+
+/**
+ * Phase 10 admission check — the keyboard counterpart of
+ * `assertRemoteMouseCommandAdmission`. Routes run this before writing any
+ * audit record so a command refused for rate, authorization, or target-channel
+ * reasons costs no database work and leaves no row describing a keystroke that
+ * never shipped.
+ */
+export function assertRemoteKeyboardCommandAdmission(input: {
+  sessionId: string;
+  controllerUserId: string;
+  now?: number;
+}): RemoteControlSession {
+  const now = input.now ?? Date.now();
+  const session = activeSessionForController(input.sessionId, input.controllerUserId);
+  assertKeyboardAuthorization(session.id, input.controllerUserId, now);
+  if ((commandListeners.get(session.id)?.size ?? 0) === 0) {
+    throw new RemoteKeyboardControlError(
+      "TARGET_KEYBOARD_CHANNEL_UNAVAILABLE",
+      409,
+      "The employee ERP tab is not ready to receive keyboard commands."
+    );
+  }
+  assertRateLimit(session.id, now);
+  return session;
 }
 
 function assertKeyboardAuthorization(
@@ -305,6 +348,11 @@ export function publishRemoteKeyboardCommand(input: {
   key?: unknown;
   shiftKey?: unknown;
   now?: number;
+  /**
+   * Set when the caller already passed `assertRemoteKeyboardCommandAdmission`,
+   * so the one-per-command rate budget is not consumed twice.
+   */
+  admitted?: boolean;
 }): RemoteKeyboardCommand {
   const now = input.now ?? Date.now();
   const session = activeSessionForController(input.sessionId, input.controllerUserId);
@@ -316,7 +364,7 @@ export function publishRemoteKeyboardCommand(input: {
       "The employee ERP tab is not ready to receive keyboard commands."
     );
   }
-  assertRateLimit(session.id, now);
+  if (!input.admitted) assertRateLimit(session.id, now);
 
   if (input.type !== "insert-text" && input.type !== "key") {
     throw new RemoteKeyboardControlError("INVALID_KEYBOARD_COMMAND", 400, "Unsupported keyboard command.");

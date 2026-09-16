@@ -4,6 +4,7 @@ import { requireActionAccess } from "../lib/permissionMiddleware";
 import { getSessionCompanyId, getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
 import {
   RemoteKeyboardControlError,
+  assertRemoteKeyboardCommandAdmission,
   authorizeRemoteKeyboardControl,
   publishRemoteKeyboardCommand,
   publishRemoteKeyboardCommandResult,
@@ -16,6 +17,10 @@ import {
 } from "../services/remoteKeyboardCommandService";
 import { getRemoteControlSession, isRemoteControlControllerRole } from "../services/remoteControlSessionService";
 import { remoteSupportCommandAuditDetails, writeRemoteSupportAudit } from "../services/remoteSupportAuditService";
+import {
+  enqueueRemoteSupportCommandAudit,
+  isRemoteSupportCommandAuditAccepting,
+} from "../services/remoteSupportCommandAuditQueue";
 import { isRemoteKeyboardAllowedOnRoute } from "../services/remoteSupportSensitiveActionPolicy";
 
 const STREAM_HEARTBEAT_MS = 5000;
@@ -85,10 +90,24 @@ function serializeResult(result: RemoteKeyboardCommandResult) {
 
 function handleError(error: unknown, res: Response): void {
   if (error instanceof RemoteKeyboardControlError) {
+    const { retryAfterMs } = error;
+    if (typeof retryAfterMs === "number" && Number.isFinite(retryAfterMs)) {
+      // Refusing fast is only useful if the controller knows when to resume.
+      res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
+      res.status(error.statusCode).json({ code: error.code, message: error.message, retryAfterMs });
+      return;
+    }
     res.status(error.statusCode).json({ code: error.code, message: error.message });
     return;
   }
   res.status(500).json({ message: "Unable to manage keyboard control." });
+}
+
+function respondAuditUnavailable(res: Response): void {
+  res.status(503).json({
+    code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
+    message: "Remote support auditing is temporarily unavailable. Keyboard control remains blocked.",
+  });
 }
 
 async function auditOrBlock(input: Parameters<typeof writeRemoteSupportAudit>[0], res: Response): Promise<boolean> {
@@ -96,10 +115,7 @@ async function auditOrBlock(input: Parameters<typeof writeRemoteSupportAudit>[0]
     await writeRemoteSupportAudit(input);
     return true;
   } catch {
-    res.status(503).json({
-      code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE",
-      message: "Remote support auditing is temporarily unavailable. Keyboard control remains blocked.",
-    });
+    respondAuditUnavailable(res);
     return false;
   }
 }
@@ -233,23 +249,30 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
             message: "Keyboard control is blocked on this sensitive ERP route.",
           });
         }
-        const audited = await auditOrBlock(
-          {
-            event: "keyboard_command",
-            session,
-            actorUserId: sessionUserId(req),
-            actorUsername: sessionUsername(req),
-            details: remoteSupportCommandAuditDetails({
-              capability: "keyboard",
-              commandType: typeof req.body?.type === "string" ? req.body.type : "invalid",
-              key: typeof req.body?.key === "string" ? req.body.key : undefined,
-              text: typeof req.body?.text === "string" ? req.body.text : undefined,
-              route: session.targetRoute,
-            }),
-          },
-          res
-        );
-        if (!audited) return;
+        // Phase 10: admission first. Rate, authorization, and target-channel
+        // refusals used to happen inside publication, after an audit row had
+        // already been written for a keystroke that was then discarded.
+        assertRemoteKeyboardCommandAdmission({
+          sessionId: session.id,
+          controllerUserId: sessionUserId(req),
+        });
+
+        if (!isRemoteSupportCommandAuditAccepting()) return respondAuditUnavailable(res);
+        const accepted = enqueueRemoteSupportCommandAudit({
+          event: "keyboard_command",
+          session,
+          actorUserId: sessionUserId(req),
+          actorUsername: sessionUsername(req),
+          details: remoteSupportCommandAuditDetails({
+            capability: "keyboard",
+            commandType: typeof req.body?.type === "string" ? req.body.type : "invalid",
+            key: typeof req.body?.key === "string" ? req.body.key : undefined,
+            text: typeof req.body?.text === "string" ? req.body.text : undefined,
+            route: session.targetRoute,
+          }),
+        });
+        if (!accepted) return respondAuditUnavailable(res);
+
         const command = publishRemoteKeyboardCommand({
           sessionId: session.id,
           controllerUserId: sessionUserId(req),
@@ -257,6 +280,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
           text: req.body?.text,
           key: req.body?.key,
           shiftKey: req.body?.shiftKey,
+          admitted: true,
         });
         res.status(202).json({ command: serializeCommand(command) });
       } catch (error) {
@@ -300,7 +324,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
   app.post(
     "/api/screen-feed/control/sessions/:sessionId/keyboard-commands/:commandId/result",
     requireLogin,
-    async (req, res) => {
+    (req, res) => {
       try {
         const result = publishRemoteKeyboardCommandResult({
           sessionId: req.params.sessionId,
@@ -312,7 +336,9 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
         });
         const session = getRemoteControlSession(req.params.sessionId);
         if (session) {
-          await writeRemoteSupportAudit({
+          // One acknowledgement per keystroke: batched for the same reason the
+          // mouse acknowledgement path is.
+          enqueueRemoteSupportCommandAudit({
             event: result.status === "blocked" ? "command_blocked" : "keyboard_result",
             session,
             actorUserId: sessionUserId(req),

@@ -93,28 +93,39 @@ export function buildRemoteSupportAuditChanges(input: {
   };
 }
 
-export async function writeRemoteSupportAudit(input: {
+export interface RemoteSupportAuditInput {
   event: RemoteSupportAuditEvent;
   session: RemoteControlSession;
   actorUserId?: string;
   actorUsername?: string;
   details?: RemoteSupportAuditDetails;
-}): Promise<void> {
+}
+
+/**
+ * Builds the exact `audit_log` row a remote-support event produces, without
+ * writing it. Phase 10 batches per-command rows off the request path, so the
+ * row has to be materialized at the moment the command is authorized — the
+ * session route and capability flags it records must be the ones in force
+ * then, not whatever they have become by the time the batch is flushed.
+ */
+export function buildRemoteSupportAuditRow(input: RemoteSupportAuditInput) {
+  return {
+    userId: boundedText(input.actorUserId, 128) ?? input.session.controllerUserId,
+    username: boundedText(input.actorUsername, 160) ?? input.session.controllerUsername,
+    companyId: input.session.companyId,
+    action: `remote_support_${input.event}`,
+    tableName: "remote_support_sessions",
+    recordId: null,
+    recordIdentifier: input.session.id,
+    changes: buildRemoteSupportAuditChanges(input),
+  };
+}
+
+export async function writeRemoteSupportAudit(input: RemoteSupportAuditInput): Promise<void> {
   if (input.event === "session_stopped" && auditedStoppedSessionIds.has(input.session.id)) return;
 
-  const actorUserId = boundedText(input.actorUserId, 128) ?? input.session.controllerUserId;
-  const actorUsername = boundedText(input.actorUsername, 160) ?? input.session.controllerUsername;
   try {
-    await db.insert(auditLog).values({
-      userId: actorUserId,
-      username: actorUsername,
-      companyId: input.session.companyId,
-      action: `remote_support_${input.event}`,
-      tableName: "remote_support_sessions",
-      recordId: null,
-      recordIdentifier: input.session.id,
-      changes: buildRemoteSupportAuditChanges(input),
-    });
+    await db.insert(auditLog).values(buildRemoteSupportAuditRow(input));
     if (input.event === "session_stopped") auditedStoppedSessionIds.add(input.session.id);
   } catch (error) {
     logger.error("[RemoteSupport] permanent audit write failed", {
@@ -131,6 +142,13 @@ export function installRemoteSupportSessionStopAudit(): void {
   if (stopAuditInstalled) return;
   stopAuditInstalled = true;
   subscribeRemoteControlSessionStops((session) => {
+    // A stopped session is the natural boundary for the batched per-command
+    // queue: the history of what was just done should be readable immediately
+    // rather than after the next interval tick. Imported lazily because the
+    // queue imports this module for its row builder.
+    void import("./remoteSupportCommandAuditQueue")
+      .then((queue) => queue.flushRemoteSupportCommandAudits())
+      .catch(() => undefined);
     void writeRemoteSupportAudit({
       event: "session_stopped",
       session,

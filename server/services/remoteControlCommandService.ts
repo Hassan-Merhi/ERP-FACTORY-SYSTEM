@@ -59,7 +59,9 @@ export class RemoteMouseControlError extends Error {
   constructor(
     readonly code: string,
     readonly statusCode: number,
-    message: string
+    message: string,
+    /** Milliseconds the controller should wait before retrying, when known. */
+    readonly retryAfterMs?: number
   ) {
     super(message);
     this.name = "RemoteMouseControlError";
@@ -72,6 +74,16 @@ type ResultListener = (result: RemoteMouseCommandResult) => void;
 interface RateWindow {
   startedAt: number;
   counts: Record<RemoteMouseCommandType, number>;
+}
+
+export interface RemoteMouseCommandPublication {
+  command: RemoteMouseCommand;
+  /**
+   * Pointer moves this publication made obsolete. They were dropped from the
+   * queue before delivery and are reported `ignored`/`superseded-pointer-move`
+   * so the controller's in-flight accounting still balances.
+   */
+  supersededCommandIds: string[];
 }
 
 const PASSWORD_CONFIRMATION_MAX_AGE_MS = 5 * 60 * 1000;
@@ -89,6 +101,12 @@ const commandListeners = new Map<string, Set<CommandListener>>();
 const resultListeners = new Map<string, Set<ResultListener>>();
 const authorizations = new Map<string, RemoteMouseAuthorization>();
 const commandHistory = new Map<string, RemoteMouseCommand>();
+/**
+ * Commands that reached at least one target stream. Anything in
+ * `commandHistory` but not here is still queued and has not been seen by the
+ * employee tab, which is exactly the set a newer pointer move can supersede.
+ */
+const deliveredCommandIds = new Set<string>();
 const completedResults = new Map<string, RemoteMouseCommandResult>();
 const sequenceBySession = new Map<string, number>();
 const rateWindows = new Map<string, RateWindow>();
@@ -227,6 +245,38 @@ function pendingCommandsForSession(sessionId: string): RemoteMouseCommand[] {
     .sort((left, right) => left.sequence - right.sequence);
 }
 
+/**
+ * Drops undelivered pointer moves a newer command has made meaningless.
+ *
+ * A pointer move only carries "the cursor is here now". When the target stream
+ * is slow or briefly disconnected, the queue fills with positions that are
+ * already wrong, and replaying them on reconnect drags the remote cursor
+ * through a stale trail before it catches up. Only queued moves are eligible —
+ * anything already delivered has been executed, and clicks and scrolls are
+ * discrete actions that are never superseded.
+ */
+function dropSupersededPointerMoves(sessionId: string, now: number): string[] {
+  const superseded: string[] = [];
+  for (const [commandId, command] of commandHistory) {
+    if (command.sessionId !== sessionId) continue;
+    if (command.type !== "pointer-move") continue;
+    if (deliveredCommandIds.has(commandId)) continue;
+
+    commandHistory.delete(commandId);
+    const result: RemoteMouseCommandResult = {
+      commandId,
+      sessionId,
+      status: "ignored",
+      reason: "superseded-pointer-move",
+      completedAt: now,
+    };
+    completedResults.set(commandId, result);
+    notify(resultListeners.get(sessionId), result);
+    superseded.push(commandId);
+  }
+  return superseded;
+}
+
 function clearSessionMouseState(sessionId: string, disableCapability: boolean): void {
   authorizations.delete(sessionId);
   rateWindows.delete(sessionId);
@@ -234,7 +284,10 @@ function clearSessionMouseState(sessionId: string, disableCapability: boolean): 
   commandListeners.delete(sessionId);
   resultListeners.delete(sessionId);
   for (const [commandId, command] of commandHistory) {
-    if (command.sessionId === sessionId) commandHistory.delete(commandId);
+    if (command.sessionId === sessionId) {
+      commandHistory.delete(commandId);
+      deliveredCommandIds.delete(commandId);
+    }
   }
   for (const [commandId, result] of completedResults) {
     if (result.sessionId === sessionId) completedResults.delete(commandId);
@@ -252,10 +305,42 @@ function assertRateLimit(sessionId: string, type: RemoteMouseCommandType, now: n
     rateWindows.set(sessionId, window);
   }
 
-  window.counts[type] += 1;
-  if (window.counts[type] > RATE_LIMITS[type]) {
-    throw new RemoteMouseControlError("COMMAND_RATE_LIMITED", 429, "Mouse commands are being sent too quickly.");
+  if (window.counts[type] >= RATE_LIMITS[type]) {
+    // Refused commands do not consume budget: a controller that backs off for
+    // the remainder of the window is admitted again immediately, instead of
+    // being pushed further out by its own rejected retries.
+    const retryAfterMs = Math.max(1, window.startedAt + RATE_WINDOW_MS - now);
+    throw new RemoteMouseControlError(
+      "COMMAND_RATE_LIMITED",
+      429,
+      "Mouse commands are being sent too quickly.",
+      retryAfterMs
+    );
   }
+  window.counts[type] += 1;
+}
+
+/**
+ * Phase 10 admission check.
+ *
+ * The route used to write an audit row and only then call
+ * `publishRemoteMouseCommand`, so a command refused by the rate limiter had
+ * already paid for a database round trip and left an audit row describing a
+ * command that never shipped. Callers run this first: it applies exactly the
+ * same session, authorization, and rate rules as publication, so a refusal
+ * costs nothing and never produces a dead command.
+ */
+export function assertRemoteMouseCommandAdmission(input: {
+  sessionId: string;
+  controllerUserId: string;
+  type: RemoteMouseCommandType;
+  now?: number;
+}): RemoteControlSession {
+  const now = input.now ?? Date.now();
+  const session = activeSessionForController(input.sessionId, input.controllerUserId);
+  assertMouseAuthorization(session.id, input.controllerUserId, now);
+  assertRateLimit(session.id, input.type, now);
+  return session;
 }
 
 function assertMouseAuthorization(sessionId: string, controllerUserId: string, now: number): RemoteMouseAuthorization {
@@ -339,7 +424,12 @@ export function publishRemoteMouseCommand(input: {
   deltaY?: unknown;
   frameViewport?: unknown;
   now?: number;
-}): RemoteMouseCommand {
+  /**
+   * Set when the caller already passed `assertRemoteMouseCommandAdmission` for
+   * this command, so the one-per-command rate budget is not consumed twice.
+   */
+  admitted?: boolean;
+}): RemoteMouseCommandPublication {
   const now = input.now ?? Date.now();
   const session = activeSessionForController(input.sessionId, input.controllerUserId);
   assertMouseAuthorization(session.id, input.controllerUserId, now);
@@ -361,7 +451,12 @@ export function publishRemoteMouseCommand(input: {
     throw new RemoteMouseControlError("INVALID_SCROLL", 400, "A bounded scroll delta is required.");
   }
 
-  assertRateLimit(session.id, type, now);
+  if (!input.admitted) assertRateLimit(session.id, type, now);
+
+  // Superseding runs before the new command is queued so the new move is never
+  // a candidate for its own cleanup.
+  const supersededCommandIds = type === "pointer-move" ? dropSupersededPointerMoves(session.id, now) : [];
+
   const nextSequence = (sequenceBySession.get(session.id) ?? 0) + 1;
   sequenceBySession.set(session.id, nextSequence);
 
@@ -386,8 +481,9 @@ export function publishRemoteMouseCommand(input: {
   };
 
   commandHistory.set(command.id, command);
-  notify(commandListeners.get(session.id), command);
-  return { ...command };
+  const delivered = notify(commandListeners.get(session.id), command);
+  if (delivered > 0) deliveredCommandIds.add(command.id);
+  return { command: { ...command }, supersededCommandIds };
 }
 
 export function subscribeRemoteMouseCommands(input: {
@@ -405,7 +501,7 @@ export function subscribeRemoteMouseCommands(input: {
   listeners.add(input.listener);
 
   for (const command of pendingCommandsForSession(session.id)) {
-    notifySingle(input.listener, command);
+    if (notifySingle(input.listener, command)) deliveredCommandIds.add(command.id);
   }
 
   return () => {
@@ -450,6 +546,7 @@ export function publishRemoteMouseCommandResult(input: {
     completedAt: now,
   };
   commandHistory.delete(commandId);
+  deliveredCommandIds.delete(commandId);
   completedResults.set(commandId, result);
   notify(resultListeners.get(session.id), result);
   return { ...result };
@@ -492,6 +589,7 @@ export function cleanupRemoteMouseCommandState(now = Date.now()): void {
   for (const [commandId, command] of commandHistory) {
     if (now - command.createdAt <= COMMAND_TIMEOUT_MS) continue;
     commandHistory.delete(commandId);
+    deliveredCommandIds.delete(commandId);
     const result: RemoteMouseCommandResult = {
       commandId,
       sessionId: command.sessionId,
@@ -508,13 +606,17 @@ export function cleanupRemoteMouseCommandState(now = Date.now()): void {
   }
 
   for (const [commandId, command] of commandHistory) {
-    if (now - command.createdAt > COMMAND_RETENTION_MS) commandHistory.delete(commandId);
+    if (now - command.createdAt > COMMAND_RETENTION_MS) {
+      commandHistory.delete(commandId);
+      deliveredCommandIds.delete(commandId);
+    }
   }
 }
 
 export function resetRemoteMouseCommandStateForTests(): void {
   commandListeners.clear();
   resultListeners.clear();
+  deliveredCommandIds.clear();
   authorizations.clear();
   commandHistory.clear();
   completedResults.clear();

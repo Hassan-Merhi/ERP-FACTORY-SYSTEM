@@ -162,7 +162,7 @@ describe("remote mouse command safety", () => {
       x: 0.25,
       y: 0.75,
       now: now + 1,
-    });
+    }).command;
     const click = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -170,7 +170,7 @@ describe("remote mouse command safety", () => {
       x: 0.5,
       y: 0.5,
       now: now + 2,
-    });
+    }).command;
     const scroll = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -180,7 +180,7 @@ describe("remote mouse command safety", () => {
       deltaX: 5000,
       deltaY: -5000,
       now: now + 3,
-    });
+    }).command;
 
     expect(pointer.sequence).toBe(1);
     expect(click.sequence).toBe(2);
@@ -231,7 +231,7 @@ describe("remote mouse command safety", () => {
       x: 0.5,
       y: 0.5,
       now: now + 3,
-    });
+    }).command;
     expect(queued.sequence).toBe(1);
   });
 
@@ -393,7 +393,7 @@ describe("remote mouse command safety", () => {
       x: 0.5,
       y: 0.5,
       now: now + 1,
-    });
+    }).command;
 
     expect(() =>
       publishRemoteMouseCommandResult({
@@ -464,7 +464,7 @@ describe("remote mouse command safety", () => {
       x: 0.5,
       y: 0.5,
       now: now + 1,
-    });
+    }).command;
     const result = publishRemoteMouseCommandResult({
       sessionId: session.id,
       commandId: command.id,
