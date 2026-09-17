@@ -173,7 +173,7 @@ async function pollViewerFallback(): Promise<void> {
   viewerPollAbort?.abort();
   viewerPollAbort = controller;
   try {
-    const headers: HeadersInit = {};
+    const headers: Record<string, string> = {};
     if (viewerPollEtag) headers["If-None-Match"] = viewerPollEtag;
     const response = await fetch(
       `/api/screen-feed/${encodeURIComponent(binding.userId)}?tabId=${encodeURIComponent(binding.tabId)}`,
