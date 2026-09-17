@@ -416,9 +416,9 @@ export function RemoteKeyboardControllerOverlay() {
             }}
             onCompositionEnd={(event) => {
               isComposingRef.current = false;
-              const data = (event as any).data ?? (event.currentTarget as HTMLInputElement).value ?? "";
+              const data = event.data ?? event.currentTarget.value ?? "";
               // Clear the DOM value so the next composition starts empty
-              (event.currentTarget as HTMLInputElement).value = "";
+              event.currentTarget.value = "";
               if (data) {
                 queueText(data);
               }
