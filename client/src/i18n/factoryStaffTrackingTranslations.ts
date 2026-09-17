@@ -61,6 +61,7 @@ const factoryStaffTrackingTranslations = {
   produced: { en: "Produced", ar: "المنتج", fr: "Produit" },
   status: { en: "Status", ar: "الحالة", fr: "Statut" },
   notes: { en: "Notes", ar: "ملاحظات", fr: "Notes" },
+  group: { en: "Group", ar: "المجموعة", fr: "Groupe" },
   loadingStaff: {
     en: "Loading factory staff…",
     ar: "جارٍ تحميل موظفي المصنع…",
@@ -113,6 +114,89 @@ const factoryStaffTrackingTranslations = {
     en: "Could not copy yesterday's production",
     ar: "تعذر نسخ إنتاج أمس",
     fr: "Impossible de copier la production d’hier",
+  },
+  excelTemplate: { en: "Excel Template", ar: "قالب Excel", fr: "Modèle Excel" },
+  importExcel: { en: "Import Excel", ar: "استيراد Excel", fr: "Importer Excel" },
+  importing: { en: "Importing…", ar: "جارٍ الاستيراد…", fr: "Importation…" },
+  templateDownloadFailed: {
+    en: "Template download failed",
+    ar: "فشل تنزيل القالب",
+    fr: "Échec du téléchargement du modèle",
+  },
+  couldNotCreateExcelTemplate: {
+    en: "Could not create the Excel template",
+    ar: "تعذر إنشاء قالب Excel",
+    fr: "Impossible de créer le modèle Excel",
+  },
+  workbookMissingWorksheet: {
+    en: "The workbook does not contain a worksheet",
+    ar: "لا يحتوي المصنف على ورقة عمل",
+    fr: "Le classeur ne contient aucune feuille de calcul",
+  },
+  missingRequiredColumn: {
+    en: "Missing required column",
+    ar: "العمود المطلوب مفقود",
+    fr: "Colonne requise manquante",
+  },
+  excelNoWorkerRows: {
+    en: "The Excel file does not contain any worker rows",
+    ar: "لا يحتوي ملف Excel على صفوف عمال",
+    fr: "Le fichier Excel ne contient aucune ligne d’ouvrier",
+  },
+  duplicateWorkerCodeInExcel: {
+    en: "Duplicate worker code in Excel",
+    ar: "رمز عامل مكرر في Excel",
+    fr: "Code ouvrier en double dans Excel",
+  },
+  invalidTargetForWorkerCode: {
+    en: "Invalid target for worker code",
+    ar: "هدف غير صالح لرمز العامل",
+    fr: "Objectif invalide pour le code ouvrier",
+  },
+  noWorkerCodesFound: {
+    en: "No worker codes were found in the Excel file",
+    ar: "لم يتم العثور على رموز عمال في ملف Excel",
+    fr: "Aucun code ouvrier trouvé dans le fichier Excel",
+  },
+  noMatchingWorkerCodes: {
+    en: "None of the worker codes in the Excel file match this Production Targets list",
+    ar: "لا يطابق أي رمز عامل في ملف Excel قائمة أهداف الإنتاج هذه",
+    fr: "Aucun code ouvrier du fichier Excel ne correspond à cette liste d’objectifs de production",
+  },
+  couldNotSaveImportedProductionTargets: {
+    en: "Could not save imported Production Targets",
+    ar: "تعذر حفظ أهداف الإنتاج المستوردة",
+    fr: "Impossible d’enregistrer les objectifs de production importés",
+  },
+  productionTargetsImported: {
+    en: "Production targets imported",
+    ar: "تم استيراد أهداف الإنتاج",
+    fr: "Objectifs de production importés",
+  },
+  workerCodesNotFoundSkipped: {
+    en: "worker code(s) were not found and were skipped.",
+    ar: "رمز/رموز عامل لم يتم العثور عليها وتم تجاوزها.",
+    fr: "code(s) ouvrier introuvable(s) ont été ignoré(s).",
+  },
+  categoryTargetSaved: {
+    en: "The category and target values were saved.",
+    ar: "تم حفظ قيم الفئة والهدف.",
+    fr: "Les valeurs de catégorie et d’objectif ont été enregistrées.",
+  },
+  excelImportFailed: {
+    en: "Excel import failed",
+    ar: "فشل استيراد Excel",
+    fr: "Échec de l’importation Excel",
+  },
+  couldNotImportProductionTargets: {
+    en: "Could not import Production Targets",
+    ar: "تعذر استيراد أهداف الإنتاج",
+    fr: "Impossible d’importer les objectifs de production",
+  },
+  statusControlledFromAttendance: {
+    en: "Status is controlled from Attendance Register",
+    ar: "يتم التحكم بالحالة من سجل الحضور",
+    fr: "Le statut est contrôlé depuis le registre de présence",
   },
   endProduction: { en: "End Production", ar: "إنهاء الإنتاج", fr: "Terminer la production" },
   endingProduction: { en: "Ending…", ar: "جارٍ الإنهاء…", fr: "Finalisation…" },
