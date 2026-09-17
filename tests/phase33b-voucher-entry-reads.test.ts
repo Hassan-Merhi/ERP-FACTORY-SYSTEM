@@ -14,7 +14,7 @@ let sequence = 0;
 
 async function makeVoucher(
   voucherType: string,
-  options: { companyId?: number; locationId?: number | null; totalAmount?: string } = {},
+  options: { companyId?: number; locationId?: number | null; totalAmount?: string } = {}
 ) {
   sequence += 1;
   const [voucher] = await db
@@ -94,7 +94,7 @@ describe("Phase 33B voucher entry finance reads", () => {
           accountType: "ledger",
           accountId: ctx.cashAccountId,
         }),
-      ]),
+      ])
     );
   });
 
@@ -113,7 +113,9 @@ describe("Phase 33B voucher entry finance reads", () => {
 
     const response = await agent.get(`/api/vouchers/${foreignVoucher.id}/entries`);
     expect([403, 404]).toContain(response.status);
-    expect(response.body).not.toEqual(expect.arrayContaining([expect.objectContaining({ voucherId: foreignVoucher.id })]));
+    expect(response.body).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ voucherId: foreignVoucher.id })])
+    );
   });
 
   it("returns Sales item detail for finance users and hides cost/profit when ERP field policy requires it", async () => {
