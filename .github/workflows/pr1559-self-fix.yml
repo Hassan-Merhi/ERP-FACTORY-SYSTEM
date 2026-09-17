@@ -1,9 +1,9 @@
-name: PR 1559 one-shot CI repair
+name: PR 1563 one-shot doc-index repair
 
 on:
   push:
     branches:
-      - test/phase33b-accounting-finance-20260917
+      - test/phase33e-supplier-intercompany-permissions-20260917
 
 permissions:
   contents: write
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: test/phase33b-accounting-finance-20260917
+          ref: test/phase33e-supplier-intercompany-permissions-20260917
           fetch-depth: 0
           persist-credentials: true
 
@@ -29,56 +29,35 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Apply source repairs
-        run: node scripts/pr1559-self-fix.mjs
-
-      - name: Format repaired source
+      - name: Classify missing archived docs
         run: |
-          node node_modules/prettier/bin/prettier.cjs --write \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
-            client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'config/doc-index.json';
+          const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+          data.classification['docs/archive/remote-support-audit-authorization.md'] = 'record';
+          data.classification['docs/archive/remote-support-phase-12-usable-allowlists.md'] = 'record';
+          data.classification = Object.fromEntries(
+            Object.entries(data.classification).sort(([a], [b]) => a.localeCompare(b)),
+          );
+          fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          NODE
 
-      - name: Verify repaired static gates
+      - name: Verify failing repository audits
         run: |
-          npm run lint
           npm run audit:doc-index
-          node scripts/audit-i18n-phase14.mjs
-          node node_modules/prettier/bin/prettier.cjs --check \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
-            client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+          npm run audit:scripts
+          node node_modules/prettier/bin/prettier.cjs --check config/doc-index.json
 
-      - name: Commit repaired source
+      - name: Restore helper and commit repair
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            config/doc-index.json \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
-            client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+          git checkout origin/main -- .github/workflows/pr1559-self-fix.yml
+          git add .github/workflows/pr1559-self-fix.yml config/doc-index.json
           if git diff --cached --quiet; then
-            echo "No source changes to commit."
+            echo "No changes to commit."
             exit 0
           fi
-          git commit -m "fix: clear PR 1559 repository gates"
-          git push origin HEAD:test/phase33b-accounting-finance-20260917
+          git commit -m "fix: classify remote-support archive records"
+          git push origin HEAD:test/phase33e-supplier-intercompany-permissions-20260917
