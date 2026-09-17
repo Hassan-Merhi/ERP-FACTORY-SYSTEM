@@ -35,15 +35,6 @@ export interface RemoteMouseExecutionOptions {
   keyboardEnabled?: boolean;
 }
 
-// prettier-ignore
-export interface RemoteMouseViewportMetrics {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  scale: number;
-}
-
 const BLOCKED_SELECTOR = [
   "input",
   "textarea",
@@ -190,57 +181,168 @@ function isSameOriginNavigation(anchor: HTMLAnchorElement, location: Location): 
   }
 }
 
+export interface RemoteMouseFrameSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * The box the frame's pixels actually occupy inside the image element.
+ * Viewers letterbox the frame with `object-fit: contain` whenever the
+ * element's aspect ratio differs from the frame's, and coordinates taken
+ * against the raw element rect would land offset. The frame size comes from
+ * the image's natural (encoded) dimensions, or from the frame viewport
+ * snapshot stamped on the image.
+ */
+export function getRemoteMouseFrameContentBox(
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  frameSize: RemoteMouseFrameSize
+): Pick<DOMRect, "left" | "top" | "width" | "height"> | null {
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  if (!Number.isFinite(frameSize.width) || frameSize.width <= 0) return null;
+  if (!Number.isFinite(frameSize.height) || frameSize.height <= 0) return null;
+  const scale = Math.min(rect.width / frameSize.width, rect.height / frameSize.height);
+  const width = frameSize.width * scale;
+  const height = frameSize.height * scale;
+  return {
+    left: rect.left + (rect.width - width) / 2,
+    top: rect.top + (rect.height - height) / 2,
+    width,
+    height,
+  };
+}
+
 export function normalizeRemoteMousePoint(
   clientX: number,
   clientY: number,
-  rect: Pick<DOMRect, "left" | "top" | "width" | "height">
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  frameSize?: RemoteMouseFrameSize | null
 ): { x: number; y: number } | null {
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const x = (clientX - rect.left) / rect.width;
-  const y = (clientY - rect.top) / rect.height;
+  const box = frameSize ? getRemoteMouseFrameContentBox(rect, frameSize) : rect;
+  if (!box || box.width <= 0 || box.height <= 0) return null;
+  const x = (clientX - box.left) / box.width;
+  const y = (clientY - box.top) / box.height;
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
   return { x, y };
 }
 
 /**
- * Phase 11 — control accuracy. A normalized click is only meaningful against
- * the viewport it was aimed at. The controller attaches the captured frame's
- * scroll/viewport snapshot to click and scroll commands; the target ignores
- * commands whose frame has since scrolled, resized, or zoomed instead of
- * landing the pointer on whatever control happens to be there now.
+ * Control accuracy — one coordinate space.
  *
- * Tolerances stay tight on purpose: a scrolled page moves every target, so
- * even a few pixels of drift make the frame untrustworthy. Pointer movement
- * is display-only and skips this check to keep the support cursor smooth.
+ * Every mouse coordinate in the remote-control pipeline is normalized `0..1`
+ * over exactly one region: the layout viewport the screen-feed capture engine
+ * photographs (`window.innerWidth × window.innerHeight` showing document
+ * content at `scrollX/scrollY`). The controller normalizes pointer input into
+ * that frame space; the target maps it back out through the same space.
+ *
+ * `window.visualViewport` deliberately does NOT define the space: the frame is
+ * captured from the layout viewport, and mapping through a different viewport
+ * (pinch-zoomed or offset) lands clicks away from where the controller aimed.
+ *
+ * When the live viewport has drifted from the captured frame (the employee —
+ * or an earlier remote command — scrolled, resized, or zoomed), the point is
+ * REMAPPED through document space instead of rejecting the command: pure
+ * scroll drift cancels exactly, so clicks keep landing on the content the
+ * controller aimed at. Only a point that remaps outside the live viewport
+ * (the aimed content is no longer visible) is ignored.
+ *
+ * Scroll commands are exempt from frame-viewport staleness entirely:
+ * scrolling is precisely what invalidates the captured scroll position, so a
+ * staleness gate would drop every scroll after the first. The scroll anchor
+ * is still remapped so the right scroll container is chosen.
  */
-export const FRAME_VIEWPORT_SIZE_TOLERANCE_PX = 2;
-export const FRAME_VIEWPORT_SCROLL_TOLERANCE_PX = 2;
-export const FRAME_VIEWPORT_SCALE_TOLERANCE = 0.01;
 
-export function isRemoteMouseFrameViewportStale(
-  frame: RemoteMouseFrameViewport | null | undefined,
-  view: Window = window
-): boolean {
-  if (!frame) return false;
+export interface RemoteMouseViewportMetrics {
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+}
+
+/**
+ * How far beyond the live viewport's edges a remapped frame point may sit and
+ * still be treated as an in-view edge click. Absorbs the sub-pixel rounding
+ * the server applies to frame snapshots; anything farther means the aimed
+ * content really did scroll or reflow out of view.
+ */
+export const FRAME_POINT_EDGE_SLOP_PX = 2;
+
+export function getRemoteMouseViewportMetrics(view: Window = window): RemoteMouseViewportMetrics {
+  return {
+    width: finitePositive(view.innerWidth, 1),
+    height: finitePositive(view.innerHeight, 1),
+    scrollX: finiteOffset(view.scrollX),
+    scrollY: finiteOffset(view.scrollY),
+  };
+}
+
+function coerceRemoteMouseFrameViewport(
+  frame: RemoteMouseFrameViewport | null | undefined
+): RemoteMouseFrameViewport | undefined {
+  if (!frame) return undefined;
   if (
     !Number.isFinite(frame.width) ||
+    frame.width <= 0 ||
     !Number.isFinite(frame.height) ||
+    frame.height <= 0 ||
     !Number.isFinite(frame.scrollX) ||
     !Number.isFinite(frame.scrollY) ||
-    !Number.isFinite(frame.visualScale)
+    !Number.isFinite(frame.visualScale) ||
+    frame.visualScale <= 0
   ) {
-    return false;
+    return undefined;
   }
+  return frame;
+}
+
+export interface RemoteMouseFramePointMapping {
+  clientX: number;
+  clientY: number;
+  /** False when the remapped frame point fell outside the live viewport. */
+  onScreen: boolean;
+}
+
+/**
+ * The single mapping every command type goes through: pointer display, click
+ * hit testing, and scroll anchoring all land on the same pixel.
+ *
+ * - No usable snapshot (legacy controllers, pointer moves): the normalized
+ *   point is already expressed against the live viewport.
+ * - With a snapshot: the point is translated frame → document → live
+ *   viewport, so viewport drift moves the point with the content instead of
+ *   invalidating it.
+ */
+export function mapRemoteMouseFramePoint(
+  x: number,
+  y: number,
+  frame: RemoteMouseFrameViewport | null | undefined,
+  view: Window = window
+): RemoteMouseFramePointMapping | null {
+  if (!finiteCoordinate(x) || !finiteCoordinate(y)) return null;
   const live = getRemoteMouseViewportMetrics(view);
-  const scrollX = Number.isFinite(view.scrollX) ? view.scrollX : 0;
-  const scrollY = Number.isFinite(view.scrollY) ? view.scrollY : 0;
-  return (
-    Math.abs(live.width - frame.width) > FRAME_VIEWPORT_SIZE_TOLERANCE_PX ||
-    Math.abs(live.height - frame.height) > FRAME_VIEWPORT_SIZE_TOLERANCE_PX ||
-    Math.abs(scrollX - frame.scrollX) > FRAME_VIEWPORT_SCROLL_TOLERANCE_PX ||
-    Math.abs(scrollY - frame.scrollY) > FRAME_VIEWPORT_SCROLL_TOLERANCE_PX ||
-    Math.abs(live.scale - frame.visualScale) > FRAME_VIEWPORT_SCALE_TOLERANCE
-  );
+  const captured = coerceRemoteMouseFrameViewport(frame);
+
+  if (!captured) {
+    return {
+      clientX: Math.max(0, Math.min(live.width - 1, x * live.width)),
+      clientY: Math.max(0, Math.min(live.height - 1, y * live.height)),
+      onScreen: true,
+    };
+  }
+
+  const documentX = captured.scrollX + x * captured.width;
+  const documentY = captured.scrollY + y * captured.height;
+  const unclampedX = documentX - live.scrollX;
+  const unclampedY = documentY - live.scrollY;
+  return {
+    clientX: Math.max(0, Math.min(live.width - 1, unclampedX)),
+    clientY: Math.max(0, Math.min(live.height - 1, unclampedY)),
+    onScreen:
+      unclampedX >= -FRAME_POINT_EDGE_SLOP_PX &&
+      unclampedX <= live.width - 1 + FRAME_POINT_EDGE_SLOP_PX &&
+      unclampedY >= -FRAME_POINT_EDGE_SLOP_PX &&
+      unclampedY <= live.height - 1 + FRAME_POINT_EDGE_SLOP_PX,
+  };
 }
 
 function finiteFrameNumber(value: unknown): number | null {
@@ -286,35 +388,6 @@ export function parseFrameViewportFromDataset(dataset: DOMStringMap): RemoteMous
 }
 
 // prettier-ignore
-export function getRemoteMouseViewportMetrics(view: Window = window): RemoteMouseViewportMetrics {
-  const visualViewport = view.visualViewport;
-  const width = finitePositive(visualViewport?.width, finitePositive(view.innerWidth, 1));
-  const height = finitePositive(visualViewport?.height, finitePositive(view.innerHeight, 1));
-  return {
-    left: finiteOffset(visualViewport?.offsetLeft),
-    top: finiteOffset(visualViewport?.offsetTop),
-    width,
-    height,
-    scale: finitePositive(visualViewport?.scale, 1),
-  };
-}
-
-// prettier-ignore
-export function mapRemoteMousePoint(
-  x: number,
-  y: number,
-  view: Window = window
-): { clientX: number; clientY: number } | null {
-  if (!finiteCoordinate(x) || !finiteCoordinate(y)) return null;
-  const viewport = getRemoteMouseViewportMetrics(view);
-  const right = viewport.left + viewport.width;
-  const bottom = viewport.top + viewport.height;
-  return {
-    clientX: Math.max(viewport.left, Math.min(right - 1, viewport.left + x * viewport.width)),
-    clientY: Math.max(viewport.top, Math.min(bottom - 1, viewport.top + y * viewport.height)),
-  };
-}
-
 export function isRemoteMouseBlockedElement(element: Element | null): boolean {
   if (!element) return true;
   const blocked = element.closest(BLOCKED_SELECTOR);
@@ -340,6 +413,53 @@ export function isAllowedRemoteClickElement(
 
   const descriptor = elementDescriptor(clickable);
   return !!descriptor && SAFE_ACTION_TEXT.test(descriptor) && !DANGEROUS_TEXT.test(descriptor);
+}
+
+export const REMOTE_WHEEL_DELTA_MODE_PIXEL = 0;
+export const REMOTE_WHEEL_DELTA_MODE_LINE = 1;
+export const REMOTE_WHEEL_DELTA_MODE_PAGE = 2;
+/**
+ * Approximate CSS pixels per wheel line. Line-mode controllers (Firefox)
+ * report ~3 lines per notch; 40 px/line restores the ~120 px per notch that
+ * pixel-mode browsers scroll, matching the widely used normalize-wheel
+ * heuristic.
+ */
+export const REMOTE_WHEEL_LINE_HEIGHT_PX = 40;
+export const REMOTE_WHEEL_FALLBACK_PAGE_WIDTH_PX = 1024;
+export const REMOTE_WHEEL_FALLBACK_PAGE_HEIGHT_PX = 768;
+
+/**
+ * Wheel deltas are only pixels when `deltaMode` is `DOM_DELTA_PIXEL`.
+ * Line-mode events (Firefox: ~3 per notch) and page-mode events would
+ * otherwise be forwarded raw and scroll 1–3 px — i.e. no visible scrolling
+ * at all. Normalization happens on the controller, where the event and its
+ * units live; the target only ever receives pixels.
+ *
+ * Page-mode deltas are scaled by the target's page size, taken from the
+ * captured frame viewport the controller is looking at.
+ */
+export function normalizeRemoteWheelDelta(
+  deltaX: number,
+  deltaY: number,
+  deltaMode: number,
+  pageWidth?: number,
+  pageHeight?: number
+): { deltaX: number; deltaY: number } {
+  const safeDeltaX = Number.isFinite(deltaX) ? deltaX : 0;
+  const safeDeltaY = Number.isFinite(deltaY) ? deltaY : 0;
+  if (deltaMode === REMOTE_WHEEL_DELTA_MODE_LINE) {
+    return {
+      deltaX: safeDeltaX * REMOTE_WHEEL_LINE_HEIGHT_PX,
+      deltaY: safeDeltaY * REMOTE_WHEEL_LINE_HEIGHT_PX,
+    };
+  }
+  if (deltaMode === REMOTE_WHEEL_DELTA_MODE_PAGE) {
+    return {
+      deltaX: safeDeltaX * finitePositive(pageWidth, REMOTE_WHEEL_FALLBACK_PAGE_WIDTH_PX),
+      deltaY: safeDeltaY * finitePositive(pageHeight, REMOTE_WHEEL_FALLBACK_PAGE_HEIGHT_PX),
+    };
+  }
+  return { deltaX: safeDeltaX, deltaY: safeDeltaY };
 }
 
 // prettier-ignore
@@ -379,24 +499,16 @@ export function applyRemoteMouseCommand(
   view: Window = window,
   options: RemoteMouseExecutionOptions = {}
 ): RemoteMouseExecutionResult {
-  const mappedPoint = mapRemoteMousePoint(command.x, command.y, view);
+  const mappedPoint = mapRemoteMouseFramePoint(command.x, command.y, command.frameViewport, view);
   if (!mappedPoint) {
     return { status: "ignored", reason: "invalid-coordinates", clientX: 0, clientY: 0 };
   }
 
-  const { clientX, clientY } = mappedPoint;
+  const { clientX, clientY, onScreen } = mappedPoint;
   const target = documentRef.elementFromPoint(clientX, clientY);
 
   if (command.type === "pointer-move") {
     return { status: "executed", reason: null, clientX, clientY };
-  }
-
-  if (isRemoteMouseFrameViewportStale(command.frameViewport, view)) {
-    return { status: "ignored", reason: "stale-frame-viewport", clientX, clientY };
-  }
-
-  if (!target) {
-    return { status: "ignored", reason: "no-target", clientX, clientY };
   }
 
   if (command.type === "scroll") {
@@ -405,7 +517,15 @@ export function applyRemoteMouseCommand(
     if (deltaX === 0 && deltaY === 0) {
       return { status: "ignored", reason: "empty-scroll", clientX, clientY };
     }
+    if (!target) {
+      return { status: "ignored", reason: "no-target", clientX, clientY };
+    }
 
+    // Scrolling is exempt from frame-viewport staleness by design: the scroll
+    // itself is what invalidates the captured scroll position, so requiring a
+    // fresh frame would drop every scroll after the first. The anchor above
+    // was still remapped through the frame snapshot, so the scroll targets
+    // the container the controller was pointing at.
     const scrollTarget = nearestScrollableElement(target, view, deltaX, deltaY);
     if (scrollTarget) {
       scrollTarget.scrollBy({ left: deltaX, top: deltaY, behavior: "auto" });
@@ -413,6 +533,19 @@ export function applyRemoteMouseCommand(
       view.scrollBy({ left: deltaX, top: deltaY, behavior: "auto" });
     }
     return { status: "executed", reason: null, clientX, clientY };
+  }
+
+  // The click point was remapped through the frame snapshot above, so pure
+  // viewport drift keeps the click on the aimed content. When the remapped
+  // point falls outside the live viewport, the aimed content is no longer
+  // visible and there is nothing accurate to click — ignore rather than land
+  // on whatever moved into the clamped position.
+  if (!onScreen) {
+    return { status: "ignored", reason: "frame-point-offscreen", clientX, clientY };
+  }
+
+  if (!target) {
+    return { status: "ignored", reason: "no-target", clientX, clientY };
   }
 
   if (options.keyboardEnabled && focusRemoteEditableElement(target)) {

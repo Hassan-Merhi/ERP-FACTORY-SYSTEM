@@ -20,8 +20,10 @@ import {
 } from "@/hooks/remote-control-command-flow";
 import {
   normalizeRemoteMousePoint,
+  normalizeRemoteWheelDelta,
   parseFrameViewportFromDataset,
   type RemoteMouseCommandType,
+  type RemoteMouseFrameSize,
   type RemoteMouseFrameViewport,
 } from "@/hooks/remote-mouse-control-policy";
 import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
@@ -317,8 +319,21 @@ export function RemoteMouseControllerOverlay() {
     image.style.cursor = "crosshair";
     image.style.touchAction = "none";
 
-    const pointFromEvent = (clientX: number, clientY: number) =>
-      normalizeRemoteMousePoint(clientX, clientY, image.getBoundingClientRect());
+    const pointFromEvent = (clientX: number, clientY: number) => {
+      // Normalize against the box the frame pixels actually occupy. Viewers
+      // letterbox the frame with `object-fit: contain`, and points taken
+      // against the raw element rect would land offset. The encoded frame's
+      // natural size is the ground truth; fall back to the viewport snapshot
+      // stamped on the image, then to the element rect itself.
+      const frameSize: RemoteMouseFrameSize | null =
+        image.naturalWidth > 0 && image.naturalHeight > 0
+          ? { width: image.naturalWidth, height: image.naturalHeight }
+          : (() => {
+              const frame = parseFrameViewportFromDataset(image.dataset);
+              return frame ? { width: frame.width, height: frame.height } : null;
+            })();
+      return normalizeRemoteMousePoint(clientX, clientY, image.getBoundingClientRect(), frameSize);
+    };
 
     const onPointerMove = (event: PointerEvent) => {
       const point = pointFromEvent(event.clientX, event.clientY);
@@ -346,11 +361,19 @@ export function RemoteMouseControllerOverlay() {
       if (!point) return;
       event.preventDefault();
       event.stopPropagation();
+      // Wheel deltas are only pixels when deltaMode is DOM_DELTA_PIXEL.
+      // Line-mode controllers (Firefox, ~3 per notch) and page-mode platforms
+      // would otherwise ship raw and scroll 1–3 px per event — no visible
+      // scrolling at all. Normalize here, where the event and its units live;
+      // page-mode deltas scale by the target's page size, taken from the
+      // captured frame the pointer is over.
+      const frame = parseFrameViewportFromDataset(image.dataset);
+      const delta = normalizeRemoteWheelDelta(event.deltaX, event.deltaY, event.deltaMode, frame?.width, frame?.height);
       const previous = scrollPendingRef.current;
       scrollPendingRef.current = {
         ...point,
-        deltaX: Math.max(-1200, Math.min(1200, (previous?.deltaX ?? 0) + event.deltaX)),
-        deltaY: Math.max(-1200, Math.min(1200, (previous?.deltaY ?? 0) + event.deltaY)),
+        deltaX: Math.max(-1200, Math.min(1200, (previous?.deltaX ?? 0) + delta.deltaX)),
+        deltaY: Math.max(-1200, Math.min(1200, (previous?.deltaY ?? 0) + delta.deltaY)),
       };
       if (scrollTimerRef.current === null) {
         scrollTimerRef.current = window.setTimeout(flushScroll, SCROLL_COALESCE_MS);
@@ -387,8 +410,8 @@ export function RemoteMouseControllerOverlay() {
           setLastResult(result);
           if (result.status === "blocked") {
             setError(t("That control is protected and cannot be activated remotely."));
-          } else if (result.status === "ignored" && result.reason === "stale-frame-viewport") {
-            setError(t("The screen changed since this frame was captured. Wait for a fresh frame and try again."));
+          } else if (result.status === "ignored" && result.reason === "frame-point-offscreen") {
+            setError(t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again."));
           }
         }
       } catch {

@@ -103,3 +103,4 @@
 - [Golden Coast vouchers are immutable](golden-coast-voucher-immutability.md) — every GC- voucher is idempotency-tracked and corrected by reversal, never edited; voucher write paths must call voucherMutationBlockReason, not isReadonlyMigratedVoucher alone.
 - [GitHub push fallback](github-api-push-fallback.md) — when HTTPS Git credentials fail, create the branch commit through the authorized GitHub API using incremental tree uploads.
 - [Git tree manifest safety](github-tree-manifest-safety.md) — large tree output can truncate in CodeExecution; build manifests with direct child_process/fs reads, never returned shell text.
+- [Remote mouse control accuracy](remote-control-accuracy-fix.md) — one coordinate space (photographed layout viewport, never visualViewport), remap stale frames through document space instead of rejecting, scroll exempt from frame staleness, normalize wheel deltaMode to pixels on the controller.
