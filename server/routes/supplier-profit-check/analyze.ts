@@ -12,6 +12,7 @@ import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { buildSupplierProfitRows, type ProfitSourceItem } from "./analysis-core";
+import { getProfitCheckSupplierScope } from "./supplier-scope";
 
 const VALID_SOURCE_TYPES = new Set(["all", "proforma", "otw_containers"]);
 
@@ -39,11 +40,8 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
         return res.status(400).json({ message: "Invalid sourceType" });
       }
 
-      const supplierScopeResult = await pool.query(
-        `SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
-        [supplierId, companyId]
-      );
-      if (supplierScopeResult.rows.length === 0) {
+      const supplierScope = await getProfitCheckSupplierScope(supplierId, companyId);
+      if (!supplierScope) {
         return res.status(404).json({ message: "Supplier not found" });
       }
 
@@ -210,11 +208,28 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
         );
         items = itemsResult.rows as ProfitSourceItem[];
       } else {
-        const supplierRow = await pool.query(
-          `SELECT stock_group_id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
-          [supplierId, companyId]
-        );
-        const linkedStockGroupId = supplierRow.rows[0]?.stock_group_id ?? null;
+        let linkedStockGroupId = supplierScope.stockGroupId;
+
+        // Parent-owned suppliers can carry a stock-group id from the parent
+        // tenant. Map that group to the active company by stable group code;
+        // if no corresponding group exists, use the active company's full item
+        // catalog rather than returning an empty Profit Check.
+        if (linkedStockGroupId && supplierScope.ownerCompanyId !== companyId) {
+          const mappedGroup = await pool.query(
+            `
+            SELECT child.id
+            FROM stock_groups parent
+            JOIN stock_groups child
+              ON child.company_id = $1
+             AND lower(child.code) = lower(parent.code)
+            WHERE parent.id = $2
+              AND parent.company_id = $3
+            LIMIT 1
+          `,
+            [companyId, linkedStockGroupId, supplierScope.ownerCompanyId]
+          );
+          linkedStockGroupId = mappedGroup.rows[0]?.id ? Number(mappedGroup.rows[0].id) : null;
+        }
 
         const itemsResult = linkedStockGroupId
           ? await pool.query(
