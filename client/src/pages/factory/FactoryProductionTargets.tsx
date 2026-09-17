@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Loader2,
   LockKeyhole,
+  MessageCircle,
   Save,
   Search,
   Target,
@@ -406,11 +407,11 @@ export default function FactoryProductionTargets() {
     }
   };
 
-  const sendProductionWhatsappImage = async (endedDate: string) => {
-    // Re-read the just-finalized day so the image uses the exact frozen production counts,
-    // not a potentially stale browser snapshot from a few seconds before End Production.
-    const finalizedSnapshot = await fetchProduction("daily", endedDate, endedDate);
-    setRows(finalizedSnapshot.rows);
+  const sendProductionWhatsappImage = async (reportDate: string) => {
+    // Always refresh first so each manual send reflects the latest available production
+    // counts, targets/categories, and Attendance Register-driven statuses for that day.
+    const latestSnapshot = await fetchProduction("daily", reportDate, reportDate);
+    setRows(latestSnapshot.rows);
     await waitForReportPaint();
 
     if (!productionReportRef.current) throw new Error(tr("productionWhatsappImageFailed"));
@@ -421,11 +422,11 @@ export default function FactoryProductionTargets() {
       scale: 2,
       logging: false,
     });
-    const title = `${tr("productionTargets")} — ${endedDate}`;
+    const title = `${tr("productionTargets")} — ${reportDate}`;
     const response = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
       imageBase64: canvas.toDataURL("image/png"),
-      date: endedDate,
-      fileName: `Production_${endedDate}.png`,
+      date: reportDate,
+      fileName: `Production_${reportDate}.png`,
       caption: title,
       reportLabel: title,
       recipient: "production",
@@ -436,6 +437,20 @@ export default function FactoryProductionTargets() {
       throw new Error(body.message || tr("productionWhatsappImageFailed"));
     }
   };
+
+  const sendWhatsappMutation = useMutation({
+    mutationFn: () => sendProductionWhatsappImage(referenceDate),
+    onSuccess: () => {
+      toast({ title: tr("productionWhatsappImageSent") });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: tr("productionWhatsappImageFailed"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const endProductionMutation = useMutation({
     mutationFn: async () => {
@@ -453,27 +468,14 @@ export default function FactoryProductionTargets() {
       }
       return response.json();
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       const endedDate = referenceDate;
       toast({ title: tr("productionEnded") });
-
-      try {
-        await sendProductionWhatsappImage(endedDate);
-        toast({ title: tr("productionWhatsappImageSent") });
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : tr("productionWhatsappImageFailed");
-        toast({
-          title: tr("productionWhatsappImageFailed"),
-          description: message,
-          variant: "destructive",
-        });
-      } finally {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/staff-tracking"],
-          refetchType: "active",
-        });
-        setReferenceDate(addIsoDays(endedDate, 1));
-      }
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/staff-tracking"],
+        refetchType: "active",
+      });
+      setReferenceDate(addIsoDays(endedDate, 1));
     },
     onError: (error: Error) => {
       toast({ title: tr("endProductionFailed"), description: error.message, variant: "destructive" });
@@ -507,7 +509,8 @@ export default function FactoryProductionTargets() {
     setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   };
 
-  const busy = saveMutation.isPending || isImporting || endProductionMutation.isPending;
+  const busy =
+    saveMutation.isPending || isImporting || sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -587,6 +590,22 @@ export default function FactoryProductionTargets() {
             )}
             {saveMutation.isPending ? tr("saving") : tr("save")}
           </Button>
+
+          {periodType === "daily" && (
+            <Button
+              variant="outline"
+              onClick={() => sendWhatsappMutation.mutate()}
+              disabled={rows.length === 0 || busy}
+              data-testid="button-send-production-whatsapp"
+            >
+              {sendWhatsappMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="mr-2 h-4 w-4" />
+              )}
+              {sendWhatsappMutation.isPending ? "Sending…" : "Send to WhatsApp"}
+            </Button>
+          )}
 
           {periodType === "daily" && (
             <Button
