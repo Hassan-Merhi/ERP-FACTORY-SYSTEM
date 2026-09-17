@@ -275,7 +275,7 @@ export function AppSidebar({ user }: { user?: SidebarUser }) {
   };
 
   return (
-    <Sidebar>
+    <Sidebar className="!flex">
       <ModuleHeader icon={Package} label="Business OS" tagline="ERP / Warehouse" accent={MODULE_ACCENT.erp} />
 
       <SidebarContent className="px-3 py-2 overflow-y-auto">
