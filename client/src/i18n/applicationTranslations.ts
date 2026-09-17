@@ -77,6 +77,28 @@ export const applicationTranslations = {
     fr: "Une nouvelle version de l’application est prête.",
   },
 
+  "containerVerification.itemsRefreshed": {
+    en: "Container items refreshed",
+    ar: "تم تحديث عناصر الحاوية",
+    fr: "Articles du conteneur actualisés",
+  },
+  "containerVerification.latestDetailsLoaded": {
+    en: "${data.imported} current item lines loaded from the latest container details${skippedMsg}",
+    ar: "تم تحميل ${data.imported} من بنود العناصر الحالية من أحدث تفاصيل الحاوية${skippedMsg}",
+    fr: "${data.imported} lignes d’articles actuelles chargées depuis les derniers détails du conteneur${skippedMsg}",
+  },
+  "containerVerification.refreshNeedsConnection": {
+    en: "Refresh requires a connection",
+    ar: "يتطلب التحديث اتصالاً بالشبكة",
+    fr: "L’actualisation nécessite une connexion",
+  },
+  "factoryAdvances.netDue": { en: "Net Due", ar: "صافي المستحق", fr: "Net dû" },
+  "accountMigration.returnFailed": {
+    en: "Account return migration failed",
+    ar: "فشلت إعادة ترحيل الحساب",
+    fr: "Échec du retour de migration du compte",
+  },
+
   "settings.dataTools.costOverride.title": {
     en: "Location Cost Price Override",
     ar: "تعديل تكلفة المخزون حسب الموقع",

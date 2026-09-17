@@ -22,4 +22,19 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "يجب ألا يتجاوز clientSaleId 36 حرفًا",
     fr: "clientSaleId ne doit pas dépasser 36 caractères",
   },
+  {
+    en: "A watched user is required.",
+    ar: "يجب تحديد مستخدم للمشاهدة.",
+    fr: "Un utilisateur à surveiller est requis.",
+  },
+  {
+    en: "No company selected.",
+    ar: "لم يتم تحديد شركة.",
+    fr: "Aucune société sélectionnée.",
+  },
+  {
+    en: "No active screen feed is available for this user in the selected company.",
+    ar: "لا توجد مشاركة شاشة نشطة متاحة لهذا المستخدم في الشركة المحددة.",
+    fr: "Aucun flux d’écran actif n’est disponible pour cet utilisateur dans la société sélectionnée.",
+  },
 ];
