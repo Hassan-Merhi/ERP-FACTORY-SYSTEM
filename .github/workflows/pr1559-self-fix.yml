@@ -61,7 +61,7 @@ jobs:
             tests/phase33b-daybook-finance-routes.test.ts \
             tests/phase33b-voucher-entry-reads.test.ts
 
-      - name: Commit repairs and remove one-shot machinery
+      - name: Commit repaired source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -76,6 +76,9 @@ jobs:
             tests/phase33b-account-migration-routes.test.ts \
             tests/phase33b-daybook-finance-routes.test.ts \
             tests/phase33b-voucher-entry-reads.test.ts
-          git rm .github/workflows/pr1559-self-fix.yml scripts/pr1559-self-fix.mjs
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
           git commit -m "fix: clear PR 1559 repository gates"
           git push origin HEAD:test/phase33b-accounting-finance-20260917
