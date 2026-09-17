@@ -273,6 +273,27 @@ export interface RemoteMouseViewportMetrics {
  */
 export const FRAME_POINT_EDGE_SLOP_PX = 2;
 
+/**
+ * Whether the live viewport can host a command at all.
+ *
+ * A window that reports no width or height — minimized, detached, a zero-size
+ * frame — cannot be mapped into. Clamping against the 1×1 fallback below would
+ * land every command on whatever sits in the top-left corner, which is usually
+ * the shell's navigation, so such a command is refused instead of aimed at a
+ * fabricated viewport.
+ */
+export function isUsableRemoteMouseViewport(view: Window = window): boolean {
+  const { innerWidth, innerHeight } = view;
+  return (
+    typeof innerWidth === "number" &&
+    Number.isFinite(innerWidth) &&
+    innerWidth > 0 &&
+    typeof innerHeight === "number" &&
+    Number.isFinite(innerHeight) &&
+    innerHeight > 0
+  );
+}
+
 export function getRemoteMouseViewportMetrics(view: Window = window): RemoteMouseViewportMetrics {
   return {
     width: finitePositive(view.innerWidth, 1),
@@ -325,6 +346,7 @@ export function mapRemoteMouseFramePoint(
   view: Window = window
 ): RemoteMouseFramePointMapping | null {
   if (!finiteCoordinate(x) || !finiteCoordinate(y)) return null;
+  if (!isUsableRemoteMouseViewport(view)) return null;
   const live = getRemoteMouseViewportMetrics(view);
   const captured = coerceRemoteMouseFrameViewport(frame);
 
@@ -520,7 +542,11 @@ export function applyRemoteMouseCommand(
 ): RemoteMouseExecutionResult {
   const mappedPoint = mapRemoteMouseFramePoint(command.x, command.y, command.frameViewport, view);
   if (!mappedPoint) {
-    return { status: "ignored", reason: "invalid-coordinates", clientX: 0, clientY: 0 };
+    // Separate causes: the controller sent an unusable point, or this window
+    // has no viewport to land it in. Both refuse the command; the reason tells
+    // the operator which one happened.
+    const reason = isUsableRemoteMouseViewport(view) ? "invalid-coordinates" : "invalid-viewport";
+    return { status: "ignored", reason, clientX: 0, clientY: 0 };
   }
 
   const { clientX, clientY, onScreen } = mappedPoint;

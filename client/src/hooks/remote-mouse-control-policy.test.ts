@@ -7,6 +7,7 @@ import {
   getRemoteMouseViewportMetrics,
   isAllowedRemoteClickElement,
   isRemoteMouseBlockedElement,
+  isUsableRemoteMouseViewport,
   mapRemoteMouseFramePoint,
   normalizeRemoteMousePoint,
   normalizeRemoteWheelDelta,
@@ -514,6 +515,108 @@ describe("remote mouse execution policy", () => {
     expect(isRemoteMouseBlockedElement(dangerousSafe)).toBe(true);
     expect(isAllowedRemoteClickElement(dangerousSafe)).toBe(false);
     expect(isAllowedRemoteClickElement(formSafe)).toBe(false);
+  });
+
+  it("scrolls the same distance whichever unit the controller's wheel reports", () => {
+    const panel = document.createElement("div");
+    Object.defineProperty(panel, "scrollHeight", { configurable: true, value: 3000 });
+    Object.defineProperty(panel, "clientHeight", { configurable: true, value: 600 });
+    panel.scrollTop = 500;
+    panel.style.overflowY = "auto";
+    document.body.appendChild(panel);
+    document.elementFromPoint = vi.fn(() => panel);
+    const scrollBy = vi.fn();
+    panel.scrollBy = scrollBy;
+
+    // One notch is ~120 px in every unit the controller may report, because the
+    // controller converts to pixels before the command is sent.
+    const pixel = normalizeRemoteWheelDelta(0, 120, REMOTE_WHEEL_DELTA_MODE_PIXEL);
+    const line = normalizeRemoteWheelDelta(0, 3, REMOTE_WHEEL_DELTA_MODE_LINE);
+    expect(line).toEqual(pixel);
+
+    // A page-mode notch is one screenful of the frame the controller is viewing.
+    const pageMode = normalizeRemoteWheelDelta(0, 1, REMOTE_WHEEL_DELTA_MODE_PAGE, 1000, 600);
+    expect(pageMode).toEqual({ deltaX: 0, deltaY: 600 });
+
+    for (const delta of [pixel, line, pageMode]) {
+      expect(applyRemoteMouseCommand(command("scroll", { ...delta }))).toMatchObject({ status: "executed" });
+    }
+    expect(scrollBy.mock.calls.map(([options]) => options.top)).toEqual([120, 120, 600]);
+  });
+
+  it("scrolls at the point the controller aimed at, not the viewport centre", () => {
+    const panel = document.createElement("div");
+    document.body.appendChild(panel);
+    const elementFromPoint = vi.fn(() => panel);
+    document.elementFromPoint = elementFromPoint;
+    const scrollBy = vi.fn();
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+
+    applyRemoteMouseCommand(
+      command("scroll", {
+        x: 0.25,
+        y: 0.75,
+        deltaY: 120,
+        frameViewport: { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
+      })
+    );
+
+    expect(elementFromPoint).toHaveBeenCalledWith(250, 450);
+  });
+
+  it("refuses commands aimed into a window that reports no viewport", () => {
+    expect(isUsableRemoteMouseViewport(window)).toBe(true);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 0 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 0 });
+    expect(isUsableRemoteMouseViewport(window)).toBe(false);
+
+    const control = document.createElement("button");
+    control.textContent = "View details";
+    control.dataset.remoteControlAction = "view-details";
+    document.body.appendChild(control);
+    const click = vi.spyOn(control, "click");
+    document.elementFromPoint = vi.fn(() => control);
+
+    // A minimized or detached window would otherwise clamp every command onto
+    // the top-left corner and activate whatever sits there.
+    expect(applyRemoteMouseCommand(command("click"))).toMatchObject({
+      status: "ignored",
+      reason: "invalid-viewport",
+    });
+    expect(applyRemoteMouseCommand(command("scroll", { deltaY: 120 }))).toMatchObject({
+      status: "ignored",
+      reason: "invalid-viewport",
+    });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it("recovers on the next frame after a reconnect left the aim point stale", () => {
+    const control = document.createElement("button");
+    control.textContent = "View details";
+    control.dataset.remoteControlAction = "view-details";
+    document.body.appendChild(control);
+    const click = vi.spyOn(control, "click");
+    document.elementFromPoint = vi.fn(() => control);
+
+    // While the transport was down the employee scrolled a screenful, so the
+    // frame the controller is still looking at aims off the live viewport.
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 1400 });
+    const staleFrame = { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport: staleFrame }))).toMatchObject({
+      status: "ignored",
+      reason: "frame-point-offscreen",
+    });
+    expect(click).not.toHaveBeenCalled();
+
+    // The first frame after the reconnect carries the employee's real scroll
+    // position, and the same aim point lands again.
+    const freshFrame = { width: 1000, height: 600, scrollX: 0, scrollY: 1400, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport: freshFrame }))).toMatchObject({
+      status: "executed",
+      clientX: 500,
+      clientY: 300,
+    });
+    expect(click).toHaveBeenCalledTimes(1);
   });
 
   it("ignores malformed coordinates, empty scrolls, and missing targets", () => {
