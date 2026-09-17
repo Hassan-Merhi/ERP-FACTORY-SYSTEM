@@ -9,7 +9,13 @@ const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
 const VITEST = resolve(ROOT, "node_modules/vitest/vitest.mjs");
 const coverage = process.argv.includes("--coverage");
-const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 8);
+// Shard count tracks suite growth. The backend suite passed 745 files with the
+// Phase 33 coverage waves, at which point a 1/8 shard no longer fit the 210s
+// plain budget and certification aborted before the later shards ever ran.
+// Twelve shards restore the per-shard headroom the budget is meant to police;
+// workflows that pin their own matrix (phase33-parallel-coverage) still set
+// BACKEND_TEST_SHARDS explicitly.
+const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 12);
 // The budget belongs to the pass being run, not to the command line. --complete
 // runs a plain pass and then a coverage pass, and coverage instrumentation is
 // measurably slower: in one certification run the same shard took 127.5s plain

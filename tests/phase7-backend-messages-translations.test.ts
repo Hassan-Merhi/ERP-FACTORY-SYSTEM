@@ -10,9 +10,11 @@ describe("Phase 7 backend-message translations", () => {
     // 658 reviewed entries, plus the 20 Phase 3 accounting/payroll/loading/inventory
     // compatibility entries added during the accounting closeout, plus the 12 carried
     // in by the Phase 3 latest-main sync (b86cb44), plus 6 more reviewed entries
-    // added since, for a total of 697.
-    expect(backendMessagesPhase7Translations).toHaveLength(697);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(697);
+    // added since, plus the 3 remote-support watch phrases reviewed in Phase 33E
+    // (27bd1a8), plus the pool-timeout and CSRF rejection phrases the Phase 9
+    // release ratchet required, for a total of 702.
+    expect(backendMessagesPhase7Translations).toHaveLength(702);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(702);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");

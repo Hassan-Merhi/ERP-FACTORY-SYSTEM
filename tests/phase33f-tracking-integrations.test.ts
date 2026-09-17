@@ -150,7 +150,13 @@ describe("Phase 33F tracking integrations", () => {
         { eta: "2026-10-07", isDestination: true },
       ],
     });
-    expect(parsed.latestStatus).toBe("SAILED");
+    // The generic (non-synergy) shape reports no latestStatus of its own: only
+    // the structured "synergy" schema derives one. Callers fall back to the
+    // newest event's status, so the parser exposes it there instead.
+    expect(parsed.synergy).toBe(false);
+    expect(parsed.latestStatus).toBeNull();
+    expect(parsed.events[0]?.status).toBe("SAILED");
+    // Destination ETA comes from the isDestination port call, never portCalls[0].
     expect(parsed.eta).toBe("2026-10-07");
   });
 });

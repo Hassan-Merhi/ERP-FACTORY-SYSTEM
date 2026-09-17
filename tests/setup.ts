@@ -289,6 +289,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
+    // stock_group_location_archive_items.stock_item_id is ON DELETE RESTRICT
+    // against stock_items, and the archive header restricts against locations,
+    // so any fixture that archives a stock group blocks both deletes below.
+    await pool.query(
+      "DELETE FROM stock_group_location_archive_items WHERE archive_id IN (SELECT id FROM stock_group_location_archives WHERE company_id = $1)",
+      [company.id]
+    );
+    await pool.query("DELETE FROM stock_group_location_archives WHERE company_id = $1", [company.id]);
     await db.delete(schema.stockItems).where(eq(schema.stockItems.companyId, company.id));
     await db.delete(schema.stockGroups).where(eq(schema.stockGroups.companyId, company.id));
     // user_company_roles.assigned_location_id and user_locations.location_id both
