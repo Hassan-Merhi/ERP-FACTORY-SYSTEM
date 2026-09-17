@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   annotateRemoteControlSurface,
+  installRemoteControlSurfaceCoverage,
   shouldAnnotateRemoteEditable,
 } from "./remote-control-surface-coverage";
 
@@ -9,6 +10,11 @@ describe("remote control surface coverage", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     window.history.replaceState({}, "", "/dashboard");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("annotates safe entity filters but not sensitive financial or credential fields", () => {
@@ -91,5 +97,54 @@ describe("remote control surface coverage", () => {
 
     expect(input.dataset.remoteControlEditable).toBeUndefined();
     expect(link.dataset.remoteControlAction).toBeUndefined();
+  });
+
+  it("is idempotent and does not rewrite existing coverage attributes", () => {
+    const input = document.createElement("input");
+    input.placeholder = "Search by name";
+    document.body.appendChild(input);
+    const setAttribute = vi.spyOn(input, "setAttribute");
+
+    annotateRemoteControlSurface(input);
+    annotateRemoteControlSurface(input);
+
+    expect(input.dataset.remoteControlEditable).toBe("true");
+    expect(
+      setAttribute.mock.calls.filter(
+        ([name, value]) => name === "data-remote-control-editable" && value === "true"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("coalesces child-list mutations into one animation frame and scopes work to added subtrees", async () => {
+    const callbacks: FrameRequestCallback[] = [];
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        callbacks.push(callback);
+        return callbacks.length;
+      })
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn(() => undefined));
+
+    const dispose = installRemoteControlSurfaceCoverage(document.body);
+    const first = document.createElement("div");
+    const firstInput = document.createElement("input");
+    firstInput.placeholder = "Customer name";
+    first.appendChild(firstInput);
+    const second = document.createElement("div");
+    const secondInput = document.createElement("input");
+    secondInput.placeholder = "Supplier code";
+    second.appendChild(secondInput);
+
+    document.body.append(first, second);
+    await Promise.resolve();
+
+    expect(callbacks).toHaveLength(1);
+    callbacks[0]?.(0);
+    expect(firstInput.dataset.remoteControlEditable).toBe("true");
+    expect(secondInput.dataset.remoteControlEditable).toBe("true");
+
+    dispose();
   });
 });

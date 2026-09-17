@@ -19,16 +19,20 @@ assert.match(
   "the Daybook transform must install its complete-data client"
 );
 assert.match(client, /const ENDPOINT = "\/api\/factory\/daybook";/, "Daybook endpoint must be targeted");
-assert.match(client, /const DEFAULT_LIMIT = 100;/, "Daybook default page size must be 100");
+assert.match(client, /const DEFAULT_LIMIT = 100;/, "Daybook initial page size must remain 100");
 assert.match(client, /fetchAllDaybookEntries/, "complete export loader is required");
 assert.match(client, /for \(let page = 2; page <= totalPages; page \+= 1\)/, "complete loader must fetch every page");
 assert.match(client, /entryId/, "entry deep links must bypass normal paging");
 assert.match(client, /voucherId/, "voucher deep links must bypass normal paging");
-assert.match(client, /JSON\.stringify\(payload\.items\)/, "the legacy Daybook array contract must be preserved");
-assert.match(client, /factory-daybook-page-previous/, "Previous control is required");
-assert.match(client, /factory-daybook-page-next/, "Next control is required");
-assert.match(client, /factory-daybook-page-size/, "page-size control is required");
-assert.match(client, /table groups and totals are this page/, "page-scoped totals must be disclosed");
+assert.match(client, /const pageCache = new Map<number, DaybookPage>\(\)/, "progressive daybook pages must be cached client-side");
+assert.match(client, /handleProgressiveScroll/, "daybook must progressively load as the user scrolls");
+assert.match(client, /AUTOLOAD_THRESHOLD_PX/, "progressive loading must use a near-bottom threshold");
+assert.match(client, /factory-daybook-progress/, "progressive loading status must be available");
+assert.match(client, /scroll to load more/, "progressive loading status must explain the interaction");
+assert.match(client, /JSON\.stringify\(entries\)/, "the cumulative Daybook array contract must be preserved");
+assert.doesNotMatch(client, /factory-daybook-page-previous/, "manual Previous pagination must stay removed");
+assert.doesNotMatch(client, /factory-daybook-page-next/, "manual Next pagination must stay removed");
+assert.doesNotMatch(client, /factory-daybook-page-size/, "manual page-size pagination must stay removed");
 assert.match(client, /handleRouteState/, "route changes must clear transient paging state");
 
 assert.match(
@@ -85,16 +89,17 @@ console.log(
       ok: true,
       checks: [
         "Daybook startup wiring",
-        "100-row screen pagination",
+        "100-row initial payload",
+        "progressive scroll loading",
+        "client-side cumulative page merge",
         "All Time empty-date preservation",
         "legacy array compatibility",
-        "visible page controls",
+        "no manual next/previous controls",
         "server-side search/status/amount/sort filters",
         "entry and voucher deep-link bypass",
         "complete summary export",
         "complete detailed export",
         "worker-edit exclusion preservation",
-        "page-total disclosure",
         "route-state reset",
         "fail-loud source transforms",
       ],

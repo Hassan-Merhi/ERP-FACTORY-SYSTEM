@@ -3,21 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const html2canvas = vi.fn();
 vi.mock("html2canvas", () => ({ default: (...args: unknown[]) => html2canvas(...args) }));
 
-const sendScreenFeedBinaryFrame = vi.fn();
-vi.mock("@/lib/screen-feed-binary-transport", () => ({
-  sendScreenFeedBinaryFrame: (...args: unknown[]) => sendScreenFeedBinaryFrame(...args),
-}));
-
 import { captureAndUploadScreenFrame } from "./screen-feed-capture-engine";
 
-/**
- * jsdom ships no 2D canvas implementation, so the engine is exercised against a
- * stub that reproduces the one browser behaviour this suite is about: a canvas
- * that consumed tainted pixels refuses to be exported. The engine encodes with
- * toBlob and ships the result over the binary transport, so both are stubbed
- * here rather than the HTTP frame upload the viewer used before Phase 13-14.
- */
 const taintedCanvases = new WeakSet<HTMLCanvasElement>();
+let encodedBlobSize = 4;
 
 function securityError(): DOMException {
   return new DOMException("Tainted canvases may not be exported.", "SecurityError");
@@ -43,22 +32,20 @@ function stubContext(owner: HTMLCanvasElement): CanvasRenderingContext2D {
   } as unknown as CanvasRenderingContext2D;
 }
 
-/** Bytes every stubbed encode produces unless a test overrides toBlob itself. */
-const ENCODED_BYTES = 1024;
-
-function jpegBlob(bytes: number): Blob {
-  return new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
-}
-
 function installCanvasStubs(): void {
   HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
     return stubContext(this);
   } as unknown as HTMLCanvasElement["getContext"];
 
-  HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, callback: BlobCallback) {
+  HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, callback, type) {
     if (taintedCanvases.has(this)) throw securityError();
-    callback(jpegBlob(ENCODED_BYTES));
-  } as unknown as HTMLCanvasElement["toBlob"];
+    callback(new Blob([new Uint8Array(encodedBlobSize)], { type: type || "image/jpeg" }));
+  };
+
+  HTMLCanvasElement.prototype.toDataURL = function (this: HTMLCanvasElement) {
+    if (taintedCanvases.has(this)) throw securityError();
+    return "data:image/jpeg;base64,AAAA";
+  };
 }
 
 function makeCanvas(width: number, height: number, tainted: boolean): HTMLCanvasElement {
@@ -69,7 +56,7 @@ function makeCanvas(width: number, height: number, tainted: boolean): HTMLCanvas
   return canvas;
 }
 
-function captureOnce(fast = false) {
+function captureOnce(fetchMock: ReturnType<typeof vi.fn>, fast = false) {
   return captureAndUploadScreenFrame({
     fast,
     lastSignature: null,
@@ -80,9 +67,11 @@ function captureOnce(fast = false) {
     scrollElements: [],
     shouldContinue: () => true,
   }).then((result) => {
-    const header = sendScreenFeedBinaryFrame.mock.calls[0]?.[0] as
-      { metadata?: { capture?: Record<string, unknown> } } | undefined;
-    return { result, capture: header?.metadata?.capture ?? {} };
+    const upload = fetchMock.mock.calls.find(
+      (call) => call[0] === "/api/screen-feed" && (call[1] as { method?: string } | undefined)?.method === "POST"
+    );
+    const body = JSON.parse((upload?.[1] as { body?: string } | undefined)?.body ?? "{}");
+    return { result, body, upload };
   });
 }
 
@@ -90,6 +79,7 @@ describe("screen feed capture engine", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    encodedBlobSize = 4;
     installCanvasStubs();
     (globalThis as { CanvasRenderingContext2D?: unknown }).CanvasRenderingContext2D = class {
       createPattern() {
@@ -99,8 +89,6 @@ describe("screen feed capture engine", () => {
     fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     vi.stubGlobal("fetch", fetchMock);
     html2canvas.mockReset();
-    sendScreenFeedBinaryFrame.mockReset();
-    sendScreenFeedBinaryFrame.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -109,45 +97,43 @@ describe("screen feed capture engine", () => {
 
   it("never renders through foreignObject, whose output cannot be encoded", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
-    await captureOnce();
+    await captureOnce(fetchMock);
 
     const options = html2canvas.mock.calls[0]?.[1] as { foreignObjectRendering?: boolean };
     expect(options.foreignObjectRendering).toBe(false);
   });
 
-  it("uploads a normal capture as a dom frame", async () => {
+  it("uses the HTTP recovery upload when binary transport is unavailable", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
-    const { result, capture } = await captureOnce();
+    const { result, body, upload } = await captureOnce(fetchMock);
 
     expect(result.uploaded).toBe(true);
     expect(result.failed).toBe(false);
     expect(result.failureStage).toBeUndefined();
-    expect(result.failureReason).toBeUndefined();
-    expect(capture.source).toBe("dom");
-    expect(capture.failureReason).toBeUndefined();
-    // The JPEG travels as the packet payload, never inline in the header.
-    expect((sendScreenFeedBinaryFrame.mock.calls[0]?.[1] as Blob).type).toBe("image/jpeg");
+    expect(upload).toBeTruthy();
+    expect(body.tabId).toBeTruthy();
+    expect(body.capture.source).toBe("dom");
+    expect(String(body.dataUrl)).toMatch(/^data:image\/jpeg;base64,/);
   });
 
-  it("still delivers a frame, with the reason, when the rendered canvas cannot be encoded", async () => {
+  it("still delivers a fallback frame with the reason when the rendered canvas cannot be encoded", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, true));
-    const { result, capture } = await captureOnce();
+    const { result, body } = await captureOnce(fetchMock);
 
-    // The watcher must never be left on an empty viewer with no explanation
-    // while the watched browser silently re-renders the page forever.
     expect(result.uploaded).toBe(true);
     expect(result.failed).toBe(false);
-    expect(capture.source).toBe("fallback");
-    expect(String(capture.failureReason)).toContain("Tainted");
+    expect(body.capture.source).toBe("fallback");
+    expect(String(body.capture.failureReason)).toContain("Tainted");
+    expect(String(body.dataUrl)).toMatch(/^data:image\/jpeg;base64,/);
   });
 
   it("returns an encode failure when even the fallback canvas cannot be exported", async () => {
     HTMLCanvasElement.prototype.toBlob = function () {
       throw securityError();
-    } as unknown as HTMLCanvasElement["toBlob"];
+    };
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
 
-    const { result } = await captureOnce();
+    const { result } = await captureOnce(fetchMock);
 
     expect(result.uploaded).toBe(false);
     expect(result.failed).toBe(true);
@@ -156,24 +142,22 @@ describe("screen feed capture engine", () => {
   });
 
   it("never uploads a fast frame above the fast transport encoding cap", async () => {
-    HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, callback: BlobCallback) {
-      callback(jpegBlob(600_000));
-    } as unknown as HTMLCanvasElement["toBlob"];
+    encodedBlobSize = 600_000;
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
 
-    const { result } = await captureOnce(true);
+    const { result, upload } = await captureOnce(fetchMock, true);
 
     expect(result.uploaded).toBe(false);
     expect(result.failed).toBe(true);
     expect(result.failureStage).toBe("encode");
-    expect(sendScreenFeedBinaryFrame).not.toHaveBeenCalled();
+    expect(upload).toBeUndefined();
   });
 
-  it("returns the upload status when the transport cannot ship the frame", async () => {
+  it("returns the upload status when the HTTP recovery endpoint rejects a frame", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
-    sendScreenFeedBinaryFrame.mockResolvedValue(false);
+    fetchMock.mockResolvedValue({ ok: false, status: 413 });
 
-    const { result } = await captureOnce();
+    const { result } = await captureOnce(fetchMock);
 
     expect(result.uploaded).toBe(false);
     expect(result.failed).toBe(true);
@@ -183,23 +167,29 @@ describe("screen feed capture engine", () => {
 
   it("reports how long the capture cost so the caller can pace itself", async () => {
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
-    const { result } = await captureOnce();
+    const { result } = await captureOnce(fetchMock);
 
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(result.durationMs)).toBe(true);
   });
 
-  it("encodes a successful frame in a single toBlob pass", async () => {
-    let encodeCalls = 0;
-    HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, callback: BlobCallback) {
-      encodeCalls += 1;
-      callback(jpegBlob(ENCODED_BYTES));
-    } as unknown as HTMLCanvasElement["toBlob"];
+  it("encodes a successful frame once and reuses that JPEG for HTTP recovery", async () => {
+    let blobEncodeCalls = 0;
+    let dataUrlEncodeCalls = 0;
+    HTMLCanvasElement.prototype.toBlob = function (_callback, type) {
+      blobEncodeCalls += 1;
+      _callback(new Blob([new Uint8Array(encodedBlobSize)], { type: type || "image/jpeg" }));
+    };
+    HTMLCanvasElement.prototype.toDataURL = function () {
+      dataUrlEncodeCalls += 1;
+      return "data:image/jpeg;base64,AAAA";
+    };
     html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
 
-    await captureOnce();
+    await captureOnce(fetchMock);
 
-    expect(encodeCalls).toBe(1);
+    expect(blobEncodeCalls).toBe(1);
+    expect(dataUrlEncodeCalls).toBe(0);
   });
 
   it("sanitizes the clone without a per-element computed-style walk", async () => {
@@ -229,7 +219,7 @@ describe("screen feed capture engine", () => {
       return makeCanvas(1200, 800, false);
     });
 
-    await captureOnce();
+    await captureOnce(fetchMock);
     expect(computedCalls).toBe(0);
     expect(selectors).not.toContain("*");
     expect(selectors.some((selector) => selector.includes("svg *"))).toBe(false);
@@ -247,7 +237,7 @@ describe("screen feed capture engine", () => {
       return makeCanvas(1200, 800, false);
     });
 
-    await captureOnce();
+    await captureOnce(fetchMock);
     expect(strippedSrc).toBeNull();
   });
 });
