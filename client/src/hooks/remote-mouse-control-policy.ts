@@ -41,7 +41,6 @@ const BLOCKED_SELECTOR = [
   "textarea",
   "select",
   "option",
-  "form",
   "[contenteditable]:not([contenteditable='false'])",
   "[data-remote-control-blocked='true']",
   "[data-sensitive-action]",
