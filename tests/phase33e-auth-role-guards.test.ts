@@ -49,16 +49,18 @@ function responseDouble() {
   return res;
 }
 
-function request(input: {
-  role?: string;
-  user?: boolean;
-  session?: Record<string, unknown>;
-  body?: Record<string, unknown>;
-  params?: Record<string, string>;
-  query?: Record<string, unknown>;
-  path?: string;
-  method?: string;
-} = {}) {
+function request(
+  input: {
+    role?: string;
+    user?: boolean;
+    session?: Record<string, unknown>;
+    body?: Record<string, unknown>;
+    params?: Record<string, string>;
+    query?: Record<string, unknown>;
+    path?: string;
+    method?: string;
+  } = {}
+) {
   const hasUser = input.user !== false;
   return {
     user: hasUser
@@ -196,11 +198,7 @@ describe("Phase 33E date mutation permissions", () => {
 
     await guard(request({ user: false, body: { voucherDate: "2026-01-01" } }), unauthorized, vi.fn());
     await guard(request({ role: "Admin", body: { voucherDate: "2020-01-01" } }), responseDouble(), adminNext);
-    await guard(
-      request({ role: "Developer", body: { voucherDate: "2020-01-01" } }),
-      responseDouble(),
-      developerNext
-    );
+    await guard(request({ role: "Developer", body: { voucherDate: "2020-01-01" } }), responseDouble(), developerNext);
 
     expect(unauthorized.statusCode).toBe(401);
     expect(adminNext).toHaveBeenCalledOnce();
@@ -269,7 +267,11 @@ describe("Phase 33E date mutation permissions", () => {
 
   it("does not impose Manager/POS date policy on unrelated roles", async () => {
     const next = vi.fn();
-    await canModifyDate()(request({ role: "Normal User", body: { voucherDate: "2020-01-01" } }), responseDouble(), next);
+    await canModifyDate()(
+      request({ role: "Normal User", body: { voucherDate: "2020-01-01" } }),
+      responseDouble(),
+      next
+    );
     expect(next).toHaveBeenCalledOnce();
   });
 });

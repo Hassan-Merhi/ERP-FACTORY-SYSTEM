@@ -23,12 +23,14 @@ import {
   sendCompanyAccessError,
 } from "../server/security/companyAccessBoundary";
 
-function req(input: {
-  userId?: string;
-  currentCompanyId?: unknown;
-  currentRole?: string;
-  user?: { id?: string; role?: string };
-} = {}) {
+function req(
+  input: {
+    userId?: string;
+    currentCompanyId?: unknown;
+    currentRole?: string;
+    user?: { id?: string; role?: string };
+  } = {}
+) {
   return {
     session: {
       userId: input.userId ?? "user-1",
@@ -121,25 +123,15 @@ describe("Phase 33E company access boundary", () => {
   });
 
   it("gives a per-company Developer canonical access to every valid company", async () => {
-    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
-      { companyId: 10, role: "Developer" },
-    ]);
-    harness.storage.getAllCompanies.mockResolvedValue([
-      { id: 1 },
-      { id: "2" },
-      { id: 0 },
-      { id: -5 },
-      { id: "bad" },
-    ]);
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Developer" }]);
+    harness.storage.getAllCompanies.mockResolvedValue([{ id: 1 }, { id: "2" }, { id: 0 }, { id: -5 }, { id: "bad" }]);
 
     await expect(getAccessibleCompanyIds("dev-1")).resolves.toEqual(new Set([1, 2]));
     expect(harness.storage.getUser).not.toHaveBeenCalled();
   });
 
   it("honors an account-level Developer even when no company-role row says Developer", async () => {
-    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
-      { companyId: 10, role: "Manager" },
-    ]);
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Manager" }]);
     harness.storage.getUser.mockResolvedValue({ id: "dev-2", role: "Developer" });
     harness.storage.getAllCompanies.mockResolvedValue([{ id: 10 }, { id: 20 }, { id: 30 }]);
 

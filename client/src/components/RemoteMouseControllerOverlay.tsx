@@ -401,21 +401,28 @@ export function RemoteMouseControllerOverlay() {
   // Distinct error reasons for "clicks do nothing" — each terminal result
   // produces a specific message so operators can tell why a click didn't
   // activate anything, instead of seeing a generic banner or nothing.
-  const getMouseErrorForReason = (reason: string | null, status: string): string | null => {
-    if (status === "executed") return null;
-    if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
-    if (reason === "action-not-allowlisted") return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
-    if (reason === "frame-point-offscreen") return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
-    if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
-    if (reason === "no-target") return t("No element at that position.");
-    if (reason === "no-clickable-target") return t("No clickable control at that position.");
-    if (reason === "click-failed") return t("Click failed to activate the control.");
-    if (reason === "empty-scroll") return t("Empty scroll ignored.");
-    if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
-    if (reason === "duplicate-command") return t("Duplicate command ignored.");
-    if (reason) return t(`Action ${status}: ${reason}`);
-    return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");
-  };
+  const getMouseErrorForReason = useCallback(
+    (reason: string | null, status: string): string | null => {
+      if (status === "executed") return null;
+      if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
+      if (reason === "action-not-allowlisted")
+        return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
+      if (reason === "frame-point-offscreen")
+        return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
+      if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
+      if (reason === "no-target") return t("No element at that position.");
+      if (reason === "no-clickable-target") return t("No clickable control at that position.");
+      if (reason === "click-failed") return t("Click failed to activate the control.");
+      if (reason === "empty-scroll") return t("Empty scroll ignored.");
+      if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
+      if (reason === "duplicate-command") return t("Duplicate command ignored.");
+      if (reason) return t(`Action ${status}: ${reason}`);
+      return t(
+        status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored."
+      );
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!controlEnabled || !sessionId) return;
@@ -436,7 +443,7 @@ export function RemoteMouseControllerOverlay() {
       }
     });
     return () => eventSource.close();
-  }, [controlEnabled, sessionId, t]);
+  }, [controlEnabled, getMouseErrorForReason, sessionId]);
 
   if (!target || !session || !portalHost) return null;
 

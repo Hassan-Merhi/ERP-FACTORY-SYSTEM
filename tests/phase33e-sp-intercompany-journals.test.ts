@@ -209,9 +209,7 @@ describe("Phase 33E Supplier Partner intercompany offload journals", () => {
       input()
     );
 
-    const supplierClearing = harness.state.inserts
-      .slice(0, 2)
-      .map((entry) => entry.values as Record<string, unknown>);
+    const supplierClearing = harness.state.inserts.slice(0, 2).map((entry) => entry.values as Record<string, unknown>);
     expect(supplierClearing).toEqual([
       expect.objectContaining({ supplierId: 1, debitAmount: "60.00", creditAmount: "0" }),
       expect.objectContaining({ supplierId: 2, debitAmount: "40.00", creditAmount: "0" }),

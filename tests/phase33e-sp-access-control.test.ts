@@ -60,15 +60,17 @@ function responseDouble() {
   return res;
 }
 
-function request(input: {
-  path?: string;
-  method?: string;
-  role?: string;
-  userId?: string;
-  body?: Record<string, unknown>;
-  params?: Record<string, string>;
-  idempotencyKey?: string;
-} = {}) {
+function request(
+  input: {
+    path?: string;
+    method?: string;
+    role?: string;
+    userId?: string;
+    body?: Record<string, unknown>;
+    params?: Record<string, string>;
+    idempotencyKey?: string;
+  } = {}
+) {
   const path = input.path ?? "/sales";
   const method = input.method ?? "GET";
   return {

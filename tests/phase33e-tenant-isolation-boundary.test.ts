@@ -21,9 +21,7 @@ vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/db", () => ({ db: harness.db }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
 vi.mock("../server/services/security/activeCompanyPermissionContext", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("../server/services/security/activeCompanyPermissionContext")
-  >();
+  const actual = await importOriginal<typeof import("../server/services/security/activeCompanyPermissionContext")>();
   return {
     ...actual,
     getActiveCompanyPermissionContext: harness.getActiveCompanyPermissionContext,
@@ -60,15 +58,17 @@ function canonicalContext(overrides: Partial<ActiveCompanyPermissionContext> = {
   };
 }
 
-function request(input: {
-  path?: string;
-  method?: string;
-  query?: Record<string, unknown>;
-  body?: Record<string, unknown>;
-  userId?: string | null;
-  currentCompanyId?: number | null;
-  currentRole?: string;
-} = {}) {
+function request(
+  input: {
+    path?: string;
+    method?: string;
+    query?: Record<string, unknown>;
+    body?: Record<string, unknown>;
+    userId?: string | null;
+    currentCompanyId?: number | null;
+    currentRole?: string;
+  } = {}
+) {
   const path = input.path ?? "/api/vouchers";
   return {
     path,
@@ -153,9 +153,7 @@ describe("Phase 33E global tenant isolation boundary", () => {
   });
 
   it("rejects conflicting primary company ids before route execution", async () => {
-    const { res, next } = await runBoundary(
-      request({ query: { companyId: 10 }, body: { companyId: 20 } })
-    );
+    const { res, next } = await runBoundary(request({ query: { companyId: 10 }, body: { companyId: 20 } }));
 
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({
@@ -364,11 +362,7 @@ describe("Phase 33E :companyId path boundary", () => {
 
   it("returns canonical context errors and forwards unknown errors", async () => {
     harness.getActiveCompanyPermissionContext.mockRejectedValueOnce(
-      new ActiveCompanyPermissionContextError(
-        "Missing company role",
-        403,
-        "ACTIVE_COMPANY_ROLE_REQUIRED"
-      )
+      new ActiveCompanyPermissionContextError("Missing company role", 403, "ACTIVE_COMPANY_ROLE_REQUIRED")
     );
     const canonical = await runParam(request(), "10");
     expect(canonical.res.statusCode).toBe(403);
