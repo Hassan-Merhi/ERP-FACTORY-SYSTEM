@@ -11,6 +11,22 @@ vi.mock("../server/lib/permissionMiddleware", () => ({
   requireActionAccess: () => (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
+// Frame routes now require a same-company presence/tab match. These tests are
+// about conditional ETag polling, not tenant isolation, so the gate is stubbed.
+vi.mock("../server/services/screenFeedTenantGate", () => ({
+  assertScreenFeedTenantAccess: async () => ({ allowed: true, companyId: 1, source: "presence" }),
+  setScreenFeedPresenceLookupForTests: () => undefined,
+}));
+
+vi.mock("../server/services/screenWatchAuditService", () => ({
+  beginScreenWatch: async () => ({ watchId: "watch-test", started: false }),
+  endScreenWatch: async () => false,
+  endAllScreenWatchesForController: async () => 0,
+  endAllScreenWatchesForTarget: async () => 0,
+  expireStaleScreenWatches: async () => 0,
+  resetScreenWatchAuditStateForTests: () => undefined,
+}));
+
 const { registerScreenFeedTransportHardening, resetScreenFeedTransportHardeningForTests } =
   await import("../server/routes/screenFeedTransportHardening");
 const { registerScreenFeedRoutes } = await import("../server/routes/screenFeedRoutes");

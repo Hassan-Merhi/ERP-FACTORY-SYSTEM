@@ -34,12 +34,25 @@ export function registerUserPresenceRoutes(app: Express) {
 
     try {
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+      const companyId = req.session.currentCompanyId || null;
+
+      // Developer retains the cross-company operational view. Every other
+      // authorized role only sees presence inside the active company so the
+      // Active Users panel cannot be used as a cross-tenant directory.
+      const scope =
+        userRole === "Developer" || !companyId
+          ? and(gt(userPresence.lastSeen, threeMinutesAgo), ne(userPresence.role, "Developer"))
+          : and(
+              gt(userPresence.lastSeen, threeMinutesAgo),
+              ne(userPresence.role, "Developer"),
+              eq(userPresence.companyId, companyId)
+            );
 
       // Single SELECT with WHERE — no blocking cleanup step.
       const activeUsers = await db
         .select()
         .from(userPresence)
-        .where(and(gt(userPresence.lastSeen, threeMinutesAgo), ne(userPresence.role, "Developer")))
+        .where(scope)
         .orderBy(desc(userPresence.lastSeen));
 
       res.json(activeUsers);

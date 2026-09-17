@@ -959,6 +959,7 @@
     "POST /api/screen-feed/admin/runtime/emergency-stop [requireAuth > <anonymous>]",
     "POST /api/screen-feed/admin/runtime/restore-defaults [requireAuth > <anonymous>]",
     "POST /api/screen-feed/admin/runtime/reset-metrics [requireAuth > <anonymous>]",
+    "GET /api/screen-feed/admin/audit-queue-health [requireAuth > <anonymous>]",
     "GET /api/screen-feed/capabilities [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/screen-feed/live/status [requireLogin > <anonymous>]",
     "GET /api/screen-feed/live/:userId [requireAuth > <anonymous> > <anonymous>]",
