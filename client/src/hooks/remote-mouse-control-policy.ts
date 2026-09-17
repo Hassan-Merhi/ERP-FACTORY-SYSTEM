@@ -41,6 +41,7 @@ const BLOCKED_SELECTOR = [
   "textarea",
   "select",
   "option",
+  "form :is(button,a[href],[role='button'],[role='link'],[role='menuitem']):not([data-remote-control-action]):not([data-remote-control-safe='true'])",
   "[contenteditable]:not([contenteditable='false'])",
   "[data-remote-control-blocked='true']",
   "[data-sensitive-action]",
