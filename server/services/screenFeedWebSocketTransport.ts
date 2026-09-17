@@ -2,7 +2,12 @@ import type { WebSocket } from "ws";
 import { decodeRemoteSupportBinaryPacket, REMOTE_SUPPORT_MAX_FRAME_BYTES } from "@shared/remoteSupportTransport";
 import { isRemoteControlControllerRole, listRemoteControlTabs } from "./remoteControlSessionService";
 import { assertScreenFeedTenantAccess } from "./screenFeedTenantGate";
-import { isRemoteSupportEnabled, recordRemoteSupportMetric } from "./remoteSupportRuntime";
+import {
+  isRemoteSupportEnabled,
+  recordRemoteSupportFrameReceived,
+  recordRemoteSupportMetric,
+  recordRemoteSupportViewerRendered,
+} from "./remoteSupportRuntime";
 
 export interface ScreenFeedSocketContext {
   userId: string;
@@ -23,6 +28,15 @@ const OPEN = 1;
 
 function clean(value: unknown, max = 160): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function finiteNumber(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 export function screenFeedSocketKey(userId: string, tabId: string): string {
@@ -94,17 +108,14 @@ function registeredTab(context: ScreenFeedSocketContext, tabId: string) {
 function bindProducer(socket: SocketWithState, context: ScreenFeedSocketContext, tabIdRaw: unknown): boolean {
   const tabId = clean(tabIdRaw);
   if (!tabId) {
-    safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_TAB_ID", message: "ERP tab identifier is required." });
+    safeSendJson(socket, {
+      type: "screen-feed:error",
+      code: "INVALID_TAB_ID",
+      message: "ERP tab identifier is required.",
+    });
     return false;
   }
 
-  // The screen-feed effect and the control-tab heartbeat start independently.
-  // The authenticated websocket can therefore become ready a few milliseconds
-  // before the heartbeat has inserted this tab in the in-memory presence map.
-  // Pre-binding the caller's own tab is safe: viewers still cannot bind unless
-  // the exact tab is registered and passes the tenant gate below. If the tab is
-  // already known, reject a stale socket whose company context no longer
-  // matches it rather than letting a company switch reuse the old scope.
   const knownTab = registeredTab(context, tabId);
   if (knownTab && context.companyId && knownTab.companyId !== context.companyId) {
     safeSendJson(socket, {
@@ -136,7 +147,11 @@ async function bindViewer(
   const watchedUserId = clean(watchedUserIdRaw, 128);
   const tabId = clean(tabIdRaw);
   if (!watchedUserId || !tabId) {
-    safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_WATCH_TARGET", message: "A user and ERP tab are required." });
+    safeSendJson(socket, {
+      type: "screen-feed:error",
+      code: "INVALID_WATCH_TARGET",
+      message: "A user and ERP tab are required.",
+    });
     return false;
   }
 
@@ -160,8 +175,6 @@ async function bindViewer(
     return false;
   }
 
-  // One viewer socket follows one selected ERP tab. Switching the selector
-  // atomically removes the previous binding so old tabs stop capturing at once.
   clearViewerBindings(socket);
   const key = screenFeedSocketKey(watchedUserId, tabId);
   addSocket(viewers, key, socket);
@@ -170,6 +183,27 @@ async function bindViewer(
   const latest = latestFrames.get(key);
   if (latest && Date.now() - latest.capturedAt <= FRAME_RETENTION_MS) safeSendBinary(socket, latest.packet);
   notifyProducerStatus(key);
+  return true;
+}
+
+function recordViewerPaint(
+  socket: SocketWithState,
+  context: ScreenFeedSocketContext,
+  message: Record<string, unknown>
+): boolean {
+  // Paint acknowledgements are accepted only from an authenticated support-role
+  // socket that is already bound as the viewer for the exact user+tab feed.
+  if (!isRemoteControlControllerRole(context.role)) return true;
+  const watchedUserId = clean(message.userId, 128);
+  const tabId = clean(message.tabId);
+  if (!watchedUserId || !tabId) return true;
+  const key = screenFeedSocketKey(watchedUserId, tabId);
+  if (!viewerKeysBySocket.get(socket)?.has(key)) return true;
+
+  const capturedAt = Date.parse(clean(message.capturedAt, 80));
+  const viewerRenderedAt = finiteNumber(message.viewerRenderedAt);
+  if (!Number.isFinite(capturedAt) || viewerRenderedAt == null) return true;
+  recordRemoteSupportViewerRendered({ feedKey: key, capturedAt, viewerRenderedAt });
   return true;
 }
 
@@ -197,25 +231,51 @@ export async function handleScreenFeedWebSocketMessage(
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return true;
     if (data.byteLength > REMOTE_SUPPORT_MAX_FRAME_BYTES + 24 * 1024 + 5) {
       recordRemoteSupportMetric("frameRejected");
-      safeSendJson(socket, { type: "screen-feed:error", code: "FRAME_TOO_LARGE", message: "Frame payload is too large." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "FRAME_TOO_LARGE",
+        message: "Frame payload is too large.",
+      });
       return true;
     }
     const decoded = decodeRemoteSupportBinaryPacket(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
     if (!decoded) {
       recordRemoteSupportMetric("frameRejected");
-      safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_FRAME_PACKET", message: "Invalid screen frame packet." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "INVALID_FRAME_PACKET",
+        message: "Invalid screen frame packet.",
+      });
       return true;
     }
     const key = screenFeedSocketKey(context.userId, decoded.header.tabId);
     if (!producerKeysBySocket.get(socket)?.has(key)) {
-      safeSendJson(socket, { type: "screen-feed:error", code: "TAB_NOT_BOUND", message: "Bind the ERP tab before sending frames." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "TAB_NOT_BOUND",
+        message: "Bind the ERP tab before sending frames.",
+      });
       return true;
     }
 
+    const serverReceivedAt = Date.now();
+    const capturedAt = Date.parse(decoded.header.capturedAt);
+    const capture = metadataRecord(decoded.header.metadata.capture);
+    const captureDurationMs = finiteNumber(capture?.durationMs);
+
     // Keep the exact received packet. No base64 conversion, JSON image copy or
     // re-encoding occurs between producer and viewers.
-    latestFrames.set(key, { packet: data, capturedAt: Date.now() });
+    latestFrames.set(key, { packet: data, capturedAt: serverReceivedAt });
     recordRemoteSupportMetric("frameAccepted", decoded.payload.byteLength);
+    if (Number.isFinite(capturedAt)) {
+      recordRemoteSupportFrameReceived({
+        feedKey: key,
+        capturedAt,
+        serverReceivedAt,
+        captureDurationMs,
+      });
+    }
+
     let delivered = 0;
     for (const viewer of viewers.get(key) ?? []) {
       safeSendBinary(viewer, data);
@@ -236,6 +296,7 @@ export async function handleScreenFeedWebSocketMessage(
 
   if (message.type === "screen-feed:producer-bind") return bindProducer(socket, context, message.tabId);
   if (message.type === "screen-feed:viewer-bind") return bindViewer(socket, context, message.userId, message.tabId);
+  if (message.type === "screen-feed:viewer-rendered") return recordViewerPaint(socket, context, message);
   if (typeof message.type === "string" && message.type.startsWith("screen-feed:")) {
     return forwardProducerJson(socket, context, message);
   }

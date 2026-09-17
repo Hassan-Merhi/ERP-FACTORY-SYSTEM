@@ -77,7 +77,10 @@ const WATCH_TARGET_ATTRIBUTE_FILTER = [
 function nodeContainsWatchDialog(node: Node): boolean {
   if (node.nodeType !== Node.ELEMENT_NODE) return false;
   const element = node as Element;
-  return element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) || Boolean(element.querySelector(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR));
+  return (
+    element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
+    Boolean(element.querySelector(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR))
+  );
 }
 
 function nodeMayContainWatchScope(node: Node): boolean {
@@ -95,7 +98,8 @@ function mutationMayAffectWatchTarget(records: readonly MutationRecord[]): boole
         element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
         element.closest(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
         (record.attributeName === "data-testid" && record.oldValue?.startsWith("dialog-watch-user"))
-      ) return true;
+      )
+        return true;
       continue;
     }
     if (record.type !== "childList") continue;
@@ -142,7 +146,8 @@ function normalizeSession(
     !target ||
     value.targetUserId !== target.userId ||
     value.targetTabId !== target.tabId
-  ) return null;
+  )
+    return null;
   const extended = value as Partial<RemoteControllerSessionView>;
   return {
     ...value,
@@ -243,7 +248,12 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
 
   useEffect(() => {
     const dialog = findRemoteSupportWatchDialog();
-    if (!target || !dialog || dialog.dataset.watchedUserId !== target.userId || dialog.dataset.watchedTabId !== target.tabId) {
+    if (
+      !target ||
+      !dialog ||
+      dialog.dataset.watchedUserId !== target.userId ||
+      dialog.dataset.watchedTabId !== target.tabId
+    ) {
       setPortalHost(null);
       return;
     }
@@ -338,22 +348,26 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
     };
   }, [refreshSession, target]);
 
+  const targetUserId = target?.userId;
+  const targetTabId = target?.tabId;
+
   useEffect(() => {
-    const watchedTarget = target;
     return () => {
       const current = sessionRef.current;
       if (
-        !watchedTarget ||
+        !targetUserId ||
+        !targetTabId ||
         !current ||
-        current.targetUserId !== watchedTarget.userId ||
-        current.targetTabId !== watchedTarget.tabId
-      ) return;
+        current.targetUserId !== targetUserId ||
+        current.targetTabId !== targetTabId
+      )
+        return;
       void remoteControllerRequestJson(`/api/screen-feed/control/sessions/${encodeURIComponent(current.id)}/stop`, {
         method: "POST",
         body: JSON.stringify({ reason: "controller-viewer-tab-changed" }),
       }).catch(() => undefined);
     };
-  }, [target?.tabId, target?.userId]);
+  }, [targetTabId, targetUserId]);
 
   const value = useMemo<RemoteControllerSessionContextValue>(
     () => ({ target, session, portalHost, refreshSession, adoptSession }),

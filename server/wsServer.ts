@@ -14,12 +14,15 @@ import {
 import {
   cleanupScreenFeedWebSocket,
   handleScreenFeedWebSocketMessage,
+  screenFeedSocketKey,
   type ScreenFeedSocketContext,
 } from "./services/screenFeedWebSocketTransport";
 import {
   cleanupRemoteControlWebSocket,
   handleRemoteControlWebSocketMessage,
 } from "./services/remoteControlWebSocketTransport";
+import { isRemoteControlControllerRole } from "./services/remoteControlSessionService";
+import { recordRemoteSupportCommandTelemetry } from "./services/remoteSupportRuntime";
 
 let wss: WebSocketServer | null = null;
 let resolveSession: SessionResolver | null = null;
@@ -59,6 +62,11 @@ function cleanSessionText(value: unknown, max = 160): string {
 function positiveCompanyId(value: unknown): number | null {
   const companyId = Number(value);
   return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function upgradeResponseStub() {
@@ -133,8 +141,7 @@ function sendRealtimeReady(ws: WebSocket): void {
 function rawDataBuffer(data: RawData): Buffer {
   if (Buffer.isBuffer(data)) return data;
   if (Array.isArray(data)) return Buffer.concat(data);
-  if (data instanceof ArrayBuffer) return Buffer.from(data);
-  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  return Buffer.from(data);
 }
 
 function parseJsonMessage(buffer: Buffer): Record<string, unknown> | null {
@@ -146,6 +153,43 @@ function parseJsonMessage(buffer: Buffer): Record<string, unknown> | null {
   }
 }
 
+function handleRemoteSupportTelemetry(context: ScreenFeedSocketContext, message: Record<string, unknown>): boolean {
+  if (message.type !== "remote-support:telemetry") return false;
+  // Only authenticated controller-role sockets can contribute rollout metrics.
+  if (!isRemoteControlControllerRole(context.role)) return true;
+
+  const commandId = cleanSessionText(message.commandId, 128);
+  const targetUserId = cleanSessionText(message.targetUserId, 128);
+  const targetTabId = cleanSessionText(message.targetTabId, 160);
+  if (!commandId || !targetUserId || !targetTabId) return true;
+  const feedKey = screenFeedSocketKey(targetUserId, targetTabId);
+  const commandType = cleanSessionText(message.commandType, 80) || "unknown";
+
+  if (message.event === "command-sent") {
+    recordRemoteSupportCommandTelemetry({
+      event: "sent",
+      commandId,
+      feedKey,
+      commandType,
+      sentAt: finiteNumber(message.sentAt),
+    });
+    return true;
+  }
+
+  if (message.event === "command-result") {
+    recordRemoteSupportCommandTelemetry({
+      event: "result",
+      commandId,
+      feedKey,
+      commandType,
+      sentAt: finiteNumber(message.sentAt),
+      executedAt: finiteNumber(message.executedAt),
+      status: cleanSessionText(message.status, 40),
+    });
+  }
+  return true;
+}
+
 async function handleAuthenticatedSocketMessage(
   ws: WebSocket,
   context: ScreenFeedSocketContext,
@@ -155,8 +199,11 @@ async function handleAuthenticatedSocketMessage(
   const buffer = rawDataBuffer(data);
   if (!isBinary) {
     const message = parseJsonMessage(buffer);
-    if (message && typeof message.type === "string" && message.type.startsWith("remote-control:")) {
-      if (await handleRemoteControlWebSocketMessage(ws, context, message)) return;
+    if (message) {
+      if (handleRemoteSupportTelemetry(context, message)) return;
+      if (typeof message.type === "string" && message.type.startsWith("remote-control:")) {
+        if (await handleRemoteControlWebSocketMessage(ws, context, message)) return;
+      }
     }
   }
   await handleScreenFeedWebSocketMessage(ws, context, buffer, isBinary);
@@ -185,9 +232,6 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
                 companyId: result.companyId,
               });
             }
-            // Session-store authentication is paid once per socket. Both the
-            // binary screen feed and the authorized command hot path reuse this
-            // context instead of running HTTP auth/role middleware per event.
             sendRealtimeReady(ws);
             return;
           }

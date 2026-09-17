@@ -2,74 +2,95 @@
  * User-presence routes.
  *
  * Active-user presence tracking (list, heartbeat/update, per-user status and
- * activity, clear, and leave). Extracted from authRoutes.ts as a
- * sub-registrar; behaviour is unchanged.
+ * activity, clear, and leave).
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { eq, and, desc, lt, gt, ne, sql } from "drizzle-orm";
+import { eq, and, desc, gt, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth } from "../auth";
 import { broadcast } from "../wsServer";
 import { companies, userActivityLog, userPresence, updatePresenceSchema } from "@shared/schema";
+import { installPresenceMaintenance } from "../services/presenceMaintenance";
+import { assertScreenFeedTenantAccess } from "../services/screenFeedTenantGate";
 
-function broadcastPresenceChange(): void {
-  // Active-user monitoring crosses ERP company context for authorized viewers,
-  // so this intentionally has no company filter. The dedicated `presence`
-  // topic wakes only active presence/watch queries.
-  broadcast({ type: "invalidate", topics: ["presence"] });
+const PRESENCE_ROLES = new Set(["Admin", "Owner", "Manager", "Developer"]);
+
+function sessionCompanyId(req: Request): number | null {
+  const companyId = Number(req.session.currentCompanyId);
+  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
+}
+
+function broadcastPresenceChange(companyId: number | null): void {
+  if (!companyId) return;
+  // Presence lists are company-scoped, so only sockets for the affected tenant
+  // are woken. A route change in one company no longer causes every admin
+  // client in the ERP to refetch its active-user list.
+  broadcast({ type: "invalidate", topics: ["presence"] }, { companyId });
+}
+
+async function authorizePresenceDetail(
+  req: Request,
+  res: Response,
+  watchedUserId: string
+): Promise<{
+  role: string;
+  companyId: number;
+} | null> {
+  const role = req.session.currentRole || "";
+  if (!PRESENCE_ROLES.has(role)) {
+    res.status(403).json({ message: "Access denied." });
+    return null;
+  }
+
+  const gate = await assertScreenFeedTenantAccess({
+    controllerRole: role,
+    controllerCompanyId: sessionCompanyId(req),
+    watchedUserId,
+  });
+  if (!gate.allowed) {
+    res.status(gate.status).json({ message: gate.message });
+    return null;
+  }
+
+  return { role, companyId: gate.companyId };
 }
 
 export function registerUserPresenceRoutes(app: Express) {
-  // User Presence tracking endpoints
-  // GET: Fetch all active users (Admin/Owner/Manager only)
-  // Uses TTL-based filtering (WHERE lastSeen > 2 min ago) in a single SELECT —
-  // no blocking DELETE before fetch. Stale-row cleanup runs fire-and-forget separately.
+  installPresenceMaintenance();
+
+  // GET: Fetch active users for the selected company. Stale-row deletion is
+  // scheduled centrally; this request is now SELECT-only.
   app.get("/api/user-presence", requireAuth, async (req, res) => {
     const userRole = req.session.currentRole;
-    if (!userRole || !["Admin", "Owner", "Manager", "Developer"].includes(userRole)) {
+    if (!userRole || !PRESENCE_ROLES.has(userRole)) {
       return res.status(403).json({ message: "Access denied. Admin, Owner, or Manager role required." });
     }
 
     try {
+      const companyId = sessionCompanyId(req);
+      if (!companyId) return res.json([]);
+
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
-      const companyId = req.session.currentCompanyId || null;
+      const scope = and(
+        gt(userPresence.lastSeen, threeMinutesAgo),
+        ne(userPresence.role, "Developer"),
+        eq(userPresence.companyId, companyId)
+      );
 
-      // Developer retains the cross-company operational view. Every other
-      // authorized role only sees presence inside the active company so the
-      // Active Users panel cannot be used as a cross-tenant directory.
-      const scope =
-        userRole === "Developer" || !companyId
-          ? and(gt(userPresence.lastSeen, threeMinutesAgo), ne(userPresence.role, "Developer"))
-          : and(
-              gt(userPresence.lastSeen, threeMinutesAgo),
-              ne(userPresence.role, "Developer"),
-              eq(userPresence.companyId, companyId)
-            );
-
-      // Single SELECT with WHERE — no blocking cleanup step.
-      const activeUsers = await db
-        .select()
-        .from(userPresence)
-        .where(scope)
-        .orderBy(desc(userPresence.lastSeen));
+      const activeUsers = await db.select().from(userPresence).where(scope).orderBy(desc(userPresence.lastSeen));
 
       res.json(activeUsers);
-
-      // Fire-and-forget stale row cleanup; never blocks the response.
-      db.delete(userPresence)
-        .where(lt(userPresence.lastSeen, threeMinutesAgo))
-        .catch((err: unknown) => logger.error("[Presence] Stale cleanup error:", { error: getErrorMessage(err) }));
     } catch (error: unknown) {
       logger.error("[Presence] Error fetching active users:", { error: getErrorMessage(error) });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
 
-  // PATCH: Update user presence (heartbeat / route change)
-  // Returns 204 immediately; the presence write remains best-effort. Heartbeats
-  // are intentionally silent; route changes publish one targeted realtime event.
+  // PATCH: Update user presence (heartbeat / route change). The request returns
+  // immediately; writes remain best-effort. Route changes publish a tenant-
+  // scoped invalidation and activity retention is handled by the scheduler.
   app.patch("/api/user-presence", requireAuth, async (req, res) => {
     const parseResult = updatePresenceSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -80,7 +101,7 @@ export function registerUserPresenceRoutes(app: Express) {
     const sessionId = req.sessionID;
     const userId = req.user!.id;
     const username = req.user!.username;
-    const companyId = req.session.currentCompanyId || null;
+    const companyId = sessionCompanyId(req);
     const sessionCompanyName = req.session.currentCompanyName || null;
     const role = req.session.currentRole || null;
 
@@ -141,37 +162,40 @@ export function registerUserPresenceRoutes(app: Express) {
           companyName,
           route,
         });
-        broadcastPresenceChange();
-
-        db.execute(
-          sql`DELETE FROM user_activity_log WHERE user_id = ${userId}
-                AND id NOT IN (
-                  SELECT id FROM user_activity_log WHERE user_id = ${userId}
-                  ORDER BY occurred_at DESC LIMIT 200
-                )`
-        ).catch(() => {});
+        broadcastPresenceChange(companyId);
       }
     })().catch((error: unknown) => {
       logger.error("[Presence] Heartbeat processing error:", { error: getErrorMessage(error) });
     });
   });
 
-  // GET: Fetch a single user's current presence (for Watch panel polling).
+  // GET: Fetch a single user's current presence for the Watch panel. The same
+  // tenant gate as frame access applies, so Admin/Owner/Manager can see history
+  // only for users active in their selected company; Developer keeps support
+  // access across companies.
   app.get("/api/user-presence/:userId", requireAuth, async (req, res) => {
-    const role = req.session.currentRole;
-    if (role !== "Developer") {
-      return res.status(403).json({ message: "Access denied." });
-    }
     try {
+      const access = await authorizePresenceDetail(req, res, req.params.userId);
+      if (!access) return;
+
       const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+      const whereClause =
+        access.role === "Developer"
+          ? and(eq(userPresence.userId, req.params.userId), gt(userPresence.lastSeen, threeMinutesAgo))
+          : and(
+              eq(userPresence.userId, req.params.userId),
+              eq(userPresence.companyId, access.companyId),
+              gt(userPresence.lastSeen, threeMinutesAgo)
+            );
+
       const rows = await db
         .select()
         .from(userPresence)
-        .where(and(eq(userPresence.userId, req.params.userId), gt(userPresence.lastSeen, threeMinutesAgo)))
+        .where(whereClause)
         .orderBy(desc(userPresence.lastSeen))
         .limit(1);
       if (!rows[0]) return res.json(null);
-      // Explicitly serialize date to ISO string so clients parse it reliably
+
       res.json({
         ...rows[0],
         lastSeen: rows[0].lastSeen instanceof Date ? rows[0].lastSeen.toISOString() : String(rows[0].lastSeen),
@@ -181,24 +205,29 @@ export function registerUserPresenceRoutes(app: Express) {
     }
   });
 
-  // GET: Fetch navigation activity history for a user (for Watch panel).
+  // GET: Fetch navigation activity history for a user. Non-developer support
+  // roles are restricted to the selected company, matching the frame route.
   app.get("/api/user-presence/:userId/activity", requireAuth, async (req, res) => {
-    const role = req.session.currentRole;
-    if (role !== "Developer") {
-      return res.status(403).json({ message: "Access denied." });
-    }
     try {
+      const access = await authorizePresenceDetail(req, res, req.params.userId);
+      if (!access) return;
+
+      const whereClause =
+        access.role === "Developer"
+          ? eq(userActivityLog.userId, req.params.userId)
+          : and(eq(userActivityLog.userId, req.params.userId), eq(userActivityLog.companyId, access.companyId));
+
       const rows = await db
         .select()
         .from(userActivityLog)
-        .where(eq(userActivityLog.userId, req.params.userId))
+        .where(whereClause)
         .orderBy(desc(userActivityLog.occurredAt))
         .limit(50);
-      // Serialize dates to ISO strings for reliable client-side parsing
+
       res.json(
-        rows.map((r) => ({
-          ...r,
-          occurredAt: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
+        rows.map((row) => ({
+          ...row,
+          occurredAt: row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
         }))
       );
     } catch (e: unknown) {
@@ -209,24 +238,25 @@ export function registerUserPresenceRoutes(app: Express) {
   // DELETE: Clear user presence on logout — fire-and-forget, never 500.
   app.delete("/api/user-presence", requireAuth, async (req, res) => {
     const sessionId = req.sessionID;
+    const companyId = sessionCompanyId(req);
     res.status(204).end();
     if (sessionId) {
       db.delete(userPresence)
         .where(eq(userPresence.sessionId, sessionId))
-        .then(() => broadcastPresenceChange())
+        .then(() => broadcastPresenceChange(companyId))
         .catch((err: unknown) => logger.error("[Presence] Delete error:", { error: getErrorMessage(err) }));
     }
   });
 
   // POST: Handle sendBeacon leave (no auth — session may already be ending).
-  // Responds instantly; DB delete runs in the background.
   app.post("/api/user-presence/leave", async (req, res) => {
     const sessionId = req.sessionID;
+    const companyId = sessionCompanyId(req);
     res.status(204).end();
     if (sessionId) {
       db.delete(userPresence)
         .where(eq(userPresence.sessionId, sessionId))
-        .then(() => broadcastPresenceChange())
+        .then(() => broadcastPresenceChange(companyId))
         .catch((err: unknown) => logger.error("[Presence] Leave delete error:", { error: getErrorMessage(err) }));
     }
   });

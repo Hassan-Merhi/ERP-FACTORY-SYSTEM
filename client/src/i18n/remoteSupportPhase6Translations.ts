@@ -102,6 +102,61 @@ export const remoteSupportPhase6Translations: readonly Phase7BackendMessagesEntr
     ar: "نتيجة أمر لوحة المفاتيح غير مدعومة.",
     fr: "Résultat de commande clavier non pris en charge.",
   },
+  {
+    en: "RemoteControllerSessionProvider is missing.",
+    ar: "موفّر جلسة التحكم عن بُعد غير موجود.",
+    fr: "Le fournisseur de session de contrôle à distance est manquant.",
+  },
+  {
+    en: "Remote-control send failed.",
+    ar: "فشل إرسال أمر التحكم عن بُعد.",
+    fr: "Échec de l’envoi de la commande à distance.",
+  },
+  {
+    en: "Legacy frame producer is sending too quickly.",
+    ar: "مرسل الإطارات القديم يرسل بسرعة كبيرة.",
+    fr: "L’émetteur d’images hérité envoie trop rapidement.",
+  },
+  {
+    en: "ERP tab identifier is required.",
+    ar: "معرّف علامة تبويب ERP مطلوب.",
+    fr: "L’identifiant de l’onglet ERP est requis.",
+  },
+  {
+    en: "ERP tab belongs to a different company context.",
+    ar: "علامة تبويب ERP تابعة لسياق شركة مختلف.",
+    fr: "L’onglet ERP appartient à un autre contexte d’entreprise.",
+  },
+  {
+    en: "A user and ERP tab are required.",
+    ar: "يجب تحديد مستخدم وعلامة تبويب ERP.",
+    fr: "Un utilisateur et un onglet ERP sont requis.",
+  },
+  {
+    en: "The selected ERP tab is no longer available.",
+    ar: "علامة تبويب ERP المحددة لم تعد متاحة.",
+    fr: "L’onglet ERP sélectionné n’est plus disponible.",
+  },
+  {
+    en: "Invalid screen frame packet.",
+    ar: "حزمة إطار الشاشة غير صالحة.",
+    fr: "Le paquet d’image écran est invalide.",
+  },
+  {
+    en: "Bind the ERP tab before sending frames.",
+    ar: "اربط علامة تبويب ERP قبل إرسال الإطارات.",
+    fr: "Liez l’onglet ERP avant d’envoyer des images.",
+  },
+  {
+    en: "Remote support header is too large.",
+    ar: "ترويسة الدعم عن بُعد كبيرة جدًا.",
+    fr: "L’en-tête de support à distance est trop volumineux.",
+  },
+  {
+    en: "Remote support frame is too large.",
+    ar: "إطار الدعم عن بُعد كبير جدًا.",
+    fr: "L’image de support à distance est trop volumineuse.",
+  },
   { en: "Mouse active", ar: "الماوس نشط", fr: "Souris active" },
   { en: "Keyboard active", ar: "لوحة المفاتيح نشطة", fr: "Clavier actif" },
   { en: "Mouse and keyboard active", ar: "الماوس ولوحة المفاتيح نشطان", fr: "Souris et clavier actifs" },
