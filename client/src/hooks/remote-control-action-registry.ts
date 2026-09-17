@@ -1,42 +1,18 @@
 /**
  * Generated `data-remote-control-action` registry — usable allowlist for remote mouse control.
  *
- * Every value here was explicitly reviewed as a read-only or navigation-safe action.
- * The mouse policy only allows clicks when the target carries one of these values,
- * in addition to the existing text-heuristic fallbacks. Adding a new allowlisted
- * control requires adding its action to this registry first; the verifier
- * `scripts/verify-remote-control-action-registry.mjs` fails CI when a
- * `data-remote-control-action` value is used without being registered or when a
- * registry entry has no matching usage.
- *
- * This file is the source of truth — see `scripts/generate-remote-control-action-registry.mjs`
- * for the scanner that keeps the registry and the codebase in sync.
+ * Every value here is actively used by a reviewed read-only or navigation-safe
+ * control. The verifier keeps the registry exact: unregistered usages and stale
+ * forward-registered values both fail CI so coverage cannot silently drift.
  */
 export const REMOTE_CONTROL_ALLOWED_ACTIONS = [
+  "navigation",
+  "toggle-view",
   "view",
+  "view-container",
   "view-details",
   "view-invoice",
-  "view-container",
-  "view-deleted-item",
   "view-profitability",
-  "view-history",
-  "open",
-  "close",
-  "back",
-  "next",
-  "previous",
-  "expand",
-  "collapse",
-  "show",
-  "hide",
-  "search",
-  "filter",
-  "refresh",
-  "clear-filter",
-  "toggle-view",
-  "navigation",
-  "tab",
-  "history",
 ] as const;
 
 export type RemoteControlAction = (typeof REMOTE_CONTROL_ALLOWED_ACTIONS)[number];

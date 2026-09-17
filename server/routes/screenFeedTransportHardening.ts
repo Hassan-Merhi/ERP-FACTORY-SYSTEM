@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { getSessionUserId } from "../lib/requestContext";
+import { screenFeedStoreKey } from "../screenFeedStore";
 import { isRemoteSupportEnabled, recordRemoteSupportMetric } from "../services/remoteSupportRuntime";
 
 const FAST_MAX_FRAME_SIZE = 900_000;
 const LEGACY_MAX_FRAME_SIZE = 1_500_000;
-const FAST_MIN_UPLOAD_INTERVAL_MS = 650;
+// This limiter only protects the legacy base64 recovery endpoint. Current
+// clients stream binary frames over /ws and never hit it. Keep a modest guard
+// for old clients without imposing the old 650 ms / 1.54 fps ceiling.
+const LEGACY_FAST_MIN_UPLOAD_INTERVAL_MS = 200;
 const FAST_RETRY_AFTER_SECONDS = 1;
 const MAX_USER_ID_LENGTH = 64;
 const MIN_RECONNECT_DELAY_MS = 2_500;
@@ -41,9 +45,6 @@ function frameEtag(userId: string, frame: ScreenFeedFrame): string {
   const identity = [
     userId,
     frame?.capturedAt ?? "",
-    // Captures are stored as a new frame with a server timestamp, so this keeps
-    // the validator O(1) instead of hashing a potentially megabyte-sized image
-    // again for every poll.
     typeof frame?.dataUrl === "string" ? frame.dataUrl.length : 0,
     Number(frame?.cursor?.ts) || 0,
     latestClickTs,
@@ -81,7 +82,7 @@ function installConditionalFrameResponse(req: Request, res: Response, watchedUse
   const originalJson = res.json.bind(res);
   res.json = ((body) => {
     const fastEnabled = isRemoteSupportEnabled("fastScreenFeed");
-    res.setHeader("X-Screen-Feed-Transport", fastEnabled ? "fast" : "legacy");
+    res.setHeader("X-Screen-Feed-Transport", fastEnabled ? "binary-ws" : "legacy-recovery");
 
     if (!body || typeof body !== "object" || typeof body.dataUrl !== "string") {
       res.setHeader("Cache-Control", "no-store");
@@ -89,22 +90,10 @@ function installConditionalFrameResponse(req: Request, res: Response, watchedUse
     }
 
     const etag = frameEtag(watchedUserId, body);
-    // The payload is authorized per watcher. `private` prevents an intermediary
-    // from retaining a captured frame, while `no-cache` lets the browser retain
-    // its validator and revalidate it on every polling request.
     res.setHeader("Cache-Control", "private, no-cache, must-revalidate");
-    // Preserve any response dimensions set by upstream middleware as well.
     res.vary("Cookie");
     res.setHeader("ETag", etag);
-
-    // The frame endpoint is most valuable as a conditional response while the
-    // viewer is in its legacy/recovery polling mode. Do not tie revalidation to
-    // the SSE flag: disabling fast transport is exactly when this route becomes
-    // the steady-state transport again.
-    if (matchesEtag(req.headers["if-none-match"], etag)) {
-      return res.status(304).end();
-    }
-
+    if (matchesEtag(req.headers["if-none-match"], etag)) return res.status(304).end();
     return originalJson(body);
   }) as typeof res.json;
 }
@@ -113,14 +102,14 @@ function clearTransportPressureState(pathname: string, method: string): void {
   const runtimeMutation =
     (method === "PATCH" && pathname === "/api/screen-feed/admin/runtime") ||
     (method === "POST" &&
-      ["/api/screen-feed/admin/runtime/emergency-stop", "/api/screen-feed/admin/runtime/restore-defaults"].includes(
-        pathname
-      ));
+      ["/api/screen-feed/admin/runtime/emergency-stop", "/api/screen-feed/admin/runtime/restore-defaults"].includes(pathname));
   if (runtimeMutation) lastFastUploadAt.clear();
 }
 
 function enforceUploadPressure(req: Request, res: Response, next: NextFunction): void {
-  const userId = getSessionUserId(req);
+  const userId = String(getSessionUserId(req));
+  const tabId = req.body?.tabId;
+  const producerKey = screenFeedStoreKey(userId, tabId);
   const fastEnabled = isRemoteSupportEnabled("fastScreenFeed");
   const dataUrl = req.body?.dataUrl;
   const activeLimit = fastEnabled ? FAST_MAX_FRAME_SIZE : LEGACY_MAX_FRAME_SIZE;
@@ -137,19 +126,17 @@ function enforceUploadPressure(req: Request, res: Response, next: NextFunction):
   }
 
   const now = Date.now();
-  const previous = lastFastUploadAt.get(userId) ?? 0;
-  if (now - previous < FAST_MIN_UPLOAD_INTERVAL_MS) {
+  const previous = lastFastUploadAt.get(producerKey) ?? 0;
+  if (now - previous < LEGACY_FAST_MIN_UPLOAD_INTERVAL_MS) {
     recordRemoteSupportMetric("frameRejected");
     res.setHeader("Retry-After", String(FAST_RETRY_AFTER_SECONDS));
-    res.status(429).json({ message: "Frame producer is sending too quickly." });
+    res.status(429).json({ message: "Legacy frame producer is sending too quickly." });
     return;
   }
 
-  lastFastUploadAt.set(userId, now);
+  lastFastUploadAt.set(producerKey, now);
   res.once("finish", () => {
-    if (res.statusCode >= 400 && lastFastUploadAt.get(userId) === now) {
-      lastFastUploadAt.delete(userId);
-    }
+    if (res.statusCode >= 400 && lastFastUploadAt.get(producerKey) === now) lastFastUploadAt.delete(producerKey);
   });
   next();
 }
@@ -173,18 +160,13 @@ export function registerScreenFeedTransportHardening(app: Express): void {
         } catch {
           return res.status(400).json({ message: "Invalid watched user ID." });
         }
-        if (!isValidWatchedUserId(watchedUserId)) {
-          return res.status(400).json({ message: "Invalid watched user ID." });
-        }
+        if (!isValidWatchedUserId(watchedUserId)) return res.status(400).json({ message: "Invalid watched user ID." });
         installConditionalFrameResponse(req, res, watchedUserId);
       }
       return next();
     }
 
-    if (req.method === "POST" && pathname === "/api/screen-feed") {
-      return enforceUploadPressure(req, res, next);
-    }
-
+    if (req.method === "POST" && pathname === "/api/screen-feed") return enforceUploadPressure(req, res, next);
     next();
   });
 }
