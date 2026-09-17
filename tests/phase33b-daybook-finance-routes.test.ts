@@ -128,9 +128,7 @@ describe("Phase 33B factory daybook accounting routes", () => {
   it("rejects invalid cost edits before any container-cost cascade", async () => {
     const entryId = await createManualEntry("PAYMENT");
 
-    const missingReason = await agent
-      .patch(`/api/factory/daybook/${entryId}/cost-edit`)
-      .send({ newAmount: "40.00" });
+    const missingReason = await agent.patch(`/api/factory/daybook/${entryId}/cost-edit`).send({ newAmount: "40.00" });
     expect(missingReason.status).toBe(400);
 
     const negativeAmount = await agent
