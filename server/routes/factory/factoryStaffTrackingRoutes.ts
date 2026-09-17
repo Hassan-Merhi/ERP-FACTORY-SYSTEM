@@ -319,7 +319,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
               : savedRow?.producedBales === null || savedRow?.producedBales === undefined
                 ? null
                 : Number(savedRow.producedBales),
-          status: savedRow?.status ?? defaultStatus,
+          status:
+            query.page === "production" && !finalized ? defaultStatus : (savedRow?.status ?? defaultStatus),
           notes: savedRow?.notes ?? "",
           active: worker.active,
         };
@@ -379,7 +380,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       }
 
       const allWorkers = await db
-        .select({ id: factoryWorkers.id })
+        .select({ id: factoryWorkers.id, dateJoined: factoryWorkers.dateJoined })
         .from(factoryWorkers)
         .where(eq(factoryWorkers.companyId, companyId));
       const allEmployees = await db
@@ -393,8 +394,24 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           )
         );
       const workerIds = new Set(allWorkers.map((row) => row.id));
+      const workerJoinDates = new Map(allWorkers.map((row) => [row.id, row.dateJoined]));
       const employeeIds = new Set(allEmployees.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const productionAttendance = new Map<number, string>();
+
+      if (page === "production" && periodType === "daily" && workerIds.size > 0) {
+        const attendanceRows = await db
+          .select({ workerId: factoryAttendance.workerId, status: factoryAttendance.status })
+          .from(factoryAttendance)
+          .where(
+            and(
+              eq(factoryAttendance.companyId, companyId),
+              eq(factoryAttendance.attendanceDate, periodStart),
+              inArray(factoryAttendance.workerId, [...workerIds])
+            )
+          );
+        attendanceRows.forEach((row) => productionAttendance.set(row.workerId, row.status));
+      }
 
       const normalizedRecords: NormalizedTrackingRow[] = [];
       const recordKeys = new Set<string>();
@@ -402,8 +419,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       for (const raw of records) {
         const personType = String(raw?.personType || "") as PersonType;
         const personId = Number(raw?.personId);
-        const status = String(raw?.status || "Present") as TrackingStatus;
-        if (!Number.isInteger(personId) || personId <= 0 || !STATUSES.has(status)) {
+        const requestedStatus = String(raw?.status || "Present") as TrackingStatus;
+        if (
+          !Number.isInteger(personId) ||
+          personId <= 0 ||
+          (page === "attendance" && !STATUSES.has(requestedStatus))
+        ) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRow });
         }
         if (
@@ -452,6 +473,15 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         ) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
         }
+
+        const status: TrackingStatus =
+          page === "production"
+            ? isNew(workerJoinDates.get(personId), periodStart, periodEnd)
+              ? "New"
+              : productionAttendance.get(personId) === "Absent"
+                ? "Absent"
+                : "Present"
+            : requestedStatus;
 
         normalizedRecords.push({
           personType,
