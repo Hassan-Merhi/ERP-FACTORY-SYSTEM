@@ -253,6 +253,8 @@ describe("remote mouse command safety", () => {
     });
 
     const frameViewport = { width: 1280, height: 720, scrollX: 0, scrollY: 240, visualScale: 1 };
+    // publishRemoteMouseCommand returns a publication wrapper; the command
+    // itself (with the sanitized snapshot attached) lives under `.command`.
     const click = publishRemoteMouseCommand({
       sessionId: session.id,
       controllerUserId: "1",
@@ -261,7 +263,7 @@ describe("remote mouse command safety", () => {
       y: 0.5,
       frameViewport,
       now: now + 1,
-    });
+    }).command;
     expect(click.frameViewport).toEqual(frameViewport);
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ frameViewport }));
 
@@ -275,7 +277,7 @@ describe("remote mouse command safety", () => {
       y: 0.5,
       frameViewport: { width: "wide", scrollY: -50 },
       now: now + 2,
-    });
+    }).command;
     expect(legacy.frameViewport).toBeUndefined();
 
     const absent = publishRemoteMouseCommand({
@@ -287,7 +289,7 @@ describe("remote mouse command safety", () => {
       deltaX: 0,
       deltaY: 120,
       now: now + 3,
-    });
+    }).command;
     expect(absent.frameViewport).toBeUndefined();
 
     expect(sanitizeRemoteMouseFrameViewport(null)).toBeUndefined();

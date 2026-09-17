@@ -3,13 +3,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyRemoteMouseCommand,
+  getRemoteMouseFrameContentBox,
   getRemoteMouseViewportMetrics,
   isAllowedRemoteClickElement,
   isRemoteMouseBlockedElement,
-  isRemoteMouseFrameViewportStale,
-  mapRemoteMousePoint,
+  mapRemoteMouseFramePoint,
   normalizeRemoteMousePoint,
+  normalizeRemoteWheelDelta,
   parseFrameViewportFromDataset,
+  REMOTE_WHEEL_DELTA_MODE_LINE,
+  REMOTE_WHEEL_DELTA_MODE_PAGE,
+  REMOTE_WHEEL_DELTA_MODE_PIXEL,
+  REMOTE_WHEEL_FALLBACK_PAGE_WIDTH_PX,
   type RemoteMouseCommandType,
   type RemoteMouseCommandView,
 } from "./remote-mouse-control-policy";
@@ -48,21 +53,43 @@ describe("remote mouse execution policy", () => {
     expect(normalizeRemoteMousePoint(10, 10, { left: 0, top: 0, width: 0, height: 300 })).toBeNull();
   });
 
-  it("maps normalized points through the active visual viewport", () => {
+  it("normalizes pointer input against the frame's rendered content box", () => {
+    // A 1000×700 element letterboxing a 1000×600 frame leaves 50px bars top
+    // and bottom; coordinates must be taken against the frame pixels, not the
+    // element rect.
+    const rect = { left: 0, top: 0, width: 1000, height: 700 };
+    expect(getRemoteMouseFrameContentBox(rect, { width: 1000, height: 600 })).toEqual({
+      left: 0,
+      top: 50,
+      width: 1000,
+      height: 600,
+    });
+    expect(normalizeRemoteMousePoint(500, 350, rect, { width: 1000, height: 600 })).toEqual({ x: 0.5, y: 0.5 });
+    // The letterbox bars are outside the frame's coordinate space.
+    expect(normalizeRemoteMousePoint(500, 25, rect, { width: 1000, height: 600 })).toBeNull();
+    expect(normalizeRemoteMousePoint(500, 675, rect, { width: 1000, height: 600 })).toBeNull();
+    // Without a frame size the element rect remains the space (legacy viewers).
+    expect(normalizeRemoteMousePoint(500, 350, rect)).toEqual({ x: 0.5, y: 0.5 });
+    expect(
+      getRemoteMouseFrameContentBox({ left: 0, top: 0, width: 0, height: 700 }, { width: 1000, height: 600 })
+    ).toBeNull();
+    expect(getRemoteMouseFrameContentBox(rect, { width: 0, height: 600 })).toBeNull();
+  });
+
+  it("maps normalized points in one layout-viewport coordinate space", () => {
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
       value: { offsetLeft: 120, offsetTop: 80, width: 500, height: 300, scale: 2 },
     });
 
-    expect(getRemoteMouseViewportMetrics()).toEqual({
-      left: 120,
-      top: 80,
-      width: 500,
-      height: 300,
-      scale: 2,
-    });
-    expect(mapRemoteMousePoint(0.5, 0.5)).toEqual({ clientX: 370, clientY: 230 });
-    expect(mapRemoteMousePoint(1, 1)).toEqual({ clientX: 619, clientY: 379 });
+    // The captured frame is the layout viewport (innerWidth/innerHeight at
+    // scrollX/scrollY). The visual viewport is a different space and must not
+    // shift or rescale the mapping, or clicks land away from where the
+    // controller aimed.
+    expect(getRemoteMouseViewportMetrics()).toEqual({ width: 1000, height: 600, scrollX: 0, scrollY: 0 });
+    expect(mapRemoteMouseFramePoint(0.5, 0.5, undefined)).toEqual({ clientX: 500, clientY: 300, onScreen: true });
+    expect(mapRemoteMouseFramePoint(1, 1, undefined)).toEqual({ clientX: 999, clientY: 599, onScreen: true });
+    expect(mapRemoteMouseFramePoint(2, 0.5, undefined)).toBeNull();
   });
 
   it("uses the same viewport transform for pointer display and hit testing", () => {
@@ -79,10 +106,10 @@ describe("remote mouse execution policy", () => {
     expect(applyRemoteMouseCommand(command("click", { x: 0.25, y: 0.75 }))).toEqual({
       status: "executed",
       reason: null,
-      clientX: 240,
-      clientY: 325,
+      clientX: 250,
+      clientY: 450,
     });
-    expect(document.elementFromPoint).toHaveBeenCalledWith(240, 325);
+    expect(document.elementFromPoint).toHaveBeenCalledWith(250, 450);
     expect(viewClick).toHaveBeenCalledTimes(1);
   });
 
@@ -268,9 +295,7 @@ describe("remote mouse execution policy", () => {
     expect(outerScrollBy).toHaveBeenCalledWith({ left: 0, top: 120, behavior: "auto" });
   });
 
-  it("maps clicks against the frame's captured scroll and viewport state", () => {
-    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
-    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  it("remaps clicks through the frame snapshot instead of rejecting them", () => {
     const viewButton = document.createElement("button");
     viewButton.textContent = "View details";
     const viewClick = vi.spyOn(viewButton, "click").mockImplementation(() => {});
@@ -281,44 +306,104 @@ describe("remote mouse execution policy", () => {
     expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
       status: "executed",
       reason: null,
+      clientX: 500,
+      clientY: 300,
     });
+    expect(document.elementFromPoint).toHaveBeenLastCalledWith(500, 300);
     expect(viewClick).toHaveBeenCalledTimes(1);
 
-    // The employee scrolled after the frame was captured: the normalized
-    // coordinates now point at a different control, so the click must be
-    // ignored instead of landing on whatever is there now.
+    // The employee scrolled 240px after the frame was captured. The content
+    // the controller aimed at moved up by exactly 240px, so the click is
+    // remapped to the same document position and still executes instead of
+    // being rejected as a stale frame.
     Object.defineProperty(window, "scrollY", { configurable: true, value: 240 });
     expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
-      status: "ignored",
-      reason: "stale-frame-viewport",
+      status: "executed",
+      reason: null,
+      clientX: 500,
+      clientY: 60,
     });
-    expect(viewClick).toHaveBeenCalledTimes(1);
+    expect(document.elementFromPoint).toHaveBeenLastCalledWith(500, 60);
+    expect(viewClick).toHaveBeenCalledTimes(2);
 
-    // A resized or zoomed viewport invalidates the frame the same way.
+    // Horizontal scroll drift remaps the same way.
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 60 });
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "executed",
+      clientX: 440,
+      clientY: 60,
+    });
+
+    // A resize or zoom no longer invalidates the frame: the point is remapped
+    // through document space as a best effort rather than dropped.
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 800 });
-    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
-      status: "ignored",
-      reason: "stale-frame-viewport",
-    });
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({ status: "executed" });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1000 });
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
       value: { offsetLeft: 0, offsetTop: 0, width: 1000, height: 600, scale: 2 },
     });
-    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
-      status: "ignored",
-      reason: "stale-frame-viewport",
-    });
-    expect(viewClick).toHaveBeenCalledTimes(1);
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({ status: "executed" });
+    expect(viewClick).toHaveBeenCalledTimes(5);
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
   });
 
-  it("keeps the support pointer smooth when the frame viewport is stale", () => {
+  it("ignores clicks whose remapped aim point left the live viewport", () => {
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 400 });
+    const viewButton = document.createElement("button");
+    viewButton.textContent = "View details";
+    const viewClick = vi.spyOn(viewButton, "click").mockImplementation(() => {});
+    document.body.appendChild(viewButton);
+    document.elementFromPoint = vi.fn(() => viewButton);
+
+    // y = 0.5 on a frame captured at scroll 0 → document y 300 → 100px above
+    // the live viewport: the aimed content is no longer visible, so there is
+    // nothing accurate to click.
+    const frameViewport = { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport }))).toMatchObject({
+      status: "ignored",
+      reason: "frame-point-offscreen",
+    });
+    expect(viewClick).not.toHaveBeenCalled();
+  });
+
+  it("keeps scrolling working against a frame the scroll itself made stale", () => {
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 240 });
+    document.elementFromPoint = vi.fn(() => document.body);
+    const windowScrollBy = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+    const frameViewport = { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 };
+
+    // The page already scrolled 240px since the frame was captured — a scroll
+    // command must still execute, or remote scrolling would die after the
+    // first command and only recover when the next frame arrived.
+    expect(applyRemoteMouseCommand(command("scroll", { deltaX: 0, deltaY: 120, frameViewport }))).toMatchObject({
+      status: "executed",
+      reason: null,
+    });
+    expect(windowScrollBy).toHaveBeenCalledWith({ left: 0, top: 120, behavior: "auto" });
+    // The anchor is still remapped through the snapshot: 0.5/0.5 at frame
+    // scroll 0 → document y 300 → live clientY 60.
+    expect(document.elementFromPoint).toHaveBeenLastCalledWith(500, 60);
+
+    // A resized frame is equally no reason to drop the scroll.
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 800 });
+    expect(applyRemoteMouseCommand(command("scroll", { deltaX: 0, deltaY: 120, frameViewport }))).toMatchObject({
+      status: "executed",
+      reason: null,
+    });
+    expect(windowScrollBy).toHaveBeenCalledTimes(2);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1000 });
+  });
+
+  it("keeps the support pointer smooth and on screen when the frame viewport is stale", () => {
     Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 500 });
     document.elementFromPoint = vi.fn(() => null);
-    // Pointer movement is display-only: it never activates a control, so it
-    // skips the stale-frame check that gates clicks and scrolls.
+    // Pointer movement is display-only: it never activates a control, and it
+    // stays clamped inside the live viewport even when the frame it was aimed
+    // at has scrolled away underneath.
     expect(
       applyRemoteMouseCommand(
         command("pointer-move", {
@@ -327,7 +412,7 @@ describe("remote mouse execution policy", () => {
           frameViewport: { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
         })
       )
-    ).toEqual({ status: "executed", reason: null, clientX: 250, clientY: 450 });
+    ).toEqual({ status: "executed", reason: null, clientX: 250, clientY: 0 });
     Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
   });
 
@@ -340,11 +425,53 @@ describe("remote mouse execution policy", () => {
     document.body.appendChild(viewButton);
     document.elementFromPoint = vi.fn(() => viewButton);
 
-    expect(isRemoteMouseFrameViewportStale(undefined)).toBe(false);
-    expect(isRemoteMouseFrameViewportStale(null)).toBe(false);
     expect(applyRemoteMouseCommand(command("click"))).toMatchObject({ status: "executed" });
     expect(viewClick).toHaveBeenCalledTimes(1);
     Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  });
+
+  it("falls back to live-viewport mapping when the frame snapshot is malformed", () => {
+    const viewButton = document.createElement("button");
+    viewButton.textContent = "View details";
+    const viewClick = vi.spyOn(viewButton, "click").mockImplementation(() => {});
+    document.body.appendChild(viewButton);
+    document.elementFromPoint = vi.fn(() => viewButton);
+
+    // A malformed snapshot is dropped, not rejected: the command keeps the
+    // legacy live-viewport mapping.
+    expect(
+      applyRemoteMouseCommand(
+        command("click", {
+          frameViewport: { width: Number.NaN, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
+        })
+      )
+    ).toMatchObject({ status: "executed", clientX: 500, clientY: 300 });
+    expect(
+      applyRemoteMouseCommand(
+        command("click", {
+          frameViewport: { width: 0, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
+        })
+      )
+    ).toMatchObject({ status: "executed", clientX: 500, clientY: 300 });
+    expect(viewClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("normalizes wheel deltas to pixels for every deltaMode", () => {
+    // Pixel-mode events pass through untouched.
+    expect(normalizeRemoteWheelDelta(12, -40, REMOTE_WHEEL_DELTA_MODE_PIXEL)).toEqual({ deltaX: 12, deltaY: -40 });
+    // Line-mode controllers (Firefox) report ~3 lines per notch.
+    expect(normalizeRemoteWheelDelta(3, -3, REMOTE_WHEEL_DELTA_MODE_LINE)).toEqual({ deltaX: 120, deltaY: -120 });
+    // Page-mode deltas are scaled by the target's page size.
+    expect(normalizeRemoteWheelDelta(0, -2, REMOTE_WHEEL_DELTA_MODE_PAGE, 1000, 600)).toEqual({
+      deltaX: 0,
+      deltaY: -1200,
+    });
+    expect(normalizeRemoteWheelDelta(1, 0, REMOTE_WHEEL_DELTA_MODE_PAGE)).toEqual({
+      deltaX: REMOTE_WHEEL_FALLBACK_PAGE_WIDTH_PX,
+      deltaY: 0,
+    });
+    expect(normalizeRemoteWheelDelta(Number.NaN, 5, REMOTE_WHEEL_DELTA_MODE_PIXEL)).toEqual({ deltaX: 0, deltaY: 5 });
+    expect(normalizeRemoteWheelDelta(2, 2, 99)).toEqual({ deltaX: 2, deltaY: 2 });
   });
 
   it("reads the captured-frame snapshot stamped on the viewer image", () => {
