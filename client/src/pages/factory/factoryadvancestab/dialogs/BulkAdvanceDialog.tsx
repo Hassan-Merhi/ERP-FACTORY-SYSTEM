@@ -4,6 +4,8 @@
  * Props are the parent-scope bindings the block referenced; they were
  * discovered from compiler errors rather than guessed.
  */
+import { useQuery } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import type { useAdvancesModel } from "../advances/useAdvancesModel";
 
 type AdvancesModel = ReturnType<typeof useAdvancesModel>;
@@ -20,8 +22,24 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmt } from "../utils";
+
+type AmountDueRecord = Record<
+  number,
+  {
+    periodStart: string;
+    periodEnd: string;
+    base: number;
+    transport: number;
+    absenceDays?: number;
+    absenceDeducted: number;
+    advanceDeducted: number;
+    net: number;
+    lastPaidThrough: string | null;
+  }
+>;
 
 export function BulkAdvanceDialog({
   bulkAmounts,
@@ -48,6 +66,23 @@ export function BulkAdvanceDialog({
   setBulkSelected: AdvancesModel["setBulkSelected"];
   workers: AdvancesModel["workers"];
 }) {
+  const { data: amountDue = {} } = useQuery<AmountDueRecord>({
+    queryKey: ["/api/factory/workers/amount-due"],
+    queryFn: async () => {
+      const res = await fetch("/api/factory/workers/amount-due", { credentials: "include" });
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: bulkOpen,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  const fmtDue = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = (s: string) =>
+    new Date(s + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
   return (
     <Dialog
       open={bulkOpen}
@@ -59,7 +94,7 @@ export function BulkAdvanceDialog({
         }
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Bulk Advance</DialogTitle>
           <DialogDescription>Record advances for multiple workers at once</DialogDescription>
@@ -151,19 +186,22 @@ export function BulkAdvanceDialog({
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Worker</TableHead>
+                    <TableHead className="w-36 text-right">Net Due</TableHead>
                     <TableHead className="w-40">Amount ($)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(workers || []).length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                      <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
                         No workers found
                       </TableCell>
                     </TableRow>
                   ) : (
                     (workers || []).map((w) => {
                       const selected = bulkSelected.has(w.id);
+                      const due = amountDue[w.id];
+                      const absenceDays = due?.absenceDays ?? 0;
                       return (
                         <TableRow
                           key={w.id}
@@ -193,6 +231,79 @@ export function BulkAdvanceDialog({
                             />
                           </TableCell>
                           <TableCell className="font-medium">{w.fullName}</TableCell>
+                          <TableCell className="text-right font-mono text-sm" onClick={(e) => e.stopPropagation()}>
+                            {!due ? (
+                              <span className="text-muted-foreground/40">—</span>
+                            ) : (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    className={[
+                                      "flex items-center gap-1 ml-auto rounded px-1.5 py-0.5 transition-colors",
+                                      "hover:bg-muted/60 cursor-pointer select-none",
+                                      due.net > 0
+                                        ? "text-emerald-600 dark:text-emerald-400"
+                                        : "text-muted-foreground/50",
+                                    ].join(" ")}
+                                    data-testid={`button-bulk-net-due-${w.id}`}
+                                  >
+                                    {due.net > 0 ? fmtDue(due.net) : "Paid up"}
+                                    <Info className="h-3 w-3 opacity-50 shrink-0" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3 text-sm" align="end" side="left">
+                                  <p className="font-semibold text-foreground mb-1">Due Today</p>
+                                  <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+                                    Period: {fmtDate(due.periodStart)} → {fmtDate(due.periodEnd)}
+                                    {due.lastPaidThrough && (
+                                      <span className="block">Last paid through {fmtDate(due.lastPaidThrough)}</span>
+                                    )}
+                                  </p>
+                                  <div className="space-y-1.5">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Base salary</span>
+                                      <span className="font-mono">{fmtDue(due.base)}</span>
+                                    </div>
+                                    {due.transport > 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Transport</span>
+                                        <span className="font-mono">+{fmtDue(due.transport)}</span>
+                                      </div>
+                                    )}
+                                    {(due.absenceDeducted ?? 0) > 0 && (
+                                      <div className="flex justify-between text-rose-600 dark:text-rose-400">
+                                        <span>
+                                          Absences deducted ({absenceDays} {absenceDays === 1 ? "day" : "days"})
+                                        </span>
+                                        <span className="font-mono">−{fmtDue(due.absenceDeducted)}</span>
+                                      </div>
+                                    )}
+                                    {due.advanceDeducted > 0 && (
+                                      <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                                        <span>Advance deducted</span>
+                                        <span className="font-mono">−{fmtDue(due.advanceDeducted)}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex justify-between border-t pt-1.5 font-semibold">
+                                      <span>Net due</span>
+                                      <span
+                                        className={`font-mono ${
+                                          due.net > 0
+                                            ? "text-emerald-600 dark:text-emerald-400"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {fmtDue(due.net)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground/50 mt-2 leading-relaxed">
+                                    Calendar-day proration · Absences &amp; advances deducted
+                                  </p>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Input
                               type="number"
