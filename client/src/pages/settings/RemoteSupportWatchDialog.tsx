@@ -7,6 +7,7 @@ import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
 import { apiRequest } from "@/lib/queryClient";
 import {
+  reportScreenFeedFrameRendered,
   sendScreenFeedControlMessage,
   subscribeScreenFeedBinaryFrames,
   subscribeScreenFeedTransportStatus,
@@ -238,8 +239,6 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
       }
     });
 
-    // If the singleton socket is already authenticated, bind immediately;
-    // otherwise the transport-ready event above performs the bind.
     bindViewer();
 
     return () => {
@@ -371,6 +370,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
                 alt={`${t("Live screen for")} ${username}`}
                 className={displayMode === "fit" ? "max-h-full max-w-full object-contain" : "max-h-none max-w-none object-none"}
                 draggable={false}
+                onLoad={() => reportScreenFeedFrameRendered(frame.capturedAt, selectedTabId)}
                 data-testid="img-screen-feed"
                 data-frame-viewport-width={frame.viewport?.width ?? ""}
                 data-frame-viewport-height={frame.viewport?.height ?? ""}
