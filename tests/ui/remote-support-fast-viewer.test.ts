@@ -6,10 +6,10 @@ const activeUsers = readFileSync("client/src/pages/settings/ActiveUsersSection.t
 const transport = readFileSync("client/src/lib/screen-feed-binary-transport.ts", "utf8");
 
 describe("remote support fast viewer", () => {
-  it("uses the runtime flag to choose live transport in the unified viewer", () => {
+  it("uses the watcher-readable capability endpoint and unified viewer", () => {
     expect(viewer).toContain('queryKey: ["/api/screen-feed/capabilities"]');
     expect(viewer).not.toContain('apiRequest("GET", "/api/screen-feed/admin/runtime")');
-    expect(viewer).toContain("runtime?.flags?.fastScreenFeed === true");
+    expect(viewer).toContain("runtime?.flags?.screenFeedEnabled === false");
     expect(viewer).toContain("<ScreenFeedDialog");
     expect(activeUsers).toContain("<RemoteSupportWatchDialog");
   });
