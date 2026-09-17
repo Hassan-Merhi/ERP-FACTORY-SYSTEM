@@ -289,15 +289,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
-    // stock_group_location_archive_items.stock_item_id is ON DELETE RESTRICT
-    // against stock_items, and the archive header restricts against locations,
-    // so any fixture that archives a stock group blocks both deletes below.
-    await pool.query(
-      "DELETE FROM stock_group_location_archive_items WHERE archive_id IN (SELECT id FROM stock_group_location_archives WHERE company_id = $1)",
-      [company.id]
-    );
-    await pool.query("DELETE FROM stock_group_location_archives WHERE company_id = $1", [company.id]);
+    // Several tables restrict against stock_items and stock_groups —
+    // stock_group_location_archive_items and inventory_negative_layers among
+    // them — and the set grows as features land. Sweep them the same way the
+    // locations delete below does, rather than naming each one here and
+    // rediscovering the next one as a cleanup failure in an unrelated test.
+    await clearRestrictingReferences("stock_items", company.id);
     await db.delete(schema.stockItems).where(eq(schema.stockItems.companyId, company.id));
+    await clearRestrictingReferences("stock_groups", company.id);
     await db.delete(schema.stockGroups).where(eq(schema.stockGroups.companyId, company.id));
     // user_company_roles.assigned_location_id and user_locations.location_id both
     // restrict against locations, so any fixture that pins a user to a location
