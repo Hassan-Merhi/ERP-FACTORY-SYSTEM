@@ -17,7 +17,11 @@ jobs:
   certify:
     name: Application Certification
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # The full sequential suite is the long pole: twelve backend shards plain,
+    # then twelve under coverage, then the frontend passes and the remaining
+    # gates. 120 left no margin once the shard budget stopped aborting the run
+    # at six minutes and the whole suite actually ran.
+    timeout-minutes: 180
     services:
       postgres:
         image: postgres:18
@@ -156,6 +160,7 @@ jobs:
           # server once and prove the database health endpoint becomes ready.
           node dist/index.js > "$RUNNER_TEMP/startup-migrations.txt" 2>&1 &
           app_pid=$!
+          # shellcheck disable=SC2317  # reached through the EXIT trap below
           cleanup() {
             kill "$app_pid" 2>/dev/null || true
             wait "$app_pid" 2>/dev/null || true
@@ -180,6 +185,10 @@ jobs:
           cat "$RUNNER_TEMP/startup-migrations.txt"
           exit 1
 
+      # test:backend:verify is --complete: a plain pass and then a coverage pass,
+      # the same pair the frontend step below spells out as two commands. The
+      # standalone coverage script used to run after it, repeating that coverage
+      # pass a third time for no added signal at a cost of ~40 minutes.
       - name: Backend verification and coverage
         id: backend
         if: always() && steps.schema.outcome == 'success'
@@ -187,7 +196,6 @@ jobs:
         run: |
           set -euo pipefail
           npm run test:backend:verify
-          npm run test:backend:verify:coverage
 
       - name: Frontend verification and coverage
         id: frontend
