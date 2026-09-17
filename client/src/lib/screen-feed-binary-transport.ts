@@ -12,12 +12,18 @@ export interface ScreenFeedBinaryFrame {
 type FrameListener = (frame: ScreenFeedBinaryFrame) => void;
 type StatusListener = (message: Record<string, unknown>) => void;
 
+interface ViewerBinding {
+  userId: string;
+  tabId: string;
+}
+
 const frameListeners = new Set<FrameListener>();
 const statusListeners = new Set<StatusListener>();
 let socket: WebSocket | null = null;
 let ready = false;
 let reconnectTimer: number | null = null;
 let refs = 0;
+let viewerBinding: ViewerBinding | null = null;
 
 function targetUrl(): string {
   const configured = (import.meta.env?.VITE_WS_URL as string) || "";
@@ -40,6 +46,38 @@ function scheduleReconnect(): void {
     reconnectTimer = null;
     connect();
   }, 1000 + Math.floor(Math.random() * 500));
+}
+
+function sendViewerRendered(header: RemoteSupportFrameHeader): void {
+  const binding = viewerBinding;
+  if (!binding || binding.tabId !== header.tabId) return;
+
+  // Two animation frames let React's frame listener commit the new object URL
+  // and give the browser a paint opportunity before the acknowledgement is
+  // timestamped. This is intentionally best-effort telemetry, never a gate on
+  // rendering or control.
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (
+        !socket ||
+        socket.readyState !== WebSocket.OPEN ||
+        !ready ||
+        viewerBinding?.userId !== binding.userId ||
+        viewerBinding?.tabId !== binding.tabId
+      ) {
+        return;
+      }
+      socket.send(
+        JSON.stringify({
+          type: "screen-feed:viewer-rendered",
+          userId: binding.userId,
+          tabId: binding.tabId,
+          capturedAt: header.capturedAt,
+          viewerRenderedAt: Date.now(),
+        })
+      );
+    });
+  });
 }
 
 function connect(): void {
@@ -72,6 +110,7 @@ function connect(): void {
       const decoded = decodeRemoteSupportBinaryPacket(bytes);
       if (!decoded) return;
       for (const listener of frameListeners) listener({ header: decoded.header, jpeg: decoded.payload });
+      sendViewerRendered(decoded.header);
     };
     if (event.data instanceof ArrayBuffer) consume(new Uint8Array(event.data));
     else if (event.data instanceof Blob) void event.data.arrayBuffer().then((buffer) => consume(new Uint8Array(buffer)));
@@ -101,6 +140,7 @@ function retain(): () => void {
       const current = socket;
       socket = null;
       ready = false;
+      viewerBinding = null;
       current?.close(1000, "Screen feed idle");
     }
   };
@@ -126,6 +166,11 @@ export function subscribeScreenFeedBinaryFrames(listener: FrameListener): () => 
 
 export function sendScreenFeedControlMessage(message: Record<string, unknown>): boolean {
   if (!socket || socket.readyState !== WebSocket.OPEN || !ready) return false;
+  if (message.type === "screen-feed:viewer-bind") {
+    const userId = typeof message.userId === "string" ? message.userId.trim().slice(0, 128) : "";
+    const tabId = typeof message.tabId === "string" ? message.tabId.trim().slice(0, 160) : "";
+    if (userId && tabId) viewerBinding = { userId, tabId };
+  }
   socket.send(JSON.stringify(message));
   return true;
 }
