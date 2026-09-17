@@ -1,0 +1,81 @@
+name: PR 1559 one-shot CI repair
+
+on:
+  push:
+    branches:
+      - test/phase33b-accounting-finance-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: test/phase33b-accounting-finance-20260917
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply source repairs
+        run: node scripts/pr1559-self-fix.mjs
+
+      - name: Format repaired source
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/components/RemoteKeyboardControllerOverlay.tsx \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/i18n/factoryStaffTrackingTranslations.ts \
+            client/src/pages/ContainerVerification.tsx \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            tests/phase33b-account-migration-routes.test.ts \
+            tests/phase33b-daybook-finance-routes.test.ts \
+            tests/phase33b-voucher-entry-reads.test.ts
+
+      - name: Verify repaired static gates
+        run: |
+          npm run lint
+          npm run audit:doc-index
+          node scripts/audit-i18n-phase14.mjs
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/components/RemoteKeyboardControllerOverlay.tsx \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/i18n/factoryStaffTrackingTranslations.ts \
+            client/src/pages/ContainerVerification.tsx \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            tests/phase33b-account-migration-routes.test.ts \
+            tests/phase33b-daybook-finance-routes.test.ts \
+            tests/phase33b-voucher-entry-reads.test.ts
+
+      - name: Commit repairs and remove one-shot machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            config/doc-index.json \
+            client/src/components/RemoteKeyboardControllerOverlay.tsx \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/i18n/factoryStaffTrackingTranslations.ts \
+            client/src/pages/ContainerVerification.tsx \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            tests/phase33b-account-migration-routes.test.ts \
+            tests/phase33b-daybook-finance-routes.test.ts \
+            tests/phase33b-voucher-entry-reads.test.ts
+          git rm .github/workflows/pr1559-self-fix.yml scripts/pr1559-self-fix.mjs
+          git commit -m "fix: clear PR 1559 repository gates"
+          git push origin HEAD:test/phase33b-accounting-finance-20260917
