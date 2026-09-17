@@ -1335,6 +1335,10 @@
       "status": 403,
       "shape": "{message:scalar}"
     },
+    "/api/screen-feed/admin/audit-queue-health": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/screen-feed/being-watched": {
       "status": 200,
       "shape": "{fast:scalar,lastWatcherPollAgeMs:scalar,userId:scalar,watched:scalar}"

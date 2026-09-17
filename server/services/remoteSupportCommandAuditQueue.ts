@@ -14,6 +14,9 @@
  *     and it is still redacted by the same builder;
  *   - rows are flushed in batches on a short interval, so a burst of pointer
  *     moves becomes one multi-row insert instead of N serialized inserts;
+ *   - consecutive pointer-move requests for the same session collapse into a
+ *     single row carrying `pointerCount`, so a steady cursor stream does not
+ *     flood the audit table while still proving control was exercised;
  *   - when the audit backend stops accepting writes the queue becomes
  *     *unhealthy*, and callers must refuse new commands. Control is never
  *     silently unaudited — it fails closed at the door instead of paying for
@@ -27,15 +30,21 @@ import { buildRemoteSupportAuditRow, type RemoteSupportAuditInput } from "./remo
 export interface RemoteSupportCommandAuditHealth {
   pending: number;
   accepting: boolean;
+  healthy: boolean;
   consecutiveFailures: number;
   droppedRecords: number;
   writtenRecords: number;
   flushedBatches: number;
+  aggregatedPointerMoves: number;
   lastFlushAt: number | null;
   lastFailureAt: number | null;
+  lastFlushAtIso: string | null;
+  lastFailureAtIso: string | null;
 }
 
-type AuditRow = ReturnType<typeof buildRemoteSupportAuditRow>;
+type AuditRow = ReturnType<typeof buildRemoteSupportAuditRow> & {
+  changes: Record<string, { new: unknown }>;
+};
 type AuditRowWriter = (rows: AuditRow[]) => Promise<void>;
 
 /** One insert carries at most this many rows so a backlog cannot build a giant statement. */
@@ -54,6 +63,7 @@ let consecutiveFailures = 0;
 let droppedRecords = 0;
 let writtenRecords = 0;
 let flushedBatches = 0;
+let aggregatedPointerMoves = 0;
 let lastFlushAt: number | null = null;
 let lastFailureAt: number | null = null;
 
@@ -69,6 +79,43 @@ function scheduleFlush(): void {
     void flushRemoteSupportCommandAudits().catch(() => undefined);
   }, FLUSH_INTERVAL_MS);
   (flushTimer as unknown as { unref?: () => void }).unref?.();
+}
+
+function isPointerMoveRow(row: AuditRow): boolean {
+  return (
+    row.action === "remote_support_mouse_command" &&
+    String(row.changes?.commandType?.new ?? "") === "pointer-move"
+  );
+}
+
+function pointerCountOf(row: AuditRow): number {
+  const value = Number(row.changes?.pointerCount?.new ?? 1);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+}
+
+/**
+ * Collapses a newly built pointer-move row into the trailing pending row when
+ * it is also a pointer-move for the same session. Discrete actions (click,
+ * scroll, keyboard, results) always create their own row so the audit still
+ * records each intentional action.
+ */
+function tryAggregatePointerMove(row: AuditRow): boolean {
+  if (!isPointerMoveRow(row)) return false;
+  const last = pendingRows[pendingRows.length - 1];
+  if (!last || !isPointerMoveRow(last)) return false;
+  if (last.recordIdentifier !== row.recordIdentifier) return false;
+  if (last.userId !== row.userId) return false;
+
+  const nextCount = pointerCountOf(last) + pointerCountOf(row);
+  last.changes = {
+    ...last.changes,
+    ...row.changes,
+    pointerCount: { new: nextCount },
+    status: row.changes.status ?? last.changes.status,
+    route: row.changes.route ?? last.changes.route,
+  };
+  aggregatedPointerMoves += 1;
+  return true;
 }
 
 /**
@@ -87,7 +134,7 @@ export function isRemoteSupportCommandAuditAccepting(): boolean {
 export function enqueueRemoteSupportCommandAudit(input: RemoteSupportAuditInput): boolean {
   let row: AuditRow;
   try {
-    row = buildRemoteSupportAuditRow(input);
+    row = buildRemoteSupportAuditRow(input) as AuditRow;
   } catch (error) {
     logger.error("[RemoteSupport] unable to build a command audit row", {
       error,
@@ -97,7 +144,16 @@ export function enqueueRemoteSupportCommandAudit(input: RemoteSupportAuditInput)
     return false;
   }
 
-  pendingRows.push(row);
+  // A single pointer-move always starts with pointerCount=1 so aggregated and
+  // unaggregated rows share the same shape for readers.
+  if (isPointerMoveRow(row) && row.changes.pointerCount === undefined) {
+    row.changes = { ...row.changes, pointerCount: { new: 1 } };
+  }
+
+  if (!tryAggregatePointerMove(row)) {
+    pendingRows.push(row);
+  }
+
   if (pendingRows.length > MAX_PENDING_ROWS) {
     const shed = pendingRows.splice(0, pendingRows.length - MAX_PENDING_ROWS);
     droppedRecords += shed.length;
@@ -155,15 +211,23 @@ export function flushRemoteSupportCommandAudits(): Promise<number> {
 }
 
 export function getRemoteSupportCommandAuditHealth(): RemoteSupportCommandAuditHealth {
+  const accepting = isRemoteSupportCommandAuditAccepting();
   return {
     pending: pendingRows.length,
-    accepting: isRemoteSupportCommandAuditAccepting(),
+    accepting,
+    // Healthy means the queue is accepting *and* has not recently failed a flush.
+    // Operators use this on the runtime snapshot; controllers still key off
+    // `accepting` alone so a single transient failure does not block control.
+    healthy: accepting && consecutiveFailures === 0,
     consecutiveFailures,
     droppedRecords,
     writtenRecords,
     flushedBatches,
+    aggregatedPointerMoves,
     lastFlushAt,
     lastFailureAt,
+    lastFlushAtIso: lastFlushAt ? new Date(lastFlushAt).toISOString() : null,
+    lastFailureAtIso: lastFailureAt ? new Date(lastFailureAt).toISOString() : null,
   };
 }
 
@@ -181,6 +245,7 @@ export function resetRemoteSupportCommandAuditQueueForTests(): void {
   droppedRecords = 0;
   writtenRecords = 0;
   flushedBatches = 0;
+  aggregatedPointerMoves = 0;
   lastFlushAt = null;
   lastFailureAt = null;
   writer = defaultWriter;

@@ -2,7 +2,11 @@ import type { Express, Request, Response } from "express";
 import { requireAuth, requireLogin } from "../auth";
 import { logger } from "../lib/logger";
 import { requireActionAccess } from "../lib/permissionMiddleware";
-import { getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
+import {
+  getSessionRole,
+  getSessionUserId,
+  getSessionUsername,
+} from "../lib/requestContext";
 import {
   screenFeedCursorStore,
   screenFeedFailureStore,
@@ -13,6 +17,7 @@ import {
   type ScreenFrame,
 } from "../screenFeedStore";
 import { isRemoteControlControllerRole, stopAllRemoteControlSessions } from "../services/remoteControlSessionService";
+import { getRemoteSupportCommandAuditHealth } from "../services/remoteSupportCommandAuditQueue";
 import { screenFeedLiveHub } from "../services/screenFeedLiveHub";
 import {
   isValidScreenFeedDataUrl,
@@ -23,6 +28,11 @@ import {
   sanitizeScreenFeedFailure,
   sanitizeScreenFeedViewport,
 } from "../services/screenFeedService";
+import { assertScreenFeedTenantAccess } from "../services/screenFeedTenantGate";
+import {
+  beginScreenWatch,
+  endScreenWatch,
+} from "../services/screenWatchAuditService";
 import {
   emergencyDisableRemoteSupport,
   getRemoteSupportRuntimeSnapshot,
@@ -60,6 +70,35 @@ function requireSupportController(req: Request, res: Response): boolean {
 
 function runtimeActor(req: Request): string {
   return String(getSessionUserId(req));
+}
+
+function sessionCompanyId(req: Request): number | null {
+  const value = (req.session as { currentCompanyId?: unknown } | undefined)?.currentCompanyId;
+  const companyId = Number(value);
+  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
+}
+
+function sessionActor(req: Request) {
+  return {
+    userId: String(getSessionUserId(req)),
+    username: getSessionUsername(req) || String(getSessionUserId(req)),
+    role: getSessionRole(req) || "",
+    companyId: sessionCompanyId(req),
+  };
+}
+
+async function authorizeFrameAccess(req: Request, res: Response, watchedUserId: string) {
+  const actor = sessionActor(req);
+  const gate = await assertScreenFeedTenantAccess({
+    controllerRole: actor.role,
+    controllerCompanyId: actor.companyId,
+    watchedUserId,
+  });
+  if (!gate.allowed) {
+    res.status(gate.status).json({ message: gate.message });
+    return null;
+  }
+  return { actor, companyId: gate.companyId };
 }
 
 function openEventStream(res: Response): void {
@@ -136,7 +175,18 @@ export function registerScreenFeedRoutes(app: Express) {
   app.get("/api/screen-feed/admin/runtime", requireAuth, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     res.setHeader("Cache-Control", "no-store");
-    res.json(getRemoteSupportRuntimeSnapshot());
+    // Queue health sits next to the runtime flags so operators can see when
+    // control is about to fail closed without grepping process logs.
+    res.json({
+      ...getRemoteSupportRuntimeSnapshot(),
+      commandAuditQueue: getRemoteSupportCommandAuditHealth(),
+    });
+  });
+
+  app.get("/api/screen-feed/admin/audit-queue-health", requireAuth, (req, res) => {
+    if (!requireDeveloper(req, res)) return;
+    res.setHeader("Cache-Control", "no-store");
+    res.json(getRemoteSupportCommandAuditHealth());
   });
 
   app.patch("/api/screen-feed/admin/runtime", requireAuth, (req, res) => {
@@ -236,7 +286,7 @@ export function registerScreenFeedRoutes(app: Express) {
     sendStatus();
   });
 
-  app.get("/api/screen-feed/live/:userId", requireAuth, viewPermission, (req, res) => {
+  app.get("/api/screen-feed/live/:userId", requireAuth, viewPermission, async (req, res) => {
     if (!requireSupportController(req, res)) return;
     if (!isRemoteSupportEnabled("screenFeedEnabled") || !isRemoteSupportEnabled("fastScreenFeed")) {
       res.setHeader("Cache-Control", "no-store");
@@ -244,12 +294,25 @@ export function registerScreenFeedRoutes(app: Express) {
     }
 
     const watchedUserId = req.params.userId;
+    const access = await authorizeFrameAccess(req, res, watchedUserId);
+    if (!access) return;
+
     openEventStream(res);
     recordRemoteSupportMetric("liveViewerConnected");
     watcherPollStore.set(watchedUserId, Date.now());
 
-    const unsubscribeFrames = screenFeedLiveHub.subscribeFrames(watchedUserId, (frame) => {
-      writeEvent(res, "frame", serializeFrame(frame, screenFeedFailureStore.get(watchedUserId)));
+    const frame = screenFeedStore.get(watchedUserId);
+    void beginScreenWatch({
+      companyId: access.companyId,
+      controllerUserId: access.actor.userId,
+      controllerUsername: access.actor.username,
+      controllerRole: access.actor.role,
+      targetUserId: watchedUserId,
+      targetUsername: frame?.username,
+    });
+
+    const unsubscribeFrames = screenFeedLiveHub.subscribeFrames(watchedUserId, (nextFrame) => {
+      writeEvent(res, "frame", serializeFrame(nextFrame, screenFeedFailureStore.get(watchedUserId)));
     });
     const unsubscribeCursors = screenFeedLiveHub.subscribeCursors(watchedUserId, (cursor) => {
       writeEvent(res, "cursor", serializeCursor(cursor));
@@ -262,6 +325,16 @@ export function registerScreenFeedRoutes(app: Express) {
 
     const heartbeatId = setInterval(() => {
       watcherPollStore.set(watchedUserId, Date.now());
+      // Keep the watch TTL alive while the live stream is open so a long
+      // uninterrupted session does not produce a false "watch-timeout" end.
+      void beginScreenWatch({
+        companyId: access.companyId,
+        controllerUserId: access.actor.userId,
+        controllerUsername: access.actor.username,
+        controllerRole: access.actor.role,
+        targetUserId: watchedUserId,
+        targetUsername: screenFeedStore.get(watchedUserId)?.username,
+      });
       writeHeartbeat(res);
     }, LIVE_HEARTBEAT_MS);
 
@@ -273,6 +346,11 @@ export function registerScreenFeedRoutes(app: Express) {
       unsubscribeCursors();
       unsubscribeFailures();
       unsubscribeDisconnect();
+      void endScreenWatch({
+        controllerUserId: access.actor.userId,
+        targetUserId: watchedUserId,
+        stopReason: "live-viewer-closed",
+      });
       if (!screenFeedLiveHub.hasViewer(watchedUserId)) {
         watcherPollStore.delete(watchedUserId);
         screenFeedLiveHub.notifyStatus(watchedUserId);
@@ -400,12 +478,15 @@ export function registerScreenFeedRoutes(app: Express) {
     res.status(204).end();
   });
 
-  app.get("/api/screen-feed/:userId", requireAuth, viewPermission, (req, res) => {
+  app.get("/api/screen-feed/:userId", requireAuth, viewPermission, async (req, res) => {
     if (!requireSupportController(req, res)) return;
     recordRemoteSupportMetric("viewerPoll");
     res.setHeader("Cache-Control", "no-store");
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.json(null);
     const watchedUserId = req.params.userId;
+    const access = await authorizeFrameAccess(req, res, watchedUserId);
+    if (!access) return;
+
     watcherPollStore.set(watchedUserId, Date.now());
     screenFeedLiveHub.notifyStatus(watchedUserId);
     const frame = screenFeedStore.get(watchedUserId);
@@ -417,6 +498,18 @@ export function registerScreenFeedRoutes(app: Express) {
         `[ScreenFeed] GET /:userId watchedUserId=${watchedUserId} hasFrame=${hasFrame} frameAgeMs=${frameAgeMs}`
       );
     }
+
+    // Polling viewers refresh the watch TTL on every successful authorized
+    // poll. Closing the dialog stops the polls and the sweeper ends the watch.
+    void beginScreenWatch({
+      companyId: access.companyId,
+      controllerUserId: access.actor.userId,
+      controllerUsername: access.actor.username,
+      controllerRole: access.actor.role,
+      targetUserId: watchedUserId,
+      targetUsername: frame?.username,
+    });
+
     if (!frame) return res.json(failure ? { captureFailure: serializeFailure(failure) } : null);
     const latestCursor = screenFeedCursorStore.get(watchedUserId);
     if (latestCursor) frame.cursor = latestCursor;
