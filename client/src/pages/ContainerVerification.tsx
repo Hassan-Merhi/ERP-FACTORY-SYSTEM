@@ -151,7 +151,7 @@ export default function ContainerVerification() {
   }, [containerId]);
 
   const autoPopulateMutation = useMutation({
-    mutationFn: async (showToast: boolean) => syncLoadedItemsFromContainer(),
+    mutationFn: async (_showToast: boolean) => syncLoadedItemsFromContainer(),
     onSuccess: (data, showToast) => {
       queryClient.setQueryData<LoadedItem[]>(["/api/containers", containerId, "loaded-items"], data.items);
       if (!showToast) return;
