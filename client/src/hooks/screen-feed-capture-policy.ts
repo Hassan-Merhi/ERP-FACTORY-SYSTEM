@@ -1,28 +1,27 @@
-export const ACTIVE_CAPTURE_MIN_GAP_MS = 850;
-export const DIRTY_SETTLE_MS = 180;
-export const MAX_DIRTY_LATENCY_MS = 1200;
+// Binary transport removed the 650 ms upload limiter and the capture path now
+// does one JPEG Blob encode instead of base64/JSON. Keep interaction frames
+// responsive while still leaving the watched tab meaningful main-thread time.
+export const ACTIVE_CAPTURE_MIN_GAP_MS = 220;
+export const DIRTY_SETTLE_MS = 90;
+export const MAX_DIRTY_LATENCY_MS = 700;
 export const IDLE_REFRESH_MS = 60000;
 export const FAILED_CAPTURE_BACKOFF_MS = 3500;
 
-// Keep the legacy exports for any tests or older call sites, but map them onto
-// the low-impact policy. The optimized hook no longer continuously captures
-// unchanged pages just to discover that the frame is identical.
+// Keep the legacy exports for tests/older call sites.
 export const ACTIVE_CAPTURE_DELAY_MS = ACTIVE_CAPTURE_MIN_GAP_MS;
 export const IDLE_CAPTURE_DELAY_MS = 5000;
 export const MAX_IDLE_CAPTURE_DELAY_MS = IDLE_REFRESH_MS;
 export const FAILED_CAPTURE_DELAY_MS = FAILED_CAPTURE_BACKOFF_MS;
 
 /**
- * A full-page render costs the employee's main thread. Spacing captures by a
- * multiple of what the last one actually cost keeps the browser mostly idle on
- * heavy ERP screens instead of rendering back-to-back at the nominal cadence.
- *
- * Phase 11 reduced this from 4 to 2: remote clicks are now validated against
- * the frame's captured scroll/viewport state, so fresher frames directly mean
- * fewer stale-frame rejections and more accurate control.
+ * Adaptive capture protection now targets roughly a 50% capture duty ceiling:
+ * after an expensive render the browser gets one render-duration of idle time.
+ * The old factor of 2 was layered on top of an 850 ms hard floor and the old
+ * HTTP/base64 upload limiter; keeping all three after the transport rewrite
+ * unnecessarily capped the live feed near 1 fps.
  */
-export const CAPTURE_DUTY_CYCLE = 2;
-export const MAX_ADAPTIVE_CAPTURE_GAP_MS = 15000;
+export const CAPTURE_DUTY_CYCLE = 1;
+export const MAX_ADAPTIVE_CAPTURE_GAP_MS = 8000;
 export const MAX_FAILED_CAPTURE_BACKOFF_MS = 60000;
 
 export function adaptiveCaptureGapMs(requestedGapMs: number, lastCaptureDurationMs: number): number {
@@ -31,10 +30,8 @@ export function adaptiveCaptureGapMs(requestedGapMs: number, lastCaptureDuration
 }
 
 /**
- * Repeated failures mean something structural is wrong (a rejected payload, a
- * renderer that cannot encode). Retrying at a fixed interval turns that into a
- * permanent load on the watched machine, so each consecutive failure widens the
- * gap up to a minute.
+ * Repeated failures mean something structural is wrong. Each consecutive
+ * failure widens the gap up to a minute; success resets the counter.
  */
 export function failedCaptureBackoffMs(consecutiveFailures: number): number {
   const attempts = Math.max(1, Math.floor(consecutiveFailures));
