@@ -101,7 +101,7 @@ jobs:
       - name: Verify repository gates
         run: |
           npm run lint
-          npm run type-check
+          npm run check
           node scripts/verify-i18n-audit-classifier.mjs
           node scripts/audit-i18n-phase14.mjs
           node node_modules/prettier/bin/prettier.cjs --check \
