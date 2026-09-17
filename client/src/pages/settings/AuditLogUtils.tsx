@@ -321,6 +321,8 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   settings_change: "Settings Changed",
   remote_support_session_started: "Support Session Started",
   remote_support_session_stopped: "Support Session Stopped",
+  remote_support_screen_watch_started: "Screen Watch Started",
+  remote_support_screen_watch_ended: "Screen Watch Ended",
   remote_support_mouse_authorized: "Mouse Control Enabled",
   remote_support_mouse_revoked: "Mouse Control Disabled",
   remote_support_keyboard_authorized: "Keyboard Control Enabled",

@@ -39,6 +39,7 @@ import { insuranceMonthlyAmounts } from "./025-insurance-monthly-amounts";
 import { poImportParentCompany } from "./026-po-import-parent-company";
 import { factoryStaffTrackingSchema } from "./027-factory-staff-tracking";
 import { supplierTrackingDefaultsSchema } from "./028-supplier-tracking-defaults";
+import { userPresenceComplianceIndexes } from "./029-user-presence-compliance-indexes";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -75,6 +76,7 @@ export const startupMigrations: string[] = [
   ...poImportParentCompany,
   ...factoryStaffTrackingSchema,
   ...supplierTrackingDefaultsSchema,
+  ...userPresenceComplianceIndexes,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it

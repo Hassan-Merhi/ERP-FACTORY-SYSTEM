@@ -494,11 +494,12 @@ describe("remote support Phase 10 — control responsiveness", () => {
         batches.push(rows.length);
       });
 
+      // Discrete clicks stay one-row-per-command; the batcher still packs them.
       for (let index = 0; index < 30; index += 1) {
         enqueueRemoteSupportCommandAudit({
           event: "mouse_command",
           session,
-          details: { capability: "mouse", commandType: "pointer-move", route: session.targetRoute },
+          details: { capability: "mouse", commandType: "click", route: session.targetRoute },
         });
       }
       await flushRemoteSupportCommandAudits();
@@ -507,6 +508,28 @@ describe("remote support Phase 10 — control responsiveness", () => {
       expect(batches.length).toBeLessThan(30);
       expect(Math.max(...batches)).toBeLessThanOrEqual(25);
       expect(getRemoteSupportCommandAuditHealth().pending).toBe(0);
+    });
+
+    it("aggregates consecutive pointer-moves into a single row with pointerCount", async () => {
+      const session = auditSession();
+      const rows: Array<{ changes: Record<string, { new: unknown }> }> = [];
+      setRemoteSupportCommandAuditWriterForTests(async (batch) => {
+        rows.push(...(batch as typeof rows));
+      });
+
+      for (let index = 0; index < 12; index += 1) {
+        enqueueRemoteSupportCommandAudit({
+          event: "mouse_command",
+          session,
+          details: { capability: "mouse", commandType: "pointer-move", route: session.targetRoute },
+        });
+      }
+      await flushRemoteSupportCommandAudits();
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].changes.commandType).toEqual({ new: "pointer-move" });
+      expect(rows[0].changes.pointerCount).toEqual({ new: 12 });
+      expect(getRemoteSupportCommandAuditHealth().aggregatedPointerMoves).toBe(11);
     });
 
     it("records the session state in force when the command was authorized", async () => {

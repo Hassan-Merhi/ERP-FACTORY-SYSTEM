@@ -183,6 +183,12 @@ export const userPresence = pgTable(
   },
   (t) => ({
     uniqueSession: uniqueIndex("user_presence_session_unique").on(t.sessionId),
+    // Active-user list and screen-feed tenant gate both filter by last_seen
+    // (and often company_id). Without this the presence table is a sequential
+    // scan on every heartbeat cleanup and Watch panel refresh.
+    lastSeenIdx: index("user_presence_last_seen_idx").on(t.lastSeen),
+    companyLastSeenIdx: index("user_presence_company_last_seen_idx").on(t.companyId, t.lastSeen),
+    userLastSeenIdx: index("user_presence_user_last_seen_idx").on(t.userId, t.lastSeen),
   })
 );
 
