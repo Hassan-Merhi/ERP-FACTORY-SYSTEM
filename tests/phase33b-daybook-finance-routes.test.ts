@@ -17,7 +17,7 @@ async function createVoucher(): Promise<number> {
        (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency)
      VALUES ($1, $2, 'Payment', '2026-09-17', $3, '75.00', 'USD')
      RETURNING id`,
-    [ctx.companyId, `P33B-DAYBOOK-${sequence}`, `${TEST_PREFIX} synthetic voucher ${sequence}`],
+    [ctx.companyId, `P33B-DAYBOOK-${sequence}`, `${TEST_PREFIX} synthetic voucher ${sequence}`]
   );
   return result.rows[0].id;
 }
@@ -30,7 +30,7 @@ async function createManualEntry(txType = "PAYMENT"): Promise<number> {
         currency_code, amount_currency, fx_rate_to_usd, amount_usd)
      VALUES ($1, '2026-09-17', $2, NULL, 'manual', $3, 'USD', '50.00', '1', '50.00')
      RETURNING id`,
-    [ctx.companyId, txType, `${TEST_PREFIX} Phase 33B entry ${sequence}`],
+    [ctx.companyId, txType, `${TEST_PREFIX} Phase 33B entry ${sequence}`]
   );
   return result.rows[0].id;
 }
@@ -83,7 +83,7 @@ describe("Phase 33B factory daybook accounting routes", () => {
       `SELECT id, reference_id, description, tx_date::text
          FROM factory_daybook_entries
         WHERE company_id = $1 AND reference_table = 'vouchers' AND reference_id = $2`,
-      [ctx.companyId, voucherId],
+      [ctx.companyId, voucherId]
     );
     expect(daybook.rowCount).toBe(1);
     expect(daybook.rows[0]).toMatchObject({
@@ -94,7 +94,7 @@ describe("Phase 33B factory daybook accounting routes", () => {
 
     const voucher = await pool.query<{ description: string; voucher_date: string }>(
       `SELECT description, voucher_date::text FROM vouchers WHERE id = $1`,
-      [voucherId],
+      [voucherId]
     );
     expect(voucher.rows[0]).toEqual({
       description: "Phase 33B corrected synthetic payment",
@@ -146,7 +146,7 @@ describe("Phase 33B factory daybook accounting routes", () => {
 
     const row = await pool.query<{ amount_currency: string; amount_usd: string }>(
       `SELECT amount_currency, amount_usd FROM factory_daybook_entries WHERE id = $1`,
-      [entryId],
+      [entryId]
     );
     expect(Number(row.rows[0].amount_currency)).toBe(50);
     expect(Number(row.rows[0].amount_usd)).toBe(50);
