@@ -6,8 +6,8 @@ const controllerPassword = process.env.REMOTE_SUPPORT_E2E_CONTROLLER_PASSWORD ||
 const targetUsername = process.env.REMOTE_SUPPORT_E2E_TARGET_USERNAME || "";
 const targetPassword = process.env.REMOTE_SUPPORT_E2E_TARGET_PASSWORD || "";
 const targetPath = process.env.REMOTE_SUPPORT_E2E_TARGET_PATH || "/";
-const maxFrameIntervalP95Ms = Number(process.env.REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS || 2500);
-const maxClientToViewerP95Ms = Number(process.env.REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS || 2500);
+const maxFrameIntervalP95Ms = Number(process.env.REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS || 1500);
+const maxClientToViewerP95Ms = Number(process.env.REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS || 1500);
 const minClickSuccessRate = Number(process.env.REMOTE_SUPPORT_GATE_MIN_CLICK_SUCCESS_RATE || 0.95);
 const frameSamplesRequired = Number(process.env.REMOTE_SUPPORT_E2E_FRAME_SAMPLES || 6);
 
@@ -114,7 +114,6 @@ test.describe("remote support canary measurement", () => {
         }, 450);
       });
 
-      // Wait for the target's normal presence hook to publish the active row.
       await controllerPage.goto(`${baseURL}/settings`, { waitUntil: "domcontentloaded" });
       await controllerPage.getByRole("button", { name: "Sessions & Users" }).click();
       const watchButton = controllerPage.getByTestId(`button-watch-${targetUserId}`);
@@ -156,8 +155,6 @@ test.describe("remote support canary measurement", () => {
         })
         .toBeGreaterThan(0);
 
-      // The click changes target state and the animated marker continues to
-      // produce fresh frames, allowing command→visible correlation to close.
       await collectFrameTimes(controllerPage, image, 3, 20_000);
 
       let afterRuntime = await runtime(controllerPage);

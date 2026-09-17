@@ -1,26 +1,9 @@
 import type { Express } from "express";
-
-const GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE = "gc_owner_withdrawal_clearing";
-const GC_OWNER_WITHDRAWAL_CLEARING_CODE = "GC-OWCLR";
-const GC_OWNER_WITHDRAWAL_CLEARING_NAME = "GC Owner Withdrawal Clearing";
-const ACCOUNT_MIGRATION_CLEARING_SUBTYPE = "account_migration_clearing";
-
-function isSystemOnlyAccount(value: unknown): boolean {
-  if (!value || typeof value !== "object") return false;
-  const row = value as Record<string, unknown>;
-  const subType = String(row.subType ?? row.sub_type ?? "");
-
-  return (
-    subType === ACCOUNT_MIGRATION_CLEARING_SUBTYPE ||
-    subType === GC_OWNER_WITHDRAWAL_CLEARING_SUBTYPE ||
-    String(row.code ?? "") === GC_OWNER_WITHDRAWAL_CLEARING_CODE ||
-    String(row.name ?? "").trim().toLowerCase() === GC_OWNER_WITHDRAWAL_CLEARING_NAME.toLowerCase()
-  );
-}
+import { isSystemOnlyLedgerAccount } from "../lib/systemOnlyLedgerAccounts";
 
 function filterSystemOnlyAccounts(body: unknown): unknown {
   if (Array.isArray(body)) {
-    return body.filter((row) => !isSystemOnlyAccount(row));
+    return body.filter((row) => !isSystemOnlyLedgerAccount(row));
   }
 
   if (body && typeof body === "object") {
@@ -28,7 +11,7 @@ function filterSystemOnlyAccounts(body: unknown): unknown {
     if (Array.isArray(envelope.accounts)) {
       return {
         ...envelope,
-        accounts: envelope.accounts.filter((row) => !isSystemOnlyAccount(row)),
+        accounts: envelope.accounts.filter((row) => !isSystemOnlyLedgerAccount(row)),
       };
     }
   }
