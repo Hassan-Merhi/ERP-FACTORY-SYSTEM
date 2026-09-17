@@ -77,10 +77,13 @@ describe("Phase 33F websocket auth and broadcast scoping", () => {
   });
 
   it("marks an authenticated socket ready only after session company/user scope resolves", async () => {
-    setupWS({} as any, ((req: any, _res: any, next: (error?: unknown) => void) => {
-      req.session = { userId: "user-7", currentCompanyId: 7, factoryCompanyId: 11 };
-      next();
-    }) as any);
+    setupWS(
+      {} as any,
+      ((req: any, _res: any, next: (error?: unknown) => void) => {
+        req.session = { userId: "user-7", currentCompanyId: 7, factoryCompanyId: 11 };
+        next();
+      }) as any
+    );
 
     const socket = new (WebSocket as any)();
     harness.server.connect(socket, {});
@@ -94,10 +97,13 @@ describe("Phase 33F websocket auth and broadcast scoping", () => {
   });
 
   it("fails closed for scoped broadcasts when a socket has no authenticated session context", async () => {
-    setupWS({} as any, ((req: any, _res: any, next: (error?: unknown) => void) => {
-      req.session = {};
-      next();
-    }) as any);
+    setupWS(
+      {} as any,
+      ((req: any, _res: any, next: (error?: unknown) => void) => {
+        req.session = {};
+        next();
+      }) as any
+    );
 
     const socket = new (WebSocket as any)();
     harness.server.connect(socket, {});
@@ -110,9 +116,12 @@ describe("Phase 33F websocket auth and broadcast scoping", () => {
   });
 
   it("closes sockets when session resolution fails instead of leaving them permanently unscoped", async () => {
-    setupWS({} as any, ((_req: any, _res: any, next: (error?: unknown) => void) => {
-      next(new Error("session store unavailable"));
-    }) as any);
+    setupWS(
+      {} as any,
+      ((_req: any, _res: any, next: (error?: unknown) => void) => {
+        next(new Error("session store unavailable"));
+      }) as any
+    );
 
     const socket = new (WebSocket as any)();
     harness.server.connect(socket, {});

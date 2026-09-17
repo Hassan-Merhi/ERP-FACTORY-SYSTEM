@@ -29,9 +29,11 @@ import { registerWhatsAppFastSendRoutes } from "../server/routes/whatsappFastSen
 import { registerWhatsAppRoutes } from "../server/routes/whatsappRoutes";
 
 function fakeApp() {
-  const register = (method: string) => (path: string, ...handlers: Array<(...args: any[]) => any>) => {
-    harness.registrations.push({ method, path, handlers });
-  };
+  const register =
+    (method: string) =>
+    (path: string, ...handlers: Array<(...args: any[]) => any>) => {
+      harness.registrations.push({ method, path, handlers });
+    };
   return {
     get: register("GET"),
     head: register("HEAD"),

@@ -7,10 +7,7 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings: Array.from(strings), values }),
 }));
 
-import {
-  phase5QueryTypes,
-  phase5ReportShard,
-} from "../server/chat/reports/implementations/phase5ReportShard";
+import { phase5QueryTypes, phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
   return {

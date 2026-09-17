@@ -89,10 +89,7 @@ describe("Phase 33F scheduler daily-export behavior", () => {
 
     await expect(runDailyExport()).resolves.toBe(true);
     expect(harness.createExportRun).toHaveBeenCalledWith("scheduled");
-    expect(harness.finishExportRun).toHaveBeenCalledWith(
-      101,
-      expect.objectContaining({ status: "skipped" })
-    );
+    expect(harness.finishExportRun).toHaveBeenCalledWith(101, expect.objectContaining({ status: "skipped" }));
     expect(harness.fetchAllCompanies).not.toHaveBeenCalled();
   });
 

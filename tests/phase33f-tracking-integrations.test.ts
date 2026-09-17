@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { isTrackTraceScraper, scrapeTrackTrace } from "../server/lib/trackTraceScraper";
-import { isEnabled as isMaerskPublicEnabled, track as trackMaerskPublic } from "../server/lib/trackingProviders/maerskPublicProvider";
+import {
+  isEnabled as isMaerskPublicEnabled,
+  track as trackMaerskPublic,
+} from "../server/lib/trackingProviders/maerskPublicProvider";
 import { formatEtaDate, extractFromJson, isMaerskDirectScraperAvailable } from "../server/lib/maerskDirectScraper";
 
 function prefetchResponse(cookie = "session=abc; Path=/") {
@@ -141,9 +144,7 @@ describe("Phase 33F tracking integrations", () => {
     expect(formatEtaDate("2026-09-17T23:30:00-05:00")).toBe("2026-09-17");
 
     const parsed = extractFromJson({
-      events: [
-        { eventDateTime: "2026-09-11T12:00:00Z", status: "SAILED", location: "Dubai" },
-      ],
+      events: [{ eventDateTime: "2026-09-11T12:00:00Z", status: "SAILED", location: "Dubai" }],
       portCalls: [
         { eta: "2026-09-25", isDestination: false },
         { eta: "2026-10-07", isDestination: true },
