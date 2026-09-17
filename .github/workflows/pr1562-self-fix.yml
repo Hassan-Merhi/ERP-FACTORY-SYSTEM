@@ -1,5 +1,6 @@
 name: PR 1562 one-shot CI repair
 
+# Temporary branch-only repair workflow. Remove after it pushes the repaired branch.
 on:
   push:
     branches:
