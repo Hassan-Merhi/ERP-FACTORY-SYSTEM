@@ -1,9 +1,9 @@
-name: PR 1559 one-shot CI repair
+name: PR 1563 one-shot i18n repair
 
 on:
   push:
     branches:
-      - test/phase33b-accounting-finance-20260917
+      - test/phase33e-supplier-intercompany-permissions-20260917
 
 permissions:
   contents: write
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout PR branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: test/phase33b-accounting-finance-20260917
+          ref: test/phase33e-supplier-intercompany-permissions-20260917
           fetch-depth: 0
           persist-credentials: true
 
@@ -29,56 +29,99 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
 
-      - name: Apply source repairs
-        run: node scripts/pr1559-self-fix.mjs
+      - name: Apply source-level i18n repairs
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          function replaceOrThrow(path, search, replacement, label) {
+            let source = fs.readFileSync(path, 'utf8');
+            if (!source.includes(search)) throw new Error(`Missing expected source for ${label} in ${path}`);
+            source = source.replace(search, replacement);
+            fs.writeFileSync(path, source);
+          }
+
+          {
+            const path = 'client/src/i18n/applicationTranslations.ts';
+            let source = fs.readFileSync(path, 'utf8');
+            if (!source.includes('"containerVerification.itemsRefreshed"')) {
+              const marker = '  "settings.dataTools.costOverride.title": {';
+              if (!source.includes(marker)) throw new Error(`Missing translation insertion marker in ${path}`);
+              const entries = `  "containerVerification.itemsRefreshed": {\n    en: "Container items refreshed",\n    ar: "تم تحديث عناصر الحاوية",\n    fr: "Articles du conteneur actualisés",\n  },\n  "containerVerification.latestDetailsLoaded": {\n    en: "\${data.imported} current item lines loaded from the latest container details\${skippedMsg}",\n    ar: "تم تحميل \${data.imported} من بنود العناصر الحالية من أحدث تفاصيل الحاوية\${skippedMsg}",\n    fr: "\${data.imported} lignes d’articles actuelles chargées depuis les derniers détails du conteneur\${skippedMsg}",\n  },\n  "containerVerification.refreshNeedsConnection": {\n    en: "Refresh requires a connection",\n    ar: "يتطلب التحديث اتصالاً بالشبكة",\n    fr: "L’actualisation nécessite une connexion",\n  },\n  "factoryAdvances.netDue": { en: "Net Due", ar: "صافي المستحق", fr: "Net dû" },\n  "accountMigration.returnFailed": {\n    en: "Account return migration failed",\n    ar: "فشلت إعادة ترحيل الحساب",\n    fr: "Échec du retour de migration du compte",\n  },\n\n`;
+              source = source.replace(marker, entries + marker);
+              fs.writeFileSync(path, source);
+            }
+          }
+
+          replaceOrThrow(
+            'client/src/pages/factory/FactoryProductionTargets.tsx',
+            'throw new Error(`${tr("missingRequiredColumn")}: ${requiredHeader}`);',
+            'throw new Error([tr("missingRequiredColumn"), requiredHeader].join(": "));',
+            'missing required column message'
+          );
+          replaceOrThrow(
+            'client/src/pages/factory/FactoryProductionTargets.tsx',
+            'throw new Error(`${tr("duplicateWorkerCodeInExcel")}: ${workerCode}`);',
+            'throw new Error([tr("duplicateWorkerCodeInExcel"), workerCode].join(": "));',
+            'duplicate worker code message'
+          );
+          replaceOrThrow(
+            'client/src/pages/factory/FactoryProductionTargets.tsx',
+            'throw new Error(`${tr("invalidTargetForWorkerCode")} ${workerCode}`);',
+            'throw new Error([tr("invalidTargetForWorkerCode"), workerCode].join(" "));',
+            'invalid target message'
+          );
+          replaceOrThrow(
+            'client/src/pages/factory/FactoryProductionTargets.tsx',
+            'title: `${tr("productionTargetsImported")}: ${matchedCount}`,',
+            'title: [tr("productionTargetsImported"), matchedCount].join(": "),',
+            'production import success title'
+          );
+
+          {
+            const path = 'client/src/i18n/backendMessagesPhase7Translations.part13.ts';
+            let source = fs.readFileSync(path, 'utf8');
+            if (!source.includes('A watched user is required.')) {
+              const marker = '\n];';
+              const entries = `\n  {\n    en: "A watched user is required.",\n    ar: "يجب تحديد مستخدم للمشاهدة.",\n    fr: "Un utilisateur à surveiller est requis.",\n  },\n  {\n    en: "No company selected.",\n    ar: "لم يتم تحديد شركة.",\n    fr: "Aucune société sélectionnée.",\n  },\n  {\n    en: "No active screen feed is available for this user in the selected company.",\n    ar: "لا توجد مشاركة شاشة نشطة متاحة لهذا المستخدم في الشركة المحددة.",\n    fr: "Aucun flux d’écran actif n’est disponible pour cet utilisateur dans la société sélectionnée.",\n  },`;
+              if (!source.includes(marker)) throw new Error(`Missing backend translation insertion marker in ${path}`);
+              source = source.replace(marker, entries + marker);
+              fs.writeFileSync(path, source);
+            }
+          }
+          NODE
 
       - name: Format repaired source
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
             client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+            client/src/i18n/backendMessagesPhase7Translations.part13.ts \
+            client/src/pages/factory/FactoryProductionTargets.tsx
 
-      - name: Verify repaired static gates
+      - name: Verify repository gates
         run: |
           npm run lint
-          npm run audit:doc-index
+          npm run type-check
+          node scripts/verify-i18n-audit-classifier.mjs
           node scripts/audit-i18n-phase14.mjs
           node node_modules/prettier/bin/prettier.cjs --check \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
             client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+            client/src/i18n/backendMessagesPhase7Translations.part13.ts \
+            client/src/pages/factory/FactoryProductionTargets.tsx
 
-      - name: Commit repaired source
+      - name: Restore helper workflow and commit repaired source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout origin/main -- .github/workflows/pr1559-self-fix.yml
           git add \
-            config/doc-index.json \
-            client/src/components/RemoteKeyboardControllerOverlay.tsx \
-            client/src/components/RemoteMouseControllerOverlay.tsx \
+            .github/workflows/pr1559-self-fix.yml \
             client/src/i18n/applicationTranslations.ts \
-            client/src/i18n/factoryStaffTrackingTranslations.ts \
-            client/src/pages/ContainerVerification.tsx \
-            client/src/pages/factory/FactoryProductionTargets.tsx \
-            tests/phase33b-account-migration-routes.test.ts \
-            tests/phase33b-daybook-finance-routes.test.ts \
-            tests/phase33b-voucher-entry-reads.test.ts
+            client/src/i18n/backendMessagesPhase7Translations.part13.ts \
+            client/src/pages/factory/FactoryProductionTargets.tsx
           if git diff --cached --quiet; then
             echo "No source changes to commit."
             exit 0
           fi
-          git commit -m "fix: clear PR 1559 repository gates"
-          git push origin HEAD:test/phase33b-accounting-finance-20260917
+          git commit -m "fix: clear untranslated-text quality gate"
+          git push origin HEAD:test/phase33e-supplier-intercompany-permissions-20260917
