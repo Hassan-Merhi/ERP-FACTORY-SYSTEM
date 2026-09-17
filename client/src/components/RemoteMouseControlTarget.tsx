@@ -5,6 +5,11 @@ import {
   type RemoteMouseCommandView,
   type RemoteMouseExecutionResult,
 } from "@/hooks/remote-mouse-control-policy";
+import {
+  requestRemoteControlRealtime,
+  subscribeRemoteControlRealtime,
+  subscribeRemoteControlRealtimeReady,
+} from "@/lib/remote-control-session-transport";
 
 interface RemotePointerState {
   x: number;
@@ -25,9 +30,7 @@ function parseFrameViewport(value: unknown): RemoteMouseCommandView["frameViewpo
     typeof viewport.scrollX !== "number" ||
     typeof viewport.scrollY !== "number" ||
     typeof viewport.visualScale !== "number"
-  ) {
-    return undefined;
-  }
+  ) return undefined;
   return {
     width: viewport.width,
     height: viewport.height,
@@ -47,9 +50,7 @@ function parseCommand(value: unknown): RemoteMouseCommandView | null {
     typeof command.x !== "number" ||
     typeof command.y !== "number" ||
     typeof command.sequence !== "number"
-  ) {
-    return null;
-  }
+  ) return null;
   return { ...command, frameViewport: parseFrameViewport(command.frameViewport) } as RemoteMouseCommandView;
 }
 
@@ -60,21 +61,16 @@ async function reportCommandResult(
   result: RemoteMouseExecutionResult
 ): Promise<void> {
   try {
-    await fetch(
-      `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/commands/${encodeURIComponent(commandId)}/result`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tabId,
-          status: result.status,
-          reason: result.reason,
-        }),
-      }
-    );
+    await requestRemoteControlRealtime({
+      type: "remote-control:mouse-result",
+      sessionId,
+      tabId,
+      commandId,
+      status: result.status,
+      reason: result.reason,
+    });
   } catch {
-    // A later command or the session heartbeat will reconcile connection state.
+    // Session heartbeat/reconnect will reconcile transport state.
   }
 }
 
@@ -85,12 +81,7 @@ export function RemoteMouseControlTarget({
   session: RemoteControlSessionView | null;
   tabId: string;
 }) {
-  const [pointer, setPointer] = useState<RemotePointerState>({
-    x: 0.5,
-    y: 0.5,
-    visible: false,
-    clickPulse: 0,
-  });
+  const [pointer, setPointer] = useState<RemotePointerState>({ x: 0.5, y: 0.5, visible: false, clickPulse: 0 });
   const seenCommandIdsRef = useRef(new Set<string>());
   const lastSequenceRef = useRef(0);
 
@@ -116,19 +107,20 @@ export function RemoteMouseControlTarget({
     }
 
     let closed = false;
-    const params = new URLSearchParams({ sessionId, tabId });
-    const eventSource = new EventSource(`/api/screen-feed/control/commands?${params.toString()}`, {
-      withCredentials: true,
-    });
-
-    eventSource.addEventListener("command", (event) => {
+    const bind = () => {
       if (closed) return;
-      let command: RemoteMouseCommandView | null = null;
-      try {
-        command = parseCommand(JSON.parse((event as MessageEvent<string>).data));
-      } catch {
-        command = null;
-      }
+      void requestRemoteControlRealtime({
+        type: "remote-control:bind-mouse-target",
+        sessionId,
+        tabId,
+      }).catch(() => {
+        if (!closed) setPointer((current) => ({ ...current, visible: false }));
+      });
+    };
+
+    const handleCommand = (value: unknown) => {
+      if (closed) return;
+      const command = parseCommand(value);
       if (!command || command.sessionId !== sessionId) return;
 
       if (seenCommandIdsRef.current.has(command.id) || command.sequence <= lastSequenceRef.current) {
@@ -169,15 +161,21 @@ export function RemoteMouseControlTarget({
         clickPulse: command.type === "click" ? current.clickPulse + 1 : current.clickPulse,
       }));
       void reportCommandResult(sessionId, tabId, command.id, result);
-    });
-
-    eventSource.onerror = () => {
-      if (!closed) setPointer((current) => ({ ...current, visible: false }));
     };
+
+    const unsubscribeMessages = subscribeRemoteControlRealtime((message) => {
+      if (message.type === "remote-control:mouse-command") handleCommand(message.command);
+    });
+    const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
+      if (ready) bind();
+      else if (!closed) setPointer((current) => ({ ...current, visible: false }));
+    });
+    bind();
 
     return () => {
       closed = true;
-      eventSource.close();
+      unsubscribeMessages();
+      unsubscribeReady();
       setPointer((current) => ({ ...current, visible: false }));
     };
   }, [mouseEnabled, sessionId, tabId, targetTabId]);
