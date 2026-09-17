@@ -30,7 +30,11 @@ function broadcastPresenceChange(companyId: number | null): void {
   broadcast({ type: "invalidate", topics: ["presence"] }, { companyId });
 }
 
-async function authorizePresenceDetail(req: Request, res: Response, watchedUserId: string): Promise<{
+async function authorizePresenceDetail(
+  req: Request,
+  res: Response,
+  watchedUserId: string
+): Promise<{
   role: string;
   companyId: number;
 } | null> {
@@ -75,11 +79,7 @@ export function registerUserPresenceRoutes(app: Express) {
         eq(userPresence.companyId, companyId)
       );
 
-      const activeUsers = await db
-        .select()
-        .from(userPresence)
-        .where(scope)
-        .orderBy(desc(userPresence.lastSeen));
+      const activeUsers = await db.select().from(userPresence).where(scope).orderBy(desc(userPresence.lastSeen));
 
       res.json(activeUsers);
     } catch (error: unknown) {
@@ -215,10 +215,7 @@ export function registerUserPresenceRoutes(app: Express) {
       const whereClause =
         access.role === "Developer"
           ? eq(userActivityLog.userId, req.params.userId)
-          : and(
-              eq(userActivityLog.userId, req.params.userId),
-              eq(userActivityLog.companyId, access.companyId)
-            );
+          : and(eq(userActivityLog.userId, req.params.userId), eq(userActivityLog.companyId, access.companyId));
 
       const rows = await db
         .select()
@@ -230,8 +227,7 @@ export function registerUserPresenceRoutes(app: Express) {
       res.json(
         rows.map((row) => ({
           ...row,
-          occurredAt:
-            row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
+          occurredAt: row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
         }))
       );
     } catch (e: unknown) {

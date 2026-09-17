@@ -100,7 +100,8 @@ function readViewport(value: unknown): ScreenFrameViewport | null {
 function readCapture(value: unknown): ScreenCaptureInfo | null {
   const record = objectRecord(value);
   if (!record) return null;
-  const source = record.source === "dom" || record.source === "retry" || record.source === "fallback" ? record.source : undefined;
+  const source =
+    record.source === "dom" || record.source === "retry" || record.source === "fallback" ? record.source : undefined;
   return {
     source,
     durationMs: typeof record.durationMs === "number" ? record.durationMs : undefined,
@@ -139,11 +140,15 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
 
   const { data: tabsPayload, refetch: refetchTabs } = useQuery<{ tabs?: RemoteControlTabView[] }>({
     queryKey: ["/api/screen-feed/control/tabs", userId],
-    queryFn: () => apiRequest("GET", `/api/screen-feed/control/tabs/${encodeURIComponent(userId)}`).then((response) => response.json()),
+    queryFn: () =>
+      apiRequest("GET", `/api/screen-feed/control/tabs/${encodeURIComponent(userId)}`).then((response) =>
+        response.json()
+      ),
     refetchInterval: 4000,
   });
   const tabs = useMemo(
-    () => (Array.isArray(tabsPayload?.tabs) ? tabsPayload.tabs.slice().sort((a, b) => b.lastSeenAt - a.lastSeenAt) : []),
+    () =>
+      Array.isArray(tabsPayload?.tabs) ? tabsPayload.tabs.slice().sort((a, b) => b.lastSeenAt - a.lastSeenAt) : [],
     [tabsPayload]
   );
 
@@ -279,7 +284,11 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
               {connected ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
               <span>{connected ? t("Binary live feed") : t("Connecting…")}</span>
               {frame?.capturedAt ? <span>· {fmtTime(frame.capturedAt)}</span> : null}
-              {presence?.lastSeen ? <span>· {t("last seen")} {fmtTime(presence.lastSeen)}</span> : null}
+              {presence?.lastSeen ? (
+                <span>
+                  · {t("last seen")} {fmtTime(presence.lastSeen)}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -360,7 +369,9 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
           <div
             ref={viewerSurfaceRef}
             className={`flex min-w-0 flex-1 bg-black ${
-              displayMode === "fit" ? "items-center justify-center overflow-hidden" : "items-start justify-start overflow-auto"
+              displayMode === "fit"
+                ? "items-center justify-center overflow-hidden"
+                : "items-start justify-start overflow-auto"
             }`}
             data-testid="screen-feed-viewport"
           >
@@ -368,7 +379,9 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
               <img
                 src={frame.imageUrl}
                 alt={`${t("Live screen for")} ${username}`}
-                className={displayMode === "fit" ? "max-h-full max-w-full object-contain" : "max-h-none max-w-none object-none"}
+                className={
+                  displayMode === "fit" ? "max-h-full max-w-full object-contain" : "max-h-none max-w-none object-none"
+                }
                 draggable={false}
                 onLoad={() => reportScreenFeedFrameRendered(frame.capturedAt, selectedTabId)}
                 data-testid="img-screen-feed"
@@ -391,7 +404,10 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
             )}
           </div>
 
-          <aside className="hidden w-80 shrink-0 flex-col border-l bg-background lg:flex" data-testid="screen-feed-activity-panel">
+          <aside
+            className="hidden w-80 shrink-0 flex-col border-l bg-background lg:flex"
+            data-testid="screen-feed-activity-panel"
+          >
             <div className="flex items-center gap-2 border-b px-3 py-2 font-medium">
               <History className="h-4 w-4" /> {t("Recent activity")}
             </div>
@@ -410,7 +426,9 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
                   <div key={`${event.id}-${event.route}`} className="space-y-0.5 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-medium leading-tight">{getPageLabel(event.route)}</p>
-                      {event.count > 1 ? <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">×{event.count}</span> : null}
+                      {event.count > 1 ? (
+                        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">×{event.count}</span>
+                      ) : null}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-mono text-xs text-muted-foreground">{event.route}</p>
@@ -456,7 +474,9 @@ function RuntimeDisabledDialog({ onClose }: { onClose: () => void }) {
         <div className="max-w-md space-y-3 p-6 text-center">
           <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
           <p className="font-semibold">{t("Remote screen feed is disabled.")}</p>
-          <p className="text-sm text-muted-foreground">{t("Enable screen feed in Remote Support settings before opening a viewer.")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("Enable screen feed in Remote Support settings before opening a viewer.")}
+          </p>
           <Button onClick={onClose}>{t("Close")}</Button>
         </div>
       </DialogContent>
@@ -465,7 +485,11 @@ function RuntimeDisabledDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function RemoteSupportWatchDialog(props: { userId: string; username: string; onClose: () => void }) {
-  const { data: runtime, isLoading, isError } = useQuery<RemoteSupportRuntime>({
+  const {
+    data: runtime,
+    isLoading,
+    isError,
+  } = useQuery<RemoteSupportRuntime>({
     queryKey: ["/api/screen-feed/capabilities"],
     queryFn: () => apiRequest("GET", "/api/screen-feed/capabilities").then((response) => response.json()),
     staleTime: 15000,

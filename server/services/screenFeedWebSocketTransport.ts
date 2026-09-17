@@ -108,7 +108,11 @@ function registeredTab(context: ScreenFeedSocketContext, tabId: string) {
 function bindProducer(socket: SocketWithState, context: ScreenFeedSocketContext, tabIdRaw: unknown): boolean {
   const tabId = clean(tabIdRaw);
   if (!tabId) {
-    safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_TAB_ID", message: "ERP tab identifier is required." });
+    safeSendJson(socket, {
+      type: "screen-feed:error",
+      code: "INVALID_TAB_ID",
+      message: "ERP tab identifier is required.",
+    });
     return false;
   }
 
@@ -143,7 +147,11 @@ async function bindViewer(
   const watchedUserId = clean(watchedUserIdRaw, 128);
   const tabId = clean(tabIdRaw);
   if (!watchedUserId || !tabId) {
-    safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_WATCH_TARGET", message: "A user and ERP tab are required." });
+    safeSendJson(socket, {
+      type: "screen-feed:error",
+      code: "INVALID_WATCH_TARGET",
+      message: "A user and ERP tab are required.",
+    });
     return false;
   }
 
@@ -178,7 +186,11 @@ async function bindViewer(
   return true;
 }
 
-function recordViewerPaint(socket: SocketWithState, context: ScreenFeedSocketContext, message: Record<string, unknown>): boolean {
+function recordViewerPaint(
+  socket: SocketWithState,
+  context: ScreenFeedSocketContext,
+  message: Record<string, unknown>
+): boolean {
   // Paint acknowledgements are accepted only from an authenticated support-role
   // socket that is already bound as the viewer for the exact user+tab feed.
   if (!isRemoteControlControllerRole(context.role)) return true;
@@ -219,18 +231,30 @@ export async function handleScreenFeedWebSocketMessage(
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return true;
     if (data.byteLength > REMOTE_SUPPORT_MAX_FRAME_BYTES + 24 * 1024 + 5) {
       recordRemoteSupportMetric("frameRejected");
-      safeSendJson(socket, { type: "screen-feed:error", code: "FRAME_TOO_LARGE", message: "Frame payload is too large." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "FRAME_TOO_LARGE",
+        message: "Frame payload is too large.",
+      });
       return true;
     }
     const decoded = decodeRemoteSupportBinaryPacket(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
     if (!decoded) {
       recordRemoteSupportMetric("frameRejected");
-      safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_FRAME_PACKET", message: "Invalid screen frame packet." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "INVALID_FRAME_PACKET",
+        message: "Invalid screen frame packet.",
+      });
       return true;
     }
     const key = screenFeedSocketKey(context.userId, decoded.header.tabId);
     if (!producerKeysBySocket.get(socket)?.has(key)) {
-      safeSendJson(socket, { type: "screen-feed:error", code: "TAB_NOT_BOUND", message: "Bind the ERP tab before sending frames." });
+      safeSendJson(socket, {
+        type: "screen-feed:error",
+        code: "TAB_NOT_BOUND",
+        message: "Bind the ERP tab before sending frames.",
+      });
       return true;
     }
 

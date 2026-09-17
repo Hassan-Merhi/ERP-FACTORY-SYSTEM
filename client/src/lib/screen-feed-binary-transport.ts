@@ -42,10 +42,13 @@ function emitStatus(message: Record<string, unknown>): void {
 
 function scheduleReconnect(): void {
   if (!shouldRun() || reconnectTimer !== null) return;
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = null;
-    connect();
-  }, 1000 + Math.floor(Math.random() * 500));
+  reconnectTimer = window.setTimeout(
+    () => {
+      reconnectTimer = null;
+      connect();
+    },
+    1000 + Math.floor(Math.random() * 500)
+  );
 }
 
 function connect(): void {
@@ -80,7 +83,8 @@ function connect(): void {
       for (const listener of frameListeners) listener({ header: decoded.header, jpeg: decoded.payload });
     };
     if (event.data instanceof ArrayBuffer) consume(new Uint8Array(event.data));
-    else if (event.data instanceof Blob) void event.data.arrayBuffer().then((buffer) => consume(new Uint8Array(buffer)));
+    else if (event.data instanceof Blob)
+      void event.data.arrayBuffer().then((buffer) => consume(new Uint8Array(buffer)));
   };
 
   next.onclose = () => {

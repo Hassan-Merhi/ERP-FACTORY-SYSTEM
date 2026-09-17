@@ -201,7 +201,12 @@ function connect(): void {
     if (socket !== next || typeof event.data !== "string") return;
     try {
       const parsed = JSON.parse(event.data) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof (parsed as { type?: unknown }).type === "string") {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed) &&
+        typeof (parsed as { type?: unknown }).type === "string"
+      ) {
         handleMessage(parsed as RemoteControlRealtimeMessage);
       }
     } catch {

@@ -141,8 +141,7 @@ function sendRealtimeReady(ws: WebSocket): void {
 function rawDataBuffer(data: RawData): Buffer {
   if (Buffer.isBuffer(data)) return data;
   if (Array.isArray(data)) return Buffer.concat(data);
-  if (data instanceof ArrayBuffer) return Buffer.from(data);
-  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  return Buffer.from(data);
 }
 
 function parseJsonMessage(buffer: Buffer): Record<string, unknown> | null {

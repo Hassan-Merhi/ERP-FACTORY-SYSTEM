@@ -150,10 +150,10 @@ test.describe("remote support canary measurement", () => {
       expect(box).not.toBeNull();
       await controllerPage.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
       await expect
-        .poll(
-          () => targetPage.evaluate(() => Number(window.__remoteSupportE2EClickCount || 0)),
-          { timeout: 20_000, intervals: [250, 500, 1000] }
-        )
+        .poll(() => targetPage.evaluate(() => Number(window.__remoteSupportE2EClickCount || 0)), {
+          timeout: 20_000,
+          intervals: [250, 500, 1000],
+        })
         .toBeGreaterThan(0);
 
       // The click changes target state and the animated marker continues to

@@ -60,11 +60,7 @@ function sendJson(socket: WebSocket, payload: unknown): void {
   }
 }
 
-function response(
-  socket: WebSocket,
-  id: string | null,
-  payload: Record<string, unknown> = {}
-): void {
+function response(socket: WebSocket, id: string | null, payload: Record<string, unknown> = {}): void {
   if (!id) return;
   sendJson(socket, { type: "remote-control:response", requestId: id, ok: true, ...payload });
 }
@@ -144,7 +140,11 @@ function controllerSession(
     throw new RemoteMouseControlError("CONTROLLER_MISMATCH", 403, "This controller does not own the session.");
   }
   if (context.role !== "Developer" && context.companyId !== session.companyId) {
-    throw new RemoteMouseControlError("SESSION_COMPANY_MISMATCH", 403, "This support session belongs to another company.");
+    throw new RemoteMouseControlError(
+      "SESSION_COMPANY_MISMATCH",
+      403,
+      "This support session belongs to another company."
+    );
   }
   if (!session.capabilities.mouse) {
     throw new RemoteMouseControlError("MOUSE_AUTHORIZATION_REQUIRED", 428, "Mouse control is not authorized.");
@@ -155,7 +155,11 @@ function controllerSession(
   return session;
 }
 
-function targetSession(context: ScreenFeedSocketContext, sessionIdRaw: unknown, tabIdRaw: unknown): RemoteControlSession {
+function targetSession(
+  context: ScreenFeedSocketContext,
+  sessionIdRaw: unknown,
+  tabIdRaw: unknown
+): RemoteControlSession {
   const sessionId = clean(sessionIdRaw);
   const tabId = clean(tabIdRaw);
   const session = getRemoteControlSession(sessionId);
@@ -224,7 +228,8 @@ function bindMouseTarget(socket: WebSocket, context: ScreenFeedSocketContext, me
       sessionId: session.id,
       targetUserId: context.userId,
       targetTabId: session.targetTabId,
-      listener: (command) => sendJson(socket, { type: "remote-control:mouse-command", command: serializeMouseCommand(command) }),
+      listener: (command) =>
+        sendJson(socket, { type: "remote-control:mouse-command", command: serializeMouseCommand(command) }),
     });
     installBinding(socket, key, unsubscribe);
     response(socket, id, { sessionId: session.id, tabId: session.targetTabId, binding: "mouse-target" });
@@ -233,7 +238,11 @@ function bindMouseTarget(socket: WebSocket, context: ScreenFeedSocketContext, me
   }
 }
 
-function bindMouseController(socket: WebSocket, context: ScreenFeedSocketContext, message: Record<string, unknown>): void {
+function bindMouseController(
+  socket: WebSocket,
+  context: ScreenFeedSocketContext,
+  message: Record<string, unknown>
+): void {
   const id = requestId(message.requestId);
   try {
     const session = controllerSession(context, message.sessionId);
@@ -241,7 +250,8 @@ function bindMouseController(socket: WebSocket, context: ScreenFeedSocketContext
     const unsubscribe = subscribeRemoteMouseResults({
       sessionId: session.id,
       controllerUserId: context.userId,
-      listener: (result) => sendJson(socket, { type: "remote-control:mouse-result", result: serializeMouseResult(result) }),
+      listener: (result) =>
+        sendJson(socket, { type: "remote-control:mouse-result", result: serializeMouseResult(result) }),
     });
     installBinding(socket, key, unsubscribe);
     response(socket, id, { sessionId: session.id, binding: "mouse-controller" });
@@ -250,19 +260,28 @@ function bindMouseController(socket: WebSocket, context: ScreenFeedSocketContext
   }
 }
 
-function bindKeyboardTarget(socket: WebSocket, context: ScreenFeedSocketContext, message: Record<string, unknown>): void {
+function bindKeyboardTarget(
+  socket: WebSocket,
+  context: ScreenFeedSocketContext,
+  message: Record<string, unknown>
+): void {
   const id = requestId(message.requestId);
   try {
     const session = targetSession(context, message.sessionId, message.tabId);
     if (!session.capabilities.keyboard) {
-      throw new RemoteKeyboardControlError("KEYBOARD_AUTHORIZATION_REQUIRED", 428, "Keyboard control is not authorized.");
+      throw new RemoteKeyboardControlError(
+        "KEYBOARD_AUTHORIZATION_REQUIRED",
+        428,
+        "Keyboard control is not authorized."
+      );
     }
     const key = bindingKey("keyboard-target", session.id);
     const unsubscribe = subscribeRemoteKeyboardCommands({
       sessionId: session.id,
       targetUserId: context.userId,
       targetTabId: session.targetTabId,
-      listener: (command) => sendJson(socket, { type: "remote-control:keyboard-command", command: serializeKeyboardCommand(command) }),
+      listener: (command) =>
+        sendJson(socket, { type: "remote-control:keyboard-command", command: serializeKeyboardCommand(command) }),
     });
     installBinding(socket, key, unsubscribe);
     response(socket, id, { sessionId: session.id, tabId: session.targetTabId, binding: "keyboard-target" });
@@ -271,7 +290,11 @@ function bindKeyboardTarget(socket: WebSocket, context: ScreenFeedSocketContext,
   }
 }
 
-function bindKeyboardController(socket: WebSocket, context: ScreenFeedSocketContext, message: Record<string, unknown>): void {
+function bindKeyboardController(
+  socket: WebSocket,
+  context: ScreenFeedSocketContext,
+  message: Record<string, unknown>
+): void {
   const id = requestId(message.requestId);
   try {
     const session = controllerSession(context, message.sessionId, true);
@@ -279,7 +302,8 @@ function bindKeyboardController(socket: WebSocket, context: ScreenFeedSocketCont
     const unsubscribe = subscribeRemoteKeyboardResults({
       sessionId: session.id,
       controllerUserId: context.userId,
-      listener: (result) => sendJson(socket, { type: "remote-control:keyboard-result", result: serializeKeyboardResult(result) }),
+      listener: (result) =>
+        sendJson(socket, { type: "remote-control:keyboard-result", result: serializeKeyboardResult(result) }),
     });
     installBinding(socket, key, unsubscribe);
     response(socket, id, { sessionId: session.id, binding: "keyboard-controller" });
@@ -296,9 +320,10 @@ async function publishMouseFromController(
   const id = requestId(message.requestId);
   try {
     const session = controllerSession(context, message.sessionId);
-    const command = message.command && typeof message.command === "object" && !Array.isArray(message.command)
-      ? (message.command as Record<string, unknown>)
-      : {};
+    const command =
+      message.command && typeof message.command === "object" && !Array.isArray(message.command)
+        ? (message.command as Record<string, unknown>)
+        : {};
     const type = command.type;
     if (
       (type !== "pointer-move" && type !== "click" && type !== "scroll") ||
@@ -358,9 +383,10 @@ async function publishKeyboardFromController(
   const id = requestId(message.requestId);
   try {
     const session = controllerSession(context, message.sessionId, true);
-    const command = message.command && typeof message.command === "object" && !Array.isArray(message.command)
-      ? (message.command as Record<string, unknown>)
-      : {};
+    const command =
+      message.command && typeof message.command === "object" && !Array.isArray(message.command)
+        ? (message.command as Record<string, unknown>)
+        : {};
     const type = command.type;
     if (!isRemoteKeyboardAllowedOnRoute(session.targetRoute)) {
       await recordSensitiveBlock({
@@ -420,7 +446,7 @@ function publishMouseResultFromTarget(
     const session = targetSession(context, message.sessionId, message.tabId);
     const result = publishRemoteMouseCommandResult({
       sessionId: session.id,
-      commandId: message.commandId,
+      commandId: clean(message.commandId, 128),
       targetUserId: context.userId,
       targetTabId: session.targetTabId,
       status: message.status,
@@ -454,7 +480,7 @@ function publishKeyboardResultFromTarget(
     const session = targetSession(context, message.sessionId, message.tabId);
     const result = publishRemoteKeyboardCommandResult({
       sessionId: session.id,
-      commandId: message.commandId,
+      commandId: clean(message.commandId, 128),
       targetUserId: context.userId,
       targetTabId: session.targetTabId,
       status: message.status,

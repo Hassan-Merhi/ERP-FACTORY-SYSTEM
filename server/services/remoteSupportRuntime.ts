@@ -1,9 +1,5 @@
 export type RemoteSupportFlagName =
-  | "screenFeedEnabled"
-  | "fastScreenFeed"
-  | "remoteControl"
-  | "keyboardControl"
-  | "sensitiveActionProtection";
+  "screenFeedEnabled" | "fastScreenFeed" | "remoteControl" | "keyboardControl" | "sensitiveActionProtection";
 
 export interface RemoteSupportFlags {
   screenFeedEnabled: boolean;
@@ -420,7 +416,9 @@ export function recordRemoteSupportCommandTelemetry(input: {
   executedAt?: number;
   status?: string;
 }): void {
-  const commandId = String(input.commandId ?? "").trim().slice(0, 128);
+  const commandId = String(input.commandId ?? "")
+    .trim()
+    .slice(0, 128);
   const feedKey = String(input.feedKey ?? "").slice(0, 320);
   if (!commandId || !feedKey) return;
 
