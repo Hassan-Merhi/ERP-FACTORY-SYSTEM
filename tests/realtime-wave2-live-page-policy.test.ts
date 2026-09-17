@@ -22,7 +22,7 @@ describe("Wave 2 live-page policy", () => {
     expect(chat).toContain("setTimeout(stopLocalTyping, 3000)");
   });
 
-  it("keeps presence heartbeats silent in generic invalidation middleware", () => {
+  it("keeps presence heartbeats silent and route invalidation tenant-scoped", () => {
     const applicationRoutes = source("server/routes/applicationRoutes.ts");
     const realtimePolicy = source("shared/realtimeInvalidation.ts");
     const presenceRoutes = source("server/routes/userPresenceRoutes.ts");
@@ -33,7 +33,8 @@ describe("Wave 2 live-page policy", () => {
     expect(realtimePolicy).toContain('path === "/api/user-presence"');
     expect(realtimePolicy).toContain('path.startsWith("/api/user-presence/")');
     expect(presenceRoutes).toContain('if (type === "route_change")');
-    expect(presenceRoutes).toContain("broadcastPresenceChange();");
+    expect(presenceRoutes).toContain("broadcastPresenceChange(companyId);");
+    expect(presenceRoutes).toContain('broadcast({ type: "invalidate", topics: ["presence"] }, { companyId });');
     expect(presenceRoutes).not.toContain('if (type === "heartbeat")');
   });
 
