@@ -31,6 +31,7 @@ interface LegacyScreenFramePayload {
 
 const VIEWER_FALLBACK_POLL_MS = 1200;
 const VIEWER_FALLBACK_ERROR_POLL_MS = 2500;
+const FALLBACK_ENCODE_ERROR_CODE = "screen_feed_fallback_encode_failed";
 const frameListeners = new Set<FrameListener>();
 const statusListeners = new Set<StatusListener>();
 let socket: WebSocket | null = null;
@@ -192,7 +193,8 @@ async function pollViewerFallback(): Promise<void> {
     if (!response.ok) {
       emitStatus({
         type: "screen-feed:error",
-        message: `Screen-feed HTTP fallback rejected (${response.status}).`,
+        code: "http-fallback-rejected",
+        status: response.status,
       });
       scheduleViewerPollingFallback(VIEWER_FALLBACK_ERROR_POLL_MS);
       return;
@@ -206,12 +208,9 @@ async function pollViewerFallback(): Promise<void> {
       }
     }
     scheduleViewerPollingFallback();
-  } catch (error) {
+  } catch {
     if (controller.signal.aborted) return;
-    emitStatus({
-      type: "screen-feed:error",
-      message: error instanceof Error ? error.message : "Screen-feed HTTP fallback failed.",
-    });
+    emitStatus({ type: "screen-feed:error", code: "http-fallback-failed" });
     scheduleViewerPollingFallback(VIEWER_FALLBACK_ERROR_POLL_MS);
   } finally {
     if (viewerPollAbort === controller) viewerPollAbort = null;
@@ -370,10 +369,10 @@ export function sendScreenFeedControlMessage(message: Record<string, unknown>): 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to encode screen-feed fallback frame."));
+    reader.onerror = () => reject(reader.error ?? new Error(FALLBACK_ENCODE_ERROR_CODE));
     reader.onload = () => {
       if (typeof reader.result !== "string") {
-        reject(new Error("Unable to encode screen-feed fallback frame."));
+        reject(new Error(FALLBACK_ENCODE_ERROR_CODE));
         return;
       }
       resolve(reader.result);
