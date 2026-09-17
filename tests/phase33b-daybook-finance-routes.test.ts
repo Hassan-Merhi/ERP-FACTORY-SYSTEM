@@ -4,8 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
-// `dbkedit` is an established factory fixture prefix in tests/setup.ts.
-const TEST_PREFIX = "dbkedit";
+const TEST_PREFIX = "phase33bday";
 
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
@@ -38,8 +37,9 @@ async function createManualEntry(txType = "PAYMENT"): Promise<number> {
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
-  agent = request.agent(ctx.app);
+  await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
 
+  agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
     username: `${TEST_PREFIX}_testuser`,
     password: "testpassword123",
