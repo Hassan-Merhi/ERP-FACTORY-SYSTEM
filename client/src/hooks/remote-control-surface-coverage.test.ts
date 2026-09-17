@@ -39,8 +39,9 @@ describe("remote control surface coverage", () => {
     expect(password.dataset.remoteControlEditable).toBeUndefined();
   });
 
-  it("marks same-origin sidebar navigation and leaves external links alone", () => {
-    const sidebar = document.createElement("aside");
+  it("marks same-origin real-sidebar navigation and leaves external links alone", () => {
+    const sidebar = document.createElement("div");
+    sidebar.dataset.sidebar = "sidebar";
     const internal = document.createElement("a");
     internal.href = "/inventory";
     internal.textContent = "Inventory";
@@ -61,6 +62,18 @@ describe("remote control surface coverage", () => {
     expect(section.dataset.remoteControlAction).toBe("navigation");
   });
 
+  it("does not mark unrelated aside navigation", () => {
+    const unrelated = document.createElement("aside");
+    const link = document.createElement("a");
+    link.href = "/reports";
+    link.textContent = "Reports";
+    unrelated.appendChild(link);
+    document.body.appendChild(unrelated);
+
+    annotateRemoteControlSurface(document);
+    expect(link.dataset.remoteControlAction).toBeUndefined();
+  });
+
   it("does not override protected containers", () => {
     const blocked = document.createElement("div");
     blocked.dataset.remoteControlBlocked = "true";
@@ -69,7 +82,8 @@ describe("remote control surface coverage", () => {
     const link = document.createElement("a");
     link.href = "/accounts";
     blocked.append(input, link);
-    const sidebar = document.createElement("aside");
+    const sidebar = document.createElement("div");
+    sidebar.dataset.sidebar = "sidebar";
     sidebar.appendChild(blocked);
     document.body.appendChild(sidebar);
 
