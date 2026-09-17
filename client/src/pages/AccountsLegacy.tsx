@@ -93,7 +93,7 @@ export default function Accounts() {
             <Button
               variant="outline"
               data-testid="button-account-groups"
-              onClick={() => model.navigate("/account-groups")}
+              onClick={() => model.navigate(`${model.modePrefix}/account-groups`)}
             >
               <Layers className="w-4 h-4 mr-2" /> Account Groups
             </Button>
