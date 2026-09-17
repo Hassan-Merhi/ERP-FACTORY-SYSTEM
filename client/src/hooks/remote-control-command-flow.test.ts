@@ -61,7 +61,7 @@ describe("remote control command flow", () => {
   describe("command decisions", () => {
     it("sends ordinary commands while the gate is open", () => {
       const gate = createRemoteControlRateGate();
-      for (const kind of ["pointer-move", "click", "scroll"] as const) {
+      for (const kind of ["pointer-move", "click", "scroll", "keyboard"] as const) {
         expect(decideRemoteControlCommand({ kind, gate, now: 1000 })).toBe("send");
       }
     });
@@ -72,9 +72,10 @@ describe("remote control command flow", () => {
       expect(decideRemoteControlCommand({ kind: "scroll", gate, now: 1100 })).toBe("supersede");
     });
 
-    it("defers a click instead of discarding the operator's intent", () => {
+    it("defers discrete click and keyboard intent instead of discarding it", () => {
       const gate = applyRemoteControlRateLimit(createRemoteControlRateGate(), 1000, 500);
       expect(decideRemoteControlCommand({ kind: "click", gate, now: 1100 })).toBe("defer");
+      expect(decideRemoteControlCommand({ kind: "keyboard", gate, now: 1100 })).toBe("defer");
       expect(remoteControlSendDelayMs(gate, 1100)).toBe(400);
     });
 
@@ -83,7 +84,6 @@ describe("remote control command flow", () => {
       expect(decideRemoteControlCommand({ kind: "pointer-move", gate, now: 1000, hasNewerPointerSample: true })).toBe(
         "supersede"
       );
-      // A newer pointer sample says nothing about a pending click.
       expect(decideRemoteControlCommand({ kind: "click", gate, now: 1000, hasNewerPointerSample: true })).toBe("send");
     });
 
@@ -93,17 +93,19 @@ describe("remote control command flow", () => {
     });
   });
 
-  describe("rate limit detection", () => {
-    it("recognizes the status and both service codes", () => {
+  describe("backpressure detection", () => {
+    it("recognizes 429 rate limits and fail-closed audit 503s", () => {
       expect(isRemoteControlRateLimitError({ status: 429 })).toBe(true);
       expect(isRemoteControlRateLimitError({ status: 400, code: "COMMAND_RATE_LIMITED" })).toBe(true);
       expect(isRemoteControlRateLimitError({ status: 400, code: "KEYBOARD_RATE_LIMITED" })).toBe(true);
+      expect(isRemoteControlRateLimitError({ status: 503 })).toBe(true);
+      expect(isRemoteControlRateLimitError({ status: 500, code: "REMOTE_SUPPORT_AUDIT_UNAVAILABLE" })).toBe(true);
     });
 
-    it("does not treat an authorization prompt as a pacing signal", () => {
+    it("does not treat authorization or sensitive-route denial as pacing", () => {
       expect(isRemoteControlRateLimitError({ status: 428, code: "MOUSE_AUTHORIZATION_REQUIRED" })).toBe(false);
       expect(isRemoteControlRateLimitError({ status: 403, code: "SENSITIVE_REMOTE_ACTION_BLOCKED" })).toBe(false);
-      expect(isRemoteControlRateLimitError({ status: 503, code: null })).toBe(false);
+      expect(isRemoteControlRateLimitError({ status: 500, code: null })).toBe(false);
     });
   });
 });

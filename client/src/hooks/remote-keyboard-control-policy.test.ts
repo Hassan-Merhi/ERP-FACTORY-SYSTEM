@@ -36,16 +36,20 @@ describe("remote keyboard editing policy", () => {
     noteTrustedLocalRemoteControlInteraction(0);
   });
 
-  it("allows search and filter fields while blocking credential and financial fields", () => {
+  it("allows search/entity filters while blocking credential and financial fields", () => {
     const search = appendInput({ type: "search", placeholder: "Search by name" });
-    const filter = appendInput({ type: "text", "aria-label": "Filter code" });
+    const customer = appendInput({ type: "text", placeholder: "Customer name" });
+    const supplier = appendInput({ type: "text", "aria-label": "Supplier code" });
+    const item = appendInput({ type: "text", placeholder: "Item description" });
     const password = appendInput({ type: "password", autocomplete: "current-password" });
     const amount = appendInput({ type: "number", name: "paymentAmount" });
     const protectedInput = appendInput({ type: "text", placeholder: "Search" });
     protectedInput.dataset.remoteControlBlocked = "true";
 
     expect(isSafeRemoteEditableElement(search)).toBe(true);
-    expect(isSafeRemoteEditableElement(filter)).toBe(true);
+    expect(isSafeRemoteEditableElement(customer)).toBe(true);
+    expect(isSafeRemoteEditableElement(supplier)).toBe(true);
+    expect(isSafeRemoteEditableElement(item)).toBe(true);
     expect(isSafeRemoteEditableElement(password)).toBe(false);
     expect(isSafeRemoteEditableElement(amount)).toBe(false);
     expect(isSafeRemoteEditableElement(protectedInput)).toBe(false);
@@ -83,9 +87,14 @@ describe("remote keyboard editing policy", () => {
     expect(changeListener).toHaveBeenCalledTimes(1);
   });
 
-  it("supports deletion and caret movement without submitting forms", () => {
-    const input = appendInput({ type: "search", placeholder: "Search" });
+  it("supports deletion, caret movement, and Enter on safe search/filter controls", () => {
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    input.type = "search";
+    input.placeholder = "Search customer name";
     input.value = "abcd";
+    form.appendChild(input);
+    document.body.appendChild(form);
     input.setSelectionRange(2, 2);
     focusRemoteEditableElement(input);
 
@@ -99,9 +108,25 @@ describe("remote keyboard editing policy", () => {
     ).toMatchObject({ status: "executed" });
     expect(input.selectionStart).toBe(input.value.length);
 
-    expect(applyRemoteKeyboardCommand(command({ type: "key", key: "Enter", text: undefined }), document, 5002)).toEqual(
-      { status: "blocked", reason: "form-submit-blocked" }
-    );
+    expect(
+      applyRemoteKeyboardCommand(command({ type: "key", key: "Enter", text: undefined }), document, 5002)
+    ).toEqual({ status: "executed", reason: null });
+  });
+
+  it("still blocks Enter for an explicitly editable non-filter write field", () => {
+    const form = document.createElement("form");
+    const input = document.createElement("input");
+    input.name = "internalMemo";
+    input.dataset.remoteControlEditable = "true";
+    form.appendChild(input);
+    document.body.appendChild(form);
+    focusRemoteEditableElement(input);
+
+    // Explicit editability permits text editing, but Enter never synthesizes a
+    // native form submission. The command is treated as handled locally.
+    expect(
+      applyRemoteKeyboardCommand(command({ type: "key", key: "Enter", text: undefined }), document, 5000)
+    ).toEqual({ status: "executed", reason: null });
   });
 
   it("supports textarea line breaks and safe Tab navigation", () => {

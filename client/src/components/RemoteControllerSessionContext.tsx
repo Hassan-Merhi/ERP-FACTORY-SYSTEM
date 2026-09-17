@@ -23,6 +23,7 @@ export interface RemoteControllerSessionView extends RemoteControlSessionView {
 export interface RemoteWatchTarget {
   userId: string;
   username: string;
+  tabId: string;
 }
 
 export class RemoteControllerRequestError extends Error {
@@ -30,7 +31,6 @@ export class RemoteControllerRequestError extends Error {
     readonly status: number,
     readonly code: string | null,
     message: string,
-    /** Server-supplied backoff, in milliseconds, for a refused (429) command. */
     readonly retryAfterMs: number | null = null
   ) {
     super(message);
@@ -38,12 +38,9 @@ export class RemoteControllerRequestError extends Error {
   }
 }
 
-/** Reads the backoff a refused request carries, preferring the JSON body over the header. */
 function parseRetryAfterMs(response: Response, payload: { retryAfterMs?: unknown }): number | null {
   const fromBody = payload?.retryAfterMs;
-  if (typeof fromBody === "number" && Number.isFinite(fromBody) && fromBody > 0) {
-    return Math.min(fromBody, 30_000);
-  }
+  if (typeof fromBody === "number" && Number.isFinite(fromBody) && fromBody > 0) return Math.min(fromBody, 30_000);
   const header = Number(response.headers.get("Retry-After"));
   if (Number.isFinite(header) && header > 0) return Math.min(header * 1000, 30_000);
   return null;
@@ -62,7 +59,7 @@ interface RemoteControllerSessionContextValue {
 }
 
 interface RefreshInFlight {
-  targetUserId: string;
+  targetKey: string;
   promise: Promise<RemoteControllerSessionView | null>;
 }
 
@@ -70,15 +67,17 @@ const RemoteControllerSessionContext = createContext<RemoteControllerSessionCont
 const SESSION_REFRESH_MS = 5000;
 const WATCH_TARGET_REFRESH_DEBOUNCE_MS = 50;
 const PORTAL_SCOPE_SELECTOR = "[data-radix-portal]";
-const WATCH_TARGET_ATTRIBUTE_FILTER = ["data-testid", "data-watched-user-id", "data-watch-username"];
+const WATCH_TARGET_ATTRIBUTE_FILTER = [
+  "data-testid",
+  "data-watched-user-id",
+  "data-watched-tab-id",
+  "data-watch-username",
+];
 
 function nodeContainsWatchDialog(node: Node): boolean {
   if (node.nodeType !== Node.ELEMENT_NODE) return false;
   const element = node as Element;
-  return (
-    element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
-    Boolean(element.querySelector(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR))
-  );
+  return element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) || Boolean(element.querySelector(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR));
 }
 
 function nodeMayContainWatchScope(node: Node): boolean {
@@ -92,19 +91,13 @@ function mutationMayAffectWatchTarget(records: readonly MutationRecord[]): boole
     if (record.type === "attributes") {
       const element = record.target instanceof Element ? record.target : null;
       if (!element) continue;
-      // Attribute observers are scoped to portal roots and only subscribe to
-      // these three lifecycle attributes. A dialog can lose its test id during
-      // a replacement, so retain the old value to notice that removal too.
       if (
         element.matches(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
         element.closest(REMOTE_SUPPORT_WATCH_DIALOG_SELECTOR) ||
         (record.attributeName === "data-testid" && record.oldValue?.startsWith("dialog-watch-user"))
-      ) {
-        return true;
-      }
+      ) return true;
       continue;
     }
-
     if (record.type !== "childList") continue;
     for (const node of [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]) {
       if (nodeContainsWatchDialog(node)) return true;
@@ -116,12 +109,7 @@ function mutationMayAffectWatchTarget(records: readonly MutationRecord[]): boole
 export async function remoteControllerRequestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(url, {
-    credentials: "include",
-    cache: "no-store",
-    ...init,
-    headers,
-  });
+  const response = await fetch(url, { credentials: "include", cache: "no-store", ...init, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) markRemoteSupportAuthLost();
@@ -138,16 +126,23 @@ export async function remoteControllerRequestJson<T>(url: string, init?: Request
 function currentWatchTarget(): RemoteWatchTarget | null {
   const dialog = findRemoteSupportWatchDialog();
   const userId = dialog?.dataset.watchedUserId?.trim() ?? "";
-  if (!dialog || !userId) return null;
+  const tabId = dialog?.dataset.watchedTabId?.trim() ?? "";
+  if (!dialog || !userId || !tabId) return null;
   const username = dialog.querySelector<HTMLElement>("[data-watch-username]")?.dataset.watchUsername?.trim() || userId;
-  return { userId, username };
+  return { userId, username, tabId };
 }
 
 function normalizeSession(
   value: RemoteControlSessionView | RemoteControllerSessionView | null | undefined,
-  targetUserId: string | null
+  target: RemoteWatchTarget | null
 ): RemoteControllerSessionView | null {
-  if (!value || value.status !== "active" || !targetUserId || value.targetUserId !== targetUserId) return null;
+  if (
+    !value ||
+    value.status !== "active" ||
+    !target ||
+    value.targetUserId !== target.userId ||
+    value.targetTabId !== target.tabId
+  ) return null;
   const extended = value as Partial<RemoteControllerSessionView>;
   return {
     ...value,
@@ -157,7 +152,11 @@ function normalizeSession(
 }
 
 function sameTarget(left: RemoteWatchTarget | null, right: RemoteWatchTarget | null): boolean {
-  return left?.userId === right?.userId && left?.username === right?.username;
+  return left?.userId === right?.userId && left?.username === right?.username && left?.tabId === right?.tabId;
+}
+
+function targetKey(target: RemoteWatchTarget): string {
+  return `${target.userId}\u0000${target.tabId}`;
 }
 
 export function RemoteControllerSessionProvider({ children }: { children: ReactNode }) {
@@ -171,7 +170,6 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
   useEffect(() => {
     targetRef.current = target;
   }, [target]);
-
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
@@ -179,7 +177,6 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
   useEffect(() => {
     const scopedObservers = new Map<HTMLElement, MutationObserver>();
     let refreshTimer: number | null = null;
-
     const refreshTarget = () => {
       const next = currentWatchTarget();
       setTarget((current) => (sameTarget(current, next) ? current : next));
@@ -206,9 +203,6 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
       scopedObservers.set(scope, observer);
     };
     const syncScopes = () => {
-      // Radix renders dialogs beneath a direct body portal. Keep the persistent
-      // observer at that shallow boundary, then observe only portal roots that
-      // could contain a remote-viewer dialog instead of every ERP DOM update.
       const scopes = new Set(
         Array.from(document.body.children).filter(
           (element): element is HTMLElement => element instanceof HTMLElement && nodeMayContainWatchScope(element)
@@ -249,7 +243,7 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
 
   useEffect(() => {
     const dialog = findRemoteSupportWatchDialog();
-    if (!target || !dialog || dialog.dataset.watchedUserId !== target.userId) {
+    if (!target || !dialog || dialog.dataset.watchedUserId !== target.userId || dialog.dataset.watchedTabId !== target.tabId) {
       setPortalHost(null);
       return;
     }
@@ -267,31 +261,33 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
       setSession(null);
       return null;
     }
-
+    const key = targetKey(activeTarget);
     const existing = refreshInFlightRef.current;
-    if (existing?.targetUserId === activeTarget.userId) return existing.promise;
+    if (existing?.targetKey === key) return existing.promise;
 
     const request: Promise<RemoteControllerSessionView | null> = remoteControllerRequestJson<ControllerActiveResponse>(
       "/api/screen-feed/control/sessions/controller-active"
     )
       .then((payload) => {
-        if (targetRef.current?.userId !== activeTarget.userId) return null;
+        const currentTarget = targetRef.current;
+        if (!currentTarget || targetKey(currentTarget) !== key) return null;
         const candidate = Array.isArray(payload.sessions)
-          ? payload.sessions.find((item) => item?.targetUserId === activeTarget.userId)
+          ? payload.sessions.find(
+              (item) => item?.targetUserId === activeTarget.userId && item?.targetTabId === activeTarget.tabId
+            )
           : undefined;
-        const next = normalizeSession(candidate, activeTarget.userId);
+        const next = normalizeSession(candidate, activeTarget);
         if (!next) {
           setSession(null);
           return null;
         }
-
         const current = sessionRef.current;
         const merged =
           current?.id === next.id
             ? {
                 ...next,
                 mouseAuthorization: next.mouseAuthorization ?? current.mouseAuthorization,
-                keyboardAuthorization: next.keyboardAuthorization,
+                keyboardAuthorization: next.keyboardAuthorization ?? current.keyboardAuthorization,
               }
             : next;
         setSession(merged);
@@ -301,14 +297,14 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
         if (refreshInFlightRef.current?.promise === request) refreshInFlightRef.current = null;
       });
 
-    refreshInFlightRef.current = { targetUserId: activeTarget.userId, promise: request };
+    refreshInFlightRef.current = { targetKey: key, promise: request };
     return request;
   }, []);
 
   const adoptSession = useCallback((next: RemoteControlSessionView | RemoteControllerSessionView | null) => {
-    const targetUserId = targetRef.current?.userId ?? null;
+    const activeTarget = targetRef.current;
     setSession((current) => {
-      const normalized = normalizeSession(next, targetUserId);
+      const normalized = normalizeSession(next, activeTarget);
       if (!normalized) return null;
       if (current?.id === normalized.id) {
         return {
@@ -343,16 +339,21 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
   }, [refreshSession, target]);
 
   useEffect(() => {
-    const targetUserId = target?.userId;
+    const watchedTarget = target;
     return () => {
       const current = sessionRef.current;
-      if (!targetUserId || !current || current.targetUserId !== targetUserId) return;
+      if (
+        !watchedTarget ||
+        !current ||
+        current.targetUserId !== watchedTarget.userId ||
+        current.targetTabId !== watchedTarget.tabId
+      ) return;
       void remoteControllerRequestJson(`/api/screen-feed/control/sessions/${encodeURIComponent(current.id)}/stop`, {
         method: "POST",
-        body: JSON.stringify({ reason: "controller-viewer-closed" }),
+        body: JSON.stringify({ reason: "controller-viewer-tab-changed" }),
       }).catch(() => undefined);
     };
-  }, [target?.userId]);
+  }, [target?.tabId, target?.userId]);
 
   const value = useMemo<RemoteControllerSessionContextValue>(
     () => ({ target, session, portalHost, refreshSession, adoptSession }),
@@ -364,6 +365,6 @@ export function RemoteControllerSessionProvider({ children }: { children: ReactN
 
 export function useRemoteControllerSession(): RemoteControllerSessionContextValue {
   const value = useContext(RemoteControllerSessionContext);
-  if (!value) throw new Error();
+  if (!value) throw new Error("RemoteControllerSessionProvider is missing.");
   return value;
 }

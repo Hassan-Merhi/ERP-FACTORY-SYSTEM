@@ -10,8 +10,23 @@ import {
 } from "@/components/RemoteControllerSessionContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import type { RemoteKeyboardKey } from "@/hooks/remote-keyboard-control-policy";
+import {
+  applyRemoteControlRateLimit,
+  clearRemoteControlRateLimit,
+  createRemoteControlRateGate,
+  decideRemoteControlCommand,
+  isRemoteControlRateLimitError,
+  remoteControlSendDelayMs,
+  type RemoteControlRateGate,
+} from "@/hooks/remote-control-command-flow";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
 import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportPhase6Translations";
+import {
+  RemoteControlRealtimeError,
+  requestRemoteControlRealtime,
+  subscribeRemoteControlRealtime,
+  subscribeRemoteControlRealtimeReady,
+} from "@/lib/remote-control-session-transport";
 
 function getKeyboardErrorForReason(reason: string | null, t: (v: string) => string): string | null {
   if (!reason) return null;
@@ -66,6 +81,7 @@ const ALLOWED_SPECIAL_KEYS = new Map<string, RemoteKeyboardKey>([
 
 const TEXT_BATCH_DELAY_MS = 45;
 const MAX_TEXT_BATCH_CODE_POINTS = 32;
+const MAX_TRANSIENT_RETRIES = 3;
 
 function authorizationIsFresh(expiresAt: string | null | undefined): boolean {
   if (!expiresAt) return false;
@@ -87,15 +103,17 @@ export function RemoteKeyboardControllerOverlay() {
   const textBufferRef = useRef("");
   const textTimerRef = useRef<number | null>(null);
   const isComposingRef = useRef(false);
+  const rateGateRef = useRef<RemoteControlRateGate>(createRemoteControlRateGate());
   const t = useCallback((value: string) => translateRemoteSupportPhase6Text(value, language), [language]);
 
   const sessionId = session?.id ?? null;
   const mouseActive = !!session?.capabilities.mouse && authorizationIsFresh(session.mouseAuthorization?.expiresAt);
-  const keyboardActive =
-    !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
+  const keyboardActive = !!session?.capabilities.keyboard && authorizationIsFresh(session.keyboardAuthorization?.expiresAt);
 
   useEffect(() => {
     activeSessionIdRef.current = sessionId;
+    commandTailRef.current = Promise.resolve();
+    rateGateRef.current = createRemoteControlRateGate();
     setError(null);
     setLastResult(null);
     setPasswordOpen(false);
@@ -105,11 +123,6 @@ export function RemoteKeyboardControllerOverlay() {
     textTimerRef.current = null;
   }, [sessionId]);
 
-  // Re-focus the capture input aggressively while keyboard control is active.
-  // Operators reported "can't type" when the input lost focus to a click,
-  // a window blur, or the browser's own focus management. This keeps the
-  // hidden capture input focused, with a blur-refocus handler and a
-  // window-focus listener so typing resumes without a manual click.
   useEffect(() => {
     if (!keyboardActive) return;
     const input = captureRef.current;
@@ -127,17 +140,15 @@ export function RemoteKeyboardControllerOverlay() {
     const onVisibility = () => {
       if (document.visibilityState === "visible") scheduleRefocus();
     };
+    const onDocPointerDown = (event: Event) => {
+      const targetElement = event.target as HTMLElement | null;
+      if (targetElement && input.contains(targetElement)) return;
+      if (targetElement?.closest("[data-testid='input-remote-keyboard-password']")) return;
+      scheduleRefocus();
+    };
     input.addEventListener("blur", onBlur);
     window.addEventListener("focus", onWindowFocus);
     document.addEventListener("visibilitychange", onVisibility);
-    // Also refocus after any click in the overlay's document
-    const onDocPointerDown = (e: Event) => {
-      const target = e.target as HTMLElement | null;
-      if (target && input.contains(target)) return;
-      // Don't steal focus from the password confirmation flow
-      if (target?.closest("[data-testid='input-remote-keyboard-password']")) return;
-      scheduleRefocus();
-    };
     document.addEventListener("pointerdown", onDocPointerDown, true);
     return () => {
       input.removeEventListener("blur", onBlur);
@@ -169,11 +180,8 @@ export function RemoteKeyboardControllerOverlay() {
       if (
         requestError instanceof RemoteControllerRequestError &&
         (requestError.status === 428 || requestError.code === "PASSWORD_CONFIRMATION_REQUIRED")
-      ) {
-        setPasswordOpen(true);
-      } else {
-        setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable keyboard control."));
-      }
+      ) setPasswordOpen(true);
+      else setError(requestError instanceof Error ? t(requestError.message) : t("Unable to enable keyboard control."));
     } finally {
       setBusy(false);
     }
@@ -218,31 +226,64 @@ export function RemoteKeyboardControllerOverlay() {
     }
   }, [busy, refreshSession, sessionId, t]);
 
+  const sendKeyboardCommand = useCallback(
+    async (payload: KeyboardPayload, expectedSessionId: string) => {
+      let attempts = 0;
+      while (attempts < MAX_TRANSIENT_RETRIES && activeSessionIdRef.current === expectedSessionId) {
+        const decision = decideRemoteControlCommand({ kind: "keyboard", gate: rateGateRef.current, now: Date.now() });
+        if (decision === "defer") {
+          const delay = remoteControlSendDelayMs(rateGateRef.current, Date.now());
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
+          if (activeSessionIdRef.current !== expectedSessionId) return;
+        }
+
+        try {
+          await requestRemoteControlRealtime({
+            type: "remote-control:keyboard-command",
+            sessionId: expectedSessionId,
+            command: payload,
+          });
+          rateGateRef.current = clearRemoteControlRateLimit(rateGateRef.current);
+          return;
+        } catch (requestError) {
+          if (activeSessionIdRef.current !== expectedSessionId) return;
+          if (requestError instanceof RemoteControlRealtimeError) {
+            if (isRemoteControlRateLimitError(requestError)) {
+              rateGateRef.current = applyRemoteControlRateLimit(
+                rateGateRef.current,
+                Date.now(),
+                requestError.retryAfterMs
+              );
+              attempts += 1;
+              continue;
+            }
+            if (requestError.code === "TRANSPORT_NOT_READY" || requestError.code === "TRANSPORT_DISCONNECTED") {
+              rateGateRef.current = applyRemoteControlRateLimit(rateGateRef.current, Date.now(), 350);
+              attempts += 1;
+              continue;
+            }
+            if (requestError.status === 428 || requestError.code === "KEYBOARD_AUTHORIZATION_REQUIRED") {
+              setPasswordOpen(true);
+              void refreshSession().catch(() => undefined);
+            }
+          }
+          setError(requestError instanceof Error ? t(requestError.message) : t("Keyboard command failed."));
+          return;
+        }
+      }
+    },
+    [refreshSession, t]
+  );
+
   const enqueueCommand = useCallback(
     (payload: KeyboardPayload) => {
       if (!sessionId || !keyboardActive) return;
-      const run = async () => {
-        if (activeSessionIdRef.current !== sessionId) return;
-        try {
-          await remoteControllerRequestJson(
-            `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-commands`,
-            { method: "POST", body: JSON.stringify(payload) }
-          );
-        } catch (requestError) {
-          if (activeSessionIdRef.current !== sessionId) return;
-          if (
-            requestError instanceof RemoteControllerRequestError &&
-            (requestError.status === 428 || requestError.code === "KEYBOARD_AUTHORIZATION_REQUIRED")
-          ) {
-            setPasswordOpen(true);
-            void refreshSession().catch(() => undefined);
-          }
-          setError(requestError instanceof Error ? t(requestError.message) : t("Keyboard command failed."));
-        }
-      };
-      commandTailRef.current = commandTailRef.current.catch(() => undefined).then(run);
+      const expectedSessionId = sessionId;
+      commandTailRef.current = commandTailRef.current
+        .catch(() => undefined)
+        .then(() => sendKeyboardCommand(payload, expectedSessionId));
     },
-    [keyboardActive, refreshSession, sessionId, t]
+    [keyboardActive, sendKeyboardCommand, sessionId]
   );
 
   const flushTextBuffer = useCallback(() => {
@@ -260,9 +301,7 @@ export function RemoteKeyboardControllerOverlay() {
         flushTextBuffer();
         return;
       }
-      if (textTimerRef.current === null) {
-        textTimerRef.current = window.setTimeout(flushTextBuffer, TEXT_BATCH_DELAY_MS);
-      }
+      if (textTimerRef.current === null) textTimerRef.current = window.setTimeout(flushTextBuffer, TEXT_BATCH_DELAY_MS);
     },
     [flushTextBuffer]
   );
@@ -283,26 +322,33 @@ export function RemoteKeyboardControllerOverlay() {
 
   useEffect(() => {
     if (!sessionId || !keyboardActive) return;
-    const eventSource = new EventSource(
-      `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-results`,
-      { withCredentials: true }
-    );
-    eventSource.addEventListener("result", (event) => {
-      try {
-        const result = JSON.parse((event as MessageEvent<string>).data) as KeyboardResultView;
-        if (result?.sessionId !== sessionId) return;
-        setLastResult(result);
-        if (result.status === "blocked" || result.status === "ignored") {
-          const msg = getKeyboardErrorForReason(result.reason, t);
-          if (msg) setError(msg);
-        } else if (result.status === "executed") {
-          setError(null);
-        }
-      } catch {
-        // A later result replaces malformed stream data.
-      }
+    let cancelled = false;
+    const bind = () => {
+      if (cancelled) return;
+      void requestRemoteControlRealtime({ type: "remote-control:bind-keyboard-controller", sessionId }).catch((bindError) => {
+        if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0) setError(t(bindError.message));
+      });
+    };
+    const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
+      if (ready) bind();
     });
-    return () => eventSource.close();
+    const unsubscribeMessages = subscribeRemoteControlRealtime((message) => {
+      if (message.type !== "remote-control:keyboard-result") return;
+      const result = message.result as KeyboardResultView | undefined;
+      if (!result || result.sessionId !== sessionId) return;
+      setLastResult(result);
+      if (result.status === "blocked" || result.status === "ignored") {
+        const text = getKeyboardErrorForReason(result.reason, t);
+        if (text) setError(text);
+      } else if (result.status === "executed") setError(null);
+    });
+    bind();
+    return () => {
+      cancelled = true;
+      unsubscribeReady();
+      unsubscribeMessages();
+      void requestRemoteControlRealtime({ type: "remote-control:unbind-keyboard-controller", sessionId }).catch(() => undefined);
+    };
   }, [keyboardActive, sessionId, t]);
 
   if (!target || !session || !portalHost) return null;
@@ -326,9 +372,7 @@ export function RemoteKeyboardControllerOverlay() {
           {keyboardActive ? <Keyboard className="h-4 w-4" /> : <MousePointer2 className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {t("Keyboard control")} · {session.targetUsername}
-          </p>
+          <p className="truncate text-sm font-semibold">{t("Keyboard control")} · {session.targetUsername}</p>
           <p className="text-xs text-muted-foreground">
             {mouseActive
               ? t("Only safe search, filter and explicitly approved fields can be edited.")
@@ -369,9 +413,7 @@ export function RemoteKeyboardControllerOverlay() {
             void confirmPasswordAndEnable();
           }}
         >
-          <p className="text-xs font-medium">
-            {t("Confirm your password to enable keyboard control for up to 5 minutes.")}
-          </p>
+          <p className="text-xs font-medium">{t("Confirm your password to enable keyboard control for up to 5 minutes.")}</p>
           <div className="flex gap-2">
             <Input
               autoFocus
@@ -384,11 +426,7 @@ export function RemoteKeyboardControllerOverlay() {
               data-testid="input-remote-keyboard-password"
             />
             <Button type="submit" size="sm" className="h-9" disabled={!password || busy}>
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                translateRemoteSupportPhase5Text("Confirm", language)
-              )}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : translateRemoteSupportPhase5Text("Confirm", language)}
             </Button>
           </div>
         </form>
@@ -417,27 +455,20 @@ export function RemoteKeyboardControllerOverlay() {
             onCompositionEnd={(event) => {
               isComposingRef.current = false;
               const data = event.data ?? event.currentTarget.value ?? "";
-              // Clear the DOM value so the next composition starts empty
               event.currentTarget.value = "";
-              if (data) {
-                queueText(data);
-              }
+              if (data) queueText(data);
             }}
             onInput={(event) => {
               if (isComposingRef.current) return;
-              const target = event.currentTarget as HTMLInputElement;
-              const val = target.value;
-              if (val) {
-                target.value = "";
-                // Handles mobile autocomplete, predictives, and any direct insertion
-                // that bypassed keyDown (e.g., some IME fallbacks).
-                queueText(val);
+              const input = event.currentTarget as HTMLInputElement;
+              const value = input.value;
+              if (value) {
+                input.value = "";
+                queueText(value);
               }
             }}
             onBlur={() => {
-              if (keyboardActive) {
-                window.setTimeout(() => captureRef.current?.focus({ preventScroll: true }), 0);
-              }
+              if (keyboardActive) window.setTimeout(() => captureRef.current?.focus({ preventScroll: true }), 0);
             }}
             onFocus={() => setError(null)}
             onKeyDown={(event) => {
@@ -457,10 +488,7 @@ export function RemoteKeyboardControllerOverlay() {
               if (Array.from(event.key).length === 1) {
                 event.preventDefault();
                 queueText(event.key);
-              } else if (event.key === "Unidentified") {
-                // Some IME compositions surface as Unidentified — handled via composition/input
-                event.preventDefault();
-              }
+              } else if (event.key === "Unidentified") event.preventDefault();
             }}
           />
           <p className="text-[11px] text-muted-foreground">{t("Clipboard shortcuts and paste are blocked.")}</p>
@@ -468,16 +496,10 @@ export function RemoteKeyboardControllerOverlay() {
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>
-          {keyboardActive ? t("Keyboard active") : mouseActive ? t("Enable keyboard") : t("Mouse control required")}
-        </span>
+        <span>{keyboardActive ? t("Keyboard active") : mouseActive ? t("Enable keyboard") : t("Mouse control required")}</span>
         {statusLabel && <span className="shrink-0">{statusLabel}</span>}
       </div>
-      {error && (
-        <p className="mt-2 text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-2 text-xs text-destructive" role="alert">{error}</p>}
     </section>,
     portalHost
   );

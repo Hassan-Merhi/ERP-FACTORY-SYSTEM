@@ -1,22 +1,14 @@
 /**
- * Phase 10 — controller-side command flow policy.
+ * Controller-side command flow policy.
  *
- * The controller overlay used to hand every coalesced sample to the ordered
- * send queue and only learn it was unwanted from the response. Two things went
- * wrong with that:
- *
- *   - a burst that tripped the server rate limiter kept sending, so each
- *     refusal cost a round trip and the refusals themselves kept the window
- *     saturated;
- *   - pointer moves that were queued behind a slow request were still sent
- *     after a newer position was already known, so the remote cursor replayed
- *     a stale trail.
- *
- * These are pure decisions so they can be tested without a DOM, a session, or
- * a network. The overlay owns the refs and timers; this module owns the rules.
+ * Continuous pointer/scroll samples may be dropped while the transport is
+ * under pressure; discrete click and keyboard intent must survive and wait for
+ * the gate to reopen. The same gate is also used for a temporarily unavailable
+ * audit queue (503), otherwise a fail-closed audit outage becomes an 8+/s retry
+ * storm from an otherwise healthy controller.
  */
 
-export type RemoteControlCommandKind = "pointer-move" | "click" | "scroll";
+export type RemoteControlCommandKind = "pointer-move" | "click" | "scroll" | "keyboard";
 
 export interface RemoteControlRateGate {
   /** Epoch ms before which no command may be sent. 0 means "open". */
@@ -33,12 +25,6 @@ export function createRemoteControlRateGate(): RemoteControlRateGate {
   return { blockedUntil: 0, consecutiveRefusals: 0 };
 }
 
-/**
- * True when the gate is closed. Pointer moves and scrolls are *dropped* while
- * closed — they are samples of a continuous signal and a newer one is always
- * along shortly. Clicks are discrete intent and are never dropped silently;
- * the caller retries them once the gate reopens.
- */
 export function isRemoteControlSendBlocked(gate: RemoteControlRateGate, now: number): boolean {
   return gate.blockedUntil > now;
 }
@@ -48,9 +34,9 @@ export function remoteControlSendDelayMs(gate: RemoteControlRateGate, now: numbe
 }
 
 /**
- * Applies a 429. `retryAfterMs` is the server's own window remainder when it
- * sent one; otherwise an exponential fallback keeps a blind client from
- * hammering the endpoint.
+ * Applies server backpressure. `retryAfterMs` is preferred when supplied;
+ * otherwise an exponential fallback keeps a blind client from hammering the
+ * endpoint/socket when the limiter or audit queue cannot accept work.
  */
 export function applyRemoteControlRateLimit(
   gate: RemoteControlRateGate,
@@ -65,17 +51,14 @@ export function applyRemoteControlRateLimit(
   return { blockedUntil: now + backoff, consecutiveRefusals: refusals };
 }
 
-/** A successful send proves the window reopened. */
+/** A successful send proves the pressure window reopened. */
 export function clearRemoteControlRateLimit(gate: RemoteControlRateGate): RemoteControlRateGate {
   return gate.blockedUntil === 0 && gate.consecutiveRefusals === 0 ? gate : createRemoteControlRateGate();
 }
 
 /**
- * Decides what to do with a command about to enter the send queue.
- *
- * `supersede` means a newer pointer sample already exists, so this one carries
- * no information; `defer` means the rate gate is closed but the command is
- * discrete and must survive; `send` is the ordinary path.
+ * `supersede` means a newer continuous sample carries all useful state;
+ * `defer` means a discrete click/keyboard action must wait; `send` is ordinary.
  */
 export function decideRemoteControlCommand(input: {
   kind: RemoteControlCommandKind;
@@ -89,7 +72,18 @@ export function decideRemoteControlCommand(input: {
   return input.kind === "pointer-move" || input.kind === "scroll" ? "supersede" : "defer";
 }
 
-/** True when a failed request means the command was refused for rate, not rejected outright. */
+/**
+ * True when a failed request is transient transport pressure rather than a
+ * terminal command rejection. A fail-closed audit queue uses 503 and the
+ * REMOTE_SUPPORT_AUDIT_UNAVAILABLE code, so it receives the same quiet backoff
+ * behavior as 429 rate limiting.
+ */
 export function isRemoteControlRateLimitError(error: { status?: number; code?: string | null }): boolean {
-  return error.status === 429 || error.code === "COMMAND_RATE_LIMITED" || error.code === "KEYBOARD_RATE_LIMITED";
+  return (
+    error.status === 429 ||
+    error.status === 503 ||
+    error.code === "COMMAND_RATE_LIMITED" ||
+    error.code === "KEYBOARD_RATE_LIMITED" ||
+    error.code === "REMOTE_SUPPORT_AUDIT_UNAVAILABLE"
+  );
 }

@@ -28,6 +28,12 @@ import {
 } from "@/hooks/remote-mouse-control-policy";
 import { translateRemoteSupportPhase4Text } from "@/i18n/remoteSupportPhase4Translations";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
+import {
+  RemoteControlRealtimeError,
+  requestRemoteControlRealtime,
+  subscribeRemoteControlRealtime,
+  subscribeRemoteControlRealtimeReady,
+} from "@/lib/remote-control-session-transport";
 
 interface CommandResultView {
   commandId: string;
@@ -168,15 +174,7 @@ export function RemoteMouseControllerOverlay() {
   const sendCommandNow = useCallback(
     async (payload: MouseCommandPayload, expectedSessionId: string) => {
       if (activeSessionIdRef.current !== expectedSessionId) return;
-
-      // Phase 10: never ship a command the server is going to refuse. While the
-      // rate gate is closed, continuous samples (pointer moves and scrolls) are
-      // dropped outright and discrete clicks wait for the window to reopen.
-      const decision = decideRemoteControlCommand({
-        kind: payload.type,
-        gate: rateGateRef.current,
-        now: Date.now(),
-      });
+      const decision = decideRemoteControlCommand({ kind: payload.type, gate: rateGateRef.current, now: Date.now() });
       if (decision === "supersede") return;
       if (decision === "defer") {
         const delay = remoteControlSendDelayMs(rateGateRef.current, Date.now());
@@ -185,26 +183,25 @@ export function RemoteMouseControllerOverlay() {
       }
 
       try {
-        await remoteControllerRequestJson(
-          `/api/screen-feed/control/sessions/${encodeURIComponent(expectedSessionId)}/commands`,
-          {
-            method: "POST",
-            body: JSON.stringify(payload),
-          }
-        );
+        await requestRemoteControlRealtime({
+          type: "remote-control:mouse-command",
+          sessionId: expectedSessionId,
+          command: payload,
+        });
         rateGateRef.current = clearRemoteControlRateLimit(rateGateRef.current);
       } catch (requestError) {
         if (activeSessionIdRef.current !== expectedSessionId) return;
-        if (requestError instanceof RemoteControllerRequestError) {
+        if (requestError instanceof RemoteControlRealtimeError) {
           if (isRemoteControlRateLimitError(requestError)) {
-            // A refusal is a pacing signal, not a session failure: back off
-            // quietly rather than showing the operator an error for input the
-            // server simply asked us to slow down.
             rateGateRef.current = applyRemoteControlRateLimit(
               rateGateRef.current,
               Date.now(),
               requestError.retryAfterMs
             );
+            return;
+          }
+          if (requestError.code === "TRANSPORT_NOT_READY" || requestError.code === "TRANSPORT_DISCONNECTED") {
+            rateGateRef.current = applyRemoteControlRateLimit(rateGateRef.current, Date.now(), 300);
             return;
           }
           if (requestError.status === 428 || requestError.code === "MOUSE_AUTHORIZATION_REQUIRED") {
@@ -222,9 +219,6 @@ export function RemoteMouseControllerOverlay() {
     (payload: MouseCommandPayload) => {
       if (!sessionId || !controlEnabled) return;
       const expectedSessionId = sessionId;
-      // Clicks and scrolls are aimed at the frame on screen right now, so the
-      // target can ignore them when its viewport has since scrolled, resized,
-      // or zoomed instead of activating the wrong control.
       const frameViewport = screenImage ? parseFrameViewportFromDataset(screenImage.dataset) : undefined;
       const command: MouseCommandPayload = frameViewport ? { ...payload, frameViewport } : payload;
       commandTailRef.current = commandTailRef.current
@@ -235,33 +229,24 @@ export function RemoteMouseControllerOverlay() {
   );
 
   const schedulePointerDrain = useCallback(() => {
-    if (!sessionId || !controlEnabled || pointerQueueActiveRef.current || !pointerLatestRef.current) {
-      return;
-    }
-
+    if (!sessionId || !controlEnabled || pointerQueueActiveRef.current || !pointerLatestRef.current) return;
     const expectedSessionId = sessionId;
     pointerQueueActiveRef.current = true;
     pointerQueueSessionRef.current = expectedSessionId;
-
     const nextTail = commandTailRef.current
       .catch(() => undefined)
       .then(async () => {
         if (activeSessionIdRef.current !== expectedSessionId) return;
-        // Only the newest sample is read, so every position queued behind a
-        // slow request is superseded here rather than sent and then ignored.
         const point = pointerLatestRef.current;
         pointerLatestRef.current = null;
         if (point) await sendCommandNow({ type: "pointer-move", ...point }, expectedSessionId);
       });
     commandTailRef.current = nextTail;
-
     void nextTail.finally(() => {
       if (pointerQueueSessionRef.current !== expectedSessionId) return;
       pointerQueueActiveRef.current = false;
       pointerQueueSessionRef.current = null;
-      if (pointerLatestRef.current && activeSessionIdRef.current === expectedSessionId) {
-        schedulePointerDrainRef.current();
-      }
+      if (pointerLatestRef.current && activeSessionIdRef.current === expectedSessionId) schedulePointerDrainRef.current();
     });
   }, [controlEnabled, sendCommandNow, sessionId]);
 
@@ -278,15 +263,9 @@ export function RemoteMouseControllerOverlay() {
     scrollTimerRef.current = null;
     const pending = scrollPendingRef.current;
     scrollPendingRef.current = null;
-    if (pending && (pending.deltaX !== 0 || pending.deltaY !== 0)) {
-      enqueueOrderedCommand({ type: "scroll", ...pending });
-    }
+    if (pending && (pending.deltaX !== 0 || pending.deltaY !== 0)) enqueueOrderedCommand({ type: "scroll", ...pending });
   }, [enqueueOrderedCommand]);
 
-  // The screen image only exists once a frame has arrived, which is usually
-  // after control was enabled — and it is replaced whenever the viewer drops
-  // back to the waiting placeholder. Tracking it keeps the input listeners
-  // bound to whatever image is on screen right now instead of binding once.
   useEffect(() => {
     if (!sessionTargetUserId || !portalHost) {
       setScreenImage(null);
@@ -297,7 +276,6 @@ export function RemoteMouseControllerOverlay() {
       setScreenImage(null);
       return;
     }
-
     const syncImage = () => {
       const next = dialog.querySelector<HTMLImageElement>("[data-testid='img-screen-feed']");
       setScreenImage((current) => (current === next ? current : next));
@@ -315,16 +293,10 @@ export function RemoteMouseControllerOverlay() {
     if (!controlEnabled) return;
     const image = screenImage;
     if (!image) return;
-
     image.style.cursor = "crosshair";
     image.style.touchAction = "none";
 
     const pointFromEvent = (clientX: number, clientY: number) => {
-      // Normalize against the box the frame pixels actually occupy. Viewers
-      // letterbox the frame with `object-fit: contain`, and points taken
-      // against the raw element rect would land offset. The encoded frame's
-      // natural size is the ground truth; fall back to the viewport snapshot
-      // stamped on the image, then to the element rect itself.
       const frameSize: RemoteMouseFrameSize | null =
         image.naturalWidth > 0 && image.naturalHeight > 0
           ? { width: image.naturalWidth, height: image.naturalHeight }
@@ -339,11 +311,8 @@ export function RemoteMouseControllerOverlay() {
       const point = pointFromEvent(event.clientX, event.clientY);
       if (!point) return;
       pointerLatestRef.current = point;
-      if (pointerTimerRef.current === null) {
-        pointerTimerRef.current = window.setTimeout(flushPointer, POINTER_COALESCE_MS);
-      }
+      if (pointerTimerRef.current === null) pointerTimerRef.current = window.setTimeout(flushPointer, POINTER_COALESCE_MS);
     };
-
     const onClick = (event: MouseEvent) => {
       if (event.button !== 0) return;
       const point = pointFromEvent(event.clientX, event.clientY);
@@ -355,18 +324,11 @@ export function RemoteMouseControllerOverlay() {
       pointerTimerRef.current = null;
       enqueueOrderedCommand({ type: "click", ...point });
     };
-
     const onWheel = (event: WheelEvent) => {
       const point = pointFromEvent(event.clientX, event.clientY);
       if (!point) return;
       event.preventDefault();
       event.stopPropagation();
-      // Wheel deltas are only pixels when deltaMode is DOM_DELTA_PIXEL.
-      // Line-mode controllers (Firefox, ~3 per notch) and page-mode platforms
-      // would otherwise ship raw and scroll 1–3 px per event — no visible
-      // scrolling at all. Normalize here, where the event and its units live;
-      // page-mode deltas scale by the target's page size, taken from the
-      // captured frame the pointer is over.
       const frame = parseFrameViewportFromDataset(image.dataset);
       const delta = normalizeRemoteWheelDelta(event.deltaX, event.deltaY, event.deltaMode, frame?.width, frame?.height);
       const previous = scrollPendingRef.current;
@@ -375,9 +337,7 @@ export function RemoteMouseControllerOverlay() {
         deltaX: Math.max(-1200, Math.min(1200, (previous?.deltaX ?? 0) + delta.deltaX)),
         deltaY: Math.max(-1200, Math.min(1200, (previous?.deltaY ?? 0) + delta.deltaY)),
       };
-      if (scrollTimerRef.current === null) {
-        scrollTimerRef.current = window.setTimeout(flushScroll, SCROLL_COALESCE_MS);
-      }
+      if (scrollTimerRef.current === null) scrollTimerRef.current = window.setTimeout(flushScroll, SCROLL_COALESCE_MS);
     };
 
     image.addEventListener("pointermove", onPointerMove);
@@ -398,45 +358,53 @@ export function RemoteMouseControllerOverlay() {
     };
   }, [controlEnabled, enqueueOrderedCommand, flushPointer, flushScroll, screenImage]);
 
-  // Distinct error reasons for "clicks do nothing" — each terminal result
-  // produces a specific message so operators can tell why a click didn't
-  // activate anything, instead of seeing a generic banner or nothing.
-  const getMouseErrorForReason = (reason: string | null, status: string): string | null => {
-    if (status === "executed") return null;
-    if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
-    if (reason === "action-not-allowlisted") return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
-    if (reason === "frame-point-offscreen") return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
-    if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
-    if (reason === "no-target") return t("No element at that position.");
-    if (reason === "no-clickable-target") return t("No clickable control at that position.");
-    if (reason === "click-failed") return t("Click failed to activate the control.");
-    if (reason === "empty-scroll") return t("Empty scroll ignored.");
-    if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
-    if (reason === "duplicate-command") return t("Duplicate command ignored.");
-    if (reason) return t(`Action ${status}: ${reason}`);
-    return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");
-  };
+  const getMouseErrorForReason = useCallback(
+    (reason: string | null, status: string): string | null => {
+      if (status === "executed") return null;
+      if (reason === "protected-element") return t("That control is protected and cannot be activated remotely.");
+      if (reason === "action-not-allowlisted") return t("This control isn't on the allowlist — it needs a data-remote-control-action from the registry.");
+      if (reason === "frame-point-offscreen") return t("That part of the screen has scrolled out of view. Wait for a fresh frame and try again.");
+      if (reason === "invalid-coordinates") return t("Click position is outside the screen image.");
+      if (reason === "no-target") return t("No element at that position.");
+      if (reason === "no-clickable-target") return t("No clickable control at that position.");
+      if (reason === "click-failed") return t("Click failed to activate the control.");
+      if (reason === "empty-scroll") return t("Empty scroll ignored.");
+      if (reason === "command-timeout") return t("Command timed out — the employee tab didn't respond.");
+      if (reason === "duplicate-command") return t("Duplicate command ignored.");
+      if (reason) return t(`Action ${status}: ${reason}`);
+      return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");
+    },
+    [t]
+  );
 
   useEffect(() => {
     if (!controlEnabled || !sessionId) return;
-    const eventSource = new EventSource(`/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/results`, {
-      withCredentials: true,
+    let cancelled = false;
+    const bind = () => {
+      if (cancelled) return;
+      void requestRemoteControlRealtime({ type: "remote-control:bind-mouse-controller", sessionId }).catch((bindError) => {
+        if (!cancelled && bindError instanceof RemoteControlRealtimeError && bindError.status > 0) setError(t(bindError.message));
+      });
+    };
+    const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
+      if (ready) bind();
     });
-    eventSource.addEventListener("result", (event) => {
-      try {
-        const result = JSON.parse((event as MessageEvent<string>).data) as CommandResultView;
-        if (result?.sessionId === sessionId) {
-          setLastResult(result);
-          const msg = getMouseErrorForReason(result.reason, result.status);
-          if (msg && result.status !== "executed") setError(msg);
-          else if (result.status === "executed") setError(null);
-        }
-      } catch {
-        // A later result replaces malformed stream data.
-      }
+    const unsubscribeMessages = subscribeRemoteControlRealtime((message) => {
+      if (message.type !== "remote-control:mouse-result") return;
+      const result = message.result as CommandResultView | undefined;
+      if (!result || result.sessionId !== sessionId) return;
+      setLastResult(result);
+      const text = getMouseErrorForReason(result.reason, result.status);
+      if (text && result.status !== "executed") setError(text);
+      else if (result.status === "executed") setError(null);
     });
-    return () => eventSource.close();
-  }, [controlEnabled, sessionId, t]);
+    bind();
+    return () => {
+      cancelled = true;
+      unsubscribeReady();
+      unsubscribeMessages();
+    };
+  }, [controlEnabled, getMouseErrorForReason, sessionId, t]);
 
   if (!target || !session || !portalHost) return null;
 
@@ -456,12 +424,9 @@ export function RemoteMouseControllerOverlay() {
           {controlEnabled ? <MousePointer2 className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {t("Mouse control")} · {session.targetUsername}
-          </p>
+          <p className="truncate text-sm font-semibold">{t("Mouse control")} · {session.targetUsername}</p>
           <p className="text-xs text-muted-foreground">
-            {translateRemoteSupportPhase4Text("ERP tab only", language)} · {t("Safe viewing and navigation")} ·{" "}
-            {t("Keyboard disabled")}
+            {translateRemoteSupportPhase4Text("ERP tab only", language)} · {t("Safe viewing and navigation")} · {t("Keyboard disabled")}
           </p>
         </div>
         {controlEnabled ? (
@@ -498,9 +463,7 @@ export function RemoteMouseControllerOverlay() {
             void confirmPasswordAndAuthorize();
           }}
         >
-          <p className="text-xs font-medium">
-            {t("Confirm your password to enable mouse control for up to 5 minutes.")}
-          </p>
+          <p className="text-xs font-medium">{t("Confirm your password to enable mouse control for up to 5 minutes.")}</p>
           <div className="flex gap-2">
             <Input
               autoFocus
@@ -520,18 +483,10 @@ export function RemoteMouseControllerOverlay() {
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>
-          {controlEnabled
-            ? t("Active: click and scroll on allowlisted controls")
-            : t("Read-only until explicitly enabled")}
-        </span>
+        <span>{controlEnabled ? t("Active: click and scroll on allowlisted controls") : t("Read-only until explicitly enabled")}</span>
         {statusLabel && <span className="shrink-0">{statusLabel}</span>}
       </div>
-      {error && (
-        <p className="mt-2 text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-2 text-xs text-destructive" role="alert">{error}</p>}
     </section>,
     portalHost
   );
