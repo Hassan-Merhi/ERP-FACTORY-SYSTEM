@@ -1,0 +1,101 @@
+name: PR 1562 one-shot CI repair
+
+on:
+  push:
+    branches:
+      - test/phase33d-factory-payroll-workers-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: test/phase33d-factory-payroll-workers-20260917
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bring branch up to latest main
+        run: |
+          git fetch origin main
+          git merge --no-edit origin/main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply inherited main gate repairs
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const source = fs.readFileSync("scripts/pr1559-self-fix.mjs", "utf8")
+            .replaceAll("docIndex.entries", "docIndex.classification")
+            .replace("{ ...docIndex, entries: sortedEntries }", "{ ...docIndex, classification: sortedEntries }");
+          fs.writeFileSync("/tmp/phase33d-base-fix.mjs", source);
+          NODE
+          node /tmp/phase33d-base-fix.mjs
+
+      - name: Format repaired and Phase 33D files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            config/doc-index.json \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/pages/ContainerVerification.tsx \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            tests/factory-bale-ledger-routes-behavior.test.ts \
+            tests/phase33d-employee-net-position.test.ts \
+            tests/phase33d-factory-documents-and-order-helpers.test.ts \
+            tests/phase33d-historical-replay-scope.test.ts \
+            tests/phase33d-pos-sale-write.test.ts \
+            tests/phase33d-production-schema.test.ts
+
+      - name: Verify repaired static gates
+        run: |
+          npm run lint
+          npm run audit:doc-index
+          node scripts/audit-i18n-phase14.mjs
+          npm run audit:scripts
+          node node_modules/prettier/bin/prettier.cjs --check \
+            tests/factory-bale-ledger-routes-behavior.test.ts \
+            tests/phase33d-employee-net-position.test.ts \
+            tests/phase33d-factory-documents-and-order-helpers.test.ts \
+            tests/phase33d-historical-replay-scope.test.ts \
+            tests/phase33d-pos-sale-write.test.ts \
+            tests/phase33d-production-schema.test.ts
+
+      - name: Commit and push repaired branch
+        run: |
+          git add \
+            config/doc-index.json \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/i18n/applicationTranslations.ts \
+            client/src/pages/ContainerVerification.tsx \
+            client/src/pages/factory/FactoryProductionTargets.tsx \
+            tests/factory-bale-ledger-routes-behavior.test.ts \
+            tests/phase33d-employee-net-position.test.ts \
+            tests/phase33d-factory-documents-and-order-helpers.test.ts \
+            tests/phase33d-historical-replay-scope.test.ts \
+            tests/phase33d-pos-sale-write.test.ts \
+            tests/phase33d-production-schema.test.ts
+          if git diff --cached --quiet; then
+            echo "No repair changes to commit."
+          else
+            git commit -m "fix: clear Phase 33D repository gates"
+          fi
+          git push origin HEAD:test/phase33d-factory-payroll-workers-20260917
