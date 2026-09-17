@@ -415,6 +415,45 @@ export function parseFrameViewportFromDataset(dataset: DOMStringMap): RemoteMous
   return { width, height, scrollX, scrollY, visualScale };
 }
 
+/**
+ * A control's own identity, without the text of anything nested inside it.
+ *
+ * `elementDescriptor` folds in `textContent`, which is right for the control
+ * being clicked and wrong for its ancestors: a table or panel contains every
+ * row's text, so testing an ancestor's text would block the whole page. The
+ * attributes below name the ancestor itself, so they stay meaningful up the
+ * tree.
+ */
+function controlIdentityDescriptor(element: Element): string {
+  const href = element instanceof HTMLAnchorElement ? (element.getAttribute("href") ?? "") : "";
+  return [
+    element.getAttribute("aria-label"),
+    element.getAttribute("title"),
+    element.getAttribute("data-testid"),
+    element.getAttribute("name"),
+    href,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * A click on a safe-looking control still fires every handler above it. An
+ * inner "Open" span inside a row that deletes on click would pass the
+ * nearest-control check while activating the deletion, so each enclosing
+ * control is checked too — by its own identity, never by the text it wraps.
+ */
+function hasDangerousEnclosingControl(element: Element): boolean {
+  let current = element.parentElement?.closest(CLICKABLE_SELECTOR) ?? null;
+  while (current) {
+    if (DANGEROUS_TEXT.test(controlIdentityDescriptor(current))) return true;
+    current = current.parentElement?.closest(CLICKABLE_SELECTOR) ?? null;
+  }
+  return false;
+}
+
 // prettier-ignore
 export function isRemoteMouseBlockedElement(element: Element | null): boolean {
   if (!element) return true;
@@ -422,7 +461,9 @@ export function isRemoteMouseBlockedElement(element: Element | null): boolean {
   if (blocked) return true;
 
   const clickable = element.closest(CLICKABLE_SELECTOR);
-  return !!clickable && DANGEROUS_TEXT.test(elementDescriptor(clickable));
+  if (!clickable) return false;
+  if (DANGEROUS_TEXT.test(elementDescriptor(clickable))) return true;
+  return hasDangerousEnclosingControl(clickable);
 }
 
 export function isAllowedRemoteClickElement(

@@ -619,6 +619,62 @@ describe("remote mouse execution policy", () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps destructive controls blocked however the page dresses them up", () => {
+    document.body.innerHTML = `
+      <button data-testid="button-delete-voucher" aria-label="Remove"><span class="icon"></span></button>
+      <form data-testid="form-post-voucher"><button>OK</button></form>
+      <button data-sensitive-action="manage-users">Open user roles</button>
+      <button disabled data-remote-control-action="view-details">View details</button>
+      <span role="button" aria-disabled="true" data-remote-control-safe="true">View details</span>
+      <div data-destructive><a href="/vouchers/7">Open voucher</a></div>
+      <div role="button" data-testid="row-delete-voucher-7">
+        <span role="button">Open</span>
+      </div>
+      <button data-remote-control-action="not-allowlisted">View details</button>
+      <button data-remote-control-safe="true" data-testid="button-archive-container">Open</button>
+    `;
+    const control = (selector: string): Element => {
+      const found = document.querySelector(selector);
+      if (!found) throw new Error(`missing fixture: ${selector}`);
+      return found;
+    };
+
+    // An icon-only delete button whose visible label reads "Remove": the test
+    // id still names the action, and any dangerous token anywhere in the
+    // control's identity fails it closed.
+    expect(isAllowedRemoteClickElement(control("[data-testid='button-delete-voucher'] .icon"))).toBe(false);
+    // A form submit stays blocked even when its own label is innocuous.
+    expect(isAllowedRemoteClickElement(control("[data-testid='form-post-voucher'] button"))).toBe(false);
+    // Permission-restricted and disabled controls are blocked whatever they carry.
+    expect(isAllowedRemoteClickElement(control("[data-sensitive-action]"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("button[disabled]"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("[aria-disabled='true']"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("[data-destructive] a"))).toBe(false);
+    // A safe-looking inner control inside a row that deletes on click: the
+    // click would reach the row's handler either way.
+    expect(isAllowedRemoteClickElement(control("[data-testid='row-delete-voucher-7'] span"))).toBe(false);
+    // An unregistered action is not an allowlist entry, whatever it is named.
+    expect(isAllowedRemoteClickElement(control("[data-remote-control-action='not-allowlisted']"))).toBe(false);
+    // An explicit safe annotation does not survive a destructive identity.
+    expect(isAllowedRemoteClickElement(control("[data-testid='button-archive-container']"))).toBe(false);
+  });
+
+  it("still allows the read-only controls the registry vouches for", () => {
+    document.body.innerHTML = `
+      <div role="button" data-testid="row-voucher-7"><span role="button">Open</span></div>
+      <button data-remote-control-action="view-details">Details</button>
+      <button data-remote-control-safe="true">View history</button>
+    `;
+    for (const selector of [
+      "[data-testid='row-voucher-7'] span",
+      "[data-remote-control-action='view-details']",
+      "[data-remote-control-safe='true']",
+    ]) {
+      const element = document.querySelector(selector);
+      expect(element && isAllowedRemoteClickElement(element)).toBe(true);
+    }
+  });
+
   it("ignores malformed coordinates, empty scrolls, and missing targets", () => {
     document.elementFromPoint = vi.fn(() => null);
     expect(applyRemoteMouseCommand(command("click", { x: 2 }))).toMatchObject({
