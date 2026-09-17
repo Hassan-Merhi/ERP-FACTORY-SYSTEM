@@ -14,6 +14,7 @@ describe("remote control surface coverage", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("annotates safe entity filters but not sensitive financial or credential fields", () => {
@@ -117,11 +118,14 @@ describe("remote control surface coverage", () => {
 
   it("coalesces child-list mutations into one animation frame and scopes work to added subtrees", async () => {
     const callbacks: FrameRequestCallback[] = [];
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      callbacks.push(callback);
-      return callbacks.length;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        callbacks.push(callback);
+        return callbacks.length;
+      })
+    );
+    vi.stubGlobal("cancelAnimationFrame", vi.fn(() => undefined));
 
     const dispose = installRemoteControlSurfaceCoverage(document.body);
     const first = document.createElement("div");
