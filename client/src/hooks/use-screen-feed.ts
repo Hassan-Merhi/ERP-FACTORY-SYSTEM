@@ -5,6 +5,7 @@ import {
   type ScreenFeedCursorEvent,
   type ScreenFeedFailureStage,
 } from "./screen-feed-capture-engine";
+import { getRemoteSupportTabId } from "./use-remote-control-session";
 import {
   ACTIVE_CAPTURE_MIN_GAP_MS,
   DIRTY_SETTLE_MS,
@@ -14,20 +15,20 @@ import {
   failedCaptureBackoffMs,
 } from "./screen-feed-capture-policy";
 import { normalizeScreenFeedPoint } from "./screen-feed-viewing-quality";
+import {
+  sendScreenFeedControlMessage,
+  subscribeScreenFeedTransportStatus,
+} from "@/lib/screen-feed-binary-transport";
 
 const POLL_INTERVAL_MS = 15000;
-// Until a watcher is confirmed the client is idle, so it can afford to notice a
-// new viewer quickly; once watched the slower cadence is enough because the
-// viewer's own polling keeps the watch flag alive.
 const UNWATCHED_POLL_INTERVAL_MS = 5000;
-const POINTER_INTERVAL_MS = 250;
+// Pointer telemetry is now a tiny websocket message rather than an HTTP POST.
+// 100 ms is responsive enough for the remote cursor without creating request
+// middleware/session-store load.
+const POINTER_INTERVAL_MS = 100;
 const BACKGROUND_MUTATION_MIN_GAP_MS = 4000;
 const INTERACTION_ACTIVE_WINDOW_MS = 2500;
 
-// React and Radix commonly express a visual update through class/data-state
-// changes, while legacy pages frequently write inline styles. Keep this list
-// narrow enough to avoid observing arbitrary attributes, but include both ways
-// a visible screen can change without an input/click event.
 const CAPTURE_MUTATION_ATTRIBUTE_FILTER = [
   "class",
   "style",
@@ -53,11 +54,8 @@ function trimLabel(el: HTMLElement): string {
 }
 
 function runWhenIdle(fn: () => void): void {
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(fn, { timeout: 500 });
-  } else {
-    setTimeout(fn, 0);
-  }
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
+  else setTimeout(fn, 0);
 }
 
 function cursorsDiffer(previous: ScreenFeedCursorEvent | null, next: ScreenFeedCursorEvent): boolean {
@@ -75,16 +73,11 @@ function compactFailureReason(error: unknown): string {
   return "Unexpected screen capture pipeline failure.";
 }
 
-function reportCaptureFailure(stage: ScreenFeedFailureStage, reason: string, durationMs?: number): void {
-  void fetch("/api/screen-feed/pointer", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      failure: { stage, reason: reason.slice(0, 180), durationMs },
-    }),
-  }).catch(() => {
-    // Diagnostics must never add a retry loop or slow the employee's ERP tab.
+function reportCaptureFailure(tabId: string, stage: ScreenFeedFailureStage, reason: string, durationMs?: number): void {
+  sendScreenFeedControlMessage({
+    type: "screen-feed:failure",
+    tabId,
+    failure: { stage, reason: reason.slice(0, 180), durationMs, occurredAt: new Date().toISOString() },
   });
 }
 
@@ -101,10 +94,8 @@ function mutationHasVisibleChange(records: MutationRecord[]): boolean {
     if (ignoredForCapture(record.target)) continue;
     if (record.type === "attributes" || record.type === "characterData") return true;
     if (record.type !== "childList") continue;
-
     const nodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)];
-    if (nodes.length === 0) return true;
-    if (nodes.some((node) => !ignoredForCapture(node))) return true;
+    if (nodes.length === 0 || nodes.some((node) => !ignoredForCapture(node))) return true;
   }
   return false;
 }
@@ -130,6 +121,7 @@ export function useScreenFeed() {
 
   useEffect(() => {
     busyRef.current = false;
+    const tabId = getRemoteSupportTabId();
     let disposed = false;
     let lastObservedHref = window.location.href;
     let mutationObserver: MutationObserver | null = null;
@@ -145,17 +137,13 @@ export function useScreenFeed() {
     function scheduleAt(dueAt: number) {
       if (!watchedRef.current || document.visibilityState !== "visible" || disposed || busyRef.current) return;
       if (captureTimerRef.current && captureDueAtRef.current > 0 && captureDueAtRef.current <= dueAt) return;
-
       clearCaptureTimer();
       captureDueAtRef.current = dueAt;
-      captureTimerRef.current = setTimeout(
-        () => {
-          captureTimerRef.current = null;
-          captureDueAtRef.current = 0;
-          runCaptureCycle();
-        },
-        Math.max(0, dueAt - Date.now())
-      );
+      captureTimerRef.current = setTimeout(() => {
+        captureTimerRef.current = null;
+        captureDueAtRef.current = 0;
+        runCaptureCycle();
+      }, Math.max(0, dueAt - Date.now()));
     }
 
     function effectiveMinGapMs() {
@@ -164,8 +152,7 @@ export function useScreenFeed() {
 
     function scheduleIdleRefresh() {
       if (!watchedRef.current || document.visibilityState !== "visible" || disposed || busyRef.current) return;
-      const base = lastCaptureAtRef.current || Date.now();
-      scheduleAt(base + IDLE_REFRESH_MS);
+      scheduleAt((lastCaptureAtRef.current || Date.now()) + IDLE_REFRESH_MS);
     }
 
     function markDirty(options?: { urgent?: boolean; minGapMs?: number }) {
@@ -176,26 +163,19 @@ export function useScreenFeed() {
         lastSignatureRef.current = null;
         urgent = true;
       }
-
       const requestedMinGap = options?.minGapMs ?? ACTIVE_CAPTURE_MIN_GAP_MS;
       if (!dirtyRef.current) {
         dirtySinceRef.current = now;
         pendingMinGapRef.current = requestedMinGap;
       } else {
-        // Any real user interaction is allowed to accelerate a pending
-        // background-only refresh, while repeated background mutations keep
-        // their wider spacing even if they happen during an in-flight capture.
         pendingMinGapRef.current = Math.min(pendingMinGapRef.current, requestedMinGap);
       }
       dirtyRef.current = true;
-
       if (!watchedRef.current || document.visibilityState !== "visible" || busyRef.current || disposed) return;
-
       const settleAt = urgent ? now : now + DIRTY_SETTLE_MS;
       const minGapAt = lastCaptureAtRef.current + effectiveMinGapMs();
       const maxLatencyAt = (dirtySinceRef.current || now) + MAX_DIRTY_LATENCY_MS;
-      const dueAt = Math.max(minGapAt, Math.min(settleAt, maxLatencyAt));
-      scheduleAt(dueAt);
+      scheduleAt(Math.max(minGapAt, Math.min(settleAt, maxLatencyAt)));
     }
 
     function completeCaptureCycle(result: {
@@ -209,7 +189,6 @@ export function useScreenFeed() {
     }) {
       lastCaptureAtRef.current = Date.now();
       lastCaptureDurationRef.current = Math.max(0, result.durationMs);
-
       if (result.cancelled) {
         if (watchedRef.current && document.visibilityState === "visible") {
           if (!dirtyRef.current) {
@@ -220,16 +199,13 @@ export function useScreenFeed() {
         }
         return;
       }
-
       if (result.uploaded) {
         lastSignatureRef.current = result.signature;
         lastUploadedClickTsRef.current = result.latestClickTs;
       } else if (result.unchanged && result.signature) {
         lastSignatureRef.current = result.signature;
       }
-
       if (!result.failed) consecutiveFailuresRef.current = 0;
-
       if (result.failed) {
         consecutiveFailuresRef.current += 1;
         if (!dirtyRef.current) {
@@ -249,22 +225,17 @@ export function useScreenFeed() {
             Date.now() + failedCaptureBackoffMs(consecutiveFailuresRef.current)
           )
         );
-      } else if (dirtyRef.current) {
-        markDirty({ minGapMs: pendingMinGapRef.current });
-      } else {
-        scheduleIdleRefresh();
-      }
+      } else if (dirtyRef.current) markDirty({ minGapMs: pendingMinGapRef.current });
+      else scheduleIdleRefresh();
     }
 
     function runCaptureCycle() {
       if (!watchedRef.current || busyRef.current || disposed || document.visibilityState !== "visible") return;
-
       const now = Date.now();
       if (!dirtyRef.current && lastCaptureAtRef.current && now - lastCaptureAtRef.current < IDLE_REFRESH_MS) {
         scheduleIdleRefresh();
         return;
       }
-
       const minGapAt = lastCaptureAtRef.current + effectiveMinGapMs();
       if (dirtyRef.current && lastCaptureAtRef.current && now < minGapAt) {
         scheduleAt(minGapAt);
@@ -273,22 +244,16 @@ export function useScreenFeed() {
 
       busyRef.current = true;
       let failed = false;
-
       runWhenIdle(() => {
         if (!watchedRef.current || document.visibilityState !== "visible" || disposed) {
           busyRef.current = false;
           if (watchedRef.current) markDirty({ urgent: true });
           return;
         }
-
-        // Changes that happened while waiting for an idle slice are included in
-        // this capture. Only mutations that happen after this point need another
-        // frame, which prevents a duplicate heavy render after every keystroke.
         dirtyRef.current = false;
         dirtySinceRef.current = 0;
         pendingMinGapRef.current = ACTIVE_CAPTURE_MIN_GAP_MS;
         const expectedPath = window.location.href;
-
         captureAndUploadScreenFrame({
           fast: fastModeRef.current,
           lastSignature: lastSignatureRef.current,
@@ -304,6 +269,7 @@ export function useScreenFeed() {
             completeCaptureCycle(result);
             if (result.failed && watchedRef.current && document.visibilityState === "visible" && !disposed) {
               reportCaptureFailure(
+                tabId,
                 result.failureStage ?? "pipeline",
                 result.failureReason ?? "Screen frame could not be produced or uploaded.",
                 result.durationMs
@@ -320,7 +286,7 @@ export function useScreenFeed() {
             }
             dirtyRef.current = true;
             if (watchedRef.current && document.visibilityState === "visible" && !disposed) {
-              reportCaptureFailure("pipeline", compactFailureReason(error));
+              reportCaptureFailure(tabId, "pipeline", compactFailureReason(error));
             }
           })
           .finally(() => {
@@ -335,17 +301,14 @@ export function useScreenFeed() {
       const point = normalizeScreenFeedPoint(event.clientX, event.clientY, window.innerWidth, window.innerHeight);
       pointerRef.current = { ...point, visible: true, ts: Date.now() };
     };
-
     const onPointerLeave = () => {
       if (!watchedRef.current) return;
       const previous = pointerRef.current ?? { x: 0, y: 0, visible: false, ts: Date.now() };
       pointerRef.current = { ...previous, visible: false, ts: Date.now() };
     };
-
     const noteInteraction = () => {
       lastInteractionAtRef.current = Date.now();
     };
-
     const onClick = (event: MouseEvent) => {
       if (!watchedRef.current) return;
       const target =
@@ -355,41 +318,29 @@ export function useScreenFeed() {
             ? event.target.parentElement
             : null;
       if (!target || target.closest("[data-screenfeed-ignore='true']")) return;
-
       noteInteraction();
       const point = normalizeScreenFeedPoint(event.clientX, event.clientY, window.innerWidth, window.innerHeight);
       clickBuffer.push({ ...point, label: trimLabel(target), ts: Date.now() });
       if (clickBuffer.length > 50) clickBuffer.shift();
       markDirty();
     };
-
     const onInput = (event: Event) => {
       if (!watchedRef.current || ignoredForCapture(event.target as Node | null)) return;
       noteInteraction();
       markDirty();
     };
-
     const onScroll = (event: Event) => {
       if (!watchedRef.current || ignoredForCapture(event.target as Node | null)) return;
       noteInteraction();
-      if (event.target instanceof HTMLElement) {
-        trackedScrollElements.add(event.target);
-        if (trackedScrollElements.size > 128) {
-          for (const element of trackedScrollElements) {
-            if (!element.isConnected) trackedScrollElements.delete(element);
-          }
-        }
-      }
+      if (event.target instanceof HTMLElement) trackedScrollElements.add(event.target);
       markDirty();
     };
-
     const onResize = () => {
       if (!watchedRef.current) return;
       noteInteraction();
       lastSignatureRef.current = null;
       markDirty();
     };
-
     const onNavigation = () => {
       if (!watchedRef.current) return;
       noteInteraction();
@@ -405,38 +356,25 @@ export function useScreenFeed() {
         document.visibilityState !== "visible" ||
         !cursor ||
         !cursorsDiffer(lastSentPointerRef.current, cursor)
-      ) {
-        return;
+      ) return;
+      if (sendScreenFeedControlMessage({ type: "screen-feed:cursor", tabId, cursor })) {
+        lastSentPointerRef.current = cursor;
       }
-
-      lastSentPointerRef.current = cursor;
-      void fetch("/api/screen-feed/pointer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ cursor }),
-      }).catch(() => {
-        lastSentPointerRef.current = null;
-      });
     };
-
     const startPointerLoop = () => {
       if (pointerTimerRef.current || document.visibilityState !== "visible") return;
       sendPointerUpdate();
       pointerTimerRef.current = setInterval(sendPointerUpdate, POINTER_INTERVAL_MS);
     };
-
     const stopPointerLoop = () => {
       if (pointerTimerRef.current) clearInterval(pointerTimerRef.current);
       pointerTimerRef.current = null;
       lastSentPointerRef.current = null;
     };
-
     const stopMutationObserver = () => {
       mutationObserver?.disconnect();
       mutationObserver = null;
     };
-
     const startMutationObserver = () => {
       if (mutationObserver || !watchedRef.current || document.visibilityState !== "visible") return;
       mutationObserver = new MutationObserver((records) => {
@@ -475,7 +413,6 @@ export function useScreenFeed() {
       const wasWatched = watchedRef.current;
       const modeChanged = fastModeRef.current !== fast;
       fastModeRef.current = fast;
-
       if (watched) {
         watchedRef.current = true;
         startMutationObserver();
@@ -493,7 +430,7 @@ export function useScreenFeed() {
     const pollWatcherStatus = async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const response = await fetch("/api/screen-feed/being-watched", { credentials: "include" });
+        const response = await fetch(`/api/screen-feed/being-watched?tabId=${encodeURIComponent(tabId)}`, { credentials: "include" });
         if (!response.ok) return applyWatchStatus(false, false);
         const data = await response.json();
         applyWatchStatus(Boolean(data?.watched), Boolean(data?.fast));
@@ -510,9 +447,6 @@ export function useScreenFeed() {
       pollIntervalMs = 0;
     };
     const startFallbackPolling = () => {
-      // Watching starts from an idle client, so poll briskly until a watcher is
-      // confirmed and then relax — a stuck 15s cadence is most of the delay
-      // before the very first frame is even attempted.
       const desiredInterval = watchedRef.current ? POLL_INTERVAL_MS : UNWATCHED_POLL_INTERVAL_MS;
       if (pollId && pollIntervalMs === desiredInterval) return;
       const firstRun = !pollId;
@@ -525,39 +459,28 @@ export function useScreenFeed() {
       }, desiredInterval);
     };
 
-    let eventSource: EventSource | null = null;
-    // A server with the live transport switched off answers this stream with
-    // 204, which EventSource treats as an error and can otherwise retry forever.
-    // Give up after a couple of attempts instead of reconnecting for the whole
-    // ERP session; polling remains the recovery transport.
-    const MAX_STATUS_STREAM_ERRORS = 2;
-    let statusStreamErrors = 0;
-    try {
-      eventSource = new EventSource("/api/screen-feed/live/status", { withCredentials: true });
-      eventSource.onopen = () => {
-        statusStreamErrors = 0;
+    const bindProducer = () => {
+      if (!sendScreenFeedControlMessage({ type: "screen-feed:producer-bind", tabId })) startFallbackPolling();
+    };
+    const unsubscribeTransport = subscribeScreenFeedTransportStatus((message) => {
+      if (message.type === "screen-feed-transport-ready") {
         stopFallbackPolling();
-      };
-      eventSource.addEventListener("status", (event) => {
-        statusStreamErrors = 0;
-        try {
-          const data = JSON.parse((event as MessageEvent<string>).data);
-          applyWatchStatus(Boolean(data?.watched), Boolean(data?.fast));
-        } catch {
-          startFallbackPolling();
-        }
-      });
-      eventSource.onerror = () => {
-        statusStreamErrors += 1;
-        if (statusStreamErrors >= MAX_STATUS_STREAM_ERRORS) {
-          eventSource?.close();
-          eventSource = null;
-        }
-        startFallbackPolling();
-      };
-    } catch {
-      startFallbackPolling();
-    }
+        bindProducer();
+        return;
+      }
+      if (message.type === "screen-feed:producer-bound") {
+        stopFallbackPolling();
+        return;
+      }
+      if (message.type === "screen-feed:status") {
+        applyWatchStatus(Boolean(message.watched), Boolean(message.fast));
+        return;
+      }
+      if (message.type === "screen-feed-transport-disconnected") startFallbackPolling();
+    });
+    // Recovery only. In the normal path the socket readiness event immediately
+    // stops this before the first interval fires.
+    startFallbackPolling();
 
     const onVisibilityChange = () => {
       if (document.visibilityState !== "visible") {
@@ -566,6 +489,7 @@ export function useScreenFeed() {
         stopMutationObserver();
         return;
       }
+      bindProducer();
       if (watchedRef.current) {
         startMutationObserver();
         startPointerLoop();
@@ -589,8 +513,8 @@ export function useScreenFeed() {
 
     return () => {
       disposed = true;
+      unsubscribeTransport();
       stopMutationObserver();
-      eventSource?.close();
       stopFallbackPolling();
       watchedRef.current = false;
       stopCapturing();
