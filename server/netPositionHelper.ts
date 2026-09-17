@@ -14,6 +14,7 @@ export interface AccountLike {
   name: string;
   code: string | null;
   accountType: string | null;
+  subType?: string | null;
   openingBalance: string | null;
   openingBalanceSide: string | null;
   parentId?: number | null;
@@ -76,6 +77,7 @@ const liabilityAccountTypes = ["Liability", "Duty Agent", "Transporter Agent", "
 const excludedAccountTypes = ["Income", "Profit", "Equity", "EQUITY", "Fixed Asset", "Intercompany"];
 export const expenseTypes = ["Expense", "Direct Expense", "Indirect Expense"];
 const assetAccountTypes = ["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash"];
+const ACCOUNT_MIGRATION_CLEARING_SUBTYPE = "account_migration_clearing";
 
 const fixedAssetNamePatterns = [
   "rover",
@@ -134,6 +136,7 @@ export function classifyEquityAccounts(accounts: AccountLike[], balanceMap: Map<
   const equityAccounts: EquityAccount[] = [];
 
   for (const acc of accounts) {
+    if (acc.subType === ACCOUNT_MIGRATION_CLEARING_SUBTYPE) continue;
     if (!["Equity", "EQUITY"].includes(acc.accountType || "")) continue;
 
     const netBalance = getAccountNetBalance(acc, balanceMap);
@@ -200,6 +203,7 @@ export function classifyNetPositionAccounts(
   }
 
   const isExcludedFromNetPosition = (acc: AccountLike): boolean => {
+    if (acc.subType === ACCOUNT_MIGRATION_CLEARING_SUBTYPE) return true;
     if (excludedAccountTypes.includes(acc.accountType || "")) return true;
     if (acc.code === "PRODUCTION_ADJUSTMENT" || acc.code === "CONSUMPTION_EXPENSE") return true;
     if (!includeSupplierTypeAccounts && acc.accountType === "Supplier") return true;
