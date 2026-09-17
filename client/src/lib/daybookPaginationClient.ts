@@ -205,22 +205,25 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
 
   function renderProgress(): void {
     const root = ensureProgress();
-    const shouldHide =
-      !activeMeta ||
+    // Held in a local and tested inline so the null check narrows: through a
+    // separate `shouldHide` boolean TypeScript cannot see that activeMeta is
+    // non-null past the early return.
+    const meta = activeMeta;
+    if (
+      !meta ||
       !ROUTES.has(window.location.pathname) ||
       hasDeepLink() ||
-      activeMeta.totalPages <= 1 ||
-      activeMeta.loadedCount >= activeMeta.total;
-
-    if (shouldHide) {
+      meta.totalPages <= 1 ||
+      meta.loadedCount >= meta.total
+    ) {
       root.style.display = "none";
       return;
     }
 
     root.style.display = "flex";
     root.textContent = loadingMore
-      ? `Loading more… ${activeMeta.loadedCount} of ${activeMeta.total} transactions loaded`
-      : `${activeMeta.loadedCount} of ${activeMeta.total} transactions loaded · scroll to load more`;
+      ? `Loading more… ${meta.loadedCount} of ${meta.total} transactions loaded`
+      : `${meta.loadedCount} of ${meta.total} transactions loaded · scroll to load more`;
   }
 
   function requestNextPage(): void {
@@ -244,7 +247,8 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     const host = scrollHost(event);
     if (!host) return;
 
-    const isDocumentHost = host === document.scrollingElement || host === document.documentElement || host === document.body;
+    const isDocumentHost =
+      host === document.scrollingElement || host === document.documentElement || host === document.body;
     if (!isDocumentHost && host.scrollHeight < 600) return;
 
     const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
