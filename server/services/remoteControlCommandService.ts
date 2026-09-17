@@ -31,10 +31,14 @@ export interface RemoteMouseCommand {
   deltaY?: number;
   /**
    * Scroll/viewport state of the screen frame the controller clicked on.
-   * The target tab compares this against its live viewport and ignores
-   * click/scroll commands whose frame has scrolled, resized, or zoomed
-   * since capture, so a stale picture can never land a click on the
-   * wrong control. Absent for legacy controllers and pointer-move.
+   * The target tab remaps the command's normalized point through this
+   * snapshot (frame space → document space → live viewport), so viewport
+   * drift between capture and execution moves the click with the content
+   * the controller aimed at instead of landing on whatever moved under
+   * the old position. Scroll commands are exempt from frame staleness —
+   * scrolling itself invalidates the captured scroll position — but their
+   * anchor point is still remapped. Absent for legacy controllers and
+   * pointer-move.
    */
   frameViewport?: RemoteMouseFrameViewport;
   createdAt: number;
