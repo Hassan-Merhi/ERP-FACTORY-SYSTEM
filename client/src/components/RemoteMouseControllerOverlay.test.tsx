@@ -38,6 +38,30 @@ vi.mock("@/contexts/ApplicationLanguageContext", () => ({
   useApplicationLanguage: () => ({ language: "en" }),
 }));
 
+// Mouse commands ride the realtime websocket, not the JSON control endpoint;
+// remoteControllerRequestJson above is only the authorization/revoke path.
+const realtimeRequest = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve(undefined)));
+
+vi.mock("@/lib/remote-control-session-transport", () => ({
+  RemoteControlRealtimeError: class RemoteControlRealtimeError extends Error {
+    constructor(
+      message: string,
+      readonly status?: number,
+      readonly code?: string | null,
+      readonly retryAfterMs?: number
+    ) {
+      super(message);
+    }
+  },
+  requestRemoteControlRealtime: (...args: unknown[]) => realtimeRequest(...args),
+  subscribeRemoteControlRealtime: () => () => undefined,
+  subscribeRemoteControlRealtimeReady: (listener: (ready: boolean) => void) => {
+    listener(true);
+    return () => undefined;
+  },
+  isRemoteControlRealtimeReady: () => true,
+}));
+
 class FakeEventSource {
   close() {}
   addEventListener() {}
@@ -111,17 +135,23 @@ function setupViewerDialog() {
   return { image, portalHost };
 }
 
+/**
+ * The overlay also sends session/bind traffic over the same realtime channel,
+ * so only the mouse-command envelopes are the subject of these assertions.
+ */
 function postedPayloads(): Array<Record<string, unknown>> {
-  return controllerState.requestJson.mock.calls.map((call) => {
-    const body = (call[1] as { body?: string } | undefined)?.body;
-    return body ? (JSON.parse(body) as Record<string, unknown>) : {};
-  });
+  return realtimeRequest.mock.calls
+    .map((call) => call[0] as { type?: string; command?: Record<string, unknown> } | undefined)
+    .filter((message) => message?.type === "remote-control:mouse-command")
+    .map((message) => message?.command ?? {});
 }
 
 describe("RemoteMouseControllerOverlay input wiring", () => {
   beforeEach(() => {
     controllerState.requestJson.mockClear();
     controllerState.refreshSession.mockClear();
+    realtimeRequest.mockClear();
+    realtimeRequest.mockResolvedValue(undefined);
     vi.stubGlobal("EventSource", FakeEventSource);
   });
 
@@ -204,7 +234,7 @@ describe("RemoteMouseControllerOverlay input wiring", () => {
     expect(postedPayloads()[1]).toMatchObject({ type: "click", x: 0.5, y: 0.5, frameViewport });
 
     // A click in the letterbox bar is outside the frame coordinate space.
-    controllerState.requestJson.mockClear();
+    realtimeRequest.mockClear();
     fireClick(image, 500, 25);
     await new Promise((resolve) => window.setTimeout(resolve, 150));
     expect(postedPayloads()).toEqual([]);

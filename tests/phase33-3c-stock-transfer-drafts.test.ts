@@ -38,7 +38,11 @@ vi.mock("../server/chat/aiProviders", () => ({
 }));
 vi.mock("../server/chat/intent", () => ({
   deterministicParseMultiSourceTransfer: harness.deterministicParseMultiSourceTransfer,
-  RE_MULTI_SOURCE_LOCATIONS: /hadi\s*1|multi-source/i,
+  // Mirrors server/chat/intent.ts: a multi-source request needs an actual
+  // comma- or dash-separated location list ("Hadi 1, 2, 3"). Matching a bare
+  // "Hadi 1" would route every analysis message down the deterministic
+  // multi-source branch and never reach the path these tests exercise.
+  RE_MULTI_SOURCE_LOCATIONS: /\b[a-z][a-z\s]*\d+\s*(?:,\s*\d+)+\b|\b[a-z][a-z\s]*\d+\s*-\s*\d+\b/i,
   RE_STOCK_GROUP_FILTER_HINT: /same stock group|same groups/i,
   RE_STOCK_TRANSFER: /transfer/i,
   RE_STOCK_TRANSFER_ANALYSIS: /suggest|analy[sz]e/i,
@@ -98,15 +102,13 @@ describe("Phase 33 3C stock-transfer draft builder", () => {
         aggressiveness: "normal",
       }),
     });
-    harness.matchLocationByName
-      .mockResolvedValueOnce({ matched: locations[0], candidates: [] })
-      .mockResolvedValueOnce({
-        matched: null,
-        candidates: [
-          { id: 9, name: "Kolwezi", code: "KLZ" },
-          { id: 10, name: "Kolwezi 2", code: "KLZ2" },
-        ],
-      });
+    harness.matchLocationByName.mockResolvedValueOnce({ matched: locations[0], candidates: [] }).mockResolvedValueOnce({
+      matched: null,
+      candidates: [
+        { id: 9, name: "Kolwezi", code: "KLZ" },
+        { id: 10, name: "Kolwezi 2", code: "KLZ2" },
+      ],
+    });
 
     const result = await run("suggest a transfer from Hadi 1 to Kolwezi");
 
@@ -235,9 +237,7 @@ describe("Phase 33 3C stock-transfer draft builder", () => {
     expect(harness.buildStockTransferByTargetQuantityContext).toHaveBeenCalledWith(7, [1], 9, 10, {
       onlyDestinationStockGroups: true,
     });
-    expect(result.stockTransferResponseOverride).toContain(
-      "Only 8 eligible bale(s)/item(s) found out of requested 10"
-    );
+    expect(result.stockTransferResponseOverride).toContain("Only 8 eligible bale(s)/item(s) found out of requested 10");
     expect(result.stockTransferResponseOverride).toContain("couldn't find: Missing Source");
   });
 

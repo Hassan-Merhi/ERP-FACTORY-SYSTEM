@@ -35,9 +35,18 @@ const CONTEXT_OPTIONAL_PATHS = new Set([
   "/api/auth/set-company",
 ]);
 
+// The abbreviated srcCompanyId/destCompanyId spellings belong to the
+// account-migration admin routes. Without them the destination company is
+// never membership-checked here and never reaches the request runtime
+// context, so a migration that has to post into the destination company is
+// refused by assertTransactionCompanyScope. Those routes check both companies
+// themselves as well; recognising the names adds the boundary check rather
+// than replacing theirs.
 const SECONDARY_COMPANY_FIELDS = [
   "sourceCompanyId",
   "destinationCompanyId",
+  "srcCompanyId",
+  "destCompanyId",
   "targetCompanyId",
   "fromCompanyId",
   "toCompanyId",

@@ -144,12 +144,21 @@ async function getOrCreateMigrationClearingAccount(
     code = `${params.code.slice(0, Math.max(1, MAX_CODE_LENGTH - suffix.length))}${suffix}`;
   }
 
+  // Clearing accounts are looked up by code but ledger_accounts is unique on
+  // (company_id, name), and a company can legitimately need both directions
+  // against the same counterpart: the asset-side AM-TO account and the
+  // liability-side AM-FROM account are both named after that one company. The
+  // code-keyed lookup above misses the other direction, so qualify the name
+  // with the code when the plain one is taken rather than colliding on insert.
+  const occupiedNames = new Set(rows.map((row) => row.name));
+  const name = occupiedNames.has(params.name) ? `${params.name} (${code})` : params.name;
+
   const [created] = await tx
     .insert(ledgerAccounts)
     .values({
       companyId: params.companyId,
       code,
-      name: params.name,
+      name,
       accountType: params.accountType,
       subType: MIGRATION_CLEARING_SUBTYPE,
       openingBalance: "0",
@@ -281,9 +290,7 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
 
         const context = getCompanyAccessContext(req);
         await assertCompaniesAccess(context.userId, [srcCompanyId, destCompanyId]);
-        const authorizedCompanyIds = [...new Set([srcCompanyId, destCompanyId])]
-          .sort((a, b) => a - b)
-          .join(",");
+        const authorizedCompanyIds = [...new Set([srcCompanyId, destCompanyId])].sort((a, b) => a - b).join(",");
 
         const result = await db.transaction(async (tx) => {
           await applyDatabaseScope(tx, context.activeCompanyId, authorizedCompanyIds);
@@ -414,7 +421,9 @@ export function registerAccountMigrationRoundTripRoutes(app: Express) {
 
             for (const item of sharedPlans) {
               if (temporaryClearingAccountId === null || originalClearingAccountId === null) {
-                throw new AccountMigrationRoundTripConflict("Account-migration clearing accounts were not initialized.");
+                throw new AccountMigrationRoundTripConflict(
+                  "Account-migration clearing accounts were not initialized."
+                );
               }
               const { plan, sourceVoucher } = item;
               const voucherNumber = `AMR-${saved.migrationId.slice(0, 8)}-${sourceVoucher.id}`;

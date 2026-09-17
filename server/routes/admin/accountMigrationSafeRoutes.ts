@@ -158,12 +158,21 @@ async function getOrCreateMigrationClearingAccount(
     code = `${params.code.slice(0, Math.max(1, MAX_CODE_LENGTH - suffix.length))}${suffix}`;
   }
 
+  // Clearing accounts are looked up by code but ledger_accounts is unique on
+  // (company_id, name), and a company can legitimately need both directions
+  // against the same counterpart: the asset-side AM-TO account and the
+  // liability-side AM-FROM account are both named after that one company. The
+  // code-keyed lookup above misses the other direction, so qualify the name
+  // with the code when the plain one is taken rather than colliding on insert.
+  const occupiedNames = new Set(rows.map((row) => row.name));
+  const name = occupiedNames.has(params.name) ? `${params.name} (${code})` : params.name;
+
   const [created] = await tx
     .insert(ledgerAccounts)
     .values({
       companyId: params.companyId,
       code,
-      name: params.name,
+      name,
       accountType: params.accountType,
       subType: MIGRATION_CLEARING_SUBTYPE,
       openingBalance: "0",

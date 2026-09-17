@@ -37,4 +37,14 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "لا توجد مشاركة شاشة نشطة متاحة لهذا المستخدم في الشركة المحددة.",
     fr: "Aucun flux d’écran actif n’est disponible pour cet utilisateur dans la société sélectionnée.",
   },
+  {
+    en: "Service temporarily unavailable — please retry.",
+    ar: "الخدمة غير متوفرة مؤقتًا — يرجى إعادة المحاولة.",
+    fr: "Service temporairement indisponible — veuillez réessayer.",
+  },
+  {
+    en: "CSRF token missing or invalid.",
+    ar: "رمز CSRF مفقود أو غير صالح.",
+    fr: "Jeton CSRF manquant ou invalide.",
+  },
 ];

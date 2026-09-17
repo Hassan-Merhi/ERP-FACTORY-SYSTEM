@@ -78,7 +78,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 
 ## Ongoing programs
 
-Both describe work in progress and carry live figures bound to their sources.
+These describe work in progress and carry live figures bound to their sources.
 
 | Doc | What it covers |
 |---|---|
@@ -86,6 +86,8 @@ Both describe work in progress and carry live figures bound to their sources.
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
+| [remote-support-phase-17-transport-resilience.md](remote-support-phase-17-transport-resilience.md) | Remote-support Phase 17: binary transport with a conditional HTTP polling fallback |
+| [remote-support-phase-18-control-coverage.md](remote-support-phase-18-control-coverage.md) | Remote-support Phase 18: control-surface coverage beyond the sidebar, and RTL coordinate accuracy |
 
 ## Reference registries
 

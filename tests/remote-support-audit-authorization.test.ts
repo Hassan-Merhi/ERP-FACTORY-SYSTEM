@@ -29,10 +29,8 @@ vi.mock("../server/db", () => ({
 }));
 
 const { registerScreenFeedRoutes } = await import("../server/routes/screenFeedRoutes");
-const {
-  registerRemoteControlTab,
-  resetRemoteControlSessionStateForTests,
-} = await import("../server/services/remoteControlSessionService");
+const { registerRemoteControlTab, resetRemoteControlSessionStateForTests } =
+  await import("../server/services/remoteControlSessionService");
 const {
   enqueueRemoteSupportCommandAudit,
   flushRemoteSupportCommandAudits,
@@ -47,11 +45,12 @@ const {
   getActiveScreenWatchCountForTests,
   resetScreenWatchAuditStateForTests,
 } = await import("../server/services/screenWatchAuditService");
-const {
-  assertScreenFeedTenantAccess,
-  setScreenFeedPresenceLookupForTests,
-} = await import("../server/services/screenFeedTenantGate");
-const { screenFeedStore, watcherPollStore } = await import("../server/screenFeedStore");
+const { assertScreenFeedTenantAccess, setScreenFeedPresenceLookupForTests } =
+  await import("../server/services/screenFeedTenantGate");
+const { screenFeedStore, screenFeedStoreKey, watcherPollStore } = await import("../server/screenFeedStore");
+// Frame state is tab-addressed; a request that names no tab resolves to the
+// normalized default tab, so seed under that same key.
+const FRAME_KEY_22 = screenFeedStoreKey("22", undefined);
 const { restoreRemoteSupportBootDefaults, updateRemoteSupportFlags } =
   await import("../server/services/remoteSupportRuntime");
 import type { RemoteControlSession } from "../server/services/remoteControlSessionService";
@@ -160,10 +159,7 @@ describe("remote support audit + authorization", () => {
       expect(getActiveScreenWatchCountForTests()).toBe(0);
 
       const actions = auditRows.map((row) => row.action);
-      expect(actions).toEqual([
-        "remote_support_screen_watch_started",
-        "remote_support_screen_watch_ended",
-      ]);
+      expect(actions).toEqual(["remote_support_screen_watch_started", "remote_support_screen_watch_ended"]);
       expect(auditRows[0]?.tableName).toBe("remote_support_sessions");
       expect(auditRows[0]?.companyId).toBe(7);
     });
@@ -230,7 +226,7 @@ describe("remote support audit + authorization", () => {
 
     it("returns 404 from the frame route for a cross-tenant manager", async () => {
       setScreenFeedPresenceLookupForTests(async () => 9);
-      screenFeedStore.set("22", {
+      screenFeedStore.set(FRAME_KEY_22, {
         userId: "22",
         username: "employee",
         dataUrl: "data:image/jpeg;base64,AAAA",
@@ -244,7 +240,7 @@ describe("remote support audit + authorization", () => {
 
     it("returns the frame for a same-company manager and records a watch start", async () => {
       setScreenFeedPresenceLookupForTests(async () => 7);
-      screenFeedStore.set("22", {
+      screenFeedStore.set(FRAME_KEY_22, {
         userId: "22",
         username: "employee",
         dataUrl: "data:image/jpeg;base64,AAAA",

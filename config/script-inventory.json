@@ -18,7 +18,8 @@
     "verify-mobile-responsive-phase1-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-mobile-responsive-wave2-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
     "verify-mobile-responsive-wave3-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
-    "verify-mobile-responsive-wave4-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL."
+    "verify-mobile-responsive-wave4-browser.mjs": "Drives a real browser against a running deployment — requires ERP_SMOKE_USERNAME/ERP_SMOKE_PASSWORD and a reachable ERP_SMOKE_BASE_URL.",
+    "verify-remote-support-rollout-metrics.mjs": "Polls remote-support rollout metrics from a running deployment — requires REMOTE_SUPPORT_GATE_BASE_URL/REMOTE_SUPPORT_GATE_USERNAME/REMOTE_SUPPORT_GATE_PASSWORD. The gate itself still fails loudly in .github/workflows/remote-support-rollout-e2e.yml, where those secrets are provided."
   },
   "knownFailing": {}
 }

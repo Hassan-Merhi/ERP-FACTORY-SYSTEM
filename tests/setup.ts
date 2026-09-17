@@ -254,6 +254,10 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // Purchase orders retain a restricting voucher_id foreign key, so their
     // headers must be removed before the vouchers they created.
     await db.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.companyId, company.id));
+    // Same reasoning as the stock_items sweep below: inventory_negative_layers
+    // and friends hold ON DELETE RESTRICT keys against vouchers, and the set
+    // grows with the schema. Sweep rather than name each one.
+    await clearRestrictingReferences("vouchers", company.id);
     await db.delete(schema.vouchers).where(eq(schema.vouchers.companyId, company.id));
     // stock_adjustment_items.stock_item_id is a foreign key against stock_items,
     // so any adjustment line left by a test blocks the stock_items delete below
@@ -289,7 +293,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [company.id]);
+    // Several tables restrict against stock_items and stock_groups —
+    // stock_group_location_archive_items and inventory_negative_layers among
+    // them — and the set grows as features land. Sweep them the same way the
+    // locations delete below does, rather than naming each one here and
+    // rediscovering the next one as a cleanup failure in an unrelated test.
+    await clearRestrictingReferences("stock_items", company.id);
     await db.delete(schema.stockItems).where(eq(schema.stockItems.companyId, company.id));
+    await clearRestrictingReferences("stock_groups", company.id);
     await db.delete(schema.stockGroups).where(eq(schema.stockGroups.companyId, company.id));
     // user_company_roles.assigned_location_id and user_locations.location_id both
     // restrict against locations, so any fixture that pins a user to a location
@@ -300,6 +311,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await db.delete(schema.locations).where(eq(schema.locations.companyId, company.id));
     await pool.query("DELETE FROM factory_transporters WHERE company_id = $1", [company.id]);
     await db.delete(schema.companySettings).where(eq(schema.companySettings.companyId, company.id));
+    await clearRestrictingReferences("ledger_accounts", company.id);
     await db.delete(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.companyId, company.id));
     await db.delete(schema.userSecurityPermissions).where(eq(schema.userSecurityPermissions.companyId, company.id));
 

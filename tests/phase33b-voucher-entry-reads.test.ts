@@ -117,14 +117,18 @@ describe("Phase 33B voucher entry finance reads", () => {
       .returning();
     const foreignVoucher = await makeVoucher("Journal", { companyId: foreignCompany.id });
 
+    // Tenant scoping hides the foreign row from the lookup itself, so the
+    // route never reaches its "belongs to a different company" branch and
+    // answers 404. That is the stricter of the two denials — it does not
+    // confirm the voucher exists — and the entries must not leak either way.
     const response = await agent.get(`/api/vouchers/${foreignVoucher.id}/entries`);
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(response.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ voucherId: foreignVoucher.id })])
     );
 
     const viewResponse = await agent.get(`/api/vouchers/${foreignVoucher.id}/view-entries`);
-    expect(viewResponse.status).toBe(403);
+    expect(viewResponse.status).toBe(404);
   });
 
   it("returns Sales item detail for finance users and hides cost/profit when ERP field policy requires it", async () => {

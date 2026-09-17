@@ -156,6 +156,7 @@
     }
   ],
   "classification": {
+    "docs/README.md": "reference",
     "docs/accounting-flow.md": "reference",
     "docs/api-quickstart.md": "reference",
     "docs/architecture.md": "reference",
@@ -328,8 +329,8 @@
     "docs/god-file-split-program.md": "reference",
     "docs/golden-coast-phase16-audit.md": "reference",
     "docs/group-net-position.md": "reference",
-    "docs/i18n/phases-1-4-global-language-foundation.md": "reference",
     "docs/i18n/README.md": "reference",
+    "docs/i18n/phases-1-4-global-language-foundation.md": "reference",
     "docs/inventory-cost-memory-policy.md": "reference",
     "docs/inventory-flow.md": "reference",
     "docs/mobile-tablet-web-regression.md": "reference",
@@ -345,9 +346,9 @@
     "docs/program-1-incident-response-runbook.md": "reference",
     "docs/program-8b-approval-exception-workflows.md": "reference",
     "docs/properties-navigation-registry.md": "reference",
-    "docs/README.md": "reference",
     "docs/releases.md": "reference",
     "docs/remote-support-phase-17-transport-resilience.md": "reference",
+    "docs/remote-support-phase-18-control-coverage.md": "reference",
     "docs/render-production-logging.md": "reference",
     "docs/security-privacy.md": "reference",
     "docs/smart-transfer-known-issues.md": "reference",

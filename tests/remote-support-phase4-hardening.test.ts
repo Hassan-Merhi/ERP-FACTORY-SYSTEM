@@ -85,23 +85,23 @@ describe("remote support phase 4 hardening", () => {
   it("returns exact encode and upload failure stages from the capture engine", () => {
     expect(captureEngine).toContain('failureStage: "encode"');
     expect(captureEngine).toContain('failureStage: "upload"');
-    expect(captureEngine).toContain("Screen frame upload rejected (${response.status}).");
+    expect(captureEngine).toContain("Screen-feed WebSocket transport is not ready.");
     expect(captureHook).toContain('result.failureStage ?? "pipeline"');
     expect(captureHook).toContain("result.failureReason ??");
   });
 
-  it("uses the existing pointer telemetry route for failure beacons", () => {
-    expect(captureHook).toContain('fetch("/api/screen-feed/pointer"');
+  it("beacons failures over the existing control channel, not a route of their own", () => {
+    expect(captureHook).toContain('type: "screen-feed:failure"');
     expect(captureHook).toContain("failure: { stage, reason:");
-    expect(screenRoutes).toContain("recordCaptureFailure(userId, req.body?.failure)");
+    expect(screenRoutes).toContain("recordCaptureFailure(userId, tabId, req.body?.failure)");
     expect(screenRoutes).not.toContain('app.post("/api/screen-feed/capture-failure"');
   });
 
   it("streams and polls sanitized capture failures to the viewer", () => {
     expect(screenRoutes).toContain('writeEvent(res, "capture-failure"');
     expect(screenRoutes).toContain("captureFailure: serializeFailure(failure)");
-    expect(viewer).toContain('eventSource.addEventListener("capture-failure"');
-    expect(viewer).toContain('t("Screen capture failed")');
+    expect(viewer).toContain('message.type === "screen-feed:failure"');
+    expect(viewer).toContain('t("Screen capture issue")');
   });
 
   it("returns keyboard authorization in controller-active instead of a second GET", () => {
