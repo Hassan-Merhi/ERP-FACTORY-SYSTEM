@@ -17,6 +17,14 @@ export class RemoteControlRealtimeError extends Error {
 
 type Listener = (message: RemoteControlRealtimeMessage) => void;
 
+interface CommandTiming {
+  commandId: string;
+  targetUserId: string;
+  targetTabId: string;
+  commandType: string;
+  sentAt: number;
+}
+
 const listeners = new Set<Listener>();
 const readyListeners = new Set<(ready: boolean) => void>();
 const pending = new Map<
@@ -27,6 +35,8 @@ const pending = new Map<
     timeoutId: number;
   }
 >();
+const commandTimings = new Map<string, CommandTiming>();
+const MAX_COMMAND_TIMINGS = 512;
 
 let socket: WebSocket | null = null;
 let authenticatedReady = false;
@@ -46,6 +56,17 @@ function newRequestId(): string {
   return `rc-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function timestamp(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function shouldRun(): boolean {
   return refs > 0 || listeners.size > 0 || pending.size > 0;
 }
@@ -56,12 +77,78 @@ function setReady(value: boolean): void {
   for (const listener of readyListeners) listener(value);
 }
 
+function sendTelemetry(payload: Record<string, unknown>): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN || !authenticatedReady) return;
+  try {
+    socket.send(JSON.stringify({ type: "remote-support:telemetry", ...payload }));
+  } catch {
+    // Telemetry is best-effort and must never affect command execution.
+  }
+}
+
+function trimCommandTimings(): void {
+  while (commandTimings.size > MAX_COMMAND_TIMINGS) {
+    const first = commandTimings.keys().next();
+    if (first.done) break;
+    commandTimings.delete(first.value);
+  }
+}
+
+function observePublishedCommand(message: RemoteControlRealtimeMessage): void {
+  if (message.ok === false) return;
+  const command = objectRecord(message.command);
+  if (!command) return;
+  const commandId = typeof command.id === "string" ? command.id.trim().slice(0, 128) : "";
+  const targetUserId = typeof command.targetUserId === "string" ? command.targetUserId.trim().slice(0, 128) : "";
+  const targetTabId = typeof command.targetTabId === "string" ? command.targetTabId.trim().slice(0, 160) : "";
+  const commandType = typeof command.type === "string" ? command.type.slice(0, 80) : "unknown";
+  const sentAt = timestamp(command.createdAt);
+  if (!commandId || !targetUserId || !targetTabId || sentAt == null) return;
+
+  const timing: CommandTiming = { commandId, targetUserId, targetTabId, commandType, sentAt };
+  commandTimings.set(commandId, timing);
+  trimCommandTimings();
+  sendTelemetry({
+    event: "command-sent",
+    commandId,
+    targetUserId,
+    targetTabId,
+    commandType,
+    sentAt,
+  });
+}
+
+function observeCommandResult(message: RemoteControlRealtimeMessage): void {
+  if (message.type !== "remote-control:mouse-result" && message.type !== "remote-control:keyboard-result") return;
+  const result = objectRecord(message.result);
+  if (!result) return;
+  const commandId = typeof result.commandId === "string" ? result.commandId.trim().slice(0, 128) : "";
+  const timing = commandTimings.get(commandId);
+  if (!timing) return;
+  const executedAt = timestamp(result.completedAt);
+  const status = typeof result.status === "string" ? result.status.slice(0, 40) : "unknown";
+  if (executedAt == null) return;
+
+  sendTelemetry({
+    event: "command-result",
+    commandId: timing.commandId,
+    targetUserId: timing.targetUserId,
+    targetTabId: timing.targetTabId,
+    commandType: timing.commandType,
+    sentAt: timing.sentAt,
+    executedAt,
+    status,
+  });
+  commandTimings.delete(commandId);
+}
+
 function failPending(message: string): void {
   for (const [id, request] of pending) {
     window.clearTimeout(request.timeoutId);
     request.reject(new RemoteControlRealtimeError(0, "TRANSPORT_DISCONNECTED", message));
     pending.delete(id);
   }
+  commandTimings.clear();
 }
 
 function scheduleReconnect(): void {
@@ -82,6 +169,7 @@ function handleMessage(message: RemoteControlRealtimeMessage): void {
   }
 
   if (message.type === "remote-control:response" && typeof message.requestId === "string") {
+    observePublishedCommand(message);
     const request = pending.get(message.requestId);
     if (request) {
       pending.delete(message.requestId);
@@ -99,6 +187,7 @@ function handleMessage(message: RemoteControlRealtimeMessage): void {
     }
   }
 
+  observeCommandResult(message);
   for (const listener of listeners) listener(message);
 }
 
@@ -143,6 +232,7 @@ function retain(): () => void {
       const current = socket;
       socket = null;
       setReady(false);
+      commandTimings.clear();
       current?.close(1000, "Remote control idle");
     }
   };
