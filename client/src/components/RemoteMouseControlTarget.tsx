@@ -5,6 +5,7 @@ import {
   type RemoteMouseCommandView,
   type RemoteMouseExecutionResult,
 } from "@/hooks/remote-mouse-control-policy";
+import { installRemoteControlSurfaceCoverage } from "@/hooks/remote-control-surface-coverage";
 import {
   requestRemoteControlRealtime,
   subscribeRemoteControlRealtime,
@@ -106,6 +107,7 @@ export function RemoteMouseControlTarget({
       return;
     }
 
+    const uninstallSurfaceCoverage = installRemoteControlSurfaceCoverage();
     let closed = false;
     const bind = () => {
       if (closed) return;
@@ -174,6 +176,7 @@ export function RemoteMouseControlTarget({
 
     return () => {
       closed = true;
+      uninstallSurfaceCoverage();
       unsubscribeMessages();
       unsubscribeReady();
       setPointer((current) => ({ ...current, visible: false }));
