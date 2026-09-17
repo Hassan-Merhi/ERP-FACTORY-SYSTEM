@@ -11,6 +11,7 @@ import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { calculateHistoricalLocationInventory } from "../helpers/inventoryHistoryHelpers";
 import {
   containers,
   containerOffloads,
@@ -24,12 +25,24 @@ import {
   stockAdjustmentItems,
 } from "@shared/schema";
 
+function dayBefore(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function finite(value: string | number | null | undefined): number {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export function registerLocationStockTransactionRoutes(app: Express) {
   // Location transactions for a date range (used by "Show all months" feature)
   app.get("/api/locations/:locationId/stock-items/:stockItemId/transactions", requireAuth, async (req, res) => {
     try {
-      const locationId = parseInt(req.params.locationId);
-      const stockItemId = parseInt(req.params.stockItemId);
+      const locationId = Number.parseInt(req.params.locationId, 10);
+      const stockItemId = Number.parseInt(req.params.stockItemId, 10);
       const companyId = req.session.currentCompanyId;
       const startDate = (req.query.startDate as string) || "";
       const endDate = (req.query.endDate as string) || "";
@@ -43,123 +56,17 @@ export function registerLocationStockTransactionRoutes(app: Express) {
       const location = await storage.getLocationById(locationId);
       if (!location) return res.status(404).json({ message: "Location not found" });
 
-      // ── OPENING BALANCE (all movements strictly before startDate) ──────────
-      let priorInQty = 0,
-        priorInValue = 0,
-        priorOutQty = 0,
-        priorOutValue = 0;
+      // Inventory is the source of truth for valuation. Reconstruct the opening
+      // from the live inventory ledger instead of re-deriving it from an incomplete
+      // subset of vouchers. The old voucher-only opening could become negative even
+      // while Location Inventory held a valid positive quantity/value.
+      const historicalOpening = await calculateHistoricalLocationInventory(locationId, companyId, dayBefore(startDate));
+      const openingRow = historicalOpening.find((row) => row.stockItemId === stockItemId);
+      const openingQty = finite(openingRow?.quantity);
+      const openingValue = Math.max(finite(openingRow?.totalValue), 0);
+      const storedOpeningRate = Math.max(finite(openingRow?.averageRate), 0);
+      const openingRate = openingQty > 0 && openingValue > 0 ? openingValue / openingQty : storedOpeningRate;
 
-      const priorTransfers = await db
-        .select({
-          quantity: stockTransferItems.quantity,
-          totalAmount: stockTransferItems.totalAmount,
-          sourceLocationId: stockTransferItems.sourceLocationId,
-          destinationLocationId: stockTransferVouchers.destinationLocationId,
-        })
-        .from(stockTransferItems)
-        .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
-        .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(stockTransferItems.stockItemId, stockItemId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            sql`${vouchers.voucherDate}::date < ${startDate}::date`,
-            or(
-              eq(stockTransferItems.sourceLocationId, locationId),
-              eq(stockTransferVouchers.destinationLocationId, locationId)
-            )
-          )
-        );
-      for (const t of priorTransfers) {
-        const q = parseFloat(t.quantity),
-          v = parseFloat(t.totalAmount);
-        if (t.sourceLocationId === locationId) {
-          priorOutQty += q;
-          priorOutValue += v;
-        }
-        if (t.destinationLocationId === locationId) {
-          priorInQty += q;
-          priorInValue += v;
-        }
-      }
-
-      const priorAdj = await db
-        .select({ quantity: stockAdjustmentItems.quantity, totalAmount: stockAdjustmentItems.totalAmount })
-        .from(stockAdjustmentItems)
-        .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
-        .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(stockAdjustmentItems.stockItemId, stockItemId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            eq(stockAdjustmentVouchers.locationId, locationId),
-            sql`${vouchers.voucherDate}::date < ${startDate}::date`
-          )
-        );
-      for (const a of priorAdj) {
-        const q = parseFloat(a.quantity),
-          v = parseFloat(a.totalAmount);
-        if (q > 0) {
-          priorInQty += q;
-          priorInValue += v;
-        } else {
-          priorOutQty += Math.abs(q);
-          priorOutValue += Math.abs(v);
-        }
-      }
-
-      const priorSales = await db
-        .select({ quantity: salesItems.quantity, totalCost: salesItems.totalCost })
-        .from(salesItems)
-        .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(salesItems.stockItemId, stockItemId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            eq(vouchers.locationId, locationId),
-            sql`${vouchers.voucherDate}::date < ${startDate}::date`
-          )
-        );
-      for (const s of priorSales) {
-        priorOutQty += parseFloat(s.quantity);
-        priorOutValue += parseFloat(s.totalCost);
-      }
-
-      const priorOffloads = await db
-        .select({
-          quantity: poLineItems.quantity,
-          lineTotal: poLineItems.lineTotal,
-          additionalCostPerBale: containerOffloads.additionalCostPerBale,
-        })
-        .from(containerOffloads)
-        .innerJoin(containers, eq(containerOffloads.containerId, containers.id))
-        .innerJoin(purchaseOrders, eq(purchaseOrders.containerId, containers.id))
-        .innerJoin(poLineItems, eq(poLineItems.poId, purchaseOrders.id))
-        .where(
-          and(
-            eq(poLineItems.stockItemId, stockItemId),
-            eq(containers.companyId, companyId),
-            eq(containerOffloads.locationId, locationId),
-            sql`${containerOffloads.offloadedAt}::date < ${startDate}::date`
-          )
-        );
-      for (const o of priorOffloads) {
-        const q = parseFloat(o.quantity);
-        priorInQty += q;
-        priorInValue += parseFloat(o.lineTotal) + parseFloat(o.additionalCostPerBale) * q;
-      }
-
-      const openingQty = priorInQty - priorOutQty;
-      const openingValue = priorInValue - priorOutValue;
-      const openingRate = openingQty > 0 ? openingValue / openingQty : 0;
-
-      // ── TRANSACTIONS IN DATE RANGE ────────────────────────────────────────
       type TxRaw = {
         date: string;
         particulars: string;
@@ -219,12 +126,12 @@ export function registerLocationStockTransactionRoutes(app: Express) {
         if (l) locMap[lid] = l.name;
       }
       for (const t of rangeTransfers) {
-        const q = parseFloat(t.quantity),
-          rate = parseFloat(t.rate),
-          v = parseFloat(t.totalAmount);
+        const q = finite(t.quantity);
+        const rate = Math.max(finite(t.rate), 0);
+        const value = Math.max(finite(t.totalAmount), 0);
         const srcName = t.sourceLocationId ? locMap[t.sourceLocationId] || "Unknown" : "Unknown";
         const dstName = locMap[t.destinationLocationId] || "Unknown";
-        if (t.sourceLocationId === locationId)
+        if (t.sourceLocationId === locationId) {
           txns.push({
             date: t.voucherDate,
             particulars: `To ${dstName}`,
@@ -235,9 +142,10 @@ export function registerLocationStockTransactionRoutes(app: Express) {
             inwardValue: 0,
             outwardQty: q,
             outwardRate: rate,
-            outwardValue: v,
+            outwardValue: value,
           });
-        if (t.destinationLocationId === locationId)
+        }
+        if (t.destinationLocationId === locationId) {
           txns.push({
             date: t.voucherDate,
             particulars: `From ${srcName}`,
@@ -245,11 +153,12 @@ export function registerLocationStockTransactionRoutes(app: Express) {
             voucherId: t.voucherId,
             inwardQty: q,
             inwardRate: rate,
-            inwardValue: v,
+            inwardValue: value,
             outwardQty: 0,
             outwardRate: 0,
             outwardValue: 0,
           });
+        }
       }
 
       // Stock Adjustments
@@ -276,24 +185,25 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           )
         )
         .orderBy(vouchers.voucherDate);
+
       for (const a of rangeAdj) {
-        const raw = parseFloat(a.quantity),
-          val = parseFloat(a.totalAmount);
-        const q = Math.abs(raw),
-          rate = parseFloat(a.rate),
-          v = Math.abs(val);
-        const isIn = raw > 0;
+        const rawQty = finite(a.quantity);
+        const rawValue = finite(a.totalAmount);
+        const qty = Math.abs(rawQty);
+        const rate = Math.max(finite(a.rate), 0);
+        const value = Math.abs(rawValue);
+        const isIn = rawQty > 0;
         txns.push({
           date: a.voucherDate,
           particulars: isIn ? "Production" : "Consumption",
           vchType: isIn ? "Production" : "Consumption",
           voucherId: a.voucherId,
-          inwardQty: isIn ? q : 0,
+          inwardQty: isIn ? qty : 0,
           inwardRate: isIn ? rate : 0,
-          inwardValue: isIn ? val : 0,
-          outwardQty: isIn ? 0 : q,
+          inwardValue: isIn ? value : 0,
+          outwardQty: isIn ? 0 : qty,
           outwardRate: isIn ? 0 : rate,
-          outwardValue: isIn ? 0 : v,
+          outwardValue: isIn ? 0 : value,
         });
       }
 
@@ -322,6 +232,7 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           )
         )
         .orderBy(vouchers.voucherDate);
+
       for (const s of rangeSales) {
         txns.push({
           date: s.voucherDate,
@@ -331,12 +242,12 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           inwardQty: 0,
           inwardRate: 0,
           inwardValue: 0,
-          outwardQty: parseFloat(s.quantity),
-          outwardRate: 0,
-          outwardValue: 0,
+          outwardQty: Math.abs(finite(s.quantity)),
+          outwardRate: Math.max(finite(s.costPrice), 0),
+          outwardValue: Math.max(finite(s.totalCost), 0),
           isPOS: true,
-          posSellingRate: parseFloat(s.sellingPrice),
-          posSellingValue: parseFloat(s.totalSales),
+          posSellingRate: Math.max(finite(s.sellingPrice), 0),
+          posSellingValue: Math.max(finite(s.totalSales), 0),
         });
       }
 
@@ -366,9 +277,12 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           )
         )
         .orderBy(containerOffloads.offloadedAt);
+
       for (const o of rangeOffloads) {
-        const q = parseFloat(o.quantity);
-        const landedValue = parseFloat(o.lineTotal) + parseFloat(o.additionalCostPerBale) * q;
+        const qty = Math.abs(finite(o.quantity));
+        const baseValue = Math.max(finite(o.lineTotal), 0);
+        const additionalCost = Math.max(finite(o.additionalCostPerBale), 0) * qty;
+        const landedValue = baseValue + additionalCost;
         const dateStr =
           o.offloadedAt instanceof Date
             ? o.offloadedAt.toISOString().split("T")[0]
@@ -379,8 +293,8 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           vchType: "PO Offload",
           voucherId: 0,
           poId: o.poId,
-          inwardQty: q,
-          inwardRate: landedValue / q,
+          inwardQty: qty,
+          inwardRate: qty > 0 ? landedValue / qty : 0,
           inwardValue: landedValue,
           outwardQty: 0,
           outwardRate: 0,
@@ -397,51 +311,85 @@ export function registerLocationStockTransactionRoutes(app: Express) {
         return 0;
       });
 
-      // Build running balance
-      let runQty = openingQty > 0 ? openingQty : 0;
-      let runValue = openingQty > 0 ? openingValue : 0;
-
       type TxOut = TxRaw & {
         closingQty: number;
         closingRate: number;
         closingValue: number;
         isOpeningBalance?: boolean;
       };
+
+      let runQty = openingQty;
+      let runValue = openingQty > 0 ? openingValue : 0;
+      let rateMemory = openingRate;
       const out: TxOut[] = [];
 
-      if (runQty > 0 || runValue > 0) {
+      if (runQty !== 0 || runValue > 0 || rateMemory > 0) {
         out.push({
           date: startDate,
           particulars: "Opening Balance",
           vchType: "",
           voucherId: 0,
           inwardQty: runQty,
-          inwardRate: openingRate,
+          inwardRate: rateMemory,
           inwardValue: runValue,
           outwardQty: 0,
           outwardRate: 0,
           outwardValue: 0,
           closingQty: runQty,
-          closingRate: openingRate,
+          closingRate: rateMemory,
           closingValue: runValue,
           isOpeningBalance: true,
         });
       }
 
+      // Follow the same asset-value boundary as Inventory: total value is never
+      // allowed to become negative. average rate is non-negative cost memory.
       for (const t of txns) {
-        const avgRate = runQty > 0 ? runValue / runQty : 0;
-        runQty += t.inwardQty - t.outwardQty;
-        const outCost = t.outwardQty * avgRate;
-        runValue += t.inwardValue - outCost;
-        const closingRate = runQty > 0 ? runValue / runQty : 0;
+        const currentRate = runQty > 0 && runValue > 0 ? runValue / runQty : rateMemory;
+        const storedOutwardValue = Math.max(t.outwardValue, 0);
+        const calculatedOutwardValue = t.outwardQty > 0 ? t.outwardQty * Math.max(currentRate, 0) : 0;
+        const outwardValue = storedOutwardValue > 0 ? storedOutwardValue : calculatedOutwardValue;
+        const outwardRate = t.outwardQty > 0 ? outwardValue / t.outwardQty : 0;
+
+        const nextQty = runQty + t.inwardQty - t.outwardQty;
+        const unboundedValue = runValue + Math.max(t.inwardValue, 0) - outwardValue;
+        const nextValue = nextQty > 0 ? Math.max(unboundedValue, 0) : 0;
+
+        runQty = nextQty;
+        runValue = nextValue;
+        if (runQty > 0 && runValue > 0) rateMemory = runValue / runQty;
+        else if (t.inwardRate > 0) rateMemory = Math.max(t.inwardRate, 0);
+        else if (outwardRate > 0) rateMemory = Math.max(outwardRate, 0);
+
+        const closingRate = runQty > 0 && runValue > 0 ? runValue / runQty : Math.max(rateMemory, 0);
         out.push({
           ...t,
-          outwardRate: t.outwardQty > 0 ? avgRate : 0,
-          outwardValue: t.outwardQty > 0 ? outCost : 0,
+          outwardRate,
+          outwardValue,
           closingQty: runQty,
           closingRate,
           closingValue: runValue,
         });
+      }
+
+      // Re-anchor the period close to the exact Inventory snapshot. This is what
+      // the Inventory page uses, so both the Closing KPI and the last Closing
+      // columns now agree with Inventory instead of exposing voucher drift.
+      const historicalClosing = await calculateHistoricalLocationInventory(locationId, companyId, endDate);
+      const closingRow = historicalClosing.find((row) => row.stockItemId === stockItemId);
+      const authoritativeClosingQty = finite(closingRow?.quantity);
+      const authoritativeClosingValue = Math.max(finite(closingRow?.totalValue), 0);
+      const storedClosingRate = Math.max(finite(closingRow?.averageRate), 0);
+      const authoritativeClosingRate =
+        authoritativeClosingQty > 0 && authoritativeClosingValue > 0
+          ? authoritativeClosingValue / authoritativeClosingQty
+          : storedClosingRate;
+
+      if (out.length > 0) {
+        const lastTx = out[out.length - 1];
+        lastTx.closingQty = authoritativeClosingQty;
+        lastTx.closingValue = authoritativeClosingValue;
+        lastTx.closingRate = authoritativeClosingRate;
       }
 
       const nonOpening = out.filter((t) => !t.isOpeningBalance);
@@ -450,9 +398,9 @@ export function registerLocationStockTransactionRoutes(app: Express) {
         inwardValue: nonOpening.reduce((s, t) => s + t.inwardValue, 0),
         outwardQty: nonOpening.reduce((s, t) => s + t.outwardQty, 0),
         outwardValue: nonOpening.reduce((s, t) => s + t.outwardValue, 0),
-        closingQty: runQty,
-        closingRate: runQty > 0 ? runValue / runQty : 0,
-        closingValue: runValue,
+        closingQty: authoritativeClosingQty,
+        closingRate: authoritativeClosingRate,
+        closingValue: authoritativeClosingValue,
         inwardRate: 0,
         outwardRate: 0,
       };
@@ -461,7 +409,7 @@ export function registerLocationStockTransactionRoutes(app: Express) {
 
       res.json({ stockItem, location, startDate, endDate, transactions: out, totals });
     } catch (error: unknown) {
-      logger.error("Location stock item transactions range error:", { error: error });
+      logger.error("Location stock item transactions range error:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
