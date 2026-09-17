@@ -108,7 +108,9 @@ function isProtected(element: HTMLElement): boolean {
   );
 }
 
-export function shouldAnnotateRemoteEditable(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+export function shouldAnnotateRemoteEditable(
+  element: Element
+): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) {
     return false;
   }
@@ -138,11 +140,7 @@ function sameOriginNavigation(anchor: HTMLAnchorElement, location: Location): bo
 }
 
 function sidebarRoots(root: ParentNode): Element[] {
-  return Array.from(
-    root.querySelectorAll(
-      "[data-sidebar='sidebar'],[data-sidebar='content'],[data-testid*='sidebar'],aside"
-    )
-  );
+  return Array.from(root.querySelectorAll("[data-sidebar='sidebar'],[data-sidebar='content'],[data-testid*='sidebar']"));
 }
 
 export function annotateRemoteControlSurface(root: ParentNode = document): void {
