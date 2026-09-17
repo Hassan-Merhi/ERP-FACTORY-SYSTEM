@@ -48,38 +48,6 @@ function scheduleReconnect(): void {
   }, 1000 + Math.floor(Math.random() * 500));
 }
 
-function sendViewerRendered(header: RemoteSupportFrameHeader): void {
-  const binding = viewerBinding;
-  if (!binding || binding.tabId !== header.tabId) return;
-
-  // Two animation frames let React's frame listener commit the new object URL
-  // and give the browser a paint opportunity before the acknowledgement is
-  // timestamped. This is intentionally best-effort telemetry, never a gate on
-  // rendering or control.
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      if (
-        !socket ||
-        socket.readyState !== WebSocket.OPEN ||
-        !ready ||
-        viewerBinding?.userId !== binding.userId ||
-        viewerBinding?.tabId !== binding.tabId
-      ) {
-        return;
-      }
-      socket.send(
-        JSON.stringify({
-          type: "screen-feed:viewer-rendered",
-          userId: binding.userId,
-          tabId: binding.tabId,
-          capturedAt: header.capturedAt,
-          viewerRenderedAt: Date.now(),
-        })
-      );
-    });
-  });
-}
-
 function connect(): void {
   if (socket || !shouldRun()) return;
   const next = new WebSocket(targetUrl());
@@ -110,7 +78,6 @@ function connect(): void {
       const decoded = decodeRemoteSupportBinaryPacket(bytes);
       if (!decoded) return;
       for (const listener of frameListeners) listener({ header: decoded.header, jpeg: decoded.payload });
-      sendViewerRendered(decoded.header);
     };
     if (event.data instanceof ArrayBuffer) consume(new Uint8Array(event.data));
     else if (event.data instanceof Blob) void event.data.arrayBuffer().then((buffer) => consume(new Uint8Array(buffer)));
@@ -162,6 +129,36 @@ export function subscribeScreenFeedBinaryFrames(listener: FrameListener): () => 
     frameListeners.delete(listener);
     release();
   };
+}
+
+/**
+ * Called by the actual <img> onLoad path. One animation frame after decode/load
+ * is a closer approximation of browser-visible paint than acknowledging the
+ * frame when the WebSocket message is merely dispatched to React.
+ */
+export function reportScreenFeedFrameRendered(capturedAt: string, tabId: string): void {
+  const binding = viewerBinding;
+  if (!binding || binding.tabId !== tabId || !capturedAt) return;
+  window.requestAnimationFrame(() => {
+    if (
+      !socket ||
+      socket.readyState !== WebSocket.OPEN ||
+      !ready ||
+      viewerBinding?.userId !== binding.userId ||
+      viewerBinding?.tabId !== binding.tabId
+    ) {
+      return;
+    }
+    socket.send(
+      JSON.stringify({
+        type: "screen-feed:viewer-rendered",
+        userId: binding.userId,
+        tabId: binding.tabId,
+        capturedAt,
+        viewerRenderedAt: Date.now(),
+      })
+    );
+  });
 }
 
 export function sendScreenFeedControlMessage(message: Record<string, unknown>): boolean {
