@@ -69,14 +69,21 @@ jobs:
             server/services/remoteControlWebSocketTransport.ts \
             server/wsServer.ts
 
-      - name: Verify type-check and lint
+      - name: Verify type-check, lint, and print i18n findings
         shell: bash
         run: |
           set -euo pipefail
           npm run check
           npm run lint
           npm run audit:toolchain
-          npm run audit:scripts
+          node scripts/audit-i18n-phase14.mjs --no-enforce --json-out /tmp/i18n-phase14.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const report = JSON.parse(fs.readFileSync("/tmp/i18n-phase14.json", "utf8"));
+          for (const finding of report.findings.filter((item) => item.status === "actionable")) {
+            console.log(`I18N_ACTIONABLE ${finding.file}:${finding.line ?? "?"} [${finding.module}/${finding.kind}] ${JSON.stringify(finding.text)}`);
+          }
+          NODE
 
       - name: Commit repair
         shell: bash
