@@ -2,15 +2,13 @@ import type { Express, Request, Response } from "express";
 import { requireAuth, requireLogin } from "../auth";
 import { logger } from "../lib/logger";
 import { requireActionAccess } from "../lib/permissionMiddleware";
+import { getSessionRole, getSessionUserId, getSessionUsername } from "../lib/requestContext";
 import {
-  getSessionRole,
-  getSessionUserId,
-  getSessionUsername,
-} from "../lib/requestContext";
-import {
+  normalizeScreenFeedTabId,
   screenFeedCursorStore,
   screenFeedFailureStore,
   screenFeedStore,
+  screenFeedStoreKey,
   watcherPollStore,
   type ScreenFeedCursor,
   type ScreenFeedFailureInfo,
@@ -29,10 +27,7 @@ import {
   sanitizeScreenFeedViewport,
 } from "../services/screenFeedService";
 import { assertScreenFeedTenantAccess } from "../services/screenFeedTenantGate";
-import {
-  beginScreenWatch,
-  endScreenWatch,
-} from "../services/screenWatchAuditService";
+import { beginScreenWatch, endScreenWatch } from "../services/screenWatchAuditService";
 import {
   emergencyDisableRemoteSupport,
   getRemoteSupportRuntimeSnapshot,
@@ -87,6 +82,10 @@ function sessionActor(req: Request) {
   };
 }
 
+function requestTabId(req: Request): string {
+  return normalizeScreenFeedTabId(req.query.tabId ?? req.body?.tabId);
+}
+
 async function authorizeFrameAccess(req: Request, res: Response, watchedUserId: string) {
   const actor = sessionActor(req);
   const gate = await assertScreenFeedTenantAccess({
@@ -123,9 +122,10 @@ function writeHeartbeat(res: Response): void {
   (res as FlushableResponse).flush?.();
 }
 
-function isUserBeingWatched(userId: string): boolean {
-  if (screenFeedLiveHub.hasViewer(userId)) return true;
-  const lastPoll = watcherPollStore.get(userId) ?? 0;
+function isFeedBeingWatched(userId: string, tabId: string): boolean {
+  const key = screenFeedStoreKey(userId, tabId);
+  if (screenFeedLiveHub.hasViewer(key)) return true;
+  const lastPoll = watcherPollStore.get(key) ?? 0;
   return lastPoll > 0 && Date.now() - lastPoll < WATCHER_TIMEOUT_MS;
 }
 
@@ -151,6 +151,7 @@ function serializeFrame(frame: ScreenFrame, failure?: ScreenFeedFailureInfo | nu
     receivedAt: frame.capturedAt.toISOString(),
     clientCapturedAt: frame.clientCapturedAt?.toISOString() ?? null,
     username: frame.username,
+    tabId: frame.tabId,
     clicks: frame.clicks,
     cursor: serializeCursor(frame.cursor),
     viewport: frame.viewport ?? null,
@@ -159,15 +160,16 @@ function serializeFrame(frame: ScreenFrame, failure?: ScreenFeedFailureInfo | nu
   };
 }
 
-function recordCaptureFailure(userId: string, value: unknown): boolean {
+function recordCaptureFailure(userId: string, tabId: string, value: unknown): boolean {
   const sanitized = sanitizeScreenFeedFailure(value);
   if (!sanitized) return false;
   const failure: ScreenFeedFailureInfo = { ...sanitized, occurredAt: new Date() };
-  screenFeedFailureStore.set(userId, failure);
+  const key = screenFeedStoreKey(userId, tabId);
+  screenFeedFailureStore.set(key, failure);
   logger.warn(
-    `[ScreenFeed] capture failure userId=${userId} stage=${failure.stage} durationMs=${failure.durationMs ?? "unknown"} reason=${failure.reason}`
+    `[ScreenFeed] capture failure userId=${userId} tabId=${tabId} stage=${failure.stage} durationMs=${failure.durationMs ?? "unknown"} reason=${failure.reason}`
   );
-  if (isRemoteSupportEnabled("fastScreenFeed")) screenFeedLiveHub.publishFailure(userId, failure);
+  if (isRemoteSupportEnabled("fastScreenFeed")) screenFeedLiveHub.publishFailure(key, failure);
   return true;
 }
 
@@ -175,12 +177,7 @@ export function registerScreenFeedRoutes(app: Express) {
   app.get("/api/screen-feed/admin/runtime", requireAuth, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     res.setHeader("Cache-Control", "no-store");
-    // Queue health sits next to the runtime flags so operators can see when
-    // control is about to fail closed without grepping process logs.
-    res.json({
-      ...getRemoteSupportRuntimeSnapshot(),
-      commandAuditQueue: getRemoteSupportCommandAuditHealth(),
-    });
+    res.json({ ...getRemoteSupportRuntimeSnapshot(), commandAuditQueue: getRemoteSupportCommandAuditHealth() });
   });
 
   app.get("/api/screen-feed/admin/audit-queue-health", requireAuth, (req, res) => {
@@ -198,9 +195,7 @@ export function registerScreenFeedRoutes(app: Express) {
       screenFeedCursorStore.clear();
       screenFeedFailureStore.clear();
     }
-    if (!snapshot.flags.screenFeedEnabled || !snapshot.flags.fastScreenFeed) {
-      screenFeedLiveHub.disconnectAll();
-    }
+    if (!snapshot.flags.screenFeedEnabled || !snapshot.flags.fastScreenFeed) screenFeedLiveHub.disconnectAll();
     if (!snapshot.flags.remoteControl) stopAllRemoteControlSessions("runtime-disabled");
     res.setHeader("Cache-Control", "no-store");
     res.json(snapshot);
@@ -233,9 +228,6 @@ export function registerScreenFeedRoutes(app: Express) {
     res.json(resetRemoteSupportMetrics());
   });
 
-  // The admin runtime snapshot is Developer-only, but every authorized watcher
-  // (Admin/Owner/Manager) needs to know whether the live transport is available
-  // before opening a viewer. Without this they all fall back to polling.
   app.get("/api/screen-feed/capabilities", requireAuth, viewPermission, (req, res) => {
     if (!requireSupportController(req, res)) return;
     res.setHeader("Cache-Control", "no-store");
@@ -250,25 +242,24 @@ export function registerScreenFeedRoutes(app: Express) {
     });
   });
 
+  // Legacy SSE recovery only. Normal status delivery is tab-scoped WebSocket.
   app.get("/api/screen-feed/live/status", requireLogin, (req, res) => {
     if (!isRemoteSupportEnabled("screenFeedEnabled") || !isRemoteSupportEnabled("fastScreenFeed")) {
       res.setHeader("Cache-Control", "no-store");
       return res.status(204).end();
     }
     const userId = String(getSessionUserId(req));
-    const wantsEventStream = String(req.headers.accept ?? "")
-      .toLowerCase()
-      .includes("text/event-stream");
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(userId, tabId);
+    const wantsEventStream = String(req.headers.accept ?? "").toLowerCase().includes("text/event-stream");
     if (!wantsEventStream) {
       res.setHeader("Cache-Control", "no-store");
-      return res.json({ watched: isUserBeingWatched(userId), fast: true });
+      return res.json({ watched: isFeedBeingWatched(userId, tabId), fast: true, tabId });
     }
     openEventStream(res);
     recordRemoteSupportMetric("liveStatusConnected");
-    const sendStatus = () => {
-      writeEvent(res, "status", { watched: isUserBeingWatched(userId), fast: true });
-    };
-    const unsubscribeStatus = screenFeedLiveHub.subscribeStatus(userId, sendStatus);
+    const sendStatus = () => writeEvent(res, "status", { watched: isFeedBeingWatched(userId, tabId), fast: true, tabId });
+    const unsubscribeStatus = screenFeedLiveHub.subscribeStatus(key, sendStatus);
     let unsubscribeDisconnect = () => {};
     let closed = false;
     const refreshId = setInterval(sendStatus, LIVE_STATUS_REFRESH_MS);
@@ -294,14 +285,16 @@ export function registerScreenFeedRoutes(app: Express) {
     }
 
     const watchedUserId = req.params.userId;
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(watchedUserId, tabId);
     const access = await authorizeFrameAccess(req, res, watchedUserId);
     if (!access) return;
 
     openEventStream(res);
     recordRemoteSupportMetric("liveViewerConnected");
-    watcherPollStore.set(watchedUserId, Date.now());
+    watcherPollStore.set(key, Date.now());
 
-    const frame = screenFeedStore.get(watchedUserId);
+    const frame = screenFeedStore.get(key);
     void beginScreenWatch({
       companyId: access.companyId,
       controllerUserId: access.actor.userId,
@@ -311,29 +304,23 @@ export function registerScreenFeedRoutes(app: Express) {
       targetUsername: frame?.username,
     });
 
-    const unsubscribeFrames = screenFeedLiveHub.subscribeFrames(watchedUserId, (nextFrame) => {
-      writeEvent(res, "frame", serializeFrame(nextFrame, screenFeedFailureStore.get(watchedUserId)));
+    const unsubscribeFrames = screenFeedLiveHub.subscribeFrames(key, (nextFrame) => {
+      writeEvent(res, "frame", serializeFrame(nextFrame, screenFeedFailureStore.get(key)));
     });
-    const unsubscribeCursors = screenFeedLiveHub.subscribeCursors(watchedUserId, (cursor) => {
-      writeEvent(res, "cursor", serializeCursor(cursor));
-    });
-    const unsubscribeFailures = screenFeedLiveHub.subscribeFailures(watchedUserId, (failure) => {
-      writeEvent(res, "capture-failure", serializeFailure(failure));
-    });
+    const unsubscribeCursors = screenFeedLiveHub.subscribeCursors(key, (cursor) => writeEvent(res, "cursor", serializeCursor(cursor)));
+    const unsubscribeFailures = screenFeedLiveHub.subscribeFailures(key, (failure) => writeEvent(res, "capture-failure", serializeFailure(failure)));
     let unsubscribeDisconnect = () => {};
     let closed = false;
 
     const heartbeatId = setInterval(() => {
-      watcherPollStore.set(watchedUserId, Date.now());
-      // Keep the watch TTL alive while the live stream is open so a long
-      // uninterrupted session does not produce a false "watch-timeout" end.
+      watcherPollStore.set(key, Date.now());
       void beginScreenWatch({
         companyId: access.companyId,
         controllerUserId: access.actor.userId,
         controllerUsername: access.actor.username,
         controllerRole: access.actor.role,
         targetUserId: watchedUserId,
-        targetUsername: screenFeedStore.get(watchedUserId)?.username,
+        targetUsername: screenFeedStore.get(key)?.username,
       });
       writeHeartbeat(res);
     }, LIVE_HEARTBEAT_MS);
@@ -351,9 +338,9 @@ export function registerScreenFeedRoutes(app: Express) {
         targetUserId: watchedUserId,
         stopReason: "live-viewer-closed",
       });
-      if (!screenFeedLiveHub.hasViewer(watchedUserId)) {
-        watcherPollStore.delete(watchedUserId);
-        screenFeedLiveHub.notifyStatus(watchedUserId);
+      if (!screenFeedLiveHub.hasViewer(key)) {
+        watcherPollStore.delete(key);
+        screenFeedLiveHub.notifyStatus(key);
       }
       if (!res.writableEnded) res.end();
     };
@@ -361,32 +348,33 @@ export function registerScreenFeedRoutes(app: Express) {
     unsubscribeDisconnect = screenFeedLiveHub.subscribeDisconnect(cleanup);
     req.once("close", cleanup);
     res.once("close", cleanup);
-    writeEvent(res, "ready", { userId: watchedUserId });
-    const currentFrame = screenFeedStore.get(watchedUserId);
-    const currentFailure = screenFeedFailureStore.get(watchedUserId);
+    writeEvent(res, "ready", { userId: watchedUserId, tabId });
+    const currentFrame = screenFeedStore.get(key);
+    const currentFailure = screenFeedFailureStore.get(key);
     if (currentFrame) writeEvent(res, "frame", serializeFrame(currentFrame, currentFailure));
     if (currentFailure) writeEvent(res, "capture-failure", serializeFailure(currentFailure));
-    const currentCursor = screenFeedCursorStore.get(watchedUserId);
+    const currentCursor = screenFeedCursorStore.get(key);
     if (currentCursor) writeEvent(res, "cursor", serializeCursor(currentCursor));
   });
 
   app.get("/api/screen-feed/being-watched", requireLogin, (req, res) => {
     recordRemoteSupportMetric("watcherStatusPoll");
-    if (!isRemoteSupportEnabled("screenFeedEnabled")) {
-      return res.json({ watched: false, fast: false });
-    }
+    if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.json({ watched: false, fast: false });
     const userId = String(getSessionUserId(req));
-    const lastPoll = watcherPollStore.get(userId) ?? 0;
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(userId, tabId);
+    const lastPoll = watcherPollStore.get(key) ?? 0;
     const ageMs = Date.now() - lastPoll;
-    const watched = isUserBeingWatched(userId);
+    const watched = isFeedBeingWatched(userId, tabId);
     if (isDev) {
       logger.info(
-        `[ScreenFeed] being-watched userId=${userId} watched=${watched} lastPollAgeMs=${lastPoll > 0 ? ageMs : "never"}`
+        `[ScreenFeed] being-watched userId=${userId} tabId=${tabId} watched=${watched} lastPollAgeMs=${lastPoll > 0 ? ageMs : "never"}`
       );
     }
     res.json({
       watched,
       fast: isRemoteSupportEnabled("fastScreenFeed"),
+      tabId,
       ...(isDev ? { userId, lastWatcherPollAgeMs: lastPoll > 0 ? ageMs : null } : {}),
     });
   });
@@ -403,48 +391,44 @@ export function registerScreenFeedRoutes(app: Express) {
   app.post("/api/screen-feed/pointer", requireLogin, (req, res) => {
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.status(204).end();
     const userId = String(getSessionUserId(req));
-    if (!isUserBeingWatched(userId)) return res.status(204).end();
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(userId, tabId);
+    if (!isFeedBeingWatched(userId, tabId)) return res.status(204).end();
 
-    // Failure telemetry shares this tiny watched-user channel so diagnostics do
-    // not create another route or another always-on request path. The payload is
-    // sanitized before storage/logging and contains no screenshot or page data.
-    if (recordCaptureFailure(userId, req.body?.failure)) return res.status(204).end();
-
+    if (recordCaptureFailure(userId, tabId, req.body?.failure)) return res.status(204).end();
     const cursor = sanitizeScreenFeedCursor(req.body?.cursor ?? req.body);
-    // Pointer telemetry is visual-only. A stale/skewed sample must never create
-    // a 400 retry loop or interfere with the employee's ERP session.
     if (!cursor) return res.status(204).end();
-    screenFeedCursorStore.set(userId, cursor);
-    const existingFrame = screenFeedStore.get(userId);
+    screenFeedCursorStore.set(key, cursor);
+    const existingFrame = screenFeedStore.get(key);
     if (existingFrame) existingFrame.cursor = cursor;
-    if (isRemoteSupportEnabled("fastScreenFeed")) screenFeedLiveHub.publishCursor(userId, cursor);
+    if (isRemoteSupportEnabled("fastScreenFeed")) screenFeedLiveHub.publishCursor(key, cursor);
     res.status(204).end();
   });
 
+  // Legacy JSON/base64 upload is retained only as a recovery endpoint for old
+  // clients. Current clients never enter this route; they use binary /ws frames.
   app.post("/api/screen-feed", requireLogin, (req, res) => {
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.status(200).end();
     const userId = String(getSessionUserId(req));
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(userId, tabId);
     if (isDev) {
-      logger.info(
-        `[ScreenFeed] POST /api/screen-feed received from userId=${userId} body_keys=${Object.keys(req.body ?? {}).join(",")}`
-      );
+      logger.info(`[ScreenFeed] legacy POST received userId=${userId} tabId=${tabId}`);
     }
     const { dataUrl, clicks, cursor, viewport, capture, clientCapturedAt } = req.body ?? {};
     if (!isValidScreenFeedDataUrl(dataUrl)) {
       recordRemoteSupportMetric("frameRejected");
-      logger.warn(`[ScreenFeed] frame rejected userId=${userId} reason=invalid-data-url type=${typeof dataUrl}`);
+      logger.warn(`[ScreenFeed] legacy frame rejected userId=${userId} tabId=${tabId} reason=invalid-data-url`);
       return res.status(400).end();
     }
     if (dataUrl.length > MAX_FRAME_SIZE) {
       recordRemoteSupportMetric("frameRejected");
-      logger.warn(`[ScreenFeed] frame rejected userId=${userId} reason=frame-too-large bytes=${dataUrl.length}`);
       return res.status(204).end();
     }
     const receivedAt = new Date();
     const username = getSessionUsername(req) || userId;
     const safeClicks = sanitizeScreenFeedClicks(clicks, receivedAt.getTime());
-    const safeCursor =
-      sanitizeScreenFeedCursor(cursor, receivedAt.getTime()) ?? screenFeedCursorStore.get(userId) ?? null;
+    const safeCursor = sanitizeScreenFeedCursor(cursor, receivedAt.getTime()) ?? screenFeedCursorStore.get(key) ?? null;
     const safeCapture = sanitizeScreenFeedCapture(capture);
     const frame: ScreenFrame = {
       dataUrl,
@@ -452,28 +436,19 @@ export function registerScreenFeedRoutes(app: Express) {
       clientCapturedAt: sanitizeScreenFeedClientCapturedAt(clientCapturedAt, receivedAt.getTime()),
       userId,
       username,
+      tabId,
       clicks: safeClicks,
       cursor: safeCursor,
       viewport: sanitizeScreenFeedViewport(viewport),
       capture: safeCapture,
     };
-    screenFeedStore.set(userId, frame);
-    screenFeedFailureStore.delete(userId);
-    if (safeCursor) screenFeedCursorStore.set(userId, safeCursor);
+    screenFeedStore.set(key, frame);
+    screenFeedFailureStore.delete(key);
+    if (safeCursor) screenFeedCursorStore.set(key, safeCursor);
     recordRemoteSupportMetric("frameAccepted", Buffer.byteLength(dataUrl, "utf8"));
-    if (safeCapture?.failureReason) {
-      logger.warn(
-        `[ScreenFeed] fallback frame accepted userId=${userId} source=${safeCapture.source} durationMs=${safeCapture.durationMs} reason=${safeCapture.failureReason}`
-      );
-    }
     if (isRemoteSupportEnabled("fastScreenFeed")) {
-      const pushed = screenFeedLiveHub.publishFrame(userId, frame);
+      const pushed = screenFeedLiveHub.publishFrame(key, frame);
       if (pushed > 0) recordRemoteSupportMetric("framePushed", pushed);
-    }
-    if (isDev) {
-      logger.info(
-        `[ScreenFeed] POST frame stored userId=${userId} frameLen=${dataUrl.length} clicks=${safeClicks.length}`
-      );
     }
     res.status(204).end();
   });
@@ -484,23 +459,20 @@ export function registerScreenFeedRoutes(app: Express) {
     res.setHeader("Cache-Control", "no-store");
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.json(null);
     const watchedUserId = req.params.userId;
+    const tabId = requestTabId(req);
+    const key = screenFeedStoreKey(watchedUserId, tabId);
     const access = await authorizeFrameAccess(req, res, watchedUserId);
     if (!access) return;
 
-    watcherPollStore.set(watchedUserId, Date.now());
-    screenFeedLiveHub.notifyStatus(watchedUserId);
-    const frame = screenFeedStore.get(watchedUserId);
-    const failure = screenFeedFailureStore.get(watchedUserId);
-    const hasFrame = !!frame;
+    watcherPollStore.set(key, Date.now());
+    screenFeedLiveHub.notifyStatus(key);
+    const frame = screenFeedStore.get(key);
+    const failure = screenFeedFailureStore.get(key);
     if (isDev) {
       const frameAgeMs = frame ? Date.now() - frame.capturedAt.getTime() : null;
-      logger.info(
-        `[ScreenFeed] GET /:userId watchedUserId=${watchedUserId} hasFrame=${hasFrame} frameAgeMs=${frameAgeMs}`
-      );
+      logger.info(`[ScreenFeed] legacy GET userId=${watchedUserId} tabId=${tabId} hasFrame=${!!frame} frameAgeMs=${frameAgeMs}`);
     }
 
-    // Polling viewers refresh the watch TTL on every successful authorized
-    // poll. Closing the dialog stops the polls and the sweeper ends the watch.
     void beginScreenWatch({
       companyId: access.companyId,
       controllerUserId: access.actor.userId,
@@ -510,8 +482,8 @@ export function registerScreenFeedRoutes(app: Express) {
       targetUsername: frame?.username,
     });
 
-    if (!frame) return res.json(failure ? { captureFailure: serializeFailure(failure) } : null);
-    const latestCursor = screenFeedCursorStore.get(watchedUserId);
+    if (!frame) return res.json(failure ? { captureFailure: serializeFailure(failure), tabId } : null);
+    const latestCursor = screenFeedCursorStore.get(key);
     if (latestCursor) frame.cursor = latestCursor;
     res.json(serializeFrame(frame, failure));
   });

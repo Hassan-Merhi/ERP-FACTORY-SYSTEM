@@ -6,13 +6,23 @@ import {
   isRegisteredRemoteControlAction,
   getRemoteControlAction,
 } from "./remote-control-action-registry";
-import { isAllowedRemoteClickElement } from "./remote-mouse-control-policy";
+import { isAllowedRemoteClickElement, isRemoteMouseBlockedElement } from "./remote-mouse-control-policy";
 
 describe("remote-control-action registry", () => {
-  it("contains only expected vetted actions", () => {
-    expect(REMOTE_CONTROL_ALLOWED_ACTIONS.length).toBeGreaterThan(10);
-    for (const a of REMOTE_CONTROL_ALLOWED_ACTIONS) {
-      expect(REMOTE_CONTROL_ACTION_SET.has(a)).toBe(true);
+  it("contains the exact actively covered vetted actions", () => {
+    expect([...REMOTE_CONTROL_ALLOWED_ACTIONS].sort()).toEqual(
+      [
+        "navigation",
+        "toggle-view",
+        "view",
+        "view-container",
+        "view-details",
+        "view-invoice",
+        "view-profitability",
+      ].sort()
+    );
+    for (const action of REMOTE_CONTROL_ALLOWED_ACTIONS) {
+      expect(REMOTE_CONTROL_ACTION_SET.has(action)).toBe(true);
     }
   });
 
@@ -20,22 +30,23 @@ describe("remote-control-action registry", () => {
     expect(isRegisteredRemoteControlAction("view")).toBe(true);
     expect(isRegisteredRemoteControlAction("toggle-view")).toBe(true);
     expect(isRegisteredRemoteControlAction("view-invoice")).toBe(true);
+    expect(isRegisteredRemoteControlAction("navigation")).toBe(true);
     expect(isRegisteredRemoteControlAction("not-registered")).toBe(false);
     expect(isRegisteredRemoteControlAction("")).toBe(false);
     expect(isRegisteredRemoteControlAction(null)).toBe(false);
   });
 
   it("reads data-remote-control-action from elements", () => {
-    const el = document.createElement("button");
-    el.setAttribute("data-remote-control-action", "view");
-    expect(getRemoteControlAction(el)).toBe("view");
-    el.setAttribute("data-remote-control-action", "  toggle-view  ");
-    expect(getRemoteControlAction(el)).toBe("toggle-view");
-    el.removeAttribute("data-remote-control-action");
-    expect(getRemoteControlAction(el)).toBeNull();
+    const element = document.createElement("button");
+    element.setAttribute("data-remote-control-action", "view");
+    expect(getRemoteControlAction(element)).toBe("view");
+    element.setAttribute("data-remote-control-action", "  toggle-view  ");
+    expect(getRemoteControlAction(element)).toBe("toggle-view");
+    element.removeAttribute("data-remote-control-action");
+    expect(getRemoteControlAction(element)).toBeNull();
   });
 
-  it("allows clicks only when the registry action is vetted", () => {
+  it("allows vetted registry actions and rejects unknown or dangerous actions", () => {
     const registered = document.createElement("button");
     registered.textContent = "View";
     registered.setAttribute("data-remote-control-action", "view");
@@ -48,33 +59,51 @@ describe("remote-control-action registry", () => {
     document.body.appendChild(unregistered);
     expect(isAllowedRemoteClickElement(unregistered)).toBe(false);
 
-    // Unregistered action cannot be rescued by matching safe text
     const heuristicButton = document.createElement("button");
     heuristicButton.textContent = "View details";
     heuristicButton.setAttribute("data-remote-control-action", "not-allowlisted");
     document.body.appendChild(heuristicButton);
     expect(isAllowedRemoteClickElement(heuristicButton)).toBe(false);
 
-    // Without the attribute, the text heuristic still applies (backward compat)
     const legacy = document.createElement("button");
     legacy.textContent = "View details";
     document.body.appendChild(legacy);
     expect(isAllowedRemoteClickElement(legacy)).toBe(true);
 
-    // Registry cannot override dangerous or blocked surfaces
     const dangerous = document.createElement("button");
     dangerous.textContent = "Delete voucher";
     dangerous.setAttribute("data-remote-control-action", "view");
     document.body.appendChild(dangerous);
     expect(isAllowedRemoteClickElement(dangerous)).toBe(false);
+  });
 
-    const blockedForm = document.createElement("form");
-    const formSafe = document.createElement("button");
-    formSafe.textContent = "View details";
-    formSafe.setAttribute("data-remote-control-action", "view");
-    blockedForm.appendChild(formSafe);
-    document.body.appendChild(blockedForm);
-    expect(isAllowedRemoteClickElement(formSafe)).toBe(false);
+  it("allows an explicitly vetted form control while unannotated and destructive form actions stay blocked", () => {
+    const form = document.createElement("form");
+
+    const safe = document.createElement("button");
+    safe.type = "button";
+    safe.textContent = "View details";
+    safe.setAttribute("data-remote-control-action", "view");
+    form.appendChild(safe);
+
+    const unannotated = document.createElement("button");
+    unannotated.type = "button";
+    unannotated.textContent = "View details";
+    form.appendChild(unannotated);
+
+    const destructive = document.createElement("button");
+    destructive.type = "button";
+    destructive.textContent = "Delete voucher";
+    destructive.setAttribute("data-remote-control-action", "view");
+    form.appendChild(destructive);
+    document.body.appendChild(form);
+
+    expect(isRemoteMouseBlockedElement(safe)).toBe(false);
+    expect(isAllowedRemoteClickElement(safe)).toBe(true);
+    expect(isRemoteMouseBlockedElement(unannotated)).toBe(true);
+    expect(isAllowedRemoteClickElement(unannotated)).toBe(false);
+    expect(isRemoteMouseBlockedElement(destructive)).toBe(true);
+    expect(isAllowedRemoteClickElement(destructive)).toBe(false);
 
     document.body.innerHTML = "";
   });
