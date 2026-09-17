@@ -49,7 +49,12 @@ export function RemoteControlSessionWatchdog() {
       if (cancelled || runningRef.current || document.visibilityState !== "visible") return;
       runningRef.current = true;
       try {
-        if (session?.id && session.status === "active" && session.targetUserId === target.userId) {
+        const boundToSelectedTab =
+          session?.id &&
+          session.status === "active" &&
+          session.targetUserId === target.userId &&
+          session.targetTabId === target.tabId;
+        if (boundToSelectedTab && session) {
           conflictCountRef.current = 0;
           nextStartAttemptAtRef.current = 0;
           setState("ready");
@@ -86,11 +91,16 @@ export function RemoteControlSessionWatchdog() {
             body: JSON.stringify({
               targetUserId: target.userId,
               targetUsername: target.username,
+              tabId: target.tabId,
               durationMinutes: 15,
             }),
           });
           if (cancelled) return;
-          if (started.session?.id && started.session.targetUserId === target.userId) {
+          if (
+            started.session?.id &&
+            started.session.targetUserId === target.userId &&
+            started.session.targetTabId === target.tabId
+          ) {
             conflictCountRef.current = 0;
             nextStartAttemptAtRef.current = 0;
             lastHeartbeatRef.current = Date.now();
@@ -99,15 +109,12 @@ export function RemoteControlSessionWatchdog() {
             setMessage(null);
             return;
           }
-          throw new Error(t("Remote control session did not bind to the watched user."));
+          throw new Error(t("Remote control session did not bind to the selected ERP tab."));
         } catch (error) {
           if (cancelled) return;
           const code = error instanceof RemoteControllerRequestError ? (error.code ?? "") : "";
           const status = error instanceof RemoteControllerRequestError ? error.status : 0;
-          if (
-            status === 409 &&
-            ["TARGET_TAB_UNAVAILABLE", "TARGET_ALREADY_CONTROLLED", "SESSION_INACTIVE"].includes(code)
-          ) {
+          if (status === 409 && ["TARGET_TAB_UNAVAILABLE", "TARGET_ALREADY_CONTROLLED", "SESSION_INACTIVE"].includes(code)) {
             conflictCountRef.current += 1;
             const retryDelay = Math.min(
               CONFLICT_RETRY_MAX_MS,
@@ -118,7 +125,7 @@ export function RemoteControlSessionWatchdog() {
             setMessage(
               code === "TARGET_ALREADY_CONTROLLED"
                 ? t("Another controller already owns this support session.")
-                : t("Waiting for the employee ERP tab to register for control.")
+                : t("Waiting for the selected employee ERP tab to register for control.")
             );
             void refreshSession().catch(() => undefined);
             return;
@@ -172,7 +179,7 @@ export function RemoteControlSessionWatchdog() {
               : t("Control reconnecting")}
         </p>
         <p className="text-[11px] text-muted-foreground">
-          {message || `${t("Preparing the ERP tab for")} ${target.username}.`}
+          {message || `${t("Preparing the selected ERP tab for")} ${target.username}.`}
         </p>
       </div>
     </div>
