@@ -16,6 +16,10 @@ import {
   handleScreenFeedWebSocketMessage,
   type ScreenFeedSocketContext,
 } from "./services/screenFeedWebSocketTransport";
+import {
+  cleanupRemoteControlWebSocket,
+  handleRemoteControlWebSocketMessage,
+} from "./services/remoteControlWebSocketTransport";
 
 let wss: WebSocketServer | null = null;
 let resolveSession: SessionResolver | null = null;
@@ -32,7 +36,6 @@ type SessionResolution =
   | { status: "missing" }
   | { status: "unresolved" };
 
-/** Runs the app's session middleware over a bare upgrade request. */
 type SessionResolver = (request: IncomingMessage) => Promise<SessionResolution>;
 type SessionUpgradeRequest = IncomingMessage & {
   session?: {
@@ -47,7 +50,7 @@ type SessionUpgradeRequest = IncomingMessage & {
 
 const socketCompanies = new WeakMap<WebSocket, readonly number[] | null>();
 const socketUsers = new WeakMap<WebSocket, string | null>();
-const socketScreenFeedContexts = new WeakMap<WebSocket, ScreenFeedSocketContext>();
+const socketRemoteContexts = new WeakMap<WebSocket, ScreenFeedSocketContext>();
 
 function cleanSessionText(value: unknown, max = 160): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -58,11 +61,6 @@ function positiveCompanyId(value: unknown): number | null {
   return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
 }
 
-/**
- * express-session decorates the response to write its cookie. An upgrade has no
- * response to write to, so it gets a stand-in that accepts those calls and does
- * nothing — the session is only being read here.
- */
 function upgradeResponseStub() {
   const noop = () => undefined;
   return {
@@ -102,10 +100,7 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
             }
 
             const session = (request as SessionUpgradeRequest).session;
-            const companyIds = normalizeBroadcastCompanyIds([
-              session?.currentCompanyId,
-              session?.factoryCompanyId,
-            ]);
+            const companyIds = normalizeBroadcastCompanyIds([session?.currentCompanyId, session?.factoryCompanyId]);
             const userId = normalizeBroadcastUserId(session?.userId);
             if (companyIds.length > 0 || userId) {
               finish({
@@ -142,6 +137,31 @@ function rawDataBuffer(data: RawData): Buffer {
   return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
 }
 
+function parseJsonMessage(buffer: Buffer): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(buffer.toString("utf8")) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleAuthenticatedSocketMessage(
+  ws: WebSocket,
+  context: ScreenFeedSocketContext,
+  data: RawData,
+  isBinary: boolean
+): Promise<void> {
+  const buffer = rawDataBuffer(data);
+  if (!isBinary) {
+    const message = parseJsonMessage(buffer);
+    if (message && typeof message.type === "string" && message.type.startsWith("remote-control:")) {
+      if (await handleRemoteControlWebSocketMessage(ws, context, message)) return;
+    }
+  }
+  await handleScreenFeedWebSocketMessage(ws, context, buffer, isBinary);
+}
+
 export function setupWS(server: Server, sessionMiddleware?: RequestHandler): void {
   wss = new WebSocketServer({ server, path: "/ws" });
   resolveSession = sessionMiddleware ? sessionCompanyResolver(sessionMiddleware) : null;
@@ -158,16 +178,16 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
             socketCompanies.set(ws, result.companyIds);
             socketUsers.set(ws, result.userId);
             if (result.userId) {
-              socketScreenFeedContexts.set(ws, {
+              socketRemoteContexts.set(ws, {
                 userId: result.userId,
                 username: result.username,
                 role: result.role,
                 companyId: result.companyId,
               });
             }
-            // Read the session once at connection setup. Screen-feed binary
-            // traffic then reuses this authenticated scope rather than running
-            // express-session and user_company_roles middleware per frame.
+            // Session-store authentication is paid once per socket. Both the
+            // binary screen feed and the authorized command hot path reuse this
+            // context instead of running HTTP auth/role middleware per event.
             sendRealtimeReady(ws);
             return;
           }
@@ -203,10 +223,10 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
               source: "websocket",
             },
             () => {
-              const context = socketScreenFeedContexts.get(ws);
+              const context = socketRemoteContexts.get(ws);
               if (!context) return;
-              void handleScreenFeedWebSocketMessage(ws, context, rawDataBuffer(data), isBinary).catch((error) => {
-                logger.warn("[WS] Screen-feed message failed.", { error });
+              void handleAuthenticatedSocketMessage(ws, context, data, isBinary).catch((error) => {
+                logger.warn("[WS] Remote-support message failed.", { error });
               });
             }
           );
@@ -218,8 +238,9 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
 
         ws.on("close", () => {
           clearInterval(pingInterval);
+          cleanupRemoteControlWebSocket(ws);
           cleanupScreenFeedWebSocket(ws);
-          socketScreenFeedContexts.delete(ws);
+          socketRemoteContexts.delete(ws);
           socketCompanies.delete(ws);
           socketUsers.delete(ws);
         });
