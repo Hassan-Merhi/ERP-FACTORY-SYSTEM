@@ -1,4 +1,4 @@
-import type WebSocket from "ws";
+import type { WebSocket } from "ws";
 import { decodeRemoteSupportBinaryPacket, REMOTE_SUPPORT_MAX_FRAME_BYTES } from "@shared/remoteSupportTransport";
 import { isRemoteControlControllerRole, listRemoteControlTabs } from "./remoteControlSessionService";
 import { assertScreenFeedTenantAccess } from "./screenFeedTenantGate";
@@ -11,7 +11,7 @@ export interface ScreenFeedSocketContext {
   companyId: number | null;
 }
 
-type SocketWithState = WebSocket & { readyState: number; send(data: unknown, options?: unknown): void };
+type SocketWithState = WebSocket;
 
 const producers = new Map<string, Set<SocketWithState>>();
 const viewers = new Map<string, Set<SocketWithState>>();
@@ -77,6 +77,16 @@ function notifyProducerStatus(key: string): void {
   }
 }
 
+function clearViewerBindings(socket: SocketWithState): void {
+  const keys = viewerKeysBySocket.get(socket);
+  if (!keys) return;
+  for (const key of keys) {
+    removeSocket(viewers, key, socket);
+    notifyProducerStatus(key);
+  }
+  keys.clear();
+}
+
 function registeredTab(context: ScreenFeedSocketContext, tabId: string) {
   return listRemoteControlTabs(context.userId).find(
     (tab) => tab.tabId === tabId && (!context.companyId || tab.companyId === context.companyId)
@@ -134,6 +144,9 @@ async function bindViewer(
     return false;
   }
 
+  // One viewer socket follows one selected ERP tab. Switching the selector
+  // atomically removes the previous binding so old tabs stop capturing at once.
+  clearViewerBindings(socket);
   const key = screenFeedSocketKey(watchedUserId, tabId);
   addSocket(viewers, key, socket);
   rememberSocketKey(viewerKeysBySocket, socket, key);
@@ -165,7 +178,7 @@ export async function handleScreenFeedWebSocketMessage(
   isBinary: boolean
 ): Promise<boolean> {
   if (isBinary) {
-    if (!isRemoteSupportEnabled("screenFeed")) return true;
+    if (!isRemoteSupportEnabled("screenFeedEnabled")) return true;
     if (data.byteLength > REMOTE_SUPPORT_MAX_FRAME_BYTES + 24 * 1024 + 5) {
       recordRemoteSupportMetric("frameRejected");
       safeSendJson(socket, { type: "screen-feed:error", code: "FRAME_TOO_LARGE", message: "Frame payload is too large." });
@@ -182,15 +195,17 @@ export async function handleScreenFeedWebSocketMessage(
       safeSendJson(socket, { type: "screen-feed:error", code: "TAB_NOT_BOUND", message: "Bind the ERP tab before sending frames." });
       return true;
     }
+
     // Keep the exact received packet. No base64 conversion, JSON image copy or
     // re-encoding occurs between producer and viewers.
     latestFrames.set(key, { packet: data, capturedAt: Date.now() });
+    recordRemoteSupportMetric("frameAccepted", decoded.payload.byteLength);
     let delivered = 0;
     for (const viewer of viewers.get(key) ?? []) {
       safeSendBinary(viewer, data);
       delivered += 1;
     }
-    if (delivered > 0) recordRemoteSupportMetric("framePublished");
+    if (delivered > 0) recordRemoteSupportMetric("framePushed", delivered);
     return true;
   }
 
@@ -204,9 +219,7 @@ export async function handleScreenFeedWebSocketMessage(
   }
 
   if (message.type === "screen-feed:producer-bind") return bindProducer(socket, context, message.tabId);
-  if (message.type === "screen-feed:viewer-bind") {
-    return bindViewer(socket, context, message.userId, message.tabId);
-  }
+  if (message.type === "screen-feed:viewer-bind") return bindViewer(socket, context, message.userId, message.tabId);
   if (typeof message.type === "string" && message.type.startsWith("screen-feed:")) {
     return forwardProducerJson(socket, context, message);
   }
@@ -214,18 +227,9 @@ export async function handleScreenFeedWebSocketMessage(
 }
 
 export function cleanupScreenFeedWebSocket(socket: SocketWithState): void {
-  for (const key of producerKeysBySocket.get(socket) ?? []) {
-    removeSocket(producers, key, socket);
-  }
+  for (const key of producerKeysBySocket.get(socket) ?? []) removeSocket(producers, key, socket);
   producerKeysBySocket.delete(socket);
-
-  const viewerKeys = viewerKeysBySocket.get(socket);
-  if (viewerKeys) {
-    for (const key of viewerKeys) {
-      removeSocket(viewers, key, socket);
-      notifyProducerStatus(key);
-    }
-  }
+  clearViewerBindings(socket);
   viewerKeysBySocket.delete(socket);
 }
 
