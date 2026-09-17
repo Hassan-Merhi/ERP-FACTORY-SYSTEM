@@ -59,7 +59,10 @@ const SENSITIVE_AUTOCOMPLETE = new Set([
   "transaction-amount",
   "transaction-currency",
 ]);
-const SENSITIVE_DESCRIPTOR = new RegExp(
+
+// These descriptors are intrinsically sensitive. A "search" label must never
+// override them, even when the field is explicitly marked editable.
+const HARD_SENSITIVE_DESCRIPTOR = new RegExp(
   [
     "password",
     "passcode",
@@ -96,12 +99,7 @@ const SENSITIVE_DESCRIPTOR = new RegExp(
     "approve",
     "delete",
     "remove",
-    "supplier",
-    "customer",
-    "employee",
-    "company",
     "كلمة المرور",
-    "رمز",
     "دفع",
     "مبلغ",
     "حذف",
@@ -114,6 +112,12 @@ const SENSITIVE_DESCRIPTOR = new RegExp(
   ].join("|"),
   "i"
 );
+
+// Entity words are common in harmless filters ("Customer name", "Supplier
+// code", "Item description"). They are only sensitive when there is no clear
+// filter intent and no explicit field annotation.
+const BUSINESS_ENTITY_DESCRIPTOR = /\b(?:supplier|customer|employee|company)\b/i;
+
 const SAFE_FILTER_DESCRIPTOR = new RegExp(
   [
     "search",
@@ -130,6 +134,7 @@ const SAFE_FILTER_DESCRIPTOR = new RegExp(
     "name",
     "note",
     "description",
+    "item",
     "rechercher",
     "filtrer",
     "chercher",
@@ -180,34 +185,37 @@ function isProtectedContainer(element: HTMLElement): boolean {
   );
 }
 
+function safeFilterIntent(element: RemoteEditableElement): boolean {
+  return SAFE_FILTER_DESCRIPTOR.test(elementDescriptor(element));
+}
+
 export function isSafeRemoteEditableElement(element: Element | null): element is RemoteEditableElement {
-  if (
-    !(
-      element instanceof HTMLInputElement ||
-      element instanceof HTMLTextAreaElement ||
-      element instanceof HTMLSelectElement
-    )
-  ) {
+  if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) {
     return false;
   }
   const readOnly = (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) && element.readOnly;
   if (element.disabled || readOnly || isProtectedContainer(element)) return false;
 
   const descriptor = elementDescriptor(element);
-  if (SENSITIVE_DESCRIPTOR.test(descriptor)) return false;
+  const explicit = isExplicitlyEditable(element);
+  const filterLike = SAFE_FILTER_DESCRIPTOR.test(descriptor);
+  if (HARD_SENSITIVE_DESCRIPTOR.test(descriptor)) return false;
+  if (BUSINESS_ENTITY_DESCRIPTOR.test(descriptor) && !explicit && !filterLike) return false;
+
   const autocomplete = element.getAttribute("autocomplete")?.trim().toLowerCase() ?? "";
   if (SENSITIVE_AUTOCOMPLETE.has(autocomplete)) return false;
 
-  const explicit = isExplicitlyEditable(element);
-  const filterLike = SAFE_FILTER_DESCRIPTOR.test(descriptor);
   if (element instanceof HTMLInputElement) {
     const type = element.type.toLowerCase();
     if (type === "password" || type === "hidden" || type === "file") return false;
-    if (type === "checkbox" || type === "radio") return explicit || filterLike;
+    if (type === "checkbox" || type === "radio") return explicit;
     if (!SAFE_TEXT_INPUT_TYPES.has(type)) return false;
   }
   if (element instanceof HTMLSelectElement && !explicit && !filterLike) return false;
 
+  // Fields inside forms stay fail-closed unless their descriptor clearly marks
+  // them as filter/search UI or the page explicitly opts them in. This avoids
+  // reopening write forms while removing the old blanket form exclusion.
   if (element.form && !explicit && !filterLike) return false;
   return explicit || filterLike || !element.form;
 }
@@ -232,9 +240,7 @@ export function noteTrustedLocalRemoteControlInteraction(now = Date.now()): void
 }
 
 export function getRemoteEditableFocus(): RemoteEditableElement | null {
-  if (!remoteFocusedElement || !remoteFocusedElement.isConnected) {
-    remoteFocusedElement = null;
-  }
+  if (!remoteFocusedElement || !remoteFocusedElement.isConnected) remoteFocusedElement = null;
   return remoteFocusedElement;
 }
 
@@ -281,7 +287,7 @@ function replaceSelection(
   try {
     element.setSelectionRange(caret, caret);
   } catch {
-    // Number and date inputs do not support text selection in every browser.
+    // Number/date inputs do not support text selection in every browser.
   }
   dispatchValueEvents(element, inputType, replacement || null);
   return true;
@@ -293,9 +299,7 @@ function dispatchKey(element: HTMLElement, key: string, shiftKey: boolean): void
 }
 
 function focusAdjacentEditable(current: RemoteEditableElement, reverse: boolean, documentRef: Document): boolean {
-  const candidates = Array.from(documentRef.querySelectorAll("input,textarea,select")).filter(
-    isSafeRemoteEditableElement
-  );
+  const candidates = Array.from(documentRef.querySelectorAll("input,textarea,select")).filter(isSafeRemoteEditableElement);
   if (candidates.length === 0) return false;
   const index = Math.max(0, candidates.indexOf(current));
   const nextIndex = reverse ? (index - 1 + candidates.length) % candidates.length : (index + 1) % candidates.length;
@@ -308,10 +312,7 @@ function applySelectKey(element: HTMLSelectElement, key: RemoteKeyboardKey): boo
   if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "Home" && key !== "End") return false;
   const enabledOptions = Array.from(element.options).filter((option) => !option.disabled);
   if (enabledOptions.length === 0) return false;
-  const current = Math.max(
-    0,
-    enabledOptions.findIndex((option) => option === element.selectedOptions[0])
-  );
+  const current = Math.max(0, enabledOptions.findIndex((option) => option === element.selectedOptions[0]));
   const next =
     key === "Home"
       ? 0
@@ -350,8 +351,14 @@ export function applyRemoteKeyboardCommand(
   }
 
   if (command.type === "insert-text") {
-    
-    if (typeof command.text !== "string" || command.text.length === 0 || Array.from(command.text).some((character) => { const code = character.charCodeAt(0); return code <= 31 || code === 127; })) {
+    if (
+      typeof command.text !== "string" ||
+      command.text.length === 0 ||
+      Array.from(command.text).some((character) => {
+        const code = character.charCodeAt(0);
+        return code <= 31 || code === 127;
+      })
+    ) {
       return { status: "ignored", reason: "invalid-text" };
     }
     if (
@@ -395,6 +402,12 @@ export function applyRemoteKeyboardCommand(
       return replaceSelection(element, "\n", "insertLineBreak")
         ? { status: "executed", reason: null }
         : { status: "blocked", reason: "field-length-limit" };
+    }
+    // dispatchKey above lets React/onKeyDown search handlers run. Native form
+    // submission is intentionally not synthesized: safe search/filter controls
+    // are completable without remotely submitting an arbitrary write form.
+    if (isExplicitlyEditable(element) || safeFilterIntent(element)) {
+      return { status: "executed", reason: null };
     }
     return { status: "blocked", reason: "form-submit-blocked" };
   }

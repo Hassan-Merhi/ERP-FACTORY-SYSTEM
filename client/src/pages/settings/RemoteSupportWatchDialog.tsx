@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock, History, Maximize2, Monitor, RefreshCw, Wifi, WifiOff, X, ZoomIn } from "lucide-react";
+import { AlertTriangle, History, Maximize2, Monitor, RefreshCw, Wifi, WifiOff, X, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  sendScreenFeedControlMessage,
+  subscribeScreenFeedBinaryFrames,
+  subscribeScreenFeedTransportStatus,
+} from "@/lib/screen-feed-binary-transport";
 import { getPageLabel } from "./WatchUserDialog";
 
 interface RemoteSupportRuntime {
-  flags?: {
-    screenFeedEnabled?: boolean;
-    fastScreenFeed?: boolean;
-  };
+  flags?: { screenFeedEnabled?: boolean; fastScreenFeed?: boolean };
+}
+
+interface RemoteControlTabView {
+  userId: string;
+  username: string;
+  tabId: string;
+  companyId: number;
+  route: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
 }
 
 interface CaptureFailure {
@@ -37,29 +49,10 @@ interface ScreenFrameViewport {
 }
 
 interface ScreenFrame {
-  dataUrl: string;
+  imageUrl: string;
   capturedAt: string;
-  receivedAt?: string;
-  username?: string;
   capture?: ScreenCaptureInfo | null;
-  captureFailure?: CaptureFailure | null;
   viewport?: ScreenFrameViewport | null;
-}
-
-interface ScreenFeedPayload {
-  dataUrl?: string;
-  capturedAt?: string;
-  receivedAt?: string;
-  username?: string;
-  capture?: ScreenCaptureInfo | null;
-  captureFailure?: CaptureFailure | null;
-  viewport?: ScreenFrameViewport | null;
-}
-
-interface FastPollState {
-  etag: string | null;
-  frame: ScreenFrame | null;
-  failure: CaptureFailure | null;
 }
 
 interface ActivityEvent {
@@ -74,9 +67,6 @@ interface GroupedActivityEvent extends ActivityEvent {
 
 type DisplayMode = "fit" | "actual";
 
-const FALLBACK_POLL_MS = 3000;
-const MAX_LIVE_STREAM_ERRORS = 2;
-
 function groupConsecutiveActivity(activity: ActivityEvent[]): GroupedActivityEvent[] {
   const grouped: GroupedActivityEvent[] = [];
   for (const event of activity) {
@@ -90,70 +80,78 @@ function groupConsecutiveActivity(activity: ActivityEvent[]): GroupedActivityEve
   return grouped;
 }
 
-function captureFailureFromFrame(frame: ScreenFrame | null): CaptureFailure | null {
-  if (!frame) return null;
-  if (frame.captureFailure?.reason) return frame.captureFailure;
-  if (!frame.capture?.failureReason) return null;
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function readViewport(value: unknown): ScreenFrameViewport | null {
+  const record = objectRecord(value);
+  if (!record) return null;
+  const width = Number(record.width);
+  const height = Number(record.height);
+  const scrollX = Number(record.scrollX);
+  const scrollY = Number(record.scrollY);
+  const visualScale = Number(record.visualScale);
+  if (![width, height, scrollX, scrollY, visualScale].every(Number.isFinite)) return null;
+  return { width, height, scrollX, scrollY, visualScale };
+}
+
+function readCapture(value: unknown): ScreenCaptureInfo | null {
+  const record = objectRecord(value);
+  if (!record) return null;
+  const source = record.source === "dom" || record.source === "retry" || record.source === "fallback" ? record.source : undefined;
   return {
-    stage: frame.capture.source === "fallback" ? "capture" : "encode",
-    reason: frame.capture.failureReason,
-    occurredAt: frame.capturedAt,
-    durationMs: frame.capture.durationMs ?? null,
+    source,
+    durationMs: typeof record.durationMs === "number" ? record.durationMs : undefined,
+    failureReason: typeof record.failureReason === "string" ? record.failureReason : undefined,
   };
 }
 
-async function fetchConditionalFrame(
-  userId: string,
-  state: FastPollState,
-  signal: AbortSignal
-): Promise<FastPollState> {
-  const response = await fetch(`/api/screen-feed/${encodeURIComponent(userId)}`, {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store",
-    signal,
-    headers: state.etag ? { "If-None-Match": state.etag } : undefined,
-  });
-
-  if (response.status === 304) return state;
-  if (!response.ok) throw new Error("Screen feed request failed.");
-
-  const payload = (await response.json()) as ScreenFeedPayload | null;
-  // A 200 response without a frame is a real state transition (for example,
-  // the source frame expired), not an unchanged response. Only a 304 keeps the
-  // prior image in memory; otherwise an old frame could remain visible forever.
-  const nextFrame = payload?.dataUrl && payload.capturedAt ? (payload as ScreenFrame) : null;
-  const failure = payload?.captureFailure ?? (nextFrame ? captureFailureFromFrame(nextFrame) : null);
+function captureFailureFromMetadata(metadata: Record<string, unknown>, capturedAt: string): CaptureFailure | null {
+  const capture = readCapture(metadata.capture);
+  if (!capture?.failureReason) return null;
   return {
-    etag: response.headers.get("ETag"),
-    frame: nextFrame,
-    failure,
+    stage: capture.source === "fallback" ? "capture" : "encode",
+    reason: capture.failureReason,
+    occurredAt: capturedAt,
+    durationMs: capture.durationMs ?? null,
   };
 }
 
-function ScreenFeedDialog({
-  userId,
-  username,
-  onClose,
-  liveTransportEnabled,
-}: {
-  userId: string;
-  username: string;
-  onClose: () => void;
-  liveTransportEnabled: boolean;
-}) {
+function byteRangeToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const start = bytes.byteOffset;
+  const end = start + bytes.byteLength;
+  return bytes.buffer.slice(start, end) as ArrayBuffer;
+}
+
+function ScreenFeedDialog({ userId, username, onClose }: { userId: string; username: string; onClose: () => void }) {
   const { language } = useApplicationLanguage();
   const [frame, setFrame] = useState<ScreenFrame | null>(null);
   const [captureFailure, setCaptureFailure] = useState<CaptureFailure | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("fit");
-  const stateRef = useRef<FastPollState>({ etag: null, frame: null, failure: null });
-  const connectedRef = useRef(false);
-  const pollAbortRef = useRef<AbortController | null>(null);
+  const [selectedTabId, setSelectedTabId] = useState("");
+  const objectUrlRef = useRef<string | null>(null);
   const viewerSurfaceRef = useRef<HTMLDivElement>(null);
   const t = useCallback((value: string) => translateRemoteSupportPhase5Text(value, language), [language]);
+
+  const { data: tabsPayload, refetch: refetchTabs } = useQuery<{ tabs?: RemoteControlTabView[] }>({
+    queryKey: ["/api/screen-feed/control/tabs", userId],
+    queryFn: () => apiRequest("GET", `/api/screen-feed/control/tabs/${encodeURIComponent(userId)}`).then((response) => response.json()),
+    refetchInterval: 4000,
+  });
+  const tabs = useMemo(
+    () => (Array.isArray(tabsPayload?.tabs) ? tabsPayload.tabs.slice().sort((a, b) => b.lastSeenAt - a.lastSeenAt) : []),
+    [tabsPayload]
+  );
+
+  useEffect(() => {
+    if (selectedTabId && tabs.some((tab) => tab.tabId === selectedTabId)) return;
+    setSelectedTabId(tabs[0]?.tabId ?? "");
+  }, [selectedTabId, tabs]);
+
+  const selectedTab = useMemo(() => tabs.find((tab) => tab.tabId === selectedTabId) ?? null, [selectedTabId, tabs]);
 
   const { data: presenceRaw } = useQuery({
     queryKey: ["/api/user-presence", userId],
@@ -166,122 +164,94 @@ function ScreenFeedDialog({
     refetchInterval: 30000,
   });
 
-  const presence = presenceRaw && typeof presenceRaw === "object" && !Array.isArray(presenceRaw) ? presenceRaw : null;
+  const presence = objectRecord(presenceRaw);
   const activity = useMemo(() => (Array.isArray(activityRaw) ? (activityRaw as ActivityEvent[]) : []), [activityRaw]);
   const groupedActivity = useMemo(() => groupConsecutiveActivity(activity), [activity]);
 
-  const setConnectionState = useCallback((value: boolean) => {
-    connectedRef.current = value;
-    setConnected(value);
-  }, []);
-
-  const pollOnce = useCallback(async () => {
-    pollAbortRef.current?.abort();
-    const controller = new AbortController();
-    pollAbortRef.current = controller;
-    setRefreshing(true);
-    try {
-      const next = await fetchConditionalFrame(userId, stateRef.current, controller.signal);
-      stateRef.current = next;
-      setFrame(next.frame);
-      setCaptureFailure(next.failure);
-      setError(null);
-    } catch (pollError) {
-      if (controller.signal.aborted) return;
-      setError(pollError instanceof Error ? t(pollError.message) : t("Polling recovery failed."));
-    } finally {
-      if (pollAbortRef.current === controller) {
-        pollAbortRef.current = null;
-        setRefreshing(false);
-      }
-    }
-  }, [t, userId]);
+  const bindViewer = useCallback(() => {
+    if (!selectedTabId) return false;
+    return sendScreenFeedControlMessage({
+      type: "screen-feed:viewer-bind",
+      userId,
+      tabId: selectedTabId,
+    });
+  }, [selectedTabId, userId]);
 
   useEffect(() => {
-    stateRef.current = { etag: null, frame: null, failure: null };
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    objectUrlRef.current = null;
     setFrame(null);
     setCaptureFailure(null);
-    setConnectionState(false);
+    setConnected(false);
     setError(null);
+    if (!selectedTabId) return;
 
-    let closed = false;
-    let eventSource: EventSource | null = null;
-    let liveStreamErrors = 0;
-    let liveStreamAbandoned = false;
-
-    if (liveTransportEnabled) {
-      eventSource = new EventSource(`/api/screen-feed/live/${encodeURIComponent(userId)}`, {
-        withCredentials: true,
-      });
-
-      eventSource.addEventListener("ready", () => {
-        if (closed || liveStreamAbandoned) return;
-        liveStreamErrors = 0;
-        setConnectionState(true);
-        setError(null);
-      });
-      eventSource.addEventListener("frame", (event) => {
-        if (closed || liveStreamAbandoned) return;
-        try {
-          const nextFrame = JSON.parse((event as MessageEvent<string>).data) as ScreenFrame;
-          if (!nextFrame?.dataUrl) return;
-          liveStreamErrors = 0;
-          const nextFailure = captureFailureFromFrame(nextFrame);
-          stateRef.current = { etag: null, frame: nextFrame, failure: nextFailure };
-          setFrame(nextFrame);
-          setCaptureFailure(nextFailure);
-          setConnectionState(true);
-          setError(null);
-        } catch {
-          setError(t("A live frame arrived in an invalid format."));
-        }
-      });
-      eventSource.addEventListener("capture-failure", (event) => {
-        if (closed || liveStreamAbandoned) return;
-        try {
-          const failure = JSON.parse((event as MessageEvent<string>).data) as CaptureFailure;
-          if (!failure?.reason) return;
-          stateRef.current = { ...stateRef.current, failure };
-          setCaptureFailure(failure);
-        } catch {
-          // Polling recovery can still retrieve the sanitized diagnostic.
-        }
-      });
-      eventSource.onerror = () => {
-        if (closed || liveStreamAbandoned) return;
-        liveStreamErrors += 1;
-        setConnectionState(false);
-        setError(t("Live connection interrupted. Polling recovery is active."));
-        if (liveStreamErrors >= MAX_LIVE_STREAM_ERRORS) {
-          liveStreamAbandoned = true;
-          eventSource?.close();
-          eventSource = null;
-        }
-        void pollOnce();
+    const unsubscribeFrames = subscribeScreenFeedBinaryFrames((incoming) => {
+      if (incoming.header.tabId !== selectedTabId) return;
+      const metadata = objectRecord(incoming.header.metadata) ?? {};
+      const url = URL.createObjectURL(new Blob([byteRangeToArrayBuffer(incoming.jpeg)], { type: "image/jpeg" }));
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = url;
+      const next: ScreenFrame = {
+        imageUrl: url,
+        capturedAt: incoming.header.capturedAt,
+        capture: readCapture(metadata.capture),
+        viewport: readViewport(metadata.viewport),
       };
-    }
+      setFrame(next);
+      setCaptureFailure(captureFailureFromMetadata(metadata, incoming.header.capturedAt));
+      setConnected(true);
+      setError(null);
+    });
 
-    // Prime the viewer from the conditional endpoint. Once SSE is connected,
-    // the interval below goes idle and polling becomes recovery-only.
-    void pollOnce();
-    const intervalId = window.setInterval(() => {
-      if (!liveTransportEnabled || !connectedRef.current) void pollOnce();
-    }, FALLBACK_POLL_MS);
+    const unsubscribeStatus = subscribeScreenFeedTransportStatus((message) => {
+      if (message.type === "screen-feed-transport-ready") {
+        bindViewer();
+        return;
+      }
+      if (message.type === "screen-feed:viewer-bound" && message.userId === userId && message.tabId === selectedTabId) {
+        setConnected(true);
+        setError(null);
+        return;
+      }
+      if (message.type === "screen-feed:failure" && message.tabId === selectedTabId) {
+        const failureRecord = objectRecord(message.failure);
+        if (failureRecord && typeof failureRecord.reason === "string") {
+          setCaptureFailure({
+            stage: typeof failureRecord.stage === "string" ? failureRecord.stage : "pipeline",
+            reason: failureRecord.reason,
+            occurredAt:
+              typeof failureRecord.occurredAt === "string" ? failureRecord.occurredAt : new Date().toISOString(),
+            durationMs: typeof failureRecord.durationMs === "number" ? failureRecord.durationMs : null,
+          });
+        }
+        return;
+      }
+      if (message.type === "screen-feed:error") {
+        setConnected(false);
+        setError(typeof message.message === "string" ? t(message.message) : t("Live connection interrupted."));
+        return;
+      }
+      if (message.type === "screen-feed-transport-disconnected") {
+        setConnected(false);
+        setError(t("Live connection interrupted. Reconnecting…"));
+      }
+    });
+
+    // If the singleton socket is already authenticated, bind immediately;
+    // otherwise the transport-ready event above performs the bind.
+    bindViewer();
 
     return () => {
-      closed = true;
-      liveStreamAbandoned = true;
-      window.clearInterval(intervalId);
-      eventSource?.close();
-      pollAbortRef.current?.abort();
-      pollAbortRef.current = null;
-      connectedRef.current = false;
-      stateRef.current = { etag: null, frame: null, failure: null };
+      unsubscribeFrames();
+      unsubscribeStatus();
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
     };
-  }, [liveTransportEnabled, pollOnce, setConnectionState, t, userId]);
+  }, [bindViewer, selectedTabId, t, userId]);
 
-  const fmtTime = (value: string | null | undefined) => {
-    if (!value) return "—";
+  const fmtTime = (value: unknown) => {
+    if (typeof value !== "string" && typeof value !== "number") return "—";
     const date = new Date(value);
     return Number.isNaN(date.getTime())
       ? "—"
@@ -298,6 +268,7 @@ function ScreenFeedDialog({
         className="!fixed !inset-0 !left-0 !top-0 !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !rounded-none p-0 overflow-hidden flex flex-col bg-background"
         data-testid="dialog-watch-user"
         data-watched-user-id={userId}
+        data-watched-tab-id={selectedTabId}
         data-screenfeed-ignore="true"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
@@ -305,25 +276,40 @@ function ScreenFeedDialog({
             <div className="font-semibold truncate" data-watch-username={username}>
               {t("Watching")} {username}
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {liveTransportEnabled && connected ? (
-                <Wifi className="h-3.5 w-3.5" />
-              ) : (
-                <WifiOff className="h-3.5 w-3.5" />
-              )}
-              <span>{liveTransportEnabled && connected ? t("Fast live feed") : t("Polling mode")}</span>
-              {frame?.capturedAt ? <span>· {new Date(frame.capturedAt).toLocaleTimeString()}</span> : null}
-              {presence?.lastSeen ? (
-                <span>
-                  · {t("last seen")} {fmtTime(presence.lastSeen)}
-                </span>
-              ) : null}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {connected ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+              <span>{connected ? t("Binary live feed") : t("Connecting…")}</span>
+              {frame?.capturedAt ? <span>· {fmtTime(frame.capturedAt)}</span> : null}
+              {presence?.lastSeen ? <span>· {t("last seen")} {fmtTime(presence.lastSeen)}</span> : null}
             </div>
           </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void pollOnce()} disabled={refreshing}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {t("Refresh")}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{t("ERP tab")}</span>
+              <select
+                value={selectedTabId}
+                onChange={(event) => setSelectedTabId(event.target.value)}
+                className="h-8 max-w-[320px] rounded-md border bg-background px-2 text-sm text-foreground"
+                data-testid="select-remote-support-tab"
+              >
+                {tabs.length === 0 ? <option value="">{t("No active tabs")}</option> : null}
+                {tabs.map((tab, index) => (
+                  <option key={tab.tabId} value={tab.tabId}>
+                    {getPageLabel(tab.route)} · {tab.route} · #{index + 1}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void refetchTabs();
+                bindViewer();
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> {t("Refresh")}
             </Button>
             <Button
               size="sm"
@@ -341,7 +327,7 @@ function ScreenFeedDialog({
             >
               <ZoomIn className="mr-1.5 h-3.5 w-3.5" /> 100%
             </Button>
-            {frame?.dataUrl ? (
+            {frame?.imageUrl ? (
               <Button size="sm" variant="outline" onClick={openNativeFullscreen} data-testid="button-fullscreen-feed">
                 <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> {t("Full Screen")}
               </Button>
@@ -354,8 +340,7 @@ function ScreenFeedDialog({
 
         {error ? (
           <div className="flex items-center gap-2 border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
+            <AlertTriangle className="h-4 w-4 shrink-0" /> <span>{error}</span>
           </div>
         ) : null}
 
@@ -376,19 +361,15 @@ function ScreenFeedDialog({
           <div
             ref={viewerSurfaceRef}
             className={`flex min-w-0 flex-1 bg-black ${
-              displayMode === "fit"
-                ? "items-center justify-center overflow-hidden"
-                : "items-start justify-start overflow-auto"
+              displayMode === "fit" ? "items-center justify-center overflow-hidden" : "items-start justify-start overflow-auto"
             }`}
             data-testid="screen-feed-viewport"
           >
-            {frame?.dataUrl ? (
+            {frame?.imageUrl ? (
               <img
-                src={frame.dataUrl}
+                src={frame.imageUrl}
                 alt={`${t("Live screen for")} ${username}`}
-                className={
-                  displayMode === "fit" ? "max-h-full max-w-full object-contain" : "max-h-none max-w-none object-none"
-                }
+                className={displayMode === "fit" ? "max-h-full max-w-full object-contain" : "max-h-none max-w-none object-none"}
                 draggable={false}
                 data-testid="img-screen-feed"
                 data-frame-viewport-width={frame.viewport?.width ?? ""}
@@ -399,28 +380,26 @@ function ScreenFeedDialog({
                 data-frame-captured-at={frame.capturedAt}
               />
             ) : (
-              <div className="m-auto flex max-w-xl flex-col items-center gap-2 px-6 text-center text-sm text-white/70">
-                <Clock className="h-9 w-9 opacity-40" />
-                <span>
-                  {captureFailure
-                    ? `${t("Screen capture failed")}: ${captureFailure.reason}`
-                    : t("Waiting for the first screen frame…")}
-                </span>
+              <div className="flex max-w-md flex-col items-center gap-3 px-6 text-center text-sm text-white/70">
+                <Monitor className="h-10 w-10" />
+                <p>
+                  {selectedTabId
+                    ? t("Waiting for the first binary frame from this ERP tab…")
+                    : t("Waiting for an active ERP tab…")}
+                </p>
               </div>
             )}
           </div>
 
-          <aside className="hidden w-72 shrink-0 flex-col border-l lg:flex">
-            <div className="border-b px-3 py-2">
-              <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                <History className="h-3.5 w-3.5" /> {t("Page history")}
-              </p>
+          <aside className="hidden w-80 shrink-0 flex-col border-l bg-background lg:flex" data-testid="screen-feed-activity-panel">
+            <div className="flex items-center gap-2 border-b px-3 py-2 font-medium">
+              <History className="h-4 w-4" /> {t("Recent activity")}
             </div>
-            {presence?.currentRoute ? (
+            {selectedTab ? (
               <div className="border-b bg-muted/40 px-3 py-2">
-                <p className="mb-0.5 text-xs text-muted-foreground">{t("Currently on")}</p>
-                <p className="truncate text-sm font-semibold">{getPageLabel(presence.currentRoute)}</p>
-                <p className="truncate font-mono text-xs text-muted-foreground">{presence.currentRoute}</p>
+                <p className="mb-0.5 text-xs text-muted-foreground">{t("Selected tab")}</p>
+                <p className="truncate text-sm font-semibold">{getPageLabel(selectedTab.route)}</p>
+                <p className="truncate font-mono text-xs text-muted-foreground">{selectedTab.route}</p>
               </div>
             ) : null}
             <div className="min-h-0 flex-1 divide-y overflow-y-auto text-sm">
@@ -431,9 +410,7 @@ function ScreenFeedDialog({
                   <div key={`${event.id}-${event.route}`} className="space-y-0.5 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-medium leading-tight">{getPageLabel(event.route)}</p>
-                      {event.count > 1 ? (
-                        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">×{event.count}</span>
-                      ) : null}
+                      {event.count > 1 ? <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">×{event.count}</span> : null}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-mono text-xs text-muted-foreground">{event.route}</p>
@@ -479,9 +456,7 @@ function RuntimeDisabledDialog({ onClose }: { onClose: () => void }) {
         <div className="max-w-md space-y-3 p-6 text-center">
           <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
           <p className="font-semibold">{t("Remote screen feed is disabled.")}</p>
-          <p className="text-sm text-muted-foreground">
-            {t("Enable screen feed in Remote Support settings before opening a viewer.")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("Enable screen feed in Remote Support settings before opening a viewer.")}</p>
           <Button onClick={onClose}>{t("Close")}</Button>
         </div>
       </DialogContent>
@@ -490,14 +465,7 @@ function RuntimeDisabledDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function RemoteSupportWatchDialog(props: { userId: string; username: string; onClose: () => void }) {
-  const {
-    data: runtime,
-    isLoading,
-    isError,
-  } = useQuery<RemoteSupportRuntime>({
-    // Every authorized watcher can read this; the Developer-only admin runtime
-    // snapshot (queryKey: ["/api/screen-feed/admin/runtime"]) answers 403 for
-    // Admin/Owner/Manager, which silently pinned them to polling mode.
+  const { data: runtime, isLoading, isError } = useQuery<RemoteSupportRuntime>({
     queryKey: ["/api/screen-feed/capabilities"],
     queryFn: () => apiRequest("GET", "/api/screen-feed/capabilities").then((response) => response.json()),
     staleTime: 15000,
@@ -505,17 +473,6 @@ export function RemoteSupportWatchDialog(props: { userId: string; username: stri
   });
 
   if (isLoading) return <RuntimeLoadingDialog onClose={props.onClose} />;
-
-  if (!isError && runtime?.flags?.screenFeedEnabled === false) {
-    return <RuntimeDisabledDialog onClose={props.onClose} />;
-  }
-
-  return (
-    <ScreenFeedDialog
-      {...props}
-      liveTransportEnabled={
-        !isError && runtime?.flags?.screenFeedEnabled === true && runtime?.flags?.fastScreenFeed === true
-      }
-    />
-  );
+  if (!isError && runtime?.flags?.screenFeedEnabled === false) return <RuntimeDisabledDialog onClose={props.onClose} />;
+  return <ScreenFeedDialog {...props} />;
 }

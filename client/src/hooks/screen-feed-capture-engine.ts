@@ -1,17 +1,17 @@
+import { getRemoteSupportTabId } from "./use-remote-control-session";
 import { hashScreenFeedPixels, shouldUploadScreenFrame } from "./screen-feed-capture-policy";
 import {
-  approximateDataUrlBytes,
   getScreenFeedCaptureScale,
   isSafeScreenFeedAssetUrl,
   shouldPreserveScreenFeedBackground,
 } from "./screen-feed-viewing-quality";
+import { sendScreenFeedBinaryFrame } from "@/lib/screen-feed-binary-transport";
 
 const CAPTURE_TIMEOUT_MS = 9000;
 const RETRY_CAPTURE_TIMEOUT_MS = 5000;
-const UPLOAD_TIMEOUT_MS = 8000;
 const CLICK_RETAIN_MS = 8000;
-const MAX_DATA_URL_LEN = 1_300_000;
-const FAST_MAX_DATA_URL_LEN = 560_000;
+const MAX_JPEG_BYTES = 900_000;
+const FAST_MAX_JPEG_BYTES = 420_000;
 const SIGNATURE_WIDTH = 32;
 const SIGNATURE_HEIGHT = 18;
 const MAX_CAPTURE_WIDTH = 1536;
@@ -54,7 +54,7 @@ export interface ScreenFeedCaptureResult {
 }
 
 interface EncodedFrame {
-  dataUrl: string;
+  blob: Blob;
   canvas: HTMLCanvasElement;
   quality: number;
 }
@@ -187,9 +187,6 @@ function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left:
   copyLiveFormState(doc);
   copyScrollablePositions(doc, snapshot);
 
-  // One stylesheet on the clone replaces the old per-element getComputedStyle
-  // walk. Filters, blend modes, and pseudo-element decorations are stripped in
-  // O(1) instead of forcing layout on every node of a large ERP page.
   const captureOverrides = doc.createElement("style");
   captureOverrides.setAttribute("data-screenfeed-capture-styles", "true");
   captureOverrides.textContent = `
@@ -227,8 +224,6 @@ function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left:
     if (href && !isSafeScreenFeedAssetUrl(href, origin)) element.remove();
   });
 
-  // Inline background URLs only — reading computed style for every element was
-  // the capture hot path. Stylesheet `color-mix()` is resolved at build time.
   doc.querySelectorAll<HTMLElement>("[style]").forEach((element) => {
     const backgroundImage = element.style.backgroundImage;
     if (backgroundImage && backgroundImage !== "none" && !shouldPreserveScreenFeedBackground(backgroundImage, origin)) {
@@ -247,11 +242,8 @@ function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: numb
     useCORS: true,
     allowTaint: false,
     logging: false,
-    // ForeignObject rendering draws the page through an SVG <foreignObject>
-    // image. Chromium marks any canvas that consumed such an image as tainted,
-    // so the later toDataURL() throws SecurityError and the frame is dropped —
-    // silently, forever, while the employee keeps paying for full page renders.
-    // The regular renderer is the only one whose output can actually be encoded.
+    // ForeignObject rendering taints Chromium canvases. The regular renderer
+    // produces a canvas that can be encoded directly into a JPEG Blob.
     foreignObjectRendering: false,
     imageTimeout: 1800,
     removeContainer: true,
@@ -340,11 +332,6 @@ async function withSafeCreatePattern<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Returns null when the pixels cannot be read at all (a tainted canvas throws
- * SecurityError from getImageData). A null signature means "unknown", which
- * makes the caller upload the frame rather than silently dropping it.
- */
 function buildFrameSignature(canvas: HTMLCanvasElement): string | null {
   try {
     const sample = document.createElement("canvas");
@@ -374,16 +361,18 @@ function resizeCanvas(source: HTMLCanvasElement, maxWidth: number): HTMLCanvasEl
   return target;
 }
 
-function encodeFrame(canvas: HTMLCanvasElement, fast: boolean): EncodedFrame | null {
-  // One resize + one JPEG encode. The old quality ladder called toDataURL up
-  // to five times per frame, each pass re-compressing the whole screenshot.
+function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+}
+
+async function encodeFrame(canvas: HTMLCanvasElement, fast: boolean): Promise<EncodedFrame | null> {
   const maxWidth = fast ? 1120 : 1440;
   const quality = fast ? 0.56 : 0.7;
-  const limit = fast ? FAST_MAX_DATA_URL_LEN : MAX_DATA_URL_LEN;
+  const limit = fast ? FAST_MAX_JPEG_BYTES : MAX_JPEG_BYTES;
   const candidate = resizeCanvas(canvas, maxWidth);
-  const dataUrl = candidate.toDataURL("image/jpeg", quality);
-  if (!dataUrl.startsWith("data:image/") || dataUrl.length > limit) return null;
-  return { dataUrl, canvas: candidate, quality };
+  const blob = await canvasToJpegBlob(candidate, quality);
+  if (!blob || blob.type !== "image/jpeg" || blob.size <= 0 || blob.size > limit) return null;
+  return { blob, canvas: candidate, quality };
 }
 
 interface EncodeOutcome {
@@ -392,33 +381,24 @@ interface EncodeOutcome {
   failureReason?: string;
 }
 
-/**
- * Encoding is the last place a capture can die, and it dies for reasons the
- * render itself cannot see: a tainted canvas throws SecurityError, an oversized
- * page encodes past the transport limit. Dropping the frame there leaves the
- * watcher on "waiting for the first frame" with no explanation while the
- * employee's browser keeps re-rendering the page. Falling back to the cheap
- * text canvas keeps the viewer populated and carries the reason across.
- */
-function encodeWithFallback(canvas: HTMLCanvasElement, fast: boolean, source: CaptureSource): EncodeOutcome {
-  const limit = fast ? FAST_MAX_DATA_URL_LEN : MAX_DATA_URL_LEN;
+async function encodeWithFallback(
+  canvas: HTMLCanvasElement,
+  fast: boolean,
+  source: CaptureSource
+): Promise<EncodeOutcome> {
   let reason: string;
   try {
-    const encoded = encodeFrame(canvas, fast);
-    if (encoded?.dataUrl.startsWith("data:image/") && encoded.dataUrl.length <= limit) {
-      return { encoded, source };
-    }
-    reason = `encode-invalid-${encoded?.dataUrl.length ?? 0}`;
+    const encoded = await encodeFrame(canvas, fast);
+    if (encoded) return { encoded, source };
+    reason = "encode-invalid-or-oversized";
   } catch (error) {
     reason = errorMessage(error);
   }
 
   trace("encode-fallback", reason);
   try {
-    const encoded = encodeFrame(buildFallbackCanvas(reason), fast);
-    if (encoded?.dataUrl.startsWith("data:image/") && encoded.dataUrl.length <= limit) {
-      return { encoded, source: "fallback", failureReason: reason };
-    }
+    const encoded = await encodeFrame(buildFallbackCanvas(reason), fast);
+    if (encoded) return { encoded, source: "fallback", failureReason: reason };
   } catch (error) {
     reason = `${reason}; fallback: ${errorMessage(error)}`;
   }
@@ -458,9 +438,6 @@ async function captureCanvas(scrollElements: Iterable<HTMLElement>): Promise<Cap
     const firstReason = errorMessage(error);
     trace("capture-fail-p1", firstReason);
 
-    // html2canvas cannot be cancelled. If it hits our timeout, starting another
-    // html2canvas immediately would create two expensive full-page renderers at
-    // once and is worse for the employee. Fall back without a second render.
     if (isCaptureTimeout(error)) {
       trace("capture-fallback-timeout", firstReason);
       return { canvas: buildFallbackCanvas(firstReason), source: "fallback", failureReason: firstReason };
@@ -521,11 +498,7 @@ export async function captureAndUploadScreenFrame(input: {
 
   const startedAt = Date.now();
   const captured = await captureCanvas(input.scrollElements);
-  if (
-    !input.shouldContinue() ||
-    document.visibilityState !== "visible" ||
-    window.location.href !== input.expectedPath
-  ) {
+  if (!input.shouldContinue() || document.visibilityState !== "visible" || window.location.href !== input.expectedPath) {
     trace("capture-discarded");
     return cancelledResult(input.lastUploadedClickTs, startedAt);
   }
@@ -541,8 +514,6 @@ export async function captureAndUploadScreenFrame(input: {
       lastSignature: input.lastSignature,
       latestClickTs,
       lastUploadedClickTs: input.lastUploadedClickTs,
-      // An unreadable canvas has no comparable signature; always ship it so the
-      // watcher sees the page instead of an unexplained empty viewer.
       force: signature === null,
     })
   ) {
@@ -557,11 +528,11 @@ export async function captureAndUploadScreenFrame(input: {
     };
   }
 
-  const {
-    encoded,
-    source,
-    failureReason: encodeFailureReason,
-  } = encodeWithFallback(captured.canvas, input.fast, captured.source);
+  const { encoded, source, failureReason: encodeFailureReason } = await encodeWithFallback(
+    captured.canvas,
+    input.fast,
+    captured.source
+  );
   const failureReason = encodeFailureReason ?? captured.failureReason;
 
   if (!encoded) {
@@ -585,42 +556,41 @@ export async function captureAndUploadScreenFrame(input: {
   }
 
   const completedAt = Date.now();
-  const uploadController = new AbortController();
-  const uploadTimeout = setTimeout(() => uploadController.abort(), UPLOAD_TIMEOUT_MS);
   try {
-    const response = await fetch("/api/screen-feed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      signal: uploadController.signal,
-      body: JSON.stringify({
-        dataUrl: encoded.dataUrl,
-        clicks,
-        cursor: input.cursor,
-        viewport: buildViewportMetadata(),
-        clientCapturedAt: new Date(completedAt).toISOString(),
-        capture: {
-          width: encoded.canvas.width,
-          height: encoded.canvas.height,
-          source,
-          quality: encoded.quality,
-          encodedBytes: approximateDataUrlBytes(encoded.dataUrl),
-          durationMs: completedAt - startedAt,
-          failureReason,
+    const uploaded = await sendScreenFeedBinaryFrame(
+      {
+        type: "screen-feed-frame",
+        version: 1,
+        tabId: getRemoteSupportTabId(),
+        capturedAt: new Date(completedAt).toISOString(),
+        metadata: {
+          clicks,
+          cursor: input.cursor,
+          viewport: buildViewportMetadata(),
+          capture: {
+            width: encoded.canvas.width,
+            height: encoded.canvas.height,
+            source,
+            quality: encoded.quality,
+            encodedBytes: encoded.blob.size,
+            durationMs: completedAt - startedAt,
+            failureReason,
+          },
         },
-      }),
-    });
-    if (!response.ok) trace("upload-rejected", String(response.status));
+      },
+      encoded.blob
+    );
+    if (!uploaded) trace("upload-rejected", "transport-not-ready");
     return {
-      uploaded: response.ok,
+      uploaded,
       unchanged: false,
-      failed: !response.ok,
+      failed: !uploaded,
       cancelled: false,
       signature,
       latestClickTs,
       durationMs: Math.max(0, Date.now() - startedAt),
-      ...(!response.ok
-        ? { failureStage: "upload" as const, failureReason: `Screen frame upload rejected (${response.status}).` }
+      ...(!uploaded
+        ? { failureStage: "upload" as const, failureReason: "Screen-feed WebSocket transport is not ready." }
         : {}),
     };
   } catch (error) {
@@ -640,7 +610,5 @@ export async function captureAndUploadScreenFrame(input: {
       failureStage: "upload",
       failureReason: reason,
     };
-  } finally {
-    clearTimeout(uploadTimeout);
   }
 }
