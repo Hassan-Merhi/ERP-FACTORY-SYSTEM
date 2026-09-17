@@ -215,6 +215,7 @@ export function registerPayrollCoreReadRoutes(app: Express) {
           periodEnd: string;
           base: number;
           transport: number;
+          absenceDays: number;
           absenceDeducted: number;
           advanceDeducted: number;
           net: number;
@@ -232,6 +233,7 @@ export function registerPayrollCoreReadRoutes(app: Express) {
             periodEnd: todayStr,
             base: 0,
             transport: 0,
+            absenceDays: 0,
             absenceDeducted: 0,
             advanceDeducted: 0,
             net: 0,
@@ -242,15 +244,18 @@ export function registerPayrollCoreReadRoutes(app: Express) {
 
         const grossBase = computeMonthlyPay(baseSal, periodStart, todayStr);
         const grossTransport = computeMonthlyPay(transport, periodStart, todayStr);
+        let absenceDays = 0;
         let absDeductBase = 0;
         let absDeductTransport = 0;
         for (const attendance of attendanceByWorker[worker.id] ?? []) {
           if (attendance.date < periodStart || attendance.date > todayStr) continue;
           const dim = getDIM(attendance.date);
           if (attendance.status === "Absent") {
+            absenceDays += 1;
             absDeductBase += baseSal / dim;
             absDeductTransport += transport / dim;
           } else if (attendance.status === "Half Day") {
+            absenceDays += 0.5;
             absDeductBase += (baseSal / dim) * 0.5;
             absDeductTransport += (transport / dim) * 0.5;
           }
@@ -267,6 +272,7 @@ export function registerPayrollCoreReadRoutes(app: Express) {
           periodEnd: todayStr,
           base: round2(base),
           transport: round2(transportDue),
+          absenceDays,
           absenceDeducted: round2(absenceDeducted),
           advanceDeducted: round2(advanceDeducted),
           net: round2(net),

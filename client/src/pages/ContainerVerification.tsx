@@ -31,6 +31,13 @@ type SupplierDetailResponse = SupplierIdentity & {
   supplier?: SupplierIdentity;
 };
 
+type LoadedItemSyncResult = {
+  imported: number;
+  skipped: number;
+  replaced: number;
+  items: LoadedItem[];
+};
+
 export default function ContainerVerification() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -84,7 +91,7 @@ export default function ContainerVerification() {
     enabled: !!selectedSupplierId,
   });
 
-  const { data: loadedItems = [], isLoading: loadingItems } = useQuery<LoadedItem[]>({
+  const { data: loadedItems = [] } = useQuery<LoadedItem[]>({
     queryKey: ["/api/containers", containerId, "loaded-items"],
     queryFn: async () => {
       const res = await fetch(`/api/containers/${containerId}/loaded-items`, { credentials: "include" });
@@ -138,19 +145,21 @@ export default function ContainerVerification() {
     },
   });
 
+  const syncLoadedItemsFromContainer = useCallback(async (): Promise<LoadedItemSyncResult> => {
+    const res = await apiRequest("POST", `/api/containers/${containerId}/auto-populate-loaded-items?replace=true`);
+    return res.json() as Promise<LoadedItemSyncResult>;
+  }, [containerId]);
+
   const autoPopulateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/containers/${containerId}/auto-populate-loaded-items`);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/containers", containerId, "loaded-items"] });
+    mutationFn: async (showToast: boolean) => syncLoadedItemsFromContainer(),
+    onSuccess: (data, showToast) => {
+      queryClient.setQueryData<LoadedItem[]>(["/api/containers", containerId, "loaded-items"], data.items);
+      if (!showToast) return;
       const skippedMsg = data.skipped > 0 ? ` (${data.skipped} skipped - missing barcodes)` : "";
       toast({
-        title: "Items loaded",
-        description: `${data.imported} items imported from purchase orders${skippedMsg}`,
+        title: "Container items refreshed",
+        description: `${data.imported} current item lines loaded from the latest container details${skippedMsg}`,
       });
-      if (verificationResult) generateComparison();
     },
     onError: (e: ClientErrorLike) => {
       if (e?._handledGlobally) return;
@@ -209,7 +218,7 @@ export default function ContainerVerification() {
   };
 
   const generateComparison = useCallback(
-    async (supplierId?: string, proformaId?: string) => {
+    async (supplierId?: string, proformaId?: string, refreshContainerItems = true) => {
       const sid = supplierId ?? selectedSupplierId;
       const pid = proformaId ?? selectedProformaId;
       if (!sid || !pid) {
@@ -217,6 +226,11 @@ export default function ContainerVerification() {
         return;
       }
       try {
+        if (refreshContainerItems) {
+          const syncResult = await syncLoadedItemsFromContainer();
+          queryClient.setQueryData<LoadedItem[]>(["/api/containers", containerId, "loaded-items"], syncResult.items);
+        }
+
         const res = await fetch(
           `/api/suppliers/${sid}/containers/${containerId}/verification-summary?proformaId=${pid}`,
           { credentials: "include", cache: "no-store" }
@@ -231,7 +245,7 @@ export default function ContainerVerification() {
         toast({ title: "Error", description: getErrorDetails(err).message, variant: "destructive" });
       }
     },
-    [selectedSupplierId, selectedProformaId, containerId, toast]
+    [selectedSupplierId, selectedProformaId, containerId, toast, syncLoadedItemsFromContainer]
   );
 
   const exportToExcel = () => {
@@ -260,10 +274,10 @@ export default function ContainerVerification() {
 
   const requestAutoPopulate = () => {
     if (!navigator.onLine) {
-      toast({ title: "Not available offline", description: "Auto-populate requires a connection" });
+      toast({ title: "Not available offline", description: "Refresh requires a connection" });
       return;
     }
-    autoPopulateMutation.mutate();
+    autoPopulateMutation.mutate(true);
   };
 
   useEffect(() => {
@@ -275,16 +289,15 @@ export default function ContainerVerification() {
 
   useEffect(() => {
     if (
-      loadedItems.length === 0 &&
-      !loadingItems &&
       containerData?.container &&
       !autoPopulateMutation.isPending &&
       !autoPopulateMutation.isSuccess &&
+      !autoPopulateMutation.isError &&
       navigator.onLine
     ) {
-      autoPopulateMutation.mutate();
+      autoPopulateMutation.mutate(false);
     }
-  }, [loadedItems, loadingItems, containerData, autoPopulateMutation]);
+  }, [containerData, autoPopulateMutation]);
 
   // Auto-select supplier when opened via "Compare" from Daybook (supplierId URL param).
   // Do not require the supplier to exist in the active company's list: containers can
@@ -303,12 +316,26 @@ export default function ContainerVerification() {
     if (pick) setSelectedProformaId(String(pick.id));
   }, [autoCompare, selectedSupplierId, proformas, selectedProformaId]);
 
-  // Auto-generate comparison once supplier + proforma are both set
+  // Auto-generate only after the current container details have been refreshed.
   useEffect(() => {
-    if (!autoCompare || !selectedSupplierId || !selectedProformaId || autoCompareTriggered) return;
+    if (
+      !autoCompare ||
+      !selectedSupplierId ||
+      !selectedProformaId ||
+      autoCompareTriggered ||
+      !autoPopulateMutation.isSuccess
+    )
+      return;
     setAutoCompareTriggered(true);
-    generateComparison(selectedSupplierId, selectedProformaId);
-  }, [autoCompare, selectedSupplierId, selectedProformaId, autoCompareTriggered, generateComparison]);
+    generateComparison(selectedSupplierId, selectedProformaId, false);
+  }, [
+    autoCompare,
+    selectedSupplierId,
+    selectedProformaId,
+    autoCompareTriggered,
+    autoPopulateMutation.isSuccess,
+    generateComparison,
+  ]);
 
   const container = containerData?.container;
   const selectedSupplier = selectedSupplierData?.supplier ?? selectedSupplierData;
@@ -417,7 +444,7 @@ export default function ContainerVerification() {
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => generateComparison()}
-                disabled={!selectedSupplierId || !selectedProformaId}
+                disabled={!selectedSupplierId || !selectedProformaId || autoPopulateMutation.isPending}
                 className="flex-1"
                 data-testid="button-generate-comparison"
               >

@@ -705,6 +705,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                     className={cn("rounded-none gap-1.5", viewMode === "detailed" && "bg-muted font-medium")}
                     data-testid="button-view-detailed"
                     data-remote-control-safe="true"
+                    data-remote-control-action="toggle-view"
                   >
                     <LayoutList className="w-4 h-4" />
                     Detailed
@@ -719,6 +720,7 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
                     className={cn("rounded-none gap-1.5", viewMode === "condensed" && "bg-muted font-medium")}
                     data-testid="button-view-condensed"
                     data-remote-control-safe="true"
+                    data-remote-control-action="toggle-view"
                   >
                     <Layers className="w-4 h-4" />
                     Condensed

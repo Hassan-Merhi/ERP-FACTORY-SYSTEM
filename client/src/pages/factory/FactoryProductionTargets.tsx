@@ -4,12 +4,15 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
-  Copy,
+  Download,
+  FileSpreadsheet,
   Loader2,
   LockKeyhole,
+  MessageCircle,
   Save,
   Search,
   Target,
+  Upload,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +63,11 @@ interface ProductionGroup {
   rows: ProductionRow[];
 }
 
+interface ImportedProductionTarget {
+  category: string;
+  targetBales: number | null;
+}
+
 function localDateStr(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -108,18 +116,18 @@ function differenceClass(target: number | null, produced: number | null) {
   return "text-foreground";
 }
 
-function statusClass(status: TrackingStatus) {
-  if (status === FACTORY_TRACKING_STATUSES.absent)
-    return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-  if (status === FACTORY_TRACKING_STATUSES.new)
-    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-}
-
 function statusTranslationKey(status: TrackingStatus): FactoryStaffTrackingTranslationKey {
   if (status === FACTORY_TRACKING_STATUSES.absent) return "absent";
   if (status === FACTORY_TRACKING_STATUSES.new) return "new";
   return "present";
+}
+
+function normalizeExcelHeader(value: string): string {
+  return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+}
+
+function normalizeWorkerCode(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase();
 }
 
 function groupProductionRows(sourceRows: ProductionRow[]): ProductionGroup[] {
@@ -220,7 +228,9 @@ export default function FactoryProductionTargets() {
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
   const { data, isLoading } = useQuery<ProductionResponse>({
@@ -238,8 +248,8 @@ export default function FactoryProductionTargets() {
 
   const finalized = Boolean(data?.finalized);
 
-  const buildRecords = () =>
-    rows.map((row) => ({
+  const buildRecords = (sourceRows: ProductionRow[] = rows) =>
+    sourceRows.map((row) => ({
       personType: row.personType,
       personId: row.personId,
       groupName: row.groupName || "",
@@ -278,41 +288,130 @@ export default function FactoryProductionTargets() {
     },
   });
 
-  const copyYesterdayMutation = useMutation({
-    mutationFn: async () => {
-      const yesterday = addIsoDays(referenceDate, -1);
-      return fetchProduction("daily", yesterday, yesterday);
-    },
-    onSuccess: (previous) => {
-      if (previous.rows.length === 0) {
-        toast({ title: tr("noYesterdayProduction"), variant: "destructive" });
-        return;
-      }
-      const previousByWorker = new Map(previous.rows.map((row) => [row.personId, row]));
-      setRows((current) =>
-        current.map((row) => {
-          const prior = previousByWorker.get(row.personId);
-          if (!prior) return row;
-          return {
-            ...row,
-            category: prior.category,
-            targetBales: prior.targetBales,
-            status: prior.status,
-          };
-        })
-      );
-      toast({ title: tr("yesterdayCopied") });
-    },
-    onError: (error: Error) => {
-      toast({ title: tr("copyYesterdayFailed"), description: error.message, variant: "destructive" });
-    },
-  });
+  const downloadExcelTemplate = async () => {
+    try {
+      const { ExcelJS, writeFile } = await import("@/lib/excelHelper");
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Production Targets");
+      worksheet.columns = [
+        { header: "Worker Code", key: "workerCode", width: 20 },
+        { header: "Category", key: "category", width: 28 },
+        { header: "Target", key: "target", width: 14 },
+      ];
+      rows.forEach((row) => {
+        worksheet.addRow({
+          workerCode: row.code || "",
+          category: row.category || "",
+          target: row.targetBales ?? "",
+        });
+      });
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.views = [{ state: "frozen", ySplit: 1 }];
+      await writeFile(workbook, `production-targets-template-${period.start}.xlsx`);
+    } catch (error: unknown) {
+      toast({
+        title: "Template download failed",
+        description: error instanceof Error ? error.message : "Could not create the Excel template",
+        variant: "destructive",
+      });
+    }
+  };
 
-  const sendProductionWhatsappImage = async (endedDate: string) => {
-    // Re-read the just-finalized day so the image uses the exact frozen production counts,
-    // not a potentially stale browser snapshot from a few seconds before End Production.
-    const finalizedSnapshot = await fetchProduction("daily", endedDate, endedDate);
-    setRows(finalizedSnapshot.rows);
+  const importProductionTargets = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const { readFile, utils } = await import("@/lib/excelHelper");
+      const workbook = await readFile(file);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) throw new Error("The workbook does not contain a worksheet");
+
+      const headers = new Set<string>();
+      worksheet.getRow(1).eachCell((cell) => headers.add(normalizeExcelHeader(cell.text)));
+      for (const requiredHeader of ["worker code", "category", "target"]) {
+        if (!headers.has(requiredHeader)) {
+          throw new Error(`Missing required column: ${requiredHeader}`);
+        }
+      }
+
+      const importedRows = utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: "" });
+      if (importedRows.length === 0) throw new Error("The Excel file does not contain any worker rows");
+
+      const importedByCode = new Map<string, ImportedProductionTarget>();
+      for (const importedRow of importedRows) {
+        const normalizedRow = new Map<string, unknown>();
+        Object.entries(importedRow).forEach(([key, value]) => normalizedRow.set(normalizeExcelHeader(key), value));
+        const workerCode = normalizeWorkerCode(normalizedRow.get("worker code"));
+        if (!workerCode) continue;
+        if (importedByCode.has(workerCode)) throw new Error(`Duplicate worker code in Excel: ${workerCode}`);
+
+        const category = String(normalizedRow.get("category") ?? "").trim();
+        const targetValue = normalizedRow.get("target");
+        const targetText = String(targetValue ?? "").trim();
+        const targetBales = targetText === "" ? null : Number(targetValue);
+        if (targetBales !== null && (!Number.isFinite(targetBales) || targetBales < 0)) {
+          throw new Error(`Invalid target for worker code ${workerCode}`);
+        }
+        importedByCode.set(workerCode, { category, targetBales });
+      }
+
+      if (importedByCode.size === 0) throw new Error("No worker codes were found in the Excel file");
+
+      const unmatchedCodes = new Set(importedByCode.keys());
+      let matchedCount = 0;
+      const nextRows = rows.map((row) => {
+        if (!row.code) return row;
+        const code = normalizeWorkerCode(row.code);
+        const imported = importedByCode.get(code);
+        if (!imported) return row;
+        unmatchedCodes.delete(code);
+        matchedCount += 1;
+        return { ...row, category: imported.category, targetBales: imported.targetBales };
+      });
+
+      if (matchedCount === 0) throw new Error("None of the worker codes in the Excel file match this Production Targets list");
+
+      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
+        page: "production",
+        periodType,
+        periodStart: period.start,
+        periodEnd: period.end,
+        finalize: false,
+        records: buildRecords(nextRows),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Could not save imported Production Targets");
+      }
+
+      setRows(nextRows);
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/staff-tracking"],
+        refetchType: "active",
+      });
+      toast({
+        title: `Imported ${matchedCount} production target${matchedCount === 1 ? "" : "s"}`,
+        description:
+          unmatchedCodes.size > 0
+            ? `${unmatchedCodes.size} worker code${unmatchedCodes.size === 1 ? " was" : "s were"} not found and were skipped.`
+            : "The category and target values were saved.",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Excel import failed",
+        description: error instanceof Error ? error.message : "Could not import Production Targets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
+
+  const sendProductionWhatsappImage = async (reportDate: string) => {
+    // Always refresh first so each manual send reflects the latest available production
+    // counts, targets/categories, and Attendance Register-driven statuses for that day.
+    const latestSnapshot = await fetchProduction("daily", reportDate, reportDate);
+    setRows(latestSnapshot.rows);
     await waitForReportPaint();
 
     if (!productionReportRef.current) throw new Error(tr("productionWhatsappImageFailed"));
@@ -323,11 +422,11 @@ export default function FactoryProductionTargets() {
       scale: 2,
       logging: false,
     });
-    const title = `${tr("productionTargets")} — ${endedDate}`;
+    const title = `${tr("productionTargets")} — ${reportDate}`;
     const response = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
       imageBase64: canvas.toDataURL("image/png"),
-      date: endedDate,
-      fileName: `Production_${endedDate}.png`,
+      date: reportDate,
+      fileName: `Production_${reportDate}.png`,
       caption: title,
       reportLabel: title,
       recipient: "production",
@@ -338,6 +437,20 @@ export default function FactoryProductionTargets() {
       throw new Error(body.message || tr("productionWhatsappImageFailed"));
     }
   };
+
+  const sendWhatsappMutation = useMutation({
+    mutationFn: () => sendProductionWhatsappImage(referenceDate),
+    onSuccess: () => {
+      toast({ title: tr("productionWhatsappImageSent") });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: tr("productionWhatsappImageFailed"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const endProductionMutation = useMutation({
     mutationFn: async () => {
@@ -355,27 +468,14 @@ export default function FactoryProductionTargets() {
       }
       return response.json();
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       const endedDate = referenceDate;
       toast({ title: tr("productionEnded") });
-
-      try {
-        await sendProductionWhatsappImage(endedDate);
-        toast({ title: tr("productionWhatsappImageSent") });
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : tr("productionWhatsappImageFailed");
-        toast({
-          title: tr("productionWhatsappImageFailed"),
-          description: message,
-          variant: "destructive",
-        });
-      } finally {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/staff-tracking"],
-          refetchType: "active",
-        });
-        setReferenceDate(addIsoDays(endedDate, 1));
-      }
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/staff-tracking"],
+        refetchType: "active",
+      });
+      setReferenceDate(addIsoDays(endedDate, 1));
     },
     onError: (error: Error) => {
       toast({ title: tr("endProductionFailed"), description: error.message, variant: "destructive" });
@@ -409,7 +509,8 @@ export default function FactoryProductionTargets() {
     setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   };
 
-  const busy = saveMutation.isPending || copyYesterdayMutation.isPending || endProductionMutation.isPending;
+  const busy =
+    saveMutation.isPending || isImporting || sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -447,21 +548,35 @@ export default function FactoryProductionTargets() {
             />
           </div>
 
-          {periodType === "daily" && (
-            <Button
-              variant="outline"
-              onClick={() => copyYesterdayMutation.mutate()}
-              disabled={finalized || rows.length === 0 || busy}
-              data-testid="button-copy-yesterday-production"
-            >
-              {copyYesterdayMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Copy className="mr-2 h-4 w-4" />
-              )}
-              {copyYesterdayMutation.isPending ? tr("copyingYesterday") : tr("copyYesterday")}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={() => void downloadExcelTemplate()}
+            disabled={rows.length === 0 || busy}
+            data-testid="button-production-excel-template"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Excel Template
+          </Button>
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importProductionTargets(file);
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={finalized || rows.length === 0 || busy}
+            data-testid="button-import-production-excel"
+          >
+            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+            {isImporting ? "Importing…" : "Import Excel"}
+          </Button>
 
           <Button
             onClick={() => saveMutation.mutate()}
@@ -475,6 +590,22 @@ export default function FactoryProductionTargets() {
             )}
             {saveMutation.isPending ? tr("saving") : tr("save")}
           </Button>
+
+          {periodType === "daily" && (
+            <Button
+              variant="outline"
+              onClick={() => sendWhatsappMutation.mutate()}
+              disabled={rows.length === 0 || busy}
+              data-testid="button-send-production-whatsapp"
+            >
+              {sendWhatsappMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <MessageCircle className="mr-2 h-4 w-4" />
+              )}
+              {sendWhatsappMutation.isPending ? "Sending…" : "Send to WhatsApp"}
+            </Button>
+          )}
 
           {periodType === "daily" && (
             <Button
@@ -619,23 +750,14 @@ export default function FactoryProductionTargets() {
                           {differenceText(row.targetBales, row.producedBales)}
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={row.status}
-                            disabled={finalized}
-                            onValueChange={(value) => setRow(sourceIndex, { status: value as TrackingStatus })}
+                          <div
+                            className="flex h-8 w-[125px] cursor-not-allowed items-center gap-2 rounded-md border bg-muted/70 px-3 text-sm text-muted-foreground"
+                            aria-disabled="true"
+                            title="Status is controlled from Attendance Register"
                           >
-                            <SelectTrigger className="w-[125px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={FACTORY_TRACKING_STATUSES.present}>{tr("present")}</SelectItem>
-                              <SelectItem value={FACTORY_TRACKING_STATUSES.absent}>{tr("absent")}</SelectItem>
-                              <SelectItem value={FACTORY_TRACKING_STATUSES.new}>{tr("new")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Badge className={`mt-1.5 border-0 ${statusClass(row.status)}`}>
-                            {tr(statusTranslationKey(row.status))}
-                          </Badge>
+                            <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                            <span>{tr(statusTranslationKey(row.status))}</span>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

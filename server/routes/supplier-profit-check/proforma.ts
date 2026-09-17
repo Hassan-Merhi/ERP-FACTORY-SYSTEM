@@ -12,6 +12,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { getProfitCheckSupplierScope } from "./supplier-scope";
 
 class ProfitCheckInputError extends Error {
   constructor(
@@ -223,15 +224,13 @@ export function registerSupplierProfitProformaRoutes(app: Express, requireAuth: 
     if (!Number.isInteger(supplierId) || supplierId <= 0 || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "supplierId and items required" });
     }
+    if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+      return res.status(404).json({ message: "Supplier not found" });
+    }
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const supplier = await client.query(
-        `SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL FOR UPDATE`,
-        [supplierId, companyId]
-      );
-      if (supplier.rows.length === 0) throw new ProfitCheckInputError("Supplier not found", 404);
 
       const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
       if (lines.length === 0) throw new ProfitCheckInputError("Enter qty for at least one item");
@@ -286,11 +285,9 @@ export function registerSupplierProfitProformaRoutes(app: Express, requireAuth: 
       if (proformaResult.rows.length === 0) throw new ProfitCheckInputError("Proforma not found", 404);
 
       const supplierId = Number(proformaResult.rows[0].supplier_id);
-      const supplier = await client.query(
-        `SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
-        [supplierId, companyId]
-      );
-      if (supplier.rows.length === 0) throw new ProfitCheckInputError("Supplier not found", 404);
+      if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+        throw new ProfitCheckInputError("Supplier not found", 404);
+      }
 
       const lines = await resolveAndConsolidateItems(client, companyId, supplierId, items);
       await client.query(`DELETE FROM supplier_proforma_lines WHERE proforma_id = $1`, [proformaId]);

@@ -134,6 +134,7 @@ export default function SoldContainers() {
                           variant="outline"
                           data-testid={`button-view-${sale.saleId}`}
                           data-remote-control-safe="true"
+                          data-remote-control-action="view"
                         >
                           <Eye className="h-4 w-4 mr-2" />
                           View

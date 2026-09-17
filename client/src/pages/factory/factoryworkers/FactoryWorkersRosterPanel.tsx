@@ -636,6 +636,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                       {(() => {
                         const due = amountDue[worker.id];
                         if (!due) return <span className="text-muted-foreground/40">—</span>;
+                        const absenceDays = (due as typeof due & { absenceDays?: number }).absenceDays ?? 0;
                         const fmt = (n: number) =>
                           `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                         const fmtDate = (s: string) =>
@@ -675,7 +676,9 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                                 )}
                                 {(due.absenceDeducted ?? 0) > 0 && (
                                   <div className="flex justify-between text-rose-600 dark:text-rose-400">
-                                    <span>Absences deducted</span>
+                                    <span>
+                                      Absences deducted ({absenceDays} {absenceDays === 1 ? "day" : "days"})
+                                    </span>
                                     <span className="font-mono">−{fmt(due.absenceDeducted)}</span>
                                   </div>
                                 )}

@@ -13,6 +13,30 @@ import type { RemoteKeyboardKey } from "@/hooks/remote-keyboard-control-policy";
 import { translateRemoteSupportPhase5Text } from "@/i18n/remoteSupportPhase5Translations";
 import { translateRemoteSupportPhase6Text } from "@/i18n/remoteSupportPhase6Translations";
 
+function getKeyboardErrorForReason(reason: string | null, t: (v: string) => string): string | null {
+  if (!reason) return null;
+  const map: Record<string, string> = {
+    "local-user-active": t("Employee is actively typing — remote typing paused. Try again in a moment."),
+    "no-safe-editable-focus": t("No safe field focused — click a safe search, filter or approved field in the watched screen first."),
+    "text-not-supported": t("This field doesn't accept typed text — select a text field."),
+    "field-length-limit": t("Field is at its length limit — delete some text first."),
+    "invalid-text": t("Text contains blocked control characters."),
+    "invalid-key": t("That key isn't allowed remotely."),
+    "form-submit-blocked": t("Form submission is blocked remotely."),
+    "select-key-blocked": t("This select only supports ArrowUp/Down, Home, End."),
+    "checkbox-key-blocked": t("Checkbox not approved — only explicitly approved checkboxes can be toggled remotely."),
+    "selection-not-supported": t("This field doesn't support text selection."),
+    "vertical-key-not-supported": t("Vertical arrow not supported in this field."),
+    "number-step-blocked": t("Number stepping blocked — only approved number fields support ArrowUp/Down."),
+    "nothing-to-delete": t("Nothing to delete at the current cursor position."),
+    "delete-failed": t("Delete failed."),
+    "no-adjacent-field": t("No adjacent safe field to Tab to."),
+    "stale-command": t("Command expired before execution."),
+    "duplicate-command": t("Duplicate command ignored."),
+  };
+  return map[reason] ?? t("That field is protected and cannot be edited remotely.");
+}
+
 interface KeyboardResultView {
   commandId: string;
   sessionId: string;
@@ -62,6 +86,7 @@ export function RemoteKeyboardControllerOverlay() {
   const activeSessionIdRef = useRef<string | null>(null);
   const textBufferRef = useRef("");
   const textTimerRef = useRef<number | null>(null);
+  const isComposingRef = useRef(false);
   const t = useCallback((value: string) => translateRemoteSupportPhase6Text(value, language), [language]);
 
   const sessionId = session?.id ?? null;
@@ -80,9 +105,47 @@ export function RemoteKeyboardControllerOverlay() {
     textTimerRef.current = null;
   }, [sessionId]);
 
+  // Re-focus the capture input aggressively while keyboard control is active.
+  // Operators reported "can't type" when the input lost focus to a click,
+  // a window blur, or the browser's own focus management. This keeps the
+  // hidden capture input focused, with a blur-refocus handler and a
+  // window-focus listener so typing resumes without a manual click.
   useEffect(() => {
-    if (keyboardActive) captureRef.current?.focus({ preventScroll: true });
-  }, [keyboardActive]);
+    if (!keyboardActive) return;
+    const input = captureRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    const scheduleRefocus = () => {
+      window.setTimeout(() => {
+        if (document.activeElement !== input && keyboardActive && activeSessionIdRef.current === sessionId) {
+          input.focus({ preventScroll: true });
+        }
+      }, 0);
+    };
+    const onBlur = () => scheduleRefocus();
+    const onWindowFocus = () => scheduleRefocus();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") scheduleRefocus();
+    };
+    input.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    // Also refocus after any click in the overlay's document
+    const onDocPointerDown = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target && input.contains(target)) return;
+      // Don't steal focus from the password confirmation flow
+      if (target?.closest("[data-testid='input-remote-keyboard-password']")) return;
+      scheduleRefocus();
+    };
+    document.addEventListener("pointerdown", onDocPointerDown, true);
+    return () => {
+      input.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+    };
+  }, [keyboardActive, sessionId]);
 
   const requestKeyboardAuthorization = useCallback(async () => {
     if (!sessionId) return;
@@ -229,8 +292,11 @@ export function RemoteKeyboardControllerOverlay() {
         const result = JSON.parse((event as MessageEvent<string>).data) as KeyboardResultView;
         if (result?.sessionId !== sessionId) return;
         setLastResult(result);
-        if (result.status === "blocked") {
-          setError(t("That field is protected and cannot be edited remotely."));
+        if (result.status === "blocked" || result.status === "ignored") {
+          const msg = getKeyboardErrorForReason(result.reason, t);
+          if (msg) setError(msg);
+        } else if (result.status === "executed") {
+          setError(null);
         }
       } catch {
         // A later result replaces malformed stream data.
@@ -336,13 +402,46 @@ export function RemoteKeyboardControllerOverlay() {
             value=""
             inputMode="text"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             placeholder={t("Type remote text here")}
             className="h-9"
             data-testid="input-remote-keyboard-capture"
             onPaste={(event) => event.preventDefault()}
             onCopy={(event) => event.preventDefault()}
             onCut={(event) => event.preventDefault()}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              isComposingRef.current = false;
+              const data = (event as any).data ?? (event.currentTarget as HTMLInputElement).value ?? "";
+              // Clear the DOM value so the next composition starts empty
+              (event.currentTarget as HTMLInputElement).value = "";
+              if (data) {
+                queueText(data);
+              }
+            }}
+            onInput={(event) => {
+              if (isComposingRef.current) return;
+              const target = event.currentTarget as HTMLInputElement;
+              const val = target.value;
+              if (val) {
+                target.value = "";
+                // Handles mobile autocomplete, predictives, and any direct insertion
+                // that bypassed keyDown (e.g., some IME fallbacks).
+                queueText(val);
+              }
+            }}
+            onBlur={() => {
+              if (keyboardActive) {
+                window.setTimeout(() => captureRef.current?.focus({ preventScroll: true }), 0);
+              }
+            }}
+            onFocus={() => setError(null)}
             onKeyDown={(event) => {
+              if (isComposingRef.current) return;
               if (event.ctrlKey || event.metaKey || event.altKey) {
                 event.preventDefault();
                 setError(t("Clipboard shortcuts and paste are blocked."));
@@ -358,6 +457,9 @@ export function RemoteKeyboardControllerOverlay() {
               if (Array.from(event.key).length === 1) {
                 event.preventDefault();
                 queueText(event.key);
+              } else if (event.key === "Unidentified") {
+                // Some IME compositions surface as Unidentified — handled via composition/input
+                event.preventDefault();
               }
             }}
           />

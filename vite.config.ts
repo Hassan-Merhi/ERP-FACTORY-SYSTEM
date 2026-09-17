@@ -9,6 +9,7 @@ import { salesReportInvalidationPlugin } from "./build/viteSalesReportInvalidati
 import { phase1PaginationPlugin } from "./build/vitePhase1PaginationGuardPlugin.ts";
 import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin.ts";
 import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin.ts";
+import { cssColorMixPlugin } from "./build/viteCssColorMixPlugin.ts";
 
 // `vite build` produces the production artifact, so it must be a production
 // build regardless of the NODE_ENV the surrounding job happens to export. CI
@@ -46,6 +47,7 @@ export default defineConfig({
     phase1PaginationPlugin(),
     lazyHeavyImportsPlugin(),
     labelAssetExtractionPlugin(),
+    cssColorMixPlugin(),
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&

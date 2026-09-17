@@ -61,11 +61,12 @@ export function registerContainerLoadedItemImportRoutes(app: Express, requireAut
         if (!(await verifyContainerOwnership(containerId, companyId)))
           return res.status(403).json({ message: "Access denied" });
 
+        const replaceExisting = req.query.replace === "true";
         const existingItems = await db
           .select()
           .from(supplierContainerLoadedItems)
           .where(eq(supplierContainerLoadedItems.containerId, containerId));
-        if (existingItems.length > 0) {
+        if (existingItems.length > 0 && !replaceExisting) {
           return res
             .status(400)
             .json({ message: "Container already has loaded items. Clear them first to re-populate." });
@@ -112,12 +113,31 @@ export function registerContainerLoadedItemImportRoutes(app: Express, requireAut
           pricePerBale: item.rate || null,
         }));
 
-        await db.insert(supplierContainerLoadedItems).values(values);
-        const allItems = await db
-          .select()
-          .from(supplierContainerLoadedItems)
-          .where(eq(supplierContainerLoadedItems.containerId, containerId));
-        res.json({ imported: values.length, skipped: skippedCount, items: allItems });
+        const allItems = replaceExisting
+          ? await db.transaction(async (tx) => {
+              await tx
+                .delete(supplierContainerLoadedItems)
+                .where(eq(supplierContainerLoadedItems.containerId, containerId));
+              await tx.insert(supplierContainerLoadedItems).values(values);
+              return tx
+                .select()
+                .from(supplierContainerLoadedItems)
+                .where(eq(supplierContainerLoadedItems.containerId, containerId));
+            })
+          : await (async () => {
+              await db.insert(supplierContainerLoadedItems).values(values);
+              return db
+                .select()
+                .from(supplierContainerLoadedItems)
+                .where(eq(supplierContainerLoadedItems.containerId, containerId));
+            })();
+
+        res.json({
+          imported: values.length,
+          skipped: skippedCount,
+          replaced: replaceExisting ? existingItems.length : 0,
+          items: allItems,
+        });
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
       }
