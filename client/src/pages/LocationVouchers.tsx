@@ -348,6 +348,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
             }}
             data-testid="button-show-all-months"
             data-remote-control-safe="true"
+            data-remote-control-action="toggle-view"
           >
             <Eye className="h-4 w-4 mr-1.5" />
             {showAllMonths ? "This month only" : "Show all months"}

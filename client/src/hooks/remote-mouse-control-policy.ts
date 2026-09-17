@@ -1,4 +1,5 @@
 import { clearRemoteEditableFocus, focusRemoteEditableElement } from "./remote-keyboard-control-policy";
+import { isRegisteredRemoteControlAction } from "./remote-control-action-registry";
 
 export type RemoteMouseCommandType = "pointer-move" | "click" | "scroll";
 export type RemoteMouseExecutionStatus = "executed" | "blocked" | "ignored";
@@ -68,6 +69,7 @@ const CLICKABLE_SELECTOR = [
   "[role='menuitem']",
   "[role='tab']",
   "[data-remote-control-safe='true']",
+  "[data-remote-control-action]",
 ].join(",");
 
 const DANGEROUS_TEXT = new RegExp(
@@ -331,6 +333,19 @@ export function isAllowedRemoteClickElement(
   if (!element || isRemoteMouseBlockedElement(element)) return false;
   const clickable = element.closest(CLICKABLE_SELECTOR);
   if (!(clickable instanceof HTMLElement)) return false;
+
+  // Explicit registry — generated allowlist via data-remote-control-action.
+  // This is the primary usable allowlist: every allowlisted control carries
+  // a vetted action from the registry. It cannot override blocked/dangerous
+  // checks above, which fail closed first.
+  const action = clickable.getAttribute("data-remote-control-action");
+  if (action != null) {
+    // Presence of the attribute opts the element into registry checking.
+    // An unregistered action is not allowlisted, even if its text would
+    // otherwise match the heuristic.
+    if (isRegisteredRemoteControlAction(action.trim())) return true;
+    return false;
+  }
 
   if (clickable.getAttribute("data-remote-control-safe") === "true") return true;
   if (clickable.getAttribute("role") === "tab" || clickable.tagName === "SUMMARY") return true;

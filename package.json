@@ -66,7 +66,9 @@
     "test:frontend": "node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts",
     "test:frontend:coverage": "node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts --coverage",
     "audit:platform": "node scripts/audit-platform-modernization.mjs",
-    "test:platform": "node --test tests/platform-modernization-contract.node.test.mjs"
+    "test:platform": "node --test tests/platform-modernization-contract.node.test.mjs",
+    "verify:remote-control-registry": "node scripts/verify-remote-control-action-registry.mjs",
+    "generate:remote-control-registry": "node scripts/generate-remote-control-action-registry.mjs --write"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

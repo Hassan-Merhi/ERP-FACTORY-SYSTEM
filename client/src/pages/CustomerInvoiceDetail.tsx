@@ -311,6 +311,7 @@ export default function CustomerInvoiceDetail() {
             onClick={() => setShowProfitability(true)}
             data-testid="button-view-profitability"
             data-remote-control-safe="true"
+            data-remote-control-action="view-profitability"
           >
             <TrendingUp className="mr-2 h-4 w-4" />
             Profitability
