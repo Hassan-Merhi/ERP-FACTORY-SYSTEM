@@ -522,6 +522,7 @@ export default function DeletedItems() {
                                 }}
                                 data-testid={`button-view-${item.type}-${item.id}`}
                                 data-remote-control-safe="true"
+                                data-remote-control-action="view-details"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>

@@ -287,6 +287,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
             variant={showAllMonths ? "default" : "outline"}
             size="sm"
             data-remote-control-safe="true"
+            data-remote-control-action="toggle-view"
             onClick={() => {
               setShowAllMonths((v) => {
                 const next = !v;
