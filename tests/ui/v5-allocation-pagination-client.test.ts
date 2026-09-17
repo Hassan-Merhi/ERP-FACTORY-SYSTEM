@@ -1,17 +1,11 @@
 /**
- * Stock-allocation paging: browse a page, export everything.
+ * Stock-allocation progressive browsing: start small, append on scroll, export everything.
  *
- * This module does two opposite things to the same endpoint. It patches
- * window.fetch so the on-screen allocation table asks for one page at a time,
- * and it exports fetchAllV5AllocationData for the paths that genuinely need
- * every row — the export button and the proforma drawers. Neither had a test.
- *
- * The expensive failure is the export quietly returning page one. Stock
- * allocation is what tells a planner whether a container can be filled, and a
- * spreadsheet holding the first fifty articles of two hundred does not look
- * truncated: it looks like a short catalogue. So the multi-page walk is pinned
- * here row by row, along with its refusal to return a partial result when a
- * later page fails.
+ * The on-screen table intentionally keeps its first request at 50 rows so the
+ * initial Render payload stays bounded. Additional pages are fetched only when
+ * the user approaches the bottom and are merged into the existing response.
+ * Explicit business actions still use fetchAllV5AllocationData because export
+ * and proforma workflows require a complete snapshot immediately.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,6 +24,8 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
   return {
     ok,
     status,
+    statusText: ok ? "OK" : "Error",
+    headers: new Headers({ "Content-Type": "application/json" }),
     clone() {
       return this;
     },
@@ -62,10 +58,11 @@ beforeAll(async () => {
 beforeEach(() => {
   underlyingFetch.mockClear();
   underlyingFetch.mockImplementation(async () => jsonResponse(allocationPage()));
+  window.history.replaceState({}, "", "/factory/stock-allocation-v5");
 });
 
 afterEach(() => {
-  document.querySelector("#erp-v5-allocation-pagination")?.remove();
+  document.querySelector("#erp-v5-allocation-progress")?.remove();
 });
 
 describe("v5 allocation full-data fetch", () => {
@@ -84,8 +81,6 @@ describe("v5 allocation full-data fetch", () => {
 
     const result = await fetchAllV5AllocationData(new URLSearchParams({ companyId: "1" }));
 
-    // Three pages of two rows. Stopping after page one is the failure this
-    // whole test exists for, and six rows is the only proof it did not.
     expect(result.rows).toHaveLength(6);
     expect(underlyingFetch).toHaveBeenCalledTimes(3);
     expect(Object.keys(result.productNames as Record<string, string>)).toHaveLength(3);
@@ -103,8 +98,6 @@ describe("v5 allocation full-data fetch", () => {
   it("reports the joined result as a single complete page", async () => {
     const result = await fetchAllV5AllocationData();
 
-    // Callers pass this straight into an export. Leaving hasNextPage true would
-    // invite a second, duplicating walk over data already collected.
     expect(result.hasNextPage).toBe(false);
     expect(result.hasPreviousPage).toBe(false);
     expect(result.page).toBe(1);
@@ -117,8 +110,6 @@ describe("v5 allocation full-data fetch", () => {
       return jsonResponse(allocationPage({ rows: [{ articleCode: `A-${page}` }], totalPages: 3, page }));
     });
 
-    // A partial return here is worse than an error: the caller cannot tell an
-    // export of every article from an export of the first fifty.
     await expect(fetchAllV5AllocationData()).rejects.toThrow("Allocation page unavailable");
   });
 
@@ -130,19 +121,49 @@ describe("v5 allocation full-data fetch", () => {
 });
 
 describe("v5 allocation on-screen interception", () => {
-  it("pages the table query", async () => {
-    await window.fetch(`${ENDPOINT}?companyId=1`);
+  it("keeps the initial table payload at 50 rows", async () => {
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=initial`);
 
     const url = sentUrl(underlyingFetch.mock.calls[0]);
     expect(url.searchParams.get("pagination")).toBe("1");
+    expect(url.searchParams.get("page")).toBe("1");
     expect(url.searchParams.get("limit")).toBe("50");
+  });
+
+  it("loads the next page near the bottom and merges it with already-loaded rows", async () => {
+    underlyingFetch.mockImplementation(async (input: unknown) => {
+      const page = Number(sentUrl([input]).searchParams.get("page") || "1");
+      return jsonResponse(
+        allocationPage({
+          rows: [{ articleCode: page === 1 ? "A-1" : "B-1" }],
+          productNames: page === 1 ? { "A-1": "Article One" } : { "B-1": "Article Two" },
+          total: 2,
+          page,
+          totalPages: 2,
+        })
+      );
+    });
+
+    const first = await window.fetch(`${ENDPOINT}?companyId=1&filter=progressive`);
+    const firstBody = (await first.json()) as { rows: Array<{ articleCode: string }> };
+    expect(firstBody.rows.map((row) => row.articleCode)).toEqual(["A-1"]);
+
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });
+    Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 700 });
+    Object.defineProperty(document.documentElement, "scrollTop", { configurable: true, value: 650 });
+    document.documentElement.dispatchEvent(new Event("scroll"));
+
+    const second = await window.fetch(`${ENDPOINT}?companyId=1&filter=progressive`);
+    const secondBody = (await second.json()) as { rows: Array<{ articleCode: string }> };
+
+    expect(sentUrl(underlyingFetch.mock.calls[1]).searchParams.get("page")).toBe("2");
+    expect(secondBody.rows.map((row) => row.articleCode)).toEqual(["A-1", "B-1"]);
+    expect(document.querySelector("[data-testid='v5-allocation-page-next']")).toBeNull();
   });
 
   it("leaves an explicit full-action request alone", async () => {
     await window.fetch(`${ENDPOINT}?companyId=1&fullAction=1&limit=250`);
 
-    // fetchAllV5AllocationData goes through this same patched fetch, so an
-    // interceptor that paged full actions would page the export walk itself.
     expect(sentUrl(underlyingFetch.mock.calls[0]).searchParams.get("limit")).toBe("250");
   });
 

@@ -83,6 +83,11 @@ const SAFE_INPUT_TYPES = new Set([
   "week",
 ]);
 
+const FIELD_SELECTOR = "input,textarea,select";
+const SIDEBAR_SELECTOR = "[data-sidebar='sidebar'],[data-sidebar='content'],[data-testid*='sidebar']";
+const SIDEBAR_LINK_SELECTOR = "a[href]";
+const SIDEBAR_BUTTON_SELECTOR = "button[data-testid*='section'],button[aria-expanded]";
+
 function fieldDescriptor(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {
   const labels = element.labels ? Array.from(element.labels).map((label) => label.textContent ?? "").join(" ") : "";
   return [
@@ -139,36 +144,92 @@ function sameOriginNavigation(anchor: HTMLAnchorElement, location: Location): bo
   }
 }
 
+function descendantsIncludingRoot<T extends Element>(root: ParentNode, selector: string): T[] {
+  const matches: T[] = [];
+  if (root instanceof Element && root.matches(selector)) matches.push(root as T);
+  root.querySelectorAll<T>(selector).forEach((element) => matches.push(element));
+  return matches;
+}
+
+function setAttributeIfChanged(element: Element, name: string, value: string): void {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+}
+
 function sidebarRoots(root: ParentNode): Element[] {
-  return Array.from(root.querySelectorAll("[data-sidebar='sidebar'],[data-sidebar='content'],[data-testid*='sidebar']"));
+  return descendantsIncludingRoot<Element>(root, SIDEBAR_SELECTOR);
 }
 
 export function annotateRemoteControlSurface(root: ParentNode = document): void {
-  root.querySelectorAll("input,textarea,select").forEach((element) => {
+  descendantsIncludingRoot<Element>(root, FIELD_SELECTOR).forEach((element) => {
     if (shouldAnnotateRemoteEditable(element)) {
-      element.setAttribute("data-remote-control-editable", "true");
+      setAttributeIfChanged(element, "data-remote-control-editable", "true");
     }
   });
 
   for (const sidebar of sidebarRoots(root)) {
-    sidebar.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((anchor) => {
+    descendantsIncludingRoot<HTMLAnchorElement>(sidebar, SIDEBAR_LINK_SELECTOR).forEach((anchor) => {
       if (sameOriginNavigation(anchor, window.location) && !isProtected(anchor)) {
-        anchor.setAttribute("data-remote-control-action", "navigation");
-        anchor.setAttribute("data-remote-control-safe", "true");
+        setAttributeIfChanged(anchor, "data-remote-control-action", "navigation");
+        setAttributeIfChanged(anchor, "data-remote-control-safe", "true");
       }
     });
-    sidebar.querySelectorAll<HTMLElement>("button[data-testid*='section'],button[aria-expanded]").forEach((button) => {
+    descendantsIncludingRoot<HTMLElement>(sidebar, SIDEBAR_BUTTON_SELECTOR).forEach((button) => {
       if (!isProtected(button)) {
-        button.setAttribute("data-remote-control-action", "navigation");
-        button.setAttribute("data-remote-control-safe", "true");
+        setAttributeIfChanged(button, "data-remote-control-action", "navigation");
+        setAttributeIfChanged(button, "data-remote-control-safe", "true");
       }
     });
   }
 }
 
+function minimalMutationRoots(candidates: Set<Element>): Element[] {
+  const roots = Array.from(candidates).filter((element) => element.isConnected);
+  return roots.filter((candidate) => !roots.some((other) => other !== candidate && other.contains(candidate)));
+}
+
 export function installRemoteControlSurfaceCoverage(root: HTMLElement = document.body): () => void {
   annotateRemoteControlSurface(root);
-  const observer = new MutationObserver(() => annotateRemoteControlSurface(root));
+
+  const pendingRoots = new Set<Element>();
+  let scheduledFrame: number | null = null;
+  let disposed = false;
+
+  const flush = () => {
+    scheduledFrame = null;
+    if (disposed) return;
+    const roots = minimalMutationRoots(pendingRoots);
+    pendingRoots.clear();
+    roots.forEach((changedRoot) => annotateRemoteControlSurface(changedRoot));
+  };
+
+  const scheduleFlush = () => {
+    if (scheduledFrame !== null || disposed) return;
+    if (typeof window.requestAnimationFrame === "function") {
+      scheduledFrame = window.requestAnimationFrame(flush);
+    } else {
+      scheduledFrame = window.setTimeout(flush, 16);
+    }
+  };
+
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type !== "childList") continue;
+      record.addedNodes.forEach((node) => {
+        if (node instanceof Element && node.isConnected && root.contains(node)) pendingRoots.add(node);
+      });
+    }
+    if (pendingRoots.size > 0) scheduleFlush();
+  });
   observer.observe(root, { childList: true, subtree: true });
-  return () => observer.disconnect();
+
+  return () => {
+    disposed = true;
+    observer.disconnect();
+    pendingRoots.clear();
+    if (scheduledFrame !== null) {
+      if (typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(scheduledFrame);
+      else window.clearTimeout(scheduledFrame);
+      scheduledFrame = null;
+    }
+  };
 }

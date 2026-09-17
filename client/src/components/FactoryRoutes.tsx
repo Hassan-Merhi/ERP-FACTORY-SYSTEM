@@ -107,6 +107,7 @@ import {
   WipersReEntry,
 } from "@/lazyPages";
 
+const AccountGroups = lazy(() => import("@/pages/AccountGroups"));
 const FactoryInvoiceDetailBilingual = lazy(() => import("@/pages/factory/FactoryInvoiceDetailBilingual"));
 const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatchOptimized"));
 
@@ -174,6 +175,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={StockQuery} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
+      {isAdminOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
       <Route path="/factory/vouchers/:id/edit" component={VoucherEdit} />
