@@ -26,10 +26,15 @@ assert.match(client, /for \(let page = 2; page <= totalPages; page \+= 1\)/, "al
 assert.match(client, /hasFocusedDeepLink\(\)/, "focused proforma links must bypass normal paging");
 assert.match(client, /negativeOnlyMode \|\| hasFocusedDeepLink\(\)/, "global Negative Only and deep links must stay full-data");
 assert.match(client, /button-v5-toggle-negative-only/, "Negative Only mode changes must be observed");
-assert.match(client, /v5-allocation-page-previous/, "Previous control is required");
-assert.match(client, /v5-allocation-page-next/, "Next control is required");
-assert.match(client, /v5-allocation-page-size/, "page-size control is required");
-assert.match(client, /garbage\/wiper toggle is page-scoped/, "page-scoped garbage filtering must be disclosed");
+assert.match(client, /const pageCache = new Map<number, V5AllocationData>\(\)/, "progressive pages must be cached client-side");
+assert.match(client, /handleProgressiveScroll/, "stock allocation must progressively load as the user scrolls");
+assert.match(client, /AUTOLOAD_THRESHOLD_PX/, "progressive loading must use a near-bottom threshold");
+assert.match(client, /v5-allocation-progress/, "progressive loading status must be available");
+assert.match(client, /scroll to load more/, "the progressive loading status must explain the interaction");
+assert.match(client, /JSON\.stringify\(merged\)/, "progressive pages must be merged into the legacy V5 response shape");
+assert.doesNotMatch(client, /v5-allocation-page-next/, "manual Next pagination must stay removed");
+assert.doesNotMatch(client, /v5-allocation-page-previous/, "manual Previous pagination must stay removed");
+assert.doesNotMatch(client, /v5-allocation-page-size/, "manual page-size pagination must stay removed");
 assert.match(client, /handleRouteState/, "route changes must reset transient bridge modes");
 
 assert.match(
@@ -72,13 +77,15 @@ console.log(
       ok: true,
       checks: [
         "V5 startup wiring",
-        "normal 50-row paging",
+        "normal 50-row initial payload",
         "server 50-row default",
         "server 250-row cap",
+        "progressive scroll loading",
+        "client-side cumulative page merge",
+        "no manual next/previous controls",
         "all-pages action loader",
         "focused deep-link bypass",
         "global Negative Only preservation",
-        "visible page controls",
         "route-state reset",
         "complete create/edit/draft rows",
         "complete filtered Excel export",
