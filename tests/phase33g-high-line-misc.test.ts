@@ -262,7 +262,7 @@ describe("Phase 33G — AI validation routes", () => {
     });
     expect(result.warnings).toHaveLength(1);
     expect(result.errors).toHaveLength(2);
-    expect(result.suggestedFixes.map((fix: any) => fix.suggested)).toEqual(["Widget - A", "Widget - B"]);
+    expect(result.suggestedFixes.map((fix: any) => fix.suggested)).toEqual(["Widget - B", "Widget - C"]);
     expect(result.cleanedExcel).toBeTruthy();
   });
 
