@@ -1341,7 +1341,7 @@
     },
     "/api/screen-feed/being-watched": {
       "status": 200,
-      "shape": "{fast:scalar,lastWatcherPollAgeMs:scalar,userId:scalar,watched:scalar}"
+      "shape": "{fast:scalar,lastWatcherPollAgeMs:scalar,tabId:scalar,userId:scalar,watched:scalar}"
     },
     "/api/screen-feed/capabilities": {
       "status": 200,
@@ -1369,7 +1369,7 @@
     },
     "/api/screen-feed/live/status": {
       "status": 200,
-      "shape": "{fast:scalar,watched:scalar}"
+      "shape": "{fast:scalar,tabId:scalar,watched:scalar}"
     },
     "/api/sessions": {
       "status": 200,
