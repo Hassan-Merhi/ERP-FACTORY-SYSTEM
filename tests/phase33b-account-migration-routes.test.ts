@@ -33,7 +33,7 @@ async function makeAccount(companyId: number, label: string): Promise<number> {
 async function makeVoucher(
   companyId: number,
   entries: Array<{ accountId: number; debit: string; credit: string }>,
-  label: string,
+  label: string
 ): Promise<number> {
   sequence += 1;
   const [voucher] = await db
@@ -57,7 +57,7 @@ async function makeVoucher(
       debitAmount: entry.debit,
       creditAmount: entry.credit,
       narration: `${TEST_PREFIX} ${label}`,
-    })),
+    }))
   );
   return voucher.id;
 }
@@ -140,7 +140,7 @@ describe("Phase 33B account migration accounting routes", () => {
         { accountId: migratedAccountId, debit: "100.00", credit: "0" },
         { accountId: ctx.cashAccountId, debit: "0", credit: "100.00" },
       ],
-      "shared-history",
+      "shared-history"
     );
 
     const execute = await agent.post("/api/admin/account-migration/execute").send({
@@ -167,7 +167,7 @@ describe("Phase 33B account migration accounting routes", () => {
           AND narration = $2
         ORDER BY id
         LIMIT 1`,
-      [sourceVoucherId, `${TEST_PREFIX} shared-history`],
+      [sourceVoucherId, `${TEST_PREFIX} shared-history`]
     );
     expect(movedEntry.rows[0]?.ledger_account_id).not.toBe(migratedAccountId);
 
@@ -191,7 +191,7 @@ describe("Phase 33B account migration accounting routes", () => {
           AND narration = $2
         ORDER BY id
         LIMIT 1`,
-      [sourceVoucherId, `${TEST_PREFIX} shared-history`],
+      [sourceVoucherId, `${TEST_PREFIX} shared-history`]
     );
     expect(restored.rows[0]?.ledger_account_id).toBe(migratedAccountId);
   }, 60_000);
@@ -213,7 +213,7 @@ describe("Phase 33B account migration accounting routes", () => {
         { accountId: migratedAccountId, debit: "100.00", credit: "0" },
         { accountId: migratedAccountId, debit: "0", credit: "100.00" },
       ],
-      "post-migration",
+      "post-migration"
     );
 
     const undo = await agent.post("/api/admin/account-migration/undo").send({
