@@ -60,4 +60,40 @@ describe("net position account classification", () => {
       ])
     );
   });
+
+  it("excludes account migration clearing accounts from net position presentation", () => {
+    const accounts = [
+      account({
+        id: 3348,
+        name: "Account Migration Clearing - HASSAN PROPERTIES",
+        accountType: "Asset",
+        subType: "account_migration_clearing",
+        openingBalance: "300000",
+        openingBalanceSide: "Dr",
+      }),
+      account({
+        id: 3328,
+        name: "Account Migration Clearing TO - Hassan Properties",
+        accountType: "Liability",
+        subType: "account_migration_clearing",
+        openingBalance: "600000",
+        openingBalanceSide: "Cr",
+      }),
+      account({
+        id: 4000,
+        name: "Visible Cash",
+        accountType: "Cash",
+        openingBalance: "250",
+        openingBalanceSide: "Dr",
+      }),
+    ];
+
+    const result = classifyNetPositionAccounts(accounts, new Map());
+
+    expect(result.forUsTotal).toBe(250);
+    expect(result.onUsTotal).toBe(0);
+    expect(result.forUsAccounts).toHaveLength(1);
+    expect(result.forUsAccounts[0]).toMatchObject({ id: 4000, name: "Visible Cash", value: 250 });
+    expect(result.onUsAccounts).toHaveLength(0);
+  });
 });
