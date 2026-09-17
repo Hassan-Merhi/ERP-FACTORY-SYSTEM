@@ -281,6 +281,7 @@ rejectText(
 
 // Phase 4: static assets, image extraction, and production build budgets.
 requireText(viteConfig, "labelAssetExtractionPlugin()", "The label asset extraction plugin must remain enabled.");
+requireText(viteConfig, "cssColorMixPlugin()", "CSS color-mix() must be resolved at build time so capture can skip the style walk.");
 requireText(viteConfig, 'return "label-printing";', "Label printing code must remain isolated from core bundles.");
 requireText(labelAssetPlugin, "EMBEDDED_LABEL_LOGO_RE", "The embedded label logo must be replaced during builds.");
 requireText(labelAssetPlugin, "createHash", "The extracted label logo must use a content-derived filename.");
