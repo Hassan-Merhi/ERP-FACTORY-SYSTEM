@@ -3,11 +3,10 @@ import { describe, expect, it } from "vitest";
 
 const viewer = readFileSync("client/src/pages/settings/RemoteSupportWatchDialog.tsx", "utf8");
 const activeUsers = readFileSync("client/src/pages/settings/ActiveUsersSection.tsx", "utf8");
+const transport = readFileSync("client/src/lib/screen-feed-binary-transport.ts", "utf8");
 
 describe("remote support fast viewer", () => {
   it("uses the runtime flag to choose live transport in the unified viewer", () => {
-    // The capability probe must be readable by every authorized watcher, not
-    // just Developers, or non-Developer watchers are pinned to polling mode.
     expect(viewer).toContain('queryKey: ["/api/screen-feed/capabilities"]');
     expect(viewer).not.toContain('apiRequest("GET", "/api/screen-feed/admin/runtime")');
     expect(viewer).toContain("runtime?.flags?.fastScreenFeed === true");
@@ -15,18 +14,19 @@ describe("remote support fast viewer", () => {
     expect(activeUsers).toContain("<RemoteSupportWatchDialog");
   });
 
-  it("retains ETags and treats 304 as a successful unchanged frame", () => {
-    expect(viewer).toContain('"If-None-Match": state.etag');
-    expect(viewer).toContain("if (response.status === 304) return state");
-    expect(viewer).toContain('etag: response.headers.get("ETag")');
-    expect(viewer).toContain("setFrame(next.frame)");
+  it("keeps binary frames primary but retains a conditional HTTP polling fallback", () => {
+    expect(transport).toContain('headers["If-None-Match"] = viewerPollEtag');
+    expect(transport).toContain("if (response.status === 304)");
+    expect(transport).toContain('viewerPollEtag = response.headers.get("ETag") || null');
+    expect(transport).toContain('transport: "http-fallback"');
+    expect(transport).toContain("emitFrame({");
   });
 
-  it("uses SSE with abortable polling fallback and complete watched-user cleanup", () => {
-    expect(viewer).toContain("new EventSource");
-    expect(viewer).toContain("pollAbortRef.current?.abort()");
-    expect(viewer).toContain("eventSource?.close()");
-    expect(viewer).toContain("window.clearInterval(intervalId)");
-    expect(viewer).toContain("stateRef.current = { etag: null, frame: null, failure: null }");
+  it("starts fallback polling while the socket is unavailable and cleans it up completely", () => {
+    expect(transport).toContain("scheduleViewerPollingFallback(0)");
+    expect(transport).toContain("viewerPollAbort?.abort()");
+    expect(transport).toContain("window.clearTimeout(viewerPollTimer)");
+    expect(transport).toContain("stopViewerPollingFallback(true)");
+    expect(transport).toContain("current?.close(1000, \"Screen feed idle\")");
   });
 });
