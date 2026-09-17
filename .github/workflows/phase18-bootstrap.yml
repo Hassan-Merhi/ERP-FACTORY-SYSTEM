@@ -1,0 +1,64 @@
+name: Phase 18 implementation bootstrap
+
+on:
+  push:
+    branches:
+      - phase-18-control-surface-rtl
+
+permissions:
+  contents: write
+
+jobs:
+  apply-phase-18:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-18-control-surface-rtl
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply Phase 18 patch
+        run: python3 .github/scripts/apply_phase18.py
+
+      - name: Write reviewed route-reachability baseline
+        run: node scripts/generate-remote-control-action-registry.mjs --write-reachability-baseline
+
+      - name: Verify registry and route reachability
+        run: node scripts/generate-remote-control-action-registry.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Phase 18 tests
+        run: >-
+          npx vitest run
+          client/src/hooks/remote-control-surface-coverage.test.ts
+          client/src/hooks/screen-feed-capture-engine.viewport.test.ts
+          client/src/hooks/remote-mouse-control-policy.test.ts
+          tests/screen-feed-viewing-metadata.test.ts
+          tests/remote-control-command-service.test.ts
+          tests/remote-support-binary-transport.test.ts
+          tests/remote-control-route-reachability.test.ts
+
+      - name: TypeScript check
+        run: npm run check
+
+      - name: Remove one-shot bootstrap files
+        run: rm -f .github/workflows/phase18-bootstrap.yml .github/scripts/apply_phase18.py
+
+      - name: Commit Phase 18 implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(remote-support): complete Phase 18 control coverage and RTL accuracy"
+          git push origin HEAD:phase-18-control-surface-rtl
