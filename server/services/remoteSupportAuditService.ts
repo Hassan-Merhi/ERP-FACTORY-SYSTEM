@@ -1,6 +1,7 @@
 import { auditLog } from "@shared/schema";
 import { db } from "../db";
 import { logger } from "../lib/logger";
+import { installRemoteSupportAuditRetention } from "./remoteSupportAuditRetention";
 import { subscribeRemoteControlSessionStops, type RemoteControlSession } from "./remoteControlSessionService";
 
 export type RemoteSupportAuditEvent =
@@ -139,6 +140,7 @@ export async function writeRemoteSupportAudit(input: RemoteSupportAuditInput): P
 }
 
 export function installRemoteSupportSessionStopAudit(): void {
+  installRemoteSupportAuditRetention();
   if (stopAuditInstalled) return;
   stopAuditInstalled = true;
   subscribeRemoteControlSessionStops((session) => {
