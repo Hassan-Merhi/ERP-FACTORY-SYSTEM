@@ -7,6 +7,11 @@ import {
   type RemoteKeyboardCommandView,
   type RemoteKeyboardExecutionResult,
 } from "@/hooks/remote-keyboard-control-policy";
+import {
+  requestRemoteControlRealtime,
+  subscribeRemoteControlRealtime,
+  subscribeRemoteControlRealtimeReady,
+} from "@/lib/remote-control-session-transport";
 
 const MAX_COMMAND_AGE_MS = 8000;
 const MAX_SEEN_COMMANDS = 256;
@@ -20,9 +25,7 @@ function parseCommand(value: unknown): RemoteKeyboardCommandView | null {
     (command.type !== "insert-text" && command.type !== "key") ||
     typeof command.sequence !== "number" ||
     typeof command.shiftKey !== "boolean"
-  ) {
-    return null;
-  }
+  ) return null;
   return command as RemoteKeyboardCommandView;
 }
 
@@ -33,21 +36,16 @@ async function reportResult(
   result: RemoteKeyboardExecutionResult
 ): Promise<void> {
   try {
-    await fetch(
-      `/api/screen-feed/control/sessions/${encodeURIComponent(sessionId)}/keyboard-commands/${encodeURIComponent(commandId)}/result`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tabId,
-          status: result.status,
-          reason: result.reason,
-        }),
-      }
-    );
+    await requestRemoteControlRealtime({
+      type: "remote-control:keyboard-result",
+      sessionId,
+      tabId,
+      commandId,
+      status: result.status,
+      reason: result.reason,
+    });
   } catch {
-    // The session heartbeat or next command will reconcile transport state.
+    // The support session heartbeat/reconnect will reconcile transport state.
   }
 }
 
@@ -84,26 +82,22 @@ export function RemoteKeyboardControlTarget({
     document.addEventListener("input", onTrustedLocalInteraction, true);
 
     let closed = false;
-    const params = new URLSearchParams({ sessionId, tabId });
-    const eventSource = new EventSource(`/api/screen-feed/control/keyboard-commands?${params.toString()}`, {
-      withCredentials: true,
-    });
-
-    eventSource.addEventListener("command", (event) => {
+    const bind = () => {
       if (closed) return;
-      let command: RemoteKeyboardCommandView | null;
-      try {
-        command = parseCommand(JSON.parse((event as MessageEvent<string>).data));
-      } catch {
-        command = null;
-      }
+      void requestRemoteControlRealtime({
+        type: "remote-control:bind-keyboard-target",
+        sessionId,
+        tabId,
+      }).catch(() => undefined);
+    };
+
+    const handleCommand = (value: unknown) => {
+      if (closed) return;
+      const command = parseCommand(value);
       if (!command || command.sessionId !== sessionId) return;
 
       if (seenCommandIdsRef.current.has(command.id) || command.sequence <= lastSequenceRef.current) {
-        void reportResult(sessionId, tabId, command.id, {
-          status: "ignored",
-          reason: "duplicate-command",
-        });
+        void reportResult(sessionId, tabId, command.id, { status: "ignored", reason: "duplicate-command" });
         return;
       }
 
@@ -120,11 +114,21 @@ export function RemoteKeyboardControlTarget({
           ? { status: "ignored" as const, reason: "stale-command" }
           : applyRemoteKeyboardCommand(command);
       void reportResult(sessionId, tabId, command.id, result);
+    };
+
+    const unsubscribeMessages = subscribeRemoteControlRealtime((message) => {
+      if (message.type === "remote-control:keyboard-command") handleCommand(message.command);
     });
+    const unsubscribeReady = subscribeRemoteControlRealtimeReady((ready) => {
+      if (ready) bind();
+    });
+    bind();
 
     return () => {
       closed = true;
-      eventSource.close();
+      void requestRemoteControlRealtime({ type: "remote-control:unbind-keyboard-target", sessionId }).catch(() => undefined);
+      unsubscribeMessages();
+      unsubscribeReady();
       document.removeEventListener("pointerdown", onTrustedLocalInteraction, true);
       document.removeEventListener("keydown", onTrustedLocalInteraction, true);
       document.removeEventListener("beforeinput", onTrustedLocalInteraction, true);
