@@ -1,6 +1,6 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "../server/db";
 import * as schema from "../shared/schema";
@@ -58,8 +58,14 @@ describe("Phase 33B voucher entry finance reads", () => {
     const invalid = await agent.get("/api/vouchers/not-a-number/entries");
     expect(invalid.status).toBe(400);
 
+    const invalidView = await agent.get("/api/vouchers/not-a-number/view-entries");
+    expect(invalidView.status).toBe(400);
+
     const missing = await agent.get("/api/vouchers/2147482500/entries");
     expect(missing.status).toBe(404);
+
+    const missingView = await agent.get("/api/vouchers/2147482500/view-entries");
+    expect(missingView.status).toBe(404);
 
     const voucher = await makeVoucher("Journal");
     await db.insert(schema.voucherEntries).values([
@@ -112,10 +118,13 @@ describe("Phase 33B voucher entry finance reads", () => {
     const foreignVoucher = await makeVoucher("Journal", { companyId: foreignCompany.id });
 
     const response = await agent.get(`/api/vouchers/${foreignVoucher.id}/entries`);
-    expect([403, 404]).toContain(response.status);
+    expect(response.status).toBe(403);
     expect(response.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ voucherId: foreignVoucher.id })])
     );
+
+    const viewResponse = await agent.get(`/api/vouchers/${foreignVoucher.id}/view-entries`);
+    expect(viewResponse.status).toBe(403);
   });
 
   it("returns Sales item detail for finance users and hides cost/profit when ERP field policy requires it", async () => {
@@ -160,5 +169,40 @@ describe("Phase 33B voucher entry finance reads", () => {
       hassansProfit: null,
       hassansPercentage: null,
     });
+  });
+
+  it("redacts generic financial amounts for POS view-entry reads", async () => {
+    const voucher = await makeVoucher("Journal");
+    await db.insert(schema.voucherEntries).values({
+      voucherId: voucher.id,
+      ledgerAccountId: ctx.cashAccountId,
+      debitAmount: "25.00",
+      creditAmount: "0",
+      narration: "Sensitive accounting narration",
+    });
+
+    await db
+      .update(schema.userCompanyRoles)
+      .set({ role: "POS" })
+      .where(and(eq(schema.userCompanyRoles.userId, ctx.userId), eq(schema.userCompanyRoles.companyId, ctx.companyId)));
+
+    const posAgent = request.agent(ctx.app);
+    const login = await posAgent.post("/api/auth/login").send({
+      username: `${TEST_PREFIX}_testuser`,
+      password: "testpassword123",
+    });
+    expect(login.status).toBe(200);
+
+    const selected = await posAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+    expect(selected.status).toBe(200);
+
+    const response = await posAgent.get(`/api/vouchers/${voucher.id}/view-entries`);
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({
+      debitAmount: "0",
+      creditAmount: "0",
+    });
+    expect(response.body[0].narration).not.toBe("Sensitive accounting narration");
   });
 });
