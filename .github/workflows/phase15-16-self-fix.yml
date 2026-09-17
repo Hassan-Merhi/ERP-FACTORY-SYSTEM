@@ -1,0 +1,93 @@
+name: Phase 15-16 One-Shot CI Repair
+
+on:
+  push:
+    branches:
+      - fix/phase15-16-presence-observability
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: fix/phase15-16-presence-observability
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply narrow TypeScript and hook fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          remote_control = Path("server/services/remoteControlWebSocketTransport.ts")
+          text = remote_control.read_text()
+          old = "commandId: message.commandId,"
+          if text.count(old) != 2:
+              raise SystemExit(f"Expected 2 raw commandId assignments, found {text.count(old)}")
+          remote_control.write_text(text.replace(old, "commandId: clean(message.commandId, 128),"))
+
+          ws_server = Path("server/wsServer.ts")
+          text = ws_server.read_text()
+          old = """  if (data instanceof ArrayBuffer) return Buffer.from(data);\n  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);"""
+          if old not in text:
+              raise SystemExit("Expected RawData narrowing block was not found")
+          ws_server.write_text(text.replace(old, "  return Buffer.from(data);", 1))
+
+          context = Path("client/src/components/RemoteControllerSessionContext.tsx")
+          text = context.read_text()
+          old = """  useEffect(() => {\n    const watchedTarget = target;\n    return () => {\n      const current = sessionRef.current;\n      if (\n        !watchedTarget ||\n        !current ||\n        current.targetUserId !== watchedTarget.userId ||\n        current.targetTabId !== watchedTarget.tabId\n      ) return;\n      void remoteControllerRequestJson(`/api/screen-feed/control/sessions/${encodeURIComponent(current.id)}/stop`, {\n        method: \"POST\",\n        body: JSON.stringify({ reason: \"controller-viewer-tab-changed\" }),\n      }).catch(() => undefined);\n    };\n  }, [target?.tabId, target?.userId]);"""
+          new = """  const targetUserId = target?.userId;\n  const targetTabId = target?.tabId;\n\n  useEffect(() => {\n    return () => {\n      const current = sessionRef.current;\n      if (\n        !targetUserId ||\n        !targetTabId ||\n        !current ||\n        current.targetUserId !== targetUserId ||\n        current.targetTabId !== targetTabId\n      )\n        return;\n      void remoteControllerRequestJson(`/api/screen-feed/control/sessions/${encodeURIComponent(current.id)}/stop`, {\n        method: \"POST\",\n        body: JSON.stringify({ reason: \"controller-viewer-tab-changed\" }),\n      }).catch(() => undefined);\n    };\n  }, [targetTabId, targetUserId]);"""
+          if old not in text:
+              raise SystemExit("Expected controller cleanup effect was not found")
+          context.write_text(text.replace(old, new, 1))
+
+      - name: Format all changed source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed_files < <(git diff --name-only origin/main...HEAD | grep -E '^(client/src|server|shared|tests|scripts)/.*\.(ts|tsx|css|mjs)$' || true)
+          if [ "${#changed_files[@]}" -gt 0 ]; then
+            node node_modules/prettier/bin/prettier.cjs --write "${changed_files[@]}"
+          fi
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/components/RemoteControllerSessionContext.tsx \
+            server/services/remoteControlWebSocketTransport.ts \
+            server/wsServer.ts
+
+      - name: Verify type-check and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run lint
+          npm run audit:toolchain
+          npm run audit:scripts
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src server tests scripts .github/workflows/remote-support-rollout-e2e.yml
+          if git diff --cached --quiet; then
+            echo "No repair changes required."
+            exit 0
+          fi
+          git commit -m "fix: clear Phase 15-16 CI gates"
+          git push origin HEAD:fix/phase15-16-presence-observability
