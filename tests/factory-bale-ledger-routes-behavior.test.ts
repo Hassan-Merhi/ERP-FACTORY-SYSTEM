@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => {
       from: vi.fn(() => builder),
       where: vi.fn(() => builder),
       orderBy: vi.fn(() => builder),
+      limit: vi.fn(() => builder),
       then: (resolve: (value: unknown[]) => unknown, reject: (reason: unknown) => unknown) =>
         Promise.resolve(result).then(resolve, reject),
     };
@@ -53,7 +54,7 @@ vi.mock("@shared/schema", () => ({
   stockItems: { id: "stockItems.id" },
   locations: { id: "locations.id" },
   factoryDaybookEntries: { id: "daybook.id" },
-  factoryBaleWasteDispatches: { id: "waste.id" },
+  factoryBaleWasteDispatches: { id: "waste.id", companyId: "waste.companyId", dispatchNumber: "waste.dispatchNumber" },
 }));
 
 import { registerEmployeeLedgerWasteRoutes } from "../server/routes/factory/employee-pos/employeeLedgerWasteRoutes";
@@ -214,6 +215,71 @@ describe("factory bale ledger route behavior", () => {
     ]);
   });
 
+  it("returns lazy bale details only for the requested ledger section and uses the catalog production price", async () => {
+    harness.executeResults.push(
+      {
+        rows: [
+          { id: 1, productId: 1, articleCode: "SH-1", status: "IN_STOCK", referenceNumber: "R1", weightKg: 40 },
+          { id: 2, productId: 2, articleCode: "WP-1", status: "IN_STOCK", referenceNumber: "R2", weightKg: 20 },
+          { id: 3, productId: 1, articleCode: "SH-1", status: "SOLD", referenceNumber: "R3", weightKg: 41 },
+        ],
+      },
+      { rows: [{ baleId: 1 }] },
+      { rows: [] }
+    );
+    harness.selectResults.push(
+      [
+        { id: 1, categoryId: 10, productionPrice: "12.50" },
+        { id: 2, categoryId: 20, productionPrice: "4.25" },
+      ],
+      [
+        { id: 10, name: "Clothing" },
+        { id: 20, name: "Wiper Waste" },
+      ]
+    );
+
+    const res = resHarness();
+    await routes.get("GET /api/factory/bale-ledger/details")!(
+      req({ query: { section: "pendingLoading", productId: "1" } }),
+      res
+    );
+
+    expect(res.body).toEqual({
+      baleDetails: [{ id: 1, ref: "R1", weightKg: 40, totalCost: 12.5 }],
+    });
+  });
+
+  it("returns an empty waste-dispatch list immediately when no waste products exist", async () => {
+    harness.selectResults.push([{ id: 20, name: "Wiper Waste" }], []);
+    const res = resHarness();
+
+    await routes.get("GET /api/factory/waste-dispatch/bales")!(req({ query: { search: "wipe" } }), res);
+
+    expect(res.body).toEqual({ bales: [], categories: [{ id: 20, name: "Wiper Waste" }] });
+    expect(harness.db.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("groups waste history bales under their dispatch and leaves unmatched dispatches empty", async () => {
+    harness.selectResults.push([
+      { id: 7, dispatchNumber: "WD-0007" },
+      { id: 8, dispatchNumber: "WD-0008" },
+    ]);
+    harness.executeResults.push({
+      rows: [
+        { id: 101, wasteDispatchId: 7, referenceNumber: "W-1" },
+        { id: 102, wasteDispatchId: 7, referenceNumber: "W-2" },
+      ],
+    });
+    const res = resHarness();
+
+    await routes.get("GET /api/factory/waste-dispatch/history")!(req(), res);
+
+    expect(res.body).toEqual([
+      expect.objectContaining({ id: 7, bales: [expect.objectContaining({ id: 101 }), expect.objectContaining({ id: 102 })] }),
+      expect.objectContaining({ id: 8, bales: [] }),
+    ]);
+  });
+
   it("requires a selected company and validates lazy-detail section names", async () => {
     const noCompany = resHarness();
     await routes.get("GET /api/factory/bale-ledger")!(req({ session: {} }), noCompany);
@@ -227,5 +293,33 @@ describe("factory bale ledger route behavior", () => {
     );
     expect(invalidSection.statusCode).toBe(400);
     expect(invalidSection.body).toEqual({ message: "Invalid section" });
+  });
+
+  it("validates waste-dispatch delete identifiers and company-scoped existence", async () => {
+    const invalid = resHarness();
+    await routes.get("DELETE /api/factory/waste-dispatch/:id")!(req({ params: { id: "bad" } }), invalid);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.body).toEqual({ message: "Invalid dispatch id" });
+
+    harness.selectResults.push([]);
+    const missing = resHarness();
+    await routes.get("DELETE /api/factory/waste-dispatch/:id")!(req({ params: { id: "77" } }), missing);
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).toEqual({ message: "Dispatch not found" });
+  });
+
+  it("validates waste-dispatch submit payloads before numbering or stock mutations", async () => {
+    const noBales = resHarness();
+    await routes.get("POST /api/factory/waste-dispatch/submit")!(
+      req({ body: { baleIds: [], dispatchDate: "2026-09-17" } }),
+      noBales
+    );
+    expect(noBales.statusCode).toBe(400);
+    expect(noBales.body).toEqual({ message: "baleIds array is required" });
+
+    const noDate = resHarness();
+    await routes.get("POST /api/factory/waste-dispatch/submit")!(req({ body: { baleIds: [1] } }), noDate);
+    expect(noDate.statusCode).toBe(400);
+    expect(noDate.body).toEqual({ message: "dispatchDate is required" });
   });
 });
