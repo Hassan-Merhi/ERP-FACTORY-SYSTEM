@@ -3,14 +3,15 @@
  *
  * Code/alias resolution uses the same one-input-to-one-stock-item rule as the
  * main analyzer, then the shared analysis core guarantees one output row per
- * stock item. A supplied supplier id is always validated against the active
- * company before supplier-specific pricing can be read.
+ * stock item. A supplied supplier id may belong to the active company or its
+ * explicitly linked parent company.
  */
 import type { Express, Request, Response, RequestHandler } from "express";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { buildSupplierProfitRows, type ProfitSourceItem } from "./analysis-core";
+import { getProfitCheckSupplierScope } from "./supplier-scope";
 
 export function registerSupplierProfitImportRoutes(app: Express, requireAuth: RequestHandler) {
   app.post("/api/supplier-profit-check/import-by-codes", requireAuth, async (req: Request, res: Response) => {
@@ -47,11 +48,9 @@ export function registerSupplierProfitImportRoutes(app: Express, requireAuth: Re
         if (!Number.isInteger(supplierId) || supplierId <= 0) {
           return res.status(400).json({ message: "Invalid supplierId" });
         }
-        const supplierScope = await pool.query(
-          `SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
-          [supplierId, companyId]
-        );
-        if (supplierScope.rows.length === 0) return res.status(404).json({ message: "Supplier not found" });
+        if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+          return res.status(404).json({ message: "Supplier not found" });
+        }
       }
 
       const resolvedResult = await pool.query(

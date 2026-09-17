@@ -2,13 +2,15 @@
  * Supplier Profit Check manual price overrides.
  *
  * Overrides are supplier/item keyed in the legacy table, so every read/write
- * validates both records against the active company before touching it. Null is
- * an explicit reset value; omitted fields retain their previous value.
+ * validates the supplier against the active company or its explicitly linked
+ * parent and validates stock items against the active company. Null is an
+ * explicit reset value; omitted fields retain their previous value.
  */
 import type { Express, Request, Response, RequestHandler } from "express";
 import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { getProfitCheckSupplierScope } from "./supplier-scope";
 
 function normalizeNullablePrice(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -18,11 +20,7 @@ function normalizeNullablePrice(value: unknown): number | null {
 }
 
 async function supplierBelongsToCompany(supplierId: number, companyId: number): Promise<boolean> {
-  const result = await pool.query(`SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [
-    supplierId,
-    companyId,
-  ]);
-  return result.rows.length > 0;
+  return Boolean(await getProfitCheckSupplierScope(supplierId, companyId));
 }
 
 async function stockItemBelongsToCompany(stockItemId: number, companyId: number): Promise<boolean> {

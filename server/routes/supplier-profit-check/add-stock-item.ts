@@ -1,13 +1,15 @@
 /**
  * Add a stock item from Supplier Profit Check.
  *
- * The supplier and optional stock group must belong to the active company, and
- * item creation plus initial overrides commit or roll back together.
+ * The supplier may belong to the active company or its explicitly linked parent;
+ * the optional stock group and the newly created item always belong to the active
+ * company. Item creation plus initial overrides commit or roll back together.
  */
 import type { Express, Request, Response, RequestHandler } from "express";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { getProfitCheckSupplierScope } from "./supplier-scope";
 
 export function registerSupplierProfitAddStockItemRoutes(app: Express, requireAuth: RequestHandler) {
   app.post("/api/supplier-profit-check/add-stock-item", requireAuth, async (req: Request, res: Response) => {
@@ -28,18 +30,13 @@ export function registerSupplierProfitAddStockItemRoutes(app: Express, requireAu
       return res.status(400).json({ message: "Invalid stockGroupId" });
     }
 
+    if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+      return res.status(404).json({ message: "Supplier not found" });
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-
-      const supplier = await client.query(
-        `SELECT id FROM suppliers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
-        [supplierId, companyId]
-      );
-      if (supplier.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Supplier not found" });
-      }
 
       if (stockGroupId !== null) {
         const group = await client.query(`SELECT id FROM stock_groups WHERE id = $1 AND company_id = $2`, [

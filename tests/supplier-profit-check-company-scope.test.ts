@@ -59,7 +59,7 @@ describe("supplier profit check company scope", () => {
     harness.query.mockReset();
   });
 
-  it("rejects a supplier outside the active company before loading profit data", async () => {
+  it("rejects a supplier outside the active company and linked parent before loading profit data", async () => {
     harness.query.mockReturnValueOnce(result([]));
     const res = resHarness();
 
@@ -71,7 +71,7 @@ describe("supplier profit check company scope", () => {
 
   it("keeps a selected proforma scoped to company and supplier and preserves unresolved source qty", async () => {
     harness.query
-      .mockReturnValueOnce(result([{ id: 2 }]))
+      .mockReturnValueOnce(result([{ id: 2, company_id: 4, stock_group_id: null }]))
       .mockReturnValueOnce(
         result([
           {
@@ -120,17 +120,30 @@ describe("supplier profit check company scope", () => {
     });
   });
 
-  it("uses the active company when resolving the supplier stock group", async () => {
+  it("uses the active company's stock group for a locally owned supplier", async () => {
     harness.query
-      .mockReturnValueOnce(result([{ id: 2 }]))
-      .mockReturnValueOnce(result([{ stock_group_id: 5 }]))
+      .mockReturnValueOnce(result([{ id: 2, company_id: 4, stock_group_id: 5 }]))
       .mockReturnValueOnce(result([]));
     const res = resHarness();
 
     await analyze(req({ supplierId: 2, sourceType: "all" }), res);
 
-    expect(harness.query.mock.calls[1]?.[1]).toEqual([2, 4]);
-    expect(harness.query.mock.calls[2]?.[1]).toEqual([4, 5]);
+    expect(harness.query.mock.calls[0]?.[1]).toEqual([2, 4]);
+    expect(harness.query.mock.calls[1]?.[1]).toEqual([4, 5]);
+    expect(res.body).toHaveLength(0);
+  });
+
+  it("maps a linked parent supplier stock group into the active company by code", async () => {
+    harness.query
+      .mockReturnValueOnce(result([{ id: 2, company_id: 1, stock_group_id: 50 }]))
+      .mockReturnValueOnce(result([{ id: 7 }]))
+      .mockReturnValueOnce(result([]));
+    const res = resHarness();
+
+    await analyze(req({ supplierId: 2, sourceType: "all" }), res);
+
+    expect(harness.query.mock.calls[1]?.[1]).toEqual([4, 50, 1]);
+    expect(harness.query.mock.calls[2]?.[1]).toEqual([4, 7]);
     expect(res.body).toHaveLength(0);
   });
 });
