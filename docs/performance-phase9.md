@@ -27,6 +27,12 @@ A watched employee tab also treats CSS-driven changes as visual updates. Its cap
 
 Remote-control viewer discovery no longer performs a full-document scan for every ERP DOM mutation. A shallow body observer discovers Radix portal roots, scoped observers inspect only those roots for watch-dialog lifecycle changes, and a short debounce coalesces mount/unmount bursts before target/session state is refreshed.
 
+Screen-feed capture cost is kept off the employee's main thread as far as a full-page screenshot allows:
+
+- `color-mix()` is resolved at build time (`build/viteCssColorMixPlugin.ts`) so html2canvas never has to parse CSS Color 4 functions.
+- Clone sanitization no longer walks every element with `getComputedStyle`. Filters, blend modes, and pseudo-element decorations are stripped with one injected stylesheet; only images and inline background URLs are inspected.
+- JPEG encoding is a single resize + `toDataURL` pass instead of a five-step quality ladder.
+
 ## Remaining build warnings
 
 ### PostCSS `from` warning

@@ -17,7 +17,6 @@ const SIGNATURE_HEIGHT = 18;
 const MAX_CAPTURE_WIDTH = 1536;
 const MIN_CAPTURE_SCALE = 0.4;
 const SCROLL_KEY_ATTRIBUTE = "data-screenfeed-scroll-key";
-const UNSUPPORTED_COLOR_FUNCTION_RE = /\b(?:color|color-mix|lab|lch|oklab|oklch)\(/i;
 
 const isDev = import.meta.env.DEV;
 
@@ -26,7 +25,6 @@ type CaptureSource = "dom" | "retry" | "fallback";
 export type ScreenFeedFailureStage = "render" | "encode" | "upload" | "pipeline";
 let html2canvasPromise: Promise<Html2Canvas> | null = null;
 let scrollKeySequence = 0;
-let unsupportedCssCache: { styleSheetCount: number; found: boolean } | null = null;
 
 export interface ScreenFeedClickEvent {
   x: number;
@@ -184,121 +182,23 @@ function copyScrollablePositions(doc: Document, snapshot: Map<string, { top: num
   }
 }
 
-function createCssColorNormalizer(doc: Document): (value: string, fallback: string) => string {
-  const canvas = doc.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  const cache = new Map<string, string>();
-
-  return (value: string, fallback: string): string => {
-    const key = `${value}\u0000${fallback}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
-    if (!context) return fallback;
-
-    try {
-      context.clearRect(0, 0, 1, 1);
-      context.fillStyle = fallback;
-      context.fillStyle = value;
-      context.fillRect(0, 0, 1, 1);
-      const [red, green, blue, alphaByte] = context.getImageData(0, 0, 1, 1).data;
-      const alpha = Math.round((alphaByte / 255) * 1000) / 1000;
-      const normalized = alpha >= 1 ? `rgb(${red}, ${green}, ${blue})` : `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-      cache.set(key, normalized);
-      return normalized;
-    } catch {
-      cache.set(key, fallback);
-      return fallback;
-    }
-  };
-}
-
-function documentMayUseUnsupportedColors(doc: Document): boolean {
-  const styleSheetCount = doc.styleSheets.length;
-  if (doc === document && unsupportedCssCache?.styleSheetCount === styleSheetCount) {
-    return unsupportedCssCache.found;
-  }
-
-  let found = false;
-  for (const styleSheet of Array.from(doc.styleSheets)) {
-    try {
-      for (const rule of Array.from(styleSheet.cssRules)) {
-        if (UNSUPPORTED_COLOR_FUNCTION_RE.test(rule.cssText)) {
-          found = true;
-          break;
-        }
-      }
-    } catch {
-      // Cross-origin stylesheet inspection is optional.
-    }
-    if (found) break;
-  }
-
-  if (!found) {
-    for (const element of Array.from(doc.querySelectorAll<HTMLElement>("[style]"))) {
-      if (UNSUPPORTED_COLOR_FUNCTION_RE.test(element.getAttribute("style") ?? "")) {
-        found = true;
-        break;
-      }
-    }
-  }
-
-  if (doc === document) unsupportedCssCache = { styleSheetCount, found };
-  return found;
-}
-
-function sanitizeComputedStyle(
-  element: HTMLElement,
-  computed: CSSStyleDeclaration,
-  origin: string,
-  normalizeColor: (value: string, fallback: string) => string
-): void {
-  const backgroundImage = computed.backgroundImage;
-  if (
-    !shouldPreserveScreenFeedBackground(backgroundImage, origin) ||
-    UNSUPPORTED_COLOR_FUNCTION_RE.test(backgroundImage)
-  ) {
-    element.style.backgroundImage = "none";
-  }
-
-  element.style.color = normalizeColor(computed.color, "rgb(0, 0, 0)");
-  element.style.backgroundColor = normalizeColor(computed.backgroundColor, "rgba(0, 0, 0, 0)");
-  element.style.borderTopColor = normalizeColor(computed.borderTopColor, "rgba(0, 0, 0, 0)");
-  element.style.borderRightColor = normalizeColor(computed.borderRightColor, "rgba(0, 0, 0, 0)");
-  element.style.borderBottomColor = normalizeColor(computed.borderBottomColor, "rgba(0, 0, 0, 0)");
-  element.style.borderLeftColor = normalizeColor(computed.borderLeftColor, "rgba(0, 0, 0, 0)");
-  element.style.outlineColor = normalizeColor(computed.outlineColor, "rgba(0, 0, 0, 0)");
-  element.style.textDecorationColor = normalizeColor(computed.textDecorationColor, computed.color);
-  element.style.caretColor = "transparent";
-
-  if (computed.boxShadow !== "none" && UNSUPPORTED_COLOR_FUNCTION_RE.test(computed.boxShadow)) {
-    element.style.boxShadow = "none";
-  }
-  if (computed.textShadow !== "none" && UNSUPPORTED_COLOR_FUNCTION_RE.test(computed.textShadow)) {
-    element.style.textShadow = "none";
-  }
-  if (computed.borderImageSource !== "none" && UNSUPPORTED_COLOR_FUNCTION_RE.test(computed.borderImageSource)) {
-    element.style.borderImageSource = "none";
-  }
-  if (computed.filter !== "none") element.style.filter = "none";
-  if (computed.backdropFilter !== "none") element.style.backdropFilter = "none";
-  if (computed.mixBlendMode !== "normal") element.style.mixBlendMode = "normal";
-}
-
-function sanitizeClone(
-  doc: Document,
-  snapshot: Map<string, { top: number; left: number }>,
-  sanitizeColors: boolean
-): void {
+function sanitizeClone(doc: Document, snapshot: Map<string, { top: number; left: number }>): void {
   const origin = window.location.origin;
-  const view = doc.defaultView ?? window;
   copyLiveFormState(doc);
   copyScrollablePositions(doc, snapshot);
 
+  // One stylesheet on the clone replaces the old per-element getComputedStyle
+  // walk. Filters, blend modes, and pseudo-element decorations are stripped in
+  // O(1) instead of forcing layout on every node of a large ERP page.
   const captureOverrides = doc.createElement("style");
   captureOverrides.setAttribute("data-screenfeed-capture-styles", "true");
   captureOverrides.textContent = `
+    * {
+      caret-color: transparent !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      mix-blend-mode: normal !important;
+    }
     *::before,
     *::after {
       color: inherit !important;
@@ -327,30 +227,12 @@ function sanitizeClone(
     if (href && !isSafeScreenFeedAssetUrl(href, origin)) element.remove();
   });
 
-  if (!sanitizeColors) return;
-
-  const normalizeColor = createCssColorNormalizer(doc);
-  doc.querySelectorAll<HTMLElement>("*").forEach((element) => {
-    try {
-      sanitizeComputedStyle(element, view.getComputedStyle(element), origin, normalizeColor);
-    } catch {
+  // Inline background URLs only — reading computed style for every element was
+  // the capture hot path. Stylesheet `color-mix()` is resolved at build time.
+  doc.querySelectorAll<HTMLElement>("[style]").forEach((element) => {
+    const backgroundImage = element.style.backgroundImage;
+    if (backgroundImage && backgroundImage !== "none" && !shouldPreserveScreenFeedBackground(backgroundImage, origin)) {
       element.style.backgroundImage = "none";
-      element.style.filter = "none";
-      element.style.backdropFilter = "none";
-      element.style.boxShadow = "none";
-      element.style.textShadow = "none";
-    }
-  });
-
-  doc.querySelectorAll<SVGElement>("svg, svg *").forEach((element) => {
-    try {
-      const computed = view.getComputedStyle(element);
-      element.style.setProperty("color", normalizeColor(computed.color, "rgb(0, 0, 0)"));
-      element.style.setProperty("fill", normalizeColor(computed.fill, "rgba(0, 0, 0, 0)"));
-      element.style.setProperty("stroke", normalizeColor(computed.stroke, "rgba(0, 0, 0, 0)"));
-      element.style.setProperty("filter", "none");
-    } catch {
-      element.style.setProperty("filter", "none");
     }
   });
 }
@@ -359,7 +241,6 @@ function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: numb
   const nativeScale = getScreenFeedCaptureScale(window.devicePixelRatio);
   const viewportScale = Math.min(1, MAX_CAPTURE_WIDTH / Math.max(1, window.innerWidth));
   const captureScale = Math.max(MIN_CAPTURE_SCALE, Math.min(nativeScale, viewportScale));
-  const sanitizeColors = documentMayUseUnsupportedColors(document);
 
   return {
     scale: captureScale,
@@ -374,7 +255,7 @@ function buildHtml2CanvasOptions(snapshot: Map<string, { top: number; left: numb
     foreignObjectRendering: false,
     imageTimeout: 1800,
     removeContainer: true,
-    onclone: (doc: Document) => sanitizeClone(doc, snapshot, sanitizeColors),
+    onclone: (doc: Document) => sanitizeClone(doc, snapshot),
     ignoreElements: (element: Element) => element.getAttribute("data-screenfeed-ignore") === "true",
   } as const;
 }
@@ -494,32 +375,15 @@ function resizeCanvas(source: HTMLCanvasElement, maxWidth: number): HTMLCanvasEl
 }
 
 function encodeFrame(canvas: HTMLCanvasElement, fast: boolean): EncodedFrame | null {
-  const attempts = fast
-    ? [
-        { maxWidth: 1440, quality: 0.7 },
-        { maxWidth: 1280, quality: 0.64 },
-        { maxWidth: 1120, quality: 0.56 },
-        { maxWidth: 960, quality: 0.48 },
-        { maxWidth: 800, quality: 0.42 },
-      ]
-    : [
-        { maxWidth: 1536, quality: 0.74 },
-        { maxWidth: 1440, quality: 0.7 },
-        { maxWidth: 1280, quality: 0.64 },
-        { maxWidth: 1120, quality: 0.56 },
-        { maxWidth: 960, quality: 0.5 },
-      ];
+  // One resize + one JPEG encode. The old quality ladder called toDataURL up
+  // to five times per frame, each pass re-compressing the whole screenshot.
+  const maxWidth = fast ? 1120 : 1440;
+  const quality = fast ? 0.56 : 0.7;
   const limit = fast ? FAST_MAX_DATA_URL_LEN : MAX_DATA_URL_LEN;
-  let lastFrame: EncodedFrame | null = null;
-
-  for (const attempt of attempts) {
-    const candidate = resizeCanvas(canvas, attempt.maxWidth);
-    const dataUrl = candidate.toDataURL("image/jpeg", attempt.quality);
-    lastFrame = { dataUrl, canvas: candidate, quality: attempt.quality };
-    if (dataUrl.length <= limit) return lastFrame;
-  }
-
-  return lastFrame && lastFrame.dataUrl.length <= limit ? lastFrame : null;
+  const candidate = resizeCanvas(canvas, maxWidth);
+  const dataUrl = candidate.toDataURL("image/jpeg", quality);
+  if (!dataUrl.startsWith("data:image/") || dataUrl.length > limit) return null;
+  return { dataUrl, canvas: candidate, quality };
 }
 
 interface EncodeOutcome {

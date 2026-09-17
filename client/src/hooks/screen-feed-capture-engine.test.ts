@@ -178,4 +178,66 @@ describe("screen feed capture engine", () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(result.durationMs)).toBe(true);
   });
+
+  it("encodes a successful frame in a single toDataURL pass", async () => {
+    let encodeCalls = 0;
+    HTMLCanvasElement.prototype.toDataURL = function () {
+      encodeCalls += 1;
+      return "data:image/jpeg;base64,AAAA";
+    };
+    html2canvas.mockResolvedValue(makeCanvas(1200, 800, false));
+
+    await captureOnce(fetchMock);
+
+    expect(encodeCalls).toBe(1);
+  });
+
+  it("sanitizes the clone without a per-element computed-style walk", async () => {
+    let computedCalls = -1;
+    let selectors: string[] = [];
+    html2canvas.mockImplementation(async (_element, options: { onclone?: (doc: Document) => void }) => {
+      const computed = vi.spyOn(window, "getComputedStyle");
+      const originalDocument = Document.prototype.querySelectorAll;
+      const originalElement = Element.prototype.querySelectorAll;
+      selectors = [];
+      const track = function (this: Document | Element, selector: string) {
+        selectors.push(String(selector));
+        const original = this instanceof Element ? originalElement : originalDocument;
+        return original.call(this, selector);
+      };
+      Document.prototype.querySelectorAll = track as Document["querySelectorAll"];
+      Element.prototype.querySelectorAll = track as Element["querySelectorAll"];
+
+      try {
+        options.onclone?.(document);
+        computedCalls = computed.mock.calls.length;
+      } finally {
+        Document.prototype.querySelectorAll = originalDocument;
+        Element.prototype.querySelectorAll = originalElement;
+        computed.mockRestore();
+      }
+      return makeCanvas(1200, 800, false);
+    });
+
+    await captureOnce(fetchMock);
+    expect(computedCalls).toBe(0);
+    expect(selectors).not.toContain("*");
+    expect(selectors.some((selector) => selector.includes("svg *"))).toBe(false);
+  });
+
+  it("still strips unsafe images from the cloned document", async () => {
+    let strippedSrc: string | null = "not-run";
+    html2canvas.mockImplementation(async (_element, options: { onclone?: (doc: Document) => void }) => {
+      const img = document.createElement("img");
+      img.setAttribute("src", "https://evil.example.com/x.png");
+      document.body.appendChild(img);
+      options.onclone?.(document);
+      strippedSrc = img.getAttribute("src");
+      img.remove();
+      return makeCanvas(1200, 800, false);
+    });
+
+    await captureOnce(fetchMock);
+    expect(strippedSrc).toBeNull();
+  });
 });
