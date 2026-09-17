@@ -80,7 +80,11 @@ describe("Phase 5 faster remote viewing contracts", () => {
   });
 
   it("uses a low-impact capture cadence instead of the old 150ms loop", () => {
-    expect(ACTIVE_CAPTURE_MIN_GAP_MS).toBeGreaterThanOrEqual(850);
+    // The 850 ms floor this once required was layered on the HTTP/base64 upload
+    // limiter. Phase 13-14 removed that limiter and the per-frame base64 encode,
+    // and replaced the hard floor with an adaptive duty ceiling, so the reviewed
+    // gap is 220 ms. It still has to stay clear of the old free-running loop.
+    expect(ACTIVE_CAPTURE_MIN_GAP_MS).toBeGreaterThanOrEqual(200);
     expect(ACTIVE_CAPTURE_DELAY_MS).toBe(ACTIVE_CAPTURE_MIN_GAP_MS);
     expect(IDLE_REFRESH_MS).toBeGreaterThanOrEqual(60_000);
     expect(FAILED_CAPTURE_BACKOFF_MS).toBeGreaterThanOrEqual(3_000);

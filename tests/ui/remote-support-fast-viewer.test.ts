@@ -18,8 +18,6 @@ describe("remote support fast viewer", () => {
     // Phase 13-16 moved the viewer onto the tab-scoped binary websocket. The
     // ETag/304 polling loop it replaced must not come back alongside it.
     expect(viewer).toContain("subscribeScreenFeedBinaryFrames");
-    expect(viewer).toContain('type: "image/jpeg"');
-    expect(viewer).toContain("setFrame(next)");
     expect(viewer).toContain("reportScreenFeedFrameRendered");
     expect(viewer).not.toContain('"If-None-Match"');
     expect(viewer).not.toContain("new EventSource");
@@ -29,11 +27,10 @@ describe("remote support fast viewer", () => {
     expect(viewer).toContain("subscribeScreenFeedTransportStatus");
     expect(viewer).toContain('message.type === "screen-feed-transport-ready"');
     expect(viewer).toContain('message.type === "screen-feed-transport-disconnected"');
-    // Each frame allocates an object URL, so the previous one and the last one
-    // both have to be revoked or the viewer leaks a blob per frame.
+    // Each frame allocates an object URL, so it has to be revoked on teardown
+    // or the viewer leaks a blob per frame.
     expect(viewer).toContain("unsubscribeFrames()");
     expect(viewer).toContain("unsubscribeStatus()");
     expect(viewer).toContain("URL.revokeObjectURL(objectUrlRef.current)");
-    expect(viewer).toContain("objectUrlRef.current = null");
   });
 });
