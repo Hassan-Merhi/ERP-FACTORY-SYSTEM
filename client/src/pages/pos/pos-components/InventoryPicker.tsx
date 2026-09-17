@@ -28,6 +28,20 @@ function matches(item: InventoryItem, raw: string): boolean {
   return false;
 }
 
+function compareByItemCode(a: InventoryItem, b: InventoryItem): number {
+  const codeOrder = a.code.localeCompare(b.code, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+  if (codeOrder !== 0) return codeOrder;
+
+  return a.name.localeCompare(b.name, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
 export function InventoryPicker({
   inventory,
   selectItem,
@@ -42,11 +56,13 @@ export function InventoryPicker({
     if (syncTerm !== undefined) setLocalSearch(syncTerm);
   }, [syncTerm]);
 
-  const filteredInventory = inventory.filter((item) => {
-    const isOut = item.stock === 0;
-    if (!localSearch) return !isOut;
-    return matches(item, localSearch);
-  });
+  const filteredInventory = inventory
+    .filter((item) => {
+      const isOut = item.stock === 0;
+      if (!localSearch) return !isOut;
+      return matches(item, localSearch);
+    })
+    .sort(compareByItemCode);
 
   return (
     <Card
