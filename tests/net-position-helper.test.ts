@@ -61,22 +61,31 @@ describe("net position account classification", () => {
     );
   });
 
-  it("excludes account migration clearing accounts from net position presentation", () => {
+  it("excludes current and legacy account migration clearing accounts from net position presentation", () => {
     const accounts = [
       account({
         id: 3348,
         name: "Account Migration Clearing - HASSAN PROPERTIES",
+        code: "3348",
         accountType: "Asset",
-        subType: "account_migration_clearing",
         openingBalance: "300000",
         openingBalanceSide: "Dr",
       }),
       account({
         id: 3328,
         name: "Account Migration Clearing TO - Hassan Properties",
+        code: "3328",
+        accountType: "Liability",
+        openingBalance: "600000",
+        openingBalanceSide: "Cr",
+      }),
+      account({
+        id: 3350,
+        name: "Internal migration balance",
+        code: "AM-FROM-HASSAN",
         accountType: "Liability",
         subType: "account_migration_clearing",
-        openingBalance: "600000",
+        openingBalance: "125000",
         openingBalanceSide: "Cr",
       }),
       account({
