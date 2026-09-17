@@ -1,0 +1,74 @@
+name: Remote Support Rollout E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Canary ERP base URL (https://...)"
+        required: true
+        type: string
+      target_path:
+        description: "Safe target route to watch"
+        required: false
+        default: "/"
+        type: string
+      frame_samples:
+        description: "Distinct frames required by the browser scenario"
+        required: false
+        default: "6"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  remote-support-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install isolated Playwright harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/remote-support-playwright
+          mkdir -p /tmp/remote-support-playwright
+          cd /tmp/remote-support-playwright
+          npm init -y >/dev/null
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+          cp "$GITHUB_WORKSPACE/tests/e2e/remote-support-watch.spec.mjs" ./remote-support-watch.spec.mjs
+
+      - name: Run two-user remote support watch scenario
+        working-directory: /tmp/remote-support-playwright
+        env:
+          REMOTE_SUPPORT_E2E_BASE_URL: ${{ inputs.base_url }}
+          REMOTE_SUPPORT_E2E_TARGET_PATH: ${{ inputs.target_path }}
+          REMOTE_SUPPORT_E2E_FRAME_SAMPLES: ${{ inputs.frame_samples }}
+          REMOTE_SUPPORT_E2E_CONTROLLER_USERNAME: ${{ secrets.REMOTE_SUPPORT_E2E_CONTROLLER_USERNAME }}
+          REMOTE_SUPPORT_E2E_CONTROLLER_PASSWORD: ${{ secrets.REMOTE_SUPPORT_E2E_CONTROLLER_PASSWORD }}
+          REMOTE_SUPPORT_E2E_TARGET_USERNAME: ${{ secrets.REMOTE_SUPPORT_E2E_TARGET_USERNAME }}
+          REMOTE_SUPPORT_E2E_TARGET_PASSWORD: ${{ secrets.REMOTE_SUPPORT_E2E_TARGET_PASSWORD }}
+          REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS: "2500"
+          REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS: "2500"
+          REMOTE_SUPPORT_GATE_MIN_CLICK_SUCCESS_RATE: "0.95"
+        run: npx playwright test remote-support-watch.spec.mjs --reporter=line --workers=1
+
+      - name: Enforce rollout measurement gate
+        env:
+          REMOTE_SUPPORT_GATE_BASE_URL: ${{ inputs.base_url }}
+          REMOTE_SUPPORT_GATE_USERNAME: ${{ secrets.REMOTE_SUPPORT_E2E_CONTROLLER_USERNAME }}
+          REMOTE_SUPPORT_GATE_PASSWORD: ${{ secrets.REMOTE_SUPPORT_E2E_CONTROLLER_PASSWORD }}
+          REMOTE_SUPPORT_GATE_MIN_FRAME_SAMPLES: "5"
+          REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS: "2500"
+          REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS: "2500"
+          REMOTE_SUPPORT_GATE_MAX_CAPTURE_P95_MS: "1500"
+          REMOTE_SUPPORT_GATE_MIN_CLICK_SAMPLES: "1"
+          REMOTE_SUPPORT_GATE_MIN_CLICK_SUCCESS_RATE: "0.95"
+          REMOTE_SUPPORT_GATE_MIN_AUDIT_ROWS: "1"
+        run: node scripts/verify-remote-support-rollout-metrics.mjs
