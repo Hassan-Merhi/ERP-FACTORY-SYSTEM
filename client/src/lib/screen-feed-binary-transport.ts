@@ -175,6 +175,8 @@ export function sendScreenFeedControlMessage(message: Record<string, unknown>): 
 export async function sendScreenFeedBinaryFrame(header: RemoteSupportFrameHeader, jpeg: Blob): Promise<boolean> {
   if (!socket || socket.readyState !== WebSocket.OPEN || !ready) return false;
   const bytes = new Uint8Array(await jpeg.arrayBuffer());
-  socket.send(encodeRemoteSupportBinaryPacket(header, bytes));
+  const packet = encodeRemoteSupportBinaryPacket(header, bytes);
+  const packetBuffer = packet.buffer.slice(packet.byteOffset, packet.byteOffset + packet.byteLength) as ArrayBuffer;
+  socket.send(packetBuffer);
   return true;
 }
