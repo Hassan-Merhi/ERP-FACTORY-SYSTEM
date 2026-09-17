@@ -58,16 +58,9 @@ vi.mock("../server/excelHelper", () => ({
   writeWorkbook: harness.writeWorkbook,
 }));
 
-import {
-  clearERPContextCache,
-  getCachedERPContext,
-  getERPContext,
-} from "../server/chat/erpContext";
+import { clearERPContextCache, getCachedERPContext, getERPContext } from "../server/chat/erpContext";
 import { registerAiValidationRoutes } from "../server/routes/aiValidationRoutes";
-import {
-  bandwidthDebugMiddleware,
-  __bandwidthDebugTesting,
-} from "../server/middleware/bandwidthDebug";
+import { bandwidthDebugMiddleware, __bandwidthDebugTesting } from "../server/middleware/bandwidthDebug";
 import {
   operationalBandwidthCompactResponse,
   operationalBandwidthWireInternals,
@@ -110,7 +103,13 @@ function responseHarness(statusCode = 200) {
     write: vi.fn(() => true),
     end: vi.fn(() => res),
   };
-  return { res, headers, get body() { return body; } };
+  return {
+    res,
+    headers,
+    get body() {
+      return body;
+    },
+  };
 }
 
 function validationHandler() {
@@ -200,7 +199,10 @@ describe("Phase 33G — AI validation routes", () => {
     expect(noType.res.statusCode).toBe(400);
     expect(noType.body).toEqual({ message: "validationType is required" });
 
-    const noFile = await invokeValidation({ session: { currentCompanyId: 1 }, body: { validationType: "item_code_check" } });
+    const noFile = await invokeValidation({
+      session: { currentCompanyId: 1 },
+      body: { validationType: "item_code_check" },
+    });
     expect(noFile.res.statusCode).toBe(400);
     expect(noFile.body).toEqual({ message: "A file is required for this validation type" });
   });
@@ -228,12 +230,17 @@ describe("Phase 33G — AI validation routes", () => {
     const result = response.body as any;
 
     expect(response.res.statusCode).toBe(200);
-    expect(result.summary).toMatchObject({ totalChecked: 6, found: 2, missing: 1, duplicateInFile: 1, closeMatches: 1, codeColumn: "code" });
+    expect(result.summary).toMatchObject({
+      totalChecked: 6,
+      found: 2,
+      missing: 1,
+      duplicateInFile: 1,
+      closeMatches: 1,
+      codeColumn: "code",
+    });
     expect(result.errors).toHaveLength(2);
     expect(result.warnings).toHaveLength(2);
-    expect(result.suggestedFixes).toEqual([
-      expect.objectContaining({ original: "ABC124", suggested: "abc123" }),
-    ]);
+    expect(result.suggestedFixes).toEqual([expect.objectContaining({ original: "ABC124", suggested: "abc123" })]);
     expect(result.cleanedExcel).toBe(Buffer.from("phase33g-xlsx").toString("base64"));
     expect(harness.jsonToSheet).toHaveBeenCalledWith(expect.anything(), expect.any(Array), "Validation Results");
   });
@@ -247,7 +254,12 @@ describe("Phase 33G — AI validation routes", () => {
     });
     const result = response.body as any;
 
-    expect(result.summary).toMatchObject({ totalChecked: 4, duplicateGroups: 1, duplicateItems: 3, nameColumn: "name" });
+    expect(result.summary).toMatchObject({
+      totalChecked: 4,
+      duplicateGroups: 1,
+      duplicateItems: 3,
+      nameColumn: "name",
+    });
     expect(result.warnings).toHaveLength(1);
     expect(result.errors).toHaveLength(2);
     expect(result.suggestedFixes.map((fix: any) => fix.suggested)).toEqual(["Widget - A", "Widget - B"]);
@@ -306,7 +318,11 @@ describe("Phase 33G — compact operational responses", () => {
     const response = responseHarness();
     const originalJson = response.res.json;
     const next = vi.fn();
-    operationalBandwidthCompactResponse({ method: "POST", path: "/api/factory/customer-proformas", header: () => "v1" } as any, response.res, next);
+    operationalBandwidthCompactResponse(
+      { method: "POST", path: "/api/factory/customer-proformas", header: () => "v1" } as any,
+      response.res,
+      next
+    );
     expect(next).toHaveBeenCalledOnce();
     expect(response.res.json).toBe(originalJson);
   });
@@ -359,26 +375,75 @@ describe("Phase 33G — compact operational responses", () => {
   it("projects waste dispatch page and history payloads without unrelated fields", () => {
     const balePayload = operationalBandwidthWireInternals.preparePayload(
       compactRequest("/api/factory/waste-dispatch/bales", "waste-dispatch-page-v1"),
-      { bales: [{ id: 1, referenceNumber: "R1", productName: "P", categoryName: "C", locationName: "L", weightKg: 5, totalCost: 7, secret: "drop" }], categories: ["unused"] }
+      {
+        bales: [
+          {
+            id: 1,
+            referenceNumber: "R1",
+            productName: "P",
+            categoryName: "C",
+            locationName: "L",
+            weightKg: 5,
+            totalCost: 7,
+            secret: "drop",
+          },
+        ],
+        categories: ["unused"],
+      }
     ) as any;
     expect(balePayload).toEqual({
-      bales: [{ id: 1, referenceNumber: "R1", productName: "P", categoryName: "C", locationName: "L", weightKg: 5, totalCost: 7 }],
+      bales: [
+        {
+          id: 1,
+          referenceNumber: "R1",
+          productName: "P",
+          categoryName: "C",
+          locationName: "L",
+          weightKg: 5,
+          totalCost: 7,
+        },
+      ],
     });
 
     const history = operationalBandwidthWireInternals.preparePayload(
       compactRequest("/api/factory/waste-dispatch/history", "waste-dispatch-page-v1"),
-      [{ id: 9, dispatchNumber: "D9", dispatchDate: "2026-09-17", totalBales: 1, totalWeightKg: 5, totalCostWrittenOff: 7, internal: "drop", bales: [{ id: 1, referenceNumber: "R1", productName: "P", weightKg: 5, totalCost: 7, categoryName: "drop" }] }]
+      [
+        {
+          id: 9,
+          dispatchNumber: "D9",
+          dispatchDate: "2026-09-17",
+          totalBales: 1,
+          totalWeightKg: 5,
+          totalCostWrittenOff: 7,
+          internal: "drop",
+          bales: [{ id: 1, referenceNumber: "R1", productName: "P", weightKg: 5, totalCost: 7, categoryName: "drop" }],
+        },
+      ]
     );
     expect(history).toEqual([
-      { id: 9, dispatchNumber: "D9", dispatchDate: "2026-09-17", totalBales: 1, totalWeightKg: 5, totalCostWrittenOff: 7, bales: [{ id: 1, referenceNumber: "R1", productName: "P", weightKg: 5, totalCost: 7 }] },
+      {
+        id: 9,
+        dispatchNumber: "D9",
+        dispatchDate: "2026-09-17",
+        totalBales: 1,
+        totalWeightKg: 5,
+        totalCostWrittenOff: 7,
+        bales: [{ id: 1, referenceNumber: "R1", productName: "P", weightKg: 5, totalCost: 7 }],
+      },
     ]);
   });
 
   it("normalizes JSON values exactly like res.json and recognizes compactable paths", () => {
     expect(operationalBandwidthWireInternals.shouldCompactPath("/api/factory/location-inventory/12")).toBe(true);
-    expect(operationalBandwidthWireInternals.shouldCompactPath("/api/factory/location-inventory/not-a-number")).toBe(false);
-    expect(operationalBandwidthWireInternals.shouldCompactPath("/api/factory/customer-orders/8/verification-summary")).toBe(true);
-    expect(operationalBandwidthWireInternals.normalizeLikeResJson({ keep: 1, drop: undefined, arr: [undefined] })).toEqual({ keep: 1, arr: [null] });
+    expect(operationalBandwidthWireInternals.shouldCompactPath("/api/factory/location-inventory/not-a-number")).toBe(
+      false
+    );
+    expect(
+      operationalBandwidthWireInternals.shouldCompactPath("/api/factory/customer-orders/8/verification-summary")
+    ).toBe(true);
+    expect(
+      operationalBandwidthWireInternals.normalizeLikeResJson({ keep: 1, drop: undefined, arr: [undefined] })
+    ).toEqual({ keep: 1, arr: [null] });
     expect(operationalBandwidthWireInternals.DICT_TOKEN.test("~z")).toBe(true);
     expect(operationalBandwidthWireInternals.DICT_TOKEN.test("plain")).toBe(false);
   });
@@ -386,16 +451,30 @@ describe("Phase 33G — compact operational responses", () => {
 
 describe("Phase 33G — bandwidth diagnostics", () => {
   it("normalizes route ids, cache outcomes, contexts and thresholds", () => {
-    expect(__bandwidthDebugTesting.normalizePath({ route: { path: "/:id" }, baseUrl: "/api/items", path: "/ignored" } as any)).toBe("/api/items/:id");
-    expect(__bandwidthDebugTesting.normalizePath({ path: "/api/items/123/550e8400-e29b-41d4-a716-446655440000" } as any)).toBe("/api/items/:id/:id");
+    expect(
+      __bandwidthDebugTesting.normalizePath({ route: { path: "/:id" }, baseUrl: "/api/items", path: "/ignored" } as any)
+    ).toBe("/api/items/:id");
+    expect(
+      __bandwidthDebugTesting.normalizePath({ path: "/api/items/123/550e8400-e29b-41d4-a716-446655440000" } as any)
+    ).toBe("/api/items/:id/:id");
     expect(__bandwidthDebugTesting.isApiPath("/api")).toBe(true);
     expect(__bandwidthDebugTesting.isStaticAsset("/assets/main-ABCdef12.css")).toBe(true);
     expect(__bandwidthDebugTesting.classifyCacheOutcome(200, "BYPASS")).toBe("miss");
     expect(__bandwidthDebugTesting.classifyCacheOutcome(200, "other")).toBe("unknown");
     expect(__bandwidthDebugTesting.requestCompanyContext({ session: { currentCompanyId: 7 } } as any)).toBe("7");
-    expect(__bandwidthDebugTesting.requestCompanyContext({ session: { currentCompanyId: 7, factoryCompanyId: 8 } } as any)).toBe("8");
-    expect(__bandwidthDebugTesting.requestPageContext({ get: (name: string) => name === "x-erp-page" ? "/factory/live" : undefined } as any)).toBe("/factory/live");
-    expect(__bandwidthDebugTesting.requestPageContext({ get: (name: string) => name === "referer" ? "https://erp.test/accounts?id=2" : undefined } as any)).toBe("/accounts");
+    expect(
+      __bandwidthDebugTesting.requestCompanyContext({ session: { currentCompanyId: 7, factoryCompanyId: 8 } } as any)
+    ).toBe("8");
+    expect(
+      __bandwidthDebugTesting.requestPageContext({
+        get: (name: string) => (name === "x-erp-page" ? "/factory/live" : undefined),
+      } as any)
+    ).toBe("/factory/live");
+    expect(
+      __bandwidthDebugTesting.requestPageContext({
+        get: (name: string) => (name === "referer" ? "https://erp.test/accounts?id=2" : undefined),
+      } as any)
+    ).toBe("/accounts");
   });
 
   it("records middleware bytes, DB metrics, cache outcome, context and budget violations", () => {
@@ -413,7 +492,7 @@ describe("Phase 33G — bandwidth diagnostics", () => {
       route: undefined,
       baseUrl: "",
       session: { currentCompanyId: 5 },
-      get: (name: string) => name.toLowerCase() === "x-erp-page" ? "/inventory" : undefined,
+      get: (name: string) => (name.toLowerCase() === "x-erp-page" ? "/inventory" : undefined),
     } as any;
     const next = vi.fn();
 
@@ -422,15 +501,17 @@ describe("Phase 33G — bandwidth diagnostics", () => {
     response.res.write("abcdef");
     response.res.end("ghijkl");
 
-    expect(harness.recordOperationalEvent).toHaveBeenCalledWith(expect.objectContaining({
-      code: "large_http_response",
-      responseBytes: 12,
-      dbQueryCount: 2,
-      dbDurationMs: 7,
-      cacheOutcome: "hit",
-      companyContext: "5",
-      pageContext: "/inventory",
-    }));
+    expect(harness.recordOperationalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "large_http_response",
+        responseBytes: 12,
+        dbQueryCount: 2,
+        dbDurationMs: 7,
+        cacheOutcome: "hit",
+        companyContext: "5",
+        pageContext: "/inventory",
+      })
+    );
 
     __bandwidthDebugTesting.emitRanking();
     const snapshot = __bandwidthDebugTesting.getBandwidthDiagnosticSnapshot();
@@ -443,11 +524,12 @@ describe("Phase 33G — bandwidth diagnostics", () => {
       companyContexts: ["5"],
       pageContexts: ["/inventory"],
     });
-    expect(snapshot.violations.map((violation) => violation.code)).toEqual(expect.arrayContaining([
-      "api_bandwidth_budget_exceeded",
-      "api_endpoint_bandwidth_budget_exceeded",
-    ]));
-    expect(harness.recordOperationalEvent).toHaveBeenCalledWith(expect.objectContaining({ code: "endpoint_performance_ranking" }));
+    expect(snapshot.violations.map((violation) => violation.code)).toEqual(
+      expect.arrayContaining(["api_bandwidth_budget_exceeded", "api_endpoint_bandwidth_budget_exceeded"])
+    );
+    expect(harness.recordOperationalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "endpoint_performance_ranking" })
+    );
   });
 
   it("does nothing when diagnostics are disabled and safely clears non-ranked paths", () => {
@@ -487,7 +569,10 @@ describe("Phase 33G — AI tools", () => {
         { locationId: 2, quantity: "0", averageRate: "5", totalValue: "0" },
         { locationId: null, quantity: "2", averageRate: "6", totalValue: "12" },
       ],
-      [{ id: 1, name: "Main", code: "M" }, { id: 2, name: "Overflow", code: "O" }]
+      [
+        { id: 1, name: "Main", code: "M" },
+        { id: 2, name: "Overflow", code: "O" },
+      ]
     );
     const rows = await getStockByLocation(3, 99);
     expect(rows).toEqual([
@@ -498,16 +583,33 @@ describe("Phase 33G — AI tools", () => {
 
   it("formats supplier, customer, ledger and voucher searches", async () => {
     queueSelectResults([{ id: 1, code: null, legalName: null, phone: null, email: null, openingBalance: "12.5" }]);
-    expect(await searchSuppliers(4, "acme")).toEqual([{ id: 1, code: "", name: "Unknown", phone: "", email: "", openingBalance: "12.50" }]);
+    expect(await searchSuppliers(4, "acme")).toEqual([
+      { id: 1, code: "", name: "Unknown", phone: "", email: "", openingBalance: "12.50" },
+    ]);
 
     queueSelectResults([{ id: 2, code: "C2", legalName: "Customer Two", phone: null }]);
     expect(await searchCustomers(4, "two")).toEqual([{ id: 2, code: "C2", name: "Customer Two", phone: "" }]);
 
-    queueSelectResults([{ id: 3, code: "100", name: "Cash", accountType: "Asset", openingBalance: "4", openingBalanceSide: null }]);
-    expect(await searchLedgerAccounts(4, "cash")).toEqual([{ id: 3, code: "100", name: "Cash", accountType: "Asset", openingBalance: "4.00", openingBalanceSide: "Dr" }]);
+    queueSelectResults([
+      { id: 3, code: "100", name: "Cash", accountType: "Asset", openingBalance: "4", openingBalanceSide: null },
+    ]);
+    expect(await searchLedgerAccounts(4, "cash")).toEqual([
+      { id: 3, code: "100", name: "Cash", accountType: "Asset", openingBalance: "4.00", openingBalanceSide: "Dr" },
+    ]);
 
-    queueSelectResults([{ id: 4, voucherNumber: "V4", voucherType: "Receipt", voucherDate: "2026-09-17", totalAmount: "7.2", description: null }]);
-    expect(await searchVouchers(4, "V4")).toEqual([{ id: 4, number: "V4", type: "Receipt", date: "2026-09-17", amount: "7.20", description: "" }]);
+    queueSelectResults([
+      {
+        id: 4,
+        voucherNumber: "V4",
+        voucherType: "Receipt",
+        voucherDate: "2026-09-17",
+        totalAmount: "7.2",
+        description: null,
+      },
+    ]);
+    expect(await searchVouchers(4, "V4")).toEqual([
+      { id: 4, number: "V4", type: "Receipt", date: "2026-09-17", amount: "7.20", description: "" },
+    ]);
   });
 
   it("ranks low-stock alerts and pricing-health losses", async () => {
@@ -517,7 +619,11 @@ describe("Phase 33G — AI tools", () => {
         { id: 2, code: "B", name: "Low", reorderLevel: "5" },
         { id: 3, code: "C", name: "Healthy", reorderLevel: "5" },
       ],
-      [{ stockItemId: 1, totalQty: "0" }, { stockItemId: 2, totalQty: "2" }, { stockItemId: 3, totalQty: "8" }]
+      [
+        { stockItemId: 1, totalQty: "0" },
+        { stockItemId: 2, totalQty: "2" },
+        { stockItemId: 3, totalQty: "8" },
+      ]
     );
     expect(await getLowStockItems(1)).toEqual([
       { id: 1, code: "A", name: "Out", qty: "0.000", reorderLevel: "5.00", status: "OUT_OF_STOCK" },
@@ -543,8 +649,28 @@ describe("Phase 33G — AI tools", () => {
   });
 
   it("formats item sales and summarizes current business activity", async () => {
-    queueSelectResults([{ voucherNumber: "S1", voucherDate: "2026-09-17", quantity: "2.5", sellingPrice: "12", costPrice: "8", totalSales: "30", profit: "10" }]);
-    expect(await getSalesForItem(1, 4)).toEqual([{ voucherNumber: "S1", date: "2026-09-17", qty: "2.500", sellingPrice: "12.00", costPrice: "8.00", totalSales: "30.00", profit: "10.00" }]);
+    queueSelectResults([
+      {
+        voucherNumber: "S1",
+        voucherDate: "2026-09-17",
+        quantity: "2.5",
+        sellingPrice: "12",
+        costPrice: "8",
+        totalSales: "30",
+        profit: "10",
+      },
+    ]);
+    expect(await getSalesForItem(1, 4)).toEqual([
+      {
+        voucherNumber: "S1",
+        date: "2026-09-17",
+        qty: "2.500",
+        sellingPrice: "12.00",
+        costPrice: "8.00",
+        totalSales: "30.00",
+        profit: "10.00",
+      },
+    ]);
 
     queueSelectResults(
       [{ revenue: "100", cost: "70", profit: "30", transactionCount: 4, unitsSold: "9" }],
@@ -553,9 +679,18 @@ describe("Phase 33G — AI tools", () => {
       [{ stockItemId: 1, itemName: null, itemCode: null, totalRevenue: "90", totalProfit: "12", totalQty: "6" }]
     );
     const summary = await getBusinessSummary(1);
-    expect(summary.today).toMatchObject({ revenue: "100.00", cost: "70.00", profit: "30.00", margin: "30.0%", transactions: 4, unitsSold: "9.00" });
+    expect(summary.today).toMatchObject({
+      revenue: "100.00",
+      cost: "70.00",
+      profit: "30.00",
+      margin: "30.0%",
+      transactions: 4,
+      unitsSold: "9.00",
+    });
     expect(summary.thisMonth).toMatchObject({ revenue: "250.00", profit: "70.00", margin: "28.0%" });
     expect(summary.openPurchaseOrders).toBe(3);
-    expect(summary.topItemsThisMonth).toEqual([{ name: "Unknown", code: "", revenue: "90.00", profit: "12.00", qty: "6.00" }]);
+    expect(summary.topItemsThisMonth).toEqual([
+      { name: "Unknown", code: "", revenue: "90.00", profit: "12.00", qty: "6.00" },
+    ]);
   });
 });
