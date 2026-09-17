@@ -61,7 +61,7 @@ describe("factory daybook pagination client", () => {
     });
   });
 
-  it("intercepts the live daybook query, renders page controls, and requests the selected next page", async () => {
+  it("progressively loads the next page near the bottom and merges it into the existing rows", async () => {
     harness.previousFetch
       .mockResolvedValueOnce(page([{ id: 1 }], 1, 3, 205))
       .mockResolvedValueOnce(page([{ id: 101 }], 2, 3, 205));
@@ -71,17 +71,22 @@ describe("factory daybook pagination client", () => {
     expect(await first.json()).toEqual([{ id: 1 }]);
     expect(harness.previousFetch.mock.calls[0][0]).toMatch(/pagination=1/);
     expect(harness.previousFetch.mock.calls[0][0]).toMatch(/page=1/);
-    expect(screenText("factory-daybook-page-label")).toContain("1-100 of 205 transactions");
+    expect(screenText("factory-daybook-progress")).toContain("1 of 205 transactions loaded");
+    expect(document.querySelector("[data-testid='factory-daybook-page-next']")).toBeNull();
 
-    const next = document.querySelector<HTMLButtonElement>("[data-testid='factory-daybook-page-next']")!;
-    next.click();
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });
+    Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 700 });
+    Object.defineProperty(document.documentElement, "scrollTop", { configurable: true, value: 650 });
+    document.documentElement.dispatchEvent(new Event("scroll"));
+
     expect(harness.invalidateQueries).toHaveBeenCalledOnce();
+    expect(screenText("factory-daybook-progress")).toContain("Loading more");
 
     const second = await window.fetch("/api/factory/daybook?txType=SALE");
 
-    expect(await second.json()).toEqual([{ id: 101 }]);
+    expect(await second.json()).toEqual([{ id: 1 }, { id: 101 }]);
     expect(harness.previousFetch.mock.calls[1][0]).toMatch(/page=2/);
-    expect(screenText("factory-daybook-page-label")).toContain("101-200 of 205 transactions");
+    expect(screenText("factory-daybook-progress")).toContain("2 of 205 transactions loaded");
   });
 
   it("leaves mutations, explicit exports, deep links, and unrelated routes untouched", async () => {
