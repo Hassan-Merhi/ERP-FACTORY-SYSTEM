@@ -11,8 +11,8 @@ function numberEnv(name, fallback) {
 
 const thresholds = {
   minFrameSamples: numberEnv("REMOTE_SUPPORT_GATE_MIN_FRAME_SAMPLES", 20),
-  maxFrameIntervalP95Ms: numberEnv("REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS", 2500),
-  maxClientToViewerP95Ms: numberEnv("REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS", 2500),
+  maxFrameIntervalP95Ms: numberEnv("REMOTE_SUPPORT_GATE_MAX_FRAME_INTERVAL_P95_MS", 1500),
+  maxClientToViewerP95Ms: numberEnv("REMOTE_SUPPORT_GATE_MAX_CLIENT_TO_VIEWER_P95_MS", 1500),
   maxCaptureP95Ms: numberEnv("REMOTE_SUPPORT_GATE_MAX_CAPTURE_P95_MS", 1500),
   minClickSamples: numberEnv("REMOTE_SUPPORT_GATE_MIN_CLICK_SAMPLES", 5),
   minClickSuccessRate: numberEnv("REMOTE_SUPPORT_GATE_MIN_CLICK_SUCCESS_RATE", 0.95),
