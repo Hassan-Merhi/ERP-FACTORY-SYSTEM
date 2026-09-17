@@ -88,17 +88,33 @@ function clearViewerBindings(socket: SocketWithState): void {
 }
 
 function registeredTab(context: ScreenFeedSocketContext, tabId: string) {
-  return listRemoteControlTabs(context.userId).find(
-    (tab) => tab.tabId === tabId && (!context.companyId || tab.companyId === context.companyId)
-  );
+  return listRemoteControlTabs(context.userId).find((tab) => tab.tabId === tabId);
 }
 
 function bindProducer(socket: SocketWithState, context: ScreenFeedSocketContext, tabIdRaw: unknown): boolean {
   const tabId = clean(tabIdRaw);
-  if (!tabId || !registeredTab(context, tabId)) {
-    safeSendJson(socket, { type: "screen-feed:error", code: "TAB_NOT_REGISTERED", message: "ERP tab is not registered." });
+  if (!tabId) {
+    safeSendJson(socket, { type: "screen-feed:error", code: "INVALID_TAB_ID", message: "ERP tab identifier is required." });
     return false;
   }
+
+  // The screen-feed effect and the control-tab heartbeat start independently.
+  // The authenticated websocket can therefore become ready a few milliseconds
+  // before the heartbeat has inserted this tab in the in-memory presence map.
+  // Pre-binding the caller's own tab is safe: viewers still cannot bind unless
+  // the exact tab is registered and passes the tenant gate below. If the tab is
+  // already known, reject a stale socket whose company context no longer
+  // matches it rather than letting a company switch reuse the old scope.
+  const knownTab = registeredTab(context, tabId);
+  if (knownTab && context.companyId && knownTab.companyId !== context.companyId) {
+    safeSendJson(socket, {
+      type: "screen-feed:error",
+      code: "TAB_COMPANY_MISMATCH",
+      message: "ERP tab belongs to a different company context.",
+    });
+    return false;
+  }
+
   const key = screenFeedSocketKey(context.userId, tabId);
   addSocket(producers, key, socket);
   rememberSocketKey(producerKeysBySocket, socket, key);
