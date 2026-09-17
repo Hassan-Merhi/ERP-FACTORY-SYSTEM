@@ -8,12 +8,15 @@ function TargetProbe() {
   return <output data-testid="remote-watch-target">{target ? `${target.userId}:${target.username}` : "none"}</output>;
 }
 
-function createWatchPortal(userId: string, username: string) {
+function createWatchPortal(userId: string, username: string, tabId = "tab-1") {
   const portalRoot = document.createElement("div");
   portalRoot.setAttribute("data-radix-portal", "");
   const dialog = document.createElement("section");
   dialog.setAttribute("data-testid", "dialog-watch-user");
   dialog.dataset.watchedUserId = userId;
+  // A watch target is tab-scoped: without the tab the dialog names, the
+  // provider has no addressable target and deliberately reports none.
+  dialog.dataset.watchedTabId = tabId;
   const usernameNode = document.createElement("span");
   usernameNode.dataset.watchUsername = username;
   dialog.appendChild(usernameNode);

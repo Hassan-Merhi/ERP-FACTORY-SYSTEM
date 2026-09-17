@@ -41,7 +41,11 @@ const BLOCKED_SELECTOR = [
   "textarea",
   "select",
   "option",
-  "form :is(button,a[href],[role='button'],[role='link'],[role='menuitem']):not([data-remote-control-action]):not([data-remote-control-safe='true'])",
+  // In-form controls stay blocked unless they carry a vetted registry action.
+  // data-remote-control-safe is a free-form annotation any element can set, so
+  // it is deliberately NOT an escape hatch here: a safe annotation must never
+  // make a form submit remotely clickable.
+  "form :is(button,a[href],[role='button'],[role='link'],[role='menuitem']):not([data-remote-control-action])",
   "[contenteditable]:not([contenteditable='false'])",
   "[data-remote-control-blocked='true']",
   "[data-sensitive-action]",

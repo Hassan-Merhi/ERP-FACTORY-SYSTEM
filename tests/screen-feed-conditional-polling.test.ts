@@ -30,12 +30,15 @@ vi.mock("../server/services/screenWatchAuditService", () => ({
 const { registerScreenFeedTransportHardening, resetScreenFeedTransportHardeningForTests } =
   await import("../server/routes/screenFeedTransportHardening");
 const { registerScreenFeedRoutes } = await import("../server/routes/screenFeedRoutes");
-const { screenFeedCursorStore, screenFeedFailureStore, screenFeedStore, watcherPollStore } =
+const { screenFeedCursorStore, screenFeedFailureStore, screenFeedStore, screenFeedStoreKey, watcherPollStore } =
   await import("../server/screenFeedStore");
 const { restoreRemoteSupportBootDefaults, updateRemoteSupportFlags } =
   await import("../server/services/remoteSupportRuntime");
 
 const WATCHED_USER_ID = "employee-42";
+// Fallback HTTP state is tab-addressed, and a request that names no tab
+// resolves to the normalized default tab, so seed under that same key.
+const FRAME_KEY = screenFeedStoreKey(WATCHED_USER_ID, undefined);
 
 function appForWatcher() {
   const app = express();
@@ -54,7 +57,7 @@ function appForWatcher() {
 }
 
 function seedFrame() {
-  screenFeedStore.set(WATCHED_USER_ID, {
+  screenFeedStore.set(FRAME_KEY, {
     userId: WATCHED_USER_ID,
     username: "employee",
     dataUrl: "data:image/jpeg;base64,AAAABBBB",
@@ -97,7 +100,7 @@ describe("screen feed conditional polling", () => {
     expect(initial.headers.etag).toMatch(/^W\/"screen-feed-/);
     expect(initial.headers["cache-control"]).toBe("private, no-cache, must-revalidate");
     expect(initial.headers.vary).toContain("Cookie");
-    expect(initial.headers["x-screen-feed-transport"]).toBe("legacy");
+    expect(initial.headers["x-screen-feed-transport"]).toBe("legacy-recovery");
 
     const revalidated = await request(app)
       .get(`/api/screen-feed/${WATCHED_USER_ID}`)
@@ -114,8 +117,8 @@ describe("screen feed conditional polling", () => {
     const app = appForWatcher();
 
     const initial = await request(app).get(`/api/screen-feed/${WATCHED_USER_ID}`);
-    screenFeedStore.set(WATCHED_USER_ID, {
-      ...screenFeedStore.get(WATCHED_USER_ID)!,
+    screenFeedStore.set(FRAME_KEY, {
+      ...screenFeedStore.get(FRAME_KEY)!,
       dataUrl: "data:image/jpeg;base64,CCCCDDDD",
       capturedAt: new Date("2026-09-16T12:00:01.000Z"),
     });
