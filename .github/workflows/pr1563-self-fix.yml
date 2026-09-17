@@ -1,0 +1,105 @@
+name: PR 1563 one-shot CI repair
+
+on:
+  push:
+    branches:
+      - test/phase33e-supplier-intercompany-permissions-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: test/phase33e-supplier-intercompany-permissions-20260917
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Apply zero-warning repairs
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const mousePath = 'client/src/components/RemoteMouseControllerOverlay.tsx';
+          let mouse = fs.readFileSync(mousePath, 'utf8');
+          const mouseStart = '  const getMouseErrorForReason = (reason: string | null, status: string): string | null => {';
+          const mouseStartReplacement = '  const getMouseErrorForReason = useCallback((reason: string | null, status: string): string | null => {';
+          if (!mouse.includes(mouseStart)) throw new Error('Remote mouse helper signature changed');
+          mouse = mouse.replace(mouseStart, mouseStartReplacement);
+          const mouseEnd = '    return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");\n  };\n\n  useEffect(() => {';
+          const mouseEndReplacement = '    return t(status === "blocked" ? "That control is protected and cannot be activated remotely." : "Action ignored.");\n  }, [t]);\n\n  useEffect(() => {';
+          if (!mouse.includes(mouseEnd)) throw new Error('Remote mouse helper ending changed');
+          mouse = mouse.replace(mouseEnd, mouseEndReplacement);
+          const mouseDeps = '  }, [controlEnabled, sessionId, t]);';
+          const mouseDepsReplacement = '  }, [controlEnabled, getMouseErrorForReason, sessionId]);';
+          if (!mouse.includes(mouseDeps)) throw new Error('Remote mouse effect dependencies changed');
+          mouse = mouse.replace(mouseDeps, mouseDepsReplacement);
+          fs.writeFileSync(mousePath, mouse);
+
+          const verificationPath = 'client/src/pages/ContainerVerification.tsx';
+          let verification = fs.readFileSync(verificationPath, 'utf8');
+          const unusedArg = '    mutationFn: async (showToast: boolean) => syncLoadedItemsFromContainer(),';
+          const ignoredArg = '    mutationFn: async (_showToast: boolean) => syncLoadedItemsFromContainer(),';
+          if (!verification.includes(unusedArg)) throw new Error('Container verification mutation signature changed');
+          verification = verification.replace(unusedArg, ignoredArg);
+          fs.writeFileSync(verificationPath, verification);
+          NODE
+
+      - name: Format repaired source
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/pages/ContainerVerification.tsx \
+            tests/phase33e-active-company-permissions.test.ts \
+            tests/phase33e-auth-role-guards.test.ts \
+            tests/phase33e-company-access-boundary.test.ts \
+            tests/phase33e-sp-access-control.test.ts \
+            tests/phase33e-sp-intercompany-journals.test.ts \
+            tests/phase33e-tenant-isolation-boundary.test.ts
+
+      - name: Verify repaired gates
+        run: |
+          npm run lint
+          node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/pages/ContainerVerification.tsx \
+            tests/phase33e-active-company-permissions.test.ts \
+            tests/phase33e-auth-role-guards.test.ts \
+            tests/phase33e-company-access-boundary.test.ts \
+            tests/phase33e-sp-access-control.test.ts \
+            tests/phase33e-sp-intercompany-journals.test.ts \
+            tests/phase33e-tenant-isolation-boundary.test.ts
+
+      - name: Commit repaired source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            client/src/components/RemoteMouseControllerOverlay.tsx \
+            client/src/pages/ContainerVerification.tsx \
+            tests/phase33e-active-company-permissions.test.ts \
+            tests/phase33e-auth-role-guards.test.ts \
+            tests/phase33e-company-access-boundary.test.ts \
+            tests/phase33e-sp-access-control.test.ts \
+            tests/phase33e-sp-intercompany-journals.test.ts \
+            tests/phase33e-tenant-isolation-boundary.test.ts
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: clear PR 1563 lint and format gates"
+          git push origin HEAD:test/phase33e-supplier-intercompany-permissions-20260917
