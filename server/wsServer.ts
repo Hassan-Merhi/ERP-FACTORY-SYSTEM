@@ -1,6 +1,6 @@
 import "./lib/observabilityBootstrap";
 import { randomUUID } from "node:crypto";
-import { WebSocketServer, WebSocket } from "ws";
+import { WebSocketServer, WebSocket, type RawData } from "ws";
 import type { IncomingMessage, Server } from "http";
 import type { RequestHandler } from "express";
 import { runWithTraceContext } from "./lib/traceContext";
@@ -11,29 +11,52 @@ import {
   shouldDeliverBroadcastToCompanies,
   shouldDeliverBroadcastToUser,
 } from "./lib/broadcastScope";
+import {
+  cleanupScreenFeedWebSocket,
+  handleScreenFeedWebSocketMessage,
+  type ScreenFeedSocketContext,
+} from "./services/screenFeedWebSocketTransport";
 
 let wss: WebSocketServer | null = null;
 let resolveSession: SessionResolver | null = null;
 
 type SessionResolution =
-  | { status: "resolved"; companyIds: number[]; userId: string | null }
+  | {
+      status: "resolved";
+      companyIds: number[];
+      userId: string | null;
+      username: string;
+      role: string;
+      companyId: number | null;
+    }
   | { status: "missing" }
   | { status: "unresolved" };
 
 /** Runs the app's session middleware over a bare upgrade request. */
 type SessionResolver = (request: IncomingMessage) => Promise<SessionResolution>;
 type SessionUpgradeRequest = IncomingMessage & {
-  session?: { userId?: unknown; currentCompanyId?: unknown; factoryCompanyId?: unknown };
+  session?: {
+    userId?: unknown;
+    username?: unknown;
+    currentRole?: unknown;
+    role?: unknown;
+    currentCompanyId?: unknown;
+    factoryCompanyId?: unknown;
+  };
 };
 
-/**
- * Every client used to receive every broadcast, so a sale in one company woke
- * clients in every other company. Sockets now carry both authenticated ERP and
- * Factory company contexts, plus the authenticated user for direct events such
- * as chat.
- */
 const socketCompanies = new WeakMap<WebSocket, readonly number[] | null>();
 const socketUsers = new WeakMap<WebSocket, string | null>();
+const socketScreenFeedContexts = new WeakMap<WebSocket, ScreenFeedSocketContext>();
+
+function cleanSessionText(value: unknown, max = 160): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function positiveCompanyId(value: unknown): number | null {
+  const companyId = Number(value);
+  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
+}
 
 /**
  * express-session decorates the response to write its cookie. An upgrade has no
@@ -68,8 +91,6 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
       };
 
       try {
-        // The upgrade request carries the session cookie, and express-session
-        // reads it from the same store the HTTP routes use.
         sessionMiddleware(
           request as unknown as Parameters<RequestHandler>[0],
           upgradeResponseStub() as unknown as Parameters<RequestHandler>[1],
@@ -87,7 +108,14 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
             ]);
             const userId = normalizeBroadcastUserId(session?.userId);
             if (companyIds.length > 0 || userId) {
-              finish({ status: "resolved", companyIds, userId });
+              finish({
+                status: "resolved",
+                companyIds,
+                userId,
+                username: cleanSessionText(session?.username) || userId || "",
+                role: cleanSessionText(session?.currentRole) || cleanSessionText(session?.role),
+                companyId: positiveCompanyId(session?.currentCompanyId) ?? positiveCompanyId(session?.factoryCompanyId),
+              });
               return;
             }
             finish({ status: "missing" });
@@ -98,9 +126,6 @@ function sessionCompanyResolver(sessionMiddleware: RequestHandler): SessionResol
         finish({ status: "unresolved" });
       }
 
-      // A hung session store must not leave a live socket permanently unable to
-      // receive scoped events. Mark it unresolved so setupWS can close it and
-      // let the client reconnect with a fresh lookup.
       setTimeout(() => finish({ status: "unresolved" }), 5_000).unref?.();
     });
 }
@@ -110,28 +135,39 @@ function sendRealtimeReady(ws: WebSocket): void {
   ws.send(JSON.stringify({ type: "realtime:ready" }));
 }
 
+function rawDataBuffer(data: RawData): Buffer {
+  if (Buffer.isBuffer(data)) return data;
+  if (Array.isArray(data)) return Buffer.concat(data);
+  if (data instanceof ArrayBuffer) return Buffer.from(data);
+  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+}
+
 export function setupWS(server: Server, sessionMiddleware?: RequestHandler): void {
   wss = new WebSocketServer({ server, path: "/ws" });
   resolveSession = sessionMiddleware ? sessionCompanyResolver(sessionMiddleware) : null;
 
   wss.on("connection", (ws, request) => {
     const connectionId = `websocket-${randomUUID()}`;
-
-    // Scoped broadcasts fail closed until session context resolves. If the
-    // session store itself errors or times out, close the socket so the client
-    // reconnects instead of remaining permanently stale with null scope.
     socketCompanies.set(ws, null);
     socketUsers.set(ws, null);
+
     if (resolveSession) {
       void resolveSession(request)
         .then((result) => {
           if (result.status === "resolved") {
             socketCompanies.set(ws, result.companyIds);
             socketUsers.set(ws, result.userId);
-            // The browser's native onopen only proves the transport handshake.
-            // Signal readiness after authenticated company/user scoping resolves,
-            // so clients and E2E verification know broadcasts can no longer be
-            // skipped because this socket is still unscoped.
+            if (result.userId) {
+              socketScreenFeedContexts.set(ws, {
+                userId: result.userId,
+                username: result.username,
+                role: result.role,
+                companyId: result.companyId,
+              });
+            }
+            // Read the session once at connection setup. Screen-feed binary
+            // traffic then reuses this authenticated scope rather than running
+            // express-session and user_company_roles middleware per frame.
             sendRealtimeReady(ws);
             return;
           }
@@ -145,8 +181,6 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
           if (ws.readyState !== WebSocket.CLOSED) ws.close(1013, "Session context unavailable");
         });
     } else {
-      // Non-session deployments have no scope resolution step. The transport is
-      // immediately ready for their intentionally unscoped broadcasts.
       sendRealtimeReady(ws);
     }
 
@@ -160,7 +194,7 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
       () => {
         ws.on("error", () => {});
 
-        ws.on("message", () => {
+        ws.on("message", (data, isBinary) => {
           runWithTraceContext(
             {
               requestId: `websocket-message-${randomUUID()}`,
@@ -168,18 +202,24 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
               buildVersion: process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || "dev",
               source: "websocket",
             },
-            () => undefined
+            () => {
+              const context = socketScreenFeedContexts.get(ws);
+              if (!context) return;
+              void handleScreenFeedWebSocketMessage(ws, context, rawDataBuffer(data), isBinary).catch((error) => {
+                logger.warn("[WS] Screen-feed message failed.", { error });
+              });
+            }
           );
         });
 
         const pingInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.ping();
-          }
+          if (ws.readyState === WebSocket.OPEN) ws.ping();
         }, 30_000);
 
         ws.on("close", () => {
           clearInterval(pingInterval);
+          cleanupScreenFeedWebSocket(ws);
+          socketScreenFeedContexts.delete(ws);
           socketCompanies.delete(ws);
           socketUsers.delete(ws);
         });
@@ -189,16 +229,7 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
 }
 
 export interface BroadcastOptions {
-  /**
-   * The company the change belongs to. Sockets in other ERP/Factory company
-   * contexts are skipped; unresolved sockets fail closed. Omit companyId to
-   * avoid company filtering for intentionally cross-company messages.
-   */
   companyId?: number | null;
-  /**
-   * Optional authenticated recipients. When present, only sockets owned by one
-   * of these users receive the message. This can be combined with companyId.
-   */
   userIds?: readonly string[];
 }
 
@@ -235,10 +266,6 @@ export function broadcast(message: object, options: BroadcastOptions = {}): void
   );
 }
 
-// ── Broadcast volume ────────────────────────────────────────────────────────
-// Every write broadcasts, and every broadcast makes receiving clients refresh
-// the dependent active queries. Counting delivered vs skipped messages shows
-// whether company/user scoping is keeping unrelated clients asleep.
 const BROADCAST_REPORT_INTERVAL_MS = 5 * 60_000;
 let broadcastCount = 0;
 let deliveredCount = 0;
