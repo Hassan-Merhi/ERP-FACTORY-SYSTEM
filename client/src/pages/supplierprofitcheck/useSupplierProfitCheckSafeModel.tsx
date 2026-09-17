@@ -49,13 +49,14 @@ export function useSupplierProfitCheckSafeModel() {
   const queryClient = useQueryClient();
   const companyId = selectedCompany?.id;
 
-  // Reuse the application's normal company-scoped supplier cache key so the
-  // existing stock-group mutation invalidates this exact list immediately.
+  // Profit Check intentionally inherits suppliers from an explicitly linked
+  // parent company, matching PO/container supplier selection. Keep this cache
+  // distinct from strict supplier pickers used by accounting workflows.
   const { data: scopedSuppliers = [] } = useQuery<SupplierOption[]>({
-    queryKey: ["/api/suppliers", companyId],
+    queryKey: ["/api/suppliers", companyId, "allow-parent-fallback"],
     enabled: !!companyId,
     queryFn: async () => {
-      const response = await fetch("/api/suppliers", { credentials: "include" });
+      const response = await fetch("/api/suppliers?allowParentFallback=true", { credentials: "include" });
       return response.ok ? ((await response.json()) as SupplierOption[]) : [];
     },
     staleTime: 5 * 60 * 1000,
