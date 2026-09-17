@@ -138,7 +138,7 @@ describe("Phase 33F tracking integrations", () => {
 
   it("locks direct Maersk parser behavior for date normalization and destination selection", () => {
     expect(typeof isMaerskDirectScraperAvailable()).toBe("boolean");
-    expect(formatEtaDate("17/09/2026")).toBeTruthy();
+    expect(formatEtaDate("2026-09-17T23:30:00-05:00")).toBe("2026-09-17");
 
     const parsed = extractFromJson({
       events: [
