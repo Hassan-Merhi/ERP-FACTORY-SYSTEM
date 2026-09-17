@@ -102,15 +102,13 @@ describe("Phase 33 3C stock-transfer draft builder", () => {
         aggressiveness: "normal",
       }),
     });
-    harness.matchLocationByName
-      .mockResolvedValueOnce({ matched: locations[0], candidates: [] })
-      .mockResolvedValueOnce({
-        matched: null,
-        candidates: [
-          { id: 9, name: "Kolwezi", code: "KLZ" },
-          { id: 10, name: "Kolwezi 2", code: "KLZ2" },
-        ],
-      });
+    harness.matchLocationByName.mockResolvedValueOnce({ matched: locations[0], candidates: [] }).mockResolvedValueOnce({
+      matched: null,
+      candidates: [
+        { id: 9, name: "Kolwezi", code: "KLZ" },
+        { id: 10, name: "Kolwezi 2", code: "KLZ2" },
+      ],
+    });
 
     const result = await run("suggest a transfer from Hadi 1 to Kolwezi");
 
@@ -239,9 +237,7 @@ describe("Phase 33 3C stock-transfer draft builder", () => {
     expect(harness.buildStockTransferByTargetQuantityContext).toHaveBeenCalledWith(7, [1], 9, 10, {
       onlyDestinationStockGroups: true,
     });
-    expect(result.stockTransferResponseOverride).toContain(
-      "Only 8 eligible bale(s)/item(s) found out of requested 10"
-    );
+    expect(result.stockTransferResponseOverride).toContain("Only 8 eligible bale(s)/item(s) found out of requested 10");
     expect(result.stockTransferResponseOverride).toContain("couldn't find: Missing Source");
   });
 

@@ -29,10 +29,8 @@ vi.mock("../server/db", () => ({
 }));
 
 const { registerScreenFeedRoutes } = await import("../server/routes/screenFeedRoutes");
-const {
-  registerRemoteControlTab,
-  resetRemoteControlSessionStateForTests,
-} = await import("../server/services/remoteControlSessionService");
+const { registerRemoteControlTab, resetRemoteControlSessionStateForTests } =
+  await import("../server/services/remoteControlSessionService");
 const {
   enqueueRemoteSupportCommandAudit,
   flushRemoteSupportCommandAudits,
@@ -47,10 +45,8 @@ const {
   getActiveScreenWatchCountForTests,
   resetScreenWatchAuditStateForTests,
 } = await import("../server/services/screenWatchAuditService");
-const {
-  assertScreenFeedTenantAccess,
-  setScreenFeedPresenceLookupForTests,
-} = await import("../server/services/screenFeedTenantGate");
+const { assertScreenFeedTenantAccess, setScreenFeedPresenceLookupForTests } =
+  await import("../server/services/screenFeedTenantGate");
 const { screenFeedStore, screenFeedStoreKey, watcherPollStore } = await import("../server/screenFeedStore");
 // Frame state is tab-addressed; a request that names no tab resolves to the
 // normalized default tab, so seed under that same key.
@@ -163,10 +159,7 @@ describe("remote support audit + authorization", () => {
       expect(getActiveScreenWatchCountForTests()).toBe(0);
 
       const actions = auditRows.map((row) => row.action);
-      expect(actions).toEqual([
-        "remote_support_screen_watch_started",
-        "remote_support_screen_watch_ended",
-      ]);
+      expect(actions).toEqual(["remote_support_screen_watch_started", "remote_support_screen_watch_ended"]);
       expect(auditRows[0]?.tableName).toBe("remote_support_sessions");
       expect(auditRows[0]?.companyId).toBe(7);
     });
