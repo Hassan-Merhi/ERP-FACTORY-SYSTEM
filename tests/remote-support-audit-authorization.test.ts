@@ -51,7 +51,10 @@ const {
   assertScreenFeedTenantAccess,
   setScreenFeedPresenceLookupForTests,
 } = await import("../server/services/screenFeedTenantGate");
-const { screenFeedStore, watcherPollStore } = await import("../server/screenFeedStore");
+const { screenFeedStore, screenFeedStoreKey, watcherPollStore } = await import("../server/screenFeedStore");
+// Frame state is tab-addressed; a request that names no tab resolves to the
+// normalized default tab, so seed under that same key.
+const FRAME_KEY_22 = screenFeedStoreKey("22", undefined);
 const { restoreRemoteSupportBootDefaults, updateRemoteSupportFlags } =
   await import("../server/services/remoteSupportRuntime");
 import type { RemoteControlSession } from "../server/services/remoteControlSessionService";
@@ -230,7 +233,7 @@ describe("remote support audit + authorization", () => {
 
     it("returns 404 from the frame route for a cross-tenant manager", async () => {
       setScreenFeedPresenceLookupForTests(async () => 9);
-      screenFeedStore.set("22", {
+      screenFeedStore.set(FRAME_KEY_22, {
         userId: "22",
         username: "employee",
         dataUrl: "data:image/jpeg;base64,AAAA",
@@ -244,7 +247,7 @@ describe("remote support audit + authorization", () => {
 
     it("returns the frame for a same-company manager and records a watch start", async () => {
       setScreenFeedPresenceLookupForTests(async () => 7);
-      screenFeedStore.set("22", {
+      screenFeedStore.set(FRAME_KEY_22, {
         userId: "22",
         username: "employee",
         dataUrl: "data:image/jpeg;base64,AAAA",

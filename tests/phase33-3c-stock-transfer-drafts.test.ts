@@ -38,7 +38,11 @@ vi.mock("../server/chat/aiProviders", () => ({
 }));
 vi.mock("../server/chat/intent", () => ({
   deterministicParseMultiSourceTransfer: harness.deterministicParseMultiSourceTransfer,
-  RE_MULTI_SOURCE_LOCATIONS: /hadi\s*1|multi-source/i,
+  // Mirrors server/chat/intent.ts: a multi-source request needs an actual
+  // comma- or dash-separated location list ("Hadi 1, 2, 3"). Matching a bare
+  // "Hadi 1" would route every analysis message down the deterministic
+  // multi-source branch and never reach the path these tests exercise.
+  RE_MULTI_SOURCE_LOCATIONS: /\b[a-z][a-z\s]*\d+\s*(?:,\s*\d+)+\b|\b[a-z][a-z\s]*\d+\s*-\s*\d+\b/i,
   RE_STOCK_GROUP_FILTER_HINT: /same stock group|same groups/i,
   RE_STOCK_TRANSFER: /transfer/i,
   RE_STOCK_TRANSFER_ANALYSIS: /suggest|analy[sz]e/i,
