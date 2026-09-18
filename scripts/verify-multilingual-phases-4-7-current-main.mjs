@@ -55,7 +55,9 @@ const bundles = [
     parts: 13,
     translatorImport: "translatePhase7BackendMessageText",
     test: "tests/phase7-backend-messages-translations.test.ts",
-    expectedCount: 697,
+    // 697 + the two Phase 9 release-ratchet messages ("Service temporarily
+    // unavailable — please retry." and "CSRF token missing or invalid.").
+    expectedCount: 702,
   },
 ];
 
