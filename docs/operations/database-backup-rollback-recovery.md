@@ -50,9 +50,59 @@ Setup (one time, by an authorized operator):
 1. In the Render dashboard, copy the production database's **External**
    connection string (GitHub Actions connects over the public internet, so
    the internal URL will not work).
-2. Store it as the repository secret `BACKUP_DATABASE_URL`
+2. Confirm the role in that connection string can bypass row-level security:
+
+   ```sql
+   SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+   ```
+
+   If both are `false`, create a read-only role that can, and use it instead:
+
+   ```sql
+   CREATE ROLE erp_backup LOGIN PASSWORD '<strong-password>';
+   GRANT CONNECT ON DATABASE <db> TO erp_backup;
+   GRANT USAGE ON SCHEMA public TO erp_backup;
+   GRANT SELECT ON ALL TABLES IN SCHEMA public TO erp_backup;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO erp_backup;
+   ALTER ROLE erp_backup BYPASSRLS;
+   ```
+
+   `SELECT`-only plus `BYPASSRLS` is what the workflow needs and no more: it
+   can read every row and write nothing.
+3. Store the connection string as the repository secret `BACKUP_DATABASE_URL`
    (Settings → Secrets and variables → Actions → New repository secret).
-3. Run the workflow once via `workflow_dispatch` and confirm it goes green.
+4. Run the workflow once via `workflow_dispatch` and confirm it goes green.
+
+#### Why the backup role must bypass row-level security
+
+`migrations/0016_company_scope_rls_readiness.sql` puts `ENABLE` **and `FORCE`
+ROW LEVEL SECURITY** on the tenant tables — `vouchers`, `customers`,
+`ledger_accounts`, `bank_accounts`, `fixed_assets`, `stock_groups`,
+`stock_items`, `inventory`, `voucher_entries`. `FORCE` means the policy binds
+the table's owner too, so owning the table is not enough; only a superuser or a
+role with `BYPASSRLS` reads past it.
+
+A role without that capability fails twice, and the second failure is the one
+that matters:
+
+- the row-count fingerprint raises `app.current_company_id is required for
+  tenant data access` from `erp_current_company_id()`; and
+- `pg_dump` refuses outright with `query would be affected by row-level
+  security policy for table "vouchers"`.
+
+The `app.company_scope_maintenance = 'on'` maintenance scope fixes the first
+but **not** the second: `pg_dump` guards on row-level security being active on
+the table at all, not on what the policy would return for this session.
+
+Two workarounds look attractive and are both wrong:
+
+- **`pg_dump --enable-row-security`** exports only the rows the policy admits.
+  That produces a *silently partial* backup which restores cleanly and looks
+  healthy — strictly worse than a loud failure.
+- **`ALTER TABLE ... NO FORCE ROW LEVEL SECURITY`** is what pg_dump's own hint
+  suggests, but `FORCE` is deliberate (migration 0016: it "keeps the same rule
+  in force even when the application connection owns the protected table").
+  Do not weaken the tenant boundary to make a backup job pass.
 
 The workflow only ever reads production (`pg_dump` plus aggregate row
 counts); it can never write to it. If the secret is missing or invalid the

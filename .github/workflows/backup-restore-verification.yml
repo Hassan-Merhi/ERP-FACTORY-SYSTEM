@@ -65,6 +65,39 @@ jobs:
           sudo apt-get install -y postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
+      # Tenant tables carry FORCE ROW LEVEL SECURITY (migrations/0016), which
+      # applies even to the table's owner. A role that cannot bypass it fails
+      # twice over: the fingerprint below raises from erp_current_company_id(),
+      # and pg_dump refuses outright ("query would be affected by row-level
+      # security policy"), because its guard is that RLS is active on the table
+      # at all — not what the policy would return. Setting
+      # app.company_scope_maintenance does not rescue pg_dump. Check the one
+      # attribute that predicts both, and say what to do about it.
+      - name: Verify the backup role can bypass row-level security
+        shell: bash
+        run: |
+          set -euo pipefail
+          role=$(psql "$BACKUP_DATABASE_URL" --tuples-only --no-align \
+            --command="SELECT current_user;")
+          can_bypass=$(psql "$BACKUP_DATABASE_URL" --tuples-only --no-align \
+            --command="SELECT (rolsuper OR rolbypassrls)::text FROM pg_roles WHERE rolname = current_user;")
+          if [ "$can_bypass" != "true" ]; then
+            echo "::error::Backup role '$role' can neither bypass row-level security nor act as superuser, so pg_dump cannot read the tenant tables and this backup would be incomplete."
+            echo "Tenant tables use FORCE ROW LEVEL SECURITY, so the table owner is subject to it too."
+            echo "Point BACKUP_DATABASE_URL at a read-only role that bypasses RLS:"
+            echo "  CREATE ROLE erp_backup LOGIN PASSWORD '<strong-password>';"
+            echo "  GRANT CONNECT ON DATABASE <db> TO erp_backup;"
+            echo "  GRANT USAGE ON SCHEMA public TO erp_backup;"
+            echo "  GRANT SELECT ON ALL TABLES IN SCHEMA public TO erp_backup;"
+            echo "  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO erp_backup;"
+            echo "  ALTER ROLE erp_backup BYPASSRLS;"
+            echo "Do NOT add --enable-row-security (it yields a silently partial dump) and do NOT"
+            echo "drop FORCE ROW LEVEL SECURITY (it weakens the tenant boundary)."
+            echo "Procedure: docs/operations/database-backup-rollback-recovery.md (Automated live-backup verification)."
+            exit 1
+          fi
+          echo "Backup role '$role' can read past row-level security."
+
       - name: Fingerprint live row counts before backup
         shell: bash
         run: |
