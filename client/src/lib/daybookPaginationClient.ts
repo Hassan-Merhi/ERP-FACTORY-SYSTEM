@@ -1,4 +1,11 @@
 import { queryClient } from "./queryClient";
+import {
+  hasLoadedEveryRow,
+  isPageOutOfRange,
+  readActiveCompanyScope,
+  readPageMetadata,
+  type PaginationEnvelope,
+} from "./progressivePagination";
 
 const ENDPOINT = "/api/factory/daybook";
 const ROUTES = new Set(["/factory/daybook", "/properties/daybook"]);
@@ -26,22 +33,26 @@ export interface PaginatedDaybookEntry {
   effectiveDate?: string | null;
 }
 
-interface DaybookPage {
-  items: PaginatedDaybookEntry[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
+/**
+ * The envelope as it actually arrives. Every field is optional because the
+ * endpoint also answers unpaginated callers and older deployments omit the
+ * counts; declaring them required made the interceptor read metadata that is
+ * not guaranteed to be there.
+ */
+interface DaybookPage extends PaginationEnvelope {
+  items?: PaginatedDaybookEntry[] | null;
+  hasNextPage?: boolean | null;
+  hasPreviousPage?: boolean | null;
 }
 
 interface PaginationMeta {
   key: string;
   page: number;
   limit: number;
-  total: number;
-  totalPages: number;
+  /** Null when the server did not report a row count for this filter. */
+  total: number | null;
+  /** Null when the server did not report a page count for this filter. */
+  totalPages: number | null;
   loadedCount: number;
 }
 
@@ -123,7 +134,11 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     const params = new URLSearchParams(url.searchParams);
     for (const key of ["pagination", "page", "limit", "pageSize", "offset", "fullAction"]) params.delete(key);
     params.sort();
-    return `${url.pathname}?${params.toString()}`;
+    // The active company is carried by the session cookie, not the URL, so two
+    // companies produce identical daybook URLs. Scoping the cache key on the
+    // active company keeps a switch from merging one company's rows into
+    // another's list.
+    return `${readActiveCompanyScope()}|${url.pathname}?${params.toString()}`;
   }
 
   function hasDeepLink(): boolean {
@@ -173,6 +188,18 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
     return entries;
   }
 
+  /** Replaces the envelope body with the merged rows the daybook consumes. */
+  function entriesResponse(response: Response, entries: PaginatedDaybookEntry[]): Response {
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.set("Content-Type", "application/json; charset=utf-8");
+    return new Response(JSON.stringify(entries), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
   function ensureProgress(): HTMLDivElement {
     if (progressRoot?.isConnected) return progressRoot;
     progressRoot = document.createElement("div");
@@ -213,23 +240,29 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
       !meta ||
       !ROUTES.has(window.location.pathname) ||
       hasDeepLink() ||
+      meta.totalPages === null ||
       meta.totalPages <= 1 ||
-      meta.loadedCount >= meta.total
+      hasLoadedEveryRow(meta.total, meta.loadedCount)
     ) {
       root.style.display = "none";
       return;
     }
 
     root.style.display = "flex";
+    // `total` is non-null here: a null total hides the indicator above.
+    const total = meta.total ?? meta.loadedCount;
     root.textContent = loadingMore
-      ? `Loading more… ${meta.loadedCount} of ${meta.total} transactions loaded`
-      : `${meta.loadedCount} of ${meta.total} transactions loaded · scroll to load more`;
+      ? `Loading more… ${meta.loadedCount} of ${total} transactions loaded`
+      : `${meta.loadedCount} of ${total} transactions loaded · scroll to load more`;
   }
 
   function requestNextPage(): void {
-    if (!activeMeta || loadingMore) return;
+    const meta = activeMeta;
+    if (!meta || loadingMore) return;
+    // Without a reported page count there is no known next page to ask for.
+    if (meta.totalPages === null) return;
     const nextPage = highestLoadedPage() + 1;
-    if (nextPage <= 1 || nextPage > activeMeta.totalPages) return;
+    if (nextPage <= 1 || nextPage > meta.totalPages) return;
     pendingPage = nextPage;
     loadingMore = true;
     renderProgress();
@@ -243,7 +276,8 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
   }
 
   function handleProgressiveScroll(event: Event): void {
-    if (!activeMeta || loadingMore || activeMeta.loadedCount >= activeMeta.total) return;
+    const meta = activeMeta;
+    if (!meta || loadingMore || hasLoadedEveryRow(meta.total, meta.loadedCount)) return;
     const host = scrollHost(event);
     if (!host) return;
 
@@ -303,40 +337,35 @@ if (typeof window !== "undefined" && !window.__erpDaybookPaginationInstalled) {
         return response;
       }
 
-      const total = Number(payload.total || 0);
-      const totalPages = Number(payload.totalPages || 0);
-      const serverPage = Number(payload.page || requestedPage) || requestedPage;
-      const limit = Number(payload.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT;
+      const pageMeta = readPageMetadata(payload, requestedPage, DEFAULT_LIMIT);
 
-      if (totalPages > 0 && serverPage > totalPages) {
-        pendingPage = totalPages;
+      if (isPageOutOfRange(pageMeta)) {
+        // The requested page no longer exists — the filter narrowed or rows
+        // were removed under us. Clamp to the last real page and refetch, but
+        // still answer with the merged row array: callers of this endpoint
+        // consume an array, and handing back the raw envelope here would make
+        // the daybook read `entries.length` off a plain object.
+        pendingPage = pageMeta.totalPages;
         loadingMore = false;
         queueMicrotask(refetchDaybook);
-        return response;
+        return entriesResponse(response, mergedEntries());
       }
 
-      pageCache.set(serverPage, payload);
+      pageCache.set(pageMeta.page, payload);
       const entries = mergedEntries();
       pendingPage = null;
       loadingMore = false;
       activeMeta = {
         key: match.key,
-        page: highestLoadedPage() || serverPage,
-        limit,
-        total,
-        totalPages,
+        page: highestLoadedPage() || pageMeta.page,
+        limit: pageMeta.limit,
+        total: pageMeta.total,
+        totalPages: pageMeta.totalPages,
         loadedCount: entries.length,
       };
       renderProgress();
 
-      const headers = new Headers(response.headers);
-      headers.delete("content-length");
-      headers.set("Content-Type", "application/json; charset=utf-8");
-      return new Response(JSON.stringify(entries), {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      return entriesResponse(response, entries);
     } catch {
       pendingPage = null;
       loadingMore = false;

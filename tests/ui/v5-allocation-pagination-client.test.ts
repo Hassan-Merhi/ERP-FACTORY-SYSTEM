@@ -183,6 +183,117 @@ describe("v5 allocation on-screen interception", () => {
     expect(sentUrl(underlyingFetch.mock.calls[1]).searchParams.get("page")).toBe("2");
   });
 
+  it("returns an empty table and hides the indicator for an empty result", async () => {
+    underlyingFetch.mockImplementation(async () =>
+      jsonResponse(allocationPage({ rows: [], productNames: {}, total: 0, page: 1, totalPages: 0 }))
+    );
+
+    const response = await window.fetch(`${ENDPOINT}?companyId=1&filter=empty`);
+    const body = (await response.json()) as { rows: unknown[]; hasNextPage: boolean };
+
+    expect(body.rows).toEqual([]);
+    expect(body.hasNextPage).toBe(false);
+    expect(progressDisplay()).toBe("none");
+  });
+
+  it("treats an envelope without a page count as one loaded page", async () => {
+    underlyingFetch.mockImplementation(async () =>
+      jsonResponse({
+        rows: [{ articleCode: "N-1" }],
+        totals: {},
+        productNames: { "N-1": "No metadata" },
+        total: 1,
+      })
+    );
+
+    const response = await window.fetch(`${ENDPOINT}?companyId=1&filter=nometa`);
+    const body = (await response.json()) as { rows: Array<{ articleCode: string }>; hasNextPage: boolean };
+
+    // A missing page count means "no known next page", never "page zero".
+    expect(body.rows.map((row) => row.articleCode)).toEqual(["N-1"]);
+    expect(body.hasNextPage).toBe(false);
+    expect(progressDisplay()).toBe("none");
+  });
+
+  it("stops asking for more pages once the last page is loaded", async () => {
+    underlyingFetch.mockImplementation(async (input: unknown) => {
+      const page = Number(sentUrl([input]).searchParams.get("page") || "1");
+      return jsonResponse(
+        allocationPage({
+          rows: [{ articleCode: page === 1 ? "L-1" : "L-2" }],
+          productNames: {},
+          total: 2,
+          page,
+          totalPages: 2,
+        })
+      );
+    });
+
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=last`);
+    scrollToBottom();
+    const last = await window.fetch(`${ENDPOINT}?companyId=1&filter=last`);
+    const body = (await last.json()) as { rows: Array<{ articleCode: string }>; hasNextPage: boolean };
+
+    expect(body.rows.map((row) => row.articleCode)).toEqual(["L-1", "L-2"]);
+    expect(body.hasNextPage).toBe(false);
+    expect(progressDisplay()).toBe("none");
+
+    scrollToBottom();
+    expect(underlyingFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the loaded rows on screen when the requested page vanished", async () => {
+    underlyingFetch.mockImplementation(async (input: unknown) => {
+      const page = Number(sentUrl([input]).searchParams.get("page") || "1");
+      if (page === 1) {
+        return jsonResponse(
+          allocationPage({ rows: [{ articleCode: "S-1" }], productNames: {}, total: 205, page: 1, totalPages: 3 })
+        );
+      }
+      // The filtered set shrank to a single page while page 2 was in flight.
+      return jsonResponse(allocationPage({ rows: [], productNames: {}, total: 1, page: 2, totalPages: 1 }));
+    });
+
+    await window.fetch(`${ENDPOINT}?companyId=1&filter=vanished`);
+    scrollToBottom();
+    const stale = await window.fetch(`${ENDPOINT}?companyId=1&filter=vanished`);
+    const body = (await stale.json()) as { rows: Array<{ articleCode: string }> };
+
+    // The out-of-range envelope must not blank the table before the corrective
+    // refetch lands.
+    expect(body.rows.map((row) => row.articleCode)).toEqual(["S-1"]);
+  });
+
+  it("starts a fresh page cache when the active company changes mid-load", async () => {
+    localStorage.setItem("selectedCompanyId", "1");
+    underlyingFetch.mockImplementation(async (input: unknown) => {
+      const page = Number(sentUrl([input]).searchParams.get("page") || "1");
+      return jsonResponse(
+        allocationPage({
+          rows: [{ articleCode: `C-${page}` }],
+          productNames: {},
+          total: 205,
+          page,
+          totalPages: 3,
+        })
+      );
+    });
+
+    await window.fetch(`${ENDPOINT}?filter=scope`);
+    // Queue page 2 of company 1, then switch before it is requested. The URL is
+    // byte-identical across companies because the company travels in the
+    // session cookie.
+    scrollToBottom();
+    localStorage.setItem("selectedCompanyId", "2");
+
+    const switched = await window.fetch(`${ENDPOINT}?filter=scope`);
+    const body = (await switched.json()) as { rows: Array<{ articleCode: string }> };
+
+    expect(sentUrl(underlyingFetch.mock.calls[1]).searchParams.get("page")).toBe("1");
+    expect(body.rows.map((row) => row.articleCode)).toEqual(["C-1"]);
+    localStorage.removeItem("selectedCompanyId");
+  });
+
   it("passes a failed response through unread", async () => {
     underlyingFetch.mockImplementation(async () => jsonResponse({}, false, 502));
 
@@ -190,3 +301,15 @@ describe("v5 allocation on-screen interception", () => {
     expect(response.status).toBe(502);
   });
 });
+
+function progressDisplay(): string {
+  const root = document.querySelector<HTMLElement>("#erp-v5-allocation-progress");
+  return root?.style.display ?? "none";
+}
+
+function scrollToBottom(): void {
+  Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });
+  Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 700 });
+  Object.defineProperty(document.documentElement, "scrollTop", { configurable: true, value: 650 });
+  document.documentElement.dispatchEvent(new Event("scroll"));
+}

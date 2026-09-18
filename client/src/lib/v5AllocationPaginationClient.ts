@@ -1,4 +1,12 @@
 import { queryClient } from "./queryClient";
+import {
+  hasLoadedEveryRow,
+  hasUnloadedPages,
+  isPageOutOfRange,
+  readActiveCompanyScope,
+  readPageMetadata,
+  type PaginationEnvelope,
+} from "./progressivePagination";
 
 const ENDPOINT = "/api/factory/v5/stock-allocation";
 const ROUTE = "/factory/stock-allocation-v5";
@@ -34,7 +42,7 @@ export interface V5AllocationRow {
   isGarbageOrWipers?: boolean;
 }
 
-export interface V5AllocationData {
+export interface V5AllocationData extends PaginationEnvelope {
   rows: V5AllocationRow[];
   totals: {
     stockAvailable: number;
@@ -45,20 +53,18 @@ export interface V5AllocationData {
     shortageCount: number;
   };
   productNames: Record<string, string>;
-  total?: number;
-  page?: number;
-  limit?: number;
-  totalPages?: number;
-  hasNextPage?: boolean;
-  hasPreviousPage?: boolean;
+  hasNextPage?: boolean | null;
+  hasPreviousPage?: boolean | null;
 }
 
 interface PaginationMeta {
   key: string;
   page: number;
   limit: number;
-  total: number;
-  totalPages: number;
+  /** Null when the server did not report a row count for this filter. */
+  total: number | null;
+  /** Null when the server did not report a page count for this filter. */
+  totalPages: number | null;
   loadedCount: number;
 }
 
@@ -156,7 +162,11 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
     const params = new URLSearchParams(url.searchParams);
     for (const key of ["pagination", "page", "limit", "pageSize", "offset", "fullAction"]) params.delete(key);
     params.sort();
-    return `${url.pathname}?${params.toString()}`;
+    // The active company travels in the session cookie rather than the URL, so
+    // two companies produce identical allocation URLs. Scoping the cache key on
+    // the active company keeps a switch from merging one company's products
+    // into another's table.
+    return `${readActiveCompanyScope()}|${url.pathname}?${params.toString()}`;
   }
 
   function hasFocusedDeepLink(): boolean {
@@ -211,7 +221,7 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
     }
 
     const highest = highestLoadedPage();
-    const totalPages = Math.max(0, Number(latest.totalPages || 0));
+    const metadata = readPageMetadata(latest, highest || 1, DEFAULT_LIMIT);
     return {
       ...latest,
       rows,
@@ -219,8 +229,21 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
       page: highest || 1,
       limit: DEFAULT_LIMIT,
       hasPreviousPage: false,
-      hasNextPage: totalPages > 0 && highest < totalPages,
+      // A missing page count means "no known next page", not "page zero".
+      hasNextPage: hasUnloadedPages(metadata, highest),
     };
+  }
+
+  /** Replaces the envelope body with the merged table the allocation page consumes. */
+  function allocationResponse(response: Response, data: V5AllocationData): Response {
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.set("Content-Type", "application/json; charset=utf-8");
+    return new Response(JSON.stringify(data), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   }
 
   function ensureProgress(): HTMLDivElement {
@@ -264,23 +287,29 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
       window.location.pathname !== ROUTE ||
       negativeOnlyMode ||
       hasFocusedDeepLink() ||
+      meta.totalPages === null ||
       meta.totalPages <= 1 ||
-      meta.loadedCount >= meta.total
+      hasLoadedEveryRow(meta.total, meta.loadedCount)
     ) {
       root.style.display = "none";
       return;
     }
 
     root.style.display = "flex";
+    // `total` is non-null here: a null total hides the indicator above.
+    const total = meta.total ?? meta.loadedCount;
     root.textContent = loadingMore
-      ? `Loading more… ${meta.loadedCount} of ${meta.total} products loaded`
-      : `${meta.loadedCount} of ${meta.total} products loaded · scroll to load more`;
+      ? `Loading more… ${meta.loadedCount} of ${total} products loaded`
+      : `${meta.loadedCount} of ${total} products loaded · scroll to load more`;
   }
 
   function requestNextPage(): void {
-    if (!activeMeta || loadingMore) return;
+    const meta = activeMeta;
+    if (!meta || loadingMore) return;
+    // Without a reported page count there is no known next page to ask for.
+    if (meta.totalPages === null) return;
     const nextPage = highestLoadedPage() + 1;
-    if (nextPage <= 1 || nextPage > activeMeta.totalPages) return;
+    if (nextPage <= 1 || nextPage > meta.totalPages) return;
     pendingPage = nextPage;
     loadingMore = true;
     renderProgress();
@@ -294,7 +323,8 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
   }
 
   function handleProgressiveScroll(event: Event): void {
-    if (!activeMeta || loadingMore || activeMeta.loadedCount >= activeMeta.total) return;
+    const meta = activeMeta;
+    if (!meta || loadingMore || hasLoadedEveryRow(meta.total, meta.loadedCount)) return;
     const host = scrollHost(event);
     if (!host) return;
 
@@ -357,40 +387,35 @@ if (typeof window !== "undefined" && !window.__erpV5AllocationPaginationInstalle
         return response;
       }
 
-      const total = Number(payload.total || 0);
-      const totalPages = Number(payload.totalPages || 0);
-      const serverPage = Number(payload.page || requestedPage) || requestedPage;
-      const limit = Number(payload.limit || DEFAULT_LIMIT) || DEFAULT_LIMIT;
+      const pageMeta = readPageMetadata(payload, requestedPage, DEFAULT_LIMIT);
 
-      if (totalPages > 0 && serverPage > totalPages) {
-        pendingPage = totalPages;
+      if (isPageOutOfRange(pageMeta)) {
+        // The requested page no longer exists — the filter narrowed or rows
+        // were removed under us. Clamp to the last real page and refetch, but
+        // answer from the pages already loaded instead of letting the empty
+        // out-of-range envelope blank the table for a frame.
+        pendingPage = pageMeta.totalPages;
         loadingMore = false;
         queueMicrotask(refetchAllocation);
-        return response;
+        const anchor = pageCache.get(highestLoadedPage()) ?? payload;
+        return allocationResponse(response, mergeCachedPages(anchor));
       }
 
-      pageCache.set(serverPage, payload);
+      pageCache.set(pageMeta.page, payload);
       const merged = mergeCachedPages(payload);
       pendingPage = null;
       loadingMore = false;
       activeMeta = {
         key: match.key,
-        page: highestLoadedPage() || serverPage,
-        limit,
-        total,
-        totalPages,
+        page: highestLoadedPage() || pageMeta.page,
+        limit: pageMeta.limit,
+        total: pageMeta.total,
+        totalPages: pageMeta.totalPages,
         loadedCount: merged.rows.length,
       };
       renderProgress();
 
-      const headers = new Headers(response.headers);
-      headers.delete("content-length");
-      headers.set("Content-Type", "application/json; charset=utf-8");
-      return new Response(JSON.stringify(merged), {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      return allocationResponse(response, merged);
     } catch {
       pendingPage = null;
       loadingMore = false;

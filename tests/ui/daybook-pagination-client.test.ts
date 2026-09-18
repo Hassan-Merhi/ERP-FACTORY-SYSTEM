@@ -89,6 +89,92 @@ describe("factory daybook pagination client", () => {
     expect(screenText("factory-daybook-progress")).toContain("2 of 205 transactions loaded");
   });
 
+  it("returns an empty list and hides the indicator for an empty result", async () => {
+    harness.previousFetch.mockResolvedValueOnce(page([], 1, 0, 0));
+
+    const response = await window.fetch("/api/factory/daybook?txType=EMPTY");
+
+    expect(await response.json()).toEqual([]);
+    expect(progressDisplay()).toBe("none");
+  });
+
+  it("treats an envelope without counts as one loaded page rather than an empty result", async () => {
+    harness.previousFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [{ id: 7 }, { id: 8 }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const response = await window.fetch("/api/factory/daybook?txType=NOMETA");
+
+    // The rows still reach the table as an array, and the missing page count is
+    // read as "no known next page" instead of "the server reported zero pages".
+    expect(await response.json()).toEqual([{ id: 7 }, { id: 8 }]);
+    expect(progressDisplay()).toBe("none");
+
+    scrollToBottom();
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it("stops asking for more pages once the last page is loaded", async () => {
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 11 }], 1, 2, 2))
+      .mockResolvedValueOnce(page([{ id: 12 }], 2, 2, 2));
+
+    await window.fetch("/api/factory/daybook?txType=LAST");
+    scrollToBottom();
+    expect(harness.invalidateQueries).toHaveBeenCalledOnce();
+
+    const last = await window.fetch("/api/factory/daybook?txType=LAST");
+    expect(await last.json()).toEqual([{ id: 11 }, { id: 12 }]);
+    expect(progressDisplay()).toBe("none");
+
+    harness.invalidateQueries.mockReset();
+    scrollToBottom();
+    expect(harness.invalidateQueries).not.toHaveBeenCalled();
+    expect(harness.previousFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers with the merged rows, not the raw envelope, when the requested page vanished", async () => {
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 21 }], 1, 3, 205))
+      // The filtered set shrank to a single page while page 2 was in flight.
+      .mockResolvedValueOnce(page([], 2, 1, 1));
+
+    await window.fetch("/api/factory/daybook?txType=SHRANK");
+    scrollToBottom();
+
+    const stale = await window.fetch("/api/factory/daybook?txType=SHRANK");
+
+    // The daybook reads this body as DaybookEntry[]; an envelope object here
+    // would make it call .length and .find on a plain object.
+    expect(await stale.json()).toEqual([{ id: 21 }]);
+    await Promise.resolve();
+    expect(harness.invalidateQueries).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts a fresh page cache when the active company changes mid-load", async () => {
+    localStorage.setItem("selectedCompanyId", "1");
+    harness.previousFetch
+      .mockResolvedValueOnce(page([{ id: 31 }], 1, 3, 205))
+      .mockResolvedValueOnce(page([{ id: 91 }], 1, 1, 1));
+
+    await window.fetch("/api/factory/daybook?txType=SCOPE");
+    // Queue page 2 of company 1, then switch before it is requested. The URL is
+    // byte-identical across companies because the company travels in the
+    // session cookie.
+    scrollToBottom();
+    localStorage.setItem("selectedCompanyId", "2");
+
+    const switched = await window.fetch("/api/factory/daybook?txType=SCOPE");
+
+    // Company 2 must start at page 1 with none of company 1's rows merged in.
+    expect(harness.previousFetch.mock.calls[1][0]).toMatch(/page=1/);
+    expect(await switched.json()).toEqual([{ id: 91 }]);
+    localStorage.removeItem("selectedCompanyId");
+  });
+
   it("leaves mutations, explicit exports, deep links, and unrelated routes untouched", async () => {
     harness.previousFetch.mockResolvedValue(new Response(JSON.stringify({ untouched: true }), { status: 200 }));
 
@@ -105,4 +191,16 @@ describe("factory daybook pagination client", () => {
 
 function screenText(testId: string): string {
   return document.querySelector(`[data-testid='${testId}']`)?.textContent ?? "";
+}
+
+function progressDisplay(): string {
+  const root = document.querySelector<HTMLElement>("[data-testid='factory-daybook-progress']");
+  return root?.style.display ?? "none";
+}
+
+function scrollToBottom(): void {
+  Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 1400 });
+  Object.defineProperty(document.documentElement, "clientHeight", { configurable: true, value: 700 });
+  Object.defineProperty(document.documentElement, "scrollTop", { configurable: true, value: 650 });
+  document.documentElement.dispatchEvent(new Event("scroll"));
 }

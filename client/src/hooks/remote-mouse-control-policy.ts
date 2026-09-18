@@ -273,6 +273,27 @@ export interface RemoteMouseViewportMetrics {
  */
 export const FRAME_POINT_EDGE_SLOP_PX = 2;
 
+/**
+ * Whether the live viewport can host a command at all.
+ *
+ * A window that reports no width or height — minimized, detached, a zero-size
+ * frame — cannot be mapped into. Clamping against the 1×1 fallback below would
+ * land every command on whatever sits in the top-left corner, which is usually
+ * the shell's navigation, so such a command is refused instead of aimed at a
+ * fabricated viewport.
+ */
+export function isUsableRemoteMouseViewport(view: Window = window): boolean {
+  const { innerWidth, innerHeight } = view;
+  return (
+    typeof innerWidth === "number" &&
+    Number.isFinite(innerWidth) &&
+    innerWidth > 0 &&
+    typeof innerHeight === "number" &&
+    Number.isFinite(innerHeight) &&
+    innerHeight > 0
+  );
+}
+
 export function getRemoteMouseViewportMetrics(view: Window = window): RemoteMouseViewportMetrics {
   return {
     width: finitePositive(view.innerWidth, 1),
@@ -325,6 +346,7 @@ export function mapRemoteMouseFramePoint(
   view: Window = window
 ): RemoteMouseFramePointMapping | null {
   if (!finiteCoordinate(x) || !finiteCoordinate(y)) return null;
+  if (!isUsableRemoteMouseViewport(view)) return null;
   const live = getRemoteMouseViewportMetrics(view);
   const captured = coerceRemoteMouseFrameViewport(frame);
 
@@ -393,6 +415,45 @@ export function parseFrameViewportFromDataset(dataset: DOMStringMap): RemoteMous
   return { width, height, scrollX, scrollY, visualScale };
 }
 
+/**
+ * A control's own identity, without the text of anything nested inside it.
+ *
+ * `elementDescriptor` folds in `textContent`, which is right for the control
+ * being clicked and wrong for its ancestors: a table or panel contains every
+ * row's text, so testing an ancestor's text would block the whole page. The
+ * attributes below name the ancestor itself, so they stay meaningful up the
+ * tree.
+ */
+function controlIdentityDescriptor(element: Element): string {
+  const href = element instanceof HTMLAnchorElement ? (element.getAttribute("href") ?? "") : "";
+  return [
+    element.getAttribute("aria-label"),
+    element.getAttribute("title"),
+    element.getAttribute("data-testid"),
+    element.getAttribute("name"),
+    href,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * A click on a safe-looking control still fires every handler above it. An
+ * inner "Open" span inside a row that deletes on click would pass the
+ * nearest-control check while activating the deletion, so each enclosing
+ * control is checked too — by its own identity, never by the text it wraps.
+ */
+function hasDangerousEnclosingControl(element: Element): boolean {
+  let current = element.parentElement?.closest(CLICKABLE_SELECTOR) ?? null;
+  while (current) {
+    if (DANGEROUS_TEXT.test(controlIdentityDescriptor(current))) return true;
+    current = current.parentElement?.closest(CLICKABLE_SELECTOR) ?? null;
+  }
+  return false;
+}
+
 // prettier-ignore
 export function isRemoteMouseBlockedElement(element: Element | null): boolean {
   if (!element) return true;
@@ -400,7 +461,9 @@ export function isRemoteMouseBlockedElement(element: Element | null): boolean {
   if (blocked) return true;
 
   const clickable = element.closest(CLICKABLE_SELECTOR);
-  return !!clickable && DANGEROUS_TEXT.test(elementDescriptor(clickable));
+  if (!clickable) return false;
+  if (DANGEROUS_TEXT.test(elementDescriptor(clickable))) return true;
+  return hasDangerousEnclosingControl(clickable);
 }
 
 export function isAllowedRemoteClickElement(
@@ -520,7 +583,11 @@ export function applyRemoteMouseCommand(
 ): RemoteMouseExecutionResult {
   const mappedPoint = mapRemoteMouseFramePoint(command.x, command.y, command.frameViewport, view);
   if (!mappedPoint) {
-    return { status: "ignored", reason: "invalid-coordinates", clientX: 0, clientY: 0 };
+    // Separate causes: the controller sent an unusable point, or this window
+    // has no viewport to land it in. Both refuse the command; the reason tells
+    // the operator which one happened.
+    const reason = isUsableRemoteMouseViewport(view) ? "invalid-coordinates" : "invalid-viewport";
+    return { status: "ignored", reason, clientX: 0, clientY: 0 };
   }
 
   const { clientX, clientY, onScreen } = mappedPoint;

@@ -7,6 +7,7 @@ import {
   getRemoteMouseViewportMetrics,
   isAllowedRemoteClickElement,
   isRemoteMouseBlockedElement,
+  isUsableRemoteMouseViewport,
   mapRemoteMouseFramePoint,
   normalizeRemoteMousePoint,
   normalizeRemoteWheelDelta,
@@ -514,6 +515,164 @@ describe("remote mouse execution policy", () => {
     expect(isRemoteMouseBlockedElement(dangerousSafe)).toBe(true);
     expect(isAllowedRemoteClickElement(dangerousSafe)).toBe(false);
     expect(isAllowedRemoteClickElement(formSafe)).toBe(false);
+  });
+
+  it("scrolls the same distance whichever unit the controller's wheel reports", () => {
+    const panel = document.createElement("div");
+    Object.defineProperty(panel, "scrollHeight", { configurable: true, value: 3000 });
+    Object.defineProperty(panel, "clientHeight", { configurable: true, value: 600 });
+    panel.scrollTop = 500;
+    panel.style.overflowY = "auto";
+    document.body.appendChild(panel);
+    document.elementFromPoint = vi.fn(() => panel);
+    const scrollBy = vi.fn();
+    panel.scrollBy = scrollBy;
+
+    // One notch is ~120 px in every unit the controller may report, because the
+    // controller converts to pixels before the command is sent.
+    const pixel = normalizeRemoteWheelDelta(0, 120, REMOTE_WHEEL_DELTA_MODE_PIXEL);
+    const line = normalizeRemoteWheelDelta(0, 3, REMOTE_WHEEL_DELTA_MODE_LINE);
+    expect(line).toEqual(pixel);
+
+    // A page-mode notch is one screenful of the frame the controller is viewing.
+    const pageMode = normalizeRemoteWheelDelta(0, 1, REMOTE_WHEEL_DELTA_MODE_PAGE, 1000, 600);
+    expect(pageMode).toEqual({ deltaX: 0, deltaY: 600 });
+
+    for (const delta of [pixel, line, pageMode]) {
+      expect(applyRemoteMouseCommand(command("scroll", { ...delta }))).toMatchObject({ status: "executed" });
+    }
+    expect(scrollBy.mock.calls.map(([options]) => options.top)).toEqual([120, 120, 600]);
+  });
+
+  it("scrolls at the point the controller aimed at, not the viewport centre", () => {
+    const panel = document.createElement("div");
+    document.body.appendChild(panel);
+    const elementFromPoint = vi.fn(() => panel);
+    document.elementFromPoint = elementFromPoint;
+    const scrollBy = vi.fn();
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+
+    applyRemoteMouseCommand(
+      command("scroll", {
+        x: 0.25,
+        y: 0.75,
+        deltaY: 120,
+        frameViewport: { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 },
+      })
+    );
+
+    expect(elementFromPoint).toHaveBeenCalledWith(250, 450);
+  });
+
+  it("refuses commands aimed into a window that reports no viewport", () => {
+    expect(isUsableRemoteMouseViewport(window)).toBe(true);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 0 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 0 });
+    expect(isUsableRemoteMouseViewport(window)).toBe(false);
+
+    const control = document.createElement("button");
+    control.textContent = "View details";
+    control.dataset.remoteControlAction = "view-details";
+    document.body.appendChild(control);
+    const click = vi.spyOn(control, "click");
+    document.elementFromPoint = vi.fn(() => control);
+
+    // A minimized or detached window would otherwise clamp every command onto
+    // the top-left corner and activate whatever sits there.
+    expect(applyRemoteMouseCommand(command("click"))).toMatchObject({
+      status: "ignored",
+      reason: "invalid-viewport",
+    });
+    expect(applyRemoteMouseCommand(command("scroll", { deltaY: 120 }))).toMatchObject({
+      status: "ignored",
+      reason: "invalid-viewport",
+    });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it("recovers on the next frame after a reconnect left the aim point stale", () => {
+    const control = document.createElement("button");
+    control.textContent = "View details";
+    control.dataset.remoteControlAction = "view-details";
+    document.body.appendChild(control);
+    const click = vi.spyOn(control, "click");
+    document.elementFromPoint = vi.fn(() => control);
+
+    // While the transport was down the employee scrolled a screenful, so the
+    // frame the controller is still looking at aims off the live viewport.
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 1400 });
+    const staleFrame = { width: 1000, height: 600, scrollX: 0, scrollY: 0, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport: staleFrame }))).toMatchObject({
+      status: "ignored",
+      reason: "frame-point-offscreen",
+    });
+    expect(click).not.toHaveBeenCalled();
+
+    // The first frame after the reconnect carries the employee's real scroll
+    // position, and the same aim point lands again.
+    const freshFrame = { width: 1000, height: 600, scrollX: 0, scrollY: 1400, visualScale: 1 };
+    expect(applyRemoteMouseCommand(command("click", { frameViewport: freshFrame }))).toMatchObject({
+      status: "executed",
+      clientX: 500,
+      clientY: 300,
+    });
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps destructive controls blocked however the page dresses them up", () => {
+    document.body.innerHTML = `
+      <button data-testid="button-delete-voucher" aria-label="Remove"><span class="icon"></span></button>
+      <form data-testid="form-post-voucher"><button>OK</button></form>
+      <button data-sensitive-action="manage-users">Open user roles</button>
+      <button disabled data-remote-control-action="view-details">View details</button>
+      <span role="button" aria-disabled="true" data-remote-control-safe="true">View details</span>
+      <div data-destructive><a href="/vouchers/7">Open voucher</a></div>
+      <div role="button" data-testid="row-delete-voucher-7">
+        <span role="button">Open</span>
+      </div>
+      <button data-remote-control-action="not-allowlisted">View details</button>
+      <button data-remote-control-safe="true" data-testid="button-archive-container">Open</button>
+    `;
+    const control = (selector: string): Element => {
+      const found = document.querySelector(selector);
+      if (!found) throw new Error(`missing fixture: ${selector}`);
+      return found;
+    };
+
+    // An icon-only delete button whose visible label reads "Remove": the test
+    // id still names the action, and any dangerous token anywhere in the
+    // control's identity fails it closed.
+    expect(isAllowedRemoteClickElement(control("[data-testid='button-delete-voucher'] .icon"))).toBe(false);
+    // A form submit stays blocked even when its own label is innocuous.
+    expect(isAllowedRemoteClickElement(control("[data-testid='form-post-voucher'] button"))).toBe(false);
+    // Permission-restricted and disabled controls are blocked whatever they carry.
+    expect(isAllowedRemoteClickElement(control("[data-sensitive-action]"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("button[disabled]"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("[aria-disabled='true']"))).toBe(false);
+    expect(isAllowedRemoteClickElement(control("[data-destructive] a"))).toBe(false);
+    // A safe-looking inner control inside a row that deletes on click: the
+    // click would reach the row's handler either way.
+    expect(isAllowedRemoteClickElement(control("[data-testid='row-delete-voucher-7'] span"))).toBe(false);
+    // An unregistered action is not an allowlist entry, whatever it is named.
+    expect(isAllowedRemoteClickElement(control("[data-remote-control-action='not-allowlisted']"))).toBe(false);
+    // An explicit safe annotation does not survive a destructive identity.
+    expect(isAllowedRemoteClickElement(control("[data-testid='button-archive-container']"))).toBe(false);
+  });
+
+  it("still allows the read-only controls the registry vouches for", () => {
+    document.body.innerHTML = `
+      <div role="button" data-testid="row-voucher-7"><span role="button">Open</span></div>
+      <button data-remote-control-action="view-details">Details</button>
+      <button data-remote-control-safe="true">View history</button>
+    `;
+    for (const selector of [
+      "[data-testid='row-voucher-7'] span",
+      "[data-remote-control-action='view-details']",
+      "[data-remote-control-safe='true']",
+    ]) {
+      const element = document.querySelector(selector);
+      expect(element && isAllowedRemoteClickElement(element)).toBe(true);
+    }
   });
 
   it("ignores malformed coordinates, empty scrolls, and missing targets", () => {

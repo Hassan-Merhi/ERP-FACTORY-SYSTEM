@@ -31,7 +31,22 @@ assert.match(client, /handleProgressiveScroll/, "stock allocation must progressi
 assert.match(client, /AUTOLOAD_THRESHOLD_PX/, "progressive loading must use a near-bottom threshold");
 assert.match(client, /v5-allocation-progress/, "progressive loading status must be available");
 assert.match(client, /scroll to load more/, "the progressive loading status must explain the interaction");
-assert.match(client, /JSON\.stringify\(merged\)/, "progressive pages must be merged into the legacy V5 response shape");
+// The merged body used to be serialized inline. It moved into one helper so
+// the out-of-range path answers in the same shape instead of leaking the raw
+// envelope; both call sites are pinned below, which covers more of the
+// contract than the single inline literal did.
+assert.match(
+  client,
+  /function allocationResponse\(response: Response, data: V5AllocationData\): Response/,
+  "the legacy V5 response shape must be produced in one place"
+);
+assert.match(client, /JSON\.stringify\(data\)/, "the merged V5 body must be serialized into the response");
+assert.match(client, /return allocationResponse\(response, merged\);/, "progressive pages must be merged into the legacy V5 response shape");
+assert.match(
+  client,
+  /return allocationResponse\(response, mergeCachedPages\(anchor\)\);/,
+  "an out-of-range page must answer from the loaded pages, never the raw envelope"
+);
 assert.doesNotMatch(client, /v5-allocation-page-next/, "manual Next pagination must stay removed");
 assert.doesNotMatch(client, /v5-allocation-page-previous/, "manual Previous pagination must stay removed");
 assert.doesNotMatch(client, /v5-allocation-page-size/, "manual page-size pagination must stay removed");

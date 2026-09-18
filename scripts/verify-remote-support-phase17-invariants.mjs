@@ -51,7 +51,15 @@ requireMarkers("client/src/hooks/remote-control-surface-coverage.ts", [
   "record.addedNodes",
   "minimalMutationRoots",
   "annotateRemoteControlSurface(changedRoot)",
-  "observer.observe(root, { childList: true, subtree: true })",
+  // The observer was pinned as a single-line childList/subtree call. It now
+  // also watches the attributes the annotation decisions read, so a control
+  // that becomes usable after mount (a portal field enabled once its data
+  // loads) is discovered and one that stops qualifying loses its annotation.
+  // The parts that carry the contract are pinned individually instead, which
+  // pins strictly more of the call than the old single literal did.
+  "childList: true,",
+  "subtree: true,",
+  "attributeFilter: ANNOTATION_INPUT_ATTRIBUTES,",
 ]);
 forbidMarkers("client/src/hooks/remote-control-surface-coverage.ts", [
   "new MutationObserver(() => annotateRemoteControlSurface(root))",
