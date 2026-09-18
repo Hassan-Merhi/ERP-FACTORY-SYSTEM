@@ -13,7 +13,10 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Even without the duplicated coverage pass this job is long: a 13-minute
+    # browser smoke plus a ~70-minute backend --complete, before the smoke
+    # sweep and the frontend passes. 90 left nothing spare.
+    timeout-minutes: 150
 
     services:
       postgres:
@@ -194,11 +197,18 @@ jobs:
         continue-on-error: true
         run: npm run test:backend:verify
 
+      # The step above is --complete: a plain pass and then a coverage pass, and
+      # that coverage pass already merges the shards and asserts the thresholds
+      # in config/coverage-thresholds.json. Re-running test:backend:verify:coverage
+      # here re-ran the whole suite a second time to re-check what it had just
+      # checked, which is what pushed this job past timeout-minutes. --merge-only
+      # re-asserts the same floors against the coverage already on disk, in
+      # seconds, so this gate keeps its own outcome for the evaluation below.
       - name: Backend coverage thresholds
         id: backend_coverage
         if: always() && steps.db_schema.outcome == 'success'
         continue-on-error: true
-        run: npm run test:backend:verify:coverage
+        run: node scripts/run-backend-verification.mjs --merge-only
 
       - name: API smoke sweep
         id: smoke

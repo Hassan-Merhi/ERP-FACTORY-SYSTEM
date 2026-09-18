@@ -31,8 +31,14 @@ module.exports = {
   win: {
     target: [{ target: "appx", arch: ["x64"] }],
     icon: "icons/icon.ico",
-    publisherName: "Hassan Dakik",
-    signingHashAlgorithms: ["sha256"],
+
+    // electron-builder 25 moved the signtool settings off the win root and
+    // under signtoolOptions. Left at the root they are not merely ignored —
+    // schema validation rejects the whole win block.
+    signtoolOptions: {
+      publisherName: "Hassan Dakik",
+      signingHashAlgorithms: ["sha256"],
+    },
   },
 
   appx: {
@@ -42,14 +48,10 @@ module.exports = {
 
     applicationId: "HMDERPFactorySystem",
     displayName: "HMD ERP + FACTORY SYSTEM",
-    description:
-      "ERP, POS, factory, warehouse, and inventory management system by HMD International Group.",
     backgroundColor: "#0f172a",
     showNameOnTiles: true,
     languages: ["en-US"],
     minVersion: "10.0.17763.0",
-
-    assets: "icons/store",
   },
 
   nsis: {

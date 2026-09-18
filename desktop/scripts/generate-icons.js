@@ -14,7 +14,11 @@ const fs    = require('fs');
 
 const SOURCE = path.resolve(__dirname, '../../client/public/hmd-logo-clean.png');
 const OUT    = path.resolve(__dirname, '../icons');
-const STORE  = path.join(OUT, 'store');
+// electron-builder has no appx.assets option: AppxTarget picks user tile assets
+// up from <buildResources>/appx, and buildResources is `build` in
+// electron-builder.config.js. Writing them anywhere else leaves the package
+// with electron-builder's own placeholder tiles.
+const STORE  = path.resolve(__dirname, '../build/appx');
 
 [OUT, STORE].forEach(d => fs.mkdirSync(d, { recursive: true }));
 

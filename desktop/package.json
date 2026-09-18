@@ -1,7 +1,7 @@
 {
   "name": "erp-warehouse",
   "version": "1.0.0",
-  "description": "ERP Warehouse — HMD International Group desktop application",
+  "description": "ERP, POS, factory, warehouse, and inventory management system by HMD International Group.",
   "main": "main.js",
   "author": {
     "name": "HMD International Group",
