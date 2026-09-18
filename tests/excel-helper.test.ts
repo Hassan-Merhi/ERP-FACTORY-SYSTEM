@@ -448,6 +448,24 @@ describe("read()", () => {
     expect(SheetNames).toContain("U8");
   });
 
+  it("recovers the newest complete workbook from a pooled ArrayBuffer", async () => {
+    const stale = new ExcelJS.Workbook();
+    stale.addWorksheet("Stale");
+    const current = new ExcelJS.Workbook();
+    current.addWorksheet("Current");
+
+    const staleBuffer = await toBuffer(stale);
+    const currentBuffer = await toBuffer(current);
+    const currentOffset = 11 + staleBuffer.length + 13;
+    const slab = new Uint8Array(currentOffset + currentBuffer.length + 17);
+
+    slab.set(staleBuffer, 11);
+    slab.set(currentBuffer, currentOffset);
+
+    const { SheetNames } = await read(slab.buffer);
+    expect(SheetNames).toEqual(["Current"]);
+  });
+
   it("throws for null with message 'no data provided'", async () => {
     await expect(read(null)).rejects.toThrow("no data provided");
   });
