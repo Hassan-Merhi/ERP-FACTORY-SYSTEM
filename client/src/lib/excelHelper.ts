@@ -226,18 +226,76 @@ function isUint8Array(value: unknown): value is Uint8Array {
   return Object.prototype.toString.call(value) === "[object Uint8Array]";
 }
 
-function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
-  const bytes = isUint8Array(data) ? Uint8Array.from(data) : new Uint8Array(data);
-  if (isXlsxZip(bytes)) return bytes;
+function readUint16LE(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
 
-  // Node's Buffer#buffer may expose its larger pooled ArrayBuffer, including
-  // bytes before the Buffer's actual XLSX payload. Recover that payload when
-  // callers pass the ArrayBuffer directly (the browser path is unaffected).
+function readUint32LE(bytes: Uint8Array, offset: number): number {
+  return (
+    bytes[offset] |
+    (bytes[offset + 1] << 8) |
+    (bytes[offset + 2] << 16) |
+    (bytes[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function findXlsxZipStart(bytes: Uint8Array): number {
+  if (isXlsxZip(bytes)) return 0;
+
   for (let index = 1; index <= bytes.length - 4; index += 1) {
-    if (bytes[index] === 0x50 && bytes[index + 1] === 0x4b && bytes[index + 2] === 0x03 && bytes[index + 3] === 0x04) {
-      return bytes.slice(index);
+    if (
+      bytes[index] === 0x50 &&
+      bytes[index + 1] === 0x4b &&
+      bytes[index + 2] === 0x03 &&
+      bytes[index + 3] === 0x04
+    ) {
+      return index;
     }
   }
+
+  return -1;
+}
+
+function trimXlsxZip(bytes: Uint8Array, start: number): Uint8Array {
+  const endOfCentralDirectorySize = 22;
+
+  // A Node Buffer can expose both prefix and suffix bytes from its pooled
+  // backing ArrayBuffer. JSZip searches from the end for the ZIP directory,
+  // so stale suffix bytes that resemble an EOCD record can make a valid XLSX
+  // look corrupt. Find a structurally valid EOCD and trim to its true end.
+  for (let index = bytes.length - endOfCentralDirectorySize; index >= start; index -= 1) {
+    if (
+      bytes[index] !== 0x50 ||
+      bytes[index + 1] !== 0x4b ||
+      bytes[index + 2] !== 0x05 ||
+      bytes[index + 3] !== 0x06
+    ) {
+      continue;
+    }
+
+    const commentLength = readUint16LE(bytes, index + 20);
+    const end = index + endOfCentralDirectorySize + commentLength;
+    if (end > bytes.length) continue;
+
+    const centralDirectorySize = readUint32LE(bytes, index + 12);
+    const centralDirectoryOffset = readUint32LE(bytes, index + 16);
+    const centralDirectoryEnd = start + centralDirectoryOffset + centralDirectorySize;
+    if (centralDirectoryEnd > index) continue;
+
+    return bytes.slice(start, end);
+  }
+
+  return start === 0 ? bytes : bytes.slice(start);
+}
+
+function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
+  const bytes = isUint8Array(data) ? Uint8Array.from(data) : new Uint8Array(data);
+  const zipStart = findXlsxZipStart(bytes);
+
+  if (zipStart >= 0) {
+    return trimXlsxZip(bytes, zipStart);
+  }
+
   return bytes;
 }
 
