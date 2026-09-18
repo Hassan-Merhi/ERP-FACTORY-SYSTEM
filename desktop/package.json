@@ -13,10 +13,10 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "icons": "node scripts/generate-icons.js",
-    "build:msix": "electron-builder --win appx --x64",
-    "build:installer": "electron-builder --win nsis --x64",
-    "build:all": "electron-builder --win --x64",
-    "build:unsigned": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win appx --x64"
+    "build:msix": "electron-builder --config electron-builder.config.js --win appx --x64",
+    "build:installer": "electron-builder --config electron-builder.config.js --win nsis --x64",
+    "build:all": "electron-builder --config electron-builder.config.js --win --x64",
+    "build:unsigned": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.config.js --win appx --x64"
   },
   "dependencies": {},
   "devDependencies": {
