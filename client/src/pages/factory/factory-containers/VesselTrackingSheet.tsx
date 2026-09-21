@@ -1,0 +1,83 @@
+import { useQuery } from "@tanstack/react-query";
+import { Activity, Anchor, Clock, Compass, Gauge, Radio, Ship } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { factoryApiRequest } from "@/lib/factoryApi";
+
+interface VesselTrackingResponse {
+  container: { id: number; containerNumber: string; status: string | null; lastEventDate: string | null; lastDescription: string | null; eta: string | null; etaSource: string; carrier: string | null };
+  vessel: { name: string | null; imo: string | null; mmsi: string | null; voyage: string | null; carrier: string | null; mappingSource: string | null; mappingConfidence: string | null } | null;
+  ais: { latitude: string | number | null; longitude: string | number | null; speedKnots: string | number | null; course: string | number | null; heading: string | number | null; navigationStatus: string | null; destination: string | null; aisEta: string | null; lastPositionAt: string | null; lastUpdateAt: string | null } | null;
+}
+
+function value(v: unknown) { return v === null || v === undefined || v === "" ? "—" : String(v); }
+function when(v: string | null | undefined) { return v ? new Date(v).toLocaleString() : "—"; }
+
+export function VesselTrackingSheet({ containerId, containerNumber, open, onClose }: { containerId: number | null; containerNumber: string; open: boolean; onClose: () => void }) {
+  const { data, isLoading, isError } = useQuery<VesselTrackingResponse>({
+    queryKey: ["/api/factory/containers", containerId, "vessel-tracking"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", `/api/factory/containers/${containerId}/vessel-tracking`);
+      if (!res.ok) throw new Error("Unable to load vessel tracking");
+      return res.json();
+    },
+    enabled: open && !!containerId,
+    refetchInterval: open ? 60_000 : false,
+    staleTime: 30_000,
+  });
+
+  const ais = data?.ais;
+  const vessel = data?.vessel;
+  const hasPosition = ais?.latitude != null && ais?.longitude != null;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0">
+        <SheetHeader className="px-6 py-4 border-b shrink-0">
+          <SheetTitle className="flex items-center gap-2 text-base"><Ship className="h-4 w-4" /> Vessel Tracking <span className="font-mono text-muted-foreground font-normal text-sm">{containerNumber}</span></SheetTitle>
+        </SheetHeader>
+        <ScrollArea className="flex-1">
+          <div className="p-6 space-y-5">
+            {isLoading ? <div className="space-y-3"><Skeleton className="h-24" /><Skeleton className="h-36" /></div> : isError ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">Vessel tracking is temporarily unavailable.</div>
+            ) : (
+              <>
+                <section className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3"><div><p className="text-xs uppercase text-muted-foreground font-semibold">Carrier ETA</p><p className="font-mono text-lg font-semibold">{value(data?.container.eta)}</p></div><Badge variant="outline">{value(data?.container.etaSource)}</Badge></div>
+                  <p className="text-xs text-muted-foreground">Carrier/provider ETA remains authoritative. AIS information below is vessel telemetry only.</p>
+                </section>
+
+                <section className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center gap-2"><Anchor className="h-4 w-4 text-muted-foreground" /><p className="font-semibold">Current vessel</p></div>
+                  {vessel ? <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div><p className="text-xs text-muted-foreground">Vessel</p><p className="font-medium">{value(vessel.name)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Voyage</p><p>{value(vessel.voyage)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">IMO</p><p className="font-mono">{value(vessel.imo)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">MMSI</p><p className="font-mono">{value(vessel.mmsi)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Mapping</p><p>{value(vessel.mappingSource)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Confidence</p><Badge variant="secondary" className="mt-0.5">{value(vessel.mappingConfidence)}</Badge></div>
+                  </div> : <p className="text-sm text-muted-foreground">No vessel has been mapped to this container yet.</p>}
+                </section>
+
+                <section className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Radio className="h-4 w-4 text-muted-foreground" /><p className="font-semibold">Live AIS</p></div>{hasPosition && <Badge variant="secondary">Position available</Badge>}</div>
+                  {ais ? <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div><p className="text-xs text-muted-foreground">Position</p><p className="font-mono">{hasPosition ? `${ais.latitude}, ${ais.longitude}` : "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground flex items-center gap-1"><Gauge className="h-3 w-3" /> Speed</p><p>{ais.speedKnots != null ? `${ais.speedKnots} kn` : "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground flex items-center gap-1"><Compass className="h-3 w-3" /> Course / heading</p><p>{value(ais.course)}° / {value(ais.heading)}°</p></div>
+                    <div><p className="text-xs text-muted-foreground">Navigation</p><p>{value(ais.navigationStatus)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">AIS destination</p><p>{value(ais.destination)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">AIS ETA</p><p>{value(ais.aisEta)}</p></div>
+                    <div className="col-span-2"><p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" /> Last AIS signal</p><p>{when(ais.lastPositionAt || ais.lastUpdateAt)}</p></div>
+                  </div> : <div className="flex items-center gap-2 text-sm text-muted-foreground"><Activity className="h-4 w-4" /> Waiting for AIS data from the mapped vessel.</div>}
+                </section>
+              </>
+            )}
+          </div>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  );
+}
