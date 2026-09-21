@@ -213,11 +213,6 @@ const translations: Record<string, Translation> = {
     ar: "تم حذف خطة الحاويات",
     fr: "Plan de conteneurs supprimé",
   },
-  "Could not save plan": {
-    en: "Could not save plan",
-    ar: "تعذر حفظ الخطة",
-    fr: "Impossible d’enregistrer le plan",
-  },
   "Could not rename plan": {
     en: "Could not rename plan",
     ar: "تعذرت إعادة تسمية الخطة",
@@ -465,7 +460,6 @@ const translations: Record<string, Translation> = {
     ar: "المطابقة ستحافظ على الحاويات المقفلة، وتعدّل عدد الحاويات غير المقفلة عند الحاجة، وتعيد موازنة الكميات غير المقفلة فقط.",
     fr: "Le rapprochement préservera les conteneurs verrouillés, ajustera le nombre de conteneurs déverrouillés si nécessaire et rééquilibrera uniquement les quantités déverrouillées.",
   },
-  "Locked conflict": { en: "Locked conflict", ar: "تعارض مقفل", fr: "Conflit verrouillé" },
   Current: { en: "Current", ar: "الحالي", fr: "Actuel" },
   Planned: { en: "Planned", ar: "المخطط", fr: "Planifié" },
   Change: { en: "Change", ar: "التغيير", fr: "Écart" },
