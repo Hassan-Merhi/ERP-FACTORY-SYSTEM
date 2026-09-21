@@ -77,7 +77,7 @@ export function usePosImportModel() {
   });
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
   });
 
   const { data: customers = [] } = useQuery<Customer[]>({
