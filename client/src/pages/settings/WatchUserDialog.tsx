@@ -190,7 +190,7 @@ export function WatchUserDialog({
   } = useQuery({
     queryKey: ["/api/screen-feed", userId],
     queryFn: () => apiRequest("GET", `/api/screen-feed/${userId}`).then((response) => response.json()),
-    refetchInterval: liveConnected ? false : 3000,
+    refetchInterval: liveConnected ? false : visibleTabInterval(3_000),
   });
 
   useEffect(() => {
