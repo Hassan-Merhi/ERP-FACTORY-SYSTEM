@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ContainerPlannerReconciliation } from "./ContainerPlannerReconciliation";
 
 interface PlanSummary {
   id: number;
@@ -171,6 +172,9 @@ export function ContainerPlannerSavedPlans({
     if (planId) {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/v5/container-plans/detail", companyScope, planId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/factory/v5/container-plans/reconciliation", companyScope, planId],
       });
     }
   }
@@ -560,6 +564,11 @@ export function ContainerPlannerSavedPlans({
                   Save Name
                 </Button>
               </div>
+
+              <ContainerPlannerReconciliation
+                planId={detail.id}
+                onPlanChanged={() => invalidatePlanner(detail.id)}
+              />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (
