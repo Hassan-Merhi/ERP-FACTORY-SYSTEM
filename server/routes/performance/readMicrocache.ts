@@ -62,7 +62,10 @@ export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/user/companies", 300_000],
   ["/api/my-erp-pages", 300_000],
   ["/api/pos/last-sold-prices", 30_000],
+  ["/api/containers", 30_000],
   ["/api/containers/active", 30_000],
+  ["/api/containers/otw-items", 30_000],
+  ["/api/factory/categories", 300_000],
   ["/api/stock-transfers", 30_000],
 ]);
 
@@ -281,7 +284,12 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["inventory", "accounting"];
   }
 
-  if (path === "/api/reports/containers" || path === "/api/containers/active") {
+  if (
+    path === "/api/reports/containers" ||
+    path === "/api/containers" ||
+    path === "/api/containers/active" ||
+    path === "/api/containers/otw-items"
+  ) {
     return ["containers", "inventory", "accounting"];
   }
 
