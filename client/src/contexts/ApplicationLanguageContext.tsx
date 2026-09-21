@@ -129,11 +129,12 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
     applyApplicationLanguageToDocument(language);
     persistBrowserPreference(language);
 
+    if (language !== "en" && !translationCatalogReady) return;
     if (announcedLanguageRef.current !== language) {
       announcedLanguageRef.current = language;
       setAnnouncement(translateApplicationText("language.changed", language));
     }
-  }, [language]);
+  }, [language, translationCatalogReady]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -161,7 +162,7 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
       setLanguage,
       t: (key) => translateApplicationText(key, language),
     }),
-    [language, preferenceMutation.isPending, setLanguage]
+    [language, preferenceMutation.isPending, setLanguage, translationCatalogReady]
   );
 
   return (
