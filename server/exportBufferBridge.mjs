@@ -35,6 +35,16 @@ if (!globalThis[BRIDGE_FLAG]) {
   const bridgeDisabled = process.env.EXPORT_BUFFER_BRIDGE_DISABLED === "1";
   const tempRoot = process.env.EXPORT_BRIDGE_TEMP_DIR || path.join(tmpdir(), "erp-export-bridge");
 
+  globalThis.__erpExportCoordinatorSnapshot = () => ({
+    active: coordinatorState.active,
+    queued: coordinatorState.queue.length,
+    oldestWaitMs: coordinatorState.queue.length
+      ? Math.max(0, Date.now() - coordinatorState.queue[0].enqueuedAt)
+      : 0,
+    maxConcurrent: maxConcurrent(),
+    maxQueue: maxQueue(),
+  });
+
   function dispatchCoordinator() {
     while (coordinatorState.active < maxConcurrent() && coordinatorState.queue.length > 0) {
       const entry = coordinatorState.queue.shift();
@@ -195,19 +205,19 @@ if (!globalThis[BRIDGE_FLAG]) {
       await mkdir(tempRoot, { recursive: true });
       const entries = await readdir(tempRoot, { withFileTypes: true });
       const cutoff = Date.now() - staleFileMaxAgeMs;
-      await Promise.all(
-        entries
-          .filter((entry) => entry.isFile())
-          .map(async (entry) => {
-            const filePath = path.join(tempRoot, entry.name);
-            try {
-              const info = await stat(filePath);
-              if (info.mtimeMs < cutoff) await unlink(filePath);
-            } catch {
-              // Best-effort cleanup only.
-            }
-          })
-      );
+      // Keep cleanup deliberately low-pressure. A crash can leave many export
+      // files behind; processing them sequentially avoids turning recovery into
+      // a burst of filesystem promises and temporary allocations.
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const filePath = path.join(tempRoot, entry.name);
+        try {
+          const info = await stat(filePath);
+          if (info.mtimeMs < cutoff) await unlink(filePath);
+        } catch {
+          // Best-effort cleanup only.
+        }
+      }
     } catch (error) {
       console.warn("[ExportBufferBridge] stale-file cleanup failed", error?.message || error);
     }
@@ -423,6 +433,11 @@ if (!globalThis[BRIDGE_FLAG]) {
   }
 
   await cleanupStaleFiles();
+  const staleCleanupIntervalMs = Math.max(5 * 60 * 1000, Math.min(staleFileMaxAgeMs, 30 * 60 * 1000));
+  const staleCleanupTimer = setInterval(() => {
+    void cleanupStaleFiles();
+  }, staleCleanupIntervalMs);
+  staleCleanupTimer.unref?.();
 
   console.log(
     JSON.stringify({
