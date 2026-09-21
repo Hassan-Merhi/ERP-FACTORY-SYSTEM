@@ -145,13 +145,10 @@ export default defineConfig({
           if (id.includes("node_modules/exceljs/")) {
             return "exceljs-vendor";
           }
-          if (
-            id.includes("node_modules/recharts/") ||
-            id.includes("node_modules/d3-") ||
-            id.includes("node_modules/victory-vendor/")
-          ) {
-            return "recharts-vendor";
-          }
+          // Do not force Recharts/D3 into a shared manual vendor chunk.
+          // Several UI dependencies are also used by Recharts; forcing both
+          // sides into manual chunks creates a static ui-vendor -> chart-vendor
+          // edge that pulls charts into every authenticated shell.
           if (id.includes("node_modules/jspdf/") || id.includes("node_modules/jspdf-autotable/")) {
             return "jspdf-vendor";
           }
