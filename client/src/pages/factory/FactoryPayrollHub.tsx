@@ -1,17 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, HardHat, Shield, Target, Users } from "lucide-react";
+import { HardHat, Shield, Users } from "lucide-react";
 import FactoryWorkersHub from "@/pages/factory/FactoryWorkersHub";
 import FactoryEmployeesHub from "@/pages/factory/FactoryEmployeesHub";
 import FactoryInsurance from "@/pages/factory/FactoryInsurance";
-import FactoryProductionTargets from "@/pages/factory/FactoryProductionTargets";
-import { FactoryStaffTracking } from "@/pages/factory/FactoryStaffTracking";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
-import "./factoryTrackingModern.css";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
-type Section = "workers" | "employees" | "production-targets" | "attendance-register" | "insurance";
+type Section = "workers" | "employees" | "insurance";
 
 export default function FactoryPayrollHub() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
@@ -25,9 +22,7 @@ export default function FactoryPayrollHub() {
     !(myAccess.pageKeys?.length > 0) ||
     myAccess.pageKeys.includes("factory/insurance");
 
-  const sections: Section[] = hasInsuranceAccess
-    ? ["workers", "employees", "production-targets", "attendance-register", "insurance"]
-    : ["workers", "employees", "production-targets", "attendance-register"];
+  const sections: Section[] = hasInsuranceAccess ? ["workers", "employees", "insurance"] : ["workers", "employees"];
 
   const [activeSection, setActiveSection] = useHubQueryState<Section>({
     key: "section",
@@ -40,8 +35,6 @@ export default function FactoryPayrollHub() {
   const allTabs: TabDef[] = [
     { key: "workers", label: "Workers", Icon: HardHat },
     { key: "employees", label: "Employees", Icon: Users },
-    { key: "production-targets", label: tr("productionTargets"), Icon: Target },
-    { key: "attendance-register", label: tr("attendanceRegister"), Icon: ClipboardCheck },
     { key: "insurance", label: "Insurance", Icon: Shield },
   ];
   const tabs = allTabs.filter((tab) => sections.includes(tab.key));
@@ -93,16 +86,6 @@ export default function FactoryPayrollHub() {
         {activeSection === "employees" && (
           <div className="p-4">
             <FactoryEmployeesHub />
-          </div>
-        )}
-        {activeSection === "production-targets" && (
-          <div className="factory-tracking-modern factory-tracking-production">
-            <FactoryProductionTargets />
-          </div>
-        )}
-        {activeSection === "attendance-register" && (
-          <div className="factory-tracking-modern factory-tracking-attendance">
-            <FactoryStaffTracking mode="attendance" />
           </div>
         )}
         {activeSection === "insurance" && hasInsuranceAccess && <FactoryInsurance />}
