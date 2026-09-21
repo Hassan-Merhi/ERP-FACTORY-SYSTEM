@@ -27,14 +27,12 @@ const CHANNEL = "erp_read_microcache_invalidate";
 
 function makeClient() {
   const listeners = new Map<string, (...args: unknown[]) => void>();
-  const client = {
+  return {
     on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
       listeners.set(event, listener);
-      return client;
     }),
     removeAllListeners: vi.fn((event: string) => {
       listeners.delete(event);
-      return client;
     }),
     release: vi.fn(),
     query: vi.fn(async () => ({ rows: [] })),
@@ -42,7 +40,6 @@ function makeClient() {
       listeners.get(event)?.(...args);
     },
   };
-  return client;
 }
 
 describe("read microcache coordinator", () => {
