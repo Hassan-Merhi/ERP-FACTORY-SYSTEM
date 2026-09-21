@@ -26,9 +26,12 @@ describe("Wave 2 frontend speed contracts", () => {
   it("keeps public login and native authentication libraries out of authenticated startup", () => {
     const app = source("client/src/App.tsx");
     const login = source("client/src/pages/Login.tsx");
+    const authSession = source("client/src/app/useAuthenticatedUser.ts");
 
     expect(app).not.toContain('import Login from "@/pages/Login"');
     expect(app).toContain('lazy(() => import("@/pages/Login"))');
+    expect(authSession).not.toContain('from "@/pages/Login"');
+    expect(authSession).toContain('from "@/lib/biometricCredentials"');
 
     for (const staticImport of [
       'from "@capacitor/core"',
