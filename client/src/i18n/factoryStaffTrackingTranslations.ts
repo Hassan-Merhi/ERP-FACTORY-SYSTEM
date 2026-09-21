@@ -82,9 +82,9 @@ const factoryStaffTrackingTranslations = {
   absent: { en: "Absent", ar: "غائب", fr: "Absent" },
   new: { en: "New", ar: "جديد", fr: "Nouveau" },
   searchPlaceholder: {
-    en: "Search name, code or group...",
-    ar: "ابحث بالاسم أو الرمز أو المجموعة...",
-    fr: "Rechercher par nom, code ou groupe...",
+    en: "Search name, code or category...",
+    ar: "ابحث بالاسم أو الرمز أو الفئة...",
+    fr: "Rechercher par nom, code ou catégorie...",
   },
   person: { en: "Person", ar: "الشخص", fr: "Personne" },
   code: { en: "Code", ar: "الرمز", fr: "Code" },
