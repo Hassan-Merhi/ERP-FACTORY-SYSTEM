@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ScanLine, List, CalendarDays, Factory, ClipboardCheck, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +30,7 @@ export default function BaleStockEntry() {
     translateFactoryStaffTrackingText(key, language);
   // Track which tabs have ever been activated so we only mount heavy components on demand.
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set(["entry"]));
+  const [activeTab, setActiveTab] = useState("entry");
 
   const handleTabChange = (tab: string) => setMountedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
 
@@ -66,6 +67,20 @@ export default function BaleStockEntry() {
             : showAttendanceRegister
               ? "attendance-register"
               : "entry";
+
+  const activeTabVisible =
+    (activeTab === "entry" && showEntry) ||
+    (activeTab === "history" && showHistory) ||
+    (activeTab === "ground-scan" && showGroundScan) ||
+    (activeTab === "daily-scan" && showDailyScan) ||
+    (activeTab === "production-targets" && showProductionTargets) ||
+    (activeTab === "attendance-register" && showAttendanceRegister);
+
+  useEffect(() => {
+    if (activeTabVisible) return;
+    setActiveTab(defaultTab);
+    setMountedTabs((prev) => (prev.has(defaultTab) ? prev : new Set([...prev, defaultTab])));
+  }, [activeTabVisible, defaultTab]);
 
   const { data: _productionSession, refetch: refetchSession } = useQuery({
     queryKey: ["/api/factory/stock-entry/production-session", todayStr],
@@ -122,7 +137,14 @@ export default function BaleStockEntry() {
 
       <DailyStockSummary date={summaryDate} />
 
-      <Tabs defaultValue={defaultTab} onValueChange={handleTabChange} className="min-w-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab);
+          handleTabChange(tab);
+        }}
+        className="min-w-0"
+      >
         <TabsList aria-label="Bale stock entry sections" className="w-full max-w-full">
           {showEntry && (
             <TabsTrigger value="entry" data-testid="tab-stock-entry">
