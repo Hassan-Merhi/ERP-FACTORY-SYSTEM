@@ -224,7 +224,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const query = parseTrackingQuery(req);
       if (!query) return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
       if (!(await canAccessTrackingPage(req, companyId, query.page))) {
-        return res.status(403).json({ message: "You do not have access to this Stock Entry tab" });
+        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
       }
 
       const closure =
@@ -386,7 +386,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
       }
       if (!(await canAccessTrackingPage(req, companyId, page))) {
-        return res.status(403).json({ message: "You do not have access to this Stock Entry tab" });
+        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
       }
       if (finalize && (page !== "production" || periodType !== "daily" || periodStart !== periodEnd)) {
         return res.status(400).json({ message: "End Production is only available for a single daily production date" });
