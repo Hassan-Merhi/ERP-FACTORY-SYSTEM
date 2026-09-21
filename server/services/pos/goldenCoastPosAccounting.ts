@@ -421,10 +421,7 @@ function revisionRank(value: string): number {
   return value === "create" ? 0 : Number(value.slice(4)) || 0;
 }
 
-function isGeneratedGoldenCoastSettlementVoucher(
-  voucher: typeof vouchers.$inferSelect,
-  clientSaleId: string
-): boolean {
+function isGeneratedGoldenCoastSettlementVoucher(voucher: typeof vouchers.$inferSelect, clientSaleId: string): boolean {
   if (!String(voucher.voucherNumber || "").startsWith(`GC-POS-${clientSaleId}-`)) return false;
   const description = String(voucher.description || "");
   return (
