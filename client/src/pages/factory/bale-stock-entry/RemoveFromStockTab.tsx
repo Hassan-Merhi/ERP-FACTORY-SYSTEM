@@ -78,7 +78,7 @@ export function RemoveFromStockTab() {
   const modeApiRequest = getApiRequest(appMode);
   const { formatDisplayDate } = useDateFormat();
 
-  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers"] });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
   const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products"] });
 
   const bulkUpdateNamesMutation = useMutation({
