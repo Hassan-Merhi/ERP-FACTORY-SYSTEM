@@ -45,6 +45,5 @@ jobs:
             client/src/pages/settings/WatchUserDialog.tsx \
             tests/ui/performance-wave1-request-churn.test.ts
           git rm .github/workflows/wave1-format-once.yml
-          git add .github/workflows/wave1-format-once.yml
           git commit -m "chore: format Wave 1 request-churn changes"
           git push origin HEAD:perf/wave1-request-churn-20260921
