@@ -94,9 +94,10 @@ export default defineConfig({
           if (normalizedId.endsWith("/client/src/lib/labelHtml.ts")) {
             return "label-printing";
           }
-          if (normalizedId.includes("/client/src/i18n/")) {
-            return "application-translations";
-          }
+          // Do not force all i18n modules into one shared chunk. English startup
+          // only needs the small applicationTranslations core; non-English
+          // locale catalogs and the DOM translator follow their dynamic import
+          // boundaries and stay out of the English boot path.
           if (
             id.includes("node_modules/react/") ||
             id.includes("node_modules/react-dom/") ||
