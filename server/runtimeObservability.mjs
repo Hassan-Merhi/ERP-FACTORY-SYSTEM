@@ -18,9 +18,17 @@ const metrics = {
 
 globalThis.__erpRuntimeMetrics = metrics;
 
+// Published for the authenticated /api/health/metrics route so the event-loop
+// and export-coordinator telemetry stays available to operators without this
+// pre-Express hook answering the request itself.
+globalThis.__erpRuntimeObservabilitySnapshot = () => snapshot();
+
 function pathnameOf(req) {
-  try { return new URL(req.url || "/", "http://localhost").pathname; }
-  catch { return req.url || "/"; }
+  try {
+    return new URL(req.url || "/", "http://localhost").pathname;
+  } catch {
+    return req.url || "/";
+  }
 }
 
 function isExpectedLongLivedRequest(req, path) {
@@ -98,13 +106,12 @@ Server.prototype.emit = function observableEmit(event, ...args) {
   const [req, res] = args;
   const path = pathnameOf(req);
 
-  if (path === "/api/health/metrics") {
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.end(JSON.stringify(snapshot()));
-    return true;
-  }
+  // /api/health/metrics is deliberately NOT served here. This hook runs on the
+  // raw HTTP server, before Express installs sessions, so answering it at this
+  // layer would bypass the Admin/Developer gate that the endpoint is documented
+  // to enforce (docs/monitoring/health-metrics.md). The request falls through to
+  // the authenticated route in server/middleware/requestLogger.ts, which reads
+  // this module's snapshot through __erpRuntimeObservabilitySnapshot.
 
   const started = Date.now();
   const expectedLongLived = isExpectedLongLivedRequest(req, path);

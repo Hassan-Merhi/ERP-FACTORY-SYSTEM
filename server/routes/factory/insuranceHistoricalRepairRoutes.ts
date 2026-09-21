@@ -61,6 +61,20 @@ export async function autoRepairHistoricalInsuranceJournalDirections(): Promise<
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [AUTO_REPAIR_LOCK]);
 
+    // vouchers, voucher_entries, and ledger_accounts are FORCE ROW LEVEL
+    // SECURITY tables (migrations/0016_company_scope_rls_readiness.sql). This
+    // repair is process-owned startup work that intentionally spans every
+    // company's legacy INS-* vouchers, so it opts into the maintenance scope
+    // migration 0016 provides for exactly this case, matching the existing
+    // startup repair bridges, instead of asserting a single tenant identity it
+    // does not have.
+    await client.query(
+      `SELECT
+         set_config('app.company_scope_maintenance', 'on', true),
+         set_config('app.current_company_id', '', true),
+         set_config('app.authorized_company_ids', '', true)`
+    );
+
     const repaired = await client.query<{ voucher_id: number }>(`
       WITH classified AS (
         SELECT

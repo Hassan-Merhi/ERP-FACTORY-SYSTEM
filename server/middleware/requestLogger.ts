@@ -93,6 +93,16 @@ function percentage(part: number, total: number): number {
   return Math.round((part / total) * 10000) / 100;
 }
 
+function readRuntimeObservabilitySnapshot(): unknown {
+  const read = (globalThis as { __erpRuntimeObservabilitySnapshot?: () => unknown }).__erpRuntimeObservabilitySnapshot;
+  if (typeof read !== "function") return null;
+  try {
+    return read();
+  } catch {
+    return null;
+  }
+}
+
 function isMonitoringRole(req: Request): boolean {
   const role = String(req.session?.currentRole || req.user?.role || "").toLowerCase();
   return role === "admin" || role === "developer";
@@ -273,7 +283,14 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
             res.status(403).json({ message: "Admin or Developer access required." });
             return;
           }
-          res.status(200).json(getRequestMetricsSnapshot());
+          // server/runtimeObservability.mjs deliberately no longer answers this
+          // path on the raw HTTP server, where no session exists to authorize.
+          // Its event-loop and export-coordinator telemetry is merged here so it
+          // stays available, behind the documented Admin/Developer gate.
+          res.status(200).json({
+            ...getRequestMetricsSnapshot(),
+            runtime: readRuntimeObservabilitySnapshot(),
+          });
           return;
         }
 
