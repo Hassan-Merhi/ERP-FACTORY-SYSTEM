@@ -316,6 +316,10 @@ describe("Phase 7C read microcache", () => {
     writeResponse.emit("close");
 
     expect(publishInvalidation).toHaveBeenCalledOnce();
+    expect(publishInvalidation).toHaveBeenCalledWith({
+      companyIds: [3],
+      topics: ["accounting"],
+    });
     const readNext = vi.fn();
     middleware(request, makeResponse(), readNext);
     expect(readNext).toHaveBeenCalledOnce();
@@ -376,4 +380,121 @@ describe("Phase 7C read microcache", () => {
     expect(secondNext).not.toHaveBeenCalled();
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
+
+  it("keeps unrelated topic caches warm after a targeted write", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const accountingRequest = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+    });
+    const inventoryRequest = makeRequest({
+      path: "/api/stock-items/light",
+      originalUrl: "/api/stock-items/light",
+    });
+
+    storeJson(middleware, accountingRequest, makeResponse(), { accounts: 4 });
+    storeJson(middleware, inventoryRequest, makeResponse(), [{ id: 1 }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({ method: "POST", path: "/api/vouchers", originalUrl: "/api/vouchers" }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const accountingNext = vi.fn();
+    middleware(accountingRequest, makeResponse(), accountingNext);
+    expect(accountingNext).toHaveBeenCalledOnce();
+
+    const inventoryResponse = makeResponse();
+    const inventoryNext = vi.fn();
+    middleware(inventoryRequest, inventoryResponse, inventoryNext);
+    expect(inventoryNext).not.toHaveBeenCalled();
+    expect(inventoryResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
+
+    expect(getReadMicrocacheStats()).toMatchObject({
+      targetedInvalidations: 1,
+      blanketInvalidations: 0,
+      invalidatedEntries: 1,
+    });
+  });
+
+  it("keeps other companies warm when one company writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const company3 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    const company4 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 4, currentRole: "Admin" },
+    });
+
+    storeJson(middleware, company3, makeResponse(), { company: 3 });
+    storeJson(middleware, company4, makeResponse(), { company: 4 });
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/vouchers",
+        originalUrl: "/api/vouchers",
+        session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const company3Next = vi.fn();
+    middleware(company3, makeResponse(), company3Next);
+    expect(company3Next).toHaveBeenCalledOnce();
+
+    const company4Response = makeResponse();
+    const company4Next = vi.fn();
+    middleware(company4, company4Response, company4Next);
+    expect(company4Next).not.toHaveBeenCalled();
+    expect(company4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+  });
+
+  it("keeps explicitly different inventory locations warm", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const location3 = makeRequest({
+      path: "/api/locations/3/inventory/light",
+      originalUrl: "/api/locations/3/inventory/light",
+    });
+    const location4 = makeRequest({
+      path: "/api/locations/4/inventory/light",
+      originalUrl: "/api/locations/4/inventory/light",
+    });
+
+    storeJson(middleware, location3, makeResponse(), [{ stockItemId: 1, quantity: "2" }]);
+    storeJson(middleware, location4, makeResponse(), [{ stockItemId: 1, quantity: "5" }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/locations/3/inventory/adjust",
+        originalUrl: "/api/locations/3/inventory/adjust",
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const location3Next = vi.fn();
+    middleware(location3, makeResponse(), location3Next);
+    expect(location3Next).toHaveBeenCalledOnce();
+
+    const location4Response = makeResponse();
+    const location4Next = vi.fn();
+    middleware(location4, location4Response, location4Next);
+    expect(location4Next).not.toHaveBeenCalled();
+    expect(location4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+  });
+
 });
