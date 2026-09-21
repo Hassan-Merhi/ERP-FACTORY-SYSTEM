@@ -213,11 +213,6 @@ const translations: Record<string, Translation> = {
     ar: "تم حذف خطة الحاويات",
     fr: "Plan de conteneurs supprimé",
   },
-  "Could not save plan": {
-    en: "Could not save plan",
-    ar: "تعذر حفظ الخطة",
-    fr: "Impossible d’enregistrer le plan",
-  },
   "Could not rename plan": {
     en: "Could not rename plan",
     ar: "تعذرت إعادة تسمية الخطة",
