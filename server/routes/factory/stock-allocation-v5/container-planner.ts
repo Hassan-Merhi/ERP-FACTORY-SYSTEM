@@ -32,6 +32,21 @@ type PlannerPlanRow = {
   updated_at: Date | string;
 };
 
+type PlannerLineRow = {
+  id: number | string;
+  plan_container_id: number | string;
+  article_code: string;
+  product_name: string | null;
+  planned_qty: number | string;
+};
+
+type PlannerDetailLine = {
+  id: number;
+  articleCode: string;
+  productName: string;
+  plannedQty: number;
+};
+
 function companyIdFor(req: Request): number | null {
   const value = req.session.factoryCompanyId || req.session.currentCompanyId;
   const parsed = Number(value);
@@ -222,8 +237,8 @@ async function loadPlanDetail(client: Queryable, companyId: number, planId: numb
   const containerIds = containersResult.rows.map((row) => Number(row.id));
   const linesResult =
     containerIds.length === 0
-      ? { rows: [] as any[] }
-      : await client.query(
+      ? { rows: [] as PlannerLineRow[] }
+      : await client.query<PlannerLineRow>(
           `SELECT id, plan_container_id, article_code, product_name, planned_qty
            FROM factory_container_plan_lines
            WHERE plan_id = $1
@@ -233,7 +248,7 @@ async function loadPlanDetail(client: Queryable, companyId: number, planId: numb
           [planId, companyId, containerIds]
         );
 
-  const linesByContainer = new Map<number, any[]>();
+  const linesByContainer = new Map<number, PlannerDetailLine[]>();
   for (const line of linesResult.rows) {
     const containerId = Number(line.plan_container_id);
     if (!linesByContainer.has(containerId)) linesByContainer.set(containerId, []);
