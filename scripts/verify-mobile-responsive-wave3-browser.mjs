@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import puppeteer from "puppeteer";
 
+import { awaitAuthenticatedShell, watchSignInResponses } from "./lib/browser-smoke-signin.mjs";
+
 const BASE_URL = (process.env.ERP_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
 const USERNAME = process.env.ERP_SMOKE_USERNAME || "";
 const PASSWORD = process.env.ERP_SMOKE_PASSWORD || "";
@@ -102,11 +104,22 @@ async function login(page) {
   await page.waitForSelector('[data-testid="input-username"]', { visible: true, timeout: TIMEOUT_MS });
   await page.type('[data-testid="input-username"]', USERNAME);
   await page.type('[data-testid="input-password"]', PASSWORD);
-  await page.click('[data-testid="button-login"]');
-  await page.waitForFunction(
-    () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
-    { timeout: TIMEOUT_MS }
-  );
+  // Watch the sign-in response: a rejected sign-in (429 from the login flood
+  // guard) must name itself rather than look like a slow app for a full
+  // timeout. See scripts/lib/browser-smoke-signin.mjs.
+  const signIn = watchSignInResponses(page);
+  try {
+    await page.click('[data-testid="button-login"]');
+    await awaitAuthenticatedShell(
+      signIn,
+      page.waitForFunction(
+        () => window.location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
+        { timeout: TIMEOUT_MS },
+      ),
+    );
+  } finally {
+    signIn.stop();
+  }
   await settle(page);
   await closeLanguageOnboarding(page);
 }

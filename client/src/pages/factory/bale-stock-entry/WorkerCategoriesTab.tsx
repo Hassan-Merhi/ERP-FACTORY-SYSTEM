@@ -140,13 +140,15 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {catWorkers
-                        .filter((w) => (cat.workerIds || []).includes(w.id))
+                        .filter((w) => w.active !== false && (cat.workerIds || []).includes(w.id))
                         .map((w) => (
                           <Badge key={w.id} variant="secondary" className="text-[10px]">
                             {w.fullName || w.name}
                           </Badge>
                         ))}
-                      {(cat.workerIds || []).length === 0 && (
+                      {catWorkers.filter(
+                        (w) => w.active !== false && (cat.workerIds || []).includes(w.id)
+                      ).length === 0 && (
                         <span className="text-xs text-muted-foreground italic">No workers assigned</span>
                       )}
                     </div>
@@ -202,22 +204,33 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
               <label className="text-sm font-medium">Assign Workers</label>
               <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-2">
                 {catWorkers
-                  .filter((w) => w.active !== false)
-                  .map((w) => (
-                    <div
-                      key={w.id}
-                      onClick={() => toggleCatWorker(w.id)}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${catWorkerIds.includes(w.id) ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
-                      data-testid={`worker-option-${w.id}`}
-                    >
+                  .filter((w) => w.active !== false || catWorkerIds.includes(w.id))
+                  .map((w) => {
+                    const selected = catWorkerIds.includes(w.id);
+                    const inactive = w.active === false;
+                    return (
                       <div
-                        className={`h-4 w-4 rounded-sm border flex items-center justify-center ${catWorkerIds.includes(w.id) ? "bg-primary border-primary" : "bg-background border-input"}`}
+                        key={w.id}
+                        onClick={() => {
+                          if (!inactive || selected) toggleCatWorker(w.id);
+                        }}
+                        className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${inactive && !selected ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${selected ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
+                        data-testid={`worker-option-${w.id}`}
                       >
-                        {catWorkerIds.includes(w.id) && <CheckCircle className="h-3 w-3 text-white" />}
+                        <div
+                          className={`h-4 w-4 rounded-sm border flex items-center justify-center ${selected ? "bg-primary border-primary" : "bg-background border-input"}`}
+                        >
+                          {selected && <CheckCircle className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="text-xs font-medium truncate">{w.fullName || w.name}</span>
+                        {inactive && (
+                          <Badge variant="secondary" className="ml-auto text-[9px]">
+                            Inactive
+                          </Badge>
+                        )}
                       </div>
-                      <span className="text-xs font-medium truncate">{w.fullName || w.name}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             </div>
           </div>

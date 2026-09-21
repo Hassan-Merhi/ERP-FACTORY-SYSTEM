@@ -22,9 +22,33 @@ const MASTER_PASSWORD = process.env.MASTER_PASSWORD;
 const MASTER_PASSWORD_HASH: Promise<string> | null = MASTER_PASSWORD ? bcrypt.hash(MASTER_PASSWORD, 12) : null;
 if (!MASTER_PASSWORD) logger.info("[Auth] Master-password login is disabled.");
 
+/**
+ * Login flood guard. Ten attempts per client IP per fifteen minutes is the
+ * production budget and stays the default.
+ *
+ * It is tunable for the same reason API_RATE_LIMIT_* is: the browser smoke
+ * suites sign in repeatedly from one address. The Phase 9 language sweep alone
+ * launches a fresh browser — and so a fresh cookie jar and a real login — for
+ * each of its three languages times three viewports, which spends nine of the
+ * ten. One extra sign-in anywhere in the window returned 429, the harness had
+ * no branch for a rejected login, and every later viewport then timed out
+ * waiting for an app that was never going to render.
+ *
+ * Read as a direct process.env access so scripts/verify-env-documentation.mjs
+ * can see it.
+ */
+function readPositiveInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const LOGIN_RATE_LIMIT_WINDOW_MS = readPositiveInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
+const LOGIN_RATE_LIMIT_MAX = readPositiveInt(process.env.LOGIN_RATE_LIMIT_MAX, 10);
+
 const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  max: LOGIN_RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) =>

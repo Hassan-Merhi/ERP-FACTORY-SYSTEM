@@ -54,7 +54,7 @@ jobs:
 
             for file in "${files[@]}"; do
               case "$file" in
-                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   mobile=true
                   ;;
               esac
@@ -206,6 +206,15 @@ jobs:
       PORT: "5000"
       API_RATE_LIMIT_MAX: "100000"
       API_RATE_LIMIT_ANON_MAX: "100000"
+      # The login flood guard is a separate limiter from the two above and was
+      # not covered by them. Its production budget is ten sign-ins per IP per
+      # fifteen minutes; the Phase 9 language sweep alone spends nine, because
+      # it launches a fresh browser (and so a fresh cookie jar and a real
+      # sign-in) for each of its three languages times three viewports. One
+      # extra sign-in in that window returned 429 and every later viewport then
+      # timed out waiting for an app that could not render. This runner is a
+      # disposable single-tenant box; production keeps the default.
+      LOGIN_RATE_LIMIT_MAX: "100000"
       ERP_SMOKE_BASE_URL: http://127.0.0.1:5000
       ERP_SMOKE_OUTPUT_DIR: artifacts/ux-regression-browser
       ERP_SMOKE_USERNAME: ux_ci_${{ github.run_id }}
