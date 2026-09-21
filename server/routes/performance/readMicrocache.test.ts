@@ -110,17 +110,26 @@ describe("Phase 7C read microcache", () => {
     expect(READ_MICROCACHE_TTL_MS.get("/api/containers/otw-items")).toBe(30_000);
   });
 
-  it("isolates cache keys by user, company, role, location, station, query, and client date", () => {
+  it("isolates cache keys by identity, query, client date, and Factory catalog language", () => {
     const base = buildReadMicrocacheKey(makeRequest());
     const differentQuery = buildReadMicrocacheKey(
       makeRequest({ originalUrl: "/api/accounts/all?startDate=2026-07-02" })
     );
     const differentDate = buildReadMicrocacheKey(makeRequest({ headers: { "x-client-date": "2026-07-31" } }));
+    const differentLanguageHeader = buildReadMicrocacheKey(
+      makeRequest({ headers: { "x-factory-catalog-language": "fr" } })
+    );
+    const differentLanguageCookie = buildReadMicrocacheKey(
+      makeRequest({ headers: { cookie: "factory_catalog_language=ar" } })
+    );
     const differentUser = buildReadMicrocacheKey(makeRequest({ session: { userId: 8, currentCompanyId: 3 } }));
     const differentCompany = buildReadMicrocacheKey(makeRequest({ session: { userId: 7, currentCompanyId: 4 } }));
 
     expect(differentQuery).not.toBe(base);
     expect(differentDate).not.toBe(base);
+    expect(differentLanguageHeader).not.toBe(base);
+    expect(differentLanguageCookie).not.toBe(base);
+    expect(differentLanguageHeader).not.toBe(differentLanguageCookie);
     expect(differentUser).not.toBe(base);
     expect(differentCompany).not.toBe(base);
   });
@@ -134,6 +143,7 @@ describe("Phase 7C read microcache", () => {
 
     expect(firstResponse.jsonBody).toEqual({ total: 12 });
     expect(firstResponse.headers["Cache-Control"]).toBe("private, no-cache, must-revalidate");
+    expect(firstResponse.headers.Vary).toContain("X-Factory-Catalog-Language");
     expect(firstResponse.headers.ETag).toBeTruthy();
 
     currentTime = 1_500;
