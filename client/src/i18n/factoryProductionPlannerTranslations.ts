@@ -395,6 +395,117 @@ const translations: Record<string, Translation> = {
     ar: "اسمح بالنوافذ المنبثقة لهذا النظام. لم يتم حفظ إدخال المخزون، لذلك لم يتم إنشاء أي بالة.",
     fr: "Autorisez les fenêtres contextuelles pour cet ERP. L’entrée de stock n’a pas été enregistrée, donc aucune balle n’a été créée.",
   },
+  "Phase 3": { en: "Phase 3", ar: "المرحلة 3", fr: "Phase 3" },
+  "Live stock reconciliation": {
+    en: "Live stock reconciliation",
+    ar: "مطابقة المخزون المباشرة",
+    fr: "Rapprochement du stock en direct",
+  },
+  "Checking plan against current stock…": {
+    en: "Checking plan against current stock…",
+    ar: "جارٍ مقارنة الخطة بالمخزون الحالي…",
+    fr: "Comparaison du plan avec le stock actuel…",
+  },
+  "Could not check current stock against this plan.": {
+    en: "Could not check current stock against this plan.",
+    ar: "تعذر مقارنة المخزون الحالي بهذه الخطة.",
+    fr: "Impossible de comparer le stock actuel à ce plan.",
+  },
+  "In sync": { en: "In sync", ar: "متطابق", fr: "Synchronisé" },
+  "Locked conflict": { en: "Locked conflict", ar: "تعارض في حاوية مقفلة", fr: "Conflit verrouillé" },
+  "Stock changed": { en: "Stock changed", ar: "تغير المخزون", fr: "Stock modifié" },
+  "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.": {
+    en: "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.",
+    ar: "يقارن هذه الخطة المحفوظة بالمخزون الحالي غير المحجوز في V5. لن يتغير شيء حتى تضغط مطابقة مع المخزون الحالي.",
+    fr: "Compare ce plan enregistré au stock V5 actuel non engagé. Rien ne change tant que vous n’appuyez pas sur Rapprocher avec le stock actuel.",
+  },
+  "Refresh Check": { en: "Refresh Check", ar: "تحديث الفحص", fr: "Actualiser le contrôle" },
+  "Reconcile to Current Stock": {
+    en: "Reconcile to Current Stock",
+    ar: "مطابقة مع المخزون الحالي",
+    fr: "Rapprocher avec le stock actuel",
+  },
+  "Current available": { en: "Current available", ar: "المتاح حالياً", fr: "Disponible actuellement" },
+  "Plan total": { en: "Plan total", ar: "إجمالي الخطة", fr: "Total du plan" },
+  "New / unplanned": { en: "New / unplanned", ar: "جديد / غير مخطط", fr: "Nouveau / non planifié" },
+  "Over-planned": { en: "Over-planned", ar: "مخطط بزيادة", fr: "Surplanifié" },
+  "Locked conflicts": { en: "Locked conflicts", ar: "تعارضات مقفلة", fr: "Conflits verrouillés" },
+  "Customer committed now": {
+    en: "Customer committed now",
+    ar: "محجوز للعملاء الآن",
+    fr: "Engagé pour les clients maintenant",
+  },
+  "This plan matches current free stock.": {
+    en: "This plan matches current free stock.",
+    ar: "هذه الخطة تطابق المخزون الحر الحالي.",
+    fr: "Ce plan correspond au stock libre actuel.",
+  },
+  "No reconciliation is needed.": {
+    en: "No reconciliation is needed.",
+    ar: "لا حاجة إلى مطابقة.",
+    fr: "Aucun rapprochement n’est nécessaire.",
+  },
+  "locked bales conflict with current stock.": {
+    en: "locked bales conflict with current stock.",
+    ar: "بالات مقفلة تتعارض مع المخزون الحالي.",
+    fr: "balles verrouillées sont en conflit avec le stock actuel.",
+  },
+  "Unlock the affected container or containers first. Phase 3 will never silently reduce a locked container.": {
+    en: "Unlock the affected container or containers first. Phase 3 will never silently reduce a locked container.",
+    ar: "ألغِ قفل الحاوية أو الحاويات المتأثرة أولاً. المرحلة 3 لن تخفّض أي حاوية مقفلة تلقائياً.",
+    fr: "Déverrouillez d’abord le ou les conteneurs concernés. La phase 3 ne réduira jamais silencieusement un conteneur verrouillé.",
+  },
+  "Current stock has changed since this plan was saved.": {
+    en: "Current stock has changed since this plan was saved.",
+    ar: "تغير المخزون الحالي منذ حفظ هذه الخطة.",
+    fr: "Le stock actuel a changé depuis l’enregistrement de ce plan.",
+  },
+  "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.": {
+    en: "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.",
+    ar: "المطابقة ستحافظ على الحاويات المقفلة، وتعدّل عدد الحاويات غير المقفلة عند الحاجة، وتعيد موازنة الكميات غير المقفلة فقط.",
+    fr: "Le rapprochement préservera les conteneurs verrouillés, ajustera le nombre de conteneurs déverrouillés si nécessaire et rééquilibrera uniquement les quantités déverrouillées.",
+  },
+  "Locked conflict": { en: "Locked conflict", ar: "تعارض مقفل", fr: "Conflit verrouillé" },
+  Current: { en: "Current", ar: "الحالي", fr: "Actuel" },
+  Planned: { en: "Planned", ar: "المخطط", fr: "Planifié" },
+  Change: { en: "Change", ar: "التغيير", fr: "Écart" },
+  Locked: { en: "Locked", ar: "مقفل", fr: "Verrouillé" },
+  "Checked": { en: "Checked", ar: "تم الفحص", fr: "Vérifié" },
+  "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.": {
+    en: "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.",
+    ar: "يتم الحفاظ على الحاويات المقفلة كما هي تماماً؛ المطابقة لا تحجز معرّفات بالات فعلية ولا تغيّر تحميل العملاء.",
+    fr: "Les conteneurs verrouillés sont conservés exactement ; le rapprochement ne réserve jamais d’identifiants de balles physiques et ne modifie pas les chargements clients.",
+  },
+  "Container plan reconciled": {
+    en: "Container plan reconciled",
+    ar: "تمت مطابقة خطة الحاويات",
+    fr: "Plan de conteneurs rapproché",
+  },
+  "Plan now matches current stock.": {
+    en: "Plan now matches current stock.",
+    ar: "الخطة الآن تطابق المخزون الحالي.",
+    fr: "Le plan correspond maintenant au stock actuel.",
+  },
+  "Could not reconcile plan": {
+    en: "Could not reconcile plan",
+    ar: "تعذرت مطابقة الخطة",
+    fr: "Impossible de rapprocher le plan",
+  },
+  "Only draft container plans can be reconciled.": {
+    en: "Only draft container plans can be reconciled.",
+    ar: "يمكن مطابقة خطط الحاويات المسودة فقط.",
+    fr: "Seuls les plans de conteneurs en brouillon peuvent être rapprochés.",
+  },
+  "Locked container quantities exceed current available stock. Unlock the affected containers before reconciling.": {
+    en: "Locked container quantities exceed current available stock. Unlock the affected containers before reconciling.",
+    ar: "كميات الحاويات المقفلة تتجاوز المخزون المتاح حالياً. ألغِ قفل الحاويات المتأثرة قبل المطابقة.",
+    fr: "Les quantités des conteneurs verrouillés dépassent le stock actuellement disponible. Déverrouillez les conteneurs concernés avant le rapprochement.",
+  },
+  "The current stock cannot fit inside the available unlocked container capacity.": {
+    en: "The current stock cannot fit inside the available unlocked container capacity.",
+    ar: "لا يمكن استيعاب المخزون الحالي ضمن سعة الحاويات غير المقفلة المتاحة.",
+    fr: "Le stock actuel ne peut pas tenir dans la capacité disponible des conteneurs déverrouillés.",
+  },
 };
 
 export function translateFactoryProductionPlannerText(value: string, language: ApplicationLanguage): string | null {
