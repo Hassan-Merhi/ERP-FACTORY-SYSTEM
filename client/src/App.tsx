@@ -24,9 +24,7 @@ import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 
 const Login = lazy(() => import("@/pages/Login"));
-const ChatWidget = lazy(() =>
-  import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget }))
-);
+const ChatWidget = lazy(() => import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget })));
 const UserNotesPanel = lazy(() =>
   import("@/components/UserNotesPanel").then((module) => ({ default: module.UserNotesPanel }))
 );

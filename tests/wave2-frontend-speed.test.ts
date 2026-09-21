@@ -11,7 +11,7 @@ describe("Wave 2 frontend speed contracts", () => {
     const translator = source("client/src/components/ApplicationInterfaceTranslator.tsx");
     const vite = source("vite.config.ts");
 
-    expect(provider).not.toContain('import { ApplicationInterfaceTranslator }');
+    expect(provider).not.toContain("import { ApplicationInterfaceTranslator }");
     expect(provider).toContain('import("@/components/ApplicationInterfaceTranslator")');
     expect(provider).toContain("loadApplicationTranslationCatalog(language)");
     expect(provider).toContain('language !== "en" && translationReady');

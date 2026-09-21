@@ -197,37 +197,44 @@ export default function Login() {
     finalizeLogin();
   };
 
-  const triggerBiometric = useCallback(async (creds?: { username: string; password: string }) => {
-    setBiometryPending(true);
-    try {
-      const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
-      await BiometricAuth.authenticate({
-        reason: "Sign in to HMD ERP",
-        cancelTitle: "Use Password",
-        allowDeviceCredential: false,
-      });
-      const savedCreds = creds ?? (await loadBiometricCredentials());
-      if (!savedCreds) {
-        toast({
-          title: "No saved credentials",
-          description: "Please sign in with your password first.",
-          variant: "destructive",
+  const triggerBiometric = useCallback(
+    async (creds?: { username: string; password: string }) => {
+      setBiometryPending(true);
+      try {
+        const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
+        await BiometricAuth.authenticate({
+          reason: "Sign in to HMD ERP",
+          cancelTitle: "Use Password",
+          allowDeviceCredential: false,
         });
-        return;
+        const savedCreds = creds ?? (await loadBiometricCredentials());
+        if (!savedCreds) {
+          toast({
+            title: "No saved credentials",
+            description: "Please sign in with your password first.",
+            variant: "destructive",
+          });
+          return;
+        }
+        loginMutation.mutate(savedCreds);
+      } catch (err) {
+        if (
+          getErrorDetails(err).code !== "userCancel" &&
+          getErrorDetails(err).code !== "systemCancel" &&
+          getErrorDetails(err).code !== "appCancel"
+        ) {
+          toast({
+            title: "Biometric failed",
+            description: "Please sign in with your password.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        setBiometryPending(false);
       }
-      loginMutation.mutate(savedCreds);
-    } catch (err) {
-      if (
-        getErrorDetails(err).code !== "userCancel" &&
-        getErrorDetails(err).code !== "systemCancel" &&
-        getErrorDetails(err).code !== "appCancel"
-      ) {
-        toast({ title: "Biometric failed", description: "Please sign in with your password.", variant: "destructive" });
-      }
-    } finally {
-      setBiometryPending(false);
-    }
-  }, [loginMutation, toast]);
+    },
+    [loginMutation, toast]
+  );
 
   useEffect(() => {
     if (!isNative) return;

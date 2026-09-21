@@ -7,7 +7,10 @@ import {
   parseApplicationLanguage,
 } from "../shared/applicationLanguageContract";
 
-import { loadApplicationTranslationCatalog, translateApplicationText } from "../client/src/i18n/applicationTranslations";
+import {
+  loadApplicationTranslationCatalog,
+  translateApplicationText,
+} from "../client/src/i18n/applicationTranslations";
 
 describe("application language contract", () => {
   it("supports exactly English Arabic and French", () => {
@@ -37,7 +40,7 @@ describe("application language contract", () => {
         "accountCode",
         "containerNumber",
         "voucherNumber",
-      ]),
+      ])
     );
   });
 
