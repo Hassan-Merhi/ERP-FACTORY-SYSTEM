@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -175,12 +176,12 @@ export function WatchUserDialog({
   const { data: presenceRaw } = useQuery({
     queryKey: ["/api/user-presence", userId],
     queryFn: () => apiRequest("GET", `/api/user-presence/${userId}`).then((response) => response.json()),
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
   const { data: activityRaw } = useQuery({
     queryKey: ["/api/user-presence", userId, "activity"],
     queryFn: () => apiRequest("GET", `/api/user-presence/${userId}/activity`).then((response) => response.json()),
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
   const {
     data: screenFrameRaw,
