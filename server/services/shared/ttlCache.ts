@@ -10,6 +10,18 @@
 // ---------------------------------------------------------------------------
 
 const _statCache = new Map<string, { data: unknown; expiresAt: number }>();
+const MAX_CACHE_ENTRIES = 500;
+
+function pruneCache(now = Date.now()): void {
+  for (const [key, entry] of _statCache) {
+    if (entry.expiresAt <= now) _statCache.delete(key);
+  }
+  while (_statCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = _statCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    _statCache.delete(oldestKey);
+  }
+}
 
 export function _getCached(key: string): unknown | null {
   const e = _statCache.get(key);
@@ -22,12 +34,7 @@ export function _getCached(key: string): unknown | null {
 }
 
 export function _setCached(key: string, data: unknown, ttlMs = 30_000): void {
+  _statCache.delete(key);
   _statCache.set(key, { data, expiresAt: Date.now() + ttlMs });
-  // Prune stale entries to prevent unbounded growth (> 500 entries is unusual)
-  if (_statCache.size > 500) {
-    const now = Date.now();
-    for (const [k, v] of _statCache) {
-      if (v.expiresAt < now) _statCache.delete(k);
-    }
-  }
+  pruneCache();
 }

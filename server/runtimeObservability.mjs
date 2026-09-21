@@ -1,4 +1,4 @@
-import { monitorEventLoopDelay } from "node:perf_hooks";
+import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { Server } from "node:http";
 
 const startedAt = Date.now();
@@ -39,13 +39,20 @@ function snapshot() {
       maxMs: Number((histogram.max / 1e6).toFixed(2)),
       p95Ms: Number((histogram.percentile(95) / 1e6).toFixed(2)),
       p99Ms: Number((histogram.percentile(99) / 1e6).toFixed(2)),
+      utilizationPercent: Number((performance.eventLoopUtilization().utilization * 100).toFixed(2)),
     },
     memory: {
       rssMb: Math.round(memory.rss / 1024 / 1024),
       heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
       heapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+      heapUsedPercent: memory.heapTotal > 0 ? Number(((memory.heapUsed / memory.heapTotal) * 100).toFixed(2)) : 0,
       externalMb: Math.round(memory.external / 1024 / 1024),
+      arrayBuffersMb: Math.round((memory.arrayBuffers ?? 0) / 1024 / 1024),
     },
+    exportCoordinator:
+      typeof globalThis.__erpExportCoordinatorSnapshot === "function"
+        ? globalThis.__erpExportCoordinatorSnapshot()
+        : null,
   };
 }
 
@@ -139,4 +146,4 @@ const periodic = setInterval(() => {
 }, 60_000);
 periodic.unref();
 
-log("INFO", "startup", { slowRequestMs, requestLogsEnabled: emitRequestLogs });
+log("INFO", "startup", { slowRequestMs, requestLogsEnabled: emitRequestLogs, initial: snapshot() });

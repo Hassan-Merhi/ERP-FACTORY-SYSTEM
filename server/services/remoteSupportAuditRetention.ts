@@ -9,6 +9,7 @@ const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let installed = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 let initialTimer: ReturnType<typeof setTimeout> | null = null;
+let sweepInFlight = false;
 
 function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -47,10 +48,14 @@ export async function pruneRemoteSupportAuditRows(): Promise<void> {
 }
 
 async function runSweep(): Promise<void> {
+  if (sweepInFlight) return;
+  sweepInFlight = true;
   try {
     await pruneRemoteSupportAuditRows();
   } catch (error) {
     logger.warn("[RemoteSupport] scheduled audit retention sweep failed", { error });
+  } finally {
+    sweepInFlight = false;
   }
 }
 
@@ -70,5 +75,6 @@ export function resetRemoteSupportAuditRetentionForTests(): void {
   if (timer) clearInterval(timer);
   initialTimer = null;
   timer = null;
+  sweepInFlight = false;
   installed = false;
 }

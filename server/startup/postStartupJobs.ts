@@ -11,10 +11,19 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { checkAndRecoverDailyExport } from "../services/scheduler";
 
+let installed = false;
+let hungCleanupInFlight = false;
+
+function unrefTimer(timer: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>): void {
+  (timer as unknown as { unref?: () => void }).unref?.();
+}
+
 export function runPostStartupJobs(): void {
+  if (installed) return;
+  installed = true;
   // Delayed 30 s so diagnostics don't compete with user requests for pool
   // connections the moment the server goes live.
-  setTimeout(async () => {
+  const migrationDiagTimer = setTimeout(async () => {
     try {
       const [posRows, posWithStation, normalUserRows, oldRoleRows, canDeleteCol] = await Promise.all([
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'POS'`),
@@ -48,6 +57,7 @@ export function runPostStartupJobs(): void {
       logger.warn("[MigrationDiag] Could not run startup diagnostic:", { error: getErrorMessage(e) });
     }
   }, 30000);
+  unrefTimer(migrationDiagTimer);
 
   // ── Fix bales where deletedAt is set but status is not DELETED ────────────
   void (async () => {
@@ -92,6 +102,11 @@ export function runPostStartupJobs(): void {
   };
 
   const cleanupHungRuns = async () => {
+    if (hungCleanupInFlight) {
+      logger.warn("[ExportRun] Periodic hung-run cleanup skipped because the previous sweep is still running.");
+      return;
+    }
+    hungCleanupInFlight = true;
     try {
       const r = await pool.query(`
       UPDATE daily_export_runs
@@ -109,17 +124,22 @@ export function runPostStartupJobs(): void {
       }
     } catch (e: unknown) {
       logger.warn("[ExportRun] Periodic hung-run cleanup failed:", { error: getErrorMessage(e) });
+    } finally {
+      hungCleanupInFlight = false;
     }
   };
 
-  setTimeout(cleanupOrphanedRuns, 3000);
-  setInterval(cleanupHungRuns, 30 * 60 * 1000);
+  const orphanCleanupTimer = setTimeout(() => void cleanupOrphanedRuns(), 3000);
+  const hungCleanupTimer = setInterval(() => void cleanupHungRuns(), 30 * 60 * 1000);
+  unrefTimer(orphanCleanupTimer);
+  unrefTimer(hungCleanupTimer);
 
-  setTimeout(async () => {
+  const exportRecoveryTimer = setTimeout(async () => {
     try {
       await checkAndRecoverDailyExport();
     } catch (e: unknown) {
       logger.warn("[DailyExport] Startup recovery call failed:", { error: getErrorMessage(e) });
     }
   }, 90 * 1000);
+  unrefTimer(exportRecoveryTimer);
 }

@@ -18,6 +18,21 @@ interface ERPCacheEntry {
   expiresAt: number;
 }
 const erpContextCache = new Map<string, ERPCacheEntry>();
+const ERP_CACHE_MAX_ENTRIES = Math.max(
+  4,
+  Number.parseInt(process.env.ERP_CONTEXT_CACHE_MAX_ENTRIES || "32", 10) || 32
+);
+
+function pruneERPContextCache(now = Date.now()): void {
+  for (const [key, entry] of erpContextCache) {
+    if (entry.expiresAt <= now) erpContextCache.delete(key);
+  }
+  while (erpContextCache.size > ERP_CACHE_MAX_ENTRIES) {
+    const oldestKey = erpContextCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    erpContextCache.delete(oldestKey);
+  }
+}
 
 export function clearERPContextCache(companyId?: number): void {
   if (companyId !== undefined) {
@@ -33,6 +48,7 @@ export function clearERPContextCache(companyId?: number): void {
 export async function getCachedERPContext(companyId: number): Promise<ERPContext> {
   const key = `erp-context:${companyId}`;
   const now = Date.now();
+  pruneERPContextCache(now);
   const cached = erpContextCache.get(key);
   if (cached && now < cached.expiresAt) {
     const ageMs = now - (cached.expiresAt - ERP_CACHE_TTL_MS);
@@ -43,7 +59,9 @@ export async function getCachedERPContext(companyId: number): Promise<ERPContext
   const t0 = Date.now();
   const context = await getERPContext(companyId);
   logger.info(`[ChatService] Context loaded in ${Date.now() - t0}ms`);
-  erpContextCache.set(key, { context, expiresAt: now + ERP_CACHE_TTL_MS });
+  erpContextCache.delete(key);
+  erpContextCache.set(key, { context, expiresAt: Date.now() + ERP_CACHE_TTL_MS });
+  pruneERPContextCache();
   return context;
 }
 

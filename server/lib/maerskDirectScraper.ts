@@ -67,13 +67,41 @@ export function isMaerskDirectScraperAvailable(): boolean {
 }
 
 // ── Shared browser instance ───────────────────────────────────────────────────
-// One Chrome process is kept alive and reused across all scrape calls.
+// One Chrome process is reused across scrape bursts, then retired after an
+// idle window so Chrome does not remain part of the server's baseline RSS.
 // Replaced automatically if it crashes.
 
 let _sharedBrowser: Browser | null = null;
 let _stealthRegistered = false;
+let _browserIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function browserIdleMs(): number {
+  const parsed = Number.parseInt(String(process.env.PUPPETEER_BROWSER_IDLE_MS ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 60_000 ? parsed : 5 * 60 * 1000;
+}
+
+function clearBrowserIdleTimer(): void {
+  if (_browserIdleTimer) clearTimeout(_browserIdleTimer);
+  _browserIdleTimer = null;
+}
+
+function scheduleBrowserIdleShutdown(): void {
+  clearBrowserIdleTimer();
+  if (!_sharedBrowser) return;
+  _browserIdleTimer = setTimeout(() => {
+    const browser = _sharedBrowser;
+    _sharedBrowser = null;
+    _browserIdleTimer = null;
+    if (!browser) return;
+    void browser.close().catch((error: unknown) => {
+      logger.warn("[MaerskDirect] Idle browser shutdown failed", { error: getErrorMessage(error) });
+    });
+  }, browserIdleMs());
+  _browserIdleTimer.unref?.();
+}
 
 async function getSharedBrowser(): Promise<Browser> {
+  clearBrowserIdleTimer();
   // If we already have a live browser, verify it's still responsive
   if (_sharedBrowser) {
     try {
@@ -131,8 +159,14 @@ async function getSharedBrowser(): Promise<Browser> {
 
   // Auto-clear on crash so the next call relaunches cleanly
   launched.on("disconnected", () => {
+    // A retired browser can finish disconnecting after a replacement has already
+    // launched. Only clear shared state when this event belongs to the browser
+    // that is still registered as current.
+    if (_sharedBrowser === launched) {
+      clearBrowserIdleTimer();
+      _sharedBrowser = null;
+    }
     logger.warn("[MaerskDirect] Shared browser disconnected (crash or killed)");
-    _sharedBrowser = null;
   });
 
   logger.info("[MaerskDirect] Shared Chrome instance ready");
@@ -512,6 +546,7 @@ export async function scrapeMaerskDirect(containerNumber: string): Promise<Carri
       /* ignore */
     }
   }, SCRAPER_TIMEOUT_MS);
+  hardStop.unref?.();
 
   try {
     // ── Get/reuse shared browser (Option A: shared instance) ─────────────────
@@ -803,6 +838,7 @@ export async function scrapeMaerskDirect(containerNumber: string): Promise<Carri
       /* ignore */
     }
     release?.();
+    scheduleBrowserIdleShutdown();
     logger.info(`[MaerskDirect] ${containerNumber}: Puppeteer slot released`);
   }
 }
