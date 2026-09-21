@@ -198,7 +198,7 @@ export default function ProductionPlannerDialog() {
   const queryClient = useQueryClient();
 
   const { data: allWorkers = [] } = useQuery<Worker[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     enabled: open,
   });
   const { data: categories = [] } = useQuery<WorkerCategory[]>({
