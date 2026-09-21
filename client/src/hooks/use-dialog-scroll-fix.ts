@@ -11,9 +11,8 @@ import { useEffect } from "react";
  *    Radix's internal scroll-lock counter can drop to 0 without cleaning
  *    up the body styles — leaving the page frozen.
  *
- * This hook uses a MutationObserver to watch for ALL Radix overlay elements
- * transitioning to data-state="closed". Once none are open, it force-clears
- * any stuck body / html overflow styles.
+ * This hook watches only Radix dialog lifecycle attributes. Once none are
+ * open, it force-clears any stuck body / html overflow styles.
  */
 export function useDialogScrollFix() {
   useEffect(() => {
@@ -45,16 +44,18 @@ export function useDialogScrollFix() {
     }
 
     const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (
-          m.type === "attributes" &&
-          (m.attributeName === "data-state" || m.attributeName === "aria-hidden" || m.attributeName === "style")
-        ) {
-          const el = m.target as HTMLElement;
-          const state = el.getAttribute("data-state");
-          if (state === "closed" || m.attributeName === "aria-hidden") {
-            scheduleCleanup();
-          }
+      for (const mutation of mutations) {
+        if (mutation.type !== "attributes") continue;
+        const element = mutation.target as HTMLElement;
+
+        if (mutation.attributeName === "data-state") {
+          if (!element.matches('[role="dialog"], [data-radix-dialog-overlay]')) continue;
+          if (element.getAttribute("data-state") === "closed") scheduleCleanup();
+          continue;
+        }
+
+        if (mutation.attributeName === "aria-hidden" && element.parentElement === document.body) {
+          scheduleCleanup();
         }
       }
     });
@@ -62,7 +63,7 @@ export function useDialogScrollFix() {
     observer.observe(document.body, {
       attributes: true,
       subtree: true,
-      attributeFilter: ["data-state", "aria-hidden", "style"],
+      attributeFilter: ["data-state", "aria-hidden"],
     });
 
     return () => {

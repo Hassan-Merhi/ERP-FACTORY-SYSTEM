@@ -30,7 +30,10 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
     minimumRows: 100,
     overscan: 16,
   });
-  const visibleContainers = containers.slice(virtualRows.startIndex, virtualRows.endIndex);
+  const visibleContainers = React.useMemo(
+    () => containers.slice(virtualRows.startIndex, virtualRows.endIndex),
+    [containers, virtualRows.endIndex, virtualRows.startIndex]
+  );
 
   return (
     <div className="rounded-md border bg-card h-full flex flex-col shadow-sm overflow-clip">

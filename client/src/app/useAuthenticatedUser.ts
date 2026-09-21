@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
-import { clearBiometricCredentials } from "@/pages/Login";
+import { clearBiometricCredentials } from "@/lib/biometricCredentials";
 
 /**
  * Manages the authenticated user session:

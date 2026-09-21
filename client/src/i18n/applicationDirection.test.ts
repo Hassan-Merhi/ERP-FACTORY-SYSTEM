@@ -1,8 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyApplicationLanguageToDocument, getApplicationDirection } from "./applicationDirection";
-import { translateApplicationLiteral } from "./applicationTranslations";
+import { loadApplicationTranslationCatalog } from "./applicationTranslations";
+import { translateApplicationLiteral } from "./applicationLiteralTranslations";
 
 describe("application direction contract", () => {
+  beforeAll(async () => {
+    await Promise.all([loadApplicationTranslationCatalog("ar"), loadApplicationTranslationCatalog("fr")]);
+  });
+
   beforeEach(() => {
     document.documentElement.removeAttribute("lang");
     document.documentElement.removeAttribute("dir");

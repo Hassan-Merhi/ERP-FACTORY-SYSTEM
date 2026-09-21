@@ -10,6 +10,7 @@ import { phase1PaginationPlugin } from "./build/vitePhase1PaginationGuardPlugin.
 import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin.ts";
 import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin.ts";
 import { cssColorMixPlugin } from "./build/viteCssColorMixPlugin.ts";
+import { initialChunkAuditPlugin } from "./build/viteInitialChunkAuditPlugin.ts";
 
 // `vite build` produces the production artifact, so it must be a production
 // build regardless of the NODE_ENV the surrounding job happens to export. CI
@@ -48,6 +49,7 @@ export default defineConfig({
     lazyHeavyImportsPlugin(),
     labelAssetExtractionPlugin(),
     cssColorMixPlugin(),
+    initialChunkAuditPlugin(),
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&
@@ -94,9 +96,10 @@ export default defineConfig({
           if (normalizedId.endsWith("/client/src/lib/labelHtml.ts")) {
             return "label-printing";
           }
-          if (normalizedId.includes("/client/src/i18n/")) {
-            return "application-translations";
-          }
+          // Do not force all i18n modules into one shared chunk. English startup
+          // only needs the small applicationTranslations core; non-English
+          // locale catalogs and the DOM translator follow their dynamic import
+          // boundaries and stay out of the English boot path.
           if (
             id.includes("node_modules/react/") ||
             id.includes("node_modules/react-dom/") ||
@@ -142,16 +145,13 @@ export default defineConfig({
           if (id.includes("node_modules/exceljs/")) {
             return "exceljs-vendor";
           }
-          if (
-            id.includes("node_modules/recharts/") ||
-            id.includes("node_modules/d3-") ||
-            id.includes("node_modules/victory-vendor/")
-          ) {
-            return "recharts-vendor";
-          }
-          if (id.includes("node_modules/jspdf/") || id.includes("node_modules/jspdf-autotable/")) {
-            return "jspdf-vendor";
-          }
+          // Do not force Recharts/D3 into a shared manual vendor chunk.
+          // Several UI dependencies are also used by Recharts; forcing both
+          // sides into manual chunks creates a static ui-vendor -> chart-vendor
+          // edge that pulls charts into every authenticated shell.
+          // jsPDF is only used by export actions. Let dynamic import boundaries
+          // own it instead of forcing a manual chunk that can become a static
+          // dependency of shared application chunks.
           if (id.includes("node_modules/html2canvas/")) {
             return "html2canvas-vendor";
           }
