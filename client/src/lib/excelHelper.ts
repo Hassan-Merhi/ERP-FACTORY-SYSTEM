@@ -226,23 +226,73 @@ function isUint8Array(value: unknown): value is Uint8Array {
   return Object.prototype.toString.call(value) === "[object Uint8Array]";
 }
 
+function hasZipSignature(
+  bytes: Uint8Array,
+  index: number,
+  third: number,
+  fourth: number
+): boolean {
+  return (
+    index >= 0 &&
+    index + 3 < bytes.length &&
+    bytes[index] === 0x50 &&
+    bytes[index + 1] === 0x4b &&
+    bytes[index + 2] === third &&
+    bytes[index + 3] === fourth
+  );
+}
+
+function findLastCompleteXlsxZip(bytes: Uint8Array): Uint8Array | null {
+  // A Node Buffer can be a view into a shared slab. Once callers pass only
+  // Buffer#buffer, the original byteOffset/byteLength are lost, so the backing
+  // ArrayBuffer may contain older ZIPs before the workbook and unrelated bytes
+  // after it. Recover the newest complete ZIP by validating its EOCD and central
+  // directory instead of stopping at the first local-file header.
+  if (bytes.length < 22) return null;
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let eocd = bytes.length - 22; eocd >= 0; eocd -= 1) {
+    if (!hasZipSignature(bytes, eocd, 0x05, 0x06)) continue;
+
+    const commentLength = view.getUint16(eocd + 20, true);
+    const archiveEnd = eocd + 22 + commentLength;
+    if (archiveEnd > bytes.length) continue;
+
+    const centralDirectorySize = view.getUint32(eocd + 12, true);
+    const centralDirectoryOffset = view.getUint32(eocd + 16, true);
+    const archiveStart = eocd - centralDirectorySize - centralDirectoryOffset;
+    if (archiveStart < 0 || !hasZipSignature(bytes, archiveStart, 0x03, 0x04)) {
+      continue;
+    }
+
+    const centralDirectoryStart = archiveStart + centralDirectoryOffset;
+    if (
+      centralDirectorySize > 0 &&
+      !hasZipSignature(bytes, centralDirectoryStart, 0x01, 0x02)
+    ) {
+      continue;
+    }
+
+    return bytes.slice(archiveStart, archiveEnd);
+  }
+
+  return null;
+}
+
 function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
   const bytes = isUint8Array(data) ? Uint8Array.from(data) : new Uint8Array(data);
-  if (isXlsxZip(bytes)) return bytes;
 
-  // Node's Buffer#buffer may expose its larger pooled ArrayBuffer, including
-  // bytes before the Buffer's actual XLSX payload. Recover that payload when
-  // callers pass the ArrayBuffer directly (the browser path is unaffected).
-  for (let index = 1; index <= bytes.length - 4; index += 1) {
-    if (bytes[index] === 0x50 && bytes[index + 1] === 0x4b && bytes[index + 2] === 0x03 && bytes[index + 3] === 0x04) {
-      return bytes.slice(index);
-    }
-  }
-  return bytes;
+  // A Uint8Array preserves its exact view, so a normal XLSX can be used as-is.
+  if (isUint8Array(data) && isXlsxZip(bytes)) return bytes;
+
+  // ArrayBuffer inputs can come from Buffer#buffer and therefore include the
+  // surrounding slab. Trim to the last structurally complete XLSX archive.
+  const recoveredZip = findLastCompleteXlsxZip(bytes);
+  return recoveredZip ?? bytes;
 }
 
 function isXlsxZip(bytes: Uint8Array): boolean {
-  return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+  return hasZipSignature(bytes, 0, 0x03, 0x04);
 }
 
 async function loadSpreadsheet(workbook: ExcelJS.Workbook, bytes: Uint8Array): Promise<void> {

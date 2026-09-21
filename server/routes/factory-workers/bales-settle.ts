@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 
 import { computeMonthlyPay, computeMonthlyPayFromAttendance, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 
 export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/:id/bales - Get bales associated with worker
@@ -83,6 +84,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
           .update(factoryWorkers)
           .set({ active: false, contractEndDate: endEffective, updatedAt: new Date() })
           .where(eq(factoryWorkers.id, id));
+        await removeFactoryWorkerFromCategories(db, companyId, id);
         await writeDaybookEntry(db, {
           companyId,
           txDate: today,
@@ -298,6 +300,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
         .update(factoryWorkers)
         .set({ active: false, contractEndDate: endDate, updatedAt: new Date() })
         .where(eq(factoryWorkers.id, id));
+      await removeFactoryWorkerFromCategories(db, companyId, id);
 
       await writeDaybookEntry(db, {
         companyId,
