@@ -223,7 +223,8 @@ function readCookie(header: unknown, name: string): string | null {
   return null;
 }
 
-function factoryCatalogLanguageKey(req: Request): "en" | "ar" | "fr" {
+function factoryCatalogLanguageKey(req: Request): "none" | "en" | "ar" | "fr" {
+  if (!req.path.startsWith("/api/factory/")) return "none";
   const raw =
     req.query?.lang ??
     req.headers["x-factory-catalog-language"] ??
