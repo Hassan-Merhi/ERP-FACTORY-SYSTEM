@@ -158,6 +158,7 @@ const ProductChartCard = memo(function ProductChartCard({
   balesLabel,
   weightLabel,
   chartRegionLabel,
+  notAvailableLabel,
 }: {
   product: BaleProductCatalogRow;
   selectedRow?: ProductRow;
@@ -175,6 +176,7 @@ const ProductChartCard = memo(function ProductChartCard({
   balesLabel: string;
   weightLabel: string;
   chartRegionLabel: string;
+  notAvailableLabel: string;
 }) {
   const selectedValue = metricValue(selectedRow, metric);
   const comparisonValue = metricValue(comparisonRow, metric);
@@ -250,7 +252,7 @@ const ProductChartCard = memo(function ProductChartCard({
         <div>
           <p className="text-muted-foreground">{changeLabel}</p>
           <p className="mt-0.5 font-semibold tabular-nums">
-            {change === null ? "N/A" : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`}
+            {change === null ? notAvailableLabel : `${change > 0 ? "+" : ""}${change.toFixed(1)}%`}
           </p>
         </div>
       </div>
@@ -721,7 +723,7 @@ export default function ProductComparisonCharts() {
             <Stat
               label={copy.difference}
               value={`${totals.difference > 0 ? "+" : ""}${formatMetric(totals.difference, metric)}`}
-              sub={totals.change === null ? "N/A" : `${totals.change > 0 ? "+" : ""}${totals.change.toFixed(1)}%`}
+              sub={totals.change === null ? copy.notAvailable : `${totals.change > 0 ? "+" : ""}${totals.change.toFixed(1)}%`}
             />
           </ResponsiveMetricGrid>
 
@@ -764,6 +766,7 @@ export default function ProductComparisonCharts() {
                     balesLabel={copy.bales}
                     weightLabel={copy.weight}
                     chartRegionLabel={copy.chartRegion}
+                    notAvailableLabel={copy.notAvailable}
                   />
                 );
               })}
