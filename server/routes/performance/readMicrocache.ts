@@ -373,6 +373,12 @@ function buildReadScope(req: Request): ReadMicrocacheScope {
 
 function buildWriteInvalidation(req: Request): ReadMicrocacheInvalidation {
   const classified = classifyRealtimeWrite(req.originalUrl || req.url, req.body);
+
+  // Unknown write families deliberately keep the legacy blanket fallback. A
+  // route we have not classified may mutate cross-company/global state, so
+  // narrowing it only by the current session company could leave stale data.
+  if (!classified.topics?.length) return {};
+
   const companyIds = requestCompanyIds(req);
   return {
     ...(companyIds.length > 0 ? { companyIds } : {}),
