@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 /**
  * Controller hook for the factory container loading scan page.
  *
@@ -749,7 +750,7 @@ export function useFactoryContainerLoadingScanModel() {
       return res.json();
     },
     enabled: proformaArticleCodesForStock.length > 0,
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
 
   // Linked proforma metadata stays compact; all quantity math comes from the
