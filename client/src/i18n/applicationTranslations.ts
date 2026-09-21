@@ -32,22 +32,27 @@ export const applicationEnglishTranslations = {
   "common.updateAvailable": "Update available",
   "common.updateDescription": "A new version of the app is ready.",
   "containerVerification.itemsRefreshed": "Container items refreshed",
-  "containerVerification.latestDetailsLoaded": "${data.imported} current item lines loaded from the latest container details${skippedMsg}",
+  "containerVerification.latestDetailsLoaded":
+    "${data.imported} current item lines loaded from the latest container details${skippedMsg}",
   "containerVerification.refreshNeedsConnection": "Refresh requires a connection",
   "factoryAdvances.netDue": "Net Due",
   "accountMigration.returnFailed": "Account return migration failed",
   "settings.dataTools.costOverride.title": "Location Cost Price Override",
-  "settings.dataTools.costOverride.description": "Directly replace the average cost for existing inventory at one location. Developer use only; no voucher or daybook entry is created.",
+  "settings.dataTools.costOverride.description":
+    "Directly replace the average cost for existing inventory at one location. Developer use only; no voucher or daybook entry is created.",
   "settings.dataTools.costOverride.selectLocation": "Select Location",
   "settings.dataTools.costOverride.chooseLocation": "Choose location...",
   "settings.dataTools.costOverride.openButton": "Update Location Costs from Excel",
-  "settings.dataTools.costOverride.dialogDescription": "Upload an Excel file with barcode and costPrice columns. This directly overwrites the selected location's current average rate and total value.",
+  "settings.dataTools.costOverride.dialogDescription":
+    "Upload an Excel file with barcode and costPrice columns. This directly overwrites the selected location's current average rate and total value.",
   "settings.dataTools.costOverride.success": "Location cost prices were updated successfully.",
   "settings.dataTools.costOverride.close": "Close",
-  "settings.dataTools.costOverride.warning": "This is a direct valuation correction. It does not create accounting entries and should not be used for normal stock receipts or production.",
+  "settings.dataTools.costOverride.warning":
+    "This is a direct valuation correction. It does not create accounting entries and should not be used for normal stock receipts or production.",
   "settings.dataTools.costOverride.downloadTemplate": "Download Template",
   "settings.dataTools.costOverride.excelFile": "Excel File",
-  "settings.dataTools.costOverride.fileHint": "Each row must contain a matching item barcode and a costPrice greater than 0.",
+  "settings.dataTools.costOverride.fileHint":
+    "Each row must contain a matching item barcode and a costPrice greater than 0.",
   "settings.dataTools.costOverride.barcode": "Barcode",
   "settings.dataTools.costOverride.newCost": "New Cost",
   "settings.dataTools.costOverride.updatesReady": "cost updates ready",
@@ -59,7 +64,8 @@ export const applicationEnglishTranslations = {
   "settings.dataTools.costOverride.emptyFile": "Empty File",
   "settings.dataTools.costOverride.emptyFileDescription": "The Excel file is empty.",
   "settings.dataTools.costOverride.missingColumns": "Missing Required Columns",
-  "settings.dataTools.costOverride.missingColumnsDescription": "Expected barcode and costPrice columns. Download the template for the required format.",
+  "settings.dataTools.costOverride.missingColumnsDescription":
+    "Expected barcode and costPrice columns. Download the template for the required format.",
   "settings.dataTools.costOverride.row": "Row",
   "settings.dataTools.costOverride.barcodeRequired": "Barcode is required",
   "settings.dataTools.costOverride.costPositive": "Cost price must be greater than 0",
@@ -162,7 +168,7 @@ export const applicationEnglishTranslations = {
   "pos.notesOptional": "Notes (optional)",
   "pos.optional": "Optional",
   "pos.saveTransfer": "Save Transfer",
-  "pos.export": "Export"
+  "pos.export": "Export",
 } as const;
 
 export type ApplicationTranslationKey = keyof typeof applicationEnglishTranslations;

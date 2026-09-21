@@ -32,19 +32,23 @@ export const applicationArabicTranslations = {
   "common.updateAvailable": "يتوفر تحديث",
   "common.updateDescription": "نسخة جديدة من التطبيق جاهزة.",
   "containerVerification.itemsRefreshed": "تم تحديث عناصر الحاوية",
-  "containerVerification.latestDetailsLoaded": "تم تحميل ${data.imported} من بنود العناصر الحالية من أحدث تفاصيل الحاوية${skippedMsg}",
+  "containerVerification.latestDetailsLoaded":
+    "تم تحميل ${data.imported} من بنود العناصر الحالية من أحدث تفاصيل الحاوية${skippedMsg}",
   "containerVerification.refreshNeedsConnection": "يتطلب التحديث اتصالاً بالشبكة",
   "factoryAdvances.netDue": "صافي المستحق",
   "accountMigration.returnFailed": "فشلت إعادة ترحيل الحساب",
   "settings.dataTools.costOverride.title": "تعديل تكلفة المخزون حسب الموقع",
-  "settings.dataTools.costOverride.description": "استبدال متوسط تكلفة المخزون الحالي مباشرةً في موقع واحد. للمطور فقط، من دون إنشاء سند أو قيد يومية.",
+  "settings.dataTools.costOverride.description":
+    "استبدال متوسط تكلفة المخزون الحالي مباشرةً في موقع واحد. للمطور فقط، من دون إنشاء سند أو قيد يومية.",
   "settings.dataTools.costOverride.selectLocation": "اختر الموقع",
   "settings.dataTools.costOverride.chooseLocation": "اختر موقعاً...",
   "settings.dataTools.costOverride.openButton": "تحديث تكاليف الموقع من Excel",
-  "settings.dataTools.costOverride.dialogDescription": "حمّل ملف Excel يحتوي على عمودي barcode و costPrice. سيستبدل ذلك مباشرةً متوسط السعر والقيمة الإجمالية الحالية للموقع المحدد.",
+  "settings.dataTools.costOverride.dialogDescription":
+    "حمّل ملف Excel يحتوي على عمودي barcode و costPrice. سيستبدل ذلك مباشرةً متوسط السعر والقيمة الإجمالية الحالية للموقع المحدد.",
   "settings.dataTools.costOverride.success": "تم تحديث تكاليف الموقع بنجاح.",
   "settings.dataTools.costOverride.close": "إغلاق",
-  "settings.dataTools.costOverride.warning": "هذا تصحيح مباشر للتقييم ولا ينشئ قيوداً محاسبية. لا تستخدمه لاستلامات المخزون أو الإنتاج العادي.",
+  "settings.dataTools.costOverride.warning":
+    "هذا تصحيح مباشر للتقييم ولا ينشئ قيوداً محاسبية. لا تستخدمه لاستلامات المخزون أو الإنتاج العادي.",
   "settings.dataTools.costOverride.downloadTemplate": "تنزيل القالب",
   "settings.dataTools.costOverride.excelFile": "ملف Excel",
   "settings.dataTools.costOverride.fileHint": "يجب أن يحتوي كل صف على باركود صنف مطابق وcostPrice أكبر من صفر.",
@@ -59,7 +63,8 @@ export const applicationArabicTranslations = {
   "settings.dataTools.costOverride.emptyFile": "ملف فارغ",
   "settings.dataTools.costOverride.emptyFileDescription": "ملف Excel فارغ.",
   "settings.dataTools.costOverride.missingColumns": "أعمدة مطلوبة مفقودة",
-  "settings.dataTools.costOverride.missingColumnsDescription": "يجب أن يتضمن الملف عمودي barcode وcostPrice. نزّل القالب لمعرفة التنسيق المطلوب.",
+  "settings.dataTools.costOverride.missingColumnsDescription":
+    "يجب أن يتضمن الملف عمودي barcode وcostPrice. نزّل القالب لمعرفة التنسيق المطلوب.",
   "settings.dataTools.costOverride.row": "الصف",
   "settings.dataTools.costOverride.barcodeRequired": "الباركود مطلوب",
   "settings.dataTools.costOverride.costPositive": "يجب أن تكون التكلفة أكبر من صفر",
@@ -162,5 +167,5 @@ export const applicationArabicTranslations = {
   "pos.notesOptional": "ملاحظات (اختياري)",
   "pos.optional": "اختياري",
   "pos.saveTransfer": "حفظ التحويل",
-  "pos.export": "تصدير"
+  "pos.export": "تصدير",
 } as const satisfies ApplicationTranslationCatalog;

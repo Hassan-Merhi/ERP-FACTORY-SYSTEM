@@ -1,4 +1,15 @@
-import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  createContext,
+  lazy,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   APPLICATION_LANGUAGE_COOKIE,
@@ -56,7 +67,9 @@ function persistBrowserPreference(language: ApplicationLanguage) {
 export function ApplicationLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<ApplicationLanguage>(readLocalPreference);
   const [announcement, setAnnouncement] = useState("");
-  const [translationCatalogReady, setTranslationCatalogReady] = useState(() => isApplicationTranslationCatalogLoaded(language));
+  const [translationCatalogReady, setTranslationCatalogReady] = useState(() =>
+    isApplicationTranslationCatalogLoaded(language)
+  );
   const announcedLanguageRef = useRef(language);
   const browserPreferenceChangedRef = useRef(false);
   const isLoginRoute =

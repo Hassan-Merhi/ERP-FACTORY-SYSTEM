@@ -6,7 +6,8 @@ export const applicationFrenchTranslations = {
   "language.arabic": "Arabe",
   "language.french": "Français",
   "language.saving": "Enregistrement de la langue…",
-  "language.saveFailed": "La langue a été modifiée sur cet appareil, mais la préférence du compte n’a pas pu être enregistrée.",
+  "language.saveFailed":
+    "La langue a été modifiée sur cet appareil, mais la préférence du compte n’a pas pu être enregistrée.",
   "language.changed": "La langue de l’application est maintenant le français.",
   "accessibility.skipToMainContent": "Aller au contenu principal",
   "accessibility.openSearch": "Ouvrir la recherche",
@@ -17,7 +18,8 @@ export const applicationFrenchTranslations = {
   "accessibility.closeDialog": "Fermer la boîte de dialogue",
   "accessibility.closePanel": "Fermer le panneau",
   "workspace.controls": "Commandes de l’espace de travail",
-  "workspace.controlsDescription": "Commandes du compte, de l’affichage, de la synchronisation, de la langue et de la recherche.",
+  "workspace.controlsDescription":
+    "Commandes du compte, de l’affichage, de la synchronisation, de la langue et de la recherche.",
   "workspace.search": "Rechercher dans l’espace de travail",
   "workspace.statusDisplay": "État et affichage",
   "workspace.pendingSync": "Synchronisation en attente",
@@ -32,22 +34,27 @@ export const applicationFrenchTranslations = {
   "common.updateAvailable": "Mise à jour disponible",
   "common.updateDescription": "Une nouvelle version de l’application est prête.",
   "containerVerification.itemsRefreshed": "Articles du conteneur actualisés",
-  "containerVerification.latestDetailsLoaded": "${data.imported} lignes d’articles actuelles chargées depuis les derniers détails du conteneur${skippedMsg}",
+  "containerVerification.latestDetailsLoaded":
+    "${data.imported} lignes d’articles actuelles chargées depuis les derniers détails du conteneur${skippedMsg}",
   "containerVerification.refreshNeedsConnection": "L’actualisation nécessite une connexion",
   "factoryAdvances.netDue": "Net dû",
   "accountMigration.returnFailed": "Échec du retour de migration du compte",
   "settings.dataTools.costOverride.title": "Remplacement du coût par emplacement",
-  "settings.dataTools.costOverride.description": "Remplace directement le coût moyen du stock existant dans un emplacement. Réservé au développeur, sans création de pièce ni d’écriture de journal.",
+  "settings.dataTools.costOverride.description":
+    "Remplace directement le coût moyen du stock existant dans un emplacement. Réservé au développeur, sans création de pièce ni d’écriture de journal.",
   "settings.dataTools.costOverride.selectLocation": "Sélectionner l’emplacement",
   "settings.dataTools.costOverride.chooseLocation": "Choisir un emplacement...",
   "settings.dataTools.costOverride.openButton": "Mettre à jour les coûts depuis Excel",
-  "settings.dataTools.costOverride.dialogDescription": "Importez un fichier Excel avec les colonnes barcode et costPrice. Cette opération remplace directement le coût moyen et la valeur totale actuels de l’emplacement sélectionné.",
+  "settings.dataTools.costOverride.dialogDescription":
+    "Importez un fichier Excel avec les colonnes barcode et costPrice. Cette opération remplace directement le coût moyen et la valeur totale actuels de l’emplacement sélectionné.",
   "settings.dataTools.costOverride.success": "Les coûts de l’emplacement ont été mis à jour.",
   "settings.dataTools.costOverride.close": "Fermer",
-  "settings.dataTools.costOverride.warning": "Il s’agit d’une correction directe de valorisation. Elle ne crée aucune écriture comptable et ne doit pas servir aux réceptions ou à la production normales.",
+  "settings.dataTools.costOverride.warning":
+    "Il s’agit d’une correction directe de valorisation. Elle ne crée aucune écriture comptable et ne doit pas servir aux réceptions ou à la production normales.",
   "settings.dataTools.costOverride.downloadTemplate": "Télécharger le modèle",
   "settings.dataTools.costOverride.excelFile": "Fichier Excel",
-  "settings.dataTools.costOverride.fileHint": "Chaque ligne doit contenir un code-barres correspondant et un costPrice supérieur à 0.",
+  "settings.dataTools.costOverride.fileHint":
+    "Chaque ligne doit contenir un code-barres correspondant et un costPrice supérieur à 0.",
   "settings.dataTools.costOverride.barcode": "Code-barres",
   "settings.dataTools.costOverride.newCost": "Nouveau coût",
   "settings.dataTools.costOverride.updatesReady": "mises à jour de coût prêtes",
@@ -59,7 +66,8 @@ export const applicationFrenchTranslations = {
   "settings.dataTools.costOverride.emptyFile": "Fichier vide",
   "settings.dataTools.costOverride.emptyFileDescription": "Le fichier Excel est vide.",
   "settings.dataTools.costOverride.missingColumns": "Colonnes requises manquantes",
-  "settings.dataTools.costOverride.missingColumnsDescription": "Les colonnes barcode et costPrice sont requises. Téléchargez le modèle pour le format attendu.",
+  "settings.dataTools.costOverride.missingColumnsDescription":
+    "Les colonnes barcode et costPrice sont requises. Téléchargez le modèle pour le format attendu.",
   "settings.dataTools.costOverride.row": "Ligne",
   "settings.dataTools.costOverride.barcodeRequired": "Le code-barres est requis",
   "settings.dataTools.costOverride.costPositive": "Le coût doit être supérieur à 0",
@@ -95,7 +103,8 @@ export const applicationFrenchTranslations = {
   "common.count": "Nombre",
   "common.dateType": "DATE / TYPE",
   "factory.overview": "Aperçu",
-  "factory.overviewDescription": "Vue d’ensemble de la fabrication — indicateurs de production et cycle de vie des balles",
+  "factory.overviewDescription":
+    "Vue d’ensemble de la fabrication — indicateurs de production et cycle de vie des balles",
   "factory.otwTracking": "Suivi en transit",
   "factory.production": "Production",
   "factory.comparison": "Comparaison",
@@ -162,5 +171,5 @@ export const applicationFrenchTranslations = {
   "pos.notesOptional": "Notes (facultatif)",
   "pos.optional": "Facultatif",
   "pos.saveTransfer": "Enregistrer le transfert",
-  "pos.export": "Exporter"
+  "pos.export": "Exporter",
 } as const satisfies ApplicationTranslationCatalog;

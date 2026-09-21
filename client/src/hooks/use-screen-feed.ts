@@ -1,9 +1,5 @@
 import { useEffect, useRef } from "react";
-import type {
-  ScreenFeedClickEvent,
-  ScreenFeedCursorEvent,
-  ScreenFeedFailureStage,
-} from "./screen-feed-capture-engine";
+import type { ScreenFeedClickEvent, ScreenFeedCursorEvent, ScreenFeedFailureStage } from "./screen-feed-capture-engine";
 
 let captureEnginePromise: Promise<typeof import("./screen-feed-capture-engine")> | null = null;
 
@@ -21,10 +17,7 @@ import {
   failedCaptureBackoffMs,
 } from "./screen-feed-capture-policy";
 import { normalizeScreenFeedPoint } from "./screen-feed-viewing-quality";
-import {
-  sendScreenFeedControlMessage,
-  subscribeScreenFeedTransportStatus,
-} from "@/lib/screen-feed-binary-transport";
+import { sendScreenFeedControlMessage, subscribeScreenFeedTransportStatus } from "@/lib/screen-feed-binary-transport";
 
 const POLL_INTERVAL_MS = 15000;
 const UNWATCHED_POLL_INTERVAL_MS = 5000;
@@ -145,11 +138,14 @@ export function useScreenFeed() {
       if (captureTimerRef.current && captureDueAtRef.current > 0 && captureDueAtRef.current <= dueAt) return;
       clearCaptureTimer();
       captureDueAtRef.current = dueAt;
-      captureTimerRef.current = setTimeout(() => {
-        captureTimerRef.current = null;
-        captureDueAtRef.current = 0;
-        runCaptureCycle();
-      }, Math.max(0, dueAt - Date.now()));
+      captureTimerRef.current = setTimeout(
+        () => {
+          captureTimerRef.current = null;
+          captureDueAtRef.current = 0;
+          runCaptureCycle();
+        },
+        Math.max(0, dueAt - Date.now())
+      );
     }
 
     function effectiveMinGapMs() {
@@ -263,14 +259,14 @@ export function useScreenFeed() {
         loadScreenFeedCaptureEngine()
           .then(({ captureAndUploadScreenFrame }) =>
             captureAndUploadScreenFrame({
-          fast: fastModeRef.current,
-          lastSignature: lastSignatureRef.current,
-          lastUploadedClickTs: lastUploadedClickTsRef.current,
-          cursor: pointerRef.current,
-          expectedPath,
-          clicks: clickBuffer,
-          scrollElements: trackedScrollElements,
-          shouldContinue: () => !disposed && watchedRef.current && document.visibilityState === "visible",
+              fast: fastModeRef.current,
+              lastSignature: lastSignatureRef.current,
+              lastUploadedClickTs: lastUploadedClickTsRef.current,
+              cursor: pointerRef.current,
+              expectedPath,
+              clicks: clickBuffer,
+              scrollElements: trackedScrollElements,
+              shouldContinue: () => !disposed && watchedRef.current && document.visibilityState === "visible",
             })
           )
           .then((result) => {
@@ -365,7 +361,8 @@ export function useScreenFeed() {
         document.visibilityState !== "visible" ||
         !cursor ||
         !cursorsDiffer(lastSentPointerRef.current, cursor)
-      ) return;
+      )
+        return;
       if (sendScreenFeedControlMessage({ type: "screen-feed:cursor", tabId, cursor })) {
         lastSentPointerRef.current = cursor;
       }
@@ -439,7 +436,9 @@ export function useScreenFeed() {
     const pollWatcherStatus = async () => {
       if (document.visibilityState !== "visible") return;
       try {
-        const response = await fetch(`/api/screen-feed/being-watched?tabId=${encodeURIComponent(tabId)}`, { credentials: "include" });
+        const response = await fetch(`/api/screen-feed/being-watched?tabId=${encodeURIComponent(tabId)}`, {
+          credentials: "include",
+        });
         if (!response.ok) return applyWatchStatus(false, false);
         const data = await response.json();
         applyWatchStatus(Boolean(data?.watched), Boolean(data?.fast));

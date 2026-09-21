@@ -14,11 +14,13 @@ interface ProductTranslation {
 }
 
 function findEditDialog(): HTMLElement | null {
-  return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).find((dialog) =>
-    Array.from(dialog.querySelectorAll("h1,h2,h3,[data-radix-dialog-title]")).some(
-      (heading) => heading.textContent?.trim() === "Edit Product"
-    )
-  ) ?? null;
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).find((dialog) =>
+      Array.from(dialog.querySelectorAll("h1,h2,h3,[data-radix-dialog-title]")).some(
+        (heading) => heading.textContent?.trim() === "Edit Product"
+      )
+    ) ?? null
+  );
 }
 
 function findArticleCode(dialog: HTMLElement): string {
@@ -32,10 +34,12 @@ function findArticleCode(dialog: HTMLElement): string {
 }
 
 function findSaveButton(dialog: HTMLElement): HTMLButtonElement | null {
-  return Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find((button) => {
-    const text = button.textContent?.trim().toLowerCase() ?? "";
-    return !button.disabled && (text.includes("save") || text.includes("update product"));
-  }) ?? null;
+  return (
+    Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find((button) => {
+      const text = button.textContent?.trim().toLowerCase() ?? "";
+      return !button.disabled && (text.includes("save") || text.includes("update product"));
+    }) ?? null
+  );
 }
 
 export function BaleProductArabicEditBridge() {
@@ -91,17 +95,15 @@ export function BaleProductArabicEditBridge() {
       if (!target) {
         target = document.createElement("div");
         target.dataset.bilingualPencilFields = "true";
-        const footer = Array.from(nextDialog.querySelectorAll<HTMLElement>("div")).find((element) =>
-          element.className.includes("justify-end") && element.querySelector("button")
+        const footer = Array.from(nextDialog.querySelectorAll<HTMLElement>("div")).find(
+          (element) => element.className.includes("justify-end") && element.querySelector("button")
         );
         if (footer?.parentElement) footer.parentElement.insertBefore(target, footer);
         else nextDialog.appendChild(target);
       }
 
       const articleCode = findArticleCode(nextDialog).toUpperCase();
-      const product = productsRef.current.find(
-        (item) => (item.articleCode ?? "").trim().toUpperCase() === articleCode
-      );
+      const product = productsRef.current.find((item) => (item.articleCode ?? "").trim().toUpperCase() === articleCode);
       setDialog(nextDialog);
       setMountNode(target);
       setProductId(product?.id ?? null);
