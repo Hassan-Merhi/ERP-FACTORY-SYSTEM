@@ -16,7 +16,7 @@ import {
   yesterdayStr,
 } from "./utils";
 
-const normalizeOverviewTab = (tab: string | null) => (tab === "ledger" ? "production" : tab || "production");
+const normalizeOverviewTab = (tab: string | null) => (tab === "ledger" ? "product-comparison" : tab || "production");
 
 /**
  * State, queries and derived values for the Overview page. Extracted so the page
@@ -29,7 +29,7 @@ export function useDailyProductionReport() {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Keep the active tab in sync with the query string. Bale Ledger is intentionally
-  // hidden in Factory mode, so legacy ?tab=ledger links fall back to Production.
+  // hidden in Factory mode, so legacy ?tab=ledger links open its Product Comparison replacement.
   useEffect(() => {
     const tab = new URLSearchParams(search).get("tab");
     setActiveTab(normalizeOverviewTab(tab));
