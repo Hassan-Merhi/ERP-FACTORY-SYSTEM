@@ -39,7 +39,7 @@ import { rebuildSaleAccountingEntries } from "./rebuildSaleAccounting";
 import {
   isGoldenCoastPosCompany,
   postGoldenCoastPosAccountingTx,
-  reverseGoldenCoastPosAccountingTx,
+  retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
@@ -145,12 +145,13 @@ export async function applyPosSaleUpdateTx(
   const isGoldenCoastEdit = isSpCompanyEdit && (await isGoldenCoastPosCompany(tx, currentCompanyId));
   const clientSaleId = String(lockedVoucher.clientSaleId ?? "").trim();
   if (isGoldenCoastEdit && clientSaleId && !lockedVoucher.isCreditSale) {
-    await reverseGoldenCoastPosAccountingTx({
+    // Golden Coast settlement journals represent the CURRENT POS state. Retire
+    // every active programme-generated settlement (including marker-less
+    // recovery rows) before rebuilding the edited amount in this transaction.
+    await retireGoldenCoastPosAccountingTx({
       tx,
       companyId: currentCompanyId,
       clientSaleId,
-      revision: canonicalRevision,
-      actor: { userId, username, reason: `Edit Golden Coast POS sale ${lockedVoucher.voucherNumber}` },
     });
   }
 
