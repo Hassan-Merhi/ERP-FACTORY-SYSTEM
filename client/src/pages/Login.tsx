@@ -9,6 +9,14 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import {
+  clearBiometricCredentials,
+  loadBiometricCredentials,
+  loadNativePreferences,
+  saveBiometricCredentials,
+} from "@/lib/biometricCredentials";
+
+export { clearBiometricCredentials, saveBiometricCredentials };
 
 // Set to true to re-enable passkey registration & login
 const PASSKEY_ENABLED = false;
@@ -25,32 +33,7 @@ function isPasskeySnoozed(username: string) {
   return Date.now() - parseInt(ts, 10) < 30 * 24 * 60 * 60 * 1000;
 }
 
-const CRED_KEY = "biometric_creds";
 const OPT_IN_KEY = "biometric_opted_in";
-
-async function loadNativePreferences() {
-  const { Preferences } = await import("@capacitor/preferences");
-  return Preferences;
-}
-
-export async function saveBiometricCredentials(username: string, password: string) {
-  const Preferences = await loadNativePreferences();
-  await Preferences.set({ key: CRED_KEY, value: JSON.stringify({ username, password }) });
-}
-export async function clearBiometricCredentials() {
-  const Preferences = await loadNativePreferences();
-  await Preferences.remove({ key: CRED_KEY });
-}
-async function loadBiometricCredentials(): Promise<{ username: string; password: string } | null> {
-  const Preferences = await loadNativePreferences();
-  const { value } = await Preferences.get({ key: CRED_KEY });
-  if (!value) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
 
 const features = [
   { icon: Boxes, title: "Inventory Management", description: "Real-time stock tracking across all locations" },
