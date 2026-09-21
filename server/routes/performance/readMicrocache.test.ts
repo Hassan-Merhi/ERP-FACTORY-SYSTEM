@@ -91,7 +91,10 @@ describe("Phase 7C read microcache", () => {
       "/api/factory/bale-ledger",
       "/api/factory/containers",
       "/api/factory/bale-products",
+      "/api/factory/categories",
       "/api/factory/workers",
+      "/api/containers",
+      "/api/containers/otw-items",
       "/api/ledger-accounts",
       "/api/stock-items/light",
       "/api/locations",
@@ -103,6 +106,8 @@ describe("Phase 7C read microcache", () => {
     expect(READ_MICROCACHE_TTL_MS.get("/api/sales-report")).toBe(120_000);
     expect(READ_MICROCACHE_TTL_MS.get("/api/factory/payrolls")).toBe(120_000);
     expect(READ_MICROCACHE_TTL_MS.get("/api/factory/bale-products")).toBe(300_000);
+    expect(READ_MICROCACHE_TTL_MS.get("/api/factory/categories")).toBe(300_000);
+    expect(READ_MICROCACHE_TTL_MS.get("/api/containers/otw-items")).toBe(30_000);
   });
 
   it("isolates cache keys by user, company, role, location, station, query, and client date", () => {
