@@ -21,11 +21,38 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const results = await db
-        .select()
-        .from(factoryMixBatches)
-        .where(and(eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt)))
-        .orderBy(desc(factoryMixBatches.createdAt));
+      const where = and(eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt));
+
+      // Summary/picker consumers only need the batch identity and utilization
+      // fields. Skip source-row loading and supplier-rate recomputation entirely.
+      if (req.query.profile === "summary") {
+        const rows = await db
+          .select({
+            id: factoryMixBatches.id,
+            batchCode: factoryMixBatches.batchCode,
+            name: factoryMixBatches.name,
+            status: factoryMixBatches.status,
+            totalWeightKg: factoryMixBatches.totalWeightKg,
+            usedKg: factoryMixBatches.usedKg,
+            costPerKg: factoryMixBatches.costPerKg,
+            batchDate: factoryMixBatches.batchDate,
+            createdAt: factoryMixBatches.createdAt,
+          })
+          .from(factoryMixBatches)
+          .where(where)
+          .orderBy(desc(factoryMixBatches.createdAt));
+
+        return res.json(
+          rows.map((batch) => ({
+            ...batch,
+            remainingKg: (
+              (parseFloat(batch.totalWeightKg || "0") || 0) - (parseFloat(batch.usedKg || "0") || 0)
+            ).toFixed(3),
+          }))
+        );
+      }
+
+      const results = await db.select().from(factoryMixBatches).where(where).orderBy(desc(factoryMixBatches.createdAt));
 
       // ── Display-blend calculation (read-only, no DB writes) ──
       const batchIds = results.map((b) => b.id);

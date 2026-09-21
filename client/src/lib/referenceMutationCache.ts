@@ -11,6 +11,18 @@ interface ReferenceMutationRule {
   payloadKeys: readonly string[];
 }
 
+interface ProfiledListInvalidationRule {
+  path: RegExp;
+  queryPath: string;
+}
+
+const PROFILED_LIST_INVALIDATION_RULES: readonly ProfiledListInvalidationRule[] = [
+  { path: /^\/api\/ledger-accounts(?:\/|$)/, queryPath: "/api/ledger-accounts" },
+  { path: /^\/api\/factory\/workers(?:\/|$)/, queryPath: "/api/factory/workers" },
+  { path: /^\/api\/factory\/bale-products(?:\/|$)/, queryPath: "/api/factory/bale-products" },
+  { path: /^\/api\/factory\/mix-batches(?:\/|$)/, queryPath: "/api/factory/mix-batches" },
+];
+
 const REFERENCE_MUTATION_RULES: readonly ReferenceMutationRule[] = [
   {
     path: /^\/api\/locations(?:\/\d+)?\/?$/,
@@ -177,6 +189,17 @@ function matchesReferenceQuery(queryPath: string, queryKey: readonly unknown[]):
   return queryPathname(queryKey) === queryPath;
 }
 
+async function refreshProfiledListQueries(options: { client: QueryClient; pathname: string }): Promise<boolean> {
+  const rule = PROFILED_LIST_INVALIDATION_RULES.find((candidate) => candidate.path.test(options.pathname));
+  if (!rule) return false;
+
+  await options.client.invalidateQueries({
+    predicate: (query) => queryPathname(query.queryKey) === rule.queryPath,
+    refetchType: "active",
+  });
+  return true;
+}
+
 async function refreshSpProfitReportQueries(options: { client: QueryClient; pathname: string }): Promise<boolean> {
   if (!/^\/api\/vouchers(?:\/.*)?$/.test(options.pathname)) return false;
 
@@ -232,11 +255,14 @@ export async function applyReferenceMutationResponse(options: {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method) || !options.response.ok) return false;
 
   const pathname = options.pathname.split("?", 1)[0].replace(/\/+$/, "") || "/";
-  const refreshedSpProfit = await refreshSpProfitReportQueries({ client: options.client, pathname });
+  const [refreshedSpProfit, refreshedProfiledList] = await Promise.all([
+    refreshSpProfitReportQueries({ client: options.client, pathname }),
+    refreshProfiledListQueries({ client: options.client, pathname }),
+  ]);
   if (await refreshStockTransferEditorQueries({ ...options, method, pathname })) return true;
 
   const rule = REFERENCE_MUTATION_RULES.find((candidate) => candidate.path.test(pathname));
-  if (!rule) return refreshedSpProfit;
+  if (!rule) return refreshedSpProfit || refreshedProfiledList;
 
   const rawPayload =
     options.response.status === 204

@@ -81,7 +81,7 @@ function installFetch() {
 
 function renderPage() {
   return renderWithProviders(<AccountTransfer />, {
-    seedQueries: [[["/api/ledger-accounts"], accounts]],
+    seedQueries: [[["/api/ledger-accounts?profile=picker"], accounts]],
   });
 }
 

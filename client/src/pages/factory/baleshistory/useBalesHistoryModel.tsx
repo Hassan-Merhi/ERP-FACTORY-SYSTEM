@@ -19,7 +19,6 @@ import {
   type A4DesignColor,
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import type { FactoryMixBatch } from "@shared/schema";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
 
@@ -172,10 +171,6 @@ export function useBalesHistoryModel() {
   const balesData = balesResponse?.items ?? null;
   const serverTotalPages = balesResponse?.totalPages ?? 1;
   const serverTotal = balesResponse?.total ?? 0;
-
-  const { data: _mixBatches } = useQuery<FactoryMixBatch[]>({
-    queryKey: ["/api/factory/mix-batches"],
-  });
 
   const deleteBale = useMutation({
     mutationFn: async (id: number) => {

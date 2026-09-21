@@ -1,5 +1,3 @@
-import { queryClient } from "./queryClient";
-
 const BYPASS_HEADER = "x-phase4-bandwidth-bypass";
 const DAILY_PAGE_SIZE = 250;
 const DAILY_RECONCILE_MS = 10 * 60_000;
@@ -8,9 +6,7 @@ const PROFORMA_CACHE_MS = 5 * 60_000;
 const DAILY_LIST_PATHS = new Set(["/api/factory/daily-bale-scans", "/api/factory/daily-bale-scans/produced"]);
 
 const PROFORMA_LIST_PATH = "/api/factory/customer-proformas";
-const PROFORMA_DETAIL_PATH = /^\/api\/factory\/customer-proformas\/(\d+)$/;
 const PROFORMA_WRITE_PATH = /^\/api\/factory\/customer-proforma(?:s|-lines)(?:\/|$)/;
-const ORDER_DETAIL_PATH = /^\/api\/factory\/customer-orders\/(\d+)$/;
 
 /**
  * The payloads this interceptor handles come off the wire untyped. Each shape
@@ -21,17 +17,6 @@ const ORDER_DETAIL_PATH = /^\/api\/factory\/customer-orders\/(\d+)$/;
 type DailyScanRow = {
   id?: number | string;
   scan_date?: string;
-  [field: string]: unknown;
-};
-
-type ProformaSummaryRow = {
-  id?: number | string;
-  isActive?: boolean;
-  [field: string]: unknown;
-};
-
-type ProformaDetail = {
-  lines?: unknown;
   [field: string]: unknown;
 };
 
@@ -50,8 +35,6 @@ type TimedResponse = {
 
 const dailyCache = new Map<string, DailyCacheEntry>();
 const proformaSummaryCache = new Map<string, TimedResponse>();
-const proformaDetailCache = new Map<number, TimedResponse>();
-const linkedProformaIds = new Set<number>();
 
 function resolveUrl(input: RequestInfo | URL): URL | null {
   try {
@@ -87,11 +70,6 @@ function jsonResponseFrom(source: Response, payload: unknown): Response {
     statusText: source.statusText,
     headers,
   });
-}
-
-function isLoadingProformaPage(): boolean {
-  const path = window.location.pathname;
-  return path === "/factory/sales/loading/new" || path.includes("container-loading");
 }
 
 function dailyKey(url: URL): string {
@@ -171,49 +149,6 @@ async function handleDailyList(
 
 function clearProformaCaches(): void {
   proformaSummaryCache.clear();
-  proformaDetailCache.clear();
-  linkedProformaIds.clear();
-}
-
-async function getProformaDetail(
-  originalFetch: typeof window.fetch,
-  id: number,
-  init?: RequestInit
-): Promise<ProformaDetail | null> {
-  const cached = proformaDetailCache.get(id);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.response
-      .clone()
-      .json()
-      .catch(() => null);
-  }
-
-  const url = new URL(`/api/factory/customer-proformas/${id}`, window.location.origin);
-  const response = await originalFetch(url.toString(), withBypassHeaders(url, { ...init, credentials: "include" }));
-  if (!response.ok) return null;
-  proformaDetailCache.set(id, { response: response.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
-  return response
-    .clone()
-    .json()
-    .catch(() => null);
-}
-
-function patchProformaSummaryQueries(id: number, detail: ProformaDetail): void {
-  if (!detail?.lines) return;
-  const queries = queryClient.getQueryCache().findAll({
-    predicate: (query) => {
-      const key = query.queryKey[0];
-      return typeof key === "string" && key.startsWith(`${PROFORMA_LIST_PATH}?`) && key.includes("profile=summary");
-    },
-  });
-
-  for (const query of queries) {
-    queryClient.setQueryData(query.queryKey, (current: unknown) => {
-      if (!Array.isArray(current)) return current;
-      const rows = current as ProformaSummaryRow[];
-      return rows.map((row) => (Number(row?.id) === id ? { ...row, lines: detail.lines } : row));
-    });
-  }
 }
 
 async function handleProformaSummary(
@@ -222,44 +157,13 @@ async function handleProformaSummary(
   init: RequestInit | undefined
 ): Promise<Response> {
   const key = url.toString();
-  let raw: Response;
   const cached = proformaSummaryCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.response.clone();
 
-  if (cached && cached.expiresAt > Date.now()) {
-    raw = cached.response.clone();
-  } else {
-    raw = await originalFetch(url.toString(), withBypassHeaders(url, init));
-    if (!raw.ok) return raw;
-    proformaSummaryCache.set(key, { response: raw.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
-  }
-
-  if (!isLoadingProformaPage()) return raw;
-
-  const payload: unknown = await raw
-    .clone()
-    .json()
-    .catch(() => []);
-  if (!Array.isArray(payload)) return raw;
-  const summaries = payload as ProformaSummaryRow[];
-
-  const detailIds = new Set<number>(linkedProformaIds);
-  for (const row of summaries) {
-    if (row?.isActive && Number.isFinite(Number(row.id))) detailIds.add(Number(row.id));
-  }
-
-  const details = new Map<number, ProformaDetail>();
-  await Promise.all(
-    [...detailIds].map(async (id) => {
-      const detail = await getProformaDetail(originalFetch, id, init);
-      if (detail) details.set(id, detail);
-    })
-  );
-
-  const enriched = summaries.map((row) => {
-    const detail = details.get(Number(row.id));
-    return detail?.lines ? { ...row, lines: detail.lines } : row;
-  });
-  return jsonResponseFrom(raw, enriched);
+  const raw = await originalFetch(url.toString(), withBypassHeaders(url, init));
+  if (!raw.ok) return raw;
+  proformaSummaryCache.set(key, { response: raw.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
+  return raw;
 }
 
 function updateDailyCacheFromWrite(pathname: string, method: string, response: Response): void {
@@ -321,33 +225,6 @@ export function installPhase4BandwidthFetch(): void {
 
     if (url.pathname === PROFORMA_LIST_PATH && url.searchParams.get("profile") === "summary") {
       return handleProformaSummary(originalFetch, url, init);
-    }
-
-    const orderMatch = url.pathname.match(ORDER_DETAIL_PATH);
-    if (orderMatch && isLoadingProformaPage()) {
-      const response = await originalFetch(input, init);
-      if (!response.ok) return response;
-      const order = await response
-        .clone()
-        .json()
-        .catch(() => null);
-      const proformaId = Number(order?.proformaIdUsed);
-      if (Number.isFinite(proformaId) && proformaId > 0) {
-        linkedProformaIds.add(proformaId);
-        const detail = await getProformaDetail(originalFetch, proformaId, init);
-        if (detail) patchProformaSummaryQueries(proformaId, detail);
-      }
-      return response;
-    }
-
-    const detailMatch = url.pathname.match(PROFORMA_DETAIL_PATH);
-    if (detailMatch) {
-      const response = await originalFetch(input, init);
-      if (response.ok) {
-        const id = Number(detailMatch[1]);
-        proformaDetailCache.set(id, { response: response.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
-      }
-      return response;
     }
 
     return originalFetch(input, init);

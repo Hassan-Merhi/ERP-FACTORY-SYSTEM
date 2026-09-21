@@ -106,14 +106,14 @@ export function StockEntryTab() {
   ]);
 
   const { data: baleProducts, isLoading: _productsLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
   });
   const { data: _currentUser } = useQuery({ queryKey: ["/api/auth/me"] });
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
 
   const { data: workers = [] } = useQuery<WorkerOption[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     enabled: cart.length > 0,
   });
   const { data: workerCategoryGroups = [] } = useQuery<WorkerCategoryRow[]>({
@@ -237,7 +237,7 @@ export function StockEntryTab() {
       return await response.json();
     },
     onSuccess: (newProduct: FactoryBaleProduct) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products?profile=picker"] });
       toast({
         title: "Product Created",
         description: `"${newProduct.name}" created with article code ${newProduct.articleCode}`,

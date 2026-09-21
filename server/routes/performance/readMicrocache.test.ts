@@ -232,6 +232,22 @@ describe("Phase 7C read microcache", () => {
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
 
+  it("caches compact location inventory on the same scoped path family", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const request = makeRequest({
+      path: "/api/locations/12/inventory/light",
+      originalUrl: "/api/locations/12/inventory/light",
+    });
+    storeJson(middleware, request, makeResponse(), [{ stockItemId: 4, quantity: "12" }]);
+
+    const secondResponse = makeResponse();
+    const secondNext = vi.fn();
+    middleware(request, secondResponse, secondNext);
+
+    expect(secondNext).not.toHaveBeenCalled();
+    expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
+  });
+
   it("does not cache failed responses or requests outside the allowlist", () => {
     const middleware = createReadMicrocacheMiddleware();
     const request = makeRequest();

@@ -28,15 +28,18 @@ export function registerAccountListRoutes(app: Express) {
       }
 
       const companyId = req.session.currentCompanyId;
+      const analyticsProfile = req.query.profile === "analytics";
 
-      // Fire all independent lookups in parallel instead of serially.
+      // Analytics renders only ledger, bank and fixed-asset balances. Avoid
+      // loading employee/supplier account families that would be discarded by
+      // the compact profile after all their balance work had already run.
       const [currentCompany, ledgersAll, banks, assets, employees, allSuppliers, companyCustomers] = await Promise.all([
         storage.getCompanyById(companyId),
         storage.getAllLedgerAccounts(companyId, true),
         storage.getAllBankAccounts(companyId),
         storage.getAllFixedAssets(companyId),
-        storage.getAllEmployees(companyId),
-        storage.getAllSuppliers(),
+        analyticsProfile ? Promise.resolve([]) : storage.getAllEmployees(companyId),
+        analyticsProfile ? Promise.resolve([]) : storage.getAllSuppliers(),
         storage.getAllCustomers(companyId),
       ]);
       const ledgers = ledgersAll.filter((a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? ""));
@@ -427,6 +430,26 @@ export function registerAccountListRoutes(app: Express) {
                 )
               ).filter((s): s is NonNullable<typeof s> => s !== null);
             })();
+
+      if (analyticsProfile) {
+        return res.json({
+          accounts: accounts
+            .filter((account) => account.type === "ledger" || account.type === "bank" || account.type === "fixedAsset")
+            .map((account) => ({
+              id: account.id,
+              accountId: account.accountId,
+              type: account.type,
+              code: account.code ?? "",
+              name: account.name ?? "",
+              accountType: "accountType" in account ? account.accountType ?? null : null,
+              subType: "subType" in account ? account.subType ?? null : null,
+              balance: account.balance ?? "0",
+              balanceSide: account.balanceSide ?? null,
+              parentId: account.parentId ?? null,
+            })),
+          asOfDate: effectiveEndDate,
+        });
+      }
 
       res.json({ accounts: [...accounts, ...supplierAccountsList], asOfDate: effectiveEndDate });
     } catch (error: unknown) {

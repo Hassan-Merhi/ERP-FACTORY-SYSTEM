@@ -73,6 +73,8 @@ interface DynamicReadPolicy {
 
 const DYNAMIC_READ_MICROCACHE_POLICIES: readonly DynamicReadPolicy[] = [
   { path: /^\/api\/locations\/\d+\/inventory\/?$/, ttlMs: 30_000 },
+  { path: /^\/api\/locations\/\d+\/inventory\/light\/?$/, ttlMs: 30_000 },
+  { path: /^\/api\/factory\/customer-proformas\/\d+\/?$/, ttlMs: 60_000 },
   { path: /^\/api\/accounts\/ledger\/\d+\/transactions\/?$/, ttlMs: 30_000 },
   { path: /^\/api\/factory\/customer-orders\/\d+\/?$/, ttlMs: 60_000 },
   { path: /^\/api\/factory\/customer-orders\/\d+\/verification-summary\/?$/, ttlMs: 60_000 },
@@ -89,7 +91,7 @@ const NON_INVALIDATING_WRITE_PATHS: readonly RegExp[] = [
   /^\/api\/auth\/activity(?:\/|$)/,
 ];
 
-const POS_LOCATION_READ_PATH = /^\/api\/locations\/(\d+)\/inventory\/?$/;
+const POS_LOCATION_READ_PATH = /^\/api\/locations\/(\d+)\/inventory(?:\/light)?\/?$/;
 const PAGINATION_HEADER_PATTERN = /^x-(?:total|page|per-page|pagination|has|next|previous|prev|limit|offset)(?:-|$)/;
 
 type ReplayableHeaders = Record<string, string | string[]>;

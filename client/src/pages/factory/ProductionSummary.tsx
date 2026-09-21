@@ -58,7 +58,7 @@ export default function ProductionSummary() {
   });
 
   const { data: mixBatches, isLoading: batchesLoading } = useQuery<FactoryMixBatch[]>({
-    queryKey: ["/api/factory/mix-batches"],
+    queryKey: ["/api/factory/mix-batches?profile=summary"],
   });
 
   const { data: rawStock, isLoading: rawStockLoading } = useQuery<RawStockRow[]>({

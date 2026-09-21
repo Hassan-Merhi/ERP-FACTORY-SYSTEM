@@ -50,14 +50,14 @@ export default function ProductionComparison() {
   const [filterSuppliers, setFilterSuppliers] = useState<string[]>([]);
 
   const { data: workers = [] } = useQuery<{ id: number; fullName: string; active?: boolean }[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     staleTime: 60_000,
   });
 
   const { data: baleProducts = [] } = useQuery<
     Array<{ code: string; articleCode?: string | null; nameAr?: string | null }>
   >({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
     staleTime: 60_000,
   });
 

@@ -74,7 +74,7 @@ export default function ProductionRawStock() {
   });
 
   const { data: ledgerAccounts = [] } = useQuery<OffloadLedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });

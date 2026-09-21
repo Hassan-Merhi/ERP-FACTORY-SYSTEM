@@ -110,7 +110,7 @@ export function SpOffloadDialog({ open, onOpenChange, container, onSuccess }: Sp
   });
 
   const { data: ledgerAccounts = [] } = useQuery<SpLedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
     enabled: open,
   });
 

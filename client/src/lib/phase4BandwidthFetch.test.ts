@@ -53,7 +53,7 @@ describe("phase4 bandwidth fetch interceptor", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes("afterId=3"))).toBe(true);
   });
 
-  it("enriches active proforma summaries with cached detail lines on loading pages", async () => {
+  it("keeps proforma summaries compact on loading pages and never prefetches detail rows", async () => {
     window.history.replaceState({}, "", "/factory/sales/loading/new");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin);
@@ -62,8 +62,8 @@ describe("phase4 bandwidth fetch interceptor", () => {
       }
       if (url.pathname === "/api/factory/customer-proformas") {
         return jsonResponse([
-          { id: 42, name: "PRO-42", isActive: true },
-          { id: 43, name: "PRO-43", isActive: false },
+          { id: 42, name: "PRO-42", isActive: true, lines: [] },
+          { id: 43, name: "PRO-43", isActive: false, lines: [] },
         ]);
       }
       return jsonResponse({});
@@ -72,12 +72,12 @@ describe("phase4 bandwidth fetch interceptor", () => {
 
     const response = await window.fetch("/api/factory/customer-proformas?profile=summary");
     const payload = await response.json();
-    expect(payload[0].lines).toEqual([{ articleCode: "BAL-42", qty: 3 }]);
-    expect(payload[1].lines).toBeUndefined();
+    expect(payload[0].lines).toEqual([]);
+    expect(payload[1].lines).toEqual([]);
 
     await window.fetch("/api/factory/customer-proformas?profile=summary");
-    const detailCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("customer-proformas/42"));
-    expect(detailCalls).toHaveLength(1);
+    const detailCalls = fetchMock.mock.calls.filter(([input]) => /customer-proformas\/42(?:$|\?)/.test(String(input)));
+    expect(detailCalls).toHaveLength(0);
   });
 
   it("passes unrelated requests through and invalidates proforma caches after a write", async () => {

@@ -39,7 +39,7 @@ export default function FactoryMixOptimizer() {
   const [materials, setMaterials] = useState<MaterialRow[]>([{ supplierId: "", kgAvailable: 0, costPerKg: 0 }]);
 
   const productsQuery = useQuery<BaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
   });
 
   const suppliersQuery = useQuery<Supplier[]>({

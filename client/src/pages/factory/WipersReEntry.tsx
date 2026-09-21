@@ -71,7 +71,7 @@ export default function WipersReEntry() {
   const [pendingLabels, setPendingLabels] = useState<LabelData[] | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const { data: baleProducts, isLoading: productsLoading } = useQuery<FactoryBaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
   });
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories = [] } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
@@ -80,7 +80,7 @@ export default function WipersReEntry() {
     fullName?: string;
     name?: string;
   }
-  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers"] });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
   interface BaleListRow {
     bale: FactoryBale;
     product: FactoryBaleProduct;
@@ -190,7 +190,7 @@ export default function WipersReEntry() {
       setCart([]);
       setConfirmOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products?profile=picker"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
       toast({ title: "Bales Created", description: `${data.bales?.length || 0} bales entered under ${entryDate}` });

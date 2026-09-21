@@ -21,6 +21,42 @@ export function registerLedgerAccountReadRoutes(app: Express) {
       if (!effectiveCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+
+      // Picker consumers never need balances, audit timestamps or other account
+      // metadata. Project the compact contract in SQL instead of fetching full
+      // rows and trimming them later in the response bridge.
+      if (req.query.profile === "picker") {
+        const conditions = [
+          eq(ledgerAccounts.companyId, effectiveCompanyId),
+          isNull(ledgerAccounts.deletedAt),
+        ];
+        if (accountType && typeof accountType === "string" && accountType.trim()) {
+          conditions.push(eq(ledgerAccounts.accountType, accountType.trim()));
+        }
+        if (search && typeof search === "string" && search.trim()) {
+          const q = `%${search.trim()}%`;
+          const searchCondition = or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q));
+          if (searchCondition) conditions.push(searchCondition);
+        }
+        if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
+
+        const accounts = await db
+          .select({
+            id: ledgerAccounts.id,
+            code: ledgerAccounts.code,
+            name: ledgerAccounts.name,
+            accountType: ledgerAccounts.accountType,
+            subType: ledgerAccounts.subType,
+            parentId: ledgerAccounts.parentId,
+            active: ledgerAccounts.active,
+            isHidden: ledgerAccounts.isHidden,
+          })
+          .from(ledgerAccounts)
+          .where(and(...conditions))
+          .orderBy(asc(ledgerAccounts.code));
+        return res.json(accounts);
+      }
+
       let accounts;
       if (accountType && typeof accountType === "string" && accountType.trim()) {
         // Push accountType filter to SQL — avoids fetching all accounts then

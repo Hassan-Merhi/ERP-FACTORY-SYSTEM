@@ -30,12 +30,26 @@ export function registerFactoryProductReadRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const results = await db
-        .select()
-        .from(factoryBaleProducts)
-        .where(and(eq(factoryBaleProducts.companyId, companyId), isNull(factoryBaleProducts.deletedAt)))
-        .orderBy(factoryBaleProducts.id);
+      const where = and(eq(factoryBaleProducts.companyId, companyId), isNull(factoryBaleProducts.deletedAt));
+      if (req.query.profile === "picker") {
+        const results = await db
+          .select({
+            id: factoryBaleProducts.id,
+            code: factoryBaleProducts.code,
+            articleCode: factoryBaleProducts.articleCode,
+            name: factoryBaleProducts.name,
+            nameAr: factoryBaleProducts.nameAr,
+            weightPerBaleKg: factoryBaleProducts.weightPerBaleKg,
+            categoryId: factoryBaleProducts.categoryId,
+            active: factoryBaleProducts.active,
+          })
+          .from(factoryBaleProducts)
+          .where(where)
+          .orderBy(factoryBaleProducts.id);
+        return res.json(results);
+      }
 
+      const results = await db.select().from(factoryBaleProducts).where(where).orderBy(factoryBaleProducts.id);
       res.json(results);
     } catch (error: unknown) {
       logger.error("Error fetching factory bale products:", { error: error });

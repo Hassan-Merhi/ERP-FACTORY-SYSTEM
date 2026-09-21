@@ -93,7 +93,7 @@ export default function FactoryContainers() {
   const { data: containers, isLoading } = useQuery<ContainerWithSupplier[]>({ queryKey: ["/api/factory/containers"] });
   const { data: suppliers } = useQuery<FactorySupplier[]>({ queryKey: ["/api/factory/suppliers"] });
   const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });

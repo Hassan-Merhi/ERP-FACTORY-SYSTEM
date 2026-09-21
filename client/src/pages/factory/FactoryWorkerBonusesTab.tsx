@@ -68,9 +68,9 @@ export default function FactoryWorkerBonusesTab() {
   const [payForm, setPayForm] = useState({ cashAccountId: "", paidDate: today() });
 
   const { data: workers = [] } = useQuery<Worker[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     queryFn: async () => {
-      const res = await fetch("/api/factory/workers", { credentials: "include" });
+      const res = await fetch("/api/factory/workers?profile=picker", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

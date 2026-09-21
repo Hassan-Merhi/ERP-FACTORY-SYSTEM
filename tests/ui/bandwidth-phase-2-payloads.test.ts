@@ -73,10 +73,11 @@ describe("Bandwidth Phase 2 payload contracts", () => {
     }
   });
 
-  it("keeps loading screens compatible with compact summaries", () => {
+  it("keeps loading screens on compact summaries without eager detail fetches", () => {
     const client = read("client/src/lib/phase4BandwidthFetch.ts");
 
-    expect(client).toContain("getProformaDetail(originalFetch, id, init)");
+    expect(client).toContain("handleProformaSummary");
+    expect(client).not.toContain("getProformaDetail(");
   });
 
   it("retains existing compact Bale Ledger and container detail profiles", () => {

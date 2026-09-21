@@ -45,6 +45,34 @@ describe("Bandwidth Phase 3 cache contracts", () => {
     ]);
   });
 
+  it("keeps full and compact reference profiles synchronized after a successful write", async () => {
+    const client = new QueryClient();
+    client.setQueryData(["/api/factory/bale-products", 3], [
+      { id: 7, articleCode: "HMD10007", name: "Old", description: "full-only" },
+    ]);
+    client.setQueryData(["/api/factory/bale-products?profile=picker", 3], [
+      { id: 7, articleCode: "HMD10007", name: "Old" },
+    ]);
+
+    const applied = await applyReferenceMutationResponse({
+      client,
+      method: "PATCH",
+      pathname: "/api/factory/bale-products/7",
+      response: new Response(JSON.stringify({ id: 7, articleCode: "HMD10007", name: "Updated" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    });
+
+    expect(applied).toBe(true);
+    expect(client.getQueryData(["/api/factory/bale-products", 3])).toEqual([
+      { id: 7, articleCode: "HMD10007", name: "Updated", description: "full-only" },
+    ]);
+    expect(client.getQueryData(["/api/factory/bale-products?profile=picker", 3])).toEqual([
+      { id: 7, articleCode: "HMD10007", name: "Updated" },
+    ]);
+  });
+
   it("replaces settings objects locally instead of refetching the list", async () => {
     const client = new QueryClient();
     client.setQueryData(["/api/factory/settings"], { language: "en", allowNegativeStock: false });

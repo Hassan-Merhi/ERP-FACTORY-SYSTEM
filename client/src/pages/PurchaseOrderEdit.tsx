@@ -75,7 +75,7 @@ export default function PurchaseOrderEdit() {
   });
 
   const { data: ledgerAccounts } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
     enabled: isFactory,
   });
 

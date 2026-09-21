@@ -151,12 +151,12 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const groups: GroupRow[] = useMemo(() => pagedGroups?.items ?? [], [pagedGroups]);
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const { data: products = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
   });
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories = [] } = useQuery<(WorkerCategory & { name: string })[]>({

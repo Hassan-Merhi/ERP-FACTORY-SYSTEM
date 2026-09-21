@@ -29,8 +29,8 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
   const [catWorkerIds, setCatWorkerIds] = useState<number[]>([]);
 
   const { data: catWorkers = [] } = useQuery<WorkerOption[]>({
-    queryKey: ["/api/factory/workers"],
-    queryFn: () => fetch("/api/factory/workers", { credentials: "include" }).then((r) => r.json()),
+    queryKey: ["/api/factory/workers?profile=picker"],
+    queryFn: () => fetch("/api/factory/workers?profile=picker", { credentials: "include" }).then((r) => r.json()),
   });
   const { data: workerCategories = [], isLoading: catsLoading } = useQuery<WorkerCategoryRow[]>({
     queryKey: ["/api/factory/worker-categories"],

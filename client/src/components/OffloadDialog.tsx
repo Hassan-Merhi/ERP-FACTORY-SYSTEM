@@ -243,7 +243,7 @@ export function OffloadDialog({ open, onOpenChange, containerId, containerNumber
   });
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccountOption[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
     enabled: open && !isSpCompany,
   });
 
