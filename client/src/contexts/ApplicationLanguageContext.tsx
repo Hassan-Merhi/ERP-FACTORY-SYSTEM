@@ -160,7 +160,10 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
       direction: getApplicationDirection(language),
       isSaving: preferenceMutation.isPending,
       setLanguage,
-      t: (key) => translateApplicationText(key, language),
+      t: (key) =>
+        language !== "en" && !translationCatalogReady
+          ? translateApplicationText(key, "en")
+          : translateApplicationText(key, language),
     }),
     [language, preferenceMutation.isPending, setLanguage, translationCatalogReady]
   );
