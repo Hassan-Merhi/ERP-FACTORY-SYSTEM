@@ -9,10 +9,6 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Capacitor } from "@capacitor/core";
-import { Preferences } from "@capacitor/preferences";
-import { BiometricAuth, BiometryType } from "@aparajita/capacitor-biometric-auth";
-import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 
 // Set to true to re-enable passkey registration & login
 const PASSKEY_ENABLED = false;
@@ -32,13 +28,21 @@ function isPasskeySnoozed(username: string) {
 const CRED_KEY = "biometric_creds";
 const OPT_IN_KEY = "biometric_opted_in";
 
+async function loadNativePreferences() {
+  const { Preferences } = await import("@capacitor/preferences");
+  return Preferences;
+}
+
 export async function saveBiometricCredentials(username: string, password: string) {
+  const Preferences = await loadNativePreferences();
   await Preferences.set({ key: CRED_KEY, value: JSON.stringify({ username, password }) });
 }
 export async function clearBiometricCredentials() {
+  const Preferences = await loadNativePreferences();
   await Preferences.remove({ key: CRED_KEY });
 }
 async function loadBiometricCredentials(): Promise<{ username: string; password: string } | null> {
+  const Preferences = await loadNativePreferences();
   const { value } = await Preferences.get({ key: CRED_KEY });
   if (!value) return null;
   try {
@@ -69,7 +73,8 @@ export default function Login() {
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
   const [biometryAvailable, setBiometryAvailable] = useState(false);
-  const [biometryType, setBiometryType] = useState<BiometryType | null>(null);
+  const [biometricLabel, setBiometricLabel] = useState("Biometrics");
+  const [biometricUsesFaceIcon, setBiometricUsesFaceIcon] = useState(false);
   const [hasSavedCreds, setHasSavedCreds] = useState(false);
   const [biometryPending, setBiometryPending] = useState(false);
   const [showBioPrompt, setShowBioPrompt] = useState(false);
@@ -92,7 +97,21 @@ export default function Login() {
     return () => obs.disconnect();
   }, []);
 
-  const isNative = Capacitor.isNativePlatform();
+  const [isNative, setIsNative] = useState(false);
+
+  useEffect(() => {
+    const capacitorBridge = (window as Window & { Capacitor?: unknown }).Capacitor;
+    if (!capacitorBridge) return;
+
+    let cancelled = false;
+    void import("@capacitor/core").then(({ Capacitor }) => {
+      if (!cancelled) setIsNative(Capacitor.isNativePlatform());
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (isNative || !username) {
@@ -122,6 +141,7 @@ export default function Login() {
     },
     onSuccess: async (userData, credentials) => {
       if (isNative && biometryAvailable) {
+        const Preferences = await loadNativePreferences();
         const { value: optIn } = await Preferences.get({ key: OPT_IN_KEY });
         if (optIn === "yes") {
           await saveBiometricCredentials(credentials.username, credentials.password);
@@ -182,12 +202,14 @@ export default function Login() {
       await saveBiometricCredentials(pendingCredentials.current.username, pendingCredentials.current.password);
       setHasSavedCreds(true);
     }
+    const Preferences = await loadNativePreferences();
     await Preferences.set({ key: OPT_IN_KEY, value: "yes" });
     finalizeLogin();
   };
 
   const handleDeclineBiometrics = async () => {
     setShowBioPrompt(false);
+    const Preferences = await loadNativePreferences();
     await Preferences.set({ key: OPT_IN_KEY, value: "no" });
     finalizeLogin();
   };
@@ -195,6 +217,7 @@ export default function Login() {
   const triggerBiometric = useCallback(async (creds?: { username: string; password: string }) => {
     setBiometryPending(true);
     try {
+      const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
       await BiometricAuth.authenticate({
         reason: "Sign in to HMD ERP",
         cancelTitle: "Use Password",
@@ -223,14 +246,31 @@ export default function Login() {
     }
   }, [loginMutation, toast]);
 
-useEffect(() => {
+  useEffect(() => {
     if (!isNative) return;
-    (async () => {
+    void (async () => {
       try {
+        const [{ BiometricAuth, BiometryType }, Preferences] = await Promise.all([
+          import("@aparajita/capacitor-biometric-auth"),
+          loadNativePreferences(),
+        ]);
         const info = await BiometricAuth.checkBiometry();
         if (!info.isAvailable) return;
+
+        const primaryType = info.biometryTypes?.[0];
         setBiometryAvailable(true);
-        setBiometryType(info.biometryTypes?.[0] ?? null);
+        if (primaryType === BiometryType.faceId) {
+          setBiometricLabel("Face ID");
+          setBiometricUsesFaceIcon(true);
+        } else if (primaryType === BiometryType.touchId) {
+          setBiometricLabel("Touch ID");
+        } else if (primaryType === BiometryType.faceAuthentication) {
+          setBiometricLabel("Face Unlock");
+          setBiometricUsesFaceIcon(true);
+        } else if (primaryType === BiometryType.fingerprintAuthentication) {
+          setBiometricLabel("Fingerprint");
+        }
+
         const creds = await loadBiometricCredentials();
         if (!creds) return;
         setHasSavedCreds(true);
@@ -242,7 +282,6 @@ useEffect(() => {
         /* biometrics not available */
       }
     })();
-    
   }, [isNative, triggerBiometric]);
 
   const handleRegisterPasskey = async () => {
@@ -250,6 +289,7 @@ useEffect(() => {
     try {
       const optionsRes = await apiRequest("POST", "/api/auth/passkey/register/options", {});
       const options = await optionsRes.json();
+      const { startRegistration } = await import("@simplewebauthn/browser");
       const regResponse = await startRegistration({ optionsJSON: options });
       const verifyRes = await apiRequest("POST", "/api/auth/passkey/register/verify", {
         ...regResponse,
@@ -292,6 +332,7 @@ useEffect(() => {
         username: username || undefined,
       });
       const options = await optionsRes.json();
+      const { startAuthentication } = await import("@simplewebauthn/browser");
       const assertion = await startAuthentication({ optionsJSON: options });
       const verifyRes = await apiRequest("POST", "/api/auth/passkey/authenticate/verify", assertion);
       if (!verifyRes.ok) {
@@ -313,15 +354,7 @@ useEffect(() => {
   };
 
   const showBiometricButton = isNative && biometryAvailable && hasSavedCreds;
-  const biometricLabel = (() => {
-    if (biometryType === BiometryType.faceId) return "Face ID";
-    if (biometryType === BiometryType.touchId) return "Touch ID";
-    if (biometryType === BiometryType.faceAuthentication) return "Face Unlock";
-    if (biometryType === BiometryType.fingerprintAuthentication) return "Fingerprint";
-    return "Biometrics";
-  })();
-  const BiometricIcon =
-    biometryType === BiometryType.faceId || biometryType === BiometryType.faceAuthentication ? ScanFace : Fingerprint;
+  const BiometricIcon = biometricUsesFaceIcon ? ScanFace : Fingerprint;
 
   const cardStyle: React.CSSProperties = isDark
     ? {
