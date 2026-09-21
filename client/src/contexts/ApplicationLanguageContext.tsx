@@ -70,6 +70,7 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
   const [translationCatalogReady, setTranslationCatalogReady] = useState(() =>
     isApplicationTranslationCatalogLoaded(language)
   );
+  const translationReady = isApplicationTranslationCatalogLoaded(language) && translationCatalogReady;
   const announcedLanguageRef = useRef(language);
   const browserPreferenceChangedRef = useRef(false);
   const isLoginRoute =
@@ -142,12 +143,12 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
     applyApplicationLanguageToDocument(language);
     persistBrowserPreference(language);
 
-    if (language !== "en" && !translationCatalogReady) return;
+    if (language !== "en" && !translationReady) return;
     if (announcedLanguageRef.current !== language) {
       announcedLanguageRef.current = language;
       setAnnouncement(translateApplicationText("language.changed", language));
     }
-  }, [language, translationCatalogReady]);
+  }, [language, translationReady]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -174,16 +175,16 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
       isSaving: preferenceMutation.isPending,
       setLanguage,
       t: (key) =>
-        language !== "en" && !translationCatalogReady
+        language !== "en" && !translationReady
           ? translateApplicationText(key, "en")
           : translateApplicationText(key, language),
     }),
-    [language, preferenceMutation.isPending, setLanguage, translationCatalogReady]
+    [language, preferenceMutation.isPending, setLanguage, translationReady]
   );
 
   return (
     <ApplicationLanguageContext.Provider value={value}>
-      {language !== "en" && translationCatalogReady ? (
+      {language !== "en" && translationReady ? (
         <Suspense fallback={null}>
           <LazyApplicationInterfaceTranslator language={language} />
         </Suspense>
