@@ -236,9 +236,14 @@ async function getSharedBrowser() {
 
   const browser = _sharedBrowser;
   browser.on("disconnected", () => {
-    clearBrowserIdleTimer();
+    // A retired browser can finish disconnecting after a replacement has already
+    // launched. Only clear shared state when this event belongs to the browser
+    // that is still registered as current.
+    if (_sharedBrowser === browser) {
+      clearBrowserIdleTimer();
+      _sharedBrowser = null;
+    }
     logger.warn("[ParcelsAppScraper] Shared browser disconnected (crash or killed)");
-    _sharedBrowser = null;
   });
 
   logger.info("[ParcelsAppScraper] Shared Chrome instance ready");
