@@ -14,7 +14,7 @@ describe("Wave 2 frontend speed contracts", () => {
     expect(provider).not.toContain('import { ApplicationInterfaceTranslator }');
     expect(provider).toContain('import("@/components/ApplicationInterfaceTranslator")');
     expect(provider).toContain("loadApplicationTranslationCatalog(language)");
-    expect(provider).toContain('language !== "en" && translationCatalogReady');
+    expect(provider).toContain('language !== "en" && translationReady');
 
     expect(translator).toContain('if (language === "en") return;');
     expect(translator).toContain("portalObserver.observe(document.body, { childList: true });");
