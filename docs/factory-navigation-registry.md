@@ -107,7 +107,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/intelligence/mix-optimizer` | Production Intelligence mix optimizer section | same | correct |
 | `/factory/intelligence/cashflow` | Financial Intelligence cashflow section | same | correct |
 | `/factory/intelligence/waste` | Production Intelligence waste section | same | correct |
-| `/factory/bale-ledger` | `/factory/production-report?tab=product-comparison` | same | Product Comparison replacement |
+| `/factory/bale-ledger` | `/factory/production-report?tab=product-comparison` | same | legacy route redirected to Product Comparison |
 | `/factory/net-profit-analytics` | Financial Intelligence net-profit section | same | correct |
 | `/factory/net-position` | Financial Intelligence net-position section | same | correct |
 
