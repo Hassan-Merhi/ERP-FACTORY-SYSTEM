@@ -10,6 +10,10 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryWorkerCategories, insertFactoryWorkerCategorySchema } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import {
+  filterActiveFactoryWorkerIds,
+  pruneInactiveFactoryWorkerCategoryMembers,
+} from "../../../../lib/factoryWorkerCategoryMembership";
 
 export function registerWorkerCategoryRoutes(app: Express) {
   // ── Worker Categories ──────────────────────────────────────────────────────
@@ -17,11 +21,8 @@ export function registerWorkerCategoryRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const cats = await db
-        .select()
-        .from(factoryWorkerCategories)
-        .where(eq(factoryWorkerCategories.companyId, companyId))
-        .orderBy(factoryWorkerCategories.name);
+      // Keep categories active-only, including cleaning any legacy stale memberships.
+      const cats = await pruneInactiveFactoryWorkerCategoryMembers(db, companyId);
       res.json(cats);
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });
@@ -32,7 +33,11 @@ export function registerWorkerCategoryRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const body = insertFactoryWorkerCategorySchema.parse({ ...req.body, companyId });
+      const parsed = insertFactoryWorkerCategorySchema.parse({ ...req.body, companyId });
+      const body = {
+        ...parsed,
+        workerIds: await filterActiveFactoryWorkerIds(db, companyId, parsed.workerIds),
+      };
       const [cat] = await db.insert(factoryWorkerCategories).values(body).returning();
       res.json(cat);
     } catch (e: unknown) {
@@ -45,7 +50,14 @@ export function registerWorkerCategoryRoutes(app: Express) {
       const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id);
-      const body = insertFactoryWorkerCategorySchema.partial().parse(req.body);
+      const parsed = insertFactoryWorkerCategorySchema.partial().parse(req.body);
+      const body =
+        parsed.workerIds === undefined
+          ? parsed
+          : {
+              ...parsed,
+              workerIds: await filterActiveFactoryWorkerIds(db, companyId, parsed.workerIds),
+            };
       const [cat] = await db
         .update(factoryWorkerCategories)
         .set(body)
