@@ -28,6 +28,10 @@ export interface FactoryBilingualSnapshotPlan {
 
 export interface FactoryBilingualSnapshotScope {
   orderId?: number;
+  /** Exact customer_order_bales row changed by a compact bale scan. */
+  orderBaleId?: number;
+  /** Exact customer_order_lines row recalculated by a compact bale scan. */
+  orderLineId?: number;
   proformaId?: number;
   baleId?: number;
   posSaleId?: number;
@@ -287,6 +291,21 @@ function targetScopeGuard(
   scope: FactoryBilingualSnapshotScope | undefined
 ): string | null {
   if (!scope) return "true";
+
+  // A single successful bale scan changes exactly one order-bale row and
+  // one recalculated order-line row. Prefer those exact ids over the generic
+  // order scope so the synchronous response middleware does not re-scan every
+  // linked order snapshot after each physical scan.
+  const orderBaleId = positiveScopeId(scope.orderBaleId);
+  if (orderBaleId && item.table === "customer_order_bales") return `t.id=${orderBaleId}`;
+
+  const orderLineId = positiveScopeId(scope.orderLineId);
+  if (orderLineId && item.table === "customer_order_lines") return `t.id=${orderLineId}`;
+
+  // When exact scan ids are present, all unrelated order snapshot targets must
+  // be skipped. The scope is intentionally narrow: history/removal/expected
+  // rows are not changed by adding one bale to a loading.
+  if (orderBaleId || orderLineId) return null;
 
   const orderId = positiveScopeId(scope.orderId);
   if (

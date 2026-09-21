@@ -10,7 +10,7 @@ import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
 import Decimal from "decimal.js";
-import { getLockedSupplierRateReadOnly } from "../../../services/factory/rawStockLockedRate";
+import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   factoryCategories,
   factoryBaleProducts,
@@ -87,8 +87,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt})) <= ${to}`
         );
 
-      // ── Fetch bales with product cost price and category ──
-      const baleRows = await db
+      // Bale and mix-batch reads are independent. Start them together so the
+      // report does not pay both database latencies serially.
+      const baleRowsPromise = db
         .select({
           id: factoryBales.id,
           articleCode: factoryBales.articleCode,
@@ -108,6 +109,25 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         .leftJoin(factoryCategories, eq(factoryBaleProducts.categoryId, factoryCategories.id))
         .leftJoin(factoryWorkers, eq(factoryBales.finalizedBy, factoryWorkers.id))
         .where(and(...baleConditions));
+
+      const mixBatchRowsPromise = db
+        .select({
+          id: factoryMixBatches.id,
+          batchCode: factoryMixBatches.batchCode,
+          name: factoryMixBatches.name,
+          totalWeightKg: factoryMixBatches.totalWeightKg,
+          usedKg: factoryMixBatches.usedKg,
+          status: factoryMixBatches.status,
+          costPerKg: factoryMixBatches.costPerKg,
+          totalCost: factoryMixBatches.totalCost,
+          batchDate: factoryMixBatches.batchDate,
+          createdAt: factoryMixBatches.createdAt,
+        })
+        .from(factoryMixBatches)
+        .where(and(...mixBatchConditions))
+        .orderBy(sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt}))`);
+
+      const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise]);
 
       // ── Helper: detect wipers/garbage by category name ──
       function isWiperOrGarbage(catName: string): boolean {
@@ -244,45 +264,31 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const totalWgValue = wgRows.reduce((s, r) => s + r.totalValue, 0);
       const totalWgWeightKg = wgRows.reduce((s, r) => s + r.totalWeightKg, 0);
 
-      // ── Fetch mix batches ──
-      const mixBatchRows = await db
-        .select({
-          id: factoryMixBatches.id,
-          batchCode: factoryMixBatches.batchCode,
-          name: factoryMixBatches.name,
-          totalWeightKg: factoryMixBatches.totalWeightKg,
-          usedKg: factoryMixBatches.usedKg,
-          status: factoryMixBatches.status,
-          costPerKg: factoryMixBatches.costPerKg,
-          totalCost: factoryMixBatches.totalCost,
-          batchDate: factoryMixBatches.batchDate,
-          createdAt: factoryMixBatches.createdAt,
-        })
-        .from(factoryMixBatches)
-        .where(and(...mixBatchConditions))
-        .orderBy(sql`COALESCE(${factoryMixBatches.batchDate}, DATE(${factoryMixBatches.createdAt}))`);
-
       // ── Recompute each batch's display cost using current supplier locked rates ──
       // Mirrors GET /api/factory/mix-batches and EditMixBatchDialog: never uses the stored
       // batch cost fields directly; supplier-source rows always use the current locked USD rate.
       const reportBatchIds = mixBatchRows.map((r) => r.id);
-      let mixSourceRows: (typeof factoryMixBatchSources.$inferSelect)[] = [];
-      if (reportBatchIds.length > 0) {
-        mixSourceRows = await db
-          .select()
-          .from(factoryMixBatchSources)
-          .where(inArray(factoryMixBatchSources.mixBatchId, reportBatchIds));
-      }
+      const mixSourceRows =
+        reportBatchIds.length > 0
+          ? await db
+              .select({
+                mixBatchId: factoryMixBatchSources.mixBatchId,
+                sourceBatchId: factoryMixBatchSources.sourceBatchId,
+                supplierId: factoryMixBatchSources.supplierId,
+                inventorySupplierId: factoryMixBatchSources.inventorySupplierId,
+                containerId: factoryMixBatchSources.containerId,
+                weightKg: factoryMixBatchSources.weightKg,
+                costPerKg: factoryMixBatchSources.costPerKg,
+              })
+              .from(factoryMixBatchSources)
+              .where(inArray(factoryMixBatchSources.mixBatchId, reportBatchIds))
+          : [];
 
       // Resolve current locked USD rate for every unique supplier referenced by sources
       const reportSupplierIds = [
         ...new Set(mixSourceRows.filter((s) => s.supplierId != null).map((s) => s.supplierId as number)),
       ];
-      const reportSupplierRateMap = new Map<number, number>();
-      for (const sid of reportSupplierIds) {
-        const { rate } = await getLockedSupplierRateReadOnly(db, companyId, sid);
-        reportSupplierRateMap.set(sid, rate);
-      }
+      const reportSupplierRateMap = await getLockedSupplierRatesReadOnlyBulk(db, companyId, reportSupplierIds);
 
       // Group sources by batch
       const reportSourcesByBatch = new Map();
@@ -348,27 +354,28 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // batches but not yet turned into finished bales.  We use the same formula as the Net
       // Position page: allTimeMixKg − allTimeBaleKg.  This is more robust than tracking
       // usedKg per-batch, which breaks when batches are marked COMPLETED prematurely.
-      const mixAllTimeResult = await db.execute(sql`
-        SELECT
-          COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
-          COALESCE(SUM(total_cost::numeric),      0) AS mix_cost
-        FROM factory_mix_batches
-        WHERE company_id        = ${companyId}
-          AND carry_forward_from_id IS NULL
-          AND deleted_at        IS NULL
-      `);
+      const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
+        db.execute(sql`
+          SELECT
+            COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
+            COALESCE(SUM(total_cost::numeric),      0) AS mix_cost
+          FROM factory_mix_batches
+          WHERE company_id        = ${companyId}
+            AND carry_forward_from_id IS NULL
+            AND deleted_at        IS NULL
+        `),
+        db.execute(sql`
+          SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
+          FROM   factory_bales        b
+          LEFT   JOIN factory_bale_products p ON p.id = b.product_id
+          LEFT   JOIN factory_categories    c ON c.id = p.category_id
+          WHERE  b.company_id = ${companyId}
+            AND  b.status NOT IN ('DELETED', 'REMOVED')
+        `),
+      ]);
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
       const allTimeMixKg = parseFloat(String(mixAllTimeRow.mix_kg ?? "0")) || 0;
       const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
-
-      const baleAllTimeResult = await db.execute(sql`
-        SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
-        FROM   factory_bales        b
-        LEFT   JOIN factory_bale_products p ON p.id = b.product_id
-        LEFT   JOIN factory_categories    c ON c.id = p.category_id
-        WHERE  b.company_id = ${companyId}
-          AND  b.status NOT IN ('DELETED', 'REMOVED')
-      `);
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
       const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
 
@@ -396,17 +403,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // Also collect direct supplierId / container supplierId as fallback
       const allSupplierIdsForNames = [...new Set([...inventorySupplierIds, ...reportSupplierIds])];
 
-      const supplierNameById = new Map<number, string>();
-      if (allSupplierIdsForNames.length > 0) {
-        const sRows = await pool.query(`SELECT id, name FROM factory_suppliers WHERE id = ANY($1)`, [
-          allSupplierIdsForNames,
-        ]);
-        for (const r of sRows.rows) {
-          supplierNameById.set(r.id as number, r.name as string);
-        }
-      }
-
-      // Fallback: container → supplier name for sources without inventorySupplierId
+      // Fallback: container → supplier name for sources without inventorySupplierId.
+      // Resolve container ownership in one query, then load every required supplier
+      // name in one batch. This removes the old one-query-per-container-supplier loop.
       const containerIds = [
         ...new Set(
           mixSourceRows
@@ -421,11 +420,22 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         ]);
         for (const r of cRows.rows) {
           containerSupplierIdMap.set(r.id as number, r.supplier_id as number | null);
-          // Fetch supplier name if not already loaded
-          if (r.supplier_id && !supplierNameById.has(r.supplier_id as number)) {
-            const snRow = await pool.query(`SELECT name FROM factory_suppliers WHERE id = $1`, [r.supplier_id]);
-            if (snRow.rows[0]) supplierNameById.set(r.supplier_id as number, snRow.rows[0].name as string);
-          }
+        }
+      }
+
+      const supplierIdsForNames = [
+        ...new Set([
+          ...allSupplierIdsForNames,
+          ...[...containerSupplierIdMap.values()].filter((id): id is number => id != null),
+        ]),
+      ];
+      const supplierNameById = new Map<number, string>();
+      if (supplierIdsForNames.length > 0) {
+        const sRows = await pool.query(`SELECT id, name FROM factory_suppliers WHERE id = ANY($1)`, [
+          supplierIdsForNames,
+        ]);
+        for (const r of sRows.rows) {
+          supplierNameById.set(r.id as number, r.name as string);
         }
       }
 
