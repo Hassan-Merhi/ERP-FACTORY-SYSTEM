@@ -36,13 +36,16 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("res.status(403)");
   });
 
-  it("uses direct table editing instead of Excel import/export for Production Targets", () => {
+  it("uses a dedicated editor dialog instead of Excel import/export for Production Targets", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    const editor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     expect(production).not.toContain("button-production-excel-template");
     expect(production).not.toContain("button-import-production-excel");
-    expect(production).toContain("button-save-production");
-    expect(production).toContain("button-discard-production-changes");
-    expect(production).toContain("production-category-options");
-    expect(production).toContain("hasUnsavedChanges");
+    expect(production).toContain("button-edit-production-targets");
+    expect(production).toContain("<ProductionTargetsEditorDialog");
+    expect(editor).toContain("dialog-production-targets-editor");
+    expect(editor).toContain("button-save-production-editor");
+    expect(editor).toContain("input-production-category-");
+    expect(editor).toContain("input-production-target-");
   });
 });
