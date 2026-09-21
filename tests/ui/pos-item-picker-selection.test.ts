@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { InventoryItem } from "@/pages/pos/pos-components/posTypes";
-import {
-  getFilteredInventory,
-  getPosPickerInventory,
-  normalize,
-} from "@/pages/pos/utils/posCalculations";
+import { getFilteredInventory, getPosPickerInventory, normalize } from "@/pages/pos/utils/posCalculations";
 
 const inventory: InventoryItem[] = [
   {
