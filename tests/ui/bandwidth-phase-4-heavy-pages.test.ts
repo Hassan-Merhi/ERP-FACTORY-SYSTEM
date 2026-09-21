@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { QUERY_STALE_TIMES, staleTimeForQueryKey, visibleTabInterval } from "@/lib/queryPolicies";
 import { stockItemKeys } from "@/lib/queryKeys";
+import { factoryCatalogLanguageCacheVariant } from "@/lib/factoryCatalogCacheVariant";
 
 describe("Bandwidth Phase 4 request-pressure contracts", () => {
   beforeEach(() => {
@@ -41,4 +42,31 @@ describe("Bandwidth Phase 4 request-pressure contracts", () => {
     expect(staleTimeForQueryKey(["/api/factory/bale-products?lang=ar", 42])).toBe(QUERY_STALE_TIMES.referenceData);
     expect(staleTimeForQueryKey(["/api/factory/bale-products?lang=fr", 42])).toBe(QUERY_STALE_TIMES.referenceData);
   });
+
+  it("separates lower browser cache variants by Factory catalog language", () => {
+    const url = new URL("/api/factory/categories", "https://erp.example");
+    const headers = new Headers();
+
+    expect(factoryCatalogLanguageCacheVariant(url, headers, "factory_catalog_language=en")).toBe(
+      "factory-catalog-language=en"
+    );
+    expect(factoryCatalogLanguageCacheVariant(url, headers, "factory_catalog_language=fr")).toBe(
+      "factory-catalog-language=fr"
+    );
+
+    headers.set("x-factory-catalog-language", "ar");
+    expect(factoryCatalogLanguageCacheVariant(url, headers, "factory_catalog_language=fr")).toBe(
+      "factory-catalog-language=ar"
+    );
+
+    url.searchParams.set("lang", "fr");
+    expect(factoryCatalogLanguageCacheVariant(url, headers, "factory_catalog_language=en")).toBe(
+      "factory-catalog-language=fr"
+    );
+
+    expect(
+      factoryCatalogLanguageCacheVariant(new URL("/api/accounts/all", "https://erp.example"), headers, "")
+    ).toBe("factory-catalog-language=none");
+  });
+
 });
