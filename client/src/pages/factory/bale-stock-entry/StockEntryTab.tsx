@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Package, LockKeyhole, RefreshCw } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -47,12 +47,22 @@ interface CartItem {
   overrideLogoId: number | null;
 }
 
-type PrintWindowSet = { a4: Window | null; sticker: Window | null };
+const MAX_BALES_PER_ENTRY = 2;
 
-interface PendingPrintJob {
-  bales: Parameters<typeof printLabels>[0];
-  cart: CartItem[];
-  logoId: number | null;
+function countCartBales(items: CartItem[]): number {
+  return items.reduce((sum, item) => sum + item.qty, 0);
+}
+
+function capCartToEntryLimit(items: CartItem[]): CartItem[] {
+  let remaining = MAX_BALES_PER_ENTRY;
+  const capped: CartItem[] = [];
+  for (const item of items) {
+    if (remaining <= 0) break;
+    const qty = Math.min(Math.max(0, item.qty), remaining);
+    if (qty > 0) capped.push({ ...item, qty });
+    remaining -= qty;
+  }
+  return capped;
 }
 
 export function StockEntryTab() {
@@ -66,14 +76,7 @@ export function StockEntryTab() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("none");
   const [selectedLogoId, setSelectedLogoId] = useState<number | null>(null);
   const [productionPositionByProduct, setProductionPositionByProduct] = useState<Record<number, number | null>>({});
-  const [printGateActive, setPrintGateActive] = useState(false);
-  const [printTabsClosed, setPrintTabsClosed] = useState(0);
-  const [printGateReady, setPrintGateReady] = useState(false);
-  const [printGateNeedsReopen, setPrintGateNeedsReopen] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
-  const preOpenedWindowsRef = useRef<PrintWindowSet | null>(null);
-  const printGateWindowsRef = useRef<PrintWindowSet | null>(null);
-  const pendingPrintJobRef = useRef<PendingPrintJob | null>(null);
   const { toast } = useToast();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
@@ -267,6 +270,14 @@ export function StockEntryTab() {
       setScanInput("");
       setShowDropdown(false);
       const defaultWeight = newProduct.weightPerBaleKg ? parseFloat(newProduct.weightPerBaleKg) : 25;
+      if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+        toast({
+          title: "2-bale limit reached",
+          description: "Finish this Stock Entry before adding another bale.",
+          variant: "destructive",
+        });
+        return;
+      }
       setCart((prev) => [
         ...prev,
         {
@@ -294,20 +305,25 @@ export function StockEntryTab() {
   }, [activeLocations, selectedLocationId]);
 
   useEffect(() => {
-    if (printGateActive) {
-      scanRef.current?.blur();
-      return;
-    }
     const active = document.activeElement;
     const isOtherInputFocused =
       active &&
       active !== scanRef.current &&
       (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
     if (scanRef.current && !isOtherInputFocused) scanRef.current.focus();
-  }, [cart, printGateActive]);
+  }, [cart]);
 
   const handleScan = (value: string) => {
-    if (printGateActive || !value.trim()) return;
+    if (!value.trim()) return;
+    if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+      toast({
+        title: "2-bale limit reached",
+        description: "A Stock Entry can contain at most 2 bales. Confirm this entry before adding another.",
+        variant: "destructive",
+      });
+      setScanInput("");
+      return;
+    }
     setScanError("");
 
     const trimmed = value.trim().toLowerCase();
@@ -352,12 +368,22 @@ export function StockEntryTab() {
   };
 
   const filteredProducts =
-    !printGateActive && scanInput.trim().length > 0
+    scanInput.trim().length > 0
       ? (activeProducts || []).filter((p) => productMatchesSearch(p, scanInput)).slice(0, 1000)
       : [];
 
   const selectProduct = (product: FactoryBaleProduct) => {
-    if (printGateActive) return;
+    if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+      toast({
+        title: "2-bale limit reached",
+        description: "A Stock Entry can contain at most 2 bales. Confirm this entry before adding another.",
+        variant: "destructive",
+      });
+      setScanInput("");
+      setScanError("");
+      setShowDropdown(false);
+      return;
+    }
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
@@ -382,15 +408,46 @@ export function StockEntryTab() {
   };
 
   const updateQty = (productId: number, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((item) => (item.productId === productId ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
-        .filter((item) => item.qty > 0)
-    );
+    if (delta > 0 && countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+      toast({
+        title: "2-bale limit reached",
+        description: "A Stock Entry can contain at most 2 bales.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCart((prev) => {
+      const otherQty = prev
+        .filter((item) => item.productId !== productId)
+        .reduce((sum, item) => sum + item.qty, 0);
+      const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
+      return prev
+        .map((item) =>
+          item.productId === productId
+            ? { ...item, qty: Math.min(maxForProduct, Math.max(0, item.qty + delta)) }
+            : item
+        )
+        .filter((item) => item.qty > 0);
+    });
   };
 
   const setQty = (productId: number, qty: number) => {
-    if (qty <= 0) {
+    const otherQty = cart
+      .filter((item) => item.productId !== productId)
+      .reduce((sum, item) => sum + item.qty, 0);
+    const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
+    const cappedQty = Math.min(qty, maxForProduct);
+
+    if (qty > maxForProduct) {
+      toast({
+        title: "2-bale limit reached",
+        description: "A Stock Entry can contain at most 2 bales.",
+        variant: "destructive",
+      });
+    }
+
+    if (cappedQty <= 0) {
       setCart((prev) => prev.filter((item) => item.productId !== productId));
       setProductionPositionByProduct((prev) => {
         if (!(productId in prev)) return prev;
@@ -399,7 +456,7 @@ export function StockEntryTab() {
         return next;
       });
     } else {
-      setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)));
+      setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty: cappedQty } : item)));
     }
   };
 
@@ -437,121 +494,21 @@ export function StockEntryTab() {
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
   const totalKg = cart.reduce((sum, item) => sum + item.qty * item.weightPerBaleKg, 0);
 
-  const closePrintWindows = (windows: PrintWindowSet | null) => {
-    if (!windows) return;
-    if (windows.a4 && !windows.a4.closed) windows.a4.close();
-    if (windows.sticker && !windows.sticker.closed) windows.sticker.close();
-  };
-
-  const openRequiredPrintWindows = (): PrintWindowSet | null => {
-    const a4 = window.open("", "_blank");
-    const sticker = window.open("", "_blank");
-    if (!a4 || !sticker) {
-      closePrintWindows({ a4, sticker });
-      return null;
-    }
-    return { a4, sticker };
-  };
-
-  const resetPrintGateAfterFailure = () => {
-    closePrintWindows(printGateWindowsRef.current);
-    printGateWindowsRef.current = null;
-    preOpenedWindowsRef.current = null;
-    pendingPrintJobRef.current = null;
-    setPrintGateActive(false);
-    setPrintGateReady(false);
-    setPrintGateNeedsReopen(false);
-    setPrintTabsClosed(0);
-    window.setTimeout(() => scanRef.current?.focus(), 50);
-  };
-
-  const runPendingPrintJob = (windows: PrintWindowSet) => {
-    const job = pendingPrintJobRef.current;
-    if (!job) return;
-    preOpenedWindowsRef.current = { a4: windows.a4, sticker: windows.sticker };
-    setPrintGateNeedsReopen(false);
-    setPrintGateReady(false);
-    void printLabels(
-      job.bales,
-      job.cart,
-      baleProducts,
-      job.logoId,
-      modeApiRequest,
-      toast,
-      preOpenedWindowsRef
-    ).then(() => setPrintGateReady(true));
-  };
-
-  const handleReopenPrintTabs = () => {
-    const job = pendingPrintJobRef.current;
-    if (!printGateActive || !job) return;
-
-    closePrintWindows(printGateWindowsRef.current);
-    const windows = openRequiredPrintWindows();
-    if (!windows) {
-      toast({
-        title: "Print tabs blocked",
-        description: "Allow popups for this ERP, then click Reopen Print Tabs again.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    printGateWindowsRef.current = windows;
-    setPrintTabsClosed(0);
-    runPendingPrintJob(windows);
-  };
-
-  useEffect(() => {
-    if (!printGateActive) return;
-
-    const checkPrintTabs = () => {
-      const windows = printGateWindowsRef.current;
-      if (!windows) return;
-      const closedCount = Number(!windows.a4 || windows.a4.closed) + Number(!windows.sticker || windows.sticker.closed);
-      setPrintTabsClosed(closedCount);
-
-      if (printGateReady && !printGateNeedsReopen && closedCount === 2) {
-        printGateWindowsRef.current = null;
-        preOpenedWindowsRef.current = null;
-        pendingPrintJobRef.current = null;
-        setPrintGateActive(false);
-        setPrintGateReady(false);
-        setPrintTabsClosed(0);
-        window.setTimeout(() => scanRef.current?.focus(), 50);
-      }
-    };
-
-    checkPrintTabs();
-    const timer = window.setInterval(checkPrintTabs, 250);
-    return () => window.clearInterval(timer);
-  }, [printGateActive, printGateReady, printGateNeedsReopen]);
-
-  useEffect(() => {
-    if (!printGateActive) return;
-    const warnBeforeLeave = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warnBeforeLeave);
-    return () => window.removeEventListener("beforeunload", warnBeforeLeave);
-  }, [printGateActive]);
-
   const handleConfirmClick = () => {
-    if (printGateActive) {
-      toast({
-        title: "Finish printing first",
-        description: "Close both print tabs before entering another bale.",
-        variant: "destructive",
-      });
-      return;
-    }
     if (!selectedLocationId) {
       toast({ title: "Error", description: "Please select a warehouse location", variant: "destructive" });
       return;
     }
     if (cart.length === 0) {
       toast({ title: "Error", description: "Please add items to the cart", variant: "destructive" });
+      return;
+    }
+    if (totalQty > MAX_BALES_PER_ENTRY) {
+      toast({
+        title: "2-bale limit reached",
+        description: "A Stock Entry can contain at most 2 bales. Reduce the quantity before confirming.",
+        variant: "destructive",
+      });
       return;
     }
     if (cart.some((item) => !!item.finalizedBy) && productionPositionsLoading) {
@@ -589,9 +546,13 @@ export function StockEntryTab() {
 
   const [designPickerOpen, setDesignPickerOpen] = useState(false);
   const [pendingPrintLabels, setPendingPrintLabels] = useState<LabelData[] | null>(null);
+  const preOpenedWindowsRef = useRef<{ a4: Window | null; sticker: Window | null } | null>(null);
 
   const stockEntryMutation = useMutation({
     mutationFn: async () => {
+      if (countCartBales(cart) > MAX_BALES_PER_ENTRY) {
+        throw new Error("A Stock Entry can contain at most 2 bales.");
+      }
       const response = await modeApiRequest("POST", "/api/factory/stock-entry", {
         erpLocationId: parseInt(selectedLocationId),
         items: cart.map((item) => ({
@@ -615,82 +576,19 @@ export function StockEntryTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
       toast({ title: "Stock Entry Recorded", description: `${totalQty} bale(s) added to inventory.` });
-
-      pendingPrintJobRef.current = {
-        bales: data.bales,
-        cart: cart.map((item) => ({ ...item })),
-        logoId: selectedLogoId,
-      };
-
-      const printWindows = printGateWindowsRef.current;
-      if (
-        !printWindows ||
-        !printWindows.a4 ||
-        printWindows.a4.closed ||
-        !printWindows.sticker ||
-        printWindows.sticker.closed
-      ) {
-        setPrintGateReady(false);
-        setPrintGateNeedsReopen(true);
-        toast({
-          title: "Print tabs closed too early",
-          description: "The bale was saved. Reopen the two print tabs to print its labels before continuing.",
-          variant: "destructive",
-        });
-      } else {
-        runPendingPrintJob(printWindows);
-      }
-
+      printLabels(data.bales, cart, baleProducts, selectedLogoId, modeApiRequest, toast, preOpenedWindowsRef);
       setCart([]);
       setProductionPositionByProduct({});
       setConfirmDialogOpen(false);
       discardCartDraft();
     },
     onError: (error: Error) => {
-      resetPrintGateAfterFailure();
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      {printGateActive && (
-        <div
-          className="xl:col-span-12 flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
-          role="status"
-          aria-live="assertive"
-          data-testid="stock-entry-print-lock"
-        >
-          <div className="flex min-w-0 items-start gap-3">
-            <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-            <div className="min-w-0">
-              <p className="font-semibold">Printing in progress — Stock Entry is locked</p>
-              <p className="text-sm text-muted-foreground">
-                {printGateNeedsReopen
-                  ? "The print tabs were closed before labels were ready. Reopen them and finish printing before entering another bale."
-                  : "Close both print tabs after printing. The scanner will unlock automatically when both tabs are closed."}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-md border bg-background/70 px-3 py-1.5 text-sm font-semibold tabular-nums">
-              {printTabsClosed}/2 tabs closed
-            </span>
-            {printGateNeedsReopen && (
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={handleReopenPrintTabs}>
-                <RefreshCw className="h-4 w-4" />
-                Reopen Print Tabs
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <fieldset
-        disabled={printGateActive || stockEntryMutation.isPending}
-        className="contents"
-        aria-label="New bale stock entry controls"
-      >
       <div className="xl:col-span-8 space-y-4">
         <Card className="border-none shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0 pb-4">
@@ -711,7 +609,6 @@ export function StockEntryTab() {
                     setPendingCreateName("");
                   }}
                   data-testid="button-quick-create"
-                  disabled={printGateActive || stockEntryMutation.isPending}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Quick Create Product
@@ -742,7 +639,7 @@ export function StockEntryTab() {
                             };
                           })
                           .filter((i): i is CartItem => !!i.product);
-                        setCart(restored);
+                        setCart(capCartToEntryLimit(restored));
                       }
                       if (draftData?.productionPositionByProduct) {
                         setProductionPositionByProduct(draftData.productionPositionByProduct);
@@ -773,7 +670,6 @@ export function StockEntryTab() {
               showDropdown={showDropdown}
               filteredProducts={filteredProducts}
               onSelectProduct={selectProduct}
-              disabled={printGateActive || stockEntryMutation.isPending}
             />
 
             <StockEntryCart
@@ -825,10 +721,9 @@ export function StockEntryTab() {
           onConfirm={handleConfirmClick}
         />
       </div>
-      </fieldset>
 
       <ConfirmStockEntryDialog
-        open={confirmDialogOpen && !printGateActive}
+        open={confirmDialogOpen}
         onOpenChange={setConfirmDialogOpen}
         cart={cart}
         entryDate={entryDate}
@@ -837,37 +732,16 @@ export function StockEntryTab() {
         selectedLogoId={selectedLogoId}
         isPending={stockEntryMutation.isPending}
         onConfirm={() => {
-          if (printGateActive || stockEntryMutation.isPending) return;
-
-          const windows = openRequiredPrintWindows();
-          if (!windows) {
-            toast({
-              title: "Print tabs blocked",
-              description: "Allow popups for this ERP. Stock Entry was not saved, so no bale was created.",
-              variant: "destructive",
-            });
-            return;
-          }
-
-          preOpenedWindowsRef.current = { a4: windows.a4, sticker: windows.sticker };
-          printGateWindowsRef.current = windows;
-          pendingPrintJobRef.current = null;
-          setPrintTabsClosed(0);
-          setPrintGateReady(false);
-          setPrintGateNeedsReopen(false);
-          setPrintGateActive(true);
-          setConfirmDialogOpen(false);
-          setQuickCreateOpen(false);
-          setAdminAuthOpen(false);
-          setDesignPickerOpen(false);
-          setShowDropdown(false);
-          scanRef.current?.blur();
+          preOpenedWindowsRef.current = {
+            a4: window.open("", "_blank"),
+            sticker: window.open("", "_blank"),
+          };
           stockEntryMutation.mutate();
         }}
       />
 
       <QuickCreateProductDialog
-        open={quickCreateOpen && !printGateActive}
+        open={quickCreateOpen}
         onOpenChange={setQuickCreateOpen}
         grade={quickCreateGrade}
         onGradeChange={setQuickCreateGrade}
@@ -883,7 +757,7 @@ export function StockEntryTab() {
       />
 
       <AdminAuthDialog
-        open={adminAuthOpen && !printGateActive}
+        open={adminAuthOpen}
         onOpenChange={(open) => {
           setAdminAuthOpen(open);
           if (!open) setPendingCreateName("");
