@@ -77,9 +77,7 @@ export function ProductionTargetDefaultsDialog({
 
   useEffect(() => {
     if (!open || !data) return;
-    setDraftTargets(
-      Object.fromEntries(rows.map((row) => [row.personId, defaultsById.get(row.personId) ?? null]))
-    );
+    setDraftTargets(Object.fromEntries(rows.map((row) => [row.personId, defaultsById.get(row.personId) ?? null])));
     setSearch("");
   }, [open, data, defaultsById, rows]);
 
@@ -116,14 +114,10 @@ export function ProductionTargetDefaultsDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const response = await factoryApiRequest(
-        "POST",
-        "/api/factory/staff-tracking/production-target-defaults",
-        {
-          effectiveFrom,
-          records: changedRecords,
-        }
-      );
+      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-target-defaults", {
+        effectiveFrom,
+        records: changedRecords,
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message || tr("saveDataFailed"));
