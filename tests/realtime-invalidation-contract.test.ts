@@ -47,7 +47,8 @@ describe("realtime invalidation contract", () => {
 
   it("keeps stock reference writes separate from transactional stock writes", () => {
     expect(classifyRealtimeWrite("/api/stock-groups/3", {})).toEqual({ topics: ["reference"] });
-    expect(classifyRealtimeWrite("/api/stock-items/3", {})).toEqual({ topics: ["inventory"] });
+    expect(classifyRealtimeWrite("/api/stock-items/3", {})).toEqual({ topics: ["reference"] });
+    expect(classifyRealtimeWrite("/api/ledger-accounts/3", {})).toEqual({ topics: ["reference"] });
   });
 
   it("classifies location and inventory writes and extracts a location from the path", () => {
@@ -81,16 +82,16 @@ describe("realtime invalidation contract", () => {
 
   it("distinguishes Factory reference writes from routine workflow writes", () => {
     expect(classifyRealtimeWrite("/api/factory/categories/7", {})).toEqual({
-      topics: ["factory", "reference"],
+      topics: ["reference"],
     });
     expect(classifyRealtimeWrite("/api/factory/bale-products/12", {})).toEqual({
-      topics: ["factory", "reference"],
+      topics: ["reference"],
     });
     expect(classifyRealtimeWrite("/api/factory/customers/31", {})).toEqual({
       topics: ["factory", "accounting", "reference"],
     });
     expect(classifyRealtimeWrite("/api/factory/workers/9", {})).toEqual({
-      topics: ["factory", "payroll", "accounting", "reference"],
+      topics: ["payroll", "accounting", "reference"],
     });
     expect(classifyRealtimeWrite("/api/factory/customer-orders/44", {})).toEqual({
       topics: ["factory"],
