@@ -124,7 +124,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 {catWorkerIds.filter((id) => (workers ?? []).find((w) => w.id === id && w.active)).length} active
-                workers selected. Inactive workers are removed automatically; any stale inactive assignment can still be unchecked.
+                workers selected. Inactive workers are automatically excluded.
               </p>
             </div>
           </div>
