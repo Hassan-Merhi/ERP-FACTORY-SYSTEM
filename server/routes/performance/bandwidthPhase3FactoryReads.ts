@@ -59,38 +59,31 @@ function ledgerTotals(rows: readonly LedgerBucketRow[]) {
 // This mirrors the legacy employeeLedgerWasteRoutes classification exactly,
 // but performs it in PostgreSQL instead of loading every bale, product,
 // category, active-order ID and stale-order ID into Node on each summary read.
+const LEDGER_ORDER_STATE_SQL = `
+  order_state AS (
+    SELECT
+      cob.bale_id,
+      BOOL_OR(co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')) AS has_pending,
+      BOOL_OR(co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')) AS has_sold
+    FROM customer_order_bales cob
+    INNER JOIN customer_orders co ON co.id = cob.order_id
+    WHERE co.company_id = $1
+      AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED', 'DISPATCHED', 'SOLD')
+    GROUP BY cob.bale_id
+  )
+`;
+
 const LEDGER_CLASSIFICATION_SQL = `
   CASE
     WHEN fb.status = 'SOLD' THEN
-      CASE WHEN EXISTS (
-        SELECT 1
-        FROM customer_order_bales cob
-        INNER JOIN customer_orders co ON co.id = cob.order_id
-        WHERE cob.bale_id = fb.id
-          AND co.company_id = $1
-          AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
-      ) THEN 'pendingLoading' ELSE 'sold' END
+      CASE WHEN COALESCE(os.has_pending, false) THEN 'pendingLoading' ELSE 'sold' END
     WHEN fb.status = 'FINALIZED' THEN 'sold'
     WHEN fb.status = 'DISPATCHED' AND fb.waste_dispatch_id IS NOT NULL THEN 'wasteDispatched'
     WHEN fb.status = 'RESERVED_FOR_ORDER' THEN 'pendingLoading'
     WHEN fb.status = 'IN_STOCK' THEN
       CASE
-        WHEN EXISTS (
-          SELECT 1
-          FROM customer_order_bales cob
-          INNER JOIN customer_orders co ON co.id = cob.order_id
-          WHERE cob.bale_id = fb.id
-            AND co.company_id = $1
-            AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
-        ) THEN 'pendingLoading'
-        WHEN EXISTS (
-          SELECT 1
-          FROM customer_order_bales cob
-          INNER JOIN customer_orders co ON co.id = cob.order_id
-          WHERE cob.bale_id = fb.id
-            AND co.company_id = $1
-            AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
-        ) THEN 'sold'
+        WHEN COALESCE(os.has_pending, false) THEN 'pendingLoading'
+        WHEN COALESCE(os.has_sold, false) THEN 'sold'
         WHEN COALESCE(fb.article_code, '') LIKE 'HMD16%'
           OR LOWER(COALESCE(fc.name, '')) LIKE '%garbage%'
           OR LOWER(COALESCE(fc.name, '')) LIKE '%wiper%'
@@ -101,9 +94,10 @@ const LEDGER_CLASSIFICATION_SQL = `
   END
 `;
 
+
 async function sendLedgerSummary(companyId: number, res: import("express").Response): Promise<void> {
   const result = await pool.query<LedgerSummaryRow>(
-    `WITH classified AS (
+    `WITH ${LEDGER_ORDER_STATE_SQL}, classified AS (
        SELECT
          fb.id,
          fb.product_id,
@@ -120,6 +114,7 @@ async function sendLedgerSummary(companyId: number, res: import("express").Respo
        LEFT JOIN factory_categories fc
          ON fc.id = fbp.category_id
         AND fc.company_id = $1
+       LEFT JOIN order_state os ON os.bale_id = fb.id
        WHERE fb.company_id = $1
          AND fb.status IN ('IN_STOCK', 'FINALIZED', 'SOLD', 'DISPATCHED', 'RESERVED_FOR_ORDER')
          AND (
@@ -199,7 +194,7 @@ async function sendLedgerDetails(
   if (productId !== null) params.push(productId);
 
   const result = await pool.query<LedgerBaleDetailRow>(
-    `WITH classified AS (
+    `WITH ${LEDGER_ORDER_STATE_SQL}, classified AS (
        SELECT
          fb.id,
          fb.reference_number,
@@ -213,6 +208,7 @@ async function sendLedgerDetails(
        LEFT JOIN factory_categories fc
          ON fc.id = fbp.category_id
         AND fc.company_id = $1
+       LEFT JOIN order_state os ON os.bale_id = fb.id
        WHERE fb.company_id = $1
          AND fb.status IN ('IN_STOCK', 'FINALIZED', 'SOLD', 'DISPATCHED', 'RESERVED_FOR_ORDER')
          AND ${productClause}
