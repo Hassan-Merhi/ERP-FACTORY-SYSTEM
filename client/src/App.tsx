@@ -18,12 +18,12 @@ import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useServerRestart } from "@/hooks/use-server-restart";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import Login from "@/pages/Login";
 import { AuthenticatedApp } from "@/app/AuthenticatedApp";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 
+const Login = lazy(() => import("@/pages/Login"));
 const ChatWidget = lazy(() =>
   import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget }))
 );
@@ -200,7 +200,9 @@ export default function App() {
             <Switch>
               <Route path="/login">
                 <ApplicationLanguageProvider>
-                  <Login />
+                  <Suspense fallback={<AppLoadingState />}>
+                    <Login />
+                  </Suspense>
                 </ApplicationLanguageProvider>
               </Route>
               <Route>
