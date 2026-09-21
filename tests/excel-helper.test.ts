@@ -440,12 +440,49 @@ describe("read()", () => {
     expect(Object.keys(Sheets).sort()).toEqual(["Alpha", "Beta"]);
   });
 
+  it("ignores trailing pooled bytes that resemble a corrupt ZIP directory", async () => {
+    const src = new ExcelJS.Workbook();
+    src.addWorksheet("Pooled");
+    const buf = await toBuffer(src);
+    const exact = new Uint8Array(buf);
+    const pooled = new Uint8Array(exact.length + 64);
+    pooled.set(exact);
+
+    // Simulate unrelated bytes after a Buffer slice in a shared backing
+    // ArrayBuffer. The fake EOCD advertises an impossible directory offset;
+    // JSZip must never see it when the real XLSX payload is extracted first.
+    const fakeEocd = exact.length + 16;
+    pooled.set([0x50, 0x4b, 0x05, 0x06], fakeEocd);
+    pooled.fill(0xff, fakeEocd + 16, fakeEocd + 20);
+
+    const { SheetNames } = await read(pooled.buffer);
+    expect(SheetNames).toEqual(["Pooled"]);
+  });
+
   it("also accepts Uint8Array", async () => {
     const src = new ExcelJS.Workbook();
     src.addWorksheet("U8");
     const buf = await toBuffer(src);
     const { SheetNames } = await read(new Uint8Array(buf));
     expect(SheetNames).toContain("U8");
+  });
+
+  it("recovers the newest complete workbook from a pooled ArrayBuffer", async () => {
+    const stale = new ExcelJS.Workbook();
+    stale.addWorksheet("Stale");
+    const current = new ExcelJS.Workbook();
+    current.addWorksheet("Current");
+
+    const staleBuffer = await toBuffer(stale);
+    const currentBuffer = await toBuffer(current);
+    const currentOffset = 11 + staleBuffer.length + 13;
+    const slab = new Uint8Array(currentOffset + currentBuffer.length + 17);
+
+    slab.set(staleBuffer, 11);
+    slab.set(currentBuffer, currentOffset);
+
+    const { SheetNames } = await read(slab.buffer);
+    expect(SheetNames).toEqual(["Current"]);
   });
 
   it("throws for null with message 'no data provided'", async () => {

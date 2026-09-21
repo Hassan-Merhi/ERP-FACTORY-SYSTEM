@@ -104,8 +104,10 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                     >
                       <Checkbox
                         checked={catWorkerIds.includes(w.id)}
-                        onCheckedChange={() => (!w.active ? undefined : toggleCatWorker(w.id))}
-                        disabled={!w.active}
+                        onCheckedChange={() => {
+                          if (w.active || catWorkerIds.includes(w.id)) toggleCatWorker(w.id);
+                        }}
+                        disabled={!w.active && !catWorkerIds.includes(w.id)}
                         data-testid={`checkbox-cat-worker-${w.id}`}
                       />
                       <span className="text-sm flex-1">{w.fullName}</span>
