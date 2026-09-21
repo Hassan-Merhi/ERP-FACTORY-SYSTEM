@@ -99,6 +99,25 @@ export function registerFactoryWorkerListRoutes(app: Express, requireAuth: Reque
         conditions.push(eq(factoryWorkers.department, department as string));
       }
 
+      // Picker/filter screens need worker identity only. Keep this projection
+      // separate from payroll/roster summary fields so salary and rate columns
+      // are never selected, serialized, transferred, or parsed unnecessarily.
+      if (req.query.profile === "picker") {
+        const workers = await db
+          .select({
+            id: factoryWorkers.id,
+            employeeCode: factoryWorkers.employeeCode,
+            fullName: factoryWorkers.fullName,
+            position: factoryWorkers.position,
+            department: factoryWorkers.department,
+            active: factoryWorkers.active,
+          })
+          .from(factoryWorkers)
+          .where(and(...conditions))
+          .orderBy(factoryWorkers.fullName);
+        return res.json(workers);
+      }
+
       if (req.query.profile !== "full") {
         const pagination = parseListPagination(req.query, {
           defaultPageSize: 250,
