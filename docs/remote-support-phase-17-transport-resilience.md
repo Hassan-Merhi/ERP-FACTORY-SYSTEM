@@ -54,6 +54,44 @@ Required scheduled-run secrets:
 - `REMOTE_SUPPORT_E2E_TARGET_USERNAME`
 - `REMOTE_SUPPORT_E2E_TARGET_PASSWORD`
 
+### What an unconfigured staging target looks like
+
+Until those secrets exist, every scheduled run is red, and that is deliberate
+rather than a defect to mute. The canary job stops at its `Require staging
+target` step with:
+
+```
+REMOTE_SUPPORT_STAGING_BASE_URL is required for scheduled runs, or provide base_url for workflow_dispatch.
+```
+
+Read the two jobs separately before treating that red as a transport
+regression. `Offline protocol & policy invariants` needs no URL and no
+credentials, so it runs on every event and is the job that actually gates
+pull requests. `Live staging canary` carries `if: github.event_name !=
+'pull_request'`, so it never runs on a pull request at all. A workflow that is
+green on every pull request and red on its nightly schedule is therefore the
+expected shape of "the invariants hold, the live canary has nowhere to point" —
+not evidence that anything regressed.
+
+Setup, by an authorized operator:
+
+1. Add the five secrets above under Settings → Secrets and variables → Actions.
+   `REMOTE_SUPPORT_STAGING_BASE_URL` is the staging origin the canary drives,
+   with scheme and no trailing path (for example `https://staging.example.com`);
+   the canary appends `target_path`, which defaults to `/`.
+2. The two credential pairs are ordinary staging application logins, one for the
+   controller and one for the target. They must be able to complete a remote
+   support session against each other. Never point them at production.
+3. Confirm with a manual `workflow_dispatch`. A dispatch may pass `base_url` to
+   override the secret for that run, which is the cheapest way to test a
+   candidate origin without storing it first — but the four credential secrets
+   are read from the repository regardless, so they must exist even for a
+   dispatch.
+
+The base URL alone is not sufficient: it is only the first thing checked.
+With the URL set and the credentials missing, the run gets further and then
+fails in the Playwright canary instead.
+
 ## 17.4 Historical documentation
 
 The implementation history that previously lived mainly in merge commit bodies is archived as:
