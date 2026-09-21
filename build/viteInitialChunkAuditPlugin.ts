@@ -24,6 +24,8 @@ const HEAVY_STARTUP_MODULE_MARKERS = [
   "/node_modules/xlsx-js-style/",
   "/node_modules/jspdf/",
   "/node_modules/jspdf-autotable/",
+  "/node_modules/pdfkit/",
+  "/node_modules/pdf-parse/",
   "/node_modules/html2canvas/",
   "/node_modules/recharts/",
   "/node_modules/d3-",
