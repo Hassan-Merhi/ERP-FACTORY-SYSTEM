@@ -150,6 +150,20 @@ function loadCompatibilityCoveredValues() {
     for (const match of source.matchAll(/\ben\s*:\s*(["'`])((?:\\.|(?!\1).)*)\1/g)) {
       values.add(decodeCompatibilityValue(match[1], match[2]).trim());
     }
+
+    // Wave 2 keeps the English application catalog synchronous while Arabic
+    // and French are lazy chunks. The compact English map no longer has an
+    // `en:` property per row, so include its JSON-style values explicitly.
+    if (file.endsWith("/applicationTranslations.ts")) {
+      const catalogMatch = source.match(
+        /export const applicationEnglishTranslations = (\{[\s\S]*?\}) as const;/
+      );
+      if (catalogMatch) {
+        for (const match of catalogMatch[1].matchAll(/^\s*"[^"]+"\s*:\s*"((?:\\.|[^"\\])*)"\s*,?$/gm)) {
+          values.add(decodeCompatibilityValue('"', match[1]).trim());
+        }
+      }
+    }
   }
   return values;
 }

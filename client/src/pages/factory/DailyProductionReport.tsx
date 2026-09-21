@@ -5,18 +5,22 @@ import FactoryContainerTracking from "@/pages/factory/FactoryContainerTracking";
 import FactoryOtwTrackingTab from "@/pages/factory/FactoryOtwTrackingTab";
 import ProductionComparison from "@/pages/factory/ProductionComparison";
 import { PageHeader } from "@/components/PageHeader";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FlaskConical, Package, Ship, Tag, Truck } from "lucide-react";
+import { BarChart3, FlaskConical, Ship, Tag, Truck } from "lucide-react";
 
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
-import { BaleLedgerTabPanel } from "./dailyproductionreport/components/BaleLedgerTabPanel";
+import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
 
 // The page is a layout shell: tab chrome plus the panels. All state, queries and
-// derived values live in useDailyProductionReport, and the two heavy panels
-// (production, bale ledger) are their own components.
+// derived values live in useDailyProductionReport, with heavy panels kept in
+// their own components.
 export default function DailyProductionReport() {
   const report = useDailyProductionReport();
+  const { language } = useApplicationLanguage();
+  const productComparisonCopy = getFactoryProductComparisonCopy(language);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -43,8 +47,8 @@ export default function DailyProductionReport() {
           <TabsTrigger value="snapshot" data-testid="tab-snapshot" className="hidden">
             Snapshot
           </TabsTrigger>
-          <TabsTrigger value="ledger" data-testid="tab-ledger">
-            <Package className="h-4 w-4 mr-1.5" /> Bale Ledger
+          <TabsTrigger value="product-comparison" data-testid="tab-product-comparison">
+            <BarChart3 className="h-4 w-4 mr-1.5" /> {productComparisonCopy.tabLabel}
           </TabsTrigger>
           <TabsTrigger value="shipping" data-testid="tab-shipping">
             <Ship className="h-4 w-4 mr-1.5" /> Shipping
@@ -74,12 +78,11 @@ export default function DailyProductionReport() {
           <FactoryFinancialSnapshot />
         </TabsContent>
 
-        {/* ── Bale Ledger tab ── */}
         <TabsContent
-          value="ledger"
-          className="flex-1 overflow-y-auto p-4 gap-3 flex flex-col mt-0 data-[state=inactive]:hidden"
+          value="product-comparison"
+          className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden"
         >
-          <BaleLedgerTabPanel report={report} />
+          <ProductComparisonCharts />
         </TabsContent>
 
         <TabsContent value="comparison" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">

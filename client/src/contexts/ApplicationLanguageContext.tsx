@@ -1,4 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  createContext,
+  lazy,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   APPLICATION_LANGUAGE_COOKIE,
@@ -9,14 +20,24 @@ import {
   type ApplicationLanguage,
 } from "@shared/applicationLanguageContract";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ApplicationInterfaceTranslator } from "@/components/ApplicationInterfaceTranslator";
 import { LiveRegion } from "@/components/ui/responsive-accessibility";
-import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
+import {
+  isApplicationTranslationCatalogLoaded,
+  loadApplicationTranslationCatalog,
+  translateApplicationText,
+  type ApplicationTranslationKey,
+} from "@/i18n/applicationTranslations";
 import {
   applyApplicationLanguageToDocument,
   getApplicationDirection,
   type ApplicationDirection,
 } from "@/i18n/applicationDirection";
+
+const LazyApplicationInterfaceTranslator = lazy(() =>
+  import("@/components/ApplicationInterfaceTranslator").then((module) => ({
+    default: module.ApplicationInterfaceTranslator,
+  }))
+);
 
 interface LanguagePreferenceResponse {
   preferredLanguage?: ApplicationLanguage;
@@ -46,6 +67,10 @@ function persistBrowserPreference(language: ApplicationLanguage) {
 export function ApplicationLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<ApplicationLanguage>(readLocalPreference);
   const [announcement, setAnnouncement] = useState("");
+  const [translationCatalogReady, setTranslationCatalogReady] = useState(() =>
+    isApplicationTranslationCatalogLoaded(language)
+  );
+  const translationReady = isApplicationTranslationCatalogLoaded(language) && translationCatalogReady;
   const announcedLanguageRef = useRef(language);
   const browserPreferenceChangedRef = useRef(false);
   const isLoginRoute =
@@ -60,6 +85,27 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
     enabled: !isLoginRoute,
     staleTime: 5 * 60_000,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isApplicationTranslationCatalogLoaded(language)) {
+      setTranslationCatalogReady(true);
+      return;
+    }
+
+    setTranslationCatalogReady(false);
+    void loadApplicationTranslationCatalog(language)
+      .then(() => {
+        if (!cancelled) setTranslationCatalogReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setTranslationCatalogReady(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   useEffect(() => {
     const serverLanguage = preferenceQuery.data?.preferredLanguage;
@@ -97,11 +143,12 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
     applyApplicationLanguageToDocument(language);
     persistBrowserPreference(language);
 
+    if (language !== "en" && !translationReady) return;
     if (announcedLanguageRef.current !== language) {
       announcedLanguageRef.current = language;
       setAnnouncement(translateApplicationText("language.changed", language));
     }
-  }, [language]);
+  }, [language, translationReady]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -127,14 +174,21 @@ export function ApplicationLanguageProvider({ children }: { children: ReactNode 
       direction: getApplicationDirection(language),
       isSaving: preferenceMutation.isPending,
       setLanguage,
-      t: (key) => translateApplicationText(key, language),
+      t: (key) =>
+        language !== "en" && !translationReady
+          ? translateApplicationText(key, "en")
+          : translateApplicationText(key, language),
     }),
-    [language, preferenceMutation.isPending, setLanguage]
+    [language, preferenceMutation.isPending, setLanguage, translationReady]
   );
 
   return (
     <ApplicationLanguageContext.Provider value={value}>
-      <ApplicationInterfaceTranslator language={language} />
+      {language !== "en" && translationReady ? (
+        <Suspense fallback={null}>
+          <LazyApplicationInterfaceTranslator language={language} />
+        </Suspense>
+      ) : null}
       <LiveRegion data-testid="application-language-announcement">{announcement}</LiveRegion>
       {children}
     </ApplicationLanguageContext.Provider>

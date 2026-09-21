@@ -21,7 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
-import { ExcelJS } from "@/lib/excelHelper";
 
 interface PosContainerItem {
   itemName: string;
@@ -91,6 +90,7 @@ export default function POSContainerDetail() {
   async function exportNoCostNoFreight() {
     if (!data) return;
     try {
+      const { ExcelJS } = await import("@/lib/excelHelper");
       const supplierLabel = data.container.supplierCode || data.container.supplierName || "";
       const containerNumber = data.container.containerNumber || "";
       const truckNumber = data.container.numberPlate || "";
