@@ -3,7 +3,7 @@ import { useSearch } from "wouter";
 import { addDays, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 
-import type { LedgerData, Preset, ReportData } from "./types";
+import type { Preset, ReportData } from "./types";
 import {
   computeWorkerExpectedSalary,
   lastMonthRange,
@@ -16,6 +16,8 @@ import {
   yesterdayStr,
 } from "./utils";
 
+const normalizeOverviewTab = (tab: string | null) => (tab === "ledger" ? "production" : tab || "production");
+
 /**
  * State, queries and derived values for the Overview page. Extracted so the page
  * component is a layout shell and the two heavy tab panels can live in their own
@@ -23,15 +25,14 @@ import {
  */
 export function useDailyProductionReport() {
   const search = useSearch();
-  const initialTab = new URLSearchParams(search).get("tab") || "production";
+  const initialTab = normalizeOverviewTab(new URLSearchParams(search).get("tab"));
   const [activeTab, setActiveTab] = useState(initialTab);
 
-  // Keep in sync if the query param changes after mount (e.g. navigating here
-  // again from a redirect like /factory/bale-ledger?tab=ledger while already
-  // on this page).
+  // Keep the active tab in sync with the query string. Bale Ledger is intentionally
+  // hidden in Factory mode, so legacy ?tab=ledger links fall back to Production.
   useEffect(() => {
     const tab = new URLSearchParams(search).get("tab");
-    setActiveTab(tab || "production");
+    setActiveTab(normalizeOverviewTab(tab));
   }, [search]);
   const [preset, setPreset] = useState<Preset>("today");
   const [customFrom, setCustomFrom] = useState(todayStr());
@@ -95,18 +96,6 @@ export function useDailyProductionReport() {
       return res.json();
     },
     enabled: preset === "alltime" || (!!from && !!to),
-  });
-
-  const {
-    data: ledger,
-    isLoading: ledgerLoading,
-    refetch: ledgerRefetch,
-    isFetching: ledgerFetching,
-  } = useQuery<LedgerData>({
-    queryKey: ["/api/factory/bale-ledger"],
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
   });
 
   const { data: attendanceData } = useQuery<{
@@ -201,7 +190,6 @@ export function useDailyProductionReport() {
 
   const statusValue = data?.summary.statusValue ?? 0;
   const statusPositive = statusValue >= 0;
-  const grand = ledger?.totals.grand;
 
   return {
     activeTab,
@@ -221,17 +209,12 @@ export function useDailyProductionReport() {
     stepDates,
     data,
     isLoading,
-    ledger,
-    ledgerLoading,
-    ledgerRefetch,
-    ledgerFetching,
     attendanceData,
     monthlySalarySummary,
     salaryKpi,
     presets,
     statusValue,
     statusPositive,
-    grand,
   };
 }
 
