@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   decimal,
   index,
   integer,
@@ -59,12 +60,26 @@ export const factoryContainerPlanContainers = pgTable(
     lockedAt: timestamp("locked_at"),
     lockedBy: varchar("locked_by", { length: 100 }),
     lockedByName: text("locked_by_name"),
+    // Phase 6 shipment tracking. A container past PLANNED is physically
+    // committed and the planner keeps it locked, so every Phase 1-5 quantity
+    // edit path already refuses to touch it.
+    lifecycleStatus: text("lifecycle_status").notNull().default("PLANNED"),
+    containerNumber: varchar("container_number", { length: 60 }),
+    carrier: varchar("carrier", { length: 120 }),
+    bookingNumber: varchar("booking_number", { length: 60 }),
+    vesselName: varchar("vessel_name", { length: 120 }),
+    destination: varchar("destination", { length: 160 }),
+    etd: date("etd"),
+    eta: date("eta"),
+    statusChangedAt: timestamp("status_changed_at"),
+    statusChangedBy: varchar("status_changed_by", { length: 100 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({
     positionUnique: uniqueIndex("factory_container_plan_containers_position_unique").on(t.planId, t.position),
     companyPlanIdx: index("factory_container_plan_containers_company_idx").on(t.companyId, t.planId),
+    lifecycleIdx: index("factory_container_plan_containers_lifecycle_idx").on(t.companyId, t.lifecycleStatus),
   })
 );
 
@@ -162,8 +177,63 @@ export const factoryContainerPlanAllocations = pgTable(
   })
 );
 
+// Phase 6 lifecycle history: one row per status change, so a container's
+// journey is auditable after the fact.
+export const factoryContainerPlanContainerEvents = pgTable(
+  "factory_container_plan_container_events",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    planId: integer("plan_id")
+      .notNull()
+      .references(() => factoryContainerPlans.id, { onDelete: "cascade" }),
+    planContainerId: integer("plan_container_id")
+      .notNull()
+      .references(() => factoryContainerPlanContainers.id, { onDelete: "cascade" }),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    note: text("note"),
+    createdBy: varchar("created_by", { length: 100 }),
+    createdByName: text("created_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    containerIdx: index("factory_container_plan_container_events_container_idx").on(t.planContainerId, t.createdAt),
+  })
+);
+
+// Shipping paperwork attached to a container. Files live wherever the company
+// already stores them; this table records what exists and where.
+export const factoryContainerPlanDocuments = pgTable(
+  "factory_container_plan_documents",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    planId: integer("plan_id")
+      .notNull()
+      .references(() => factoryContainerPlans.id, { onDelete: "cascade" }),
+    planContainerId: integer("plan_container_id")
+      .notNull()
+      .references(() => factoryContainerPlanContainers.id, { onDelete: "cascade" }),
+    documentType: text("document_type").notNull(),
+    title: text("title").notNull(),
+    reference: varchar("reference", { length: 120 }),
+    fileUrl: text("file_url"),
+    issuedOn: date("issued_on"),
+    uploadedBy: varchar("uploaded_by", { length: 100 }),
+    uploadedByName: text("uploaded_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    containerIdx: index("factory_container_plan_documents_container_idx").on(t.planContainerId, t.documentType),
+  })
+);
+
 export type FactoryContainerPlan = typeof factoryContainerPlans.$inferSelect;
 export type FactoryContainerPlanContainer = typeof factoryContainerPlanContainers.$inferSelect;
 export type FactoryContainerPlanLine = typeof factoryContainerPlanLines.$inferSelect;
 export type FactoryContainerPlanBale = typeof factoryContainerPlanBales.$inferSelect;
 export type FactoryContainerPlanAllocation = typeof factoryContainerPlanAllocations.$inferSelect;
+export type FactoryContainerPlanContainerEvent = typeof factoryContainerPlanContainerEvents.$inferSelect;
+export type FactoryContainerPlanDocument = typeof factoryContainerPlanDocuments.$inferSelect;

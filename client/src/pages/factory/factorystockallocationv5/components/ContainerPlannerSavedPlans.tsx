@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ContainerPlannerReconciliation } from "./ContainerPlannerReconciliation";
 import { ContainerPlannerBaleAssignment } from "./ContainerPlannerBaleAssignment";
 import { ContainerPlannerCustomerAllocation } from "./ContainerPlannerCustomerAllocation";
+import { ContainerPlannerShipments } from "./ContainerPlannerShipments";
 
 interface PlanSummary {
   id: number;
@@ -563,6 +564,8 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                 planId={detail.id}
                 onPlanChanged={() => invalidatePlanner(detail.id)}
               />
+
+              <ContainerPlannerShipments planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (

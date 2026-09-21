@@ -11,6 +11,7 @@ import {
 } from "@shared/containerPlanner";
 import { loadContainerPlannerSource, type PlannerQueryable as Queryable } from "./container-planner-source";
 import { pruneOverAllocatedPlanAllocations, pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
+import { isShipmentCommitted, type ContainerLifecycleStatus } from "@shared/containerShipment";
 
 type PlannerPlanRow = {
   id: number;
@@ -551,6 +552,28 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         if (!plan) {
           await client.query("ROLLBACK");
           return res.status(404).json({ message: "Container plan not found" });
+        }
+
+        // A container that has left PLANNED is physically committed (Phase 6), so
+        // it must stay locked until its shipment status is walked back.
+        const lifecycleResult = await client.query<{ lifecycle_status: string }>(
+          `SELECT lifecycle_status
+           FROM factory_container_plan_containers
+           WHERE id = $1 AND plan_id = $2 AND company_id = $3
+           FOR UPDATE`,
+          [containerId, planId, companyId]
+        );
+        const lifecycleStatus = lifecycleResult.rows[0]?.lifecycle_status;
+        if (!lifecycleStatus) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Container not found" });
+        }
+        if (!isLocked && isShipmentCommitted(lifecycleStatus as ContainerLifecycleStatus)) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            code: "CONTAINER_SHIPMENT_COMMITTED",
+            message: `This container is ${lifecycleStatus}. Move its shipment status back to PLANNED before unlocking it.`,
+          });
         }
 
         const result = await client.query(
