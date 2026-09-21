@@ -98,7 +98,7 @@ export default function PendingInvoiceVerify() {
   const isDeveloper = currentUser?.role === "Developer";
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string; accountType: string }[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
   });
 
   useEffect(() => {
