@@ -32,6 +32,7 @@ const GOLDEN_COAST_POS_SETTLEMENT_SOURCE_TYPE = "golden-coast-pos-settlement";
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 type SettlementRole = "payable_reclass" | "gc_cash_transfer" | "hadi_cash_receipt";
+type SettlementPhase = "posting" | "reversal";
 
 type SettlementMarker = {
   id: number;
@@ -40,19 +41,49 @@ type SettlementMarker = {
   sourceId: string;
 };
 
-function parseSettlementSourceId(sourceId: string): {
+type ParsedSettlementSource = {
   clientSaleId: string;
   digest: string;
   role: SettlementRole;
-} | null {
+  phase: SettlementPhase;
+  revision: string;
+  reversalRevision: number | null;
+};
+
+/**
+ * Parse from the right because clientSaleId is caller supplied and may itself
+ * contain colons. Normal settlement markers end in:
+ *   <digest>:<create|editN>:<role>
+ * while edit reversals end in:
+ *   <digest>:reversal:<N>:<role>
+ */
+function parseSettlementSourceId(sourceId: string): ParsedSettlementSource | null {
   const parts = sourceId.split(":");
   if (parts.length < 4) return null;
+
   const role = parts[parts.length - 1] as SettlementRole;
   if (!["payable_reclass", "gc_cash_transfer", "hadi_cash_receipt"].includes(role)) return null;
-  const clientSaleId = parts[0]?.trim();
-  const digest = parts[1]?.trim();
-  if (!clientSaleId || !digest) return null;
-  return { clientSaleId, digest, role };
+
+  if (parts.length >= 5 && parts[parts.length - 3] === "reversal") {
+    const reversalRevision = Number(parts[parts.length - 2]);
+    const digest = parts[parts.length - 4]?.trim();
+    const clientSaleId = parts.slice(0, parts.length - 4).join(":").trim();
+    if (!clientSaleId || !digest || !Number.isInteger(reversalRevision) || reversalRevision <= 0) return null;
+    return {
+      clientSaleId,
+      digest,
+      role,
+      phase: "reversal",
+      revision: `reversal${reversalRevision}`,
+      reversalRevision,
+    };
+  }
+
+  const revision = parts[parts.length - 2]?.trim() || "";
+  const digest = parts[parts.length - 3]?.trim();
+  const clientSaleId = parts.slice(0, parts.length - 3).join(":").trim();
+  if (!clientSaleId || !digest || !/^(?:create|edit\d+)$/.test(revision)) return null;
+  return { clientSaleId, digest, role, phase: "posting", revision, reversalRevision: null };
 }
 
 function isCashTransferRole(role: SettlementRole): boolean {
@@ -63,8 +94,37 @@ function isExactClientPrefix(sourceId: string, clientSaleId: string): boolean {
   return sourceId.startsWith(`${clientSaleId}:`);
 }
 
-function isExactDigestPrefix(sourceId: string, clientSaleId: string, digest: string): boolean {
-  return sourceId.startsWith(`${clientSaleId}:${digest}:`);
+function postingRevisionRank(revision: string): number | null {
+  if (revision === "create") return 0;
+  const match = /^edit(\d+)$/.exec(revision);
+  if (!match) return null;
+  const rank = Number(match[1]);
+  return Number.isInteger(rank) && rank > 0 ? rank : null;
+}
+
+/**
+ * A POS edit leaves the previous cash pair plus the reversal that cancels it.
+ * If an admin removes an old Daybook cash journal, remove that logical pair and
+ * its cancelling reversal together. This keeps the newer rebuilt settlement
+ * intact instead of deleting every cash marker for the sale.
+ */
+function isSameManualCashLifecycle(selected: ParsedSettlementSource, candidate: ParsedSettlementSource): boolean {
+  if (candidate.clientSaleId !== selected.clientSaleId || !isCashTransferRole(candidate.role)) return false;
+
+  if (selected.phase === "posting") {
+    const rank = postingRevisionRank(selected.revision);
+    if (rank === null) return false;
+    if (candidate.phase === "posting") {
+      return candidate.revision === selected.revision && candidate.digest === selected.digest;
+    }
+    return candidate.reversalRevision === rank + 1;
+  }
+
+  const reversalRevision = selected.reversalRevision;
+  if (!reversalRevision) return false;
+  if (candidate.phase === "reversal") return candidate.reversalRevision === reversalRevision;
+  const postingRevision = reversalRevision === 1 ? "create" : `edit${reversalRevision - 1}`;
+  return candidate.revision === postingRevision;
 }
 
 async function runWithAccessibleCompanyScope<T>(companyId: number, run: () => Promise<T>): Promise<T> {
@@ -157,9 +217,10 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
     const sourceAnchor = sourceSaleCandidate
       ? (currentMarkers
           .map((marker) => ({ marker, parsed: parseSettlementSourceId(marker.sourceId) }))
-          .find(
-            (item) => item.parsed?.clientSaleId === possibleSourceClientSaleId && isCashTransferRole(item.parsed.role)
-          ) ?? null)
+          // Any surviving settlement marker proves the source-sale lifecycle.
+          // This matters after an admin has already removed the cash pair and
+          // only a payable reclassification marker remains.
+          .find((item) => item.parsed?.clientSaleId === possibleSourceClientSaleId) ?? null)
       : null;
 
     const manualCashTransferDelete = Boolean(selectedMarkerSource && isCashTransferRole(selectedMarkerSource.role));
@@ -177,10 +238,10 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
     const clientSaleId = anchor.clientSaleId;
 
     const deletion = await runWithAccessibleCompanyScope(companyId, async () => {
-      // Resolve the exact company pair from the deterministic settlement digest.
-      // This avoids treating a coincidentally reused clientSaleId in another
-      // company as part of the same POS transaction.
-      const anchorRowsRaw = await db
+      // Load the complete sale lifecycle under the request's authorized company
+      // scope. Normal cash pairs share a digest, but edit reversals deliberately
+      // do not, so reversal pairing must use revision + complementary cash role.
+      const lifecycleRowsRaw = await db
         .select({
           id: accountingPostingRequests.id,
           companyId: accountingPostingRequests.companyId,
@@ -191,18 +252,31 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
         .where(
           and(
             eq(accountingPostingRequests.sourceType, GOLDEN_COAST_POS_SETTLEMENT_SOURCE_TYPE),
-            ilike(accountingPostingRequests.sourceId, `${clientSaleId}:${anchor.digest}:%`)
+            ilike(accountingPostingRequests.sourceId, `${clientSaleId}:%`)
           )
         );
-      const anchorRows = anchorRowsRaw.filter((row) =>
-        isExactDigestPrefix(String(row.sourceId), clientSaleId, anchor.digest)
-      );
-      const pairCompanyIds = [...new Set(anchorRows.map((row) => Number(row.companyId)))];
+      const lifecycleRows = lifecycleRowsRaw
+        .map((row) => ({
+          id: Number(row.id),
+          companyId: Number(row.companyId),
+          voucherId: Number(row.voucherId),
+          sourceId: String(row.sourceId),
+          parsed: parseSettlementSourceId(String(row.sourceId)),
+        }))
+        .filter((row) => row.parsed?.clientSaleId === clientSaleId);
+
+      const relevantLifecycleRows = manualCashTransferDelete
+        ? lifecycleRows.filter((row) => row.parsed && isSameManualCashLifecycle(anchor, row.parsed))
+        : lifecycleRows;
+      const pairCompanyIds = [...new Set(relevantLifecycleRows.map((row) => row.companyId))];
       if (!pairCompanyIds.includes(companyId)) pairCompanyIds.push(companyId);
 
-      // A cash transfer is a two-company posting. Refuse a half-delete when the
-      // counterpart exists but is not visible/authorized to this request.
-      if (pairCompanyIds.length < 2) {
+      // A manual cash transfer is always a two-company posting. Refuse a
+      // half-delete if the counterpart cannot be reached. Source-sale deletion
+      // may legitimately have only one company left after its cash pair was
+      // already removed, in which case any surviving local payable marker is
+      // still cleaned up.
+      if (manualCashTransferDelete && pairCompanyIds.length < 2) {
         throw new Error("Access denied: Voucher belongs to a different company");
       }
 
@@ -253,9 +327,10 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
           }))
           .filter((row) => isExactClientPrefix(row.sourceId, clientSaleId))
           .filter((row) => {
-            if (sourcePosDelete) return true;
             const parsed = parseSettlementSourceId(row.sourceId);
-            return Boolean(parsed && isCashTransferRole(parsed.role));
+            if (!parsed || parsed.clientSaleId !== clientSaleId) return false;
+            if (sourcePosDelete) return true;
+            return isSameManualCashLifecycle(anchor, parsed);
           });
 
         const linkedVoucherIds = [...new Set(markerRows.map((row) => row.voucherId))];
