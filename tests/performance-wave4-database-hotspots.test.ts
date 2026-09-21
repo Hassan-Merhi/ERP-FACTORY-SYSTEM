@@ -7,6 +7,18 @@ const route = readFileSync(
   resolve(process.cwd(), "server/routes/factory/bale-exports/production-value-report.ts"),
   "utf8"
 );
+const baleLedger = readFileSync(
+  resolve(process.cwd(), "server/routes/performance/bandwidthPhase3FactoryReads.ts"),
+  "utf8"
+);
+const snapshotRoutes = readFileSync(
+  resolve(process.cwd(), "server/routes/factory/factoryBilingualSnapshotRoutes.ts"),
+  "utf8"
+);
+const snapshotService = readFileSync(
+  resolve(process.cwd(), "server/services/factoryBilingualSnapshotService.ts"),
+  "utf8"
+);
 
 describe("Performance Wave 4 database hotspot guards", () => {
   it("batches read-only supplier lookups instead of issuing N+1 queries", () => {
@@ -38,5 +50,23 @@ describe("Performance Wave 4 database hotspot guards", () => {
       "const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise])"
     );
     expect(route).toContain("const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([");
+  });
+
+  it("aggregates bale order-state once instead of repeating correlated EXISTS probes", () => {
+    expect(baleLedger).toContain("BOOL_OR(co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')) AS has_pending");
+    expect(baleLedger).toContain("BOOL_OR(co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')) AS has_sold");
+    expect(baleLedger).toContain("LEFT JOIN order_state os ON os.bale_id = fb.id");
+    expect(baleLedger).not.toContain("WHERE cob.bale_id = fb.id");
+  });
+
+  it("targets only the rows changed by a compact bale scan for bilingual snapshots", () => {
+    expect(snapshotRoutes).toContain("responseRecord?.compactBaleScan === true");
+    expect(snapshotRoutes).toContain("orderBaleId");
+    expect(snapshotRoutes).toContain("orderLineId");
+    expect(snapshotService).toContain('item.table === "customer_order_bales"');
+    expect(snapshotService).toContain('item.table === "customer_order_lines"');
+    expect(snapshotService).toContain("if (orderBaleId || orderLineId) return null");
+    // Non-scan order writes retain the original order-scoped behavior.
+    expect(snapshotService).toContain("return `t.order_id=${orderId}`");
   });
 });
