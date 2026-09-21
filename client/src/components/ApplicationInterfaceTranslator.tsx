@@ -294,6 +294,12 @@ export function ApplicationInterfaceTranslator({ language }: { language: Applica
       portalObserver.disconnect();
       pending.clear();
       if (frame !== null) window.cancelAnimationFrame(frame);
+
+      // The non-English translator is not mounted in English mode. Restore its
+      // imperative DOM edits once while this already-loaded runtime is leaving,
+      // then English runs with no translation observers or tree scanning.
+      translateInterfaceTree(root, "en");
+      document.querySelectorAll(PORTAL_SELECTOR).forEach((portal) => translateInterfaceTree(portal, "en"));
     };
   }, [language]);
 
