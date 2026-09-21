@@ -12,6 +12,8 @@ let installed = false;
 let presenceTimer: ReturnType<typeof setInterval> | null = null;
 let activityTimer: ReturnType<typeof setInterval> | null = null;
 let initialTimer: ReturnType<typeof setTimeout> | null = null;
+let presenceSweepInFlight = false;
+let activitySweepInFlight = false;
 
 function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -52,18 +54,26 @@ export async function pruneUserActivityHistory(): Promise<void> {
 }
 
 async function runPresenceSweep(): Promise<void> {
+  if (presenceSweepInFlight) return;
+  presenceSweepInFlight = true;
   try {
     await pruneStalePresence();
   } catch (error) {
     logger.warn("[Presence] scheduled stale-row cleanup failed", { error });
+  } finally {
+    presenceSweepInFlight = false;
   }
 }
 
 async function runActivitySweep(): Promise<void> {
+  if (activitySweepInFlight) return;
+  activitySweepInFlight = true;
   try {
     await pruneUserActivityHistory();
   } catch (error) {
     logger.warn("[Presence] scheduled activity-log cleanup failed", { error });
+  } finally {
+    activitySweepInFlight = false;
   }
 }
 
@@ -90,5 +100,7 @@ export function resetPresenceMaintenanceForTests(): void {
   initialTimer = null;
   presenceTimer = null;
   activityTimer = null;
+  presenceSweepInFlight = false;
+  activitySweepInFlight = false;
   installed = false;
 }

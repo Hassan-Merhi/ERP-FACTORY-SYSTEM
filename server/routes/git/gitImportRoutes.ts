@@ -14,7 +14,7 @@ import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { containers } from "../../../shared/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { importUndoStore, UNDO_TTL_MS, gitUpload } from "./_helpers";
+import { importUndoStore, pruneImportUndoStore, gitUpload } from "./_helpers";
 
 export function registerGitImportRoutes(app: Express) {
   // ─── ETA-only template — 2 columns: Container # + New ETA ───────────────
@@ -619,18 +619,17 @@ export function registerGitImportRoutes(app: Express) {
           updated++;
         }
 
-        // Store undo snapshot
+        // Store a bounded undo snapshot. The shared sweeper reclaims
+        // expired snapshots even if nobody performs another import.
         const importId = randomUUID();
-        // Expire old entries (> 2h)
-        for (const [k, v] of importUndoStore) {
-          if (Date.now() - v.createdAt > UNDO_TTL_MS) importUndoStore.delete(k);
-        }
+        pruneImportUndoStore();
         if (undoChanges.length > 0) {
           importUndoStore.set(importId, {
             companyId: req.session.currentCompanyId,
             createdAt: Date.now(),
             changes: undoChanges,
           });
+          pruneImportUndoStore();
         }
 
         res.json({ updated, skipped, notFound, errors, importId: undoChanges.length > 0 ? importId : null });
@@ -652,6 +651,7 @@ export function registerGitImportRoutes(app: Express) {
         if (!importId || typeof importId !== "string") {
           return res.status(400).json({ message: "importId required" });
         }
+        pruneImportUndoStore();
         const snap = importUndoStore.get(importId);
         if (!snap) {
           return res

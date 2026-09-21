@@ -83,8 +83,8 @@ export const screenFeedCursorStore = new Map<string, ScreenFeedCursor>();
 export const watcherPollStore = new Map<string, number>();
 
 // Evict frames, diagnostics, cursors, and stale watcher polls older than 2 minutes.
-setInterval(() => {
-  const cutoff = Date.now() - 2 * 60 * 1000;
+export function pruneScreenFeedStores(now = Date.now()): void {
+  const cutoff = now - 2 * 60 * 1000;
   const cutoffDt = new Date(cutoff);
   for (const [key, frame] of screenFeedStore.entries()) {
     if (frame.capturedAt < cutoffDt) screenFeedStore.delete(key);
@@ -98,4 +98,7 @@ setInterval(() => {
   for (const [key, ts] of watcherPollStore.entries()) {
     if (ts < cutoff) watcherPollStore.delete(key);
   }
-}, 60 * 1000);
+}
+
+const screenFeedCleanupTimer = setInterval(pruneScreenFeedStores, 60 * 1000);
+(screenFeedCleanupTimer as unknown as { unref?: () => void }).unref?.();

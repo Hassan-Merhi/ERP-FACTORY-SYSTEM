@@ -31,6 +31,24 @@ export const importUndoStore = new Map<
   }
 >();
 export const UNDO_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+export const MAX_IMPORT_UNDO_ENTRIES = Math.max(
+  2,
+  Number.parseInt(process.env.GIT_IMPORT_UNDO_MAX_ENTRIES || "20", 10) || 20
+);
+
+export function pruneImportUndoStore(now = Date.now()): void {
+  for (const [key, entry] of importUndoStore) {
+    if (now - entry.createdAt >= UNDO_TTL_MS) importUndoStore.delete(key);
+  }
+  while (importUndoStore.size > MAX_IMPORT_UNDO_ENTRIES) {
+    const oldestKey = importUndoStore.keys().next().value;
+    if (oldestKey === undefined) break;
+    importUndoStore.delete(oldestKey);
+  }
+}
+
+const importUndoCleanupTimer = setInterval(() => pruneImportUndoStore(), 15 * 60 * 1000);
+(importUndoCleanupTimer as unknown as { unref?: () => void }).unref?.();
 
 export const ALLOWED_EXCEL_MIME = [
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

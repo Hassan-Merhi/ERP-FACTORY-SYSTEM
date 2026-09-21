@@ -21,6 +21,18 @@ export interface LogAlertInput {
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_COOLDOWN_MS = 5 * 60 * 1_000;
 const lastSentAt = new Map<string, number>();
+const MAX_COOLDOWN_KEYS = 500;
+
+function pruneCooldowns(now: number, cooldownMs: number): void {
+  for (const [key, sentAt] of lastSentAt) {
+    if (now - sentAt >= cooldownMs) lastSentAt.delete(key);
+  }
+  while (lastSentAt.size > MAX_COOLDOWN_KEYS) {
+    const oldestKey = lastSentAt.keys().next().value;
+    if (oldestKey === undefined) break;
+    lastSentAt.delete(oldestKey);
+  }
+}
 
 function positiveNumber(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -35,10 +47,13 @@ function shouldSend(input: LogAlertInput, now = Date.now()): boolean {
   if (!isEnabled()) return false;
   if (input.severity === "warning" && process.env.LOG_ALERT_MIN_SEVERITY === "critical") return false;
   const cooldownMs = positiveNumber(process.env.LOG_ALERT_COOLDOWN_MS, DEFAULT_COOLDOWN_MS);
+  pruneCooldowns(now, cooldownMs);
   const key = `${input.severity}:${input.category}:${input.code}:${input.path || ""}`;
   const previous = lastSentAt.get(key) ?? 0;
   if (now - previous < cooldownMs) return false;
+  lastSentAt.delete(key);
   lastSentAt.set(key, now);
+  pruneCooldowns(now, cooldownMs);
   return true;
 }
 

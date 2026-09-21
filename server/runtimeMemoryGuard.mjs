@@ -170,6 +170,7 @@ function drainQueue(rule) {
   while (queue && queue.length > 0 && tryAcquire(rule)) {
     const waiter = queue.shift();
     clearTimeout(waiter.timer);
+    waiter.detach?.();
     if (waiter.res.writableEnded || waiter.res.destroyed || waiter.req.destroyed) {
       // Client went away while waiting — free the slot for the next waiter.
       releaseSlot(rule);
@@ -251,11 +252,26 @@ Server.prototype.emit = function patchedEmit(event, ...args) {
     return true;
   }
 
-  const waiter = { req, res, start: null, timer: null };
+  const waiter = { req, res, start: null, timer: null, detach: null };
   waiter.start = start;
+  const removeQueuedWaiter = () => {
+    const index = queue.indexOf(waiter);
+    if (index === -1) return;
+    queue.splice(index, 1);
+    clearTimeout(waiter.timer);
+    detach();
+  };
+  const detach = () => {
+    req.off?.("aborted", removeQueuedWaiter);
+    res.off?.("close", removeQueuedWaiter);
+  };
+  waiter.detach = detach;
+  req.once?.("aborted", removeQueuedWaiter);
+  res.once?.("close", removeQueuedWaiter);
   waiter.timer = setTimeout(() => {
     const index = queue.indexOf(waiter);
     if (index !== -1) queue.splice(index, 1);
+    detach();
     reject(res, 429, "ENDPOINT_BUSY", "This heavy operation is still busy. Please retry shortly.", 5);
   }, QUEUE_MAX_WAIT_MS);
   waiter.timer.unref?.();

@@ -25,6 +25,21 @@ const TIMEOUT_MS = 12_000;
 const RATE_LIMIT_MS = 6 * 60 * 60 * 1_000; // 6 hours
 
 const _lastAttempt = new Map<string, number>();
+const RATE_LIMIT_MAX_ENTRIES = Math.max(
+  100,
+  Number.parseInt(process.env.TRACKING_RATE_LIMIT_MAX_ENTRIES || "5000", 10) || 5000
+);
+
+function pruneRateLimitState(now = Date.now()): void {
+  for (const [containerNumber, lastAttempt] of _lastAttempt) {
+    if (now - lastAttempt >= RATE_LIMIT_MS) _lastAttempt.delete(containerNumber);
+  }
+  while (_lastAttempt.size > RATE_LIMIT_MAX_ENTRIES) {
+    const oldest = _lastAttempt.keys().next().value;
+    if (oldest === undefined) break;
+    _lastAttempt.delete(oldest);
+  }
+}
 
 export function isEnabled(): boolean {
   return true;
@@ -61,7 +76,11 @@ export async function track(containerNumber: string): Promise<CarrierTrackResult
     return { ...base, error: "rate_limited" };
   }
 
-  _lastAttempt.set(containerNumber, Date.now());
+  const attemptAt = Date.now();
+  pruneRateLimitState(attemptAt);
+  _lastAttempt.delete(containerNumber);
+  _lastAttempt.set(containerNumber, attemptAt);
+  pruneRateLimitState(attemptAt);
 
   // ── Step 1: load tracking page to obtain session cookies ──────────────────
   // Akamai/DataDome requires a real session. We GET the public tracking page

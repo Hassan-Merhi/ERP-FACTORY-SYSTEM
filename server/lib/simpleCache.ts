@@ -16,6 +16,18 @@ interface Entry {
 }
 
 const store = new Map<string, Entry>();
+const MAX_ENTRIES = Math.max(32, Number.parseInt(process.env.SIMPLE_CACHE_MAX_ENTRIES || "256", 10) || 256);
+
+function prune(now = Date.now()): void {
+  for (const [key, entry] of store) {
+    if (entry.expiresAt <= now) store.delete(key);
+  }
+  while (store.size > MAX_ENTRIES) {
+    const oldestKey = store.keys().next().value;
+    if (oldestKey === undefined) break;
+    store.delete(oldestKey);
+  }
+}
 
 export async function cache<T>(key: string, ttlMs: number, loader: () => Promise<T>): Promise<T> {
   const now = Date.now();
@@ -24,7 +36,9 @@ export async function cache<T>(key: string, ttlMs: number, loader: () => Promise
     return entry.value as T;
   }
   const value = await loader();
-  store.set(key, { value, expiresAt: now + ttlMs });
+  store.delete(key);
+  store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  prune();
   return value;
 }
 

@@ -6,6 +6,18 @@
  * lives here to avoid a circular import between the two.
  */
 const _npsCache = new Map<string, { data: unknown; expiresAt: number }>();
+const MAX_CACHE_ENTRIES = 500;
+
+function pruneCache(now = Date.now()): void {
+  for (const [key, entry] of _npsCache) {
+    if (entry.expiresAt <= now) _npsCache.delete(key);
+  }
+  while (_npsCache.size > MAX_CACHE_ENTRIES) {
+    const oldestKey = _npsCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    _npsCache.delete(oldestKey);
+  }
+}
 
 export function _npsCached(key: string) {
   const c = _npsCache.get(key);
@@ -13,9 +25,7 @@ export function _npsCached(key: string) {
 }
 
 export function _npsSetCache(key: string, data: unknown) {
+  _npsCache.delete(key);
   _npsCache.set(key, { data, expiresAt: Date.now() + 30_000 });
-  if (_npsCache.size > 500) {
-    const now = Date.now();
-    for (const [k, v] of _npsCache) if (now >= v.expiresAt) _npsCache.delete(k);
-  }
+  pruneCache();
 }
