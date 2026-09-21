@@ -23,6 +23,27 @@ describe("Wave 2 frontend speed contracts", () => {
     expect(vite).not.toContain('return "application-translations"');
   });
 
+  it("keeps public login and native authentication libraries out of authenticated startup", () => {
+    const app = source("client/src/App.tsx");
+    const login = source("client/src/pages/Login.tsx");
+
+    expect(app).not.toContain('import Login from "@/pages/Login"');
+    expect(app).toContain('lazy(() => import("@/pages/Login"))');
+
+    for (const staticImport of [
+      'from "@capacitor/core"',
+      'from "@capacitor/preferences"',
+      'from "@aparajita/capacitor-biometric-auth"',
+      'from "@simplewebauthn/browser"',
+    ]) {
+      expect(login).not.toContain(staticImport);
+    }
+
+    expect(login).toContain('import("@capacitor/preferences")');
+    expect(login).toContain('import("@aparajita/capacitor-biometric-auth")');
+    expect(login).toContain('import("@simplewebauthn/browser")');
+  });
+
   it("keeps authenticated utility and remote-support code off the immediate boot path", () => {
     const app = source("client/src/App.tsx");
     const overlays = source("client/src/app/AuthenticatedAppOverlays.tsx");
