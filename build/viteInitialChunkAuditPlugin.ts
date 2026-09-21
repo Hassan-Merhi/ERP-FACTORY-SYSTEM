@@ -57,14 +57,43 @@ function staticClosure(start: OutputChunk, byFileName: Map<string, OutputChunk>)
   return result;
 }
 
-function moduleViolations(chunks: OutputChunk[]): string[] {
+function importPath(
+  start: OutputChunk,
+  targetFileName: string,
+  byFileName: Map<string, OutputChunk>
+): string[] | null {
+  const queue: Array<{ chunk: OutputChunk; path: string[] }> = [{ chunk: start, path: [start.fileName] }];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || visited.has(current.chunk.fileName)) continue;
+    visited.add(current.chunk.fileName);
+
+    if (current.chunk.fileName === targetFileName) return current.path;
+
+    for (const importedFile of current.chunk.imports) {
+      const importedChunk = byFileName.get(importedFile);
+      if (importedChunk) queue.push({ chunk: importedChunk, path: [...current.path, importedChunk.fileName] });
+    }
+  }
+
+  return null;
+}
+
+function moduleViolations(
+  start: OutputChunk,
+  chunks: OutputChunk[],
+  byFileName: Map<string, OutputChunk>
+): string[] {
   const violations = new Set<string>();
   for (const chunk of chunks) {
     for (const moduleId of Object.keys(chunk.modules)) {
       const normalizedId = normalize(moduleId);
       for (const marker of HEAVY_STARTUP_MODULE_MARKERS) {
         if (normalizedId.includes(marker)) {
-          violations.add(`${chunk.fileName}: ${normalizedId}`);
+          const path = importPath(start, chunk.fileName, byFileName);
+          violations.add(`${path?.join(" -> ") ?? chunk.fileName}: ${normalizedId}`);
           break;
         }
       }
@@ -108,7 +137,7 @@ export function initialChunkAuditPlugin(): Plugin {
           entryFile: chunk.fileName,
           staticChunkCount: graph.length,
           staticJsKiB: kib(graphBytes(graph)),
-          violations: moduleViolations(graph),
+          violations: moduleViolations(chunk, graph, byFileName),
         };
       });
 
