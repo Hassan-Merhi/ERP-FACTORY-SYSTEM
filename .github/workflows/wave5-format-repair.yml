@@ -32,6 +32,7 @@ jobs:
       - name: Format Wave 5 source
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/hooks/use-ws-invalidation.ts \
             client/src/lib/bandwidthPhase1HotspotGuard.ts \
             client/src/lib/factoryCatalogCacheVariant.ts \
             client/src/lib/requestStormGuard.ts \
@@ -39,21 +40,35 @@ jobs:
             server/routes/performance/readMicrocache.ts \
             server/routes/performance/readMicrocacheCoordinator.ts \
             server/routes/performance/readMicrocacheCoordinator.test.ts \
+            shared/realtimeInvalidation.ts \
+            tests/realtime-invalidation-contract.test.ts \
             tests/ui/bandwidth-phase-1-invalidation-policy.test.ts \
-            tests/ui/bandwidth-phase-4-heavy-pages.test.ts
+            tests/ui/bandwidth-phase-4-heavy-pages.test.ts \
+            tests/ui/ws-invalidation-traffic.test.tsx
 
       - name: Verify formatting
         run: |
           node node_modules/prettier/bin/prettier.cjs --check \
+            client/src/hooks/use-ws-invalidation.ts \
+            client/src/lib/bandwidthPhase1HotspotGuard.ts \
+            client/src/lib/factoryCatalogCacheVariant.ts \
+            client/src/lib/requestStormGuard.ts \
             server/routes/performance/readMicrocache.test.ts \
             server/routes/performance/readMicrocache.ts \
-            server/routes/performance/readMicrocacheCoordinator.ts
+            server/routes/performance/readMicrocacheCoordinator.ts \
+            server/routes/performance/readMicrocacheCoordinator.test.ts \
+            shared/realtimeInvalidation.ts \
+            tests/realtime-invalidation-contract.test.ts \
+            tests/ui/bandwidth-phase-1-invalidation-policy.test.ts \
+            tests/ui/bandwidth-phase-4-heavy-pages.test.ts \
+            tests/ui/ws-invalidation-traffic.test.tsx
 
       - name: Commit formatted source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
+            client/src/hooks/use-ws-invalidation.ts \
             client/src/lib/bandwidthPhase1HotspotGuard.ts \
             client/src/lib/factoryCatalogCacheVariant.ts \
             client/src/lib/requestStormGuard.ts \
@@ -61,8 +76,11 @@ jobs:
             server/routes/performance/readMicrocache.ts \
             server/routes/performance/readMicrocacheCoordinator.ts \
             server/routes/performance/readMicrocacheCoordinator.test.ts \
+            shared/realtimeInvalidation.ts \
+            tests/realtime-invalidation-contract.test.ts \
             tests/ui/bandwidth-phase-1-invalidation-policy.test.ts \
-            tests/ui/bandwidth-phase-4-heavy-pages.test.ts
+            tests/ui/bandwidth-phase-4-heavy-pages.test.ts \
+            tests/ui/ws-invalidation-traffic.test.tsx
           if git diff --cached --quiet; then
             echo "No formatting changes to commit."
             exit 0
