@@ -59,15 +59,9 @@ export function ContainerPlannerReconciliation({ planId, onPlanChanged }: Props)
     onSuccess: (data) => {
       queryClient.setQueryData(queryKey, data);
       onPlanChanged();
-      const structural: string[] = [];
-      if (data.addedContainers > 0) structural.push(`${data.addedContainers} added`);
-      if (data.removedContainers > 0) structural.push(`${data.removedContainers} removed`);
       toast({
         title: "Container plan reconciled",
-        description:
-          structural.length > 0
-            ? `Plan now matches current stock · ${structural.join(" · ")}`
-            : "Plan now matches current stock.",
+        description: "Plan now matches current stock.",
       });
     },
     onError: (error: Error) => {
