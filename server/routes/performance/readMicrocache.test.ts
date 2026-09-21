@@ -361,7 +361,7 @@ describe("Phase 7C read microcache", () => {
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
 
-  it("preserves business caches across POS autosave and presence heartbeat writes", () => {
+  it("preserves business caches across drafts, presence, and realtime telemetry writes", () => {
     const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
     const request = makeRequest();
     storeJson(middleware, request, makeResponse(), { ok: true });
@@ -376,14 +376,33 @@ describe("Phase 7C read microcache", () => {
       path: "/api/user-presence",
       originalUrl: "/api/user-presence",
     });
+    const screenFeedRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed",
+      originalUrl: "/api/screen-feed",
+    });
+    const pointerRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed/pointer",
+      originalUrl: "/api/screen-feed/pointer",
+    });
+    const tabHeartbeatRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed/control/tab-heartbeat",
+      originalUrl: "/api/screen-feed/control/tab-heartbeat",
+    });
     middleware(draftRequest, makeResponse(), vi.fn());
     middleware(presenceRequest, makeResponse(), vi.fn());
+    middleware(screenFeedRequest, makeResponse(), vi.fn());
+    middleware(pointerRequest, makeResponse(), vi.fn());
+    middleware(tabHeartbeatRequest, makeResponse(), vi.fn());
 
     const secondResponse = makeResponse();
     const secondNext = vi.fn();
     middleware(request, secondResponse, secondNext);
     expect(secondNext).not.toHaveBeenCalled();
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
+    expect(getReadMicrocacheStats().invalidations).toBe(0);
   });
 
   it("keeps unrelated topic caches warm after a targeted write", () => {
