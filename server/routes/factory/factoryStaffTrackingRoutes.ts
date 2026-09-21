@@ -35,6 +35,11 @@ type NormalizedTrackingRow = {
   status: TrackingStatus;
 };
 
+type ProductionTargetDefaultRow = {
+  workerId: number | string;
+  targetBales: string | number | null;
+};
+
 const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
 const PERIOD_TYPES = new Set<PeriodType>(["daily", "weekly", "monthly"]);
 const STATUSES = new Set<TrackingStatus>(["Present", "Absent", "New"]);
@@ -166,6 +171,32 @@ async function loadPreviousDailyCarry(
   const previousDate = addIsoDays(periodStart, -1);
   const closure = await loadClosure(companyId, "production", "daily", previousDate, previousDate);
   return closure ? { date: previousDate, endedAt: closure.endedAt } : null;
+}
+
+async function loadProductionTargetDefaults(
+  companyId: number,
+  asOf: string
+): Promise<Map<number, number | null>> {
+  const result = await db.execute(sql`
+    SELECT DISTINCT ON (worker_id)
+      worker_id AS "workerId",
+      target_bales AS "targetBales"
+    FROM factory_worker_production_target_defaults
+    WHERE company_id = ${companyId}
+      AND effective_from <= ${asOf}
+    ORDER BY worker_id, effective_from DESC, id DESC
+  `);
+  const rows = resultRows(result) as ProductionTargetDefaultRow[];
+  const defaults = new Map<number, number | null>();
+
+  for (const row of rows) {
+    defaults.set(
+      Number(row.workerId),
+      row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales)
+    );
+  }
+
+  return defaults;
 }
 
 async function loadProducedByWorker(
@@ -310,6 +341,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         );
       }
 
+      // Repeating defaults only seed an unsaved daily row. Once a day has its
+      // own saved entry (including a deliberate blank target), that day wins.
+      const productionTargetDefaults =
+        query.page === "production" && query.periodType === "daily" && !finalized
+          ? await loadProductionTargetDefaults(companyId, query.periodStart)
+          : new Map<number, number | null>();
+
       const workerRows = includedWorkers.map((worker) => {
         const savedRow = savedMap.get(`worker:${worker.id}`);
         const attendanceStatus = workerAttendance.get(worker.id);
@@ -329,8 +367,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           code: worker.employeeCode,
           groupName,
           category: savedRow?.category ?? worker.position ?? worker.department ?? "",
-          targetBales:
-            savedRow?.targetBales === null || savedRow?.targetBales === undefined ? null : Number(savedRow.targetBales),
+          targetBales: savedRow
+            ? savedRow.targetBales === null || savedRow.targetBales === undefined
+              ? null
+              : Number(savedRow.targetBales)
+            : query.page === "production" && query.periodType === "daily"
+              ? (productionTargetDefaults.get(worker.id) ?? null)
+              : null,
           producedBales:
             query.page === "production"
               ? finalized
@@ -354,6 +397,105 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         finalizedAt: closure?.endedAt ?? null,
         rows: workerRows,
       });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/factory/staff-tracking/production-target-defaults", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getFactoryCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+      if (!(await canAccessTrackingPage(req, companyId, "production"))) {
+        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
+      }
+
+      const asOf = String(req.query.asOf || "");
+      if (!ISO_DATE.test(asOf)) {
+        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+      }
+
+      const defaults = await loadProductionTargetDefaults(companyId, asOf);
+      res.json({
+        asOf,
+        targets: [...defaults.entries()].map(([workerId, targetBales]) => ({ workerId, targetBales })),
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/factory/staff-tracking/production-target-defaults", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = getFactoryCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+      if (!(await canAccessTrackingPage(req, companyId, "production"))) {
+        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
+      }
+
+      const effectiveFrom = String(req.body?.effectiveFrom || "");
+      const records = Array.isArray(req.body?.records) ? req.body.records : [];
+      if (!ISO_DATE.test(effectiveFrom)) {
+        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+      }
+      if (records.length === 0 || records.length > 500) {
+        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRecordCount });
+      }
+
+      const allWorkers = await db
+        .select({ id: factoryWorkers.id })
+        .from(factoryWorkers)
+        .where(eq(factoryWorkers.companyId, companyId));
+      const workerIds = new Set(allWorkers.map((row) => row.id));
+      const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const normalized: Array<{ workerId: number; targetBales: number | null }> = [];
+      const seen = new Set<number>();
+
+      for (const raw of records) {
+        const workerId = Number(raw?.workerId);
+        const targetBales = numberOrNull(raw?.targetBales);
+
+        if (!Number.isInteger(workerId) || workerId <= 0 || !workerIds.has(workerId)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
+        }
+        if (!workerGroupNames.has(workerId)) {
+          return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
+        }
+        if (seen.has(workerId)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.duplicatePersonInBatch });
+        }
+        if (
+          raw?.targetBales !== null &&
+          raw?.targetBales !== undefined &&
+          raw?.targetBales !== "" &&
+          targetBales === null
+        ) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
+        }
+
+        seen.add(workerId);
+        normalized.push({ workerId, targetBales });
+      }
+
+      const values = normalized.map(
+        ({ workerId, targetBales }) => sql`(
+          ${companyId}, ${workerId}, ${effectiveFrom}, ${targetBales},
+          ${req.session.userId || null}, now(), now()
+        )`
+      );
+
+      await db.execute(sql`
+        INSERT INTO factory_worker_production_target_defaults (
+          company_id, worker_id, effective_from, target_bales, created_by, created_at, updated_at
+        ) VALUES ${sql.join(values, sql`, `)}
+        ON CONFLICT (company_id, worker_id, effective_from)
+        DO UPDATE SET
+          target_bales = EXCLUDED.target_bales,
+          created_by = EXCLUDED.created_by,
+          updated_at = now()
+      `);
+
+      res.json({ success: true, saved: normalized.length, effectiveFrom });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

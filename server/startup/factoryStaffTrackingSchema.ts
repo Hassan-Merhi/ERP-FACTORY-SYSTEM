@@ -57,6 +57,27 @@ const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
     USING ended_by::text;
 `;
 
+const FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_worker_production_target_defaults (
+    id serial PRIMARY KEY,
+    company_id integer NOT NULL,
+    worker_id integer NOT NULL,
+    effective_from date NOT NULL,
+    target_bales numeric(12, 2),
+    created_by varchar(255),
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_worker_production_target_default_nonnegative
+      CHECK (target_bales IS NULL OR target_bales >= 0)
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS factory_worker_production_target_default_unique
+    ON factory_worker_production_target_defaults (company_id, worker_id, effective_from);
+
+  CREATE INDEX IF NOT EXISTS factory_worker_production_target_default_lookup_idx
+    ON factory_worker_production_target_defaults (company_id, worker_id, effective_from DESC);
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -79,6 +100,10 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // production-day locking schema on every boot. Production calls this ensure
   // path unconditionally even when the bulk startup migration pass is disabled.
   await database.query(FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL);
+
+  // Daily worker targets are versioned by effective date. A new default applies
+  // to that day and future days without rewriting any historical day snapshots.
+  await database.query(FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL);
 
   // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
   // defaults are required by ordinary ERP requests, so ensure their idempotent

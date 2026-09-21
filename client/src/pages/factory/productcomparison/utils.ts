@@ -32,6 +32,25 @@ export function currentYearValue(now = new Date()): string {
   return String(now.getFullYear());
 }
 
+export function isValidLocalIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+
+  const date = new Date(year, month - 1, day);
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+export function isValidComparisonRange(range: ComparisonRange): boolean {
+  return isValidLocalIsoDate(range.from) && isValidLocalIsoDate(range.to) && range.from <= range.to;
+}
+
 function parseDay(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);

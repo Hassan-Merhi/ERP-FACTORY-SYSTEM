@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  CalendarClock,
   CalendarDays,
   ClipboardCheck,
   Loader2,
@@ -42,6 +43,7 @@ import {
   type ProductionResponse,
   type ProductionRow,
 } from "./factoryProductionTargetsModel";
+import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
@@ -147,6 +149,7 @@ export default function FactoryProductionTargets() {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [defaultsEditorOpen, setDefaultsEditorOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
@@ -158,6 +161,7 @@ export default function FactoryProductionTargets() {
   useEffect(() => {
     setRows([]);
     setEditorOpen(false);
+    setDefaultsEditorOpen(false);
   }, [periodType, period.start, period.end]);
 
   useEffect(() => {
@@ -319,6 +323,18 @@ export default function FactoryProductionTargets() {
               disabled={busy}
             />
           </div>
+
+          {periodType === "daily" && (
+            <Button
+              variant="outline"
+              onClick={() => setDefaultsEditorOpen(true)}
+              disabled={rows.length === 0 || busy}
+              data-testid="button-edit-production-default-targets"
+            >
+              <CalendarClock className="mr-2 h-4 w-4" />
+              {tr("defaultTargets")}
+            </Button>
+          )}
 
           <Button
             onClick={() => setEditorOpen(true)}
@@ -502,6 +518,13 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      <ProductionTargetDefaultsDialog
+        open={defaultsEditorOpen}
+        onOpenChange={setDefaultsEditorOpen}
+        rows={rows}
+        effectiveFrom={referenceDate}
+      />
 
       <ProductionTargetsEditorDialog
         open={editorOpen}

@@ -49,6 +49,26 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("input-production-target-");
   });
 
+  it("keeps repeating daily worker defaults separate from day-specific target edits", () => {
+    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    const defaultsEditor = src(
+      "client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx"
+    );
+    const dayEditor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
+    const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const startup = src("server/startup/factoryStaffTrackingSchema.ts");
+
+    expect(production).toContain("button-edit-production-default-targets");
+    expect(production).toContain("<ProductionTargetDefaultsDialog");
+    expect(defaultsEditor).toContain("production-target-defaults");
+    expect(defaultsEditor).toContain("effectiveFrom");
+    expect(dayEditor).toContain("/api/factory/staff-tracking/bulk");
+    expect(route).toContain("factory_worker_production_target_defaults");
+    expect(route).toContain("effective_from <=");
+    expect(route).toContain("savedRow");
+    expect(startup).toContain("factory_worker_production_target_defaults");
+  });
+
   it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     expect(production).toContain("kpi-production-target-produced");
