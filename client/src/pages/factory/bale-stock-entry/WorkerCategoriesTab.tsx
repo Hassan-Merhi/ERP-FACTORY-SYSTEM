@@ -146,8 +146,10 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                             {w.fullName || w.name}
                           </Badge>
                         ))}
-                      {(cat.workerIds || []).length === 0 && (
-                        <span className="text-xs text-muted-foreground italic">No workers assigned</span>
+                      {catWorkers.filter(
+                        (w) => w.active !== false && (cat.workerIds || []).includes(w.id)
+                      ).length === 0 && (
+                        <span className="text-xs text-muted-foreground italic">No active workers assigned</span>
                       )}
                     </div>
                   </TableCell>
