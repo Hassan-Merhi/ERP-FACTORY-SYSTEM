@@ -6,7 +6,7 @@ import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMes
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import { employees, factoryAttendance, factoryWorkers } from "@shared/schema";
+import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } from "@shared/schema";
 
 type TrackingPage = "production" | "attendance";
 type PeriodType = "daily" | "weekly" | "monthly";
@@ -49,6 +49,27 @@ const COUNTED_PRODUCTION_BALE_STATUSES = [
 
 function getFactoryCompanyId(req: Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
+}
+
+const STAFF_TRACKING_HIDDEN_TAB_KEYS: Record<TrackingPage, string> = {
+  production: "hide_tab_stockentry_production_targets",
+  attendance: "hide_tab_stockentry_attendance_register",
+};
+
+async function canAccessTrackingPage(req: Request, companyId: number, page: TrackingPage): Promise<boolean> {
+  const role = String(req.session.currentRole || req.user?.role || "");
+  if (["Admin", "Owner", "Developer"].includes(role)) return true;
+
+  const userId = req.session.userId;
+  if (!userId) return false;
+
+  const [profile] = await db
+    .select({ hiddenCostFields: factoryUserProfiles.hiddenCostFields })
+    .from(factoryUserProfiles)
+    .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, userId)))
+    .limit(1);
+
+  return !(profile?.hiddenCostFields ?? []).includes(STAFF_TRACKING_HIDDEN_TAB_KEYS[page]);
 }
 
 function parseTrackingQuery(req: Request): {
@@ -202,6 +223,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
       const query = parseTrackingQuery(req);
       if (!query) return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+      if (!(await canAccessTrackingPage(req, companyId, query.page))) {
+        return res.status(403).json({ message: "You do not have access to this Stock Entry tab" });
+      }
 
       const closure =
         query.page === "production"
@@ -360,6 +384,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         periodEnd < periodStart
       ) {
         return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+      }
+      if (!(await canAccessTrackingPage(req, companyId, page))) {
+        return res.status(403).json({ message: "You do not have access to this Stock Entry tab" });
       }
       if (finalize && (page !== "production" || periodType !== "daily" || periodStart !== periodEnd)) {
         return res.status(400).json({ message: "End Production is only available for a single daily production date" });

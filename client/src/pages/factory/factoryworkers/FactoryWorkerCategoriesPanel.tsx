@@ -53,9 +53,6 @@ export function FactoryWorkerCategoriesPanel({ model }: FactoryWorkersModelProps
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {activeMembers.length} active worker{activeMembers.length !== 1 ? "s" : ""}
-                            {ids.length > activeMembers.length && (
-                              <span className="ml-1">({ids.length - activeMembers.length} inactive)</span>
-                            )}
                           </p>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
