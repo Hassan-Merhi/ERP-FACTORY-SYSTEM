@@ -18,5 +18,6 @@ describe("Wave 4 Prettier probe", () => {
       console.log(Buffer.from(formatted, "utf8").toString("base64"));
       console.log(`WAVE4_FORMAT_END ${target}`);
     }
+    process.exit(13);
   });
 });
