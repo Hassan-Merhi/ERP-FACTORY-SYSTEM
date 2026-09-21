@@ -184,6 +184,7 @@ export function useFactoryWorkersModel() {
     mutationFn: (data: { name: string; workerIds: number[] }) =>
       factoryApiRequest("POST", "/api/factory/worker-categories", data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       setCategoryDialogOpen(false);
       toast({ title: "Category created" });
     },
@@ -197,6 +198,7 @@ export function useFactoryWorkersModel() {
         workerIds: data.workerIds,
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       setCategoryDialogOpen(false);
       toast({ title: "Category updated" });
     },
@@ -206,6 +208,7 @@ export function useFactoryWorkersModel() {
   const deleteCatMutation = useMutation({
     mutationFn: (id: number) => factoryApiRequest("DELETE", `/api/factory/worker-categories/${id}`),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       toast({ title: "Category deleted" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -275,6 +278,7 @@ export function useFactoryWorkersModel() {
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
       toast({ title: "Worker updated" });
       resetForm();
       setEditingWorker(null);
@@ -453,7 +457,8 @@ export function useFactoryWorkersModel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to end contract");
       queryClient.invalidateQueries({ queryKey: ["/api/factory/workers"] });
-      toast({ title: "Contract ended", description: payNow ? `Paid $${data.balance}` : "Balance recorded as pending" });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/worker-categories"] });
+      toast({ title: "Contract ended", description: payNow ? `Paid ${data.balance}` : "Balance recorded as pending" });
       setEndContractWorker(null);
     } catch (err: unknown) {
       toast({ title: "Error", description: getErrorMessage(err), variant: "destructive" });

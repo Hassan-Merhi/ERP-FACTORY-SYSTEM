@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 
 export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/:id - Get single worker with computed stats
@@ -216,6 +217,10 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
 
       if (!updated) return res.status(404).json({ message: "Worker not found" });
 
+      if (!updated.active) {
+        await removeFactoryWorkerFromCategories(db, companyId, updated.id);
+      }
+
       const today = getClientDate(req);
       await writeDaybookEntry(db, {
         companyId,
@@ -253,6 +258,8 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
         .returning();
 
       if (!updated) return res.status(404).json({ message: "Worker not found" });
+
+      await removeFactoryWorkerFromCategories(db, companyId, updated.id);
 
       await writeDaybookEntry(db, {
         companyId,
