@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { StatCard, type StatCardProps } from "@/components/StatCard";
 
 export interface FinancialSummaryCardProps extends Omit<StatCardProps, "tone" | "value"> {
@@ -37,7 +38,7 @@ function formatAmount(amount: number | string, currency?: string): string {
  * (revenue/expense/profit/loss/etc.) to consistent tones and formats
  * monetary values.
  */
-export function FinancialSummaryCard({
+function FinancialSummaryCardComponent({
   amount,
   currency,
   flow = "balance",
@@ -47,3 +48,5 @@ export function FinancialSummaryCard({
   const value = format ? formatAmount(amount, currency) : String(amount);
   return <StatCard tone={FLOW_TONE[flow]} value={value} {...rest} />;
 }
+
+export const FinancialSummaryCard = memo(FinancialSummaryCardComponent);
