@@ -1,5 +1,6 @@
 import {
   boolean,
+  decimal,
   index,
   integer,
   pgTable,
@@ -89,6 +90,40 @@ export const factoryContainerPlanLines = pgTable(
   })
 );
 
+// Phase 4 binds planned quantities to physical bales. The row itself is the
+// reservation: factory_bales.status stays IN_STOCK so Phase 2/3 stock totals do
+// not shift when a bale is scanned into a container.
+export const factoryContainerPlanBales = pgTable(
+  "factory_container_plan_bales",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    planId: integer("plan_id")
+      .notNull()
+      .references(() => factoryContainerPlans.id, { onDelete: "cascade" }),
+    planContainerId: integer("plan_container_id")
+      .notNull()
+      .references(() => factoryContainerPlanContainers.id, { onDelete: "cascade" }),
+    baleId: integer("bale_id").notNull(),
+    articleCode: varchar("article_code", { length: 100 }).notNull(),
+    baleCode: varchar("bale_code", { length: 100 }).notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    productName: text("product_name").notNull(),
+    weightKg: decimal("weight_kg", { precision: 15, scale: 3 }).notNull().default("0"),
+    assignedVia: text("assigned_via").notNull().default("MANUAL"),
+    assignedBy: varchar("assigned_by", { length: 100 }),
+    assignedByName: text("assigned_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    baleUnique: uniqueIndex("factory_container_plan_bales_bale_unique").on(t.companyId, t.baleId),
+    containerIdx: index("factory_container_plan_bales_container_idx").on(t.planContainerId, t.articleCode),
+    companyPlanIdx: index("factory_container_plan_bales_plan_idx").on(t.companyId, t.planId),
+  })
+);
+
 export type FactoryContainerPlan = typeof factoryContainerPlans.$inferSelect;
 export type FactoryContainerPlanContainer = typeof factoryContainerPlanContainers.$inferSelect;
 export type FactoryContainerPlanLine = typeof factoryContainerPlanLines.$inferSelect;
+export type FactoryContainerPlanBale = typeof factoryContainerPlanBales.$inferSelect;

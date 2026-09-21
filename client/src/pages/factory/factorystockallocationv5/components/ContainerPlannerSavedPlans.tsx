@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ContainerPlannerReconciliation } from "./ContainerPlannerReconciliation";
+import { ContainerPlannerBaleAssignment } from "./ContainerPlannerBaleAssignment";
 
 interface PlanSummary {
   id: number;
@@ -554,6 +555,8 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
               </div>
 
               <ContainerPlannerReconciliation planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
+
+              <ContainerPlannerBaleAssignment planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (

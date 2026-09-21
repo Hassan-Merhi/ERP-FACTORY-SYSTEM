@@ -22,6 +22,7 @@
     { "idx": 17, "version": "7", "when": 1789377000000, "tag": "0017_retail_variant_inventory", "breakpoints": true },
     { "idx": 18, "version": "7", "when": 1789380900000, "tag": "0018_retail_pos_stock_movement", "breakpoints": true },
     { "idx": 19, "version": "7", "when": 1789384800000, "tag": "0019_retail_reporting_audit", "breakpoints": true },
-    { "idx": 20, "version": "7", "when": 1789990664000, "tag": "20260921_001_factory_container_planner_phase2", "breakpoints": true }
+    { "idx": 20, "version": "7", "when": 1789990664000, "tag": "20260921_001_factory_container_planner_phase2", "breakpoints": true },
+    { "idx": 21, "version": "7", "when": 1790076664000, "tag": "20260922_001_factory_container_planner_phase4", "breakpoints": true }
   ]
 }
