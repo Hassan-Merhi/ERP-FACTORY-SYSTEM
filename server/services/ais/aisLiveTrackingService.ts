@@ -1,5 +1,6 @@
 import { logger } from "../../lib/logger";
 import { applyAisUpdate, listActiveTrackedMmsis } from "./aisRepository";
+import { setAisSubscriptionCount } from "./aisHealth";
 import { AisStreamClient } from "./aisStreamClient";
 import type { AisUpdate } from "./aisTypes";
 
@@ -11,12 +12,22 @@ let refreshInFlight: Promise<void> | null = null;
 let started = false;
 let subscribedMmsis: string[] = [];
 
-// Keep a small in-memory fingerprint per vessel so repeated identical AIS frames do
-// not cause avoidable DB writes. Timestamps remain part of position fingerprints.
+// Keep at most two fingerprints per currently subscribed vessel (position/static).
+// Entries for vessels that leave the active subscription are pruned on refresh so
+// a long-running process cannot accumulate identifiers forever.
 const lastFingerprints = new Map<string, string>();
 
 function fingerprint(update: AisUpdate): string {
   return JSON.stringify(update);
+}
+
+function pruneFingerprints(activeMmsis: string[]): void {
+  const active = new Set(activeMmsis);
+  for (const key of lastFingerprints.keys()) {
+    const separator = key.indexOf(":");
+    const mmsi = separator >= 0 ? key.slice(separator + 1) : "";
+    if (!active.has(mmsi)) lastFingerprints.delete(key);
+  }
 }
 
 async function persistUpdate(update: AisUpdate): Promise<void> {
@@ -40,6 +51,8 @@ async function refreshSubscriptions(): Promise<void> {
       if (next.join(",") === subscribedMmsis.join(",")) return;
 
       subscribedMmsis = next;
+      pruneFingerprints(next);
+      setAisSubscriptionCount(next.length);
       client.setMmsis(next);
 
       if (next.length === 0) {
@@ -67,6 +80,7 @@ export function startAisLiveTracking(): void {
   started = true;
 
   if (!process.env.AISSTREAM_API_KEY) {
+    setAisSubscriptionCount(0);
     logger.info("[AISStream] live tracking disabled: AISSTREAM_API_KEY is not configured");
     return;
   }
@@ -83,6 +97,7 @@ export function stopAisLiveTracking(): void {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = null;
   subscribedMmsis = [];
+  setAisSubscriptionCount(0);
   lastFingerprints.clear();
   client.stop();
 }
