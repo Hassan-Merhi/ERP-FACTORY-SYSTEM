@@ -39,13 +39,7 @@ const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
 const PERIOD_TYPES = new Set<PeriodType>(["daily", "weekly", "monthly"]);
 const STATUSES = new Set<TrackingStatus>(["Present", "Absent", "New"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const COUNTED_PRODUCTION_BALE_STATUSES = [
-  "IN_STOCK",
-  "SOLD",
-  "RESERVED_FOR_ORDER",
-  "DISPATCHED",
-  "FINALIZED",
-] as const;
+const COUNTED_PRODUCTION_BALE_STATUSES = ["IN_STOCK", "SOLD", "RESERVED_FOR_ORDER", "DISPATCHED", "FINALIZED"] as const;
 
 function getFactoryCompanyId(req: Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -345,8 +339,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
               : savedRow?.producedBales === null || savedRow?.producedBales === undefined
                 ? null
                 : Number(savedRow.producedBales),
-          status:
-            query.page === "production" && !finalized ? defaultStatus : (savedRow?.status ?? defaultStatus),
+          status: query.page === "production" && !finalized ? defaultStatus : (savedRow?.status ?? defaultStatus),
           notes: savedRow?.notes ?? "",
           active: worker.active,
         };
@@ -451,11 +444,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         const personType = String(raw?.personType || "") as PersonType;
         const personId = Number(raw?.personId);
         const requestedStatus = String(raw?.status || "Present") as TrackingStatus;
-        if (
-          !Number.isInteger(personId) ||
-          personId <= 0 ||
-          (page === "attendance" && !STATUSES.has(requestedStatus))
-        ) {
+        if (!Number.isInteger(personId) || personId <= 0 || (page === "attendance" && !STATUSES.has(requestedStatus))) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.invalidRow });
         }
         if (
