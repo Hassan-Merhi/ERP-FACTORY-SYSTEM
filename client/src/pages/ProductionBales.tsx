@@ -141,7 +141,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
   const { formatDisplayDate } = useDateFormat();
 
   const { data: locations } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
-  const { data: mixBatches } = useQuery<FactoryMixBatch[]>({ queryKey: ["/api/factory/mix-batches"] });
+  const { data: mixBatches } = useQuery<FactoryMixBatch[]>({ queryKey: ["/api/factory/mix-batches?profile=summary"] });
 
   const activeLocations = locations?.filter((l) => l.active);
   const activeMixBatches = mixBatches?.filter((b) => b.status === "ACTIVE");
@@ -271,7 +271,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/pressing-batches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/mix-batches?profile=summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-products"] });
 
       const locName = selectedLocationName ? `${selectedLocationName.code} - ${selectedLocationName.name}` : "";
