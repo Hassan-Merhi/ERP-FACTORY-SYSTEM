@@ -536,6 +536,8 @@
     "PATCH /api/factory/contacts/:id [requireAuth > <anonymous>]",
     "DELETE /api/factory/contacts/:id [requireAuth > <anonymous>]",
     "GET /api/factory/staff-tracking [requireAuth > <anonymous>]",
+    "GET /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",
+    "POST /api/factory/staff-tracking/production-target-defaults [requireAuth > <anonymous>]",
     "POST /api/factory/staff-tracking/bulk [requireAuth > <anonymous>]",
     "GET /api/factory/workers/with-balances [requireAuth > <anonymous>]",
     "GET /api/factory/workers [requireAuth > <anonymous>]",

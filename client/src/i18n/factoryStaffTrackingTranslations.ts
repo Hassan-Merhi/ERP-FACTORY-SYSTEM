@@ -49,15 +49,27 @@ const factoryStaffTrackingTranslations = {
     fr: "Modifiez directement la catégorie et l’objectif dans le tableau, puis enregistrez une seule fois.",
   },
   editTargets: { en: "Edit Targets", ar: "تعديل الأهداف", fr: "Modifier les objectifs" },
+  defaultTargets: { en: "Daily Defaults", ar: "الأهداف اليومية الافتراضية", fr: "Objectifs quotidiens par défaut" },
+  dailyDefaultTarget: { en: "Daily Default", ar: "الهدف اليومي الافتراضي", fr: "Objectif quotidien par défaut" },
+  defaultTargetsDescription: {
+    en: "Set each worker's repeating daily target from this date forward. Earlier days and day-specific edits stay unchanged.",
+    ar: "حدّد الهدف اليومي المتكرر لكل عامل ابتداءً من هذا التاريخ. تبقى الأيام السابقة والتعديلات الخاصة بكل يوم دون تغيير.",
+    fr: "Définissez l’objectif quotidien récurrent de chaque ouvrier à partir de cette date. Les jours antérieurs et les modifications propres à un jour restent inchangés.",
+  },
+  defaultTargetsSaved: {
+    en: "Daily default targets saved",
+    ar: "تم حفظ الأهداف اليومية الافتراضية",
+    fr: "Objectifs quotidiens par défaut enregistrés",
+  },
   productionEditorDescription: {
-    en: "Edit each worker's category and target in one place. Names, produced counts and attendance status stay automatic.",
-    ar: "عدّل فئة وهدف كل عامل في مكان واحد. تبقى الأسماء والإنتاج وحالة الحضور تلقائية.",
-    fr: "Modifiez la catégorie et l’objectif de chaque ouvrier au même endroit. Les noms, la production et le statut de présence restent automatiques.",
+    en: "Edit the selected day's category and target only. This does not change the worker's repeating daily default.",
+    ar: "عدّل فئة وهدف اليوم المحدد فقط. هذا لا يغيّر الهدف اليومي الافتراضي المتكرر للعامل.",
+    fr: "Modifiez uniquement la catégorie et l’objectif du jour sélectionné. Cela ne change pas l’objectif quotidien récurrent de l’ouvrier.",
   },
   useEditorToManageTargets: {
-    en: "Use Edit Targets to manage worker categories and targets.",
-    ar: "استخدم تعديل الأهداف لإدارة فئات العمال وأهدافهم.",
-    fr: "Utilisez Modifier les objectifs pour gérer les catégories et objectifs des ouvriers.",
+    en: "Daily Defaults repeat forward; Edit Targets changes only the selected day.",
+    ar: "الأهداف اليومية الافتراضية تتكرر للأيام القادمة، بينما تعديل الأهداف يغيّر اليوم المحدد فقط.",
+    fr: "Les objectifs quotidiens par défaut se répètent à l’avenir ; Modifier les objectifs ne change que le jour sélectionné.",
   },
   searchNameCodeCategory: {
     en: "Search name, code or category...",
