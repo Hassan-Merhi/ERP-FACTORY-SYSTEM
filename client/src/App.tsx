@@ -1,12 +1,11 @@
 import "@/styles/rtl-hardening.css";
 import "@/styles/pos-revision-history.css";
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Redirect, Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ChatWidget } from "@/components/ChatWidget";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ConnectivityProvider } from "@/contexts/ConnectivityContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
@@ -15,9 +14,6 @@ import { DateFormatProvider } from "@/contexts/DateFormatContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { CursorNavProvider } from "@/contexts/CursorNavContext";
 import { ApplicationLanguageProvider } from "@/contexts/ApplicationLanguageContext";
-import { DateJumpDialog } from "@/components/DateJumpDialog";
-import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
-import { UserNotesPanel } from "@/components/UserNotesPanel";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useServerRestart } from "@/hooks/use-server-restart";
 import { Button } from "@/components/ui/button";
@@ -26,6 +22,44 @@ import Login from "@/pages/Login";
 import { AuthenticatedApp } from "@/app/AuthenticatedApp";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
+
+const ChatWidget = lazy(() =>
+  import("@/components/ChatWidget").then((module) => ({ default: module.ChatWidget }))
+);
+const UserNotesPanel = lazy(() =>
+  import("@/components/UserNotesPanel").then((module) => ({ default: module.UserNotesPanel }))
+);
+const DateJumpDialog = lazy(() =>
+  import("@/components/DateJumpDialog").then((module) => ({ default: module.DateJumpDialog }))
+);
+const KeyboardShortcuts = lazy(() =>
+  import("@/components/KeyboardShortcuts").then((module) => ({ default: module.KeyboardShortcuts }))
+);
+
+function useIdleAuthenticatedUtilities() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let timer: number | null = null;
+    let idleCallback: number | null = null;
+
+    if (typeof window.requestIdleCallback === "function") {
+      idleCallback = window.requestIdleCallback(() => setReady(true), { timeout: 1200 });
+    } else {
+      timer = window.setTimeout(() => setReady(true), 250);
+    }
+
+    return () => {
+      if (idleCallback !== null && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleCallback);
+      }
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, []);
+
+  return ready;
+}
 
 function UpdateBanner() {
   const { toast } = useToast();
@@ -114,6 +148,20 @@ function ServerRestartWatcher() {
   return null;
 }
 
+function DeferredAuthenticatedUtilities() {
+  const ready = useIdleAuthenticatedUtilities();
+  if (!ready) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <AuthenticatedChatWidget />
+      <DateJumpDialog />
+      <AuthenticatedUserNotesPanel />
+      <KeyboardShortcuts />
+    </Suspense>
+  );
+}
+
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
 
@@ -133,10 +181,7 @@ function AuthenticatedRoot() {
               <CursorNavProvider>
                 <ServerRestartWatcher />
                 <AuthenticatedApp user={user} handleLogout={handleLogout} />
-                <AuthenticatedChatWidget />
-                <DateJumpDialog />
-                <AuthenticatedUserNotesPanel />
-                <KeyboardShortcuts />
+                <DeferredAuthenticatedUtilities />
               </CursorNavProvider>
             </CurrencyProvider>
           </DateFormatProvider>
