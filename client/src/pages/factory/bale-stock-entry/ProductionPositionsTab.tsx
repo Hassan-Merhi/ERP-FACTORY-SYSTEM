@@ -76,8 +76,8 @@ export function ProductionPositionsTab() {
   const [effectiveFrom, setEffectiveFrom] = useState(todayIso());
 
   const { data: workers = [] } = useQuery<Worker[]>({
-    queryKey: ["/api/factory/workers"],
-    queryFn: () => fetchJson<Worker[]>("/api/factory/workers"),
+    queryKey: ["/api/factory/workers?profile=picker"],
+    queryFn: () => fetchJson<Worker[]>("/api/factory/workers?profile=picker"),
   });
 
   const { data: positions = [], isLoading } = useQuery<Position[]>({
