@@ -21,10 +21,10 @@ The existing canonical cache in `server/routes/performance/readMicrocache.ts` is
 - Binary barcode responses are excluded from the JSON cache.
 - Payroll preview is treated as a read-only POST and keyed by a stable serialization of its request body.
 - POS draft reads are intentionally not cached so creates, autosaves, and deletions remain immediately visible.
-- Successful authenticated business writes invalidate only matching company/topic/location cache families after the response completes; unknown write families safely fall back to company-wide invalidation.
+- Successful authenticated business writes invalidate only matching company/topic/location cache families after the response completes; unknown write families safely retain the legacy blanket invalidation fallback.
 - Failed or unauthenticated writes cannot flush the process-wide cache.
 - Cache generation prevents an older in-flight read from being stored after a successful write invalidates the cache.
-- Presence heartbeats, POS draft autosaves, notifications, chat, and observability writes do not erase unrelated business caches.
+- Presence heartbeats, POS draft autosaves, notifications, chat, observability writes, and screen-feed frame/pointer/tab-heartbeat telemetry do not erase unrelated business caches.
 
 ### Multi-instance consistency
 
@@ -54,7 +54,8 @@ The existing canonical cache in `server/routes/performance/readMicrocache.ts` is
 - Maximum total cached response bytes: 64 MB.
 - Heavy sales and payroll reads: up to 2 minutes.
 - Volatile accounting, inventory, POS, and factory reads: generally 10 to 60 seconds.
-- Reference lists such as workers, locations, stock groups, ledger accounts, and suppliers: up to 5 minutes.
+- Reference lists such as workers, Factory categories, locations, stock groups, ledger accounts, and suppliers: up to 5 minutes.
+- ERP container summaries and the historically heavy `/api/containers/otw-items` bulk read: 30 seconds.
 
 ## Operations and verification
 
@@ -80,7 +81,7 @@ Cached responses expose `X-ERP-Read-Cache` with one of these states:
 - `COALESCED`
 - `REVALIDATED`
 
-Focused regression coverage is in `server/routes/performance/readMicrocache.test.ts`, `server/routes/performance/readMicrocache.edge-cases.test.ts`, and `server/routes/performance/readMicrocacheCoordinator.test.ts`. It verifies hotspot coverage, key isolation, cache hits, service-worker behavior, ETag revalidation on hits and recomputed misses, payroll-preview body keys, dynamic paths, TTL expiry, topic/company/location-targeted invalidation, authenticated successful-write invalidation, failed and anonymous write protection, preservation across POS autosave and presence heartbeats, legacy multi-instance rollout compatibility, binary-route exclusion, and fail-open behavior when shared coordination is unavailable.
+Focused regression coverage is in `server/routes/performance/readMicrocache.test.ts`, `server/routes/performance/readMicrocache.edge-cases.test.ts`, and `server/routes/performance/readMicrocacheCoordinator.test.ts`. It verifies hotspot coverage, key isolation, cache hits, service-worker behavior, ETag revalidation on hits and recomputed misses, payroll-preview body keys, dynamic paths, TTL expiry, topic/company/location-targeted invalidation, authenticated successful-write invalidation, failed and anonymous write protection, preservation across POS autosave, presence heartbeats, and screen-feed telemetry, legacy multi-instance rollout compatibility, binary-route exclusion, and fail-open behavior when shared coordination is unavailable.
 
 ## Production acceptance check
 
@@ -88,7 +89,7 @@ Focused regression coverage is in `server/routes/performance/readMicrocache.test
 2. Confirm first requests show `MISS` and repeated requests show `HIT`, `COALESCED`, or `REVALIDATED`.
 3. Create or edit a real voucher and confirm dependent accounting reads show `MISS` with fresh values across each active server instance while unrelated inventory/reference reads remain `HIT` where still valid.
 4. Leave POS open long enough for autosave and verify report-cache entries remain available while hit counts increase.
-5. Compare five-minute bandwidth snapshots before and after deployment, especially `/api/sales-report`, `/api/factory/payrolls`, `/api/factory/payrolls/preview`, and `/api/locations/:locationId/inventory`.
+5. Compare five-minute bandwidth snapshots before and after deployment, especially `/api/sales-report`, `/api/factory/payrolls`, `/api/factory/payrolls/preview`, `/api/locations/:locationId/inventory`, `/api/containers/otw-items`, and `/api/factory/categories`.
 
 ## Location inventory bandwidth audit — Phases 1–2
 
