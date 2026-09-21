@@ -2,14 +2,8 @@ import { createHash } from "crypto";
 import type { Request, RequestHandler } from "express";
 import { checkPOSLocation, requireAuth } from "../../auth";
 import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
-import {
-  classifyRealtimeWrite,
-  type RealtimeInvalidationTopic,
-} from "../../../shared/realtimeInvalidation";
-import {
-  startReadMicrocacheCoordinator,
-  type ReadMicrocacheInvalidation,
-} from "./readMicrocacheCoordinator";
+import { classifyRealtimeWrite, type RealtimeInvalidationTopic } from "../../../shared/realtimeInvalidation";
+import { startReadMicrocacheCoordinator, type ReadMicrocacheInvalidation } from "./readMicrocacheCoordinator";
 
 export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/sales-report", 120_000],
@@ -310,10 +304,7 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["factory", "payroll", "accounting"];
   }
 
-  if (
-    path === "/api/factory/daily-bale-scans" ||
-    path === "/api/factory/daily-bale-scans/produced"
-  ) {
+  if (path === "/api/factory/daily-bale-scans" || path === "/api/factory/daily-bale-scans/produced") {
     return ["scans"];
   }
 
@@ -330,10 +321,7 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
 
   if (path === "/api/factory/containers") return ["factory", "containers"];
 
-  if (
-    path === "/api/factory/daybook" ||
-    path === "/api/factory/suppliers/with-balances"
-  ) {
+  if (path === "/api/factory/daybook" || path === "/api/factory/suppliers/with-balances") {
     return ["factory", "accounting"];
   }
 

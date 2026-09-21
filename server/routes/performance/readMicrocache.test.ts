@@ -497,7 +497,6 @@ describe("Phase 7C read microcache", () => {
     expect(location4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
 
-
   it("keeps unknown write families on the safe blanket fallback", () => {
     const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
     const company3 = makeRequest({
@@ -540,5 +539,4 @@ describe("Phase 7C read microcache", () => {
       invalidatedEntries: 2,
     });
   });
-
 });

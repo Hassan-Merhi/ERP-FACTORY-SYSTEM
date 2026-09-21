@@ -1,9 +1,6 @@
 import { randomUUID } from "crypto";
 import type { Notification, PoolClient } from "pg";
-import {
-  REALTIME_INVALIDATION_TOPICS,
-  type RealtimeInvalidationTopic,
-} from "../../../shared/realtimeInvalidation";
+import { REALTIME_INVALIDATION_TOPICS, type RealtimeInvalidationTopic } from "../../../shared/realtimeInvalidation";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
 
