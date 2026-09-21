@@ -80,7 +80,7 @@ export default function WipersReEntry() {
     fullName?: string;
     name?: string;
   }
-  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers"] });
+  const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
   interface BaleListRow {
     bale: FactoryBale;
     product: FactoryBaleProduct;
