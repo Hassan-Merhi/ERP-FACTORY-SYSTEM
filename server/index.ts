@@ -19,7 +19,6 @@ import { registerDbHealthRoute } from "./health/dbHealthRoute";
 import { blockViewOnlyWrites } from "./auth";
 import { setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
-import { setupVite } from "./vite";
 import { pool } from "./db";
 import { requestLogger } from "./middleware/requestLogger";
 import { bandwidthDebugMiddleware } from "./middleware/bandwidthDebug";
@@ -197,6 +196,10 @@ let migrationsDone = false;
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
+    // Vite pulls a large development-only dependency graph. Keep it out of
+    // production startup/module residency entirely and load it only when the
+    // development server actually needs it.
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
     serveProductionClient(app);
@@ -213,13 +216,10 @@ let migrationsDone = false;
       migrationsDone = true;
     });
 
-  // Ensure Puppeteer's Chrome binary is present before the server starts
-  // accepting tracking requests.  Runs in background — does not block startup.
-  import("./lib/parcelsAppScraper")
-    .then(({ ensureChromiumAvailable }) => {
-      ensureChromiumAvailable().catch(() => {});
-    })
-    .catch(() => {});
+  // Do not pre-load Puppeteer/Chrome during every server boot. Container
+  // tracking resolves scraper availability when a tracking request/job actually
+  // needs it, which avoids making the browser stack permanent baseline RSS on
+  // deployments that may go hours without scraper work.
 
   registerGracefulShutdown();
 
