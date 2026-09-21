@@ -1,5 +1,21 @@
 import type { Plugin } from "vite";
-import type { OutputBundle, OutputChunk } from "rollup";
+interface AuditChunk {
+  type: "chunk";
+  fileName: string;
+  name: string;
+  isEntry: boolean;
+  imports: string[];
+  code: string;
+  modules: Record<string, unknown>;
+}
+
+function isAuditChunk(value: unknown): value is AuditChunk {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { type?: unknown }).type === "chunk"
+  );
+}
 
 const HEAVY_STARTUP_MODULE_MARKERS = [
   "/node_modules/exceljs/",
@@ -33,12 +49,12 @@ function normalize(value: string): string {
   return value.replaceAll("\\", "/");
 }
 
-function outputChunks(bundle: OutputBundle): OutputChunk[] {
-  return Object.values(bundle).filter((item): item is OutputChunk => item.type === "chunk");
+function outputChunks(bundle: Record<string, unknown>): AuditChunk[] {
+  return Object.values(bundle).filter(isAuditChunk);
 }
 
-function staticClosure(start: OutputChunk, byFileName: Map<string, OutputChunk>): OutputChunk[] {
-  const result: OutputChunk[] = [];
+function staticClosure(start: AuditChunk, byFileName: Map<string, AuditChunk>): AuditChunk[] {
+  const result: AuditChunk[] = [];
   const visited = new Set<string>();
   const pending = [start];
 
@@ -58,11 +74,11 @@ function staticClosure(start: OutputChunk, byFileName: Map<string, OutputChunk>)
 }
 
 function importPath(
-  start: OutputChunk,
+  start: AuditChunk,
   targetFileName: string,
-  byFileName: Map<string, OutputChunk>
+  byFileName: Map<string, AuditChunk>
 ): string[] | null {
-  const queue: Array<{ chunk: OutputChunk; path: string[] }> = [{ chunk: start, path: [start.fileName] }];
+  const queue: Array<{ chunk: AuditChunk; path: string[] }> = [{ chunk: start, path: [start.fileName] }];
   const visited = new Set<string>();
 
   while (queue.length > 0) {
@@ -82,9 +98,9 @@ function importPath(
 }
 
 function moduleViolations(
-  start: OutputChunk,
-  chunks: OutputChunk[],
-  byFileName: Map<string, OutputChunk>
+  start: AuditChunk,
+  chunks: AuditChunk[],
+  byFileName: Map<string, AuditChunk>
 ): string[] {
   const violations = new Set<string>();
   for (const chunk of chunks) {
@@ -102,7 +118,7 @@ function moduleViolations(
   return [...violations].sort();
 }
 
-function graphBytes(chunks: OutputChunk[]): number {
+function graphBytes(chunks: AuditChunk[]): number {
   return chunks.reduce((sum, chunk) => sum + Buffer.byteLength(chunk.code, "utf8"), 0);
 }
 
@@ -115,9 +131,9 @@ export function initialChunkAuditPlugin(): Plugin {
     name: "erp-wave2-initial-chunk-audit",
     apply: "build",
     generateBundle(_options, bundle) {
-      const chunks = outputChunks(bundle);
+      const chunks = outputChunks(bundle as unknown as Record<string, unknown>);
       const byFileName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
-      const targets: Array<{ label: string; chunk: OutputChunk }> = [];
+      const targets: Array<{ label: string; chunk: AuditChunk }> = [];
 
       for (const chunk of chunks) {
         if (chunk.isEntry) targets.push({ label: `entry:${chunk.name}`, chunk });
