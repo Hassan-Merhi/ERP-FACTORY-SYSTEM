@@ -61,6 +61,71 @@ const translations: Record<string, Translation> = {
     ar: "تم نسخ الخطة من ${data.fromDate}",
     fr: "Plan copié depuis le ${data.fromDate}",
   },
+  "Container Planner could not load the complete stock list.": {
+    en: "Container Planner could not load the complete stock list.",
+    ar: "تعذر على مخطط الحاويات تحميل قائمة المخزون الكاملة.",
+    fr: "Le planificateur de conteneurs n’a pas pu charger la liste complète du stock.",
+  },
+  "Container Planner": {
+    en: "Container Planner",
+    ar: "مخطط الحاويات",
+    fr: "Planificateur de conteneurs",
+  },
+  "Target capacity (bales)": {
+    en: "Target capacity (bales)",
+    ar: "السعة المستهدفة (بالات)",
+    fr: "Capacité cible (balles)",
+  },
+  "Physical stock": {
+    en: "Physical stock",
+    ar: "المخزون الفعلي",
+    fr: "Stock physique",
+  },
+  "Customer committed": {
+    en: "Customer committed",
+    ar: "محجوز للعملاء",
+    fr: "Engagé pour les clients",
+  },
+  "Already loading": {
+    en: "Already loading",
+    ar: "قيد التحميل بالفعل",
+    fr: "Déjà en chargement",
+  },
+  "Available to plan": {
+    en: "Available to plan",
+    ar: "متاح للتخطيط",
+    fr: "Disponible à planifier",
+  },
+  "Planned containers": {
+    en: "Planned containers",
+    ar: "الحاويات المخططة",
+    fr: "Conteneurs planifiés",
+  },
+  "Average / container": {
+    en: "Average / container",
+    ar: "المتوسط / حاوية",
+    fr: "Moyenne / conteneur",
+  },
+  "There is no positive uncommitted stock to distribute right now.": {
+    en: "There is no positive uncommitted stock to distribute right now.",
+    ar: "لا يوجد حالياً مخزون موجب غير محجوز لتوزيعه.",
+    fr: "Il n’y a actuellement aucun stock positif non engagé à répartir.",
+  },
+  "Balanced container totals": {
+    en: "Balanced container totals",
+    ar: "إجماليات الحاويات المتوازنة",
+    fr: "Totaux équilibrés des conteneurs",
+  },
+  "Free stock": {
+    en: "Free stock",
+    ar: "المخزون الحر",
+    fr: "Stock libre",
+  },
+  "Container ${index + 1}": {
+    en: "Container ${index + 1}",
+    ar: "الحاوية ${index + 1}",
+    fr: "Conteneur ${index + 1}",
+  },
 };
 
 export function translateFactoryProductionPlannerText(value: string, language: ApplicationLanguage): string | null {
@@ -69,5 +134,12 @@ export function translateFactoryProductionPlannerText(value: string, language: A
     const translated = translations["Copied plan from ${data.fromDate}"][language];
     return translated.replace("${data.fromDate}", date);
   }
+
+  const containerMatch = value.match(/^Container (\d+)$/);
+  if (containerMatch) {
+    const translated = translations["Container ${index + 1}"][language];
+    return translated.replace("${index + 1}", containerMatch[1]);
+  }
+
   return translations[value]?.[language] ?? null;
 }

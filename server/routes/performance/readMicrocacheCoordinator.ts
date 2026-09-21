@@ -1,17 +1,92 @@
 import { randomUUID } from "crypto";
 import type { Notification, PoolClient } from "pg";
+import { REALTIME_INVALIDATION_TOPICS, type RealtimeInvalidationTopic } from "../../../shared/realtimeInvalidation";
 import { pool } from "../../db";
 import { logger } from "../../lib/logger";
 
 const INVALIDATION_CHANNEL = "erp_read_microcache_invalidate";
 const RECONNECT_DELAY_MS = 5_000;
+const TOPIC_SET = new Set<string>(REALTIME_INVALIDATION_TOPICS);
+
+export interface ReadMicrocacheInvalidation {
+  companyIds?: number[];
+  topics?: RealtimeInvalidationTopic[];
+  locationIds?: number[];
+}
+
+interface ReadMicrocacheNotification {
+  version: 1;
+  sourceInstanceId: string;
+  invalidation?: ReadMicrocacheInvalidation;
+}
 
 export interface ReadMicrocacheCoordinator {
   isReady: () => boolean;
-  publishInvalidation: () => Promise<void>;
+  publishInvalidation: (invalidation: ReadMicrocacheInvalidation) => Promise<void>;
 }
 
-export function startReadMicrocacheCoordinator(onExternalInvalidation: () => void): ReadMicrocacheCoordinator {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function positiveInteger(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeIds(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const ids = new Set<number>();
+  for (const candidate of value) {
+    const id = positiveInteger(candidate);
+    if (id !== null) ids.add(id);
+  }
+  return ids.size > 0 ? [...ids] : undefined;
+}
+
+function normalizeTopics(value: unknown): RealtimeInvalidationTopic[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const topics = new Set<RealtimeInvalidationTopic>();
+  for (const candidate of value) {
+    if (typeof candidate === "string" && TOPIC_SET.has(candidate)) {
+      topics.add(candidate as RealtimeInvalidationTopic);
+    }
+  }
+  return topics.size > 0 ? [...topics] : undefined;
+}
+
+function parseScopedNotification(payload: string | undefined): ReadMicrocacheNotification | null {
+  if (!payload?.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    if (!isRecord(parsed) || parsed.version !== 1 || typeof parsed.sourceInstanceId !== "string") return null;
+
+    const rawInvalidation = isRecord(parsed.invalidation) ? parsed.invalidation : undefined;
+    const companyIds = normalizeIds(rawInvalidation?.companyIds);
+    const topics = normalizeTopics(rawInvalidation?.topics);
+    const locationIds = normalizeIds(rawInvalidation?.locationIds);
+    const invalidation =
+      rawInvalidation === undefined
+        ? undefined
+        : {
+            ...(companyIds ? { companyIds } : {}),
+            ...(topics ? { topics } : {}),
+            ...(locationIds ? { locationIds } : {}),
+          };
+
+    return {
+      version: 1,
+      sourceInstanceId: parsed.sourceInstanceId,
+      ...(invalidation ? { invalidation } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function startReadMicrocacheCoordinator(
+  onExternalInvalidation: (invalidation?: ReadMicrocacheInvalidation) => void
+): ReadMicrocacheCoordinator {
   const instanceId = process.env.RENDER_INSTANCE_ID || `${process.pid}-${randomUUID()}`;
   let ready = false;
   let activeClient: PoolClient | null = null;
@@ -55,7 +130,19 @@ export function startReadMicrocacheCoordinator(onExternalInvalidation: () => voi
       activeClient = connectedClient;
 
       connectedClient.on("notification", (notification: Notification) => {
-        if (notification.channel !== INVALIDATION_CHANNEL || notification.payload === instanceId) return;
+        if (notification.channel !== INVALIDATION_CHANNEL) return;
+
+        const scoped = parseScopedNotification(notification.payload);
+        if (scoped) {
+          if (scoped.sourceInstanceId === instanceId) return;
+          onExternalInvalidation(scoped.invalidation);
+          return;
+        }
+
+        // Backward-compatible rollout behavior: older instances publish their
+        // bare instance id. Treat any non-self legacy payload as a blanket
+        // invalidation rather than risking stale data.
+        if (notification.payload === instanceId) return;
         onExternalInvalidation();
       });
       connectedClient.on("error", (error) => handleDisconnect(connectedClient, error));
@@ -86,9 +173,14 @@ export function startReadMicrocacheCoordinator(onExternalInvalidation: () => voi
 
   return {
     isReady: () => ready,
-    publishInvalidation: async () => {
+    publishInvalidation: async (invalidation) => {
+      const payload: ReadMicrocacheNotification = {
+        version: 1,
+        sourceInstanceId: instanceId,
+        invalidation,
+      };
       try {
-        await pool.query("SELECT pg_notify($1, $2)", [INVALIDATION_CHANNEL, instanceId]);
+        await pool.query("SELECT pg_notify($1, $2)", [INVALIDATION_CHANNEL, JSON.stringify(payload)]);
       } catch (error) {
         logger.warn("Read microcache invalidation publish failed", {
           module: "read-microcache",

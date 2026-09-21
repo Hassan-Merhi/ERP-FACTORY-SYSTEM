@@ -1,7 +1,13 @@
 import { createHash } from "crypto";
 import type { Request, RequestHandler } from "express";
 import { checkPOSLocation, requireAuth } from "../../auth";
-import { startReadMicrocacheCoordinator } from "./readMicrocacheCoordinator";
+import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
+import {
+  classifyRealtimeWrite,
+  isRealtimeTelemetryWrite,
+  type RealtimeInvalidationTopic,
+} from "../../../shared/realtimeInvalidation";
+import { startReadMicrocacheCoordinator, type ReadMicrocacheInvalidation } from "./readMicrocacheCoordinator";
 
 export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/sales-report", 120_000],
@@ -60,7 +66,10 @@ export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
   ["/api/user/companies", 300_000],
   ["/api/my-erp-pages", 300_000],
   ["/api/pos/last-sold-prices", 30_000],
+  ["/api/containers", 30_000],
   ["/api/containers/active", 30_000],
+  ["/api/containers/otw-items", 30_000],
+  ["/api/factory/categories", 300_000],
   ["/api/stock-transfers", 30_000],
 ]);
 
@@ -96,6 +105,12 @@ const PAGINATION_HEADER_PATTERN = /^x-(?:total|page|per-page|pagination|has|next
 
 type ReplayableHeaders = Record<string, string | string[]>;
 
+interface ReadMicrocacheScope {
+  companyIds: number[];
+  topics?: RealtimeInvalidationTopic[];
+  locationIds?: number[];
+}
+
 interface ReadMicrocacheEntry {
   expiresAt: number;
   statusCode: number;
@@ -104,6 +119,7 @@ interface ReadMicrocacheEntry {
   etag: string;
   sizeBytes: number;
   headers: ReplayableHeaders;
+  scope: ReadMicrocacheScope;
 }
 
 interface PendingRead {
@@ -119,12 +135,12 @@ interface ReadMicrocacheOptions {
   maxCacheBytes?: number;
   now?: () => number;
   cacheEnabled?: () => boolean;
-  publishInvalidation?: () => Promise<void>;
+  publishInvalidation?: (invalidation: ReadMicrocacheInvalidation) => Promise<void>;
 }
 
 interface ReadMicrocacheController {
   middleware: RequestHandler;
-  invalidate: () => void;
+  invalidate: (invalidation?: ReadMicrocacheInvalidation) => void;
 }
 
 export interface ReadMicrocacheStats {
@@ -137,6 +153,9 @@ export interface ReadMicrocacheStats {
   stores: number;
   evictions: number;
   invalidations: number;
+  targetedInvalidations: number;
+  blanketInvalidations: number;
+  invalidatedEntries: number;
 }
 
 const EMPTY_STATS: ReadMicrocacheStats = {
@@ -149,6 +168,9 @@ const EMPTY_STATS: ReadMicrocacheStats = {
   stores: 0,
   evictions: 0,
   invalidations: 0,
+  targetedInvalidations: 0,
+  blanketInvalidations: 0,
+  invalidatedEntries: 0,
 };
 
 let activeStatsReader: () => ReadMicrocacheStats = () => ({ ...EMPTY_STATS });
@@ -187,6 +209,260 @@ function isNonInvalidatingWrite(req: Request): boolean {
   return NON_INVALIDATING_WRITE_PATHS.some((pattern) => pattern.test(req.path));
 }
 
+function readCookie(header: unknown, name: string): string | null {
+  if (typeof header !== "string") return null;
+  for (const part of header.split(";")) {
+    const [key, ...value] = part.trim().split("=");
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(value.join("="));
+    } catch {
+      return value.join("=");
+    }
+  }
+  return null;
+}
+
+function factoryCatalogLanguageKey(req: Request): "none" | "en" | "ar" | "fr" {
+  if (!req.path.startsWith("/api/factory/")) return "none";
+  const raw =
+    req.query?.lang ??
+    req.headers["x-factory-catalog-language"] ??
+    readCookie(req.headers.cookie, "factory_catalog_language");
+  return raw === "ar" || raw === "fr" ? raw : "en";
+}
+
+function positiveInteger(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function uniquePositiveIntegers(values: unknown[]): number[] {
+  const ids = new Set<number>();
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      for (const nested of value) {
+        const id = positiveInteger(nested);
+        if (id !== null) ids.add(id);
+      }
+      continue;
+    }
+    const id = positiveInteger(value);
+    if (id !== null) ids.add(id);
+  }
+  return [...ids];
+}
+
+function requestCompanyIds(req: Request): number[] {
+  const activeCompanyId = resolveActiveCompanyId(req);
+  return activeCompanyId ? [activeCompanyId] : [];
+}
+
+function readLocationIds(req: Request): number[] | undefined {
+  const candidates: unknown[] = [];
+  const locationPath = req.path.match(/^\/api\/locations\/(\d+)(?:\/|$)/);
+  if (locationPath) candidates.push(locationPath[1]);
+
+  for (const key of [
+    "locationId",
+    "location_id",
+    "fromLocationId",
+    "toLocationId",
+    "sourceLocationId",
+    "destinationLocationId",
+  ]) {
+    candidates.push(req.query?.[key]);
+  }
+
+  const ids = uniquePositiveIntegers(candidates);
+  return ids.length > 0 ? ids : undefined;
+}
+
+function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefined {
+  if (/^\/api\/locations\/\d+\/inventory(?:\/light)?\/?$/.test(path)) return ["inventory"];
+  if (/^\/api\/accounts\/ledger\/\d+\/transactions\/?$/.test(path)) return ["accounting"];
+  if (/^\/api\/vouchers\/\d+\/?$/.test(path)) return ["accounting"];
+  if (/^\/api\/factory\/customer-(?:proformas|orders)\//.test(path)) return ["factory"];
+  if (/^\/api\/factory\/workers\/attendance-report\/?$/.test(path)) return ["factory", "payroll"];
+
+  if (
+    path === "/api/sales-report" ||
+    path === "/api/dashboard/sales-report-all" ||
+    path === "/api/pos/last-sold-prices"
+  ) {
+    return ["pos", "accounting"];
+  }
+
+  if (path === "/api/location-summary") {
+    return ["inventory"];
+  }
+
+  if (
+    path === "/api/stock-items" ||
+    path === "/api/stock-items/light" ||
+    path === "/api/stock-items/all-code-aliases" ||
+    path === "/api/locations"
+  ) {
+    return ["reference"];
+  }
+
+  if (
+    path === "/api/reports/stock-movement" ||
+    path === "/api/reports/opening-stock-summary" ||
+    path === "/api/stock-transfers"
+  ) {
+    return ["inventory", "accounting"];
+  }
+
+  if (
+    path === "/api/reports/containers" ||
+    path === "/api/containers" ||
+    path === "/api/containers/active" ||
+    path === "/api/containers/otw-items"
+  ) {
+    return ["containers", "inventory", "accounting"];
+  }
+
+  if (
+    path === "/api/daybook" ||
+    path === "/api/accounts/all" ||
+    path === "/api/accounts/voucher-sidebar" ||
+    path === "/api/stats/monthly-data"
+  ) {
+    return ["accounting"];
+  }
+
+  if (path === "/api/ledger-accounts" || path === "/api/ledger-accounts/parent-groups") {
+    return ["reference"];
+  }
+
+  if (
+    path === "/api/factory/payrolls" ||
+    path === "/api/factory/payrolls/preview" ||
+    path === "/api/payroll/worker-payments-summary"
+  ) {
+    return ["factory", "payroll", "accounting"];
+  }
+
+  if (path === "/api/factory/daily-bale-scans" || path === "/api/factory/daily-bale-scans/produced") {
+    return ["scans"];
+  }
+
+  if (
+    path === "/api/factory/raw-stock" ||
+    path === "/api/factory/raw-stock/available-containers" ||
+    path === "/api/factory/mix-batches" ||
+    path === "/api/factory/bale-ledger" ||
+    path === "/api/factory/production-value-report" ||
+    path === "/api/factory/bales/stock-entry-history"
+  ) {
+    return ["factory", "inventory"];
+  }
+
+  if (path === "/api/factory/containers") return ["factory", "containers"];
+
+  if (path === "/api/factory/daybook" || path === "/api/factory/suppliers/with-balances") {
+    return ["factory", "accounting"];
+  }
+
+  if (
+    path === "/api/factory/bale-products" ||
+    path === "/api/factory/categories" ||
+    path === "/api/factory/settings" ||
+    path === "/api/factory/my-access" ||
+    path === "/api/factory/customers" ||
+    path === "/api/factory/suppliers" ||
+    path === "/api/factory/worker-categories"
+  ) {
+    return ["reference"];
+  }
+
+  if (path === "/api/factory/cash-accounts") return ["reference", "accounting"];
+
+  if (path === "/api/factory/workers" || path === "/api/factory/employees") {
+    return ["reference", "payroll", "accounting"];
+  }
+
+  if (path.startsWith("/api/factory/")) return ["factory"];
+
+  if (
+    path === "/api/company-settings" ||
+    path === "/api/user/preferences" ||
+    path === "/api/customers" ||
+    path === "/api/bank-accounts" ||
+    path === "/api/fixed-assets" ||
+    path === "/api/stock-categories" ||
+    path === "/api/stock-grades" ||
+    path === "/api/stock-groups" ||
+    path === "/api/suppliers" ||
+    path === "/api/worker-groups/with-members" ||
+    path === "/api/employee-groups" ||
+    path === "/api/user/companies" ||
+    path === "/api/my-erp-pages" ||
+    path === "/api/payroll/bonus-locations"
+  ) {
+    return ["reference"];
+  }
+
+  return undefined;
+}
+
+function buildReadScope(req: Request): ReadMicrocacheScope {
+  const topics = readTopicsForPath(req.path);
+  const locationIds = readLocationIds(req);
+  return {
+    companyIds: requestCompanyIds(req),
+    ...(topics ? { topics } : {}),
+    ...(locationIds ? { locationIds } : {}),
+  };
+}
+
+function buildWriteInvalidation(req: Request): ReadMicrocacheInvalidation {
+  const classified = classifyRealtimeWrite(req.originalUrl || req.url, req.body);
+
+  // Unknown write families deliberately keep the legacy blanket fallback. A
+  // route we have not classified may mutate cross-company/global state, so
+  // narrowing it only by the current session company could leave stale data.
+  if (!classified.topics?.length) return {};
+
+  const companyIds = requestCompanyIds(req);
+  return {
+    ...(companyIds.length > 0 ? { companyIds } : {}),
+    ...classified,
+  };
+}
+
+function idsIntersect(left: readonly number[], right: readonly number[]): boolean {
+  const rightSet = new Set(right);
+  return left.some((value) => rightSet.has(value));
+}
+
+function topicsIntersect(
+  left: readonly RealtimeInvalidationTopic[],
+  right: readonly RealtimeInvalidationTopic[]
+): boolean {
+  const rightSet = new Set<RealtimeInvalidationTopic>(right);
+  return left.some((value) => rightSet.has(value));
+}
+
+function entryMatchesInvalidation(entry: ReadMicrocacheEntry, invalidation: ReadMicrocacheInvalidation): boolean {
+  if (invalidation.companyIds?.length) {
+    if (entry.scope.companyIds.length === 0) return true;
+    if (!idsIntersect(entry.scope.companyIds, invalidation.companyIds)) return false;
+  }
+
+  if (invalidation.topics?.length) {
+    if (!entry.scope.topics?.length) return true;
+    if (!topicsIntersect(entry.scope.topics, invalidation.topics)) return false;
+  }
+
+  if (invalidation.locationIds?.length && entry.scope.locationIds?.length) {
+    if (!idsIntersect(entry.scope.locationIds, invalidation.locationIds)) return false;
+  }
+
+  return true;
+}
+
 export function buildReadMicrocacheKey(req: Request): string {
   const session = req.session;
   const bodyKey = isReadOnlyPost(req) ? stableSerialize(req.body ?? null) : "";
@@ -194,6 +470,7 @@ export function buildReadMicrocacheKey(req: Request): string {
     req.method,
     req.originalUrl,
     req.headers["x-client-date"] ?? "none",
+    factoryCatalogLanguageKey(req),
     bodyKey,
     session?.userId ?? "anonymous",
     session?.currentCompanyId ?? "none",
@@ -243,7 +520,7 @@ function replayHeaders(res: import("express").Response, headers: ReplayableHeade
 function setCacheHeaders(res: import("express").Response, entry: ReadMicrocacheEntry, state: string): void {
   res.setHeader?.("Cache-Control", "private, no-cache, must-revalidate");
   res.setHeader?.("ETag", entry.etag);
-  res.setHeader?.("Vary", "Cookie, Accept-Encoding, X-Client-Date");
+  res.setHeader?.("Vary", "Cookie, Accept-Encoding, X-Client-Date, X-Factory-Catalog-Language");
   res.setHeader?.("X-ERP-Read-Cache", state);
 }
 
@@ -271,6 +548,9 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
       stores: counters.stores,
       evictions: counters.evictions,
       invalidations: counters.invalidations,
+      targetedInvalidations: counters.targetedInvalidations,
+      blanketInvalidations: counters.blanketInvalidations,
+      invalidatedEntries: counters.invalidatedEntries,
     };
   };
 
@@ -281,13 +561,40 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     cache.delete(key);
   }
 
-  function clearForWrite(): void {
+  function invalidateCache(invalidation?: ReadMicrocacheInvalidation): void {
     writeGeneration += 1;
-    cache.clear();
-    cachedBytes = 0;
     counters.invalidations += 1;
+
+    const hasScope = Boolean(
+      invalidation?.companyIds?.length || invalidation?.topics?.length || invalidation?.locationIds?.length
+    );
+    let removed = 0;
+
+    if (!hasScope) {
+      removed = cache.size;
+      cache.clear();
+      cachedBytes = 0;
+      counters.blanketInvalidations += 1;
+    } else {
+      counters.targetedInvalidations += 1;
+      for (const [key, entry] of cache) {
+        if (!entryMatchesInvalidation(entry, invalidation!)) continue;
+        deleteEntry(key);
+        removed += 1;
+      }
+    }
+
+    counters.invalidatedEntries += removed;
+
+    // Any write may race a read that began before the mutation committed. Drop
+    // all in-flight fill candidates even when stored entries can be invalidated
+    // more narrowly; this keeps stale responses from being inserted afterward.
     for (const pending of inFlight.values()) pending.resolve(null);
     inFlight.clear();
+  }
+
+  function clearForWrite(): void {
+    invalidateCache();
   }
 
   function pruneExpired(currentTime: number): void {
@@ -305,9 +612,9 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     }
   }
 
-  function publishInvalidation(): void {
-    clearForWrite();
-    void options.publishInvalidation?.();
+  function publishInvalidation(invalidation: ReadMicrocacheInvalidation): void {
+    invalidateCache(invalidation);
+    void options.publishInvalidation?.(invalidation);
   }
 
   function sendEntry(
@@ -334,18 +641,25 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     const method = req.method.toUpperCase();
 
     if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && !isReadOnlyPost(req)) {
-      if (isNonInvalidatingWrite(req) || !req.session?.userId) return next();
+      if (
+        isNonInvalidatingWrite(req) ||
+        isRealtimeTelemetryWrite(method, req.originalUrl || req.url) ||
+        !req.session?.userId
+      ) {
+        return next();
+      }
 
+      const invalidation = buildWriteInvalidation(req);
       let finalized = false;
       res.once?.("finish", () => {
         if (finalized) return;
         finalized = true;
-        if (res.statusCode >= 200 && res.statusCode < 300) publishInvalidation();
+        if (res.statusCode >= 200 && res.statusCode < 300) publishInvalidation(invalidation);
       });
       res.once?.("close", () => {
         if (finalized) return;
         finalized = true;
-        publishInvalidation();
+        publishInvalidation(invalidation);
       });
       return next();
     }
@@ -424,6 +738,7 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
                 etag: makeEtag(serialized),
                 sizeBytes,
                 headers: captureReplayableHeaders(res),
+                scope: buildReadScope(req),
               };
               pruneExpired(now());
               const previous = cache.get(key);
@@ -457,7 +772,13 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     return next();
   };
 
-  return { middleware, invalidate: clearForWrite };
+  return {
+    middleware,
+    invalidate: (invalidation) => {
+      if (invalidation) invalidateCache(invalidation);
+      else clearForWrite();
+    },
+  };
 }
 
 export function createReadMicrocacheMiddleware(options: ReadMicrocacheOptions = {}): RequestHandler {
@@ -470,8 +791,8 @@ export function registerPerformanceReadMicrocache(app: { use: (handler: RequestH
   // deterministic while dedicated readMicrocache unit tests exercise the cache itself.
   if (process.env.NODE_ENV === "test") return;
 
-  let invalidateLocalCache: () => void = () => undefined;
-  const coordinator = startReadMicrocacheCoordinator(() => invalidateLocalCache());
+  let invalidateLocalCache: (invalidation?: ReadMicrocacheInvalidation) => void = () => undefined;
+  const coordinator = startReadMicrocacheCoordinator((invalidation) => invalidateLocalCache(invalidation));
   const controller = createReadMicrocacheController({
     cacheEnabled: coordinator.isReady,
     publishInvalidation: coordinator.publishInvalidation,

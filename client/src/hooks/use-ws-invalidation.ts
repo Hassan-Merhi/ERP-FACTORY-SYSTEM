@@ -50,8 +50,23 @@ const TOPIC_QUERY_PREFIXES: Record<RealtimeInvalidationTopic, readonly string[]>
     "/api/stock-groups",
     "/api/stock-categories",
     "/api/stock-grades",
+    "/api/stock-items",
+    "/api/ledger-accounts",
+    "/api/bank-accounts",
+    "/api/fixed-assets",
     "/api/company-settings",
     "/api/user/preferences",
+    "/api/factory/bale-products",
+    "/api/factory/categories",
+    "/api/factory/settings",
+    "/api/factory/my-access",
+    "/api/factory/users",
+    "/api/factory/customers",
+    "/api/factory/suppliers",
+    "/api/factory/workers",
+    "/api/factory/employees",
+    "/api/factory/worker-categories",
+    "/api/factory/cash-accounts",
   ],
   communications: [
     "/api/notifications",
@@ -143,9 +158,11 @@ function queryMatchesPendingInvalidation(
   if (isStableQueryKey(key)) return false;
   if (invalidation.blanket) return true;
 
-  const matchesTopic = [...invalidation.topics].some((topic) =>
-    TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix))
-  );
+  const isReferenceQuery = TOPIC_QUERY_PREFIXES.reference.some((prefix) => key.startsWith(prefix));
+  const matchesTopic = [...invalidation.topics].some((topic) => {
+    if (topic === "factory" && isReferenceQuery && !invalidation.topics.has("reference")) return false;
+    return TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix));
+  });
   if (!matchesTopic) return false;
 
   if (!invalidation.hasUnscopedLocation && invalidation.locationIds.size > 0) {
