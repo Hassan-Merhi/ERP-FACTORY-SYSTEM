@@ -116,20 +116,38 @@ describe("Phase 7C read microcache", () => {
       makeRequest({ originalUrl: "/api/accounts/all?startDate=2026-07-02" })
     );
     const differentDate = buildReadMicrocacheKey(makeRequest({ headers: { "x-client-date": "2026-07-31" } }));
+    const factoryBase = buildReadMicrocacheKey(
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
+    );
     const differentLanguageHeader = buildReadMicrocacheKey(
-      makeRequest({ headers: { "x-factory-catalog-language": "fr" } })
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        headers: { "x-factory-catalog-language": "fr" },
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
     );
     const differentLanguageCookie = buildReadMicrocacheKey(
-      makeRequest({ headers: { cookie: "factory_catalog_language=ar" } })
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        headers: { cookie: "factory_catalog_language=ar" },
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
     );
     const differentUser = buildReadMicrocacheKey(makeRequest({ session: { userId: 8, currentCompanyId: 3 } }));
     const differentCompany = buildReadMicrocacheKey(makeRequest({ session: { userId: 7, currentCompanyId: 4 } }));
 
     expect(differentQuery).not.toBe(base);
     expect(differentDate).not.toBe(base);
-    expect(differentLanguageHeader).not.toBe(base);
-    expect(differentLanguageCookie).not.toBe(base);
+    expect(differentLanguageHeader).not.toBe(factoryBase);
+    expect(differentLanguageCookie).not.toBe(factoryBase);
     expect(differentLanguageHeader).not.toBe(differentLanguageCookie);
+    expect(buildReadMicrocacheKey(makeRequest({ headers: { "x-factory-catalog-language": "fr" } }))).toBe(base);
     expect(differentUser).not.toBe(base);
     expect(differentCompany).not.toBe(base);
   });
