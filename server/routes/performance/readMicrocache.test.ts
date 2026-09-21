@@ -497,4 +497,48 @@ describe("Phase 7C read microcache", () => {
     expect(location4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
 
+
+  it("keeps unknown write families on the safe blanket fallback", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const company3 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    const company4 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 4, currentRole: "Admin" },
+    });
+
+    storeJson(middleware, company3, makeResponse(), { company: 3 });
+    storeJson(middleware, company4, makeResponse(), { company: 4 });
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/admin/unclassified-write",
+        originalUrl: "/api/admin/unclassified-write",
+        session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const company3Next = vi.fn();
+    const company4Next = vi.fn();
+    middleware(company3, makeResponse(), company3Next);
+    middleware(company4, makeResponse(), company4Next);
+
+    expect(company3Next).toHaveBeenCalledOnce();
+    expect(company4Next).toHaveBeenCalledOnce();
+    expect(getReadMicrocacheStats()).toMatchObject({
+      targetedInvalidations: 0,
+      blanketInvalidations: 1,
+      invalidatedEntries: 2,
+    });
+  });
+
 });
