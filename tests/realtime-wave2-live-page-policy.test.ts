@@ -44,8 +44,8 @@ describe("Wave 2 live-page policy", () => {
     const watchUser = source("client/src/pages/settings/WatchUserDialog.tsx");
 
     expect(presence).toContain("const HEARTBEAT_INTERVAL = 90000");
-    expect(activeUsers).toContain("refetchInterval: 30000");
-    expect(watchUser).toContain("refetchInterval: 30000");
+    expect(activeUsers).toContain("refetchInterval: visibleTabInterval(30_000)");
+    expect(watchUser).toContain("refetchInterval: visibleTabInterval(30_000)");
   });
 
   it("keeps scan fallbacks slow/visible instead of aggressive polling", () => {
