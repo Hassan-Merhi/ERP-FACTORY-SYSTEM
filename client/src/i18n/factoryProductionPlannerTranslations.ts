@@ -243,6 +243,31 @@ const translations: Record<string, Translation> = {
     ar: "تعذر حذف الخطة",
     fr: "Impossible de supprimer le plan",
   },
+  "Could not load saved plans.": {
+    en: "Could not load saved plans.",
+    ar: "تعذر تحميل خطط الحاويات المحفوظة.",
+    fr: "Impossible de charger les plans de conteneurs enregistrés.",
+  },
+  "Could not load plan.": {
+    en: "Could not load plan.",
+    ar: "تعذر تحميل الخطة.",
+    fr: "Impossible de charger le plan.",
+  },
+  "Unlock container": {
+    en: "Unlock container",
+    ar: "إلغاء قفل الحاوية",
+    fr: "Déverrouiller le conteneur",
+  },
+  "Lock container": {
+    en: "Lock container",
+    ar: "قفل الحاوية",
+    fr: "Verrouiller le conteneur",
+  },
+  "Move bales to another unlocked container": {
+    en: "Move bales to another unlocked container",
+    ar: "نقل البالات إلى حاوية أخرى غير مقفلة",
+    fr: "Déplacer les balles vers un autre conteneur déverrouillé",
+  },
 };
 
 export function translateFactoryProductionPlannerText(value: string, language: ApplicationLanguage): string | null {
