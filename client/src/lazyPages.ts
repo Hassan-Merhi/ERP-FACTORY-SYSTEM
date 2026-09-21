@@ -86,6 +86,7 @@ export const StockTransfers = lazy(() => import("@/pages/StockTransfers"));
 export const OptionalVouchers = lazy(() => import("@/pages/OptionalVouchers"));
 export const BaleLedger = lazy(() => import("@/pages/BaleLedger"));
 export const SalesReportDetail = lazy(() => import("@/pages/SalesReportDetail"));
+export const StockInSalesReport = lazy(() => import("@/pages/StockInSalesReport"));
 export const SalesReportComparison = lazy(() => import("@/pages/SalesReportComparison"));
 export const ConflictCenter = lazy(() => import("@/pages/ConflictCenter"));
 export const Chat = lazy(() => import("@/pages/Chat"));
