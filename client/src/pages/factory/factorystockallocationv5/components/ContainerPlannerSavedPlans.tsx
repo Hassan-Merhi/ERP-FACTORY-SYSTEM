@@ -1,18 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  ArrowRight,
-  Check,
-  Edit3,
-  Lock,
-  Loader2,
-  RefreshCw,
-  Save,
-  Shuffle,
-  Trash2,
-  Unlock,
-  X,
-} from "lucide-react";
+import { ArrowRight, Check, Edit3, Lock, Loader2, RefreshCw, Save, Shuffle, Trash2, Unlock, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { readActiveCompanyScope } from "@/lib/progressivePagination";
@@ -109,11 +97,7 @@ async function getJson<T>(url: string): Promise<T> {
   return body as T;
 }
 
-export function ContainerPlannerSavedPlans({
-  capacityBales,
-  includeGarbageWipers,
-  previewTotal,
-}: Props) {
+export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers, previewTotal }: Props) {
   const { toast } = useToast();
   const companyScope = readActiveCompanyScope();
 
@@ -346,9 +330,7 @@ export function ContainerPlannerSavedPlans({
     if (!detail || !moveSource) return [];
     return detail.containers.filter(
       (container) =>
-        !container.isLocked &&
-        container.id !== moveSource.containerId &&
-        container.totalBales < container.capacityBales
+        !container.isLocked && container.id !== moveSource.containerId && container.totalBales < container.capacityBales
     );
   }, [detail, moveSource]);
 
@@ -400,7 +382,11 @@ export function ContainerPlannerSavedPlans({
               onClick={() => saveMutation.mutate()}
               data-testid="button-save-container-plan"
             >
-              {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {saveMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
               Save Plan
             </Button>
           </div>
@@ -567,10 +553,7 @@ export function ContainerPlannerSavedPlans({
                 </Button>
               </div>
 
-              <ContainerPlannerReconciliation
-                planId={detail.id}
-                onPlanChanged={() => invalidatePlanner(detail.id)}
-              />
+              <ContainerPlannerReconciliation planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (
@@ -624,14 +607,19 @@ export function ContainerPlannerSavedPlans({
               </div>
 
               {moveSource && (
-                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3" data-testid="container-plan-move-panel">
+                <div
+                  className="rounded-lg border border-primary/30 bg-primary/5 p-3"
+                  data-testid="container-plan-move-panel"
+                >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-muted-foreground">Move product</p>
                       <p className="truncate text-sm font-semibold">
                         {moveSource.productName} · {moveSource.containerName}
                       </p>
-                      <p className="text-xs text-muted-foreground">Up to {formatQty(moveSource.maxQty)} bales available.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Up to {formatQty(moveSource.maxQty)} bales available.
+                      </p>
                     </div>
                     <div className="w-full lg:w-28">
                       <label className="mb-1 block text-xs text-muted-foreground">Quantity</label>
@@ -723,7 +711,10 @@ export function ContainerPlannerSavedPlans({
                           const line = lineLookup.get(`${container.id}__${product.articleCode}`);
                           const qty = line?.plannedQty ?? 0;
                           return (
-                            <td key={container.id} className="border-b border-r px-2 py-1 text-right font-mono tabular-nums">
+                            <td
+                              key={container.id}
+                              className="border-b border-r px-2 py-1 text-right font-mono tabular-nums"
+                            >
                               {qty > 0 && !container.isLocked ? (
                                 <button
                                   type="button"

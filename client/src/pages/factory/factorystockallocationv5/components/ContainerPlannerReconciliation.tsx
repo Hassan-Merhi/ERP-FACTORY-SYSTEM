@@ -236,7 +236,10 @@ export function ContainerPlannerReconciliation({ planId, onPlanChanged }: Props)
 
       {driftProducts.length > 0 && (
         <div className="mt-3 overflow-auto rounded-md border">
-          <table className="w-full min-w-[760px] border-collapse text-xs" data-testid="container-plan-reconciliation-table">
+          <table
+            className="w-full min-w-[760px] border-collapse text-xs"
+            data-testid="container-plan-reconciliation-table"
+          >
             <thead>
               <tr className="bg-muted">
                 <th className="border-b border-r px-3 py-2 text-left">Product</th>

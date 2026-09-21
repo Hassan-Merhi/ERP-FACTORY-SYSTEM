@@ -167,10 +167,7 @@ export function buildContainerPlannerPreview(
   const alreadyLoading = rows.reduce((sum, row) => sum + asNonNegativeInteger(row.totalLoaded), 0);
   const shortageBales = rows.reduce(
     (sum, row) =>
-      sum +
-      (Number.isFinite(row.freeToPromise) && row.freeToPromise < 0
-        ? Math.abs(Math.trunc(row.freeToPromise))
-        : 0),
+      sum + (Number.isFinite(row.freeToPromise) && row.freeToPromise < 0 ? Math.abs(Math.trunc(row.freeToPromise)) : 0),
     0
   );
 
@@ -318,7 +315,6 @@ export function rebalanceUnlockedContainerPlan(
   }));
 }
 
-
 /**
  * Compares a saved planning draft with the current authoritative V5 stock
  * picture. Positive deltas are newly available/unplanned stock. Negative
@@ -412,7 +408,8 @@ export function buildContainerPlanReconciliation(
   const lockedConflictTotal = products.reduce((sum, product) => sum + product.lockedConflictQty, 0);
 
   return {
-    status: lockedConflictTotal > 0 ? "LOCKED_CONFLICT" : unplannedTotal > 0 || overplannedTotal > 0 ? "DRIFT" : "IN_SYNC",
+    status:
+      lockedConflictTotal > 0 ? "LOCKED_CONFLICT" : unplannedTotal > 0 || overplannedTotal > 0 ? "DRIFT" : "IN_SYNC",
     currentStockTotal,
     currentCommittedTotal,
     currentLoadingTotal,

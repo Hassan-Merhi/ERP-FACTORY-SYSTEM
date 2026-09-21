@@ -335,11 +335,12 @@ const translations: Record<string, Translation> = {
     ar: "جميع الحاويات مقفلة. ألغِ قفل حاوية واحدة على الأقل قبل إعادة الموازنة.",
     fr: "Tous les conteneurs sont verrouillés. Déverrouillez-en au moins un avant le rééquilibrage.",
   },
-  "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.": {
-    en: "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.",
-    ar: "يمكن للحاويات غير المقفلة استيعاب ${unlockedCapacity.toLocaleString()} بالة، لكن لا يزال يلزم توزيع ${totalRemaining.toLocaleString()} بالة. ألغِ قفل المزيد من الحاويات أولاً.",
-    fr: "Les conteneurs déverrouillés peuvent contenir ${unlockedCapacity.toLocaleString()} balles, mais ${totalRemaining.toLocaleString()} balles restent à placer. Déverrouillez d’abord davantage de conteneurs.",
-  },
+  "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.":
+    {
+      en: "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.",
+      ar: "يمكن للحاويات غير المقفلة استيعاب ${unlockedCapacity.toLocaleString()} بالة، لكن لا يزال يلزم توزيع ${totalRemaining.toLocaleString()} بالة. ألغِ قفل المزيد من الحاويات أولاً.",
+      fr: "Les conteneurs déverrouillés peuvent contenir ${unlockedCapacity.toLocaleString()} balles, mais ${totalRemaining.toLocaleString()} balles restent à placer. Déverrouillez d’abord davantage de conteneurs.",
+    },
   "The remaining plan cannot fit inside the unlocked container capacity.": {
     en: "The remaining plan cannot fit inside the unlocked container capacity.",
     ar: "لا يمكن استيعاب بقية الخطة ضمن سعة الحاويات غير المقفلة.",
@@ -409,11 +410,12 @@ const translations: Record<string, Translation> = {
   "In sync": { en: "In sync", ar: "متطابق", fr: "Synchronisé" },
   "Locked conflict": { en: "Locked conflict", ar: "تعارض في حاوية مقفلة", fr: "Conflit verrouillé" },
   "Stock changed": { en: "Stock changed", ar: "تغير المخزون", fr: "Stock modifié" },
-  "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.": {
-    en: "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.",
-    ar: "يقارن هذه الخطة المحفوظة بالمخزون الحالي غير المحجوز في V5. لن يتغير شيء حتى تضغط مطابقة مع المخزون الحالي.",
-    fr: "Compare ce plan enregistré au stock V5 actuel non engagé. Rien ne change tant que vous n’appuyez pas sur Rapprocher avec le stock actuel.",
-  },
+  "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.":
+    {
+      en: "Compares this saved plan with current uncommitted V5 stock. Nothing changes until Reconcile to Current Stock is pressed.",
+      ar: "يقارن هذه الخطة المحفوظة بالمخزون الحالي غير المحجوز في V5. لن يتغير شيء حتى تضغط مطابقة مع المخزون الحالي.",
+      fr: "Compare ce plan enregistré au stock V5 actuel non engagé. Rien ne change tant que vous n’appuyez pas sur Rapprocher avec le stock actuel.",
+    },
   "Refresh Check": { en: "Refresh Check", ar: "تحديث الفحص", fr: "Actualiser le contrôle" },
   "Reconcile to Current Stock": {
     en: "Reconcile to Current Stock",
@@ -455,21 +457,23 @@ const translations: Record<string, Translation> = {
     ar: "تغير المخزون الحالي منذ حفظ هذه الخطة.",
     fr: "Le stock actuel a changé depuis l’enregistrement de ce plan.",
   },
-  "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.": {
-    en: "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.",
-    ar: "المطابقة ستحافظ على الحاويات المقفلة، وتعدّل عدد الحاويات غير المقفلة عند الحاجة، وتعيد موازنة الكميات غير المقفلة فقط.",
-    fr: "Le rapprochement préservera les conteneurs verrouillés, ajustera le nombre de conteneurs déverrouillés si nécessaire et rééquilibrera uniquement les quantités déverrouillées.",
-  },
+  "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.":
+    {
+      en: "Reconcile will preserve locked containers, resize the unlocked container count when needed, and rebalance only the unlocked quantities.",
+      ar: "المطابقة ستحافظ على الحاويات المقفلة، وتعدّل عدد الحاويات غير المقفلة عند الحاجة، وتعيد موازنة الكميات غير المقفلة فقط.",
+      fr: "Le rapprochement préservera les conteneurs verrouillés, ajustera le nombre de conteneurs déverrouillés si nécessaire et rééquilibrera uniquement les quantités déverrouillées.",
+    },
   Current: { en: "Current", ar: "الحالي", fr: "Actuel" },
   Planned: { en: "Planned", ar: "المخطط", fr: "Planifié" },
   Change: { en: "Change", ar: "التغيير", fr: "Écart" },
   Locked: { en: "Locked", ar: "مقفل", fr: "Verrouillé" },
-  "Checked": { en: "Checked", ar: "تم الفحص", fr: "Vérifié" },
-  "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.": {
-    en: "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.",
-    ar: "يتم الحفاظ على الحاويات المقفلة كما هي تماماً؛ المطابقة لا تحجز معرّفات بالات فعلية ولا تغيّر تحميل العملاء.",
-    fr: "Les conteneurs verrouillés sont conservés exactement ; le rapprochement ne réserve jamais d’identifiants de balles physiques et ne modifie pas les chargements clients.",
-  },
+  Checked: { en: "Checked", ar: "تم الفحص", fr: "Vérifié" },
+  "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.":
+    {
+      en: "Locked containers are preserved exactly; reconciliation never reserves physical bale IDs or changes customer loading.",
+      ar: "يتم الحفاظ على الحاويات المقفلة كما هي تماماً؛ المطابقة لا تحجز معرّفات بالات فعلية ولا تغيّر تحميل العملاء.",
+      fr: "Les conteneurs verrouillés sont conservés exactement ; le rapprochement ne réserve jamais d’identifiants de balles physiques et ne modifie pas les chargements clients.",
+    },
   "Container plan reconciled": {
     en: "Container plan reconciled",
     ar: "تمت مطابقة خطة الحاويات",
@@ -528,7 +532,7 @@ export function translateFactoryProductionPlannerText(value: string, language: A
   if (capacityMatch) {
     return translations["Capacity must be a whole number from 1 to ${MAX_CONTAINER_CAPACITY}"][language].replace(
       "${MAX_CONTAINER_CAPACITY}",
-      capacityMatch[1],
+      capacityMatch[1]
     );
   }
 
@@ -547,7 +551,7 @@ export function translateFactoryProductionPlannerText(value: string, language: A
   }
 
   const unlockedCapacityMatch = value.match(
-    /^Unlocked containers can hold ([\d,]+) bales, but ([\d,]+) bales still need placement\. Unlock more containers first\.$/,
+    /^Unlocked containers can hold ([\d,]+) bales, but ([\d,]+) bales still need placement\. Unlock more containers first\.$/
   );
   if (unlockedCapacityMatch) {
     return translations[

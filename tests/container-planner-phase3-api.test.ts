@@ -128,10 +128,10 @@ afterAll(async () => {
     await pool.query("DELETE FROM customer_proforma_lines WHERE proforma_id = $1", [proformaId]);
     await pool.query("DELETE FROM customer_proformas WHERE id = $1", [proformaId]);
   }
-  await pool.query(
-    "DELETE FROM factory_bales WHERE company_id = $1 AND article_code = ANY($2::text[])",
-    [ctx.companyId, [ARTICLE_A, ARTICLE_B]]
-  );
+  await pool.query("DELETE FROM factory_bales WHERE company_id = $1 AND article_code = ANY($2::text[])", [
+    ctx.companyId,
+    [ARTICLE_A, ARTICLE_B],
+  ]);
   if (customerId) {
     await pool.query("DELETE FROM customers WHERE id = $1", [customerId]);
   }

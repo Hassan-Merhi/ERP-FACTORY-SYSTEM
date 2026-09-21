@@ -9,10 +9,7 @@ import {
   rebalanceUnlockedContainerPlan,
   type SavedPlannerContainer,
 } from "@shared/containerPlanner";
-import {
-  loadContainerPlannerSource,
-  type PlannerQueryable as Queryable,
-} from "./container-planner-source";
+import { loadContainerPlannerSource, type PlannerQueryable as Queryable } from "./container-planner-source";
 
 type PlannerPlanRow = {
   id: number;
@@ -411,7 +408,9 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
 
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (!planId || !fromContainerId || !toContainerId || !quantity || !articleCode) {
-        return res.status(400).json({ message: "Plan, source, destination, product and positive quantity are required" });
+        return res
+          .status(400)
+          .json({ message: "Plan, source, destination, product and positive quantity are required" });
       }
       if (fromContainerId === toContainerId) {
         return res.status(400).json({ message: "Choose a different destination container" });
@@ -693,10 +692,7 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         deleted: true,
         revision: plan.revision,
       });
-      await client.query(
-        `DELETE FROM factory_container_plans WHERE id = $1 AND company_id = $2`,
-        [planId, companyId]
-      );
+      await client.query(`DELETE FROM factory_container_plans WHERE id = $1 AND company_id = $2`, [planId, companyId]);
       await client.query("COMMIT");
       return res.json({ success: true });
     } catch (error: unknown) {

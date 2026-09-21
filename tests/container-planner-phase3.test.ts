@@ -94,10 +94,7 @@ describe("Factory container planner phase 3 reconciliation", () => {
 
   it("keeps excluded garbage/wiper free stock outside the reconciliation target", () => {
     const result = buildContainerPlanReconciliation(
-      [
-        source("NORMAL", 5),
-        source("WIPER", 7, { isGarbageOrWipers: true }),
-      ],
+      [source("NORMAL", 5), source("WIPER", 7, { isGarbageOrWipers: true })],
       [container(1, false, [{ articleCode: "NORMAL", productName: "NORMAL", plannedQty: 5 }])],
       { includeGarbageWipers: false }
     );
