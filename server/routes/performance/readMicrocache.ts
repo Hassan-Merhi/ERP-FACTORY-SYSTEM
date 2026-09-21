@@ -292,14 +292,17 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["pos", "accounting"];
   }
 
+  if (path === "/api/location-summary") {
+    return ["inventory"];
+  }
+
   if (
-    path === "/api/location-summary" ||
     path === "/api/stock-items" ||
     path === "/api/stock-items/light" ||
     path === "/api/stock-items/all-code-aliases" ||
     path === "/api/locations"
   ) {
-    return ["inventory"];
+    return ["reference"];
   }
 
   if (
@@ -323,11 +326,13 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     path === "/api/daybook" ||
     path === "/api/accounts/all" ||
     path === "/api/accounts/voucher-sidebar" ||
-    path === "/api/stats/monthly-data" ||
-    path === "/api/ledger-accounts" ||
-    path === "/api/ledger-accounts/parent-groups"
+    path === "/api/stats/monthly-data"
   ) {
     return ["accounting"];
+  }
+
+  if (path === "/api/ledger-accounts" || path === "/api/ledger-accounts/parent-groups") {
+    return ["reference"];
   }
 
   if (
@@ -357,6 +362,24 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
 
   if (path === "/api/factory/daybook" || path === "/api/factory/suppliers/with-balances") {
     return ["factory", "accounting"];
+  }
+
+  if (
+    path === "/api/factory/bale-products" ||
+    path === "/api/factory/categories" ||
+    path === "/api/factory/settings" ||
+    path === "/api/factory/my-access" ||
+    path === "/api/factory/customers" ||
+    path === "/api/factory/suppliers" ||
+    path === "/api/factory/worker-categories"
+  ) {
+    return ["reference"];
+  }
+
+  if (path === "/api/factory/cash-accounts") return ["reference", "accounting"];
+
+  if (path === "/api/factory/workers" || path === "/api/factory/employees") {
+    return ["reference", "payroll", "accounting"];
   }
 
   if (path.startsWith("/api/factory/")) return ["factory"];
