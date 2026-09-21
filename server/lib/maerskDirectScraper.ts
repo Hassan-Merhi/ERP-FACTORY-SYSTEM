@@ -72,8 +72,35 @@ export function isMaerskDirectScraperAvailable(): boolean {
 
 let _sharedBrowser: Browser | null = null;
 let _stealthRegistered = false;
+let _browserIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function browserIdleMs(): number {
+  const parsed = Number.parseInt(String(process.env.PUPPETEER_BROWSER_IDLE_MS ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 60_000 ? parsed : 5 * 60 * 1000;
+}
+
+function clearBrowserIdleTimer(): void {
+  if (_browserIdleTimer) clearTimeout(_browserIdleTimer);
+  _browserIdleTimer = null;
+}
+
+function scheduleBrowserIdleShutdown(): void {
+  clearBrowserIdleTimer();
+  if (!_sharedBrowser) return;
+  _browserIdleTimer = setTimeout(() => {
+    const browser = _sharedBrowser;
+    _sharedBrowser = null;
+    _browserIdleTimer = null;
+    if (!browser) return;
+    void browser.close().catch((error: unknown) => {
+      logger.warn("[MaerskDirect] Idle browser shutdown failed", { error: getErrorMessage(error) });
+    });
+  }, browserIdleMs());
+  _browserIdleTimer.unref?.();
+}
 
 async function getSharedBrowser(): Promise<Browser> {
+  clearBrowserIdleTimer();
   // If we already have a live browser, verify it's still responsive
   if (_sharedBrowser) {
     try {
@@ -131,6 +158,7 @@ async function getSharedBrowser(): Promise<Browser> {
 
   // Auto-clear on crash so the next call relaunches cleanly
   launched.on("disconnected", () => {
+    clearBrowserIdleTimer();
     logger.warn("[MaerskDirect] Shared browser disconnected (crash or killed)");
     _sharedBrowser = null;
   });
@@ -512,6 +540,7 @@ export async function scrapeMaerskDirect(containerNumber: string): Promise<Carri
       /* ignore */
     }
   }, SCRAPER_TIMEOUT_MS);
+  hardStop.unref?.();
 
   try {
     // ── Get/reuse shared browser (Option A: shared instance) ─────────────────
@@ -803,6 +832,7 @@ export async function scrapeMaerskDirect(containerNumber: string): Promise<Carri
       /* ignore */
     }
     release?.();
+    scheduleBrowserIdleShutdown();
     logger.info(`[MaerskDirect] ${containerNumber}: Puppeteer slot released`);
   }
 }
