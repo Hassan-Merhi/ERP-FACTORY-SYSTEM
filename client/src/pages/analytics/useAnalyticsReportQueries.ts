@@ -49,10 +49,10 @@ export function useAnalyticsReportQueries({
   const accountsQuery = useQuery<Account[]>({
     queryKey: analyticsKeys.accounts(selectedCompanyId, balStartDate, balEndDate),
     queryFn: () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ profile: "analytics" });
       if (balStartDate) params.append("startDate", balStartDate);
       if (balEndDate) params.append("endDate", balEndDate);
-      const url = `/api/accounts/all${params.toString() ? `?${params.toString()}` : ""}`;
+      const url = `/api/accounts/all?${params.toString()}`;
       return fetchAnalyticsAccounts<Account>(url);
     },
     enabled: !!selectedCompanyId,
