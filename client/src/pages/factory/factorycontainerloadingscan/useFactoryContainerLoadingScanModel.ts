@@ -549,14 +549,7 @@ export function useFactoryContainerLoadingScanModel() {
       orderDate,
       containerNotes: loadingNote.trim() || undefined,
     });
-  }, [
-    customerId,
-    selectedLocationId,
-    chosenProforma,
-    orderDate,
-    loadingNote,
-    createOrderMutation,
-  ]);
+  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation]);
 
   /** Create a separate loading from the pending-orders warning. */
   const startNewLoadingAnyway = () => {

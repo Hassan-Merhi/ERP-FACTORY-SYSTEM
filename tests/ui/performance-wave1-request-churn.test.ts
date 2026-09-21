@@ -15,13 +15,25 @@ const pollingCases = [
   ["client/src/pages/settings/ActiveUsersSection.tsx", "visibleTabInterval(30_000)", "refetchInterval: 30000,"],
   ["client/src/pages/settings/WatchUserDialog.tsx", "visibleTabInterval(30_000)", "refetchInterval: 30000,"],
   ["client/src/pages/settings/RemoteSupportWatchDialog.tsx", "visibleTabInterval(4_000)", "refetchInterval: 4000,"],
-  ["client/src/pages/factory/FactoryNetPosition.tsx", "visibleTabInterval(120_000)", "refetchInterval: isToday ? 30_000 : false"],
+  [
+    "client/src/pages/factory/FactoryNetPosition.tsx",
+    "visibleTabInterval(120_000)",
+    "refetchInterval: isToday ? 30_000 : false",
+  ],
   ["client/src/pages/factory/FactoryDispatchBatchScan.tsx", "visibleTabInterval(10_000)", "refetchInterval: 10_000,"],
   ["client/src/pages/factory/FactoryPendingLoadings.tsx", "visibleTabInterval(60_000)", "refetchInterval: 60000,"],
-  ["client/src/pages/properties/PropertiesDashboard.tsx", "visibleTabInterval(5 * 60_000)", "refetchInterval: 5 * 60 * 1000,"],
+  [
+    "client/src/pages/properties/PropertiesDashboard.tsx",
+    "visibleTabInterval(5 * 60_000)",
+    "refetchInterval: 5 * 60 * 1000,",
+  ],
   ["client/src/pages/factory/FactoryInvoiceLoadingScan.tsx", "visibleTabInterval(10_000)", "refetchInterval: 10_000,"],
   ["client/src/pages/factory/FactoryDispatchBatchDetail.tsx", "visibleTabInterval(15_000)", "refetchInterval: 15_000,"],
-  ["client/src/pages/transactionjournal/useTransactionJournalModel.ts", "visibleTabInterval(120_000)", "refetchInterval: 30_000,"],
+  [
+    "client/src/pages/transactionjournal/useTransactionJournalModel.ts",
+    "visibleTabInterval(120_000)",
+    "refetchInterval: 30_000,",
+  ],
   [
     "client/src/pages/factory/factoryfinancialsnapshot/useFactoryFinancialSnapshotModel.ts",
     "visibleTabInterval(5 * 60_000)",
@@ -49,8 +61,8 @@ describe("Performance Wave 1 request-churn policy", () => {
   it("pauses AI task polling when the tab is hidden", () => {
     const text = source("client/src/pages/AICommandCenter.tsx");
     expect(text).toContain('document.visibilityState === "hidden"');
-    expect(text).toContain('? 2_000 : false');
-    expect(text).not.toContain('? 2000 : false');
+    expect(text).toContain("? 2_000 : false");
+    expect(text).not.toContain("? 2000 : false");
   });
 
   it("pauses container bulk-progress requests while the tab is hidden", () => {

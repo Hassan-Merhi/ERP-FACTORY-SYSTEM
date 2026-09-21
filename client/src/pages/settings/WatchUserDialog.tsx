@@ -290,7 +290,9 @@ export function WatchUserDialog({
         setDisplaySize({ width: sourceWidth, height: sourceHeight });
         return;
       }
-      setDisplaySize(calculateContainedScreenFeedSize(element.clientWidth, element.clientHeight, sourceWidth, sourceHeight));
+      setDisplaySize(
+        calculateContainedScreenFeedSize(element.clientWidth, element.clientHeight, sourceWidth, sourceHeight)
+      );
     };
     updateSize();
     const observer = new ResizeObserver(updateSize);
@@ -299,12 +301,12 @@ export function WatchUserDialog({
   }, [displayMode, sourceHeight, sourceWidth]);
 
   const isOnline =
-    !!presence?.userId &&
-    !!presence?.lastSeen &&
-    tick - new Date(presence.lastSeen).getTime() < 3 * 60 * 1000;
+    !!presence?.userId && !!presence?.lastSeen && tick - new Date(presence.lastSeen).getTime() < 3 * 60 * 1000;
   const hasScreen = !!screenFrame?.dataUrl;
   const serverTimestamp = screenFrame?.receivedAt ?? screenFrame?.capturedAt;
-  const frameAgeMs = serverTimestamp ? Math.max(0, tick - new Date(serverTimestamp).getTime()) : Number.POSITIVE_INFINITY;
+  const frameAgeMs = serverTimestamp
+    ? Math.max(0, tick - new Date(serverTimestamp).getTime())
+    : Number.POSITIVE_INFINITY;
   const transportDelayMs =
     serverTimestamp && frameReceivedAt !== null
       ? Math.max(0, frameReceivedAt - new Date(serverTimestamp).getTime())
@@ -360,7 +362,6 @@ export function WatchUserDialog({
     if (!hasScreen || frameAgeMs < 15000 || refreshing) return;
     void requestFreshFrame();
     // The age threshold prevents repeated reconnect loops.
-    
   }, [frameAgeMs, hasScreen, refreshing, requestFreshFrame]);
 
   const frameMetadata = useMemo(() => {
@@ -397,28 +398,50 @@ export function WatchUserDialog({
       >
         <div className="flex items-center gap-3 px-4 py-2.5 border-b shrink-0 flex-wrap gap-y-1">
           <span className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${recoveryState === "live" ? "bg-green-500" : recoveryState === "delayed" ? "bg-amber-500" : recoveryState === "fallback" ? "bg-red-500" : "bg-muted-foreground/50"}`} />
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${recoveryState === "live" ? "bg-green-500" : recoveryState === "delayed" ? "bg-amber-500" : recoveryState === "fallback" ? "bg-red-500" : "bg-muted-foreground/50"}`}
+            />
             <span className="text-xs font-semibold uppercase tracking-wide">{stateLabel}</span>
           </span>
           <span className="font-semibold text-sm">Watching: {username}</span>
           {presence && (
             <span className="text-sm text-muted-foreground">
-              · {presence.companyName || "Company unavailable"} · {presence.role || "—"} · last seen {timeAgo(presence.lastSeen)}
+              · {presence.companyName || "Company unavailable"} · {presence.role || "—"} · last seen{" "}
+              {timeAgo(presence.lastSeen)}
             </span>
           )}
           <div className="ml-auto flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium" data-testid="screen-feed-quality">
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium"
+              data-testid="screen-feed-quality"
+            >
               {liveConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
               {qualityLabels[quality]}
             </span>
-            <Button size="sm" variant="outline" onClick={() => void requestFreshFrame()} disabled={refreshing || isFetchingFrame} data-testid="button-request-fresh-frame">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void requestFreshFrame()}
+              disabled={refreshing || isFetchingFrame}
+              data-testid="button-request-fresh-frame"
+            >
               <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${refreshing || isFetchingFrame ? "animate-spin" : ""}`} />
               Request fresh frame
             </Button>
-            <Button size="sm" variant={displayMode === "fit" ? "default" : "outline"} onClick={() => setDisplayMode("fit")} data-testid="button-feed-fit">
+            <Button
+              size="sm"
+              variant={displayMode === "fit" ? "default" : "outline"}
+              onClick={() => setDisplayMode("fit")}
+              data-testid="button-feed-fit"
+            >
               <Monitor className="h-3.5 w-3.5 mr-1.5" /> Fit
             </Button>
-            <Button size="sm" variant={displayMode === "actual" ? "default" : "outline"} onClick={() => setDisplayMode("actual")} data-testid="button-feed-actual">
+            <Button
+              size="sm"
+              variant={displayMode === "actual" ? "default" : "outline"}
+              onClick={() => setDisplayMode("actual")}
+              data-testid="button-feed-actual"
+            >
               <ZoomIn className="h-3.5 w-3.5 mr-1.5" /> 100%
             </Button>
             {hasScreen && (
@@ -430,11 +453,19 @@ export function WatchUserDialog({
         </div>
 
         {(streamError || frameMetadata.failureReason || isFallback) && (
-          <div className={`px-4 py-2 border-b text-xs flex items-start gap-2 ${isFallback ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+          <div
+            className={`px-4 py-2 border-b text-xs flex items-start gap-2 ${isFallback ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
+          >
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">{isFallback ? "Full page capture failed; a simplified fallback is shown." : "The viewer is recovering the live connection."}</p>
-              <p className="opacity-90 break-words">{frameMetadata.failureReason || streamError || "Waiting for the next full frame."}</p>
+              <p className="font-semibold">
+                {isFallback
+                  ? "Full page capture failed; a simplified fallback is shown."
+                  : "The viewer is recovering the live connection."}
+              </p>
+              <p className="opacity-90 break-words">
+                {frameMetadata.failureReason || streamError || "Waiting for the next full frame."}
+              </p>
             </div>
           </div>
         )}
@@ -447,7 +478,11 @@ export function WatchUserDialog({
               data-testid="screen-feed-viewport"
             >
               {hasScreen ? (
-                <div className="relative shrink-0" style={{ width: displaySize.width, height: displaySize.height }} data-testid="screen-feed-frame-wrapper">
+                <div
+                  className="relative shrink-0"
+                  style={{ width: displaySize.width, height: displaySize.height }}
+                  data-testid="screen-feed-frame-wrapper"
+                >
                   <img
                     src={screenFrame.dataUrl}
                     alt="Live screen of user"
@@ -462,14 +497,33 @@ export function WatchUserDialog({
                     data-frame-captured-at={screenFrame.capturedAt}
                   />
                   {cursorVisible && cursor && (
-                    <div className="absolute pointer-events-none drop-shadow-md" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%`, transform: "translate(-2px, -2px)" }} data-testid="screen-feed-cursor">
+                    <div
+                      className="absolute pointer-events-none drop-shadow-md"
+                      style={{
+                        left: `${cursor.x * 100}%`,
+                        top: `${cursor.y * 100}%`,
+                        transform: "translate(-2px, -2px)",
+                      }}
+                      data-testid="screen-feed-cursor"
+                    >
                       <MousePointer2 className="h-5 w-5 fill-white text-black" />
                     </div>
                   )}
                   {recentClicks.map((click, index) => {
                     const opacity = Math.max(0, 1 - (tick - click.ts) / 4000);
                     return (
-                      <div key={`${click.ts}-${index}`} title={click.label} style={{ position: "absolute", left: `${click.x * 100}%`, top: `${click.y * 100}%`, transform: "translate(-50%, -50%)", opacity, pointerEvents: "none" }}>
+                      <div
+                        key={`${click.ts}-${index}`}
+                        title={click.label}
+                        style={{
+                          position: "absolute",
+                          left: `${click.x * 100}%`,
+                          top: `${click.y * 100}%`,
+                          transform: "translate(-50%, -50%)",
+                          opacity,
+                          pointerEvents: "none",
+                        }}
+                      >
                         <span className="relative flex h-5 w-5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
                           <span className="relative inline-flex rounded-full h-5 w-5 bg-orange-500 border-2 border-white" />
@@ -483,7 +537,11 @@ export function WatchUserDialog({
                   <Clock className="h-10 w-10 opacity-30" />
                   <p className="text-sm">Waiting for first frame…</p>
                   <p className="text-xs">Live delivery starts as soon as the employee browser responds.</p>
-                  {tick - watchStartRef.current > 10000 && <Button size="sm" variant="outline" onClick={() => void requestFreshFrame()}>Reconnect viewer</Button>}
+                  {tick - watchStartRef.current > 10000 && (
+                    <Button size="sm" variant="outline" onClick={() => void requestFreshFrame()}>
+                      Reconnect viewer
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -507,13 +565,27 @@ export function WatchUserDialog({
             {clicks.length > 0 && (
               <div className="border-t px-3 py-1.5 shrink-0 bg-background/80 backdrop-blur-sm">
                 <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1 shrink-0"><Eye className="h-3 w-3" /> Clicks</span>
-                  {[...clicks].reverse().slice(0, 6).map((click, index) => (
-                    <div key={`${click.ts}-${index}`} className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <span className="truncate max-w-[160px]">{click.label || "—"}</span>
-                      <span className="text-muted-foreground/50 shrink-0">{new Date(click.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-                    </div>
-                  ))}
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1 shrink-0">
+                    <Eye className="h-3 w-3" /> Clicks
+                  </span>
+                  {[...clicks]
+                    .reverse()
+                    .slice(0, 6)
+                    .map((click, index) => (
+                      <div
+                        key={`${click.ts}-${index}`}
+                        className="flex items-center gap-1 text-xs text-muted-foreground"
+                      >
+                        <span className="truncate max-w-[160px]">{click.label || "—"}</span>
+                        <span className="text-muted-foreground/50 shrink-0">
+                          {new Date(click.ts).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
@@ -521,7 +593,9 @@ export function WatchUserDialog({
 
           <div className="w-72 shrink-0 border-l flex flex-col overflow-hidden">
             <div className="px-3 py-2 border-b shrink-0">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1"><History className="h-3.5 w-3.5" /> Page history</p>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1">
+                <History className="h-3.5 w-3.5" /> Page history
+              </p>
             </div>
             {isOnline && presence?.currentRoute && (
               <div className="px-3 py-2 border-b shrink-0 bg-muted/40">
@@ -532,13 +606,17 @@ export function WatchUserDialog({
             )}
             <div className="flex-1 overflow-y-auto divide-y text-sm min-h-0">
               {groupedActivity.length === 0 ? (
-                <p className="text-xs text-muted-foreground px-3 py-3">No history yet — pages appear here as the user navigates.</p>
+                <p className="text-xs text-muted-foreground px-3 py-3">
+                  No history yet — pages appear here as the user navigates.
+                </p>
               ) : (
                 groupedActivity.map((event) => (
                   <div key={`${event.id}-${event.route}`} className="px-3 py-2 space-y-0.5">
                     <div className="flex items-center gap-2">
                       <p className="font-medium leading-tight truncate">{getPageLabel(event.route)}</p>
-                      {event.count > 1 && <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5 shrink-0">×{event.count}</span>}
+                      {event.count > 1 && (
+                        <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5 shrink-0">×{event.count}</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground font-mono truncate">{event.route}</p>
