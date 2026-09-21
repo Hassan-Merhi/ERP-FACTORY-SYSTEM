@@ -10,6 +10,7 @@ const ROOTS = [
   "vouchers",
   "inventory",
   "factory_containers",
+  "factory_container_plans",
   "factory_raw_stock",
   "factory_bales",
   "factory_container_commissions",
