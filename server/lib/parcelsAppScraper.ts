@@ -145,8 +145,35 @@ export const ensureChromiumAvailable = ensureChromiumInstalled;
 
 let _sharedBrowser: Browser | null = null;
 let _stealthRegistered = false;
+let _browserIdleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function browserIdleMs(): number {
+  const parsed = Number.parseInt(String(process.env.PUPPETEER_BROWSER_IDLE_MS ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 60_000 ? parsed : 5 * 60 * 1000;
+}
+
+function clearBrowserIdleTimer(): void {
+  if (_browserIdleTimer) clearTimeout(_browserIdleTimer);
+  _browserIdleTimer = null;
+}
+
+function scheduleBrowserIdleShutdown(): void {
+  clearBrowserIdleTimer();
+  if (!_sharedBrowser) return;
+  _browserIdleTimer = setTimeout(() => {
+    const browser = _sharedBrowser;
+    _sharedBrowser = null;
+    _browserIdleTimer = null;
+    if (!browser) return;
+    void browser.close().catch((error: unknown) => {
+      logger.warn("[ParcelsAppScraper] Idle browser shutdown failed", { error: getErrorMessage(error) });
+    });
+  }, browserIdleMs());
+  _browserIdleTimer.unref?.();
+}
 
 async function getSharedBrowser() {
+  clearBrowserIdleTimer();
   if (_sharedBrowser) {
     try {
       await _sharedBrowser.pages(); // lightweight liveness check
@@ -208,6 +235,7 @@ async function getSharedBrowser() {
 
   const browser = _sharedBrowser;
   browser.on("disconnected", () => {
+    clearBrowserIdleTimer();
     logger.warn("[ParcelsAppScraper] Shared browser disconnected (crash or killed)");
     _sharedBrowser = null;
   });
@@ -247,6 +275,7 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
       /* ignore */
     }
   }, SCRAPER_TIMEOUT_MS);
+  hardStop.unref?.();
 
   try {
     const browser = await getSharedBrowser();
@@ -317,6 +346,7 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
     }
     page = null;
     release?.();
+    scheduleBrowserIdleShutdown();
 
     if (isBlocked) {
       return {
@@ -360,6 +390,7 @@ export async function scrapeTracking(containerNumber: string): Promise<ScraperRe
       }
     }
     release?.();
+    scheduleBrowserIdleShutdown();
     return {
       success: false,
       shipment: null,
