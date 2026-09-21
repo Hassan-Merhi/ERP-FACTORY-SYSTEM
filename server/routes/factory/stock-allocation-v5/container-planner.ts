@@ -108,18 +108,28 @@ async function loadPlannerSource(client: Queryable, companyId: number): Promise<
            AND co.proforma_id_used IS NOT NULL
          GROUP BY cob.order_id, fb.article_code
        ),
-       expected AS (
-         SELECT cel.article_code,
-                COALESCE(SUM(GREATEST(cel.expected_qty - COALESCE(lbo.qty, 0), 0)), 0)::int AS qty
-         FROM customer_order_expected_lines cel
-         JOIN customer_orders co ON co.id = cel.order_id
-         LEFT JOIN loaded_by_order lbo
-           ON lbo.order_id = cel.order_id AND lbo.article_code = cel.article_code
-         WHERE cel.company_id = $1
-           AND co.company_id = $1
+       expected_source AS (
+         SELECT co.id AS order_id,
+                cpl.article_code,
+                COALESCE(cel.expected_qty, cpl.quantity, 0)::int AS expected_qty
+         FROM customer_orders co
+         JOIN customer_proforma_lines cpl
+           ON cpl.proforma_id = co.proforma_id_used
+         LEFT JOIN customer_order_expected_lines cel
+           ON cel.order_id = co.id
+          AND cel.article_code = cpl.article_code
+          AND cel.company_id = co.company_id
+         WHERE co.company_id = $1
            AND co.status IN ('DRAFT', 'LOADING')
            AND co.proforma_id_used IS NOT NULL
-         GROUP BY cel.article_code
+       ),
+       expected AS (
+         SELECT es.article_code,
+                COALESCE(SUM(GREATEST(es.expected_qty - COALESCE(lbo.qty, 0), 0)), 0)::int AS qty
+         FROM expected_source es
+         LEFT JOIN loaded_by_order lbo
+           ON lbo.order_id = es.order_id AND lbo.article_code = es.article_code
+         GROUP BY es.article_code
        ),
        codes AS (
          SELECT article_code FROM in_stock
