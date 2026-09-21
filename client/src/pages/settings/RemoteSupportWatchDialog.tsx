@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, History, Maximize2, Monitor, RefreshCw, Wifi, WifiOff, X, ZoomIn } from "lucide-react";
@@ -144,7 +145,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
       apiRequest("GET", `/api/screen-feed/control/tabs/${encodeURIComponent(userId)}`).then((response) =>
         response.json()
       ),
-    refetchInterval: 4000,
+    refetchInterval: visibleTabInterval(4_000),
   });
   const tabs = useMemo(
     () =>
@@ -162,7 +163,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
   const { data: presenceRaw } = useQuery({
     queryKey: ["/api/user-presence", userId],
     queryFn: () => apiRequest("GET", `/api/user-presence/${userId}`).then((response) => response.json()),
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
   const { data: activityRaw } = useQuery({
     queryKey: ["/api/user-presence", userId, "activity"],
