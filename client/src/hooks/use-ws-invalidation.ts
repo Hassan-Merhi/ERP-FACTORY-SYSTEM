@@ -158,9 +158,11 @@ function queryMatchesPendingInvalidation(
   if (isStableQueryKey(key)) return false;
   if (invalidation.blanket) return true;
 
-  const matchesTopic = [...invalidation.topics].some((topic) =>
-    TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix))
-  );
+  const isReferenceQuery = TOPIC_QUERY_PREFIXES.reference.some((prefix) => key.startsWith(prefix));
+  const matchesTopic = [...invalidation.topics].some((topic) => {
+    if (topic === "factory" && isReferenceQuery && !invalidation.topics.has("reference")) return false;
+    return TOPIC_QUERY_PREFIXES[topic].some((prefix) => key.startsWith(prefix));
+  });
   if (!matchesTopic) return false;
 
   if (!invalidation.hasUnscopedLocation && invalidation.locationIds.size > 0) {
