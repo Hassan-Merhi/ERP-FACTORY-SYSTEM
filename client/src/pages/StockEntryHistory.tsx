@@ -156,7 +156,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     refetchOnWindowFocus: false,
   });
   const { data: products = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
   });
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ["/api/locations"] });
   const { data: categories = [] } = useQuery<(WorkerCategory & { name: string })[]>({
