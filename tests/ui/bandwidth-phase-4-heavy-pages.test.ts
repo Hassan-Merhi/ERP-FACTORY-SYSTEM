@@ -64,9 +64,8 @@ describe("Bandwidth Phase 4 request-pressure contracts", () => {
       "factory-catalog-language=fr"
     );
 
-    expect(
-      factoryCatalogLanguageCacheVariant(new URL("/api/accounts/all", "https://erp.example"), headers, "")
-    ).toBe("factory-catalog-language=none");
+    expect(factoryCatalogLanguageCacheVariant(new URL("/api/accounts/all", "https://erp.example"), headers, "")).toBe(
+      "factory-catalog-language=none"
+    );
   });
-
 });
