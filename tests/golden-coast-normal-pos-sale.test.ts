@@ -215,6 +215,45 @@ describe("Golden Coast normal itemized POS sale", () => {
     expect(Number(inventoryRows[0].quantity)).toBeCloseTo(inventoryBeforeEdit - 2, 3);
   });
 
+  it("keeps one active settlement pair across repeated POS edits", async () => {
+    const clientSaleId = "normal-pos-sale-repeated-edits";
+    const created = await fixture.agent.post("/api/pos/sales").send({
+      ...saleBody(),
+      clientSaleId,
+    });
+    expect(created.status).toBe(200);
+
+    const edits = [
+      { quantity: "3", sellingPrice: "150", total: "450.00" },
+      { quantity: "2", sellingPrice: "175", total: "350.00" },
+      { quantity: "1", sellingPrice: "225", total: "225.00" },
+    ];
+
+    for (const edit of edits) {
+      const response = await fixture.agent.patch(`/api/vouchers/${created.body.voucher.id}/sales`).send({
+        locationId: fixture.ctx.locationId,
+        paymentAccountType: "cash",
+        paymentAccountId: fixture.ctx.cashAccountId,
+        targetCompanyId: fixture.hadiCompanyId,
+        items: [
+          {
+            stockItemId: fixture.goldenCoastStockItemId,
+            quantity: edit.quantity,
+            sellingPrice: edit.sellingPrice,
+          },
+        ],
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.grandTotal).toBe(edit.total);
+      expect(await settlementVoucherIds(clientSaleId)).toHaveLength(2);
+
+      const activeSettlement = await activeSettlementVouchers(clientSaleId);
+      expect(activeSettlement).toHaveLength(2);
+      expect(activeSettlement.map((voucher) => voucher.totalAmount)).toEqual([edit.total, edit.total]);
+    }
+  });
+
   it("replaces marker-less stale settlement vouchers instead of duplicating them", async () => {
     const clientSaleId = "normal-pos-sale-edit-missing-marker";
     const created = await fixture.agent.post("/api/pos/sales").send({
