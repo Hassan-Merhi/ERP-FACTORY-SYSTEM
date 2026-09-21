@@ -23,17 +23,6 @@ type DailyScanRow = {
   [field: string]: unknown;
 };
 
-type ProformaSummaryRow = {
-  id?: number | string;
-  isActive?: boolean;
-  [field: string]: unknown;
-};
-
-type ProformaDetail = {
-  lines?: unknown;
-  [field: string]: unknown;
-};
-
 /** Marker for the one-time fetch patch, kept off the global `Window` type. */
 type PatchedWindow = Window & { __phase4BandwidthFetchInstalled?: boolean };
 
@@ -165,29 +154,6 @@ async function handleDailyList(
 function clearProformaCaches(): void {
   proformaSummaryCache.clear();
   proformaDetailCache.clear();
-}
-
-async function getProformaDetail(
-  originalFetch: typeof window.fetch,
-  id: number,
-  init?: RequestInit
-): Promise<ProformaDetail | null> {
-  const cached = proformaDetailCache.get(id);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.response
-      .clone()
-      .json()
-      .catch(() => null);
-  }
-
-  const url = new URL(`/api/factory/customer-proformas/${id}`, window.location.origin);
-  const response = await originalFetch(url.toString(), withBypassHeaders(url, { ...init, credentials: "include" }));
-  if (!response.ok) return null;
-  proformaDetailCache.set(id, { response: response.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
-  return response
-    .clone()
-    .json()
-    .catch(() => null);
 }
 
 async function handleProformaSummary(
