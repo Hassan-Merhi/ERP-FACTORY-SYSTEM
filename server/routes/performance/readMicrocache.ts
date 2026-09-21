@@ -2,7 +2,11 @@ import { createHash } from "crypto";
 import type { Request, RequestHandler } from "express";
 import { checkPOSLocation, requireAuth } from "../../auth";
 import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
-import { classifyRealtimeWrite, type RealtimeInvalidationTopic } from "../../../shared/realtimeInvalidation";
+import {
+  classifyRealtimeWrite,
+  isRealtimeTelemetryWrite,
+  type RealtimeInvalidationTopic,
+} from "../../../shared/realtimeInvalidation";
 import { startReadMicrocacheCoordinator, type ReadMicrocacheInvalidation } from "./readMicrocacheCoordinator";
 
 export const READ_MICROCACHE_TTL_MS = new Map<string, number>([
@@ -590,7 +594,13 @@ function createReadMicrocacheController(options: ReadMicrocacheOptions = {}): Re
     const method = req.method.toUpperCase();
 
     if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && !isReadOnlyPost(req)) {
-      if (isNonInvalidatingWrite(req) || !req.session?.userId) return next();
+      if (
+        isNonInvalidatingWrite(req) ||
+        isRealtimeTelemetryWrite(method, req.originalUrl || req.url) ||
+        !req.session?.userId
+      ) {
+        return next();
+      }
 
       const invalidation = buildWriteInvalidation(req);
       let finalized = false;
