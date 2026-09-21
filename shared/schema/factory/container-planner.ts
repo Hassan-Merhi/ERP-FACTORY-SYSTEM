@@ -11,6 +11,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { companies } from "../common";
+import { customers } from "../erp/vouchers";
 
 // Planning-only tables for Stock Allocation V5. They intentionally do not
 // reference physical bale IDs or customer orders: Phase 2 is an editable draft
@@ -123,7 +124,46 @@ export const factoryContainerPlanBales = pgTable(
   })
 );
 
+// Phase 5 reserves planned quantities for a customer. One order can span
+// several containers and one container can serve several customers, so the
+// grain is (container, customer, product).
+export const factoryContainerPlanAllocations = pgTable(
+  "factory_container_plan_allocations",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    planId: integer("plan_id")
+      .notNull()
+      .references(() => factoryContainerPlans.id, { onDelete: "cascade" }),
+    planContainerId: integer("plan_container_id")
+      .notNull()
+      .references(() => factoryContainerPlanContainers.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    orderId: integer("order_id"),
+    articleCode: varchar("article_code", { length: 100 }).notNull(),
+    productName: text("product_name").notNull(),
+    allocatedQty: integer("allocated_qty").notNull(),
+    notes: text("notes"),
+    createdBy: varchar("created_by", { length: 100 }),
+    createdByName: text("created_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    allocationUnique: uniqueIndex("factory_container_plan_allocations_unique").on(
+      t.planContainerId,
+      t.customerId,
+      t.articleCode
+    ),
+    companyPlanIdx: index("factory_container_plan_allocations_plan_idx").on(t.companyId, t.planId),
+    companyCustomerIdx: index("factory_container_plan_allocations_customer_idx").on(t.companyId, t.customerId),
+  })
+);
+
 export type FactoryContainerPlan = typeof factoryContainerPlans.$inferSelect;
 export type FactoryContainerPlanContainer = typeof factoryContainerPlanContainers.$inferSelect;
 export type FactoryContainerPlanLine = typeof factoryContainerPlanLines.$inferSelect;
 export type FactoryContainerPlanBale = typeof factoryContainerPlanBales.$inferSelect;
+export type FactoryContainerPlanAllocation = typeof factoryContainerPlanAllocations.$inferSelect;

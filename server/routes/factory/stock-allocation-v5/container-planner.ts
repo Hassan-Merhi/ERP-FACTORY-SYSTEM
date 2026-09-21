@@ -10,7 +10,7 @@ import {
   type SavedPlannerContainer,
 } from "@shared/containerPlanner";
 import { loadContainerPlannerSource, type PlannerQueryable as Queryable } from "./container-planner-source";
-import { pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
+import { pruneOverAllocatedPlanAllocations, pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
 
 type PlannerPlanRow = {
   id: number;
@@ -501,6 +501,7 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
       // Quantities just moved, so Phase 4 assignments above the new per-product
       // quota are released back into unassigned stock.
       const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
 
       await client.query(
         `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
@@ -514,11 +515,12 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
           fromContainerId,
           toContainerId,
           releasedBales,
+          adjustedAllocations,
         },
       });
       const detail = await loadPlanDetail(client, companyId, planId);
       await client.query("COMMIT");
-      return res.json({ plan: detail, releasedBales });
+      return res.json({ plan: detail, releasedBales, adjustedAllocations });
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       logger.error("[V5] container planner move error", { error });
@@ -658,6 +660,7 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
       }
 
       const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
 
       await client.query(
         `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
@@ -669,11 +672,12 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
           unlockedContainers: unlockedIds.length,
           lockedContainers: savedContainers.length - unlockedIds.length,
           releasedBales,
+          adjustedAllocations,
         },
       });
       const detail = await loadPlanDetail(client, companyId, planId);
       await client.query("COMMIT");
-      return res.json({ plan: detail, releasedBales });
+      return res.json({ plan: detail, releasedBales, adjustedAllocations });
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       logger.error("[V5] container planner rebalance error", { error });
