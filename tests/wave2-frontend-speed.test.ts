@@ -79,6 +79,21 @@ describe("Wave 2 frontend speed contracts", () => {
     expect(source("client/src/pages/git-containers/ContainerTable.tsx")).toContain("React.useMemo(");
   });
 
+  it("keeps export-heavy report and POS detail routes lazy", () => {
+    const erpRoutes = source("client/src/routes/ErpRoutes.tsx");
+    const posRoutes = source("client/src/routes/PosRoutes.tsx");
+    const posDetail = source("client/src/pages/pos/POSContainerDetail.tsx");
+    const lazyPages = source("client/src/lazyPages.ts");
+
+    expect(erpRoutes).not.toContain('import StockInSalesReport from "@/pages/StockInSalesReport"');
+    expect(lazyPages).toContain('StockInSalesReport = lazy(() => import("@/pages/StockInSalesReport"))');
+
+    expect(posRoutes).not.toContain('import POSContainerDetail from "@/pages/pos/POSContainerDetail"');
+    expect(lazyPages).toContain('POSContainerDetail = lazy(() => import("@/pages/pos/POSContainerDetail"))');
+    expect(posDetail).not.toContain('import { ExcelJS } from "@/lib/excelHelper"');
+    expect(posDetail).toContain('await import("@/lib/excelHelper")');
+  });
+
   it("enforces heavy-library startup boundaries during production builds", () => {
     const audit = source("build/viteInitialChunkAuditPlugin.ts");
     const vite = source("vite.config.ts");
