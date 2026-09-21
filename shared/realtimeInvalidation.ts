@@ -182,6 +182,27 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     topics = ["factory", "payroll", "accounting"];
   } else if (startsWithAny(path, ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"])) {
     topics = ["scans"];
+  } else if (
+    startsWithAny(path, [
+      "/api/factory/bale-products",
+      "/api/factory/categories",
+      "/api/factory/settings",
+      "/api/factory/my-access",
+      "/api/factory/users",
+    ])
+  ) {
+    topics = ["factory", "reference"];
+  } else if (startsWithAny(path, ["/api/factory/customers", "/api/factory/suppliers"])) {
+    topics = ["factory", "accounting", "reference"];
+  } else if (
+    startsWithAny(path, [
+      "/api/factory/workers",
+      "/api/factory/employees",
+      "/api/factory/worker-categories",
+      "/api/factory/cash-accounts",
+    ])
+  ) {
+    topics = ["factory", "payroll", "accounting", "reference"];
   } else if (path.startsWith("/api/factory")) {
     topics = ["factory"];
   } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp"])) {
