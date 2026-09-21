@@ -35,7 +35,8 @@ export function registerLedgerAccountReadRoutes(app: Express) {
         }
         if (search && typeof search === "string" && search.trim()) {
           const q = `%${search.trim()}%`;
-          conditions.push(or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q))!);
+          const searchCondition = or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q));
+          if (searchCondition) conditions.push(searchCondition);
         }
         if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
 
