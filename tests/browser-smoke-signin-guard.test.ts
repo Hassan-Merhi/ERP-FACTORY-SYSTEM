@@ -119,6 +119,17 @@ describe("browser smoke sign-in guard", () => {
     expect(page.listenerCount).toBe(0);
   });
 
+  it("is covered by the UI Quality mobile change classifier", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const workflow = await readFile(".github/workflows/ui-quality.yml", "utf8");
+
+    // The suites that consume this helper only run when the classifier marks a
+    // change "mobile". Without the helper's own path there, a PR touching only
+    // this file would skip the browser job that exercises its real Puppeteer
+    // integration.
+    expect(workflow).toContain("scripts/lib/browser-smoke-*.mjs");
+  });
+
   it("does not treat an uninspectable response as a rejection", async () => {
     const page = fakePage();
     const signIn = watchSignInResponses(page);

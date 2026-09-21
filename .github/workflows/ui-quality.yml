@@ -54,7 +54,7 @@ jobs:
 
             for file in "${files[@]}"; do
               case "$file" in
-                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   mobile=true
                   ;;
               esac
