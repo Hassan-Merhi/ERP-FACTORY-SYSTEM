@@ -327,11 +327,7 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["accounting", "reference"];
   }
 
-  if (
-    path === "/api/daybook" ||
-    path === "/api/accounts/voucher-sidebar" ||
-    path === "/api/stats/monthly-data"
-  ) {
+  if (path === "/api/daybook" || path === "/api/accounts/voucher-sidebar" || path === "/api/stats/monthly-data") {
     return ["accounting"];
   }
 
