@@ -48,4 +48,16 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("input-production-category-");
     expect(editor).toContain("input-production-target-");
   });
+
+  it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {
+    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    expect(production).toContain("kpi-production-target-produced");
+    expect(production).toContain("TargetProducedTile");
+    expect(production).toContain("md:grid-cols-3");
+    expect(production).toContain("kpi-production-people");
+    expect(production).toContain("tooltip-production-people");
+    expect(production).toContain("peopleBreakdown");
+    expect(production).toContain("FACTORY_TRACKING_STATUSES.absent");
+    expect(production).toContain("FACTORY_TRACKING_STATUSES.new");
+  });
 });

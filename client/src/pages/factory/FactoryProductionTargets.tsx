@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
-  CheckCircle2,
   ClipboardCheck,
   Loader2,
   LockKeyhole,
@@ -18,6 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -55,6 +55,86 @@ function SummaryTile({ label, value, icon }: { label: string; value: string | nu
         <div className="text-muted-foreground">{icon}</div>
       </CardContent>
     </Card>
+  );
+}
+
+function TargetProducedTile({
+  targetLabel,
+  producedLabel,
+  target,
+  produced,
+}: {
+  targetLabel: string;
+  producedLabel: string;
+  target: number;
+  produced: number;
+}) {
+  return (
+    <Card className="shadow-none" data-testid="kpi-production-target-produced">
+      <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-5">
+          <div className="min-w-0">
+            <p className="truncate text-xs text-muted-foreground">{targetLabel}</p>
+            <p className="text-xl font-semibold tabular-nums">{target}</p>
+          </div>
+          <div className="min-w-0 border-l pl-5">
+            <p className="truncate text-xs text-muted-foreground">{producedLabel}</p>
+            <p className="text-xl font-semibold tabular-nums">{produced}</p>
+          </div>
+        </div>
+        <div className="shrink-0 text-muted-foreground">
+          <Target className="h-5 w-5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PeopleSummaryTile({
+  label,
+  value,
+  presentLabel,
+  absentLabel,
+  newLabel,
+  present,
+  absent,
+  newlyJoined,
+}: {
+  label: string;
+  value: number;
+  presentLabel: string;
+  absentLabel: string;
+  newLabel: string;
+  present: number;
+  absent: number;
+  newlyJoined: number;
+}) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="cursor-help" tabIndex={0} data-testid="kpi-production-people">
+            <SummaryTile label={label} value={value} icon={<Users className="h-5 w-5" />} />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="min-w-[180px] space-y-1.5 px-3 py-2" data-testid="tooltip-production-people">
+          <div className="flex items-center justify-between gap-5">
+            <span>{presentLabel}</span>
+            <span className="font-semibold tabular-nums">{present}</span>
+          </div>
+          <div className="flex items-center justify-between gap-5">
+            <span>{absentLabel}</span>
+            <span className="font-semibold tabular-nums">{absent}</span>
+          </div>
+          {newlyJoined > 0 && (
+            <div className="flex items-center justify-between gap-5">
+              <span>{newLabel}</span>
+              <span className="font-semibold tabular-nums">{newlyJoined}</span>
+            </div>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -195,6 +275,13 @@ export default function FactoryProductionTargets() {
     return { target, produced, difference: produced - target };
   }, [rows]);
 
+  const peopleBreakdown = useMemo(() => {
+    const absent = rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length;
+    const newlyJoined = rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.new).length;
+    const present = rows.length - absent - newlyJoined;
+    return { present, absent, newlyJoined };
+  }, [rows]);
+
   const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
   return (
@@ -293,15 +380,28 @@ export default function FactoryProductionTargets() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label={tr("totalTarget")} value={totals.target} icon={<Target className="h-5 w-5" />} />
-        <SummaryTile label={tr("balesProduced")} value={totals.produced} icon={<CheckCircle2 className="h-5 w-5" />} />
+      <div className="grid gap-3 md:grid-cols-3">
+        <TargetProducedTile
+          targetLabel={tr("totalTarget")}
+          producedLabel={tr("balesProduced")}
+          target={totals.target}
+          produced={totals.produced}
+        />
         <SummaryTile
           label={tr("difference")}
           value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
           icon={<ClipboardCheck className="h-5 w-5" />}
         />
-        <SummaryTile label={tr("people")} value={rows.length} icon={<Users className="h-5 w-5" />} />
+        <PeopleSummaryTile
+          label={tr("people")}
+          value={rows.length}
+          presentLabel={tr("present")}
+          absentLabel={tr("absent")}
+          newLabel={tr("new")}
+          present={peopleBreakdown.present}
+          absent={peopleBreakdown.absent}
+          newlyJoined={peopleBreakdown.newlyJoined}
+        />
       </div>
 
       <div className="relative max-w-md">
@@ -440,14 +540,13 @@ export default function FactoryProductionTargets() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(3, 1fr)",
             gap: "12px",
             marginBottom: "20px",
           }}
         >
           {[
-            [tr("totalTarget"), totals.target],
-            [tr("balesProduced"), totals.produced],
+            [`${tr("totalTarget")} / ${tr("balesProduced")}`, `${totals.target} / ${totals.produced}`],
             [tr("difference"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
             [tr("people"), rows.length],
           ].map(([label, value]) => (
