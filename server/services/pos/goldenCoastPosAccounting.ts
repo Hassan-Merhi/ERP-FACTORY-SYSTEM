@@ -240,7 +240,9 @@ async function buildPosting(input: {
  */
 function requireGoldenCoastSettlementClientSaleId(value: string | null | undefined): string {
   const clientSaleId = String(value ?? "").trim();
-  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
+  if (!clientSaleId) {
+    throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
+  }
   return clientSaleId;
 }
 
