@@ -13,6 +13,7 @@ describe("Factory stock-entry two-bale limit", () => {
     expect(tab).toContain("countCartBales(cart) >= MAX_BALES_PER_ENTRY");
     expect(tab).toContain("Math.max(0, MAX_BALES_PER_ENTRY - otherQty)");
     expect(tab).toContain("countCartBales(cart) > MAX_BALES_PER_ENTRY");
+    expect(tab).toContain("if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;");
     expect(tab).toContain("A Stock Entry can contain at most 2 bales.");
   });
 
