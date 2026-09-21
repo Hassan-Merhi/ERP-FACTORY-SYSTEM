@@ -144,7 +144,7 @@ export async function applyPosSaleUpdateTx(
 
   const isGoldenCoastEdit = isSpCompanyEdit && (await isGoldenCoastPosCompany(tx, currentCompanyId));
   const clientSaleId = String(lockedVoucher.clientSaleId ?? "").trim();
-  if (isGoldenCoastEdit && clientSaleId && !lockedVoucher.isCreditSale) {
+  if (isGoldenCoastEdit && clientSaleId) {
     // Golden Coast settlement journals represent the CURRENT POS state. Retire
     // every active programme-generated settlement (including marker-less
     // recovery rows) before rebuilding the edited amount in this transaction.
