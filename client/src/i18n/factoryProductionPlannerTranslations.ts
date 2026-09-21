@@ -126,6 +126,123 @@ const translations: Record<string, Translation> = {
     ar: "الحاوية ${index + 1}",
     fr: "Conteneur ${index + 1}",
   },
+  "Save this preview": {
+    en: "Save this preview",
+    ar: "حفظ هذه المعاينة",
+    fr: "Enregistrer cet aperçu",
+  },
+  "Saving creates a planning draft only. Physical bales and customer loading remain untouched.": {
+    en: "Saving creates a planning draft only. Physical bales and customer loading remain untouched.",
+    ar: "الحفظ ينشئ مسودة تخطيط فقط. البالات الفعلية وتحميل العملاء لا يتغيران.",
+    fr: "L’enregistrement crée uniquement un brouillon de planification. Les balles physiques et les chargements clients restent inchangés.",
+  },
+  "Optional plan name": {
+    en: "Optional plan name",
+    ar: "اسم الخطة اختياري",
+    fr: "Nom du plan facultatif",
+  },
+  "Save Plan": { en: "Save Plan", ar: "حفظ الخطة", fr: "Enregistrer le plan" },
+  "Saved container plans": {
+    en: "Saved container plans",
+    ar: "خطط الحاويات المحفوظة",
+    fr: "Plans de conteneurs enregistrés",
+  },
+  "Edit quantities by moving bales between unlocked containers. Lock containers you do not want rebalanced.": {
+    en: "Edit quantities by moving bales between unlocked containers. Lock containers you do not want rebalanced.",
+    ar: "عدّل الكميات بنقل البالات بين الحاويات غير المقفلة. اقفل الحاويات التي لا تريد إعادة موازنتها.",
+    fr: "Modifiez les quantités en déplaçant les balles entre les conteneurs déverrouillés. Verrouillez ceux qui ne doivent pas être rééquilibrés.",
+  },
+  "No saved container plans yet.": {
+    en: "No saved container plans yet.",
+    ar: "لا توجد خطط حاويات محفوظة بعد.",
+    fr: "Aucun plan de conteneurs enregistré pour le moment.",
+  },
+  "Rebalance Unlocked": {
+    en: "Rebalance Unlocked",
+    ar: "إعادة موازنة غير المقفل",
+    fr: "Rééquilibrer les déverrouillés",
+  },
+  Delete: { en: "Delete", ar: "حذف", fr: "Supprimer" },
+  "Confirm Delete": { en: "Confirm Delete", ar: "تأكيد الحذف", fr: "Confirmer la suppression" },
+  Cancel: { en: "Cancel", ar: "إلغاء", fr: "Annuler" },
+  "Save Name": { en: "Save Name", ar: "حفظ الاسم", fr: "Enregistrer le nom" },
+  "Locked · rebalance protected": {
+    en: "Locked · rebalance protected",
+    ar: "مقفل · محمي من إعادة الموازنة",
+    fr: "Verrouillé · protégé du rééquilibrage",
+  },
+  Unlocked: { en: "Unlocked", ar: "غير مقفل", fr: "Déverrouillé" },
+  "Move product": { en: "Move product", ar: "نقل المنتج", fr: "Déplacer le produit" },
+  Quantity: { en: "Quantity", ar: "الكمية", fr: "Quantité" },
+  Destination: { en: "Destination", ar: "الوجهة", fr: "Destination" },
+  "No unlocked destination has space": {
+    en: "No unlocked destination has space",
+    ar: "لا توجد حاوية وجهة غير مقفلة بها مساحة",
+    fr: "Aucun conteneur de destination déverrouillé n’a de place",
+  },
+  Move: { en: "Move", ar: "نقل", fr: "Déplacer" },
+  "Plan already saved": {
+    en: "Plan already saved",
+    ar: "الخطة محفوظة بالفعل",
+    fr: "Plan déjà enregistré",
+  },
+  "Container plan saved": {
+    en: "Container plan saved",
+    ar: "تم حفظ خطة الحاويات",
+    fr: "Plan de conteneurs enregistré",
+  },
+  "Plan renamed": { en: "Plan renamed", ar: "تمت إعادة تسمية الخطة", fr: "Plan renommé" },
+  "Container lock updated": {
+    en: "Container lock updated",
+    ar: "تم تحديث قفل الحاوية",
+    fr: "Verrouillage du conteneur mis à jour",
+  },
+  "Bales moved": { en: "Bales moved", ar: "تم نقل البالات", fr: "Balles déplacées" },
+  "Unlocked containers rebalanced": {
+    en: "Unlocked containers rebalanced",
+    ar: "تمت إعادة موازنة الحاويات غير المقفلة",
+    fr: "Conteneurs déverrouillés rééquilibrés",
+  },
+  "Locked containers were left unchanged.": {
+    en: "Locked containers were left unchanged.",
+    ar: "لم يتم تغيير الحاويات المقفلة.",
+    fr: "Les conteneurs verrouillés sont restés inchangés.",
+  },
+  "Container plan deleted": {
+    en: "Container plan deleted",
+    ar: "تم حذف خطة الحاويات",
+    fr: "Plan de conteneurs supprimé",
+  },
+  "Could not save plan": {
+    en: "Could not save plan",
+    ar: "تعذر حفظ الخطة",
+    fr: "Impossible d’enregistrer le plan",
+  },
+  "Could not rename plan": {
+    en: "Could not rename plan",
+    ar: "تعذرت إعادة تسمية الخطة",
+    fr: "Impossible de renommer le plan",
+  },
+  "Could not update lock": {
+    en: "Could not update lock",
+    ar: "تعذر تحديث القفل",
+    fr: "Impossible de mettre à jour le verrouillage",
+  },
+  "Could not move bales": {
+    en: "Could not move bales",
+    ar: "تعذر نقل البالات",
+    fr: "Impossible de déplacer les balles",
+  },
+  "Could not rebalance plan": {
+    en: "Could not rebalance plan",
+    ar: "تعذرت إعادة موازنة الخطة",
+    fr: "Impossible de rééquilibrer le plan",
+  },
+  "Could not delete plan": {
+    en: "Could not delete plan",
+    ar: "تعذر حذف الخطة",
+    fr: "Impossible de supprimer le plan",
+  },
 };
 
 export function translateFactoryProductionPlannerText(value: string, language: ApplicationLanguage): string | null {
