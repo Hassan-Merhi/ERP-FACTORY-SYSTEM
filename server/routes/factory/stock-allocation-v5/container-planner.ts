@@ -108,16 +108,23 @@ async function loadPlannerSource(client: Queryable, companyId: number): Promise<
            AND co.proforma_id_used IS NOT NULL
          GROUP BY cob.order_id, fb.article_code
        ),
+       proforma_expected AS (
+         SELECT cpl.proforma_id,
+                cpl.article_code,
+                COALESCE(SUM(cpl.quantity), 0)::int AS quantity
+         FROM customer_proforma_lines cpl
+         GROUP BY cpl.proforma_id, cpl.article_code
+       ),
        expected_source AS (
          SELECT co.id AS order_id,
-                cpl.article_code,
-                COALESCE(cel.expected_qty, cpl.quantity, 0)::int AS expected_qty
+                pe.article_code,
+                COALESCE(cel.expected_qty, pe.quantity, 0)::int AS expected_qty
          FROM customer_orders co
-         JOIN customer_proforma_lines cpl
-           ON cpl.proforma_id = co.proforma_id_used
+         JOIN proforma_expected pe
+           ON pe.proforma_id = co.proforma_id_used
          LEFT JOIN customer_order_expected_lines cel
            ON cel.order_id = co.id
-          AND cel.article_code = cpl.article_code
+          AND cel.article_code = pe.article_code
           AND cel.company_id = co.company_id
          WHERE co.company_id = $1
            AND co.status IN ('DRAFT', 'LOADING')
