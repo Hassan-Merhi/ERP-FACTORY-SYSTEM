@@ -149,9 +149,9 @@ export default defineConfig({
           // Several UI dependencies are also used by Recharts; forcing both
           // sides into manual chunks creates a static ui-vendor -> chart-vendor
           // edge that pulls charts into every authenticated shell.
-          if (id.includes("node_modules/jspdf/") || id.includes("node_modules/jspdf-autotable/")) {
-            return "jspdf-vendor";
-          }
+          // jsPDF is only used by export actions. Let dynamic import boundaries
+          // own it instead of forcing a manual chunk that can become a static
+          // dependency of shared application chunks.
           if (id.includes("node_modules/html2canvas/")) {
             return "html2canvas-vendor";
           }
