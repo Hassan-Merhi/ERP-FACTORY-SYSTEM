@@ -176,7 +176,7 @@ export function ProductionTargetDefaultsDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="min-h-0 flex-1 overflow-auto">
           <Table wrapperClassName="overflow-visible rounded-none border-0">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
