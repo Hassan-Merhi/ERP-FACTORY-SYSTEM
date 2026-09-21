@@ -138,6 +138,13 @@ export function ProductionTargetsEditorDialog({
       return response.json();
     },
     onSuccess: () => {
+      queryClient.setQueryData(
+        ["/api/factory/staff-tracking", "production", periodType, periodStart, periodEnd],
+        (current: unknown) =>
+          current && typeof current === "object"
+            ? { ...(current as Record<string, unknown>), rows: draftRows.map((row) => ({ ...row, category: row.category.trim() })) }
+            : current
+      );
       void queryClient.invalidateQueries({
         queryKey: ["/api/factory/staff-tracking"],
         refetchType: "active",
