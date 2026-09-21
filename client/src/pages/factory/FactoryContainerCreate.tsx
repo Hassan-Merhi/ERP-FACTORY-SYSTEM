@@ -118,7 +118,7 @@ export default function FactoryContainerCreate() {
   });
 
   const { data: ledgerAccounts = [] } = useQuery<ApiListRow[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
