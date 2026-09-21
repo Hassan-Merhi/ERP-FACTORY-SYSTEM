@@ -7,10 +7,9 @@ import {
   Loader2,
   LockKeyhole,
   MessageCircle,
-  Save,
   Search,
+  SlidersHorizontal,
   Target,
-  Undo2,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +42,7 @@ import {
   type ProductionResponse,
   type ProductionRow,
 } from "./factoryProductionTargetsModel";
+import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -58,41 +58,6 @@ function SummaryTile({ label, value, icon }: { label: string; value: string | nu
   );
 }
 
-function CategoryInput({
-  value,
-  placeholder,
-  disabled,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  disabled: boolean;
-  onCommit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  return (
-    <Input
-      value={draft}
-      disabled={disabled}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        if (draft !== value) onCommit(draft);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-      }}
-      placeholder={placeholder}
-      list="production-category-options"
-      className="h-8 w-full min-w-0"
-    />
-  );
-}
-
 export default function FactoryProductionTargets() {
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
@@ -101,7 +66,7 @@ export default function FactoryProductionTargets() {
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
@@ -112,14 +77,11 @@ export default function FactoryProductionTargets() {
 
   useEffect(() => {
     setRows([]);
-    setHasUnsavedChanges(false);
+    setEditorOpen(false);
   }, [periodType, period.start, period.end]);
 
   useEffect(() => {
-    if (data) {
-      setRows(data.rows);
-      setHasUnsavedChanges(false);
-    }
+    if (data) setRows(data.rows);
   }, [data]);
 
   const finalized = Boolean(data?.finalized);
@@ -135,35 +97,6 @@ export default function FactoryProductionTargets() {
       status: row.status,
       notes: "",
     }));
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
-        page: "production",
-        periodType,
-        periodStart: period.start,
-        periodEnd: period.end,
-        finalize: false,
-        records: buildRecords(),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || tr("saveDataFailed"));
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/factory/staff-tracking"],
-        refetchType: "active",
-      });
-      setHasUnsavedChanges(false);
-      toast({ title: tr("productionSaved") });
-    },
-    onError: (error: Error) => {
-      toast({ title: tr("saveFailed"), description: error.message, variant: "destructive" });
-    },
-  });
 
   const sendProductionWhatsappImage = async (reportDate: string) => {
     // Always refresh first so each manual send reflects the latest available production
@@ -256,33 +189,13 @@ export default function FactoryProductionTargets() {
 
   const productionReportGroups = useMemo(() => groupProductionRows(rows), [rows]);
 
-  const categorySuggestions = useMemo(
-    () =>
-      Array.from(new Set(rows.map((row) => row.category.trim()).filter(Boolean))).sort((left, right) =>
-        left.localeCompare(right, undefined, { sensitivity: "base", numeric: true })
-      ),
-    [rows]
-  );
-
   const totals = useMemo(() => {
     const target = rows.reduce((sum, row) => sum + (row.targetBales ?? 0), 0);
     const produced = rows.reduce((sum, row) => sum + (row.producedBales ?? 0), 0);
     return { target, produced, difference: produced - target };
   }, [rows]);
 
-  const setRow = (index: number, patch: Partial<ProductionRow>) => {
-    if (finalized) return;
-    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
-    setHasUnsavedChanges(true);
-  };
-
-  const discardChanges = () => {
-    if (!data) return;
-    setRows(data.rows);
-    setHasUnsavedChanges(false);
-  };
-
-  const busy = saveMutation.isPending || sendWhatsappMutation.isPending || endProductionMutation.isPending;
+  const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -320,29 +233,13 @@ export default function FactoryProductionTargets() {
             />
           </div>
 
-          {hasUnsavedChanges && (
-            <Button
-              variant="ghost"
-              onClick={discardChanges}
-              disabled={finalized || busy}
-              data-testid="button-discard-production-changes"
-            >
-              <Undo2 className="mr-2 h-4 w-4" />
-              {tr("discardChanges")}
-            </Button>
-          )}
-
           <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={finalized || rows.length === 0 || busy || !hasUnsavedChanges}
-            data-testid="button-save-production"
+            onClick={() => setEditorOpen(true)}
+            disabled={finalized || rows.length === 0 || busy}
+            data-testid="button-edit-production-targets"
           >
-            {saveMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            {saveMutation.isPending ? tr("saving") : tr("saveChanges")}
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            {tr("editTargets")}
           </Button>
 
           {periodType === "daily" && (
@@ -379,18 +276,11 @@ export default function FactoryProductionTargets() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        <div>
-          <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
-          {period.start}
-          {period.end !== period.start ? ` — ${period.end}` : ""}
-          <span className="ml-3">{tr("editProductionDirectly")}</span>
-        </div>
-        {hasUnsavedChanges && (
-          <Badge variant="secondary" data-testid="badge-production-unsaved">
-            {tr("unsavedChanges")}
-          </Badge>
-        )}
+      <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
+        {period.start}
+        {period.end !== period.start ? ` — ${period.end}` : ""}
+        <span className="ml-3">{tr("useEditorToManageTargets")}</span>
       </div>
 
       {finalized && (
@@ -423,12 +313,6 @@ export default function FactoryProductionTargets() {
           className="pl-9"
         />
       </div>
-
-      <datalist id="production-category-options">
-        {categorySuggestions.map((category) => (
-          <option key={category} value={category} />
-        ))}
-      </datalist>
 
       <div className="overflow-x-auto rounded-xl border">
         <Table>
@@ -469,7 +353,6 @@ export default function FactoryProductionTargets() {
                     </TableCell>
                   </TableRow>
                   {group.rows.map((row) => {
-                    const sourceIndex = rows.findIndex((item) => item.personId === row.personId);
                     return (
                       <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
                         <TableCell>
@@ -486,28 +369,11 @@ export default function FactoryProductionTargets() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="w-[150px] min-w-[150px] max-w-[150px]">
-                          <CategoryInput
-                            value={row.category}
-                            disabled={finalized}
-                            onCommit={(category) => setRow(sourceIndex, { category: category.trim() })}
-                            placeholder={tr("categoryStation")}
-                          />
+                        <TableCell className="w-[150px] min-w-[150px] max-w-[150px] font-medium">
+                          {row.category || "—"}
                         </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1"
-                            disabled={finalized}
-                            className="h-8 text-right tabular-nums"
-                            value={row.targetBales ?? ""}
-                            onChange={(event) =>
-                              setRow(sourceIndex, {
-                                targetBales: event.target.value === "" ? null : Number(event.target.value),
-                              })
-                            }
-                          />
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {row.targetBales ?? "—"}
                         </TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">
                           {row.producedBales ?? 0}
@@ -536,6 +402,16 @@ export default function FactoryProductionTargets() {
           </TableBody>
         </Table>
       </div>
+
+      <ProductionTargetsEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        rows={rows}
+        periodType={periodType}
+        periodStart={period.start}
+        periodEnd={period.end}
+        finalized={finalized}
+      />
 
       <div
         ref={productionReportRef}
