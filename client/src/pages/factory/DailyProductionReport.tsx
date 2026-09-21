@@ -6,10 +6,11 @@ import FactoryOtwTrackingTab from "@/pages/factory/FactoryOtwTrackingTab";
 import ProductionComparison from "@/pages/factory/ProductionComparison";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FlaskConical, Ship, Tag, Truck } from "lucide-react";
+import { BarChart3, FlaskConical, Ship, Tag, Truck } from "lucide-react";
 
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
+import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts";
 
 // The page is a layout shell: tab chrome plus the panels. All state, queries and
 // derived values live in useDailyProductionReport, with heavy panels kept in
@@ -42,6 +43,9 @@ export default function DailyProductionReport() {
           <TabsTrigger value="snapshot" data-testid="tab-snapshot" className="hidden">
             Snapshot
           </TabsTrigger>
+          <TabsTrigger value="product-comparison" data-testid="tab-product-comparison">
+            <BarChart3 className="h-4 w-4 mr-1.5" /> Product Comparison
+          </TabsTrigger>
           <TabsTrigger value="shipping" data-testid="tab-shipping">
             <Ship className="h-4 w-4 mr-1.5" /> Shipping
           </TabsTrigger>
@@ -68,6 +72,13 @@ export default function DailyProductionReport() {
         {/* ── Financial Snapshot tab ── (hidden) */}
         <TabsContent value="snapshot" className="hidden">
           <FactoryFinancialSnapshot />
+        </TabsContent>
+
+        <TabsContent
+          value="product-comparison"
+          className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden"
+        >
+          <ProductComparisonCharts />
         </TabsContent>
 
         <TabsContent value="comparison" className="flex-1 overflow-y-auto p-4 mt-0 data-[state=inactive]:hidden">
