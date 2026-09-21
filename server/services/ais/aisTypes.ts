@@ -35,4 +35,6 @@ export interface AisHealthSnapshot {
   messagesReceived: number;
   messagesRejected: number;
   reconnects: number;
+  subscribedVessels: number;
+  subscriptionUpdatedAt: Date | null;
 }
