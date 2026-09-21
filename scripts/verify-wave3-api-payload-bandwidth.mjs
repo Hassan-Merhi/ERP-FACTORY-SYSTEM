@@ -95,7 +95,7 @@ requireText(microcache, "customer-proformas\\/\\d+", "Explicit proforma details 
 requireText(microcache, "inventory(?:\\/light)?", "POS location authorization must be rechecked for full and light inventory cache hits.");
 
 requireText(bandwidth, 'if (routePath.startsWith("/api/")) return routePath;', "Bandwidth ranking must not double-prefix absolute API routes.");
-forbidText(baleHistory, 'queryKey: ["/api/factory/mix-batches"]', "Bale History must not download an unused full mix-batch list.");
+forbidText(baleHistory, "data: _mixBatches", "Bale History must not download an unused full mix-batch list.");
 
 requireText(gitClient, 'profile: "compact"', "GIT list UI must request compact rows.");
 requireText(gitClient, "useInfiniteQuery", "GIT list UI must use bounded continuous chunks.");
