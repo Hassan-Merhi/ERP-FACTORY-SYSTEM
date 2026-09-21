@@ -120,7 +120,7 @@ The UI reports three states:
 - **DRIFT** — new/unplanned stock or over-planned stock exists;
 - **LOCKED_CONFLICT** — a locked container alone contains more of an article than is currently available.
 
-The check is read-only and refreshes only while a saved plan is open. It does not reserve physical bales or alter customer loading.
+The check is read-only and refreshes only while a saved plan is open. It does not reserve physical bales or alter customer loading. Background refreshes only report drift; they never auto-reconcile or rewrite a saved plan.
 
 ### Reconcile to Current Stock
 
