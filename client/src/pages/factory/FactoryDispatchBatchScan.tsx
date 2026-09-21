@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
@@ -114,7 +115,7 @@ export default function FactoryDispatchBatchScan() {
       return res.json();
     },
     enabled: !!batchId,
-    refetchInterval: 15_000,
+    refetchInterval: visibleTabInterval(15_000),
   });
 
   const { data: auditScans = [] } = useQuery<AuditScan[]>({
@@ -125,7 +126,7 @@ export default function FactoryDispatchBatchScan() {
       return res.json();
     },
     enabled: !!batchId,
-    refetchInterval: 10_000,
+    refetchInterval: visibleTabInterval(10_000),
   });
 
   const rideScans = auditScans.filter((s) => s.truckRideId === rideId && !s.removedAt);
