@@ -19,6 +19,10 @@ export function useFactoryStockAllocationV5Model() {
   }, [searchString]);
 
   const firstMatchRef = useRef<HTMLTableRowElement | null>(null);
+  // Track the focused proforma we already auto-scrolled to. The focus query
+  // parameter can stay in the URL while the user is working on this page, so
+  // re-renders must not keep pulling the scroll position back to that row.
+  const autoScrolledProformaIdRef = useRef<number | null>(null);
 
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [editDrawerProformaId, setEditDrawerProformaId] = useState<number | null>(null);
@@ -353,20 +357,25 @@ export function useFactoryStockAllocationV5Model() {
     return n.includes("wiper") || n.includes("garbage");
   }
 
-  const allRows = (query.data?.rows ?? []).slice().sort((a, b) => a.productName.localeCompare(b.productName));
+  const allRows = useMemo(
+    () => (query.data?.rows ?? []).slice().sort((a, b) => a.productName.localeCompare(b.productName)),
+    [query.data?.rows]
+  );
   const garbageWipersCount = allRows.filter(isGarbageOrWipers).length;
-  const filteredRows = showGarbageWipers ? allRows : allRows.filter((r) => !isGarbageOrWipers(r));
-  const negativeFilteredRows = showNegativeOnly ? filteredRows.filter((r) => r.freeToPromise < 0) : filteredRows;
-  const categoryFilteredRows =
-    categoryFilter.length > 0
-      ? negativeFilteredRows.filter((r) => categoryFilter.includes(r.categoryName ?? ""))
-      : negativeFilteredRows;
-  const rows = searchQuery.trim()
-    ? categoryFilteredRows.filter((r) => {
-        const q = searchQuery.toLowerCase();
-        return r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q);
-      })
-    : categoryFilteredRows;
+  const rows = useMemo(() => {
+    const filteredRows = showGarbageWipers ? allRows : allRows.filter((r) => !isGarbageOrWipers(r));
+    const negativeFilteredRows = showNegativeOnly ? filteredRows.filter((r) => r.freeToPromise < 0) : filteredRows;
+    const categoryFilteredRows =
+      categoryFilter.length > 0
+        ? negativeFilteredRows.filter((r) => categoryFilter.includes(r.categoryName ?? ""))
+        : negativeFilteredRows;
+
+    if (!searchQuery.trim()) return categoryFilteredRows;
+    const q = searchQuery.toLowerCase();
+    return categoryFilteredRows.filter(
+      (r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q)
+    );
+  }, [allRows, categoryFilter, searchQuery, showGarbageWipers, showNegativeOnly]);
 
   // Unique sorted category names from all loaded rows (unfiltered) for the dropdown
   const allCategories = useMemo(() => {
@@ -378,23 +387,38 @@ export function useFactoryStockAllocationV5Model() {
   }, [allRows]);
   const totals = query.data?.totals;
 
-  // Auto-expand rows that contain the focused proforma, then scroll to first match
+  // Auto-expand rows that contain the focused proforma, then scroll to the
+  // first match once. Previously `rows` was rebuilt on every render, so this
+  // effect repeatedly called scrollIntoView and pulled the user back down while
+  // they were trying to scroll upward.
   useEffect(() => {
-    if (!focusProformaId || rows.length === 0) return;
+    if (!focusProformaId) {
+      autoScrolledProformaIdRef.current = null;
+      firstMatchRef.current = null;
+      return;
+    }
+    if (rows.length === 0 || autoScrolledProformaIdRef.current === focusProformaId) return;
+
     const toExpand = rows
       .filter((r) => r.proformaDetails.some((p) => p.proformaId === focusProformaId))
       .map((r) => r.articleCode);
     if (toExpand.length === 0) return;
+
+    // Clear any stale target from a previously focused proforma, then mark this
+    // focus as handled before the state update can trigger another render.
+    firstMatchRef.current = null;
+    autoScrolledProformaIdRef.current = focusProformaId;
     setExpandedRows((prev) => {
       const next = new Set(prev);
       toExpand.forEach((c) => next.add(c));
       return next;
     });
-    // Scroll after a tick so the rows have rendered
-    setTimeout(() => {
+
+    const scrollTimer = window.setTimeout(() => {
       firstMatchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
-  }, [focusProformaId, rows, rows.length]);
+    return () => window.clearTimeout(scrollTimer);
+  }, [focusProformaId, rows]);
 
   // Auto-open edit drawer when navigated here with openEdit=true
   const editOpenedRef = useRef(false);
