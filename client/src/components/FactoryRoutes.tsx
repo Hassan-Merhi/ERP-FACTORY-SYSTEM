@@ -62,7 +62,6 @@ import {
   FactoryLocationInventoryMockup,
   FactoryNetPositionDetails,
   FactoryOpeningBalanceEdit,
-  FactoryPOS,
   FactoryPartiesHub,
   ProductionComparison,
   FactoryPayrollHub,
@@ -264,7 +263,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         <Redirect replace to="/factory/intelligence/production-hub?section=waste" />
       </Route>
       <Route path="/factory/waste-dispatch" component={WasteDispatchPage} />
-      <Route path="/factory/pos" component={FactoryPOS} />
+      <Route path="/factory/pos">{() => <Redirect replace to={factoryDefaultPage} />}</Route>
       <Route path="/factory/bale-ledger">
         {() => <Redirect replace to="/factory/production-report?tab=product-comparison" />}
       </Route>
