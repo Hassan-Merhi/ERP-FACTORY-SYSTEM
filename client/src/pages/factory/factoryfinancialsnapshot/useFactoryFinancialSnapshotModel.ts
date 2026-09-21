@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -32,7 +33,7 @@ export function useFactoryFinancialSnapshotModel() {
   } = useQuery<SnapshotData>({
     queryKey: ["/api/factory/financial-snapshot"],
     placeholderData: (prev) => prev,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   const {
@@ -43,7 +44,7 @@ export function useFactoryFinancialSnapshotModel() {
   } = useQuery<NetPositionData>({
     queryKey: ["/api/factory/net-position"],
     placeholderData: (prev) => prev,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   const {
@@ -54,7 +55,7 @@ export function useFactoryFinancialSnapshotModel() {
   } = useQuery<PinnedRow[]>({
     queryKey: ["/api/agent-accounts"],
     placeholderData: (prev) => prev,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   const { data: freightAccountRows, isLoading: loadingFreight } = useQuery<PinnedRow[]>({
