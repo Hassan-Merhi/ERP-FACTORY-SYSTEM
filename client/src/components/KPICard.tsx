@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { StatCard, type StatCardProps } from "@/components/StatCard";
 import type { LucideIcon } from "lucide-react";
 
@@ -18,7 +19,7 @@ interface KPICardProps {
  * automatically shares the same KPI grammar (title + value + delta + icon
  * + tone + skeleton state).
  */
-export function KPICard(props: KPICardProps) {
+function KPICardComponent(props: KPICardProps) {
   const { title, value, change, changeType, icon, onClick, "data-testid": testId } = props;
   const statProps: StatCardProps = {
     title,
@@ -32,3 +33,5 @@ export function KPICard(props: KPICardProps) {
   };
   return <StatCard {...statProps} />;
 }
+
+export const KPICard = memo(KPICardComponent);

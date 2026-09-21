@@ -515,7 +515,6 @@ export async function runOfflinePrep(companyId: number, onProgress: (p: PrepProg
     { label: "Bales Hub", loader: () => import("@/pages/factory/FactoryBalesHub") },
     { label: "Bales History", loader: () => import("@/pages/factory/BalesHistory") },
     { label: "Bale Product History", loader: () => import("@/pages/factory/FactoryBaleProductHistory") },
-    { label: "Bale Ledger", loader: () => import("@/pages/BaleLedger") },
     { label: "Bale Relabeling", loader: () => import("@/pages/factory/FactoryBaleRelabeling") },
     { label: "Wipers Re-Entry", loader: () => import("@/pages/factory/WipersReEntry") },
     { label: "Waste Dispatch", loader: () => import("@/pages/factory/WasteDispatch") },

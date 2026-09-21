@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import { translateApplicationLiteral } from "@/i18n/applicationTranslations";
+import { translateApplicationLiteral } from "@/i18n/applicationLiteralTranslations";
 import { isFinalCloseoutText, translateFinalCloseoutText } from "@/i18n/finalCloseoutTranslations";
 import { translateSharedInterfaceText } from "@/i18n/sharedInterfaceTranslations";
 import { translateTabsFiltersText } from "@/i18n/tabsFiltersTranslations";
@@ -235,6 +235,8 @@ export function translateInterfaceTree(root: Node, language: ApplicationLanguage
 
 export function ApplicationInterfaceTranslator({ language }: { language: ApplicationLanguage }) {
   useEffect(() => {
+    if (language === "en") return;
+
     const root = document.getElementById("root");
     if (!root) return;
 
@@ -248,6 +250,10 @@ export function ApplicationInterfaceTranslator({ language }: { language: Applica
     };
 
     const schedule = (node: Node) => {
+      for (const existing of pending) {
+        if (existing === node || existing.contains(node)) return;
+        if (node.contains(existing)) pending.delete(existing);
+      }
       pending.add(node);
       if (frame === null) frame = window.requestAnimationFrame(flush);
     };
@@ -279,13 +285,21 @@ export function ApplicationInterfaceTranslator({ language }: { language: Applica
         }
       }
     });
-    portalObserver.observe(document.body, { childList: true, subtree: true });
+    // Radix portals mount as body children. A shallow observer avoids making
+    // every unrelated application subtree mutation part of the translation path.
+    portalObserver.observe(document.body, { childList: true });
 
     return () => {
       rootObserver.disconnect();
       portalObserver.disconnect();
       pending.clear();
       if (frame !== null) window.cancelAnimationFrame(frame);
+
+      // The non-English translator is not mounted in English mode. Restore its
+      // imperative DOM edits once while this already-loaded runtime is leaving,
+      // then English runs with no translation observers or tree scanning.
+      translateInterfaceTree(root, "en");
+      document.querySelectorAll(PORTAL_SELECTOR).forEach((portal) => translateInterfaceTree(portal, "en"));
     };
   }, [language]);
 

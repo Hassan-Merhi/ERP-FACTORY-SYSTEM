@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
@@ -45,20 +46,35 @@ export function AccountTransactionRows({
 }: AccountTransactionRowsProps) {
   const colSpanMid = appMode === "factory" ? 3 : 2;
   const totalColumns = 3 + (appMode === "factory" ? 1 : 0) + (hideBalances ? 0 : 3);
-  const totalDebit = vouchersWithBalance.reduce((s, v) => s + (v.totalDebit || 0), 0);
-  const totalCredit = vouchersWithBalance.reduce((s, v) => s + (v.totalCredit || 0), 0);
+  const { totalDebit, totalCredit, selectableRows } = useMemo(() => {
+    let debit = 0;
+    let credit = 0;
+    const selectable: AccountStatementRow[] = [];
+
+    for (const voucher of vouchersWithBalance) {
+      debit += voucher.totalDebit || 0;
+      credit += voucher.totalCredit || 0;
+      if (voucher.voucherType !== HISTORICAL_REFERENCE_TYPE) selectable.push(voucher);
+    }
+
+    return { totalDebit: debit, totalCredit: credit, selectableRows: selectable };
+  }, [vouchersWithBalance]);
   const isSupplier = selectedAccount.type === "supplier";
   const isReferenceRow = (v: AccountStatementRow) => v.voucherType === HISTORICAL_REFERENCE_TYPE;
-  const selectableRows = vouchersWithBalance.filter((v) => !isReferenceRow(v));
-  const allSelectableSelected =
-    selectableRows.length > 0 && selectableRows.every((v) => selectedVoucherIds.has(v.voucherId));
+  const allSelectableSelected = useMemo(
+    () => selectableRows.length > 0 && selectableRows.every((v) => selectedVoucherIds.has(v.voucherId)),
+    [selectableRows, selectedVoucherIds]
+  );
   const virtualRows = useBoundedTableRows({
     rowCount: vouchersWithBalance.length,
     rowHeight: ACCOUNT_ROW_HEIGHT,
     minimumRows: 120,
     overscan: 16,
   });
-  const renderedVouchers = vouchersWithBalance.slice(virtualRows.startIndex, virtualRows.endIndex);
+  const renderedVouchers = useMemo(
+    () => vouchersWithBalance.slice(virtualRows.startIndex, virtualRows.endIndex),
+    [vouchersWithBalance, virtualRows.endIndex, virtualRows.startIndex]
+  );
 
   const handleSelectAllRows = () => {
     if (selectableRows.length === vouchersWithBalance.length) {
