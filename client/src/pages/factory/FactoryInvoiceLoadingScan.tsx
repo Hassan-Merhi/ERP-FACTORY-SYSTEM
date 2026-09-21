@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -107,7 +108,7 @@ export default function FactoryInvoiceLoadingScan() {
       return res.json();
     },
     enabled: !!invoiceId,
-    refetchInterval: 10_000,
+    refetchInterval: visibleTabInterval(10_000),
     retry: 1,
   });
 
