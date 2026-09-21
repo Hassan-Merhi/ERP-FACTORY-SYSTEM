@@ -158,7 +158,7 @@ export default function AccountTransfer() {
   const deferredEntrySearch = useDeferredValue(searchEntries.trim());
 
   const { data: accounts = [] } = useQuery<Account[]>({
-    queryKey: ["/api/ledger-accounts"],
+    queryKey: ["/api/ledger-accounts?profile=picker"],
     enabled: !!selectedCompany,
   });
 
@@ -240,7 +240,7 @@ export default function AccountTransfer() {
       setDone({ moved: data.moved, toAccount: data.toAccount });
       setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["/api/voucher-entries/by-account", fromAccountId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts?profile=picker"] });
     },
     onError: (e: ClientErrorLike) =>
       toast({ title: "Transfer failed", description: e.message, variant: "destructive" }),
