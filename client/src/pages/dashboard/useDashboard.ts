@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -94,14 +95,14 @@ export function useDashboard() {
       return res.json();
     },
     enabled: !!selectedCompany && isFactoryMode,
-    refetchInterval: 300000, // 5 min — KPIs don't need sub-minute freshness; was 60 s causing steady background load on Android
+    refetchInterval: visibleTabInterval(5 * 60_000), // 5 min — KPIs don't need sub-minute freshness; was 60 s causing steady background load on Android
   });
 
   const { data: dashboardCashAccounts = [], error: cashAccountsError } = useQuery<DashboardCashAccount[]>({
     queryKey: ["/api/dashboard-cash-accounts", selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 30 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   // Keep the shared /api/accounts/all cache in its server envelope shape and
@@ -128,7 +129,7 @@ export function useDashboard() {
     queryKey: ["/api/dashboard-payable-accounts", selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 30 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   const addAccountMutation = useMutation({

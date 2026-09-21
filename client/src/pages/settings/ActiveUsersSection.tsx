@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState } from "react";
 import { z } from "zod";
 import { Card } from "@/components/ui/card";
@@ -44,7 +45,7 @@ export function ActiveUsersSection() {
 
   const { data: presenceData, isLoading } = useQuery<PresenceRow[]>({
     queryKey: ["/api/user-presence"],
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
 
   const { data: companies } = useQuery<{ id: number; name: string }[]>({

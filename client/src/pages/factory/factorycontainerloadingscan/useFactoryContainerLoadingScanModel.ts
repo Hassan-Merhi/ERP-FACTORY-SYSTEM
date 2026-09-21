@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 /**
  * Controller hook for the factory container loading scan page.
  *
@@ -548,14 +549,7 @@ export function useFactoryContainerLoadingScanModel() {
       orderDate,
       containerNotes: loadingNote.trim() || undefined,
     });
-  }, [
-    customerId,
-    selectedLocationId,
-    chosenProforma,
-    orderDate,
-    loadingNote,
-    createOrderMutation,
-  ]);
+  }, [customerId, selectedLocationId, chosenProforma, orderDate, loadingNote, createOrderMutation]);
 
   /** Create a separate loading from the pending-orders warning. */
   const startNewLoadingAnyway = () => {
@@ -749,7 +743,7 @@ export function useFactoryContainerLoadingScanModel() {
       return res.json();
     },
     enabled: proformaArticleCodesForStock.length > 0,
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
 
   // Linked proforma metadata stays compact; all quantity math comes from the

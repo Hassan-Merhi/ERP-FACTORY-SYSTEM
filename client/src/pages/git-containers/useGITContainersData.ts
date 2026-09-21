@@ -135,6 +135,7 @@ export function useGITContainersData({
 
     const poll = async () => {
       if (stopped) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
         const res = await fetch("/api/container-tracking/bulk-progress", { credentials: "include" });
         if (!res.ok || stopped) return;

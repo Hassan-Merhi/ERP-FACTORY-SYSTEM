@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 /**
  * Controller hook for the All Daybook (TransactionJournal) page.
  *
@@ -139,8 +140,8 @@ export function useTransactionJournalModel() {
     // Keep old data visible while a background refresh or filter change is in flight —
     // this prevents the table from blanking out between fetches.
     placeholderData: (prev) => prev,
-    // Silent background refresh every 30 seconds, just like Daybook.
-    refetchInterval: 30_000,
+    // WebSocket invalidation is primary; keep a visible-tab fallback for missed events.
+    refetchInterval: visibleTabInterval(120_000),
   });
 
   const { data: voucherTypes } = useQuery<string[]>({

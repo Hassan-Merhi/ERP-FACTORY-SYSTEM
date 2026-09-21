@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle, RefreshCw, Trash2, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
@@ -170,7 +171,7 @@ export default function ConflictCenter() {
   } = useQuery<Conflict[]>({
     queryKey: ["conflicts", "unresolved"],
     queryFn: () => getUnresolvedConflicts(),
-    refetchInterval: 15_000,
+    refetchInterval: visibleTabInterval(60_000),
   });
 
   const clearAllMutation = useMutation({

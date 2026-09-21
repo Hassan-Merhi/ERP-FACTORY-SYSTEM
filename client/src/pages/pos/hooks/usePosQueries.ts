@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { locationInventoryLightUrl } from "@/api/inventoryApi";
@@ -158,7 +159,7 @@ export function usePosQueries({
       return res.json();
     },
     enabled: !!posUser && !!activeLocation,
-    refetchInterval: 60_000,
+    refetchInterval: visibleTabInterval(60_000),
   });
 
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });

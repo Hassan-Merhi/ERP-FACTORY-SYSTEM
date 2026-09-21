@@ -49,7 +49,7 @@ describe("Phase 5 faster remote viewing contracts", () => {
   it("cleans up watched-user switches while retaining polling fallback", () => {
     expect(viewerSource).toContain("eventSource?.close()");
     expect(viewerSource).toContain("[streamGeneration, userId]");
-    expect(viewerSource).toContain("refetchInterval: liveConnected ? false : 3000");
+    expect(viewerSource).toContain("refetchInterval: liveConnected ? false : visibleTabInterval(3_000)");
     expect(viewerSource).toContain("setLiveFrame(null)");
     expect(viewerSource).toContain("setLiveCursor(null)");
   });

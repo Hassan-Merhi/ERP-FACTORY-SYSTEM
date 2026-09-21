@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { KPICard } from "@/components/KPICard";
 import { Card } from "@/components/ui/card";
@@ -100,7 +101,7 @@ export default function PropertiesDashboard() {
     queryKey: ["/api/dashboard-payable-accounts", selectedCompany?.id],
     enabled: !!selectedCompany,
     staleTime: 30 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: visibleTabInterval(5 * 60_000),
   });
 
   // Add dashboard cash account mutation

@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +49,7 @@ export default function FactoryNetPosition() {
       return res.json();
     },
     staleTime: isToday ? 30_000 : Infinity,
-    refetchInterval: isToday ? 30_000 : false,
+    refetchInterval: isToday ? visibleTabInterval(120_000) : false,
   });
 
   // Authoritative supplier balances — only used for today (live override).
@@ -61,7 +62,7 @@ export default function FactoryNetPosition() {
       return res.json();
     },
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    refetchInterval: visibleTabInterval(120_000),
     enabled: !!rawData && isToday,
   });
 

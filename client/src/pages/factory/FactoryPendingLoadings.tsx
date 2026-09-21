@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -140,7 +141,7 @@ export default function FactoryPendingLoadings() {
 
   const { data: loads = [], isLoading } = useQuery<PendingLoad[]>({
     queryKey: ["/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250"],
-    refetchInterval: 60000,
+    refetchInterval: visibleTabInterval(60_000),
   });
 
   const { data: proformas = [], isLoading: proformasLoading } = useQuery<Proforma[]>({

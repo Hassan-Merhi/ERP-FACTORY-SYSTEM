@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -86,7 +87,7 @@ export default function FactoryDispatchBatchDetail() {
       return res.json();
     },
     enabled: !!batchId,
-    refetchInterval: 15_000,
+    refetchInterval: visibleTabInterval(15_000),
   });
 
   const { data: preview, isLoading: previewLoading } = useQuery<InvoicePreview>({
