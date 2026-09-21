@@ -140,7 +140,8 @@ export async function ensureChromiumInstalled(): Promise<void> {
 export const ensureChromiumAvailable = ensureChromiumInstalled;
 
 // ── Shared browser instance ───────────────────────────────────────────────────
-// One Chrome process is kept alive and reused across all scrape calls.
+// One Chrome process is reused across scrape bursts, then retired after an
+// idle window so Chrome does not remain part of the server's baseline RSS.
 // Replaced automatically if it crashes.
 
 let _sharedBrowser: Browser | null = null;
