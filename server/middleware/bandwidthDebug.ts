@@ -136,7 +136,12 @@ function getBandwidthBudgetConfig(): BandwidthBudgetConfig {
 
 function normalizePath(req: Request): string {
   const routePath = req.route?.path;
-  if (typeof routePath === "string") return `${req.baseUrl || ""}${routePath}` || "/";
+  if (typeof routePath === "string") {
+    const baseUrl = req.baseUrl || "";
+    if (routePath.startsWith("/api/")) return routePath;
+    if (baseUrl && (routePath === baseUrl || routePath.startsWith(`${baseUrl}/`))) return routePath;
+    return `${baseUrl}${routePath}` || "/";
+  }
 
   return req.path
     .split("/")
