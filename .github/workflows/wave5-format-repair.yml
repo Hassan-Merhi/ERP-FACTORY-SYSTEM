@@ -32,9 +32,15 @@ jobs:
       - name: Format Wave 5 source
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/lib/bandwidthPhase1HotspotGuard.ts \
+            client/src/lib/factoryCatalogCacheVariant.ts \
+            client/src/lib/requestStormGuard.ts \
             server/routes/performance/readMicrocache.test.ts \
             server/routes/performance/readMicrocache.ts \
-            server/routes/performance/readMicrocacheCoordinator.ts
+            server/routes/performance/readMicrocacheCoordinator.ts \
+            server/routes/performance/readMicrocacheCoordinator.test.ts \
+            tests/ui/bandwidth-phase-1-invalidation-policy.test.ts \
+            tests/ui/bandwidth-phase-4-heavy-pages.test.ts
 
       - name: Verify formatting
         run: |
@@ -48,9 +54,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
+            client/src/lib/bandwidthPhase1HotspotGuard.ts \
+            client/src/lib/factoryCatalogCacheVariant.ts \
+            client/src/lib/requestStormGuard.ts \
             server/routes/performance/readMicrocache.test.ts \
             server/routes/performance/readMicrocache.ts \
-            server/routes/performance/readMicrocacheCoordinator.ts
+            server/routes/performance/readMicrocacheCoordinator.ts \
+            server/routes/performance/readMicrocacheCoordinator.test.ts \
+            tests/ui/bandwidth-phase-1-invalidation-policy.test.ts \
+            tests/ui/bandwidth-phase-4-heavy-pages.test.ts
           if git diff --cached --quiet; then
             echo "No formatting changes to commit."
             exit 0
