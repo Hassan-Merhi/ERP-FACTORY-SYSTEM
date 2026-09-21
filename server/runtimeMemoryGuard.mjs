@@ -259,6 +259,7 @@ Server.prototype.emit = function patchedEmit(event, ...args) {
     if (index === -1) return;
     queue.splice(index, 1);
     clearTimeout(waiter.timer);
+    detach();
   };
   const detach = () => {
     req.off?.("aborted", removeQueuedWaiter);
