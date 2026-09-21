@@ -33,6 +33,7 @@ jobs:
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
             client/src/hooks/use-ws-invalidation.ts \
+            client/src/i18n/factoryProductionPlannerTranslations.ts \
             client/src/lib/bandwidthPhase1HotspotGuard.ts \
             client/src/lib/factoryCatalogCacheVariant.ts \
             client/src/lib/requestStormGuard.ts \
@@ -50,6 +51,7 @@ jobs:
         run: |
           node node_modules/prettier/bin/prettier.cjs --check \
             client/src/hooks/use-ws-invalidation.ts \
+            client/src/i18n/factoryProductionPlannerTranslations.ts \
             client/src/lib/bandwidthPhase1HotspotGuard.ts \
             client/src/lib/factoryCatalogCacheVariant.ts \
             client/src/lib/requestStormGuard.ts \
@@ -69,6 +71,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             client/src/hooks/use-ws-invalidation.ts \
+            client/src/i18n/factoryProductionPlannerTranslations.ts \
             client/src/lib/bandwidthPhase1HotspotGuard.ts \
             client/src/lib/factoryCatalogCacheVariant.ts \
             client/src/lib/requestStormGuard.ts \
