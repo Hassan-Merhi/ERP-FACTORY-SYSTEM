@@ -53,8 +53,12 @@ describe("Performance Wave 4 database hotspot guards", () => {
   });
 
   it("aggregates bale order-state once instead of repeating correlated EXISTS probes", () => {
-    expect(baleLedger).toContain("BOOL_OR(co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')) AS has_pending");
-    expect(baleLedger).toContain("BOOL_OR(co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')) AS has_sold");
+    expect(baleLedger).toContain(
+      "BOOL_OR(co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED')) AS has_pending"
+    );
+    expect(baleLedger).toContain(
+      "BOOL_OR(co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')) AS has_sold"
+    );
     expect(baleLedger).toContain("LEFT JOIN order_state os ON os.bale_id = fb.id");
     expect(baleLedger).not.toContain("WHERE cob.bale_id = fb.id");
   });
