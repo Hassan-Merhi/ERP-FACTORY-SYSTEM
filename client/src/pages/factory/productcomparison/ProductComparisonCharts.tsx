@@ -24,6 +24,7 @@ import {
   currentDayValue,
   currentMonthValue,
   currentYearValue,
+  isValidComparisonRange,
   parseLocalIsoDate,
   type ComparisonDirection,
   type ComparisonRange,
@@ -94,6 +95,10 @@ function localizedCategoryName(category: CategoryRow, language: "en" | "ar" | "f
 }
 
 function formatRangeLabel(range: ComparisonRange, period: ProductComparisonPeriod, locale: string): string {
+  // Date inputs can briefly be empty while the user edits a custom range.
+  // Never pass an invalid Date into Intl.DateTimeFormat because it throws "Invalid time value".
+  if (!isValidComparisonRange(range)) return "—";
+
   const from = parseLocalIsoDate(range.from);
   const to = parseLocalIsoDate(range.to);
   if (period === "day") {
@@ -315,6 +320,18 @@ export default function ProductComparisonCharts() {
     refetchOnWindowFocus: false,
   });
 
+  const activeCatalog = useMemo(() => catalog.filter((product) => product.active !== false), [catalog]);
+
+  useEffect(() => {
+    if (catalog.length === 0) return;
+
+    const activeKeys = new Set(activeCatalog.map(productKey).filter(Boolean));
+    setSelectedProducts((current) => {
+      const next = current.filter((key) => activeKeys.has(key));
+      return next.length === current.length ? current : next;
+    });
+  }, [catalog.length, activeCatalog]);
+
   const ranges = useMemo(() => {
     if (period === "custom") {
       return {
@@ -325,8 +342,8 @@ export default function ProductComparisonCharts() {
     return buildAutomaticComparisonRanges(period, direction, { day, month, year });
   }, [period, direction, day, month, year, customA, customB]);
 
-  const selectedRangeValid = ranges.selected.from <= ranges.selected.to;
-  const comparisonRangeValid = ranges.comparison.from <= ranges.comparison.to;
+  const selectedRangeValid = isValidComparisonRange(ranges.selected);
+  const comparisonRangeValid = isValidComparisonRange(ranges.comparison);
   const queriesEnabled = selectedProducts.length > 0 && selectedRangeValid && comparisonRangeValid;
 
   const selectedReport = useQuery<ReportData>({
@@ -364,12 +381,12 @@ export default function ProductComparisonCharts() {
 
   const gradeOptions = useMemo(() => {
     const grades = new Set<string>();
-    for (const product of catalog) {
+    for (const product of activeCatalog) {
       const grade = deriveGrade(product.articleCode || product.code || "");
       if (grade !== "—") grades.add(grade);
     }
     return [...grades].sort();
-  }, [catalog]);
+  }, [activeCatalog]);
 
   const categoryOptions = useMemo(
     () =>
@@ -382,15 +399,15 @@ export default function ProductComparisonCharts() {
 
   const catalogByKey = useMemo(() => {
     const map = new Map<string, BaleProductCatalogRow>();
-    for (const product of catalog) {
+    for (const product of activeCatalog) {
       const key = productKey(product);
       if (key) map.set(key, product);
     }
     return map;
-  }, [catalog]);
+  }, [activeCatalog]);
 
   const productOptions = useMemo(() => {
-    return catalog
+    return activeCatalog
       .filter((product) => {
         const key = productKey(product);
         if (!key) return false;
@@ -406,7 +423,7 @@ export default function ProductComparisonCharts() {
         label: localizedProductName(product, language),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [catalog, selectedProducts, selectedCategories, selectedGrades, language, locale]);
+  }, [activeCatalog, selectedProducts, selectedCategories, selectedGrades, language, locale]);
 
   const selectedRows = useMemo(() => reportMap(selectedReport.data?.production.byProduct), [selectedReport.data]);
   const comparisonRows = useMemo(() => reportMap(comparisonReport.data?.production.byProduct), [comparisonReport.data]);
