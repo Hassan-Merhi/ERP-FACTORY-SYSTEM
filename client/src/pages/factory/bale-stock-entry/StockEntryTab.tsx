@@ -113,7 +113,7 @@ export function StockEntryTab() {
   const { data: categories } = useQuery<FactoryCategory[]>({ queryKey: ["/api/factory/categories"] });
 
   const { data: workers = [] } = useQuery<WorkerOption[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     enabled: cart.length > 0,
   });
   const { data: workerCategoryGroups = [] } = useQuery<WorkerCategoryRow[]>({
