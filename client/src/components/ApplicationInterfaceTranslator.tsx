@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
-import { translateApplicationLiteral } from "@/i18n/applicationTranslations";
+import { translateApplicationLiteral } from "@/i18n/applicationLiteralTranslations";
 import { isFinalCloseoutText, translateFinalCloseoutText } from "@/i18n/finalCloseoutTranslations";
 import { translateSharedInterfaceText } from "@/i18n/sharedInterfaceTranslations";
 import { translateTabsFiltersText } from "@/i18n/tabsFiltersTranslations";
