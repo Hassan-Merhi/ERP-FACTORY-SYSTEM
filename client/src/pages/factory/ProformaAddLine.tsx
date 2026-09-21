@@ -98,7 +98,7 @@ export default function ProformaAddLine() {
   });
 
   const { data: baleProducts = [] } = useQuery<RawBaleProduct[], Error, BaleProductWeight[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
     select: (data) =>
       data.map((p) => ({ articleCode: p.articleCode || p.code || "", weightPerBaleKg: p.weightPerBaleKg ?? null })),
   });
