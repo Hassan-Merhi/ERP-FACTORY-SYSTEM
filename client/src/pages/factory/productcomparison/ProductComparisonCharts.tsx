@@ -13,6 +13,7 @@ import {
 import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale, X } from "lucide-react";
 
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,135 +58,6 @@ interface CategoryRow {
   nameAr?: string | null;
   nameFr?: string | null;
 }
-
-const COPY = {
-  en: {
-    title: "Product Comparison",
-    subtitle: "Select products and compare production with one chart per product.",
-    daily: "Daily",
-    monthly: "Monthly",
-    yearly: "Yearly",
-    custom: "Custom",
-    previous: "Previous",
-    next: "Next",
-    bales: "Bales",
-    weight: "Weight",
-    selectedPeriod: "Selected period",
-    comparisonPeriod: "Comparison period",
-    day: "Day",
-    month: "Month",
-    year: "Year",
-    periodA: "Period A",
-    periodB: "Period B",
-    from: "From",
-    to: "To",
-    categories: "Categories",
-    grades: "Grades",
-    products: "Products",
-    allCategories: "All Categories",
-    allGrades: "All Grades",
-    selectProducts: "Select products…",
-    clear: "Clear",
-    selectedProducts: "Selected products",
-    selectedTotal: "Selected total",
-    comparisonTotal: "Comparison total",
-    difference: "Difference",
-    change: "Change",
-    noSelectionTitle: "Choose products to compare",
-    noSelectionBody: "Select one or more products above. Each selected product will get its own comparison chart.",
-    loadFailed: "Failed to load production comparison data.",
-    current: "Selected",
-    compared: "Compared",
-    noProduction: "No production in either period",
-    produced: "produced",
-    inactive: "inactive",
-    charts: "Product charts",
-  },
-  ar: {
-    title: "مقارنة المنتجات",
-    subtitle: "اختر المنتجات وقارن الإنتاج بمخطط مستقل لكل منتج.",
-    daily: "يومي",
-    monthly: "شهري",
-    yearly: "سنوي",
-    custom: "مخصص",
-    previous: "السابق",
-    next: "التالي",
-    bales: "البالات",
-    weight: "الوزن",
-    selectedPeriod: "الفترة المحددة",
-    comparisonPeriod: "فترة المقارنة",
-    day: "اليوم",
-    month: "الشهر",
-    year: "السنة",
-    periodA: "الفترة أ",
-    periodB: "الفترة ب",
-    from: "من",
-    to: "إلى",
-    categories: "الفئات",
-    grades: "الدرجات",
-    products: "المنتجات",
-    allCategories: "كل الفئات",
-    allGrades: "كل الدرجات",
-    selectProducts: "اختر المنتجات…",
-    clear: "مسح",
-    selectedProducts: "المنتجات المختارة",
-    selectedTotal: "إجمالي الفترة المحددة",
-    comparisonTotal: "إجمالي فترة المقارنة",
-    difference: "الفرق",
-    change: "التغيير",
-    noSelectionTitle: "اختر منتجات للمقارنة",
-    noSelectionBody: "اختر منتجاً واحداً أو أكثر. سيظهر مخطط مقارنة مستقل لكل منتج.",
-    loadFailed: "تعذر تحميل بيانات مقارنة الإنتاج.",
-    current: "المحدد",
-    compared: "المقارن",
-    noProduction: "لا يوجد إنتاج في الفترتين",
-    produced: "تم إنتاجه",
-    inactive: "غير نشط",
-    charts: "مخططات المنتجات",
-  },
-  fr: {
-    title: "Comparaison par produit",
-    subtitle: "Sélectionnez des produits et comparez la production avec un graphique par produit.",
-    daily: "Quotidien",
-    monthly: "Mensuel",
-    yearly: "Annuel",
-    custom: "Personnalisé",
-    previous: "Précédent",
-    next: "Suivant",
-    bales: "Balles",
-    weight: "Poids",
-    selectedPeriod: "Période sélectionnée",
-    comparisonPeriod: "Période comparée",
-    day: "Jour",
-    month: "Mois",
-    year: "Année",
-    periodA: "Période A",
-    periodB: "Période B",
-    from: "Du",
-    to: "Au",
-    categories: "Catégories",
-    grades: "Qualités",
-    products: "Produits",
-    allCategories: "Toutes les catégories",
-    allGrades: "Toutes les qualités",
-    selectProducts: "Sélectionner les produits…",
-    clear: "Effacer",
-    selectedProducts: "Produits sélectionnés",
-    selectedTotal: "Total période sélectionnée",
-    comparisonTotal: "Total période comparée",
-    difference: "Différence",
-    change: "Variation",
-    noSelectionTitle: "Choisissez des produits à comparer",
-    noSelectionBody: "Sélectionnez un ou plusieurs produits. Chaque produit aura son propre graphique de comparaison.",
-    loadFailed: "Impossible de charger les données de comparaison de production.",
-    current: "Sélectionné",
-    compared: "Comparé",
-    noProduction: "Aucune production sur les deux périodes",
-    produced: "produit",
-    inactive: "inactif",
-    charts: "Graphiques produits",
-  },
-} as const;
 
 function normalizeArticle(value: string | null | undefined): string {
   return (value || "").trim().toUpperCase();
@@ -282,6 +154,10 @@ const ProductChartCard = memo(function ProductChartCard({
   differenceLabel,
   changeLabel,
   noProductionLabel,
+  inactiveLabel,
+  balesLabel,
+  weightLabel,
+  chartRegionLabel,
 }: {
   product: BaleProductCatalogRow;
   selectedRow?: ProductRow;
@@ -295,6 +171,10 @@ const ProductChartCard = memo(function ProductChartCard({
   differenceLabel: string;
   changeLabel: string;
   noProductionLabel: string;
+  inactiveLabel: string;
+  balesLabel: string;
+  weightLabel: string;
+  chartRegionLabel: string;
 }) {
   const selectedValue = metricValue(selectedRow, metric);
   const comparisonValue = metricValue(comparisonRow, metric);
@@ -320,7 +200,7 @@ const ProductChartCard = memo(function ProductChartCard({
         </div>
         {product.active === false ? (
           <Badge variant="outline" className="shrink-0">
-            {COPY[language].inactive}
+            {inactiveLabel}
           </Badge>
         ) : null}
       </div>
@@ -336,7 +216,7 @@ const ProductChartCard = memo(function ProductChartCard({
         </div>
       </div>
 
-      <ResponsiveChartViewport label={`${localizedName} production comparison`}>
+      <ResponsiveChartViewport label={`${chartRegionLabel}: ${localizedName}`}>
         <div className="h-[245px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
@@ -348,7 +228,7 @@ const ProductChartCard = memo(function ProductChartCard({
                 tickFormatter={(value) => (metric === "bales" ? fmtNum(Number(value)) : fmtKg(Number(value)))}
               />
               <Tooltip
-                formatter={(value) => [formatMetric(Number(value), metric), metric === "bales" ? COPY[language].bales : COPY[language].weight]}
+                formatter={(value) => [formatMetric(Number(value), metric), metric === "bales" ? balesLabel : weightLabel]}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={96}>
                 <Cell fill="hsl(var(--primary))" />
@@ -414,7 +294,7 @@ function LazyProductChartCard(props: ComponentProps<typeof ProductChartCard>) {
 
 export default function ProductComparisonCharts() {
   const { language } = useApplicationLanguage();
-  const copy = COPY[language];
+  const copy = getFactoryProductComparisonCopy(language);
   const locale = localeFor(language);
 
   const [period, setPeriod] = useState<ProductComparisonPeriod>("month");
@@ -470,7 +350,7 @@ export default function ProductComparisonCharts() {
     queryFn: async () => {
       const params = new URLSearchParams({ from: ranges.selected.from, to: ranges.selected.to });
       const response = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? "Request failed");
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? copy.requestFailed);
       return response.json();
     },
   });
@@ -489,7 +369,7 @@ export default function ProductComparisonCharts() {
     queryFn: async () => {
       const params = new URLSearchParams({ from: ranges.comparison.from, to: ranges.comparison.to });
       const response = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
-      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? "Request failed");
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? copy.requestFailed);
       return response.json();
     },
   });
@@ -751,7 +631,7 @@ export default function ProductComparisonCharts() {
           {period === "custom" && (!selectedRangeValid || !comparisonRangeValid) ? (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{copy.from} ≤ {copy.to}</span>
+              <span>{copy.invalidRange}</span>
             </div>
           ) : null}
         </CardContent>
@@ -880,6 +760,10 @@ export default function ProductComparisonCharts() {
                     differenceLabel={copy.difference}
                     changeLabel={copy.change}
                     noProductionLabel={copy.noProduction}
+                    inactiveLabel={copy.inactive}
+                    balesLabel={copy.bales}
+                    weightLabel={copy.weight}
+                    chartRegionLabel={copy.chartRegion}
                   />
                 );
               })}
