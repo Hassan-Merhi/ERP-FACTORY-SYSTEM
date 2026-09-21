@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   Bar,
   BarChart,
@@ -15,7 +15,7 @@ import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale,
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ResponsiveChartPanel,
@@ -382,7 +382,7 @@ const ProductChartCard = memo(function ProductChartCard({
   );
 });
 
-function LazyProductChartCard(props: React.ComponentProps<typeof ProductChartCard>) {
+function LazyProductChartCard(props: ComponentProps<typeof ProductChartCard>) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -588,7 +588,7 @@ export default function ProductComparisonCharts() {
     return { selected, comparison, difference, change: pctChange(selected, comparison) };
   }, [selectedProducts, selectedRows, comparisonRows, metric]);
 
-  const isLoading = queriesEnabled && (selectedReport.isLoading || comparisonReport.isLoading);
+  const isLoading = queriesEnabled && (selectedReport.isFetching || comparisonReport.isFetching);
   const error = selectedReport.error || comparisonReport.error;
   const hasFilter = selectedCategories.length > 0 || selectedGrades.length > 0;
 
