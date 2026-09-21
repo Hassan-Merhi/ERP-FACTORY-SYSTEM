@@ -6,6 +6,12 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { V5Data, V5Row } from "./types";
 
+function isGarbageOrWipers(row: V5Row) {
+  if (row.isGarbageOrWipers) return true;
+  const n = row.productName.toLowerCase();
+  return n.includes("wiper") || n.includes("garbage");
+}
+
 export function useFactoryStockAllocationV5Model() {
   const { toast } = useToast();
   const searchString = useSearch();
@@ -350,12 +356,6 @@ export function useFactoryStockAllocationV5Model() {
     refetchOnReconnect: false,
     refetchOnMount: false,
   });
-
-  function isGarbageOrWipers(row: V5Row) {
-    if (row.isGarbageOrWipers) return true;
-    const n = row.productName.toLowerCase();
-    return n.includes("wiper") || n.includes("garbage");
-  }
 
   const allRows = useMemo(
     () => (query.data?.rows ?? []).slice().sort((a, b) => a.productName.localeCompare(b.productName)),
