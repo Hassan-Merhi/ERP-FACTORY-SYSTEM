@@ -335,11 +335,12 @@ const translations: Record<string, Translation> = {
     ar: "جميع الحاويات مقفلة. ألغِ قفل حاوية واحدة على الأقل قبل إعادة الموازنة.",
     fr: "Tous les conteneurs sont verrouillés. Déverrouillez-en au moins un avant le rééquilibrage.",
   },
-  "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.": {
-    en: "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.",
-    ar: "يمكن للحاويات غير المقفلة استيعاب ${unlockedCapacity.toLocaleString()} بالة، لكن لا يزال يلزم توزيع ${totalRemaining.toLocaleString()} بالة. ألغِ قفل المزيد من الحاويات أولاً.",
-    fr: "Les conteneurs déverrouillés peuvent contenir ${unlockedCapacity.toLocaleString()} balles, mais ${totalRemaining.toLocaleString()} balles restent à placer. Déverrouillez d’abord davantage de conteneurs.",
-  },
+  "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.":
+    {
+      en: "Unlocked containers can hold ${unlockedCapacity.toLocaleString()} bales, but ${totalRemaining.toLocaleString()} bales still need placement. Unlock more containers first.",
+      ar: "يمكن للحاويات غير المقفلة استيعاب ${unlockedCapacity.toLocaleString()} بالة، لكن لا يزال يلزم توزيع ${totalRemaining.toLocaleString()} بالة. ألغِ قفل المزيد من الحاويات أولاً.",
+      fr: "Les conteneurs déverrouillés peuvent contenir ${unlockedCapacity.toLocaleString()} balles, mais ${totalRemaining.toLocaleString()} balles restent à placer. Déverrouillez d’abord davantage de conteneurs.",
+    },
   "The remaining plan cannot fit inside the unlocked container capacity.": {
     en: "The remaining plan cannot fit inside the unlocked container capacity.",
     ar: "لا يمكن استيعاب بقية الخطة ضمن سعة الحاويات غير المقفلة.",
@@ -418,7 +419,7 @@ export function translateFactoryProductionPlannerText(value: string, language: A
   if (capacityMatch) {
     return translations["Capacity must be a whole number from 1 to ${MAX_CONTAINER_CAPACITY}"][language].replace(
       "${MAX_CONTAINER_CAPACITY}",
-      capacityMatch[1],
+      capacityMatch[1]
     );
   }
 
@@ -437,7 +438,7 @@ export function translateFactoryProductionPlannerText(value: string, language: A
   }
 
   const unlockedCapacityMatch = value.match(
-    /^Unlocked containers can hold ([\d,]+) bales, but ([\d,]+) bales still need placement\. Unlock more containers first\.$/,
+    /^Unlocked containers can hold ([\d,]+) bales, but ([\d,]+) bales still need placement\. Unlock more containers first\.$/
   );
   if (unlockedCapacityMatch) {
     return translations[
