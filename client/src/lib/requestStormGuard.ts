@@ -1,4 +1,5 @@
 import { isAbortError } from "./abortError";
+import { factoryCatalogLanguageCacheVariant } from "./factoryCatalogCacheVariant";
 import {
   BANDWIDTH_INVALIDATION_CHANNEL,
   getBandwidthInvalidationScope,
@@ -169,7 +170,7 @@ function buildRequestKey(url: URL, headers: Headers): string {
   ]
     .map((name) => `${name}=${headers.get(name) || ""}`)
     .join("|");
-  return `${url.toString()}|${varyHeaders}`;
+  return `${url.toString()}|${varyHeaders}|${factoryCatalogLanguageCacheVariant(url, headers)}`;
 }
 
 function trimCache(): void {

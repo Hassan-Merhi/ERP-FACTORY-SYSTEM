@@ -156,6 +156,10 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
       "/api/stock-groups",
       "/api/stock-categories",
       "/api/stock-grades",
+      "/api/stock-items",
+      "/api/ledger-accounts",
+      "/api/bank-accounts",
+      "/api/fixed-assets",
       "/api/company-settings",
       "/api/user/preferences",
     ])
@@ -182,6 +186,27 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     topics = ["factory", "payroll", "accounting"];
   } else if (startsWithAny(path, ["/api/factory/daily-bale-scans", "/api/factory/ground-scan-items"])) {
     topics = ["scans"];
+  } else if (
+    startsWithAny(path, [
+      "/api/factory/bale-products",
+      "/api/factory/categories",
+      "/api/factory/settings",
+      "/api/factory/my-access",
+      "/api/factory/users",
+    ])
+  ) {
+    topics = ["reference"];
+  } else if (startsWithAny(path, ["/api/factory/customers", "/api/factory/suppliers"])) {
+    topics = ["factory", "accounting", "reference"];
+  } else if (
+    startsWithAny(path, [
+      "/api/factory/workers",
+      "/api/factory/employees",
+      "/api/factory/worker-categories",
+      "/api/factory/cash-accounts",
+    ])
+  ) {
+    topics = ["payroll", "accounting", "reference"];
   } else if (path.startsWith("/api/factory")) {
     topics = ["factory"];
   } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp"])) {

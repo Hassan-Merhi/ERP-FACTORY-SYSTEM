@@ -121,6 +121,29 @@ describe("WebSocket invalidation traffic", () => {
     expect(predicate(queryWithKey("/api/factory/ground-scan-items"))).toBe(false);
   });
 
+  it("keeps routine Factory writes away from reference catalogs", () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+    renderHook(() => useWsInvalidation(), { wrapper: wrapper(client) });
+
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["factory"] });
+    vi.advanceTimersByTime(400);
+
+    const factoryPredicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(factoryPredicate(queryWithKey("/api/factory/customer-orders"))).toBe(true);
+    expect(factoryPredicate(queryWithKey("/api/factory/categories"))).toBe(false);
+    expect(factoryPredicate(queryWithKey("/api/factory/bale-products"))).toBe(false);
+
+    invalidate.mockClear();
+    sockets[0].receiveInvalidate({ type: "invalidate", topics: ["reference"] });
+    vi.advanceTimersByTime(400);
+
+    const referencePredicate = invalidate.mock.calls[0]?.[0].predicate!;
+    expect(referencePredicate(queryWithKey("/api/factory/categories"))).toBe(true);
+    expect(referencePredicate(queryWithKey("/api/factory/bale-products"))).toBe(true);
+    expect(referencePredicate(queryWithKey("/api/factory/customer-orders"))).toBe(false);
+  });
+
   it("coalesces multiple topics in the same write burst", () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();

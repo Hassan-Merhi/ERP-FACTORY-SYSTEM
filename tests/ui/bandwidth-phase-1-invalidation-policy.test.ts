@@ -76,6 +76,7 @@ describe("Bandwidth Phase 1 invalidation policy", () => {
       expect(source).toContain("referenceWriteGeneration");
       expect(source).toContain("getBandwidthInvalidationScope(url.pathname)");
       expect(source).toContain("BANDWIDTH_INVALIDATION_CHANNEL");
+      expect(source).toContain("factoryCatalogLanguageCacheVariant(url, headers)");
     }
 
     expect(requestGuard).toMatch(/customer-proformas\$\/,[\s\S]*scope: "live"/);
@@ -117,6 +118,20 @@ describe("Bandwidth Phase 1 invalidation policy", () => {
       invalidateBandwidthReadCaches("live");
       await window.fetch("/api/locations/11/inventory");
       expect(networkCalls).toHaveLength(2);
+    });
+
+    it("keeps a Factory snapshot within one language but refetches after the language cookie changes", async () => {
+      networkCalls.length = 0;
+      document.cookie = "factory_catalog_language=en; Path=/";
+      await window.fetch("/api/factory/categories");
+      await window.fetch("/api/factory/categories");
+      expect(networkCalls).toHaveLength(1);
+
+      document.cookie = "factory_catalog_language=fr; Path=/";
+      await window.fetch("/api/factory/categories");
+      expect(networkCalls).toHaveLength(2);
+
+      document.cookie = "factory_catalog_language=en; Path=/";
     });
   });
 });

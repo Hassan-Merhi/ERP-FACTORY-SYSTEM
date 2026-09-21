@@ -91,7 +91,10 @@ describe("Phase 7C read microcache", () => {
       "/api/factory/bale-ledger",
       "/api/factory/containers",
       "/api/factory/bale-products",
+      "/api/factory/categories",
       "/api/factory/workers",
+      "/api/containers",
+      "/api/containers/otw-items",
       "/api/ledger-accounts",
       "/api/stock-items/light",
       "/api/locations",
@@ -103,19 +106,48 @@ describe("Phase 7C read microcache", () => {
     expect(READ_MICROCACHE_TTL_MS.get("/api/sales-report")).toBe(120_000);
     expect(READ_MICROCACHE_TTL_MS.get("/api/factory/payrolls")).toBe(120_000);
     expect(READ_MICROCACHE_TTL_MS.get("/api/factory/bale-products")).toBe(300_000);
+    expect(READ_MICROCACHE_TTL_MS.get("/api/factory/categories")).toBe(300_000);
+    expect(READ_MICROCACHE_TTL_MS.get("/api/containers/otw-items")).toBe(30_000);
   });
 
-  it("isolates cache keys by user, company, role, location, station, query, and client date", () => {
+  it("isolates cache keys by identity, query, client date, and Factory catalog language", () => {
     const base = buildReadMicrocacheKey(makeRequest());
     const differentQuery = buildReadMicrocacheKey(
       makeRequest({ originalUrl: "/api/accounts/all?startDate=2026-07-02" })
     );
     const differentDate = buildReadMicrocacheKey(makeRequest({ headers: { "x-client-date": "2026-07-31" } }));
+    const factoryBase = buildReadMicrocacheKey(
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
+    );
+    const differentLanguageHeader = buildReadMicrocacheKey(
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        headers: { "x-factory-catalog-language": "fr" },
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
+    );
+    const differentLanguageCookie = buildReadMicrocacheKey(
+      makeRequest({
+        path: "/api/factory/categories",
+        originalUrl: "/api/factory/categories",
+        headers: { cookie: "factory_catalog_language=ar" },
+        session: { userId: 7, currentCompanyId: 3, factoryCompanyId: 3, currentRole: "Admin" },
+      })
+    );
     const differentUser = buildReadMicrocacheKey(makeRequest({ session: { userId: 8, currentCompanyId: 3 } }));
     const differentCompany = buildReadMicrocacheKey(makeRequest({ session: { userId: 7, currentCompanyId: 4 } }));
 
     expect(differentQuery).not.toBe(base);
     expect(differentDate).not.toBe(base);
+    expect(differentLanguageHeader).not.toBe(factoryBase);
+    expect(differentLanguageCookie).not.toBe(factoryBase);
+    expect(differentLanguageHeader).not.toBe(differentLanguageCookie);
+    expect(buildReadMicrocacheKey(makeRequest({ headers: { "x-factory-catalog-language": "fr" } }))).toBe(base);
     expect(differentUser).not.toBe(base);
     expect(differentCompany).not.toBe(base);
   });
@@ -129,6 +161,7 @@ describe("Phase 7C read microcache", () => {
 
     expect(firstResponse.jsonBody).toEqual({ total: 12 });
     expect(firstResponse.headers["Cache-Control"]).toBe("private, no-cache, must-revalidate");
+    expect(firstResponse.headers.Vary).toContain("X-Factory-Catalog-Language");
     expect(firstResponse.headers.ETag).toBeTruthy();
 
     currentTime = 1_500;
@@ -316,6 +349,10 @@ describe("Phase 7C read microcache", () => {
     writeResponse.emit("close");
 
     expect(publishInvalidation).toHaveBeenCalledOnce();
+    expect(publishInvalidation).toHaveBeenCalledWith({
+      companyIds: [3],
+      topics: ["accounting"],
+    });
     const readNext = vi.fn();
     middleware(request, makeResponse(), readNext);
     expect(readNext).toHaveBeenCalledOnce();
@@ -352,7 +389,7 @@ describe("Phase 7C read microcache", () => {
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
   });
 
-  it("preserves business caches across POS autosave and presence heartbeat writes", () => {
+  it("preserves business caches across drafts, presence, and realtime telemetry writes", () => {
     const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
     const request = makeRequest();
     storeJson(middleware, request, makeResponse(), { ok: true });
@@ -367,13 +404,288 @@ describe("Phase 7C read microcache", () => {
       path: "/api/user-presence",
       originalUrl: "/api/user-presence",
     });
+    const screenFeedRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed",
+      originalUrl: "/api/screen-feed",
+    });
+    const pointerRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed/pointer",
+      originalUrl: "/api/screen-feed/pointer",
+    });
+    const tabHeartbeatRequest = makeRequest({
+      method: "POST",
+      path: "/api/screen-feed/control/tab-heartbeat",
+      originalUrl: "/api/screen-feed/control/tab-heartbeat",
+    });
     middleware(draftRequest, makeResponse(), vi.fn());
     middleware(presenceRequest, makeResponse(), vi.fn());
+    middleware(screenFeedRequest, makeResponse(), vi.fn());
+    middleware(pointerRequest, makeResponse(), vi.fn());
+    middleware(tabHeartbeatRequest, makeResponse(), vi.fn());
 
     const secondResponse = makeResponse();
     const secondNext = vi.fn();
     middleware(request, secondResponse, secondNext);
     expect(secondNext).not.toHaveBeenCalled();
     expect(secondResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
+    expect(getReadMicrocacheStats().invalidations).toBe(0);
+  });
+
+  it("keeps unrelated topic caches warm after a targeted write", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const accountingRequest = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+    });
+    const inventoryRequest = makeRequest({
+      path: "/api/stock-items/light",
+      originalUrl: "/api/stock-items/light",
+    });
+
+    storeJson(middleware, accountingRequest, makeResponse(), { accounts: 4 });
+    storeJson(middleware, inventoryRequest, makeResponse(), [{ id: 1 }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({ method: "POST", path: "/api/vouchers", originalUrl: "/api/vouchers" }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const accountingNext = vi.fn();
+    middleware(accountingRequest, makeResponse(), accountingNext);
+    expect(accountingNext).toHaveBeenCalledOnce();
+
+    const inventoryResponse = makeResponse();
+    const inventoryNext = vi.fn();
+    middleware(inventoryRequest, inventoryResponse, inventoryNext);
+    expect(inventoryNext).not.toHaveBeenCalled();
+    expect(inventoryResponse.headers["X-ERP-Read-Cache"]).toBe("HIT");
+
+    expect(getReadMicrocacheStats()).toMatchObject({
+      targetedInvalidations: 1,
+      blanketInvalidations: 0,
+      invalidatedEntries: 1,
+    });
+  });
+
+  it("keeps stable reference reads warm across unrelated accounting and Factory workflow writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const stockItemsRequest = makeRequest({
+      path: "/api/stock-items/light",
+      originalUrl: "/api/stock-items/light",
+    });
+    const ledgerAccountsRequest = makeRequest({
+      path: "/api/ledger-accounts",
+      originalUrl: "/api/ledger-accounts",
+    });
+    const factoryCategoriesRequest = makeRequest({
+      path: "/api/factory/categories",
+      originalUrl: "/api/factory/categories",
+      session: {
+        userId: 7,
+        currentCompanyId: 3,
+        factoryCompanyId: 3,
+        currentRole: "Admin",
+      },
+    });
+
+    storeJson(middleware, stockItemsRequest, makeResponse(), [{ id: 1 }]);
+    storeJson(middleware, ledgerAccountsRequest, makeResponse(), [{ id: 10 }]);
+    storeJson(middleware, factoryCategoriesRequest, makeResponse(), [{ id: 20 }]);
+
+    const voucherResponse = makeResponse(200);
+    middleware(
+      makeRequest({ method: "POST", path: "/api/vouchers", originalUrl: "/api/vouchers" }),
+      voucherResponse,
+      vi.fn()
+    );
+    voucherResponse.emit("finish");
+
+    const orderResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/factory/customer-orders/44",
+        originalUrl: "/api/factory/customer-orders/44",
+        session: {
+          userId: 7,
+          currentCompanyId: 3,
+          factoryCompanyId: 3,
+          currentRole: "Admin",
+        },
+      }),
+      orderResponse,
+      vi.fn()
+    );
+    orderResponse.emit("finish");
+
+    for (const request of [stockItemsRequest, ledgerAccountsRequest, factoryCategoriesRequest]) {
+      const response = makeResponse();
+      const next = vi.fn();
+      middleware(request, response, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+    }
+  });
+
+  it("evicts Factory reference reads when the reference family changes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const request = makeRequest({
+      path: "/api/factory/categories",
+      originalUrl: "/api/factory/categories",
+      session: {
+        userId: 7,
+        currentCompanyId: 3,
+        factoryCompanyId: 3,
+        currentRole: "Admin",
+      },
+    });
+    storeJson(middleware, request, makeResponse(), [{ id: 20 }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/factory/categories/20",
+        originalUrl: "/api/factory/categories/20",
+        session: {
+          userId: 7,
+          currentCompanyId: 3,
+          factoryCompanyId: 3,
+          currentRole: "Admin",
+        },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const next = vi.fn();
+    middleware(request, makeResponse(), next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("keeps other companies warm when one company writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const company3 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    const company4 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 4, currentRole: "Admin" },
+    });
+
+    storeJson(middleware, company3, makeResponse(), { company: 3 });
+    storeJson(middleware, company4, makeResponse(), { company: 4 });
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/vouchers",
+        originalUrl: "/api/vouchers",
+        session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const company3Next = vi.fn();
+    middleware(company3, makeResponse(), company3Next);
+    expect(company3Next).toHaveBeenCalledOnce();
+
+    const company4Response = makeResponse();
+    const company4Next = vi.fn();
+    middleware(company4, company4Response, company4Next);
+    expect(company4Next).not.toHaveBeenCalled();
+    expect(company4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+  });
+
+  it("keeps explicitly different inventory locations warm", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const location3 = makeRequest({
+      path: "/api/locations/3/inventory/light",
+      originalUrl: "/api/locations/3/inventory/light",
+    });
+    const location4 = makeRequest({
+      path: "/api/locations/4/inventory/light",
+      originalUrl: "/api/locations/4/inventory/light",
+    });
+
+    storeJson(middleware, location3, makeResponse(), [{ stockItemId: 1, quantity: "2" }]);
+    storeJson(middleware, location4, makeResponse(), [{ stockItemId: 1, quantity: "5" }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/locations/3/inventory/adjust",
+        originalUrl: "/api/locations/3/inventory/adjust",
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const location3Next = vi.fn();
+    middleware(location3, makeResponse(), location3Next);
+    expect(location3Next).toHaveBeenCalledOnce();
+
+    const location4Response = makeResponse();
+    const location4Next = vi.fn();
+    middleware(location4, location4Response, location4Next);
+    expect(location4Next).not.toHaveBeenCalled();
+    expect(location4Response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+  });
+
+  it("keeps unknown write families on the safe blanket fallback", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const company3 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    const company4 = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+      session: { userId: 7, currentCompanyId: 4, currentRole: "Admin" },
+    });
+
+    storeJson(middleware, company3, makeResponse(), { company: 3 });
+    storeJson(middleware, company4, makeResponse(), { company: 4 });
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/admin/unclassified-write",
+        originalUrl: "/api/admin/unclassified-write",
+        session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const company3Next = vi.fn();
+    const company4Next = vi.fn();
+    middleware(company3, makeResponse(), company3Next);
+    middleware(company4, makeResponse(), company4Next);
+
+    expect(company3Next).toHaveBeenCalledOnce();
+    expect(company4Next).toHaveBeenCalledOnce();
+    expect(getReadMicrocacheStats()).toMatchObject({
+      targetedInvalidations: 0,
+      blanketInvalidations: 1,
+      invalidatedEntries: 2,
+    });
   });
 });
