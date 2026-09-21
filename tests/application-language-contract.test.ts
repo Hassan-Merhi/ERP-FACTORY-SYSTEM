@@ -7,7 +7,10 @@ import {
   parseApplicationLanguage,
 } from "../shared/applicationLanguageContract";
 
-import { translateApplicationText } from "../client/src/i18n/applicationTranslations";
+import {
+  loadApplicationTranslationCatalog,
+  translateApplicationText,
+} from "../client/src/i18n/applicationTranslations";
 
 describe("application language contract", () => {
   it("supports exactly English Arabic and French", () => {
@@ -37,11 +40,12 @@ describe("application language contract", () => {
         "accountCode",
         "containerNumber",
         "voucherNumber",
-      ]),
+      ])
     );
   });
 
-  it("resolves typed UI text in all three languages", () => {
+  it("resolves typed UI text in all three languages after lazy locale loading", async () => {
+    await Promise.all([loadApplicationTranslationCatalog("ar"), loadApplicationTranslationCatalog("fr")]);
     expect(translateApplicationText("language.label", "en")).toBe("Language");
     expect(translateApplicationText("language.label", "ar")).toBe("اللغة");
     expect(translateApplicationText("language.label", "fr")).toBe("Langue");

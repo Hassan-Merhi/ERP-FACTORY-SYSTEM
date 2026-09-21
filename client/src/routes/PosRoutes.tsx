@@ -1,6 +1,4 @@
 import { Switch, Route, Redirect } from "wouter";
-import POSContainerTracking from "@/pages/pos/POSContainerTracking";
-import POSContainerDetail from "@/pages/pos/POSContainerDetail";
 import {
   POS,
   LocationInventory,
@@ -15,11 +13,13 @@ import {
   POSSettings,
   POSPriceList,
   PosTransferOrders,
+  POSContainerTracking,
+  POSContainerDetail,
+  RetailPOS,
   MySettings,
 } from "@/lazyPages";
 import type { AuthMe } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
-import RetailPOS from "@/pages/pos/RetailPOS";
 
 interface PosRoutesProps {
   user: AuthMe;

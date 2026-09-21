@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { StatCard, type StatCardProps } from "@/components/StatCard";
 
 export interface FactoryKpiCardProps extends Omit<StatCardProps, "tone"> {
@@ -20,6 +21,8 @@ const METRIC_TONE: Record<NonNullable<FactoryKpiCardProps["metric"]>, StatCardPr
  * dashboards (FactoryDashboard, ContainerDashboard production tab,
  * production-cycles, batch detail) share one visual grammar.
  */
-export function FactoryKpiCard({ metric = "neutral", ...rest }: FactoryKpiCardProps) {
+function FactoryKpiCardComponent({ metric = "neutral", ...rest }: FactoryKpiCardProps) {
   return <StatCard tone={METRIC_TONE[metric]} {...rest} />;
 }
+
+export const FactoryKpiCard = memo(FactoryKpiCardComponent);

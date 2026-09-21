@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { translateApplicationLiteral } from "../client/src/i18n/applicationTranslations";
+import { loadApplicationTranslationCatalog } from "../client/src/i18n/applicationTranslations";
+import { translateApplicationLiteral } from "../client/src/i18n/applicationLiteralTranslations";
 import { translatePhase3SharedUiText } from "../client/src/i18n/sharedUiPhase3Translations";
 import { translateSharedInterfaceText } from "../client/src/i18n/sharedInterfaceTranslations";
 
@@ -8,6 +9,10 @@ import { translateSharedInterfaceText } from "../client/src/i18n/sharedInterface
 // "Stock" nav label. The interface translator matched that alias first and
 // rendered the Stock item as a second "Inventory" entry in the sidebar.
 describe("sidebar Stock label", () => {
+  beforeAll(async () => {
+    await Promise.all([loadApplicationTranslationCatalog("ar"), loadApplicationTranslationCatalog("fr")]);
+  });
+
   it("does not resolve the English Stock label through a translated alias", () => {
     expect(translateApplicationLiteral("Stock", "en")).toBeNull();
   });

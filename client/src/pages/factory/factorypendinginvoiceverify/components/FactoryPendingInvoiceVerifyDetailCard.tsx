@@ -80,6 +80,13 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                 {(() => {
                   const comparisonMap = new Map<string, ComparisonItem>();
                   (verification?.comparison || []).forEach((c) => comparisonMap.set(c.articleCode, c));
+
+                  // Keep the left mismatch table's Stock column consistent with
+                  // the Loaded Bales table. Extra loaded items are not proforma
+                  // lines, so their stock comes from the loaded-item summary.
+                  const loadedStockMap = new Map(
+                    (verification?.loadedItems || []).map((group) => [group.articleCode, group.stockQty ?? 0])
+                  );
       
                   // Proforma lines that are not a perfect match
                   const mismatchedProformaLines = (verification?.proformaLines || []).filter((line) => {
@@ -159,6 +166,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                               {allLeftRows.map((row, i) => {
                                 if (row.kind === "extra") {
                                   const { cmp } = row;
+                                  const stockQty = cmp.stockQty ?? loadedStockMap.get(cmp.articleCode) ?? 0;
                                   return (
                                     <TableRow
                                       key={`extra-${cmp.articleCode}`}
@@ -175,7 +183,29 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                                         </span>
                                       </TableCell>
                                       <TableCell>{getStatusBadge(cmp.status)}</TableCell>
-                                      <TableCell className="text-right font-mono text-muted-foreground">—</TableCell>
+                                      <TableCell
+                                        className="text-right font-mono"
+                                        data-testid={`text-stock-${cmp.articleCode}`}
+                                      >
+                                        {stockQty > 0 ? (
+                                          <button
+                                            className="underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 text-foreground font-medium"
+                                            onClick={() => {
+                                              const p = new URLSearchParams({
+                                                articleCode: cmp.articleCode,
+                                                productName: cmp.productName,
+                                                back: window.location.pathname + window.location.search,
+                                              });
+                                              navigate(`/factory/stock-bale-list?${p}`);
+                                            }}
+                                            data-testid={`button-stock-detail-${cmp.articleCode}`}
+                                          >
+                                            {stockQty}
+                                          </button>
+                                        ) : (
+                                          <span className="text-muted-foreground">0</span>
+                                        )}
+                                      </TableCell>
                                     </TableRow>
                                   );
                                 }

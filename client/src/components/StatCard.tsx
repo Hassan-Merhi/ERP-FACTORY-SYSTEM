@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LucideIcon, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
@@ -47,7 +48,7 @@ export interface StatCardProps {
  * Properties, etc). Provides a consistent grammar: title, big value, optional
  * delta, icon, and tone. Supports a loading skeleton state.
  */
-export function StatCard({
+function StatCardComponent({
   title,
   value,
   change,
@@ -136,3 +137,5 @@ export function StatCard({
     </Card>
   );
 }
+
+export const StatCard = memo(StatCardComponent);

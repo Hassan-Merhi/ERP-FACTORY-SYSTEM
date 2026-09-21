@@ -86,6 +86,7 @@ export const StockTransfers = lazy(() => import("@/pages/StockTransfers"));
 export const OptionalVouchers = lazy(() => import("@/pages/OptionalVouchers"));
 export const BaleLedger = lazy(() => import("@/pages/BaleLedger"));
 export const SalesReportDetail = lazy(() => import("@/pages/SalesReportDetail"));
+export const StockInSalesReport = lazy(() => import("@/pages/StockInSalesReport"));
 export const SalesReportComparison = lazy(() => import("@/pages/SalesReportComparison"));
 export const ConflictCenter = lazy(() => import("@/pages/ConflictCenter"));
 export const Chat = lazy(() => import("@/pages/Chat"));
@@ -106,6 +107,9 @@ export const POSCustomers = lazy(() => import("@/pages/pos/POSCustomers"));
 export const POSSettings = lazy(() => import("@/pages/pos/POSSettings"));
 export const POSPriceList = lazy(() => import("@/pages/pos/POSPriceList"));
 export const PosTransferOrders = lazy(() => import("@/pages/pos/PosTransferOrders"));
+export const POSContainerTracking = lazy(() => import("@/pages/pos/POSContainerTracking"));
+export const POSContainerDetail = lazy(() => import("@/pages/pos/POSContainerDetail"));
+export const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
 
 // ── Factory pages ─────────────────────────────────────────────────────────────
 export const FactoryAccounts = lazy(() => import("@/pages/factory/FactoryAccounts"));

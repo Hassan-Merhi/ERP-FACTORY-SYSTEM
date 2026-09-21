@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
-import StockInSalesReport from "@/pages/StockInSalesReport";
 import SpOverview from "@/pages/sp/SpOverview";
 import {
   AICommandCenter,
@@ -76,6 +75,7 @@ import {
   SpSetup,
   SpreadsheetEditor,
   StockHub,
+  StockInSalesReport,
   StockItemDetail,
   StockItemHistory,
   StockItemVouchers,
