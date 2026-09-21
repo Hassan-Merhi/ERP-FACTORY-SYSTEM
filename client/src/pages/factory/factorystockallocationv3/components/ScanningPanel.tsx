@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 /**
  * ScanningPanel — extracted sub-component.
  *
@@ -42,7 +43,7 @@ export function ScanningPanel({ load, onClose }: { load: V3Load; onClose: () => 
       if (!r.ok) throw new Error("Failed to fetch load detail");
       return r.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
 
   const scanMutation = useMutation({
