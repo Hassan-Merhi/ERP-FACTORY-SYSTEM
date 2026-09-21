@@ -14,6 +14,7 @@ import { registerV5LocationSummaryRoutes } from "./location-summary";
 import { registerV5CancelledContainerRoutes } from "./cancelled-containers";
 import { registerV5UnlinkedLoadingOrderRoutes } from "./unlinked-orders";
 import { registerV5ContainerPlannerRoutes } from "./container-planner";
+import { registerV5ContainerPlannerReconciliationRoutes } from "./container-planner-reconciliation";
 
 export function registerFactoryStockAllocationV5Routes(app: Express) {
   // Response-only middleware: the canonical allocation handler still owns all
@@ -26,4 +27,5 @@ export function registerFactoryStockAllocationV5Routes(app: Express) {
   registerV5CancelledContainerRoutes(app);
   registerV5UnlinkedLoadingOrderRoutes(app);
   registerV5ContainerPlannerRoutes(app);
+  registerV5ContainerPlannerReconciliationRoutes(app);
 }

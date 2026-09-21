@@ -31,10 +31,10 @@ const inventory: InventoryItem[] = [
 ];
 
 describe("POS item picker selection order", () => {
-  it("uses one punctuation-insensitive normalization for item names and codes", () => {
+  it("uses one punctuation-insensitive substring normalization for item names and codes", () => {
     expect(normalize("SH MEN T-SHIRT (SHORT)")).toBe("shmentshirtshort");
     expect(getFilteredInventory(inventory, "sh men tshirt short").map((item) => item.stockItemId)).toEqual([910]);
-    expect(getFilteredInventory(inventory, "SH#1").map((item) => item.stockItemId)).toEqual([901]);
+    expect(getFilteredInventory(inventory, "SH#1").map((item) => item.stockItemId)).toEqual([910, 901]);
   });
 
   it("returns the same deterministic order the visible desktop picker uses", () => {

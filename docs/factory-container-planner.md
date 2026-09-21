@@ -96,3 +96,60 @@ Phase 2 still does **not**:
 - change a customer loading/container lifecycle.
 
 Those actions belong to the later conversion phase.
+
+
+## Phase 3 — live stock reconciliation
+
+Phase 3 keeps a saved planning draft honest when factory stock or customer commitments change after the plan was saved.
+
+### Live comparison
+
+For the selected saved plan, the ERP compares every planned article against the current authoritative V5 stock picture:
+
+```
+currentPlannable = max(current freeToPromise, 0)
+delta            = currentPlannable - plannedQty
+unplanned        = max(delta, 0)
+overPlanned      = max(-delta, 0)
+lockedConflict   = max(lockedPlannedQty - currentPlannable, 0)
+```
+
+The UI reports three states:
+
+- **IN_SYNC** — every planned article matches current available stock;
+- **DRIFT** — new/unplanned stock or over-planned stock exists;
+- **LOCKED_CONFLICT** — a locked container alone contains more of an article than is currently available.
+
+The check is read-only and refreshes only while a saved plan is open. It does not reserve physical bales or alter customer loading. Background refreshes only report drift; they never auto-reconcile or rewrite a saved plan.
+
+### Reconcile to Current Stock
+
+Reconciliation is explicit. Nothing changes merely because drift is detected.
+
+When **Reconcile to Current Stock** is pressed, the server recalculates current stock inside the transaction and:
+
+1. preserves every locked container exactly;
+2. computes the quantity still required in unlocked containers per article;
+3. adds unlocked planning containers if more capacity is needed;
+4. removes excess unlocked planning containers if current stock now needs fewer containers;
+5. evenly redistributes only the unlocked quantities;
+6. updates the plan's source snapshot totals and revision;
+7. records the reconciliation in `audit_log`.
+
+If any locked container conflicts with current availability, the operation returns `409 CONTAINER_PLAN_LOCKED_STOCK_CONFLICT` and changes nothing. The affected container must be unlocked before reconciliation can proceed.
+
+### Shared source-of-truth
+
+Phase 2 save and Phase 3 reconciliation now use the same server-side stock-source helper. This prevents the two workflows from drifting apart on customer commitments, loaded bales, or legacy proforma orders that predate expected-line snapshots.
+
+### Phase 3 safety boundary
+
+Phase 3 still remains a planning layer:
+
+- no `factory_bales.id` is assigned to a planned container;
+- no `factory_bales.status` is changed;
+- no customer order or expected-line quantity is written;
+- no loading container is created;
+- no shipment is dispatched.
+
+Converting a reconciled planning container into the operational loading flow remains a later phase.

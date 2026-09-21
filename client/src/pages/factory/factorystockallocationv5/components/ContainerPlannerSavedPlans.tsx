@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ContainerPlannerReconciliation } from "./ContainerPlannerReconciliation";
 
 interface PlanSummary {
   id: number;
@@ -130,13 +131,13 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
     refetchOnWindowFocus: false,
   });
 
-  const plans = plansQuery.data?.plans;
+  const firstPlanId = plansQuery.data?.plans?.[0]?.id ?? null;
 
   useEffect(() => {
-    if (selectedPlanId == null && (plans?.length ?? 0) > 0) {
-      setSelectedPlanId(Number(plans![0].id));
+    if (selectedPlanId == null && firstPlanId != null) {
+      setSelectedPlanId(Number(firstPlanId));
     }
-  }, [plans, selectedPlanId]);
+  }, [firstPlanId, selectedPlanId]);
 
   const detailQuery = useQuery<{ plan: PlanDetail }>({
     queryKey: ["/api/factory/v5/container-plans/detail", companyScope, selectedPlanId],
@@ -157,6 +158,9 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
     if (planId) {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/v5/container-plans/detail", companyScope, planId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/factory/v5/container-plans/reconciliation", companyScope, planId],
       });
     }
   }
@@ -548,6 +552,8 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
                   Save Name
                 </Button>
               </div>
+
+              <ContainerPlannerReconciliation planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (
