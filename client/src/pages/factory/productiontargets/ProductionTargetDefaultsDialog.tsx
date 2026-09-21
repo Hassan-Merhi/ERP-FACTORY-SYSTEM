@@ -182,12 +182,11 @@ export function ProductionTargetDefaultsDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto">
-          <Table>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <Table wrapperClassName="overflow-visible rounded-none border-0">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="min-w-[230px]">{tr("person")}</TableHead>
-                <TableHead className="w-[110px]">{tr("code")}</TableHead>
                 <TableHead className="min-w-[180px]">{tr("category")}</TableHead>
                 <TableHead className="w-[170px] text-right">{tr("dailyDefaultTarget")}</TableHead>
               </TableRow>
@@ -195,13 +194,13 @@ export function ProductionTargetDefaultsDialog({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="py-12 text-center text-muted-foreground">
                     {tr("loadingStaff")}
                   </TableCell>
                 </TableRow>
               ) : visibleRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="py-12 text-center text-muted-foreground">
                     {tr("noMatchingStaff")}
                   </TableCell>
                 </TableRow>
@@ -213,7 +212,6 @@ export function ProductionTargetDefaultsDialog({
                         {row.name}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{row.code || "—"}</TableCell>
                     <TableCell>{row.category || "—"}</TableCell>
                     <TableCell>
                       <Input
