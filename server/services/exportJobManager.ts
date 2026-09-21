@@ -25,6 +25,17 @@ export interface ExportJob {
 
 const jobs = new Map<string, ExportJob>();
 
+const MAX_JOBS = Math.max(10, Number.parseInt(process.env.EXPORT_JOB_MAX_ENTRIES || "100", 10) || 100);
+const MAX_STEPS_PER_JOB = Math.max(20, Number.parseInt(process.env.EXPORT_JOB_MAX_STEPS || "200", 10) || 200);
+
+function pruneCompletedJobs(): void {
+  if (jobs.size < MAX_JOBS) return;
+  for (const [id, job] of jobs) {
+    if (jobs.size < MAX_JOBS) break;
+    if (job.status !== "running") deleteJob(id);
+  }
+}
+
 function removeFileQuietly(filePath: string | undefined): void {
   if (!filePath) return;
   try {
@@ -62,6 +73,7 @@ const cleanupTimer = setInterval(
 cleanupTimer.unref?.();
 
 export function createJob(mode: "download" | "email"): ExportJob {
+  pruneCompletedJobs();
   const id = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const job: ExportJob = {
     id,
@@ -89,6 +101,9 @@ export function addStep(job: ExportJob, message: string, type: StepType = "info"
     message,
     type,
   });
+  if (job.steps.length > MAX_STEPS_PER_JOB) {
+    job.steps.splice(0, job.steps.length - MAX_STEPS_PER_JOB);
+  }
 }
 
 export function finishJob(job: ExportJob, zipBuffer?: Buffer) {
