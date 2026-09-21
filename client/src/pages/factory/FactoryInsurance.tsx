@@ -79,7 +79,7 @@ export default function FactoryInsurance() {
   const ecCrRef = useRef<HTMLDivElement>(null);
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccountOption[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
