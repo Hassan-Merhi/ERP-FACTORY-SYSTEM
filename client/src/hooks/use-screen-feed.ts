@@ -1,10 +1,16 @@
 import { useEffect, useRef } from "react";
-import {
-  captureAndUploadScreenFrame,
-  type ScreenFeedClickEvent,
-  type ScreenFeedCursorEvent,
-  type ScreenFeedFailureStage,
+import type {
+  ScreenFeedClickEvent,
+  ScreenFeedCursorEvent,
+  ScreenFeedFailureStage,
 } from "./screen-feed-capture-engine";
+
+let captureEnginePromise: Promise<typeof import("./screen-feed-capture-engine")> | null = null;
+
+function loadScreenFeedCaptureEngine() {
+  captureEnginePromise ??= import("./screen-feed-capture-engine");
+  return captureEnginePromise;
+}
 import { getRemoteSupportTabId } from "./use-remote-control-session";
 import {
   ACTIVE_CAPTURE_MIN_GAP_MS,
@@ -254,7 +260,9 @@ export function useScreenFeed() {
         dirtySinceRef.current = 0;
         pendingMinGapRef.current = ACTIVE_CAPTURE_MIN_GAP_MS;
         const expectedPath = window.location.href;
-        captureAndUploadScreenFrame({
+        loadScreenFeedCaptureEngine()
+          .then(({ captureAndUploadScreenFrame }) =>
+            captureAndUploadScreenFrame({
           fast: fastModeRef.current,
           lastSignature: lastSignatureRef.current,
           lastUploadedClickTs: lastUploadedClickTsRef.current,
@@ -263,7 +271,8 @@ export function useScreenFeed() {
           clicks: clickBuffer,
           scrollElements: trackedScrollElements,
           shouldContinue: () => !disposed && watchedRef.current && document.visibilityState === "visible",
-        })
+            })
+          )
           .then((result) => {
             failed = result.failed;
             completeCaptureCycle(result);
