@@ -249,8 +249,9 @@ export default function AICommandCenter() {
     queryKey: ["/api/ai-agent/tasks", activeTaskId],
     enabled: !!activeTaskId,
     refetchInterval: (q) => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
       const s = (q.state.data as AgentTaskDetail | undefined)?.status;
-      return s === "running" || s === "waiting_for_approval" ? 2000 : false;
+      return s === "running" || s === "waiting_for_approval" ? 2_000 : false;
     },
   });
 
