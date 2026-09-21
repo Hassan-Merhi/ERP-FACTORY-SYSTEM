@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { InventoryItem } from "./posTypes";
+import { getPosPickerInventory } from "../utils/posCalculations";
 
 export interface InventoryPickerProps {
   inventory: InventoryItem[];
@@ -10,36 +11,6 @@ export interface InventoryPickerProps {
   highlightedIndex: number;
   syncTerm?: string;
   mobile?: boolean;
-}
-
-// Strip all non-alphanumeric characters so dots, dashes, spaces, parentheses,
-// brackets, # and any other punctuation never block a match.
-// e.g. "SH MEN T-SHIRT (SHORT)" → "shmentshirtshort"
-//      "sh men tshirt"          → "shmentshirt"   → still matches as a substring
-function normalize(s: string) {
-  return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function matches(item: InventoryItem, raw: string): boolean {
-  const term = normalize(raw);
-  if (!term) return true;
-  if (normalize(item.name).includes(term)) return true;
-  if (normalize(item.code).includes(term)) return true;
-  return false;
-}
-
-function compareByItemCode(a: InventoryItem, b: InventoryItem): number {
-  const codeOrder = a.code.localeCompare(b.code, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-
-  if (codeOrder !== 0) return codeOrder;
-
-  return a.name.localeCompare(b.name, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
 }
 
 export function InventoryPicker({
@@ -56,13 +27,10 @@ export function InventoryPicker({
     if (syncTerm !== undefined) setLocalSearch(syncTerm);
   }, [syncTerm]);
 
-  const filteredInventory = inventory
-    .filter((item) => {
-      const isOut = item.stock === 0;
-      if (!localSearch) return !isOut;
-      return matches(item, localSearch);
-    })
-    .sort(compareByItemCode);
+  // Use the exact same filtered/sorted list as keyboard navigation. The
+  // highlighted index must point to one canonical item regardless of whether
+  // the cashier clicks it or confirms it with Enter/Tab.
+  const filteredInventory = getPosPickerInventory(inventory, localSearch);
 
   return (
     <Card

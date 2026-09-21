@@ -1,5 +1,5 @@
 import type { SaleRow, InventoryItem } from "../pos-components/posTypes";
-import { POS_COLUMNS, getFilteredInventory } from "../utils/posCalculations";
+import { POS_COLUMNS, getPosPickerInventory } from "../utils/posCalculations";
 
 interface PosKeyboardNavigationParams {
   rows: SaleRow[];
@@ -35,7 +35,9 @@ export function usePosKeyboardNavigation({
   const makeHandleKeyDown = (searchTerm: string) => (e: React.KeyboardEvent, rowIndex: number, colIndex: number) => {
     const maxCol = POS_COLUMNS.length - 4; // Exclude plBale, totalPL, delete
     const isItemNameField = POS_COLUMNS[colIndex]?.key === "itemName";
-    const filteredItems = getFilteredInventory(inventory, searchTerm);
+    // Must match InventoryPicker's order exactly or the highlighted row and
+    // Enter/Tab can resolve to different stock items.
+    const filteredItems = getPosPickerInventory(inventory, searchTerm);
 
     if (isItemNameField && filteredItems.length > 0) {
       if (e.key === "ArrowDown") {
@@ -149,7 +151,7 @@ export function usePosKeyboardNavigation({
       case "Tab":
         if (isItemNameField && activeRow === rowIndex && filteredItems.length > 0 && !e.shiftKey) {
           e.preventDefault();
-          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex]);
+          if (filteredItems[highlightedIndex]) selectItem(filteredItems[highlightedIndex], rowIndex);
           return;
         }
         if (hasUnselectedItem) {

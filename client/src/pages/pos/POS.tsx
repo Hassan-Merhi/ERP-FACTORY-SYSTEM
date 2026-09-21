@@ -702,7 +702,10 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
           </div>
           <InventoryPicker
             inventory={inventory}
-            selectItem={selectItem}
+            // Preserve the row the cashier was typing into. The item-name input
+            // blurs when the sidebar is clicked, so activeRow can clear before
+            // the click completes; selectedCell is the stable row fallback.
+            selectItem={(item) => selectItem(item, activeRow ?? selectedCell.row)}
             itemListRef={itemListRef}
             highlightedIndex={highlightedIndex}
             syncTerm={searchTerm}
