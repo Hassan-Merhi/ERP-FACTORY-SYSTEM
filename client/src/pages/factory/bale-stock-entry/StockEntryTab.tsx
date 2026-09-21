@@ -278,17 +278,20 @@ export function StockEntryTab() {
         });
         return;
       }
-      setCart((prev) => [
-        ...prev,
-        {
-          productId: newProduct.id,
-          product: newProduct,
-          qty: 1,
-          weightPerBaleKg: defaultWeight,
-          finalizedBy: null,
-          overrideLogoId: null,
-        },
-      ]);
+      setCart((prev) => {
+        if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
+        return [
+          ...prev,
+          {
+            productId: newProduct.id,
+            product: newProduct,
+            qty: 1,
+            weightPerBaleKg: defaultWeight,
+            finalizedBy: null,
+            overrideLogoId: null,
+          },
+        ];
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -340,6 +343,7 @@ export function StockEntryTab() {
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
 
     setCart((prev) => {
+      if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
@@ -386,6 +390,7 @@ export function StockEntryTab() {
     }
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
     setCart((prev) => {
+      if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
