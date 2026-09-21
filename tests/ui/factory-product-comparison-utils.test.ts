@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAutomaticComparisonRanges,
+  isValidComparisonRange,
+  isValidLocalIsoDate,
   rangeForMonth,
   shiftDay,
   shiftMonth,
@@ -48,5 +50,16 @@ describe("Factory product comparison date ranges", () => {
       selected: { from: "2026-09-21", to: "2026-09-21" },
       comparison: { from: "2026-09-22", to: "2026-09-22" },
     });
+  });
+
+  it("rejects blank or impossible custom dates before they can be formatted or queried", () => {
+    expect(isValidLocalIsoDate("")).toBe(false);
+    expect(isValidLocalIsoDate("2026-02-29")).toBe(false);
+    expect(isValidLocalIsoDate("2028-02-29")).toBe(true);
+  });
+
+  it("rejects reversed custom comparison ranges", () => {
+    expect(isValidComparisonRange({ from: "2026-09-21", to: "2026-09-20" })).toBe(false);
+    expect(isValidComparisonRange({ from: "2026-09-20", to: "2026-09-21" })).toBe(true);
   });
 });
