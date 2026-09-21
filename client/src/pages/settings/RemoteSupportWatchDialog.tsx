@@ -168,7 +168,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
   const { data: activityRaw } = useQuery({
     queryKey: ["/api/user-presence", userId, "activity"],
     queryFn: () => apiRequest("GET", `/api/user-presence/${userId}/activity`).then((response) => response.json()),
-    refetchInterval: 30000,
+    refetchInterval: visibleTabInterval(30_000),
   });
 
   const presence = objectRecord(presenceRaw);
