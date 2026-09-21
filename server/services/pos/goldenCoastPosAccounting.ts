@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
-import { and, asc, eq, ilike, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import {
   accountingPostingRequests,
   bankAccounts,
@@ -21,6 +21,7 @@ import {
   type CentralPostingRequest,
 } from "../accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
+import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
 
 /**
  * The standard POS sale remains the source document. These postings only move
@@ -410,6 +411,107 @@ function sourceLabel(
 
 function revisionRank(value: string): number {
   return value === "create" ? 0 : Number(value.slice(4)) || 0;
+}
+
+function isGeneratedGoldenCoastSettlementVoucher(
+  voucher: typeof vouchers.$inferSelect,
+  clientSaleId: string
+): boolean {
+  if (!String(voucher.voucherNumber || "").startsWith(`GC-POS-${clientSaleId}-`)) return false;
+  const description = String(voucher.description || "");
+  return (
+    description === "Golden Coast POS cash transferred to HADI" ||
+    description === "Golden Coast POS cash received by HADI" ||
+    description === "Golden Coast POS payable reclassification" ||
+    description.startsWith("Golden Coast POS settlement reversal ")
+  );
+}
+
+/**
+ * Retire every active programme-generated settlement voucher for one itemized
+ * Golden Coast POS sale before rebuilding the current settlement.
+ *
+ * The accounting marker is the canonical lookup, but older production rows can
+ * legitimately be missing that marker after manual repair. The voucher-number
+ * prefix + programme-owned descriptions are therefore the recovery identity.
+ * Old vouchers stay in the database as soft-deleted audit history while their
+ * Daybook mirrors and replay markers are removed.
+ */
+export async function retireGoldenCoastPosAccountingTx(input: {
+  tx: DbTransaction;
+  companyId: number;
+  clientSaleId: string;
+}): Promise<{ retiredVoucherIds: number[] }> {
+  const { tx, companyId } = input;
+  const clientSaleId = input.clientSaleId.trim();
+  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement replacement");
+
+  const { parentCompanyId } = await resolvePair(tx, companyId);
+  const companyIds = [companyId, parentCompanyId];
+  const voucherPrefix = `GC-POS-${clientSaleId}-`;
+  const sourcePrefix = `${clientSaleId}:`;
+  const retiredVoucherIds: number[] = [];
+
+  for (const markerCompanyId of companyIds) {
+    await assertTransactionCompanyScope(tx, markerCompanyId);
+
+    const candidates = await tx
+      .select()
+      .from(vouchers)
+      .where(
+        and(
+          eq(vouchers.companyId, markerCompanyId),
+          isNull(vouchers.deletedAt),
+          sql<boolean>`left(${vouchers.voucherNumber}, ${voucherPrefix.length}) = ${voucherPrefix}`
+        )
+      )
+      .for("update");
+
+    const activeSettlementVouchers = candidates.filter((voucher) =>
+      isGeneratedGoldenCoastSettlementVoucher(voucher, clientSaleId)
+    );
+    const companyVoucherIds = activeSettlementVouchers.map((voucher) => Number(voucher.id));
+
+    for (const voucherId of companyVoucherIds) {
+      await removeFactoryDaybookMirrorTx({ tx, companyId: markerCompanyId, voucherId });
+    }
+
+    if (companyVoucherIds.length > 0) {
+      await tx
+        .update(vouchers)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(vouchers.companyId, markerCompanyId),
+            inArray(vouchers.id, companyVoucherIds),
+            isNull(vouchers.deletedAt)
+          )
+        );
+      retiredVoucherIds.push(...companyVoucherIds);
+    }
+
+    const markerRows = await tx
+      .select({ id: accountingPostingRequests.id, sourceId: accountingPostingRequests.sourceId })
+      .from(accountingPostingRequests)
+      .where(
+        and(
+          eq(accountingPostingRequests.companyId, markerCompanyId),
+          eq(accountingPostingRequests.sourceType, GOLDEN_COAST_POS_SETTLEMENT_SOURCE_TYPE),
+          sql<boolean>`left(${accountingPostingRequests.sourceId}, ${sourcePrefix.length}) = ${sourcePrefix}`
+        )
+      );
+
+    const markerIds = markerRows
+      .filter((row) => String(row.sourceId).startsWith(sourcePrefix))
+      .map((row) => Number(row.id));
+
+    if (markerIds.length > 0) {
+      await tx.delete(accountingPostingRequests).where(inArray(accountingPostingRequests.id, markerIds));
+    }
+  }
+
+  await assertTransactionCompanyScope(tx, companyId);
+  return { retiredVoucherIds: [...new Set(retiredVoucherIds)] };
 }
 
 /**
