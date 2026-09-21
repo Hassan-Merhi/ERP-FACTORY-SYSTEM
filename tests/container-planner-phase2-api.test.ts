@@ -11,6 +11,9 @@ const ARTICLE_B = "CTP2-B";
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
 let planId: number | null = null;
+let customerId: number;
+let proformaId: number;
+let orderId: number;
 
 async function addBales(articleCode: string, quantity: number): Promise<void> {
   for (let index = 1; index <= quantity; index += 1) {
@@ -46,16 +49,58 @@ beforeAll(async () => {
 
   await addBales(ARTICLE_A, 10);
   await addBales(ARTICLE_B, 10);
+
+  const customer = await pool.query<{ id: number }>(
+    `INSERT INTO customers (company_id, code, legal_name)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [ctx.companyId, `${TEST_PREFIX}-C`, `${TEST_PREFIX} Customer`]
+  );
+  customerId = Number(customer.rows[0].id);
+
+  const proforma = await pool.query<{ id: number }>(
+    `INSERT INTO customer_proformas (company_id, customer_id, name, is_active)
+     VALUES ($1, $2, $3, true)
+     RETURNING id`,
+    [ctx.companyId, customerId, `${TEST_PREFIX} planner commitment`]
+  );
+  proformaId = Number(proforma.rows[0].id);
+
+  await pool.query(
+    `INSERT INTO customer_proforma_lines
+       (proforma_id, article_code, product_name, quantity, price_per_bale)
+     VALUES ($1, $2, $3, 2, '10.00')`,
+    [proformaId, ARTICLE_A, `${ARTICLE_A} Product`]
+  );
+
+  const order = await pool.query<{ id: number }>(
+    `INSERT INTO customer_orders
+       (company_id, customer_id, order_date, status, proforma_id_used)
+     VALUES ($1, $2, '2026-09-21', 'DRAFT', $3)
+     RETURNING id`,
+    [ctx.companyId, customerId, proformaId]
+  );
+  orderId = Number(order.rows[0].id);
+
+  // Deliberately do not create customer_order_expected_lines. Phase 2 must
+  // still preserve this older active commitment by falling back to the linked
+  // proforma line without mutating the customer order.
 }, 120_000);
 
 afterAll(async () => {
   if (planId) {
     await pool.query("DELETE FROM factory_container_plans WHERE id = $1 AND company_id = $2", [planId, ctx.companyId]);
   }
+  await pool.query("DELETE FROM customer_order_expected_lines WHERE order_id = $1", [orderId]);
+  await pool.query("DELETE FROM customer_order_lines WHERE order_id = $1", [orderId]);
+  await pool.query("DELETE FROM customer_orders WHERE id = $1", [orderId]);
+  await pool.query("DELETE FROM customer_proforma_lines WHERE proforma_id = $1", [proformaId]);
+  await pool.query("DELETE FROM customer_proformas WHERE id = $1", [proformaId]);
   await pool.query("DELETE FROM factory_bales WHERE company_id = $1 AND article_code = ANY($2::text[])", [
     ctx.companyId,
     [ARTICLE_A, ARTICLE_B],
   ]);
+  await pool.query("DELETE FROM customers WHERE id = $1", [customerId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
 }, 60_000);
@@ -72,11 +117,18 @@ describe("Factory container planner phase 2 API", () => {
     const created = await agent.post("/api/factory/v5/container-plans").send(payload);
     expect(created.status).toBe(201);
     expect(created.body.plan.name).toBe(payload.name);
-    expect(created.body.plan.totalPlanned).toBe(20);
-    expect(created.body.plan.containers).toHaveLength(4);
+    expect(created.body.plan.totalPlanned).toBe(18);
+    expect(created.body.plan.sourceCommittedTotal).toBe(2);
+    expect(created.body.plan.containers).toHaveLength(3);
     expect(created.body.plan.containers.every((container: any) => container.totalBales <= 6)).toBe(true);
-    expect(productTotal(created.body.plan, ARTICLE_A)).toBe(10);
+    expect(productTotal(created.body.plan, ARTICLE_A)).toBe(8);
     expect(productTotal(created.body.plan, ARTICLE_B)).toBe(10);
+
+    const expectedRows = await pool.query(
+      "SELECT id FROM customer_order_expected_lines WHERE order_id = $1",
+      [orderId]
+    );
+    expect(expectedRows.rowCount).toBe(0);
 
     planId = Number(created.body.plan.id);
 
@@ -114,7 +166,7 @@ describe("Factory container planner phase 2 API", () => {
       quantity: 1,
     });
     expect(moved.status).toBe(200);
-    expect(productTotal(moved.body.plan, ARTICLE_A)).toBe(10);
+    expect(productTotal(moved.body.plan, ARTICLE_A)).toBe(8);
     expect(productTotal(moved.body.plan, ARTICLE_B)).toBe(10);
 
     const sourceAfter = moved.body.plan.containers.find((container: any) => container.id === source.id);
@@ -149,7 +201,7 @@ describe("Factory container planner phase 2 API", () => {
       .sort((a: any[], b: any[]) => String(a[0]).localeCompare(String(b[0])));
 
     expect(lockedLinesAfter).toEqual(lockedLinesBefore);
-    expect(productTotal(rebalanced.body.plan, ARTICLE_A)).toBe(10);
+    expect(productTotal(rebalanced.body.plan, ARTICLE_A)).toBe(8);
     expect(productTotal(rebalanced.body.plan, ARTICLE_B)).toBe(10);
 
     const unlockedTotals = rebalanced.body.plan.containers
