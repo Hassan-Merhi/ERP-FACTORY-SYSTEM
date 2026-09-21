@@ -235,6 +235,8 @@ export function translateInterfaceTree(root: Node, language: ApplicationLanguage
 
 export function ApplicationInterfaceTranslator({ language }: { language: ApplicationLanguage }) {
   useEffect(() => {
+    if (language === "en") return;
+
     const root = document.getElementById("root");
     if (!root) return;
 
@@ -248,6 +250,10 @@ export function ApplicationInterfaceTranslator({ language }: { language: Applica
     };
 
     const schedule = (node: Node) => {
+      for (const existing of pending) {
+        if (existing === node || existing.contains(node)) return;
+        if (node.contains(existing)) pending.delete(existing);
+      }
       pending.add(node);
       if (frame === null) frame = window.requestAnimationFrame(flush);
     };
@@ -279,7 +285,9 @@ export function ApplicationInterfaceTranslator({ language }: { language: Applica
         }
       }
     });
-    portalObserver.observe(document.body, { childList: true, subtree: true });
+    // Radix portals mount as body children. A shallow observer avoids making
+    // every unrelated application subtree mutation part of the translation path.
+    portalObserver.observe(document.body, { childList: true });
 
     return () => {
       rootObserver.disconnect();
