@@ -13,7 +13,10 @@ import {
 import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale, X } from "lucide-react";
 
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
+import {
+  formatFactoryProductComparisonOptionLabel,
+  getFactoryProductComparisonCopy,
+} from "@/i18n/factoryProductComparisonTranslations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -431,7 +434,7 @@ export default function ProductComparisonCharts() {
         const categoryName = product.categoryId ? categoryNameById.get(product.categoryId) : undefined;
         return {
           value: key,
-          label: `${pieces.filter(Boolean).join(" — ")}${categoryName ? ` · ${categoryName}` : ""}`,
+          label: formatFactoryProductComparisonOptionLabel(pieces, categoryName),
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, locale));
