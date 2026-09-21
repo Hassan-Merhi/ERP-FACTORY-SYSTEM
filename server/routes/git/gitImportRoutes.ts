@@ -651,6 +651,7 @@ export function registerGitImportRoutes(app: Express) {
         if (!importId || typeof importId !== "string") {
           return res.status(400).json({ message: "importId required" });
         }
+        pruneImportUndoStore();
         const snap = importUndoStore.get(importId);
         if (!snap) {
           return res
