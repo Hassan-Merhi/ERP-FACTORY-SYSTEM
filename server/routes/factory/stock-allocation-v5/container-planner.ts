@@ -128,6 +128,8 @@ async function loadPlannerSource(client: Queryable, companyId: number): Promise<
                 cpl.article_code,
                 COALESCE(SUM(cpl.quantity), 0)::int AS quantity
          FROM customer_proforma_lines cpl
+         JOIN customer_proformas cp ON cp.id = cpl.proforma_id
+         WHERE cp.company_id = $1
          GROUP BY cpl.proforma_id, cpl.article_code
        ),
        expected_source AS (
