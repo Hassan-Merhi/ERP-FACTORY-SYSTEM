@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
@@ -57,7 +58,7 @@ export function ExportCenter() {
     refetch: refetchBackup,
   } = useQuery<BackupStatus>({
     queryKey: ["/api/export/backup-status"],
-    refetchInterval: 60000,
+    refetchInterval: visibleTabInterval(60_000),
   });
   const { data: waSettings } = useQuery<WaSettings>({ queryKey: ["/api/whatsapp/settings"] });
   const { data: waRecipients = [] } = useQuery<WaRecipient[]>({ queryKey: ["/api/whatsapp/recipients"] });
