@@ -454,6 +454,103 @@ describe("Phase 7C read microcache", () => {
     });
   });
 
+  it("keeps stable reference reads warm across unrelated accounting and Factory workflow writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const stockItemsRequest = makeRequest({
+      path: "/api/stock-items/light",
+      originalUrl: "/api/stock-items/light",
+    });
+    const ledgerAccountsRequest = makeRequest({
+      path: "/api/ledger-accounts",
+      originalUrl: "/api/ledger-accounts",
+    });
+    const factoryCategoriesRequest = makeRequest({
+      path: "/api/factory/categories",
+      originalUrl: "/api/factory/categories",
+      session: {
+        userId: 7,
+        currentCompanyId: 3,
+        factoryCompanyId: 3,
+        currentRole: "Admin",
+      },
+    });
+
+    storeJson(middleware, stockItemsRequest, makeResponse(), [{ id: 1 }]);
+    storeJson(middleware, ledgerAccountsRequest, makeResponse(), [{ id: 10 }]);
+    storeJson(middleware, factoryCategoriesRequest, makeResponse(), [{ id: 20 }]);
+
+    const voucherResponse = makeResponse(200);
+    middleware(
+      makeRequest({ method: "POST", path: "/api/vouchers", originalUrl: "/api/vouchers" }),
+      voucherResponse,
+      vi.fn()
+    );
+    voucherResponse.emit("finish");
+
+    const orderResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/factory/customer-orders/44",
+        originalUrl: "/api/factory/customer-orders/44",
+        session: {
+          userId: 7,
+          currentCompanyId: 3,
+          factoryCompanyId: 3,
+          currentRole: "Admin",
+        },
+      }),
+      orderResponse,
+      vi.fn()
+    );
+    orderResponse.emit("finish");
+
+    for (const request of [stockItemsRequest, ledgerAccountsRequest, factoryCategoriesRequest]) {
+      const response = makeResponse();
+      const next = vi.fn();
+      middleware(request, response, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(response.headers["X-ERP-Read-Cache"]).toBe("HIT");
+    }
+  });
+
+  it("evicts Factory reference reads when the reference family changes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const request = makeRequest({
+      path: "/api/factory/categories",
+      originalUrl: "/api/factory/categories",
+      session: {
+        userId: 7,
+        currentCompanyId: 3,
+        factoryCompanyId: 3,
+        currentRole: "Admin",
+      },
+    });
+    storeJson(middleware, request, makeResponse(), [{ id: 20 }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/factory/categories/20",
+        originalUrl: "/api/factory/categories/20",
+        session: {
+          userId: 7,
+          currentCompanyId: 3,
+          factoryCompanyId: 3,
+          currentRole: "Admin",
+        },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const next = vi.fn();
+    middleware(request, makeResponse(), next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   it("keeps other companies warm when one company writes", () => {
     const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
     const company3 = makeRequest({
