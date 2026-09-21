@@ -8,7 +8,6 @@ const PROFORMA_CACHE_MS = 5 * 60_000;
 const DAILY_LIST_PATHS = new Set(["/api/factory/daily-bale-scans", "/api/factory/daily-bale-scans/produced"]);
 
 const PROFORMA_LIST_PATH = "/api/factory/customer-proformas";
-const PROFORMA_DETAIL_PATH = /^\/api\/factory\/customer-proformas\/(\d+)$/;
 const PROFORMA_WRITE_PATH = /^\/api\/factory\/customer-proforma(?:s|-lines)(?:\/|$)/;
 
 /**
@@ -38,7 +37,6 @@ type TimedResponse = {
 
 const dailyCache = new Map<string, DailyCacheEntry>();
 const proformaSummaryCache = new Map<string, TimedResponse>();
-const proformaDetailCache = new Map<number, TimedResponse>();
 
 function resolveUrl(input: RequestInfo | URL): URL | null {
   try {
@@ -153,7 +151,6 @@ async function handleDailyList(
 
 function clearProformaCaches(): void {
   proformaSummaryCache.clear();
-  proformaDetailCache.clear();
 }
 
 async function handleProformaSummary(
@@ -230,16 +227,6 @@ export function installPhase4BandwidthFetch(): void {
 
     if (url.pathname === PROFORMA_LIST_PATH && url.searchParams.get("profile") === "summary") {
       return handleProformaSummary(originalFetch, url, init);
-    }
-
-    const detailMatch = url.pathname.match(PROFORMA_DETAIL_PATH);
-    if (detailMatch) {
-      const response = await originalFetch(input, init);
-      if (response.ok) {
-        const id = Number(detailMatch[1]);
-        proformaDetailCache.set(id, { response: response.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
-      }
-      return response;
     }
 
     return originalFetch(input, init);
