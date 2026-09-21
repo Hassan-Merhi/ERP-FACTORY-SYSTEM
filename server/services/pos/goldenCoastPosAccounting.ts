@@ -444,7 +444,7 @@ export async function retireGoldenCoastPosAccountingTx(input: {
 }): Promise<{ retiredVoucherIds: number[] }> {
   const { tx, companyId } = input;
   const clientSaleId = input.clientSaleId.trim();
-  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement replacement");
+  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
 
   const { parentCompanyId } = await resolvePair(tx, companyId);
   const companyIds = [companyId, parentCompanyId];
