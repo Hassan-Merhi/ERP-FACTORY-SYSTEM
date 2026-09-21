@@ -167,10 +167,10 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
     topics = ["reference"];
   } else if (startsWithAny(path, ["/api/inventory", "/api/locations", "/api/stock", "/api/bales"])) {
     topics = ["inventory"];
+  } else if (startsWithAny(path, ["/api/vouchers", "/api/voucher-entries"])) {
+    topics = ["accounting", "inventory"];
   } else if (
     startsWithAny(path, [
-      "/api/vouchers",
-      "/api/voucher-entries",
       "/api/accounts",
       "/api/ledger",
       "/api/fiscal-transfers",

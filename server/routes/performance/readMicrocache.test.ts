@@ -351,7 +351,7 @@ describe("Phase 7C read microcache", () => {
     expect(publishInvalidation).toHaveBeenCalledOnce();
     expect(publishInvalidation).toHaveBeenCalledWith({
       companyIds: [3],
-      topics: ["accounting"],
+      topics: ["accounting", "inventory"],
     });
     const readNext = vi.fn();
     middleware(request, makeResponse(), readNext);
@@ -470,6 +470,127 @@ describe("Phase 7C read microcache", () => {
       blanketInvalidations: 0,
       invalidatedEntries: 1,
     });
+  });
+
+  it("evicts inventory reads after voucher writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const inventoryRequest = makeRequest({
+      path: "/api/locations/3/inventory",
+      originalUrl: "/api/locations/3/inventory",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    storeJson(middleware, inventoryRequest, makeResponse(), [{ stockItemId: 1, quantity: "8" }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/vouchers/44",
+        originalUrl: "/api/vouchers/44",
+        session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const next = vi.fn();
+    middleware(inventoryRequest, makeResponse(), next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("evicts accounts lists after reference writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const accountsRequest = makeRequest({
+      path: "/api/accounts/all",
+      originalUrl: "/api/accounts/all",
+    });
+    storeJson(middleware, accountsRequest, makeResponse(), [{ id: 1, name: "Old customer" }]);
+
+    const writeResponse = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/customers/1",
+        originalUrl: "/api/customers/1",
+      }),
+      writeResponse,
+      vi.fn()
+    );
+    writeResponse.emit("finish");
+
+    const next = vi.fn();
+    middleware(accountsRequest, makeResponse(), next);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("evicts sales reports after inventory or reference metadata changes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const reportRequest = makeRequest({
+      path: "/api/sales-report",
+      originalUrl: "/api/sales-report",
+    });
+
+    storeJson(middleware, reportRequest, makeResponse(), [{ item: "Old" }]);
+    const inventoryWrite = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/locations/3",
+        originalUrl: "/api/locations/3",
+      }),
+      inventoryWrite,
+      vi.fn()
+    );
+    inventoryWrite.emit("finish");
+
+    const afterInventory = vi.fn();
+    middleware(reportRequest, makeResponse(), afterInventory);
+    expect(afterInventory).toHaveBeenCalledOnce();
+
+    storeJson(middleware, reportRequest, makeResponse(), [{ item: "Current" }]);
+    const referenceWrite = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "PATCH",
+        path: "/api/stock-items/7",
+        originalUrl: "/api/stock-items/7",
+      }),
+      referenceWrite,
+      vi.fn()
+    );
+    referenceWrite.emit("finish");
+
+    const afterReference = vi.fn();
+    middleware(reportRequest, makeResponse(), afterReference);
+    expect(afterReference).toHaveBeenCalledOnce();
+  });
+
+  it("invalidates consolidated sales reports when any represented company writes", () => {
+    const middleware = createReadMicrocacheMiddleware({ ttlMs: 5_000 });
+    const consolidatedRequest = makeRequest({
+      path: "/api/dashboard/sales-report-all",
+      originalUrl: "/api/dashboard/sales-report-all",
+      session: { userId: 7, currentCompanyId: 3, currentRole: "Admin" },
+    });
+    storeJson(middleware, consolidatedRequest, makeResponse(), [{ companyId: 3 }, { companyId: 4 }]);
+
+    const company4Write = makeResponse(200);
+    middleware(
+      makeRequest({
+        method: "POST",
+        path: "/api/vouchers",
+        originalUrl: "/api/vouchers",
+        session: { userId: 7, currentCompanyId: 4, currentRole: "Admin" },
+      }),
+      company4Write,
+      vi.fn()
+    );
+    company4Write.emit("finish");
+
+    const next = vi.fn();
+    middleware(consolidatedRequest, makeResponse(), next);
+    expect(next).toHaveBeenCalledOnce();
   });
 
   it("keeps stable reference reads warm across unrelated accounting and Factory workflow writes", () => {
