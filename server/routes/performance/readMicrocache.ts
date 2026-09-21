@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type { Request, RequestHandler } from "express";
 import { checkPOSLocation, requireAuth } from "../../auth";
+import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
 import {
   classifyRealtimeWrite,
   type RealtimeInvalidationTopic,
@@ -229,7 +230,8 @@ function uniquePositiveIntegers(values: unknown[]): number[] {
 }
 
 function requestCompanyIds(req: Request): number[] {
-  return uniquePositiveIntegers([req.session?.currentCompanyId, req.session?.factoryCompanyId]);
+  const activeCompanyId = resolveActiveCompanyId(req);
+  return activeCompanyId ? [activeCompanyId] : [];
 }
 
 function readLocationIds(req: Request): number[] | undefined {
