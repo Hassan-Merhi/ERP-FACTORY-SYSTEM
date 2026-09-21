@@ -107,6 +107,9 @@ export const POSCustomers = lazy(() => import("@/pages/pos/POSCustomers"));
 export const POSSettings = lazy(() => import("@/pages/pos/POSSettings"));
 export const POSPriceList = lazy(() => import("@/pages/pos/POSPriceList"));
 export const PosTransferOrders = lazy(() => import("@/pages/pos/PosTransferOrders"));
+export const POSContainerTracking = lazy(() => import("@/pages/pos/POSContainerTracking"));
+export const POSContainerDetail = lazy(() => import("@/pages/pos/POSContainerDetail"));
+export const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
 
 // ── Factory pages ─────────────────────────────────────────────────────────────
 export const FactoryAccounts = lazy(() => import("@/pages/factory/FactoryAccounts"));
