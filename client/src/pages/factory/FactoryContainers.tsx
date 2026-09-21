@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -263,7 +263,7 @@ export default function FactoryContainers() {
               Delete Selected ({selectedIds.size})
             </Button>
           )}
-          {viewMode === "summary" && (
+          {viewMode === "summary" ? (
             <Button
               variant="outline"
               size="sm"
@@ -272,6 +272,19 @@ export default function FactoryContainers() {
               className="gap-2"
             >
               <AlertCircle className="h-4 w-4" /> All Containers
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedIds(new Set());
+                setViewMode("summary");
+              }}
+              data-testid="button-view-summary"
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" /> Factory Containers
             </Button>
           )}
           <Button
