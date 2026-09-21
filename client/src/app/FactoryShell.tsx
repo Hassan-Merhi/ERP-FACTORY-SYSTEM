@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { Suspense, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
@@ -11,10 +11,6 @@ import { DailyRateModal } from "@/components/DailyRateModal";
 import { FactorySidebar } from "@/components/FactorySidebar";
 import { FactoryRoutes } from "@/components/FactoryRoutes";
 import { FactoryCatalogLanguageSwitch } from "@/components/FactoryCatalogLanguageSwitch";
-import { FactoryBilingualDocumentActions } from "@/components/FactoryBilingualDocumentActions";
-import { FactoryFrenchCatalogManager } from "@/components/FactoryFrenchCatalogManager";
-import { HistoricalReplaySafetyPanel } from "@/components/HistoricalReplaySafetyPanel";
-import { HistoricalReplayNetEffectPanel } from "@/components/HistoricalReplayNetEffectPanel";
 import { AppTopBar } from "@/components/AppTopBar";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
@@ -24,6 +20,28 @@ import { SkipLink } from "@/components/ui/responsive-accessibility";
 import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary";
 import type { MyAccess } from "./factoryAccessGuard";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
+
+const FactoryFrenchCatalogManager = lazy(() =>
+  import("@/components/FactoryFrenchCatalogManager").then((module) => ({
+    default: module.FactoryFrenchCatalogManager,
+  }))
+);
+const FactoryBilingualDocumentActions = lazy(() =>
+  import("@/components/FactoryBilingualDocumentActions").then((module) => ({
+    default: module.FactoryBilingualDocumentActions,
+  }))
+);
+const HistoricalReplaySafetyPanel = lazy(() =>
+  import("@/components/HistoricalReplaySafetyPanel").then((module) => ({
+    default: module.HistoricalReplaySafetyPanel,
+  }))
+);
+const HistoricalReplayNetEffectPanel = lazy(() =>
+  import("@/components/HistoricalReplayNetEffectPanel").then((module) => ({
+    default: module.HistoricalReplayNetEffectPanel,
+  }))
+);
 
 interface FactoryShellProps {
   user: ShellUser;
@@ -69,7 +87,7 @@ export function FactoryShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [currentLocation] = useLocation();
   const { selectedCompany } = useCompany();
-  const { t } = useApplicationLanguage();
+  const { language, t } = useApplicationLanguage();
   const factoryContainerRef = useRef<HTMLDivElement>(null);
   useButtonClickFeedback(factoryContainerRef);
 
@@ -78,6 +96,9 @@ export function FactoryShell({
   const isRawStockRecalculateRoute =
     currentLocation === "/factory/raw-stock/recalculate" ||
     currentLocation.startsWith("/factory/raw-stock/recalculate?");
+  const isBilingualDocumentRoute =
+    /^\/factory\/sales\/pending-invoices\/\d+\/verify(?:\?|$)/.test(currentLocation) ||
+    /^\/factory\/invoices\/\d+\/loading-scan(?:\?|$)/.test(currentLocation);
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(factoryContainerRef);
   const hasAdminSearch = canUseAdminSearch(user);
@@ -115,16 +136,18 @@ export function FactoryShell({
                 }
               >
                 <FactoryCatalogLanguageSwitch />
-                <FactoryFrenchCatalogManager />
-                <FactoryBilingualDocumentActions />
-                <ErrorBoundary resetKey={`${currentLocation}:historical-replay-preview`}>
-                  {isRawStockRecalculateRoute && (
-                    <>
-                      <HistoricalReplaySafetyPanel />
-                      <HistoricalReplayNetEffectPanel />
-                    </>
-                  )}
-                </ErrorBoundary>
+                <Suspense fallback={null}>
+                  {language === "fr" ? <FactoryFrenchCatalogManager /> : null}
+                  {isBilingualDocumentRoute ? <FactoryBilingualDocumentActions /> : null}
+                  <ErrorBoundary resetKey={`${currentLocation}:historical-replay-preview`}>
+                    {isRawStockRecalculateRoute ? (
+                      <>
+                        <HistoricalReplaySafetyPanel />
+                        <HistoricalReplayNetEffectPanel />
+                      </>
+                    ) : null}
+                  </ErrorBoundary>
+                </Suspense>
                 <FactoryRoutes user={user} myAccess={myAccess} factoryDefaultPage={factoryDefaultPage} />
               </WorkspaceRouteBoundary>
             </main>
