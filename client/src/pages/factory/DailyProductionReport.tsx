@@ -5,6 +5,8 @@ import FactoryContainerTracking from "@/pages/factory/FactoryContainerTracking";
 import FactoryOtwTrackingTab from "@/pages/factory/FactoryOtwTrackingTab";
 import ProductionComparison from "@/pages/factory/ProductionComparison";
 import { PageHeader } from "@/components/PageHeader";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, FlaskConical, Ship, Tag, Truck } from "lucide-react";
 
@@ -17,6 +19,8 @@ import ProductComparisonCharts from "./productcomparison/ProductComparisonCharts
 // their own components.
 export default function DailyProductionReport() {
   const report = useDailyProductionReport();
+  const { language } = useApplicationLanguage();
+  const productComparisonCopy = getFactoryProductComparisonCopy(language);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -44,7 +48,7 @@ export default function DailyProductionReport() {
             Snapshot
           </TabsTrigger>
           <TabsTrigger value="product-comparison" data-testid="tab-product-comparison">
-            <BarChart3 className="h-4 w-4 mr-1.5" /> Product Comparison
+            <BarChart3 className="h-4 w-4 mr-1.5" /> {productComparisonCopy.tabLabel}
           </TabsTrigger>
           <TabsTrigger value="shipping" data-testid="tab-shipping">
             <Ship className="h-4 w-4 mr-1.5" /> Shipping
