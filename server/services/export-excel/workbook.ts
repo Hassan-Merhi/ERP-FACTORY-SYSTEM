@@ -114,6 +114,9 @@ export async function buildCompanyWorkbook(
 
   // ── Factory Containers ────────────────────────────────────────────────────
   addSheet(wb, "Factory Containers", data.factoryContainers);
+  addSheet(wb, "Container Plans", data.factoryContainerPlans);
+  addSheet(wb, "Plan Containers", data.factoryContainerPlanContainers);
+  addSheet(wb, "Plan Lines", data.factoryContainerPlanLines);
   addSheet(wb, "Factory Ctnr Commissions", data.factoryContainerCommissions);
   addSheet(wb, "Factory Ctnr Other Charges", data.factoryContainerOtherCharges);
   addSheet(wb, "Factory Ctnr PL Snapshots", data.factoryContainerProfitSnapshots);
@@ -509,6 +512,18 @@ export async function streamCompanyWorkbookDirect(
 
   // ── Factory Containers ─────────────────────────────────────────────────────
   await fetch1("Factory Containers", `SELECT * FROM factory_containers WHERE company_id = ${cid} ORDER BY id DESC`);
+  await fetch1(
+    "Container Plans",
+    `SELECT * FROM factory_container_plans WHERE company_id = ${cid} ORDER BY updated_at DESC, id DESC`
+  );
+  await fetch1(
+    "Plan Containers",
+    `SELECT * FROM factory_container_plan_containers WHERE company_id = ${cid} ORDER BY plan_id, position, id`
+  );
+  await fetch1(
+    "Plan Lines",
+    `SELECT * FROM factory_container_plan_lines WHERE company_id = ${cid} ORDER BY plan_id, plan_container_id, product_name, article_code`
+  );
   await fetch1(
     "Factory Ctnr Commissions",
     `SELECT * FROM factory_container_commissions WHERE company_id = ${cid} ORDER BY id`

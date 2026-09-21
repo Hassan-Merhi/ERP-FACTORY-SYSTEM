@@ -86,6 +86,9 @@ export interface CompanyExportData {
   factoryWasteEntries: QueryResultRow[];
   // Factory Containers
   factoryContainers: QueryResultRow[];
+  factoryContainerPlans: QueryResultRow[];
+  factoryContainerPlanContainers: QueryResultRow[];
+  factoryContainerPlanLines: QueryResultRow[];
   factoryContainerCommissions: QueryResultRow[];
   factoryContainerOtherCharges: QueryResultRow[];
   factoryContainerProfitSnapshots: QueryResultRow[];
