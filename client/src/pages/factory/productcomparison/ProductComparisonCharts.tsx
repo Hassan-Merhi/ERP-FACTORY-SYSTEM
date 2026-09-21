@@ -4,10 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale, X } from "lucide-react";
 
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
-import {
-  formatFactoryProductComparisonOptionLabel,
-  getFactoryProductComparisonCopy,
-} from "@/i18n/factoryProductComparisonTranslations";
+import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparisonTranslations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -165,7 +162,6 @@ const ProductChartCard = memo(function ProductChartCard({
   const difference = selectedValue - comparisonValue;
   const change = pctChange(selectedValue, comparisonValue);
   const localizedName = localizedProductName(product, language);
-  const code = (product.articleCode || product.code || "").trim();
   const chartData = [
     { period: selectedLabel, value: selectedValue },
     { period: comparisonLabel, value: comparisonValue },
@@ -180,7 +176,6 @@ const ProductChartCard = memo(function ProductChartCard({
       <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="break-words text-base font-semibold">{localizedName}</h3>
-          <p className="mt-0.5 break-all text-xs text-muted-foreground">{code || "—"}</p>
         </div>
         {product.active === false ? (
           <Badge variant="outline" className="shrink-0">
@@ -190,12 +185,18 @@ const ProductChartCard = memo(function ProductChartCard({
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-lg border bg-muted/20 p-2.5">
-          <p className="text-muted-foreground">{currentLabel}</p>
+        <div className="rounded-lg border border-chart-1/30 bg-chart-1/10 p-2.5">
+          <p className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2.5 w-2.5 rounded-full bg-chart-1" aria-hidden="true" />
+            {currentLabel}
+          </p>
           <p className="mt-1 font-semibold tabular-nums">{formatMetric(selectedValue, metric)}</p>
         </div>
-        <div className="rounded-lg border bg-muted/20 p-2.5">
-          <p className="text-muted-foreground">{comparedLabel}</p>
+        <div className="rounded-lg border border-chart-2/30 bg-chart-2/10 p-2.5">
+          <p className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2.5 w-2.5 rounded-full bg-chart-2" aria-hidden="true" />
+            {comparedLabel}
+          </p>
           <p className="mt-1 font-semibold tabular-nums">{formatMetric(comparisonValue, metric)}</p>
         </div>
       </div>
@@ -218,8 +219,8 @@ const ProductChartCard = memo(function ProductChartCard({
                 ]}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={96}>
-                <Cell fill="hsl(var(--primary))" />
-                <Cell fill="hsl(var(--muted-foreground))" />
+                <Cell fill="hsl(var(--chart-1))" />
+                <Cell fill="hsl(var(--chart-2))" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -361,11 +362,6 @@ export default function ProductComparisonCharts() {
     },
   });
 
-  const categoryNameById = useMemo(
-    () => new Map(categories.map((category) => [category.id, localizedCategoryName(category, language)])),
-    [categories, language]
-  );
-
   const gradeOptions = useMemo(() => {
     const grades = new Set<string>();
     for (const product of catalog) {
@@ -405,23 +401,12 @@ export default function ProductComparisonCharts() {
         if (selectedGrades.length > 0 && !selectedGrades.includes(grade)) return false;
         return true;
       })
-      .map((product) => {
-        const key = productKey(product);
-        const code = (product.articleCode || product.code || "").trim();
-        const english = product.name?.trim() || code;
-        const localized = localizedProductName(product, language);
-        const arabic = product.nameAr?.trim();
-        const pieces = [code, localized];
-        if (language !== "en" && english && english !== localized) pieces.push(english);
-        if (language !== "ar" && arabic && arabic !== localized) pieces.push(arabic);
-        const categoryName = product.categoryId ? categoryNameById.get(product.categoryId) : undefined;
-        return {
-          value: key,
-          label: formatFactoryProductComparisonOptionLabel(pieces, categoryName),
-        };
-      })
+      .map((product) => ({
+        value: productKey(product),
+        label: localizedProductName(product, language),
+      }))
       .sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [catalog, selectedProducts, selectedCategories, selectedGrades, language, categoryNameById, locale]);
+  }, [catalog, selectedProducts, selectedCategories, selectedGrades, language, locale]);
 
   const selectedRows = useMemo(() => reportMap(selectedReport.data?.production.byProduct), [selectedReport.data]);
   const comparisonRows = useMemo(() => reportMap(comparisonReport.data?.production.byProduct), [comparisonReport.data]);
@@ -669,9 +654,7 @@ export default function ProductComparisonCharts() {
             const key = productKey(product);
             return (
               <Badge key={key} variant="secondary" className="max-w-full gap-1.5 py-1">
-                <span className="max-w-[260px] truncate">
-                  {(product.articleCode || product.code || "").trim()} · {localizedProductName(product, language)}
-                </span>
+                <span className="max-w-[260px] truncate">{localizedProductName(product, language)}</span>
                 <button
                   type="button"
                   className="rounded-full p-0.5 hover:bg-background/70"
