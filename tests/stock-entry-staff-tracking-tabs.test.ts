@@ -35,4 +35,14 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("canAccessTrackingPage");
     expect(route).toContain("res.status(403)");
   });
+
+  it("uses direct table editing instead of Excel import/export for Production Targets", () => {
+    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    expect(production).not.toContain("button-production-excel-template");
+    expect(production).not.toContain("button-import-production-excel");
+    expect(production).toContain("button-save-production");
+    expect(production).toContain("button-discard-production-changes");
+    expect(production).toContain("production-category-options");
+    expect(production).toContain("hasUnsavedChanges");
+  });
 });
