@@ -222,7 +222,6 @@ export function rebalanceUnlockedContainerPlan(
   requestedCapacity: number
 ): RebalancedUnlockedContainer[] {
   const capacity = normalizeContainerCapacity(requestedCapacity);
-  const locked = containers.filter((container) => container.isLocked);
   const unlocked = containers
     .filter((container) => !container.isLocked)
     .sort((a, b) => a.position - b.position || a.id - b.id);
