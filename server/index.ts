@@ -216,10 +216,16 @@ let migrationsDone = false;
       migrationsDone = true;
     });
 
-  // Do not pre-load Puppeteer/Chrome during every server boot. Container
-  // tracking resolves scraper availability when a tracking request/job actually
-  // needs it, which avoids making the browser stack permanent baseline RSS on
-  // deployments that may go hours without scraper work.
+  // Keep Puppeteer/Chrome out of production baseline RSS. Development keeps
+  // the old convenience pre-warm so a missing local Chromium can still be
+  // installed automatically; production can opt back in explicitly if needed.
+  if (process.env.NODE_ENV !== "production" || process.env.PUPPETEER_PREWARM === "true") {
+    void import("./lib/parcelsAppScraper")
+      .then(({ ensureChromiumAvailable }) => ensureChromiumAvailable())
+      .catch((error: unknown) => {
+        logger.warn("[Puppeteer] Optional pre-warm failed", { error: getErrorMessage(error) });
+      });
+  }
 
   registerGracefulShutdown();
 
