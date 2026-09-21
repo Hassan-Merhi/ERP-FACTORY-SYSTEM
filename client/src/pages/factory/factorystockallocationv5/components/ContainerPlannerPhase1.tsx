@@ -12,6 +12,7 @@ import {
   DEFAULT_CONTAINER_CAPACITY,
   MAX_CONTAINER_CAPACITY,
 } from "../containerPlannerEngine";
+import { ContainerPlannerSavedPlans } from "./ContainerPlannerSavedPlans";
 
 function fmt(value: number): string {
   return Math.round(value).toLocaleString();
@@ -289,6 +290,12 @@ export function ContainerPlannerPhase1() {
             </div>
           </>
         )}
+
+        <ContainerPlannerSavedPlans
+          capacityBales={preview.capacity}
+          includeGarbageWipers={includeGarbageWipers}
+          previewTotal={preview.totalPlannable}
+        />
       </div>
     </section>
   );

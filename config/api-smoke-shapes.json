@@ -823,6 +823,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/v5/container-plans": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/v5/location-summary": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
