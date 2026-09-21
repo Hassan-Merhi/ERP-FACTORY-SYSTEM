@@ -4,14 +4,13 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
-  Download,
   Loader2,
   LockKeyhole,
   MessageCircle,
   Save,
   Search,
   Target,
-  Upload,
+  Undo2,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,12 +35,9 @@ import {
   fetchProduction,
   groupProductionRows,
   localDateStr,
-  normalizeExcelHeader,
-  normalizeWorkerCode,
   periodFor,
   statusTranslationKey,
   waitForReportPaint,
-  type ImportedProductionTarget,
   type PeriodType,
   type ProductionGroup,
   type ProductionResponse,
@@ -91,6 +87,7 @@ function CategoryInput({
         if (event.key === "Enter") event.currentTarget.blur();
       }}
       placeholder={placeholder}
+      list="production-category-options"
       className="h-8 w-full min-w-0"
     />
   );
@@ -104,9 +101,8 @@ export default function FactoryProductionTargets() {
   const [referenceDate, setReferenceDate] = useState(() => localDateStr(new Date()));
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ProductionRow[]>([]);
-  const [isImporting, setIsImporting] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const productionReportRef = useRef<HTMLDivElement>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
   const period = useMemo(() => periodFor(periodType, referenceDate), [periodType, referenceDate]);
 
   const { data, isLoading } = useQuery<ProductionResponse>({
@@ -116,10 +112,14 @@ export default function FactoryProductionTargets() {
 
   useEffect(() => {
     setRows([]);
+    setHasUnsavedChanges(false);
   }, [periodType, period.start, period.end]);
 
   useEffect(() => {
-    if (data) setRows(data.rows);
+    if (data) {
+      setRows(data.rows);
+      setHasUnsavedChanges(false);
+    }
   }, [data]);
 
   const finalized = Boolean(data?.finalized);
@@ -157,133 +157,13 @@ export default function FactoryProductionTargets() {
         queryKey: ["/api/factory/staff-tracking"],
         refetchType: "active",
       });
+      setHasUnsavedChanges(false);
       toast({ title: tr("productionSaved") });
     },
     onError: (error: Error) => {
       toast({ title: tr("saveFailed"), description: error.message, variant: "destructive" });
     },
   });
-
-  const downloadExcelTemplate = async () => {
-    try {
-      const { ExcelJS, writeFile } = await import("@/lib/excelHelper");
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(tr("productionTargets"));
-      worksheet.columns = [
-        { header: "Worker Code", key: "workerCode", width: 20 },
-        { header: tr("category"), key: "category", width: 28 },
-        { header: tr("target"), key: "target", width: 14 },
-      ];
-      rows.forEach((row) => {
-        worksheet.addRow({
-          workerCode: row.code || "",
-          category: row.category || "",
-          target: row.targetBales ?? "",
-        });
-      });
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.views = [{ state: "frozen", ySplit: 1 }];
-      await writeFile(workbook, `production-targets-template-${period.start}.xlsx`);
-    } catch (error: unknown) {
-      toast({
-        title: tr("templateDownloadFailed"),
-        description: error instanceof Error ? error.message : tr("couldNotCreateExcelTemplate"),
-        variant: "destructive",
-      });
-    }
-  };
-
-  const importProductionTargets = async (file: File) => {
-    setIsImporting(true);
-    try {
-      const { readFile, utils } = await import("@/lib/excelHelper");
-      const workbook = await readFile(file);
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) throw new Error(tr("workbookMissingWorksheet"));
-
-      const headers = new Set<string>();
-      worksheet.getRow(1).eachCell((cell) => headers.add(normalizeExcelHeader(cell.text)));
-      for (const requiredHeader of ["worker code", "category", "target"]) {
-        if (!headers.has(requiredHeader)) {
-          throw new Error([tr("missingRequiredColumn"), requiredHeader].join(": "));
-        }
-      }
-
-      const importedRows = utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: "" });
-      if (importedRows.length === 0) throw new Error(tr("excelNoWorkerRows"));
-
-      const importedByCode = new Map<string, ImportedProductionTarget>();
-      for (const importedRow of importedRows) {
-        const normalizedRow = new Map<string, unknown>();
-        Object.entries(importedRow).forEach(([key, value]) => normalizedRow.set(normalizeExcelHeader(key), value));
-        const workerCode = normalizeWorkerCode(normalizedRow.get("worker code"));
-        if (!workerCode) continue;
-        if (importedByCode.has(workerCode)) {
-          throw new Error([tr("duplicateWorkerCodeInExcel"), workerCode].join(": "));
-        }
-
-        const category = String(normalizedRow.get("category") ?? "").trim();
-        const targetValue = normalizedRow.get("target");
-        const targetText = String(targetValue ?? "").trim();
-        const targetBales = targetText === "" ? null : Number(targetValue);
-        if (targetBales !== null && (!Number.isFinite(targetBales) || targetBales < 0)) {
-          throw new Error([tr("invalidTargetForWorkerCode"), workerCode].join(" "));
-        }
-        importedByCode.set(workerCode, { category, targetBales });
-      }
-
-      if (importedByCode.size === 0) throw new Error(tr("noWorkerCodesFound"));
-
-      const unmatchedCodes = new Set(importedByCode.keys());
-      let matchedCount = 0;
-      const nextRows = rows.map((row) => {
-        if (!row.code) return row;
-        const code = normalizeWorkerCode(row.code);
-        const imported = importedByCode.get(code);
-        if (!imported) return row;
-        unmatchedCodes.delete(code);
-        matchedCount += 1;
-        return { ...row, category: imported.category, targetBales: imported.targetBales };
-      });
-
-      if (matchedCount === 0) throw new Error(tr("noMatchingWorkerCodes"));
-
-      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
-        page: "production",
-        periodType,
-        periodStart: period.start,
-        periodEnd: period.end,
-        finalize: false,
-        records: buildRecords(nextRows),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || tr("couldNotSaveImportedProductionTargets"));
-      }
-
-      setRows(nextRows);
-      void queryClient.invalidateQueries({
-        queryKey: ["/api/factory/staff-tracking"],
-        refetchType: "active",
-      });
-      toast({
-        title: [tr("productionTargetsImported"), matchedCount].join(": "),
-        description:
-          unmatchedCodes.size > 0
-            ? `${unmatchedCodes.size} ${tr("workerCodesNotFoundSkipped")}`
-            : tr("categoryTargetSaved"),
-      });
-    } catch (error: unknown) {
-      toast({
-        title: tr("excelImportFailed"),
-        description: error instanceof Error ? error.message : tr("couldNotImportProductionTargets"),
-        variant: "destructive",
-      });
-    } finally {
-      setIsImporting(false);
-      if (importInputRef.current) importInputRef.current.value = "";
-    }
-  };
 
   const sendProductionWhatsappImage = async (reportDate: string) => {
     // Always refresh first so each manual send reflects the latest available production
@@ -376,6 +256,14 @@ export default function FactoryProductionTargets() {
 
   const productionReportGroups = useMemo(() => groupProductionRows(rows), [rows]);
 
+  const categorySuggestions = useMemo(
+    () =>
+      Array.from(new Set(rows.map((row) => row.category.trim()).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, undefined, { sensitivity: "base", numeric: true })
+      ),
+    [rows]
+  );
+
   const totals = useMemo(() => {
     const target = rows.reduce((sum, row) => sum + (row.targetBales ?? 0), 0);
     const produced = rows.reduce((sum, row) => sum + (row.producedBales ?? 0), 0);
@@ -385,10 +273,16 @@ export default function FactoryProductionTargets() {
   const setRow = (index: number, patch: Partial<ProductionRow>) => {
     if (finalized) return;
     setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+    setHasUnsavedChanges(true);
   };
 
-  const busy =
-    saveMutation.isPending || isImporting || sendWhatsappMutation.isPending || endProductionMutation.isPending;
+  const discardChanges = () => {
+    if (!data) return;
+    setRows(data.rows);
+    setHasUnsavedChanges(false);
+  };
+
+  const busy = saveMutation.isPending || sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -426,39 +320,21 @@ export default function FactoryProductionTargets() {
             />
           </div>
 
-          <Button
-            variant="outline"
-            onClick={() => void downloadExcelTemplate()}
-            disabled={rows.length === 0 || busy}
-            data-testid="button-production-excel-template"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {tr("excelTemplate")}
-          </Button>
-
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,.csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void importProductionTargets(file);
-            }}
-          />
-          <Button
-            variant="outline"
-            onClick={() => importInputRef.current?.click()}
-            disabled={finalized || rows.length === 0 || busy}
-            data-testid="button-import-production-excel"
-          >
-            {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-            {isImporting ? tr("importing") : tr("importExcel")}
-          </Button>
+          {hasUnsavedChanges && (
+            <Button
+              variant="ghost"
+              onClick={discardChanges}
+              disabled={finalized || busy}
+              data-testid="button-discard-production-changes"
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              {tr("discardChanges")}
+            </Button>
+          )}
 
           <Button
             onClick={() => saveMutation.mutate()}
-            disabled={finalized || rows.length === 0 || busy}
+            disabled={finalized || rows.length === 0 || busy || !hasUnsavedChanges}
             data-testid="button-save-production"
           >
             {saveMutation.isPending ? (
@@ -466,7 +342,7 @@ export default function FactoryProductionTargets() {
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            {saveMutation.isPending ? tr("saving") : tr("save")}
+            {saveMutation.isPending ? tr("saving") : tr("saveChanges")}
           </Button>
 
           {periodType === "daily" && (
@@ -503,10 +379,18 @@ export default function FactoryProductionTargets() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
-        {period.start}
-        {period.end !== period.start ? ` — ${period.end}` : ""}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <div>
+          <CalendarDays className="mr-1.5 inline h-3.5 w-3.5" />
+          {period.start}
+          {period.end !== period.start ? ` — ${period.end}` : ""}
+          <span className="ml-3">{tr("editProductionDirectly")}</span>
+        </div>
+        {hasUnsavedChanges && (
+          <Badge variant="secondary" data-testid="badge-production-unsaved">
+            {tr("unsavedChanges")}
+          </Badge>
+        )}
       </div>
 
       {finalized && (
@@ -539,6 +423,12 @@ export default function FactoryProductionTargets() {
           className="pl-9"
         />
       </div>
+
+      <datalist id="production-category-options">
+        {categorySuggestions.map((category) => (
+          <option key={category} value={category} />
+        ))}
+      </datalist>
 
       <div className="overflow-x-auto rounded-xl border">
         <Table>
@@ -600,7 +490,7 @@ export default function FactoryProductionTargets() {
                           <CategoryInput
                             value={row.category}
                             disabled={finalized}
-                            onCommit={(category) => setRow(sourceIndex, { category })}
+                            onCommit={(category) => setRow(sourceIndex, { category: category.trim() })}
                             placeholder={tr("categoryStation")}
                           />
                         </TableCell>

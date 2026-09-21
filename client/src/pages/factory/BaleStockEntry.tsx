@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ScanLine, List, CalendarDays, Factory } from "lucide-react";
+import { ScanLine, List, CalendarDays, Factory, ClipboardCheck, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryMobileHeader, FactoryMobileHeaderActions, FactoryMobilePage } from "@/components/ui/factory-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,11 @@ import { LabelPrintSettings } from "@/components/LabelPrintSettings";
 import StockEntryHistory from "../StockEntryHistory";
 import GroundScan from "./GroundScan";
 import DailyScan from "./DailyScan";
+import FactoryProductionTargets from "./FactoryProductionTargets";
+import { FactoryStaffTracking } from "./FactoryStaffTracking";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
+import "./factoryTrackingModern.css";
 
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
@@ -20,8 +25,12 @@ export default function BaleStockEntry() {
   const todayStr = new Date().toLocaleDateString("en-CA");
   const [summaryDate, _setSummaryDate] = useState<string>(todayStr);
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
+    translateFactoryStaffTrackingText(key, language);
   // Track which tabs have ever been activated so we only mount heavy components on demand.
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set(["entry"]));
+  const [activeTab, setActiveTab] = useState("entry");
 
   const handleTabChange = (tab: string) => setMountedTabs((prev) => (prev.has(tab) ? prev : new Set([...prev, tab])));
 
@@ -42,6 +51,36 @@ export default function BaleStockEntry() {
     settings?.stockEntryTabHistoryEnabled !== false && !hiddenTabs.includes("hide_tab_stockentry_history");
   const showGroundScan = !hiddenTabs.includes("hide_tab_stockentry_ground_scan");
   const showDailyScan = !hiddenTabs.includes("hide_tab_stockentry_daily_scan");
+  const showProductionTargets = !hiddenTabs.includes("hide_tab_stockentry_production_targets");
+  const showAttendanceRegister = !hiddenTabs.includes("hide_tab_stockentry_attendance_register");
+
+  const defaultTab = showEntry
+    ? "entry"
+    : showHistory
+      ? "history"
+      : showGroundScan
+        ? "ground-scan"
+        : showDailyScan
+          ? "daily-scan"
+          : showProductionTargets
+            ? "production-targets"
+            : showAttendanceRegister
+              ? "attendance-register"
+              : "entry";
+
+  const activeTabVisible =
+    (activeTab === "entry" && showEntry) ||
+    (activeTab === "history" && showHistory) ||
+    (activeTab === "ground-scan" && showGroundScan) ||
+    (activeTab === "daily-scan" && showDailyScan) ||
+    (activeTab === "production-targets" && showProductionTargets) ||
+    (activeTab === "attendance-register" && showAttendanceRegister);
+
+  useEffect(() => {
+    if (activeTabVisible) return;
+    setActiveTab(defaultTab);
+    setMountedTabs((prev) => (prev.has(defaultTab) ? prev : new Set([...prev, defaultTab])));
+  }, [activeTabVisible, defaultTab]);
 
   const { data: _productionSession, refetch: refetchSession } = useQuery({
     queryKey: ["/api/factory/stock-entry/production-session", todayStr],
@@ -98,7 +137,14 @@ export default function BaleStockEntry() {
 
       <DailyStockSummary date={summaryDate} />
 
-      <Tabs defaultValue={showEntry ? "entry" : "history"} onValueChange={handleTabChange} className="min-w-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab);
+          handleTabChange(tab);
+        }}
+        className="min-w-0"
+      >
         <TabsList aria-label="Bale stock entry sections" className="w-full max-w-full">
           {showEntry && (
             <TabsTrigger value="entry" data-testid="tab-stock-entry">
@@ -124,6 +170,18 @@ export default function BaleStockEntry() {
               Daily Scan
             </TabsTrigger>
           )}
+          {showProductionTargets && (
+            <TabsTrigger value="production-targets" data-testid="tab-production-targets">
+              <Target className="mr-1 h-4 w-4" />
+              {tr("productionTargets")}
+            </TabsTrigger>
+          )}
+          {showAttendanceRegister && (
+            <TabsTrigger value="attendance-register" data-testid="tab-attendance-register">
+              <ClipboardCheck className="mr-1 h-4 w-4" />
+              {tr("attendanceRegister")}
+            </TabsTrigger>
+          )}
         </TabsList>
         {showEntry && (
           <TabsContent value="entry" className="mt-4 min-w-0">
@@ -143,6 +201,20 @@ export default function BaleStockEntry() {
         {showDailyScan && (
           <TabsContent value="daily-scan" className="mt-0 min-w-0 p-0">
             {mountedTabs.has("daily-scan") && <DailyScan />}
+          </TabsContent>
+        )}
+        {showProductionTargets && (
+          <TabsContent value="production-targets" className="mt-0 min-w-0 p-0">
+            <div className="factory-tracking-modern factory-tracking-production">
+              <FactoryProductionTargets />
+            </div>
+          </TabsContent>
+        )}
+        {showAttendanceRegister && (
+          <TabsContent value="attendance-register" className="mt-0 min-w-0 p-0">
+            <div className="factory-tracking-modern factory-tracking-attendance">
+              <FactoryStaffTracking mode="attendance" />
+            </div>
           </TabsContent>
         )}
       </Tabs>
