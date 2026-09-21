@@ -45,6 +45,29 @@ async function settlementVoucherIds(clientSaleId: string): Promise<number[]> {
   return rows.map((row) => Number(row.voucher_id));
 }
 
+async function activeSettlementVouchers(
+  clientSaleId: string
+): Promise<Array<{ id: number; totalAmount: string; description: string }>> {
+  const { rows } = await pool.query(
+    `SELECT id, total_amount::text AS "totalAmount", description
+     FROM vouchers
+     WHERE voucher_number LIKE $1
+       AND deleted_at IS NULL
+       AND description IN (
+         'Golden Coast POS cash transferred to HADI',
+         'Golden Coast POS cash received by HADI',
+         'Golden Coast POS payable reclassification'
+       )
+     ORDER BY id`,
+    [`GC-POS-${clientSaleId}-%`]
+  );
+  return rows.map((row) => ({
+    id: Number(row.id),
+    totalAmount: String(row.totalAmount),
+    description: String(row.description),
+  }));
+}
+
 async function expectBalancedSettlementVouchers(clientSaleId: string): Promise<void> {
   const voucherIds = await settlementVoucherIds(clientSaleId);
   expect(voucherIds.length).toBeGreaterThan(0);
@@ -142,7 +165,7 @@ describe("Golden Coast normal itemized POS sale", () => {
     expect(await settlementVoucherIds("normal-pos-sale-retry")).toEqual(beforeRetry);
   });
 
-  it("reverses and rebuilds the paired settlement on PATCH edit", async () => {
+  it("retires and replaces the paired settlement on PATCH edit", async () => {
     const beforeEdit = await accountBalance(fixture.hadiCashAccountId);
     const beforePayable = await accountBalance(fixture.saleSideAccountId);
     const beforeDeduction = await accountBalance(fixture.deductionClearingAccountId);
@@ -177,7 +200,10 @@ describe("Golden Coast normal itemized POS sale", () => {
     expect(await accountBalance(fixture.hadiCashAccountId)).toBeCloseTo(beforeEdit + 400, 2);
     expect(await accountBalance(fixture.saleSideAccountId)).toBeCloseTo(beforePayable - 380, 2);
     expect(await accountBalance(fixture.deductionClearingAccountId)).toBeCloseTo(beforeDeduction - 20, 2);
-    expect(await settlementVoucherIds("normal-pos-sale-edit")).toHaveLength(6);
+    expect(await settlementVoucherIds("normal-pos-sale-edit")).toHaveLength(2);
+    const activeSettlement = await activeSettlementVouchers("normal-pos-sale-edit");
+    expect(activeSettlement).toHaveLength(2);
+    expect(activeSettlement.map((voucher) => voucher.totalAmount)).toEqual(["400.00", "400.00"]);
     await expectBalancedSettlementVouchers("normal-pos-sale-edit");
 
     const { rows: inventoryRows } = await pool.query(
@@ -187,5 +213,51 @@ describe("Golden Coast normal itemized POS sale", () => {
       [fixture.ctx.companyId, fixture.ctx.locationId, fixture.goldenCoastStockItemId]
     );
     expect(Number(inventoryRows[0].quantity)).toBeCloseTo(inventoryBeforeEdit - 2, 3);
+  });
+
+  it("replaces marker-less stale settlement vouchers instead of duplicating them", async () => {
+    const clientSaleId = "normal-pos-sale-edit-missing-marker";
+    const created = await fixture.agent.post("/api/pos/sales").send({
+      ...saleBody(),
+      clientSaleId,
+    });
+    expect(created.status).toBe(200);
+
+    const originalSettlementIds = await settlementVoucherIds(clientSaleId);
+    expect(originalSettlementIds).toHaveLength(2);
+
+    await pool.query(
+      `DELETE FROM accounting_posting_requests
+       WHERE source_type = $1
+         AND voucher_id = ANY($2::int[])`,
+      [SETTLEMENT_SOURCE_TYPE, originalSettlementIds]
+    );
+    expect(await settlementVoucherIds(clientSaleId)).toHaveLength(0);
+
+    const edited = await fixture.agent.patch(`/api/vouchers/${created.body.voucher.id}/sales`).send({
+      locationId: fixture.ctx.locationId,
+      paymentAccountType: "cash",
+      paymentAccountId: fixture.ctx.cashAccountId,
+      targetCompanyId: fixture.hadiCompanyId,
+      items: [{ stockItemId: fixture.goldenCoastStockItemId, quantity: "2", sellingPrice: "200" }],
+    });
+
+    expect(edited.status).toBe(200);
+    expect(edited.body.grandTotal).toBe("400.00");
+
+    const activeSettlement = await activeSettlementVouchers(clientSaleId);
+    expect(activeSettlement).toHaveLength(2);
+    expect(activeSettlement.map((voucher) => voucher.totalAmount)).toEqual(["400.00", "400.00"]);
+    expect(await settlementVoucherIds(clientSaleId)).toHaveLength(2);
+
+    const { rows: retiredRows } = await pool.query(
+      `SELECT id, deleted_at
+       FROM vouchers
+       WHERE id = ANY($1::int[])
+       ORDER BY id`,
+      [originalSettlementIds]
+    );
+    expect(retiredRows).toHaveLength(2);
+    expect(retiredRows.every((row) => row.deleted_at != null)).toBe(true);
   });
 });
