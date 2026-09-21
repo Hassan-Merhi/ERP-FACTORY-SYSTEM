@@ -79,7 +79,7 @@ export function RemoveFromStockTab() {
   const { formatDisplayDate } = useDateFormat();
 
   const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
-  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products"] });
+  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products?profile=picker"] });
 
   const bulkUpdateNamesMutation = useMutation({
     mutationFn: async (file: File) => {
