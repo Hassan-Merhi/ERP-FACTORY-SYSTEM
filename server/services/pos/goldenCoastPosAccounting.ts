@@ -238,6 +238,12 @@ async function buildPosting(input: {
  * deliberately local to the POS service so the POS route does not import a
  * route module just to classify a company.
  */
+function requireGoldenCoastSettlementClientSaleId(value: string | null | undefined): string {
+  const clientSaleId = String(value ?? "").trim();
+  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
+  return clientSaleId;
+}
+
 export async function isGoldenCoastPosCompany(tx: DbTransaction, companyId: number): Promise<boolean> {
   const rows = await tx
     .select({ subType: ledgerAccounts.subType })
@@ -268,7 +274,7 @@ export async function postGoldenCoastPosAccountingTx(input: {
   payableAmountUsd: number;
   actor?: PostingActor;
 }): Promise<void> {
-  if (!input.clientSaleId?.trim()) throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
+  requireGoldenCoastSettlementClientSaleId(input.clientSaleId);
   if (input.amountUsd <= 0) return;
 
   const { tx, companyId } = input;
@@ -443,8 +449,7 @@ export async function retireGoldenCoastPosAccountingTx(input: {
   clientSaleId: string;
 }): Promise<{ retiredVoucherIds: number[] }> {
   const { tx, companyId } = input;
-  const clientSaleId = input.clientSaleId.trim();
-  if (!clientSaleId) throw new Error("Golden Coast POS requires clientSaleId for settlement idempotency");
+  const clientSaleId = requireGoldenCoastSettlementClientSaleId(input.clientSaleId);
 
   const { parentCompanyId } = await resolvePair(tx, companyId);
   const companyIds = [companyId, parentCompanyId];
