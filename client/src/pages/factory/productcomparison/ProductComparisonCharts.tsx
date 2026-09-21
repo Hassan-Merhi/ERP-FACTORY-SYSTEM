@@ -1,15 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarDays, Package, Scale, X } from "lucide-react";
 
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -105,11 +96,7 @@ function localizedCategoryName(category: CategoryRow, language: "en" | "ar" | "f
   return category.name;
 }
 
-function formatRangeLabel(
-  range: ComparisonRange,
-  period: ProductComparisonPeriod,
-  locale: string
-): string {
+function formatRangeLabel(range: ComparisonRange, period: ProductComparisonPeriod, locale: string): string {
   const from = parseLocalIsoDate(range.from);
   const to = parseLocalIsoDate(range.to);
   if (period === "day") {
@@ -124,15 +111,7 @@ function formatRangeLabel(
   return `${formatter.format(from)} – ${formatter.format(to)}`;
 }
 
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <Card className="min-w-0">
       <CardContent className="p-4">
@@ -233,7 +212,10 @@ const ProductChartCard = memo(function ProductChartCard({
                 tickFormatter={(value) => (metric === "bales" ? fmtNum(Number(value)) : fmtKg(Number(value)))}
               />
               <Tooltip
-                formatter={(value) => [formatMetric(Number(value), metric), metric === "bales" ? balesLabel : weightLabel]}
+                formatter={(value) => [
+                  formatMetric(Number(value), metric),
+                  metric === "bales" ? balesLabel : weightLabel,
+                ]}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={96}>
                 <Cell fill="hsl(var(--primary))" />
@@ -417,7 +399,8 @@ export default function ProductComparisonCharts() {
         const key = productKey(product);
         if (!key) return false;
         if (selectedProducts.includes(key)) return true;
-        if (selectedCategories.length > 0 && !selectedCategories.includes(String(product.categoryId ?? ""))) return false;
+        if (selectedCategories.length > 0 && !selectedCategories.includes(String(product.categoryId ?? "")))
+          return false;
         const grade = deriveGrade(product.articleCode || product.code || "");
         if (selectedGrades.length > 0 && !selectedGrades.includes(grade)) return false;
         return true;
@@ -438,27 +421,19 @@ export default function ProductComparisonCharts() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [
-    catalog,
-    selectedProducts,
-    selectedCategories,
-    selectedGrades,
-    language,
-    categoryNameById,
-    locale,
-  ]);
+  }, [catalog, selectedProducts, selectedCategories, selectedGrades, language, categoryNameById, locale]);
 
   const selectedRows = useMemo(() => reportMap(selectedReport.data?.production.byProduct), [selectedReport.data]);
-  const comparisonRows = useMemo(
-    () => reportMap(comparisonReport.data?.production.byProduct),
-    [comparisonReport.data]
-  );
+  const comparisonRows = useMemo(() => reportMap(comparisonReport.data?.production.byProduct), [comparisonReport.data]);
 
   const selectedLabel = formatRangeLabel(ranges.selected, period, locale);
   const comparisonLabel = formatRangeLabel(ranges.comparison, period, locale);
 
   const selectedCatalogRows = useMemo(
-    () => selectedProducts.map((key) => catalogByKey.get(key)).filter((product): product is BaleProductCatalogRow => !!product),
+    () =>
+      selectedProducts
+        .map((key) => catalogByKey.get(key))
+        .filter((product): product is BaleProductCatalogRow => !!product),
     [selectedProducts, catalogByKey]
   );
 
@@ -485,12 +460,14 @@ export default function ProductComparisonCharts() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {([
-          ["day", copy.daily],
-          ["month", copy.monthly],
-          ["year", copy.yearly],
-          ["custom", copy.custom],
-        ] as [ProductComparisonPeriod, string][]).map(([value, label]) => (
+        {(
+          [
+            ["day", copy.daily],
+            ["month", copy.monthly],
+            ["year", copy.yearly],
+            ["custom", copy.custom],
+          ] as [ProductComparisonPeriod, string][]
+        ).map(([value, label]) => (
           <Button
             key={value}
             type="button"
@@ -670,7 +647,7 @@ export default function ProductComparisonCharts() {
           className="w-full sm:w-[360px]"
           testId="product-comparison-products"
         />
-        {(hasFilter || selectedProducts.length > 0) ? (
+        {hasFilter || selectedProducts.length > 0 ? (
           <Button
             type="button"
             variant="ghost"
@@ -726,7 +703,11 @@ export default function ProductComparisonCharts() {
             <Stat
               label={copy.difference}
               value={`${totals.difference > 0 ? "+" : ""}${formatMetric(totals.difference, metric)}`}
-              sub={totals.change === null ? copy.notAvailable : `${totals.change > 0 ? "+" : ""}${totals.change.toFixed(1)}%`}
+              sub={
+                totals.change === null
+                  ? copy.notAvailable
+                  : `${totals.change > 0 ? "+" : ""}${totals.change.toFixed(1)}%`
+              }
             />
           </ResponsiveMetricGrid>
 
