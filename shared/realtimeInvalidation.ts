@@ -156,6 +156,10 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
       "/api/stock-groups",
       "/api/stock-categories",
       "/api/stock-grades",
+      "/api/stock-items",
+      "/api/ledger-accounts",
+      "/api/bank-accounts",
+      "/api/fixed-assets",
       "/api/company-settings",
       "/api/user/preferences",
     ])
@@ -191,7 +195,7 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
       "/api/factory/users",
     ])
   ) {
-    topics = ["factory", "reference"];
+    topics = ["reference"];
   } else if (startsWithAny(path, ["/api/factory/customers", "/api/factory/suppliers"])) {
     topics = ["factory", "accounting", "reference"];
   } else if (
@@ -202,7 +206,7 @@ export function classifyRealtimeWrite(url: string, body: unknown): RealtimeWrite
       "/api/factory/cash-accounts",
     ])
   ) {
-    topics = ["factory", "payroll", "accounting", "reference"];
+    topics = ["payroll", "accounting", "reference"];
   } else if (path.startsWith("/api/factory")) {
     topics = ["factory"];
   } else if (startsWithAny(path, ["/api/containers", "/api/import", "/api/sp"])) {
