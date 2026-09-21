@@ -5,7 +5,7 @@ function source(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-// Guard page-level polling sites most likely to regress into steady hidden-tab background traffic.
+// Guard page-level polling sites against steady hidden-tab background traffic.
 const pollingCases = [
   ["client/src/pages/dashboard/useDashboard.ts", "visibleTabInterval(5 * 60_000)", "refetchInterval: 300000"],
   ["client/src/pages/pos/hooks/usePosQueries.ts", "visibleTabInterval(60_000)", "refetchInterval: 60_000,"],
