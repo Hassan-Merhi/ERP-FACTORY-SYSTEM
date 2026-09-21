@@ -209,6 +209,28 @@ function isNonInvalidatingWrite(req: Request): boolean {
   return NON_INVALIDATING_WRITE_PATHS.some((pattern) => pattern.test(req.path));
 }
 
+function readCookie(header: unknown, name: string): string | null {
+  if (typeof header !== "string") return null;
+  for (const part of header.split(";")) {
+    const [key, ...value] = part.trim().split("=");
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(value.join("="));
+    } catch {
+      return value.join("=");
+    }
+  }
+  return null;
+}
+
+function factoryCatalogLanguageKey(req: Request): "en" | "ar" | "fr" {
+  const raw =
+    req.query?.lang ??
+    req.headers["x-factory-catalog-language"] ??
+    readCookie(req.headers.cookie, "factory_catalog_language");
+  return raw === "ar" || raw === "fr" ? raw : "en";
+}
+
 function positiveInteger(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
@@ -424,6 +446,7 @@ export function buildReadMicrocacheKey(req: Request): string {
     req.method,
     req.originalUrl,
     req.headers["x-client-date"] ?? "none",
+    factoryCatalogLanguageKey(req),
     bodyKey,
     session?.userId ?? "anonymous",
     session?.currentCompanyId ?? "none",
@@ -473,7 +496,7 @@ function replayHeaders(res: import("express").Response, headers: ReplayableHeade
 function setCacheHeaders(res: import("express").Response, entry: ReadMicrocacheEntry, state: string): void {
   res.setHeader?.("Cache-Control", "private, no-cache, must-revalidate");
   res.setHeader?.("ETag", entry.etag);
-  res.setHeader?.("Vary", "Cookie, Accept-Encoding, X-Client-Date");
+  res.setHeader?.("Vary", "Cookie, Accept-Encoding, X-Client-Date, X-Factory-Catalog-Language");
   res.setHeader?.("X-ERP-Read-Cache", state);
 }
 
