@@ -269,12 +269,17 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
 
   if (
     path === "/api/location-summary" ||
-    path === "/api/reports/stock-movement" ||
-    path === "/api/reports/opening-stock-summary" ||
     path === "/api/stock-items" ||
     path === "/api/stock-items/light" ||
     path === "/api/stock-items/all-code-aliases" ||
-    path === "/api/locations" ||
+    path === "/api/locations"
+  ) {
+    return ["inventory"];
+  }
+
+  if (
+    path === "/api/reports/stock-movement" ||
+    path === "/api/reports/opening-stock-summary" ||
     path === "/api/stock-transfers"
   ) {
     return ["inventory", "accounting"];
