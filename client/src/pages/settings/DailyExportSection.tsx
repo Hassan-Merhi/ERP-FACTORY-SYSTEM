@@ -1,3 +1,4 @@
+import { visibleTabInterval } from "@/lib/queryPolicies";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
@@ -181,7 +182,7 @@ export function DailyExportSection() {
     refetch: refetchBackup,
   } = useQuery<BackupStatus>({
     queryKey: ["/api/export/backup-status"],
-    refetchInterval: 60000,
+    refetchInterval: visibleTabInterval(60_000),
   });
 
   const [sendingWa, setSendingWa] = useState(false);
