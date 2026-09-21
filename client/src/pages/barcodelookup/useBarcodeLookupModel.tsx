@@ -136,7 +136,7 @@ export function useBarcodeLookupModel() {
   const isAdmin = currentUser?.role === "Admin" || currentUser?.role === "Owner" || currentUser?.role === "Developer";
 
   const { data: baleProductsList } = useQuery<BaleProduct[]>({
-    queryKey: ["/api/factory/bale-products"],
+    queryKey: ["/api/factory/bale-products?profile=picker"],
     enabled: showChangeProductDialog,
   });
 
