@@ -22,6 +22,21 @@ const TIMEOUT_MS = 10_000;
 const RATE_LIMIT_MS = 60 * 60 * 1_000;
 
 const _lastAttempt = new Map<string, number>();
+const RATE_LIMIT_MAX_ENTRIES = Math.max(
+  100,
+  Number.parseInt(process.env.TRACKING_RATE_LIMIT_MAX_ENTRIES || "5000", 10) || 5000
+);
+
+function pruneRateLimitState(now = Date.now()): void {
+  for (const [containerNumber, lastAttempt] of _lastAttempt) {
+    if (now - lastAttempt >= RATE_LIMIT_MS) _lastAttempt.delete(containerNumber);
+  }
+  while (_lastAttempt.size > RATE_LIMIT_MAX_ENTRIES) {
+    const oldest = _lastAttempt.keys().next().value;
+    if (oldest === undefined) break;
+    _lastAttempt.delete(oldest);
+  }
+}
 
 export function isEnabled(): boolean {
   if (process.env.PUBLIC_CARRIER_TRACKING_ENABLED?.toLowerCase() !== "true") return false;
@@ -59,7 +74,11 @@ export async function track(containerNumber: string): Promise<CarrierTrackResult
     return { ...base, error: "rate_limited" };
   }
 
-  _lastAttempt.set(containerNumber, Date.now());
+  const attemptAt = Date.now();
+  pruneRateLimitState(attemptAt);
+  _lastAttempt.delete(containerNumber);
+  _lastAttempt.set(containerNumber, attemptAt);
+  pruneRateLimitState(attemptAt);
 
   try {
     const url = `${PUBLIC_BASE}/${encodeURIComponent(containerNumber)}`;
