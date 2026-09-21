@@ -285,11 +285,11 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
   if (/^\/api\/factory\/customer-(?:proformas|orders)\//.test(path)) return ["factory"];
   if (/^\/api\/factory\/workers\/attendance-report\/?$/.test(path)) return ["factory", "payroll"];
 
-  if (
-    path === "/api/sales-report" ||
-    path === "/api/dashboard/sales-report-all" ||
-    path === "/api/pos/last-sold-prices"
-  ) {
+  if (path === "/api/sales-report" || path === "/api/dashboard/sales-report-all") {
+    return ["pos", "accounting", "inventory", "reference"];
+  }
+
+  if (path === "/api/pos/last-sold-prices") {
     return ["pos", "accounting"];
   }
 
@@ -323,9 +323,12 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
     return ["containers", "inventory", "accounting"];
   }
 
+  if (path === "/api/accounts/all") {
+    return ["accounting", "reference"];
+  }
+
   if (
     path === "/api/daybook" ||
-    path === "/api/accounts/all" ||
     path === "/api/accounts/voucher-sidebar" ||
     path === "/api/stats/monthly-data"
   ) {
@@ -410,8 +413,9 @@ function readTopicsForPath(path: string): RealtimeInvalidationTopic[] | undefine
 function buildReadScope(req: Request): ReadMicrocacheScope {
   const topics = readTopicsForPath(req.path);
   const locationIds = readLocationIds(req);
+  const companyIds = req.path === "/api/dashboard/sales-report-all" ? [] : requestCompanyIds(req);
   return {
-    companyIds: requestCompanyIds(req),
+    companyIds,
     ...(topics ? { topics } : {}),
     ...(locationIds ? { locationIds } : {}),
   };

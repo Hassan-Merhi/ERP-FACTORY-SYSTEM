@@ -62,8 +62,13 @@ describe("realtime invalidation contract", () => {
     });
   });
 
-  it("classifies accounting write families", () => {
-    expect(classifyRealtimeWrite("/api/vouchers/44", {})).toEqual({ topics: ["accounting"] });
+  it("classifies accounting write families and keeps stock-affecting vouchers inventory-aware", () => {
+    expect(classifyRealtimeWrite("/api/vouchers/44", {})).toEqual({
+      topics: ["accounting", "inventory"],
+    });
+    expect(classifyRealtimeWrite("/api/voucher-entries/77", {})).toEqual({
+      topics: ["accounting", "inventory"],
+    });
     expect(classifyRealtimeWrite("/api/accounts/77", {})).toEqual({ topics: ["accounting"] });
   });
 
