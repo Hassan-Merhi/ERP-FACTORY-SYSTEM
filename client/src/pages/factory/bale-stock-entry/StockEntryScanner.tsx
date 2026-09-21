@@ -13,7 +13,6 @@ interface StockEntryScannerProps {
   showDropdown: boolean;
   filteredProducts: FactoryBaleProduct[];
   onSelectProduct: (product: FactoryBaleProduct) => void;
-  disabled?: boolean;
 }
 
 export function StockEntryScanner({
@@ -25,7 +24,6 @@ export function StockEntryScanner({
   showDropdown,
   filteredProducts,
   onSelectProduct,
-  disabled = false,
 }: StockEntryScannerProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const listRef = useRef<HTMLDivElement>(null);
@@ -44,12 +42,7 @@ export function StockEntryScanner({
   }, [activeIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (disabled) {
-      e.preventDefault();
-      return;
-    }
-
-    const isOpen = !disabled && showDropdown && filteredProducts.length > 0;
+    const isOpen = showDropdown && filteredProducts.length > 0;
 
     if (isOpen && e.key === "ArrowDown") {
       e.preventDefault();
@@ -110,7 +103,6 @@ export function StockEntryScanner({
           enterKeyHint="done"
           placeholder="Scan code or type product name..."
           value={scanInput}
-          disabled={disabled}
           onChange={(e) => onScanInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           className="h-12 rounded-xl border-2 pl-11 text-base shadow-sm transition-all focus-visible:ring-primary/20 sm:h-11"
@@ -143,7 +135,6 @@ export function StockEntryScanner({
                   itemRefs.current[idx] = el;
                 }}
                 type="button"
-                disabled={disabled}
                 role="option"
                 aria-selected={idx === activeIndex}
                 className={`flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 border-b px-3 py-3 text-left transition-colors last:border-0 sm:px-4 sm:py-2.5 ${
