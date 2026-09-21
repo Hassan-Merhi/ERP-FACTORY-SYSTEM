@@ -139,7 +139,7 @@ export default function FactoryInvoiceCreate() {
   });
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string }[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
