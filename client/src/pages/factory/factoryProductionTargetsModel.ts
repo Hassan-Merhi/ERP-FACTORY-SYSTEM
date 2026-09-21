@@ -115,7 +115,11 @@ export function groupProductionRows(sourceRows: ProductionRow[]): ProductionGrou
   const groups = new Map<string, ProductionGroup>();
 
   for (const row of sourceRows) {
-    const label = row.groupName?.trim() || row.category.trim();
+    // Production Targets are organized by the editable production category
+    // (JEANS PANT, BLOUSE, TSHIRT, etc.), not by the broader worker group
+    // such as "Pressing workers". This keeps every worker doing the same
+    // category together even when they share one planner group.
+    const label = row.category.trim() || row.groupName?.trim() || "";
     const key = label.toLocaleLowerCase();
     const existing = groups.get(key);
     if (existing) existing.rows.push(row);
