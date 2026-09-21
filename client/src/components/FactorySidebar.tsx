@@ -12,7 +12,6 @@ import {
   TrendingUp,
   MapPin,
   Settings,
-  ShoppingCart,
   HardHat,
   UserRound,
   ClipboardCheck,
@@ -87,7 +86,6 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = [
     label: "Sales",
     color: NAV_COLOR.sales,
     items: [
-      { title: "Factory POS", url: "/factory/pos", icon: ShoppingCart },
       { title: "Invoicing", url: "/factory/invoicing", icon: FileText },
     ],
   },
