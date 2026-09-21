@@ -151,7 +151,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const groups: GroupRow[] = useMemo(() => pagedGroups?.items ?? [], [pagedGroups]);
 
   const { data: workers = [] } = useQuery<StockEntryWorker[]>({
-    queryKey: ["/api/factory/workers"],
+    queryKey: ["/api/factory/workers?profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
