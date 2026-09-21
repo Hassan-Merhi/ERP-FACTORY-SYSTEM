@@ -159,9 +159,14 @@ async function getSharedBrowser(): Promise<Browser> {
 
   // Auto-clear on crash so the next call relaunches cleanly
   launched.on("disconnected", () => {
-    clearBrowserIdleTimer();
+    // A retired browser can finish disconnecting after a replacement has already
+    // launched. Only clear shared state when this event belongs to the browser
+    // that is still registered as current.
+    if (_sharedBrowser === launched) {
+      clearBrowserIdleTimer();
+      _sharedBrowser = null;
+    }
     logger.warn("[MaerskDirect] Shared browser disconnected (crash or killed)");
-    _sharedBrowser = null;
   });
 
   logger.info("[MaerskDirect] Shared Chrome instance ready");
