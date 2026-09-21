@@ -73,7 +73,7 @@ function renderProductionBales() {
     ]
   );
   client.setQueryData(
-    ["/api/factory/mix-batches"],
+    ["/api/factory/mix-batches?profile=summary"],
     [
       { id: 9, batchCode: "MIX-9", name: "Daily Mix", totalWeightKg: "100", usedKg: "20", status: "ACTIVE" },
       { id: 10, batchCode: "MIX-10", name: "Closed Mix", totalWeightKg: "100", usedKg: "100", status: "CLOSED" },
