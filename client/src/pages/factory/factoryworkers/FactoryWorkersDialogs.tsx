@@ -104,8 +104,10 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
                     >
                       <Checkbox
                         checked={catWorkerIds.includes(w.id)}
-                        onCheckedChange={() => (!w.active ? undefined : toggleCatWorker(w.id))}
-                        disabled={!w.active}
+                        onCheckedChange={() => {
+                          if (w.active || catWorkerIds.includes(w.id)) toggleCatWorker(w.id);
+                        }}
+                        disabled={!w.active && !catWorkerIds.includes(w.id)}
                         data-testid={`checkbox-cat-worker-${w.id}`}
                       />
                       <span className="text-sm flex-1">{w.fullName}</span>
@@ -122,7 +124,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 {catWorkerIds.filter((id) => (workers ?? []).find((w) => w.id === id && w.active)).length} active
-                workers selected. Inactive workers are automatically excluded.
+                workers selected. Inactive workers are removed automatically; any stale inactive assignment can still be unchecked.
               </p>
             </div>
           </div>
