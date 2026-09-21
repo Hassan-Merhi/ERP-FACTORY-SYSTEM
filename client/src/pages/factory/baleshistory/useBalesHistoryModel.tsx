@@ -19,7 +19,6 @@ import {
   type A4DesignColor,
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
-import type { FactoryMixBatch } from "@shared/schema";
 import { type WeightEditBale } from "@/components/BaleWeightEditDialog";
 import { useBalesHistoryDateKeyboard } from "./pagePolicies";
 
