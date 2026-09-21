@@ -146,11 +146,13 @@ export function ContainerPlannerSavedPlans({
     refetchOnWindowFocus: false,
   });
 
+  const plans = plansQuery.data?.plans;
+
   useEffect(() => {
-    if (selectedPlanId == null && (plansQuery.data?.plans?.length ?? 0) > 0) {
-      setSelectedPlanId(Number(plansQuery.data!.plans[0].id));
+    if (selectedPlanId == null && (plans?.length ?? 0) > 0) {
+      setSelectedPlanId(Number(plans![0].id));
     }
-  }, [plansQuery.data?.plans, selectedPlanId]);
+  }, [plans, selectedPlanId]);
 
   const detailQuery = useQuery<{ plan: PlanDetail }>({
     queryKey: ["/api/factory/v5/container-plans/detail", companyScope, selectedPlanId],
@@ -164,7 +166,7 @@ export function ContainerPlannerSavedPlans({
 
   useEffect(() => {
     if (detail) setRenameValue(detail.name);
-  }, [detail?.id, detail?.name]);
+  }, [detail]);
 
   function invalidatePlanner(planId?: number | null) {
     queryClient.invalidateQueries({ queryKey: ["/api/factory/v5/container-plans", companyScope] });
@@ -356,7 +358,7 @@ export function ContainerPlannerSavedPlans({
     } else {
       setMoveDestinationId("");
     }
-  }, [moveSource?.containerId, moveSource?.articleCode, unlockedDestinations.map((c) => c.id).join(",")]);
+  }, [moveSource, unlockedDestinations]);
 
   const isBusy =
     saveMutation.isPending ||
