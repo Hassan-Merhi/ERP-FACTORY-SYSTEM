@@ -56,10 +56,33 @@ function shouldPopulateAfterWrite(req: Request): boolean {
 }
 
 function scopeFromRequest(req: Request, payload: unknown): FactoryBilingualSnapshotScope | null {
-  const responseId =
+  const responseRecord =
     payload && typeof payload === "object" && !Array.isArray(payload)
-      ? positiveId((payload as Record<string, unknown>).id)
+      ? (payload as Record<string, unknown>)
       : null;
+  const responseId = positiveId(responseRecord?.id);
+
+  // The compact bale-scan response tells us exactly which two snapshot rows
+  // changed. Keep this synchronous post-write work row-scoped instead of
+  // replaying every order-linked snapshot target before acknowledging a scan.
+  if (/^\/customer-orders\/\d+\/bales$/.test(req.path) && responseRecord?.compactBaleScan === true) {
+    const baleRecord =
+      responseRecord.bale && typeof responseRecord.bale === "object" && !Array.isArray(responseRecord.bale)
+        ? (responseRecord.bale as Record<string, unknown>)
+        : null;
+    const lineRecord =
+      responseRecord.line && typeof responseRecord.line === "object" && !Array.isArray(responseRecord.line)
+        ? (responseRecord.line as Record<string, unknown>)
+        : null;
+    const orderBaleId = positiveId(baleRecord?.id);
+    const orderLineId = positiveId(lineRecord?.id);
+    if (orderBaleId || orderLineId) {
+      return {
+        ...(orderBaleId ? { orderBaleId } : {}),
+        ...(orderLineId ? { orderLineId } : {}),
+      };
+    }
+  }
 
   const pathRules: Array<{ pattern: RegExp; key: keyof FactoryBilingualSnapshotScope }> = [
     { pattern: /^\/customer-orders\/(\d+)(?:\/|$)/, key: "orderId" },
