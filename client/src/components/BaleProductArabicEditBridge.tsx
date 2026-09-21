@@ -124,13 +124,21 @@ export function BaleProductArabicEditBridge() {
       setDescriptionAr(product?.descriptionAr ?? "");
     };
 
-    const observer = new MutationObserver(sync);
+    let frame: number | null = null;
+    const scheduleSync = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        sync();
+      });
+    };
+
+    const observer = new MutationObserver(scheduleSync);
     observer.observe(document.body, { childList: true, subtree: true });
-    const timer = window.setInterval(sync, 300);
     sync();
     return () => {
       observer.disconnect();
-      window.clearInterval(timer);
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, []);
 
