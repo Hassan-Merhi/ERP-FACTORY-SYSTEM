@@ -34,6 +34,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [vouchers-flow.md](vouchers-flow.md) | Voucher lifecycle |
 | [containers-flow.md](containers-flow.md) | Import shipments, PO to warehouse receipt |
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
+| [factory-container-planner.md](factory-container-planner.md) | Read-only V5 container planning preview and balancing rules |
 | [pos-flow.md](pos-flow.md) | Point of sale, including offline |
 | [financial-close-and-migrations.md](financial-close-and-migrations.md) | Period locks and production migrations |
 | [golden-coast-phase16-audit.md](golden-coast-phase16-audit.md) | Golden Coast payable/equity separation invariants and the unmerged phase branches |
