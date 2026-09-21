@@ -65,7 +65,10 @@ function scopeFromRequest(req: Request, payload: unknown): FactoryBilingualSnaps
   // The compact bale-scan response tells us exactly which two snapshot rows
   // changed. Keep this synchronous post-write work row-scoped instead of
   // replaying every order-linked snapshot target before acknowledging a scan.
-  if (/^\/customer-orders\/\d+\/bales$/.test(req.path) && responseRecord?.compactBaleScan === true) {
+  if (
+    /^\/customer-orders\/\d+\/bales$/.test(req.path) &&
+    responseRecord?.compactBaleScan === true
+  ) {
     const baleRecord =
       responseRecord.bale && typeof responseRecord.bale === "object" && !Array.isArray(responseRecord.bale)
         ? (responseRecord.bale as Record<string, unknown>)

@@ -94,7 +94,6 @@ const LEDGER_CLASSIFICATION_SQL = `
   END
 `;
 
-
 async function sendLedgerSummary(companyId: number, res: import("express").Response): Promise<void> {
   const result = await pool.query<LedgerSummaryRow>(
     `WITH ${LEDGER_ORDER_STATE_SQL}, classified AS (
