@@ -69,7 +69,8 @@ beforeAll(async () => {
   await pool.query(
     `INSERT INTO customer_proforma_lines
        (proforma_id, article_code, product_name, quantity, price_per_bale)
-     VALUES ($1, $2, $3, 2, '10.00')`,
+     VALUES ($1, $2, $3, 2, '10.00'),
+            ($1, $2, $3, 1, '10.00')`,
     [proformaId, ARTICLE_A, `${ARTICLE_A} Product`]
   );
 
@@ -117,11 +118,11 @@ describe("Factory container planner phase 2 API", () => {
     const created = await agent.post("/api/factory/v5/container-plans").send(payload);
     expect(created.status).toBe(201);
     expect(created.body.plan.name).toBe(payload.name);
-    expect(created.body.plan.totalPlanned).toBe(18);
-    expect(created.body.plan.sourceCommittedTotal).toBe(2);
+    expect(created.body.plan.totalPlanned).toBe(17);
+    expect(created.body.plan.sourceCommittedTotal).toBe(3);
     expect(created.body.plan.containers).toHaveLength(3);
     expect(created.body.plan.containers.every((container: any) => container.totalBales <= 6)).toBe(true);
-    expect(productTotal(created.body.plan, ARTICLE_A)).toBe(8);
+    expect(productTotal(created.body.plan, ARTICLE_A)).toBe(7);
     expect(productTotal(created.body.plan, ARTICLE_B)).toBe(10);
 
     const expectedRows = await pool.query(
@@ -166,7 +167,7 @@ describe("Factory container planner phase 2 API", () => {
       quantity: 1,
     });
     expect(moved.status).toBe(200);
-    expect(productTotal(moved.body.plan, ARTICLE_A)).toBe(8);
+    expect(productTotal(moved.body.plan, ARTICLE_A)).toBe(7);
     expect(productTotal(moved.body.plan, ARTICLE_B)).toBe(10);
 
     const sourceAfter = moved.body.plan.containers.find((container: any) => container.id === source.id);
@@ -201,7 +202,7 @@ describe("Factory container planner phase 2 API", () => {
       .sort((a: any[], b: any[]) => String(a[0]).localeCompare(String(b[0])));
 
     expect(lockedLinesAfter).toEqual(lockedLinesBefore);
-    expect(productTotal(rebalanced.body.plan, ARTICLE_A)).toBe(8);
+    expect(productTotal(rebalanced.body.plan, ARTICLE_A)).toBe(7);
     expect(productTotal(rebalanced.body.plan, ARTICLE_B)).toBe(10);
 
     const unlockedTotals = rebalanced.body.plan.containers
