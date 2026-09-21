@@ -131,7 +131,8 @@ describe("WebSocket invalidation traffic", () => {
 
     const factoryPredicate = invalidate.mock.calls[0]?.[0].predicate!;
     expect(factoryPredicate(queryWithKey("/api/factory/customer-orders"))).toBe(true);
-    expect(factoryPredicate(queryWithKey("/api/factory/categories"))).toBe(true);
+    expect(factoryPredicate(queryWithKey("/api/factory/categories"))).toBe(false);
+    expect(factoryPredicate(queryWithKey("/api/factory/bale-products"))).toBe(false);
 
     invalidate.mockClear();
     sockets[0].receiveInvalidate({ type: "invalidate", topics: ["reference"] });
