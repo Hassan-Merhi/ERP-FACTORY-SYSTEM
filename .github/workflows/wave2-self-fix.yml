@@ -1,0 +1,66 @@
+name: Wave 2 one-shot formatting repair
+
+on:
+  push:
+    branches:
+      - perf/wave-2-frontend-speed
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Wave 2 branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: perf/wave-2-frontend-speed
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Format Wave 2 source
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            build/viteInitialChunkAuditPlugin.ts \
+            client/src/App.tsx \
+            client/src/components/BaleProductArabicEditBridge.tsx \
+            client/src/contexts/ApplicationLanguageContext.tsx \
+            client/src/hooks/use-screen-feed.ts \
+            client/src/i18n/applicationTranslations.ar.ts \
+            client/src/i18n/applicationTranslations.fr.ts \
+            client/src/i18n/applicationTranslations.ts \
+            tests/application-language-contract.test.ts \
+            tests/wave2-frontend-speed.test.ts
+
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            build/viteInitialChunkAuditPlugin.ts \
+            client/src/App.tsx \
+            client/src/components/BaleProductArabicEditBridge.tsx \
+            client/src/contexts/ApplicationLanguageContext.tsx \
+            client/src/hooks/use-screen-feed.ts \
+            client/src/i18n/applicationTranslations.ar.ts \
+            client/src/i18n/applicationTranslations.fr.ts \
+            client/src/i18n/applicationTranslations.ts \
+            tests/application-language-contract.test.ts \
+            tests/wave2-frontend-speed.test.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+          git commit -m "style: format Wave 2 frontend speed changes"
+          git push origin HEAD:perf/wave-2-frontend-speed
