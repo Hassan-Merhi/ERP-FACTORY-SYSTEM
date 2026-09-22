@@ -11,7 +11,7 @@ let ctx: TestContext;
 function sessionCookie(response: { headers: Record<string, string | string[] | undefined> }): string | null {
   const raw = response.headers["set-cookie"];
   const cookies = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  const sid = cookies.find((cookie) => cookie.startsWith("connect.sid="));
+  const sid = cookies.find((cookie) => cookie.startsWith("erp.session="));
   return sid?.split(";", 1)[0] ?? null;
 }
 
@@ -34,7 +34,7 @@ describe("Phase 22 — authentication/session HTTP lifecycle", () => {
     });
     expect(firstLogin.status).toBe(200);
     const firstSid = sessionCookie(firstLogin);
-    expect(firstSid).toMatch(/^connect\.sid=/);
+    expect(firstSid).toMatch(/^erp\.session=/);
 
     const me = await agent.get("/api/auth/me");
     expect(me.status).toBe(200);
@@ -42,6 +42,12 @@ describe("Phase 22 — authentication/session HTTP lifecycle", () => {
 
     const logout = await agent.post("/api/auth/logout");
     expect(logout.status).toBe(200);
+    const logoutCookies = Array.isArray(logout.headers["set-cookie"])
+      ? logout.headers["set-cookie"]
+      : logout.headers["set-cookie"]
+        ? [logout.headers["set-cookie"]]
+        : [];
+    expect(logoutCookies.some((cookie) => cookie.startsWith("erp.session=;"))).toBe(true);
 
     const afterLogout = await agent.get("/api/auth/me");
     expect(afterLogout.status).toBe(401);
@@ -52,7 +58,7 @@ describe("Phase 22 — authentication/session HTTP lifecycle", () => {
     });
     expect(secondLogin.status).toBe(200);
     const secondSid = sessionCookie(secondLogin);
-    expect(secondSid).toMatch(/^connect\.sid=/);
+    expect(secondSid).toMatch(/^erp\.session=/);
     expect(secondSid).not.toBe(firstSid);
   });
 
