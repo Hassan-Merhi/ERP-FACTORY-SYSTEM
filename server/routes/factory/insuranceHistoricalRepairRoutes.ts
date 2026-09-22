@@ -60,6 +60,15 @@ export async function autoRepairHistoricalInsuranceJournalDirections(): Promise<
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [AUTO_REPAIR_LOCK]);
+    // This is a process-owned, cross-company startup repair. Voucher, entry,
+    // and ledger RLS intentionally fail closed without an explicit scope, so
+    // enable transaction-local maintenance scope for this one reviewed repair.
+    await client.query(`
+      SELECT
+        set_config('app.company_scope_maintenance', 'on', true),
+        set_config('app.current_company_id', '', true),
+        set_config('app.authorized_company_ids', '', true)
+    `);
 
     const repaired = await client.query<{ voucher_id: number }>(`
       WITH classified AS (
