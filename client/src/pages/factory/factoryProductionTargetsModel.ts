@@ -27,6 +27,9 @@ export interface ProductionRow {
   status: TrackingStatus;
   notes: string;
   active: boolean;
+  linkGroupId?: number | null;
+  linkedWorkerIds?: number[];
+  linkedWorkers?: Array<{ workerId: number; workerName: string }>;
 }
 
 export interface ProductionResponse {
@@ -81,6 +84,23 @@ export function periodFor(type: PeriodType, referenceDate: string) {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   return { start: localDateStr(start), end: localDateStr(end) };
+}
+
+export function summarizeProductionRows(sourceRows: ProductionRow[]) {
+  let target = 0;
+  let produced = 0;
+  const countedLinks = new Set<number>();
+
+  for (const row of sourceRows) {
+    if (row.linkGroupId != null) {
+      if (countedLinks.has(row.linkGroupId)) continue;
+      countedLinks.add(row.linkGroupId);
+    }
+    target += row.targetBales ?? 0;
+    produced += row.producedBales ?? 0;
+  }
+
+  return { target, produced, difference: produced - target };
 }
 
 export function differenceText(target: number | null, produced: number | null) {
