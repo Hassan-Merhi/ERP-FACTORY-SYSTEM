@@ -23,6 +23,12 @@ function parseMembers(value: unknown): ProductionBonusMemberSnapshot[] {
     .sort((a, b) => a.workerId - b.workerId);
 }
 
+interface LinkedWorkerGroupWindow {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  workerIds: number[];
+}
+
 interface SavedPlanEntry {
   planId: number;
   planEntryId: number;
@@ -106,6 +112,53 @@ async function loadSavedPlanEntries(
   }));
 }
 
+async function loadLinkedWorkerGroupsForPeriod(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  startDate: string,
+  endDate: string
+): Promise<LinkedWorkerGroupWindow[]> {
+  const result = await executor.execute(sql`
+    SELECT
+      l.effective_from::text AS "effectiveFrom",
+      l.effective_to::text AS "effectiveTo",
+      array_agg(m.worker_id ORDER BY m.worker_id) AS "workerIds"
+    FROM factory_worker_production_links l
+    JOIN factory_worker_production_link_members m
+      ON m.link_id = l.id
+     AND m.company_id = l.company_id
+    WHERE l.company_id = ${companyId}
+      AND l.effective_from <= ${endDate}::date
+      AND (l.effective_to IS NULL OR l.effective_to > ${startDate}::date)
+    GROUP BY l.id, l.effective_from, l.effective_to
+    ORDER BY l.effective_from, l.id
+  `);
+
+  return rows(result).map((row) => ({
+    effectiveFrom: String(row.effectiveFrom),
+    effectiveTo: row.effectiveTo == null ? null : String(row.effectiveTo),
+    workerIds: Array.isArray(row.workerIds)
+      ? row.workerIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : [],
+  }));
+}
+
+function activeLinkedGroupsForDate(
+  windows: LinkedWorkerGroupWindow[],
+  productionDate: string,
+  members: ProductionBonusMemberSnapshot[]
+): number[][] {
+  const memberIds = new Set(members.map((member) => member.workerId));
+  return windows
+    .filter(
+      (window) =>
+        window.effectiveFrom <= productionDate &&
+        (window.effectiveTo === null || window.effectiveTo > productionDate)
+    )
+    .map((window) => window.workerIds.filter((workerId) => memberIds.has(workerId)))
+    .filter((workerIds) => workerIds.length >= 2);
+}
+
 async function loadActualMap(
   executor: DatabaseOrTransaction,
   companyId: number,
@@ -136,9 +189,10 @@ export async function syncProductionBonusProposalsForPeriod(
   startDate: string,
   endDate: string
 ): Promise<void> {
-  const [planEntries, actualMap] = await Promise.all([
+  const [planEntries, actualMap, linkedWorkerWindows] = await Promise.all([
     loadSavedPlanEntries(executor, companyId, startDate, endDate),
     loadActualMap(executor, companyId, startDate, endDate),
+    loadLinkedWorkerGroupsForPeriod(executor, companyId, startDate, endDate),
   ]);
 
   for (const entry of planEntries) {
@@ -158,12 +212,18 @@ export async function syncProductionBonusProposalsForPeriod(
     if (existing?.hasDecision === true) continue;
 
     const actualBales = actualMap.get(`${entry.productionDate}:${entry.positionId}`) ?? 0;
+    const linkedWorkerGroups = activeLinkedGroupsForDate(
+      linkedWorkerWindows,
+      entry.productionDate,
+      entry.members
+    );
     const preview = calculateProductionBonusPreview({
       targetBales: entry.targetBales,
       actualBales,
       bonusPerExtraBale: entry.bonusPerExtraBale,
       bonusEnabled: entry.bonusEnabled,
       members: entry.members,
+      ...(linkedWorkerGroups.length > 0 ? { linkedWorkerGroups } : {}),
     });
 
     const runResult = await executor.execute(sql`
