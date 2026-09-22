@@ -49,6 +49,25 @@ describe("factory production bonus preview", () => {
     expect(result.allocations.map((row) => row.amount)).toEqual([4, 4, 4, 4]);
   });
 
+  it("splits a two-worker production bonus 50/50", () => {
+    const result = calculateProductionBonusPreview({
+      targetBales: 100,
+      actualBales: 110,
+      bonusPerExtraBale: 2,
+      bonusEnabled: true,
+      members: [
+        { workerId: 1, workerName: "Worker A" },
+        { workerId: 2, workerName: "Worker B" },
+      ],
+    });
+
+    expect(result.bonusPool).toBe(20);
+    expect(result.allocations).toEqual([
+      { workerId: 1, workerName: "Worker A", amount: 10 },
+      { workerId: 2, workerName: "Worker B", amount: 10 },
+    ]);
+  });
+
   it("uses deterministic cents and preserves the exact pool", () => {
     const result = calculateProductionBonusPreview({
       targetBales: 100,
