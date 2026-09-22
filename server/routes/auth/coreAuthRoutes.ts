@@ -8,7 +8,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSessionUserId } from "../../lib/sessionUser";
 import { logger } from "../../lib/logger";
-import { SESSION_COOKIE_NAME } from "../../startup/sessionMiddleware";
+import { SESSION_COOKIE_NAME } from "../../services/security/sessionCookiePolicy";
 import { storage } from "../../storage";
 import {
   advanceCurrentSessionAfterPasswordChange,
