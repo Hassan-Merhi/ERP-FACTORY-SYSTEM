@@ -11,6 +11,7 @@ import {
   type SavedPlannerLine,
 } from "@shared/containerPlanner";
 import { loadContainerPlannerSource, type PlannerQueryable } from "./container-planner-source";
+import { pruneOverAllocatedPlanAllocations, pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
 
 type PlannerHeaderRow = {
   id: number;
@@ -333,6 +334,11 @@ export function registerV5ContainerPlannerReconciliationRoutes(app: Express): vo
         }
       }
 
+      // Redistribution changed per-container quotas; release any Phase 4 bale
+      // assignment the new plan can no longer hold.
+      const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+
       await client.query(
         `UPDATE factory_container_plans
            SET source_stock_total = $1,
@@ -366,6 +372,8 @@ export function registerV5ContainerPlannerReconciliationRoutes(app: Express): vo
           lockedContainersPreserved: lockedContainers.length,
           addedContainers: addedContainerIds.length,
           removedContainers: removedUnlocked.length,
+          releasedBales,
+          adjustedAllocations,
           currentPlannableTotal: before.currentPlannableTotal,
         },
       });
@@ -382,6 +390,8 @@ export function registerV5ContainerPlannerReconciliationRoutes(app: Express): vo
         revision: Number(revisionResult.rows[0]?.revision ?? Number(header.revision) + 1),
         addedContainers: addedContainerIds.length,
         removedContainers: removedUnlocked.length,
+        releasedBales,
+        adjustedAllocations,
         checkedAt: new Date().toISOString(),
         reconciliation: after,
       });
