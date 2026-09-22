@@ -181,6 +181,19 @@ async function loadClosure(
   return rows[0] ?? null;
 }
 
+async function hasFinalizedProductionOnOrAfter(companyId: number, effectiveDate: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    SELECT 1
+    FROM factory_staff_tracking_period_closures
+    WHERE company_id = ${companyId}
+      AND page_type = 'production'
+      AND period_type = 'daily'
+      AND period_start >= ${effectiveDate}
+    LIMIT 1
+  `);
+  return resultRows(result).length > 0;
+}
+
 async function loadPreviousDailyCarry(
   companyId: number,
   periodStart: string
@@ -681,6 +694,11 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       ) {
         return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
       }
+      if (await hasFinalizedProductionOnOrAfter(companyId, effectiveFrom)) {
+        return res.status(409).json({
+          message: "Worker links cannot be changed from a date that already has finalized production history",
+        });
+      }
 
       const workers = await db
         .select({ id: factoryWorkers.id })
@@ -728,6 +746,11 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         const effectiveTo = String(req.body?.effectiveTo || "");
         if (!Number.isInteger(linkId) || linkId <= 0 || !ISO_DATE.test(effectiveTo)) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+        }
+        if (await hasFinalizedProductionOnOrAfter(companyId, effectiveTo)) {
+          return res.status(409).json({
+            message: "Worker links cannot be changed from a date that already has finalized production history",
+          });
         }
 
         const unlinked = await unlinkProductionWorkerLink({
