@@ -1,9 +1,9 @@
 /**
  * factoryContainersRoutes route composition.
  *
- * Registration order matches the original single-file module exactly.
- * Express resolves first-match, so reordering these calls can change which
- * handler serves a request - config/route-manifest.json pins the result.
+ * Registration order matches the original single-file module exactly for
+ * existing routes. AIS routes are appended so they cannot shadow legacy
+ * container handlers.
  */
 import type { Express } from "express";
 import { registerFactoryContainerListRoutes } from "./list";
@@ -15,6 +15,7 @@ import { registerFactoryContainerOtherChargesCurrencyAdminRoutes } from "./other
 import { registerFactoryContainerImportRoutes } from "./import-excel";
 import { registerFactoryContainerMoveSupplierRoutes } from "./move-supplier";
 import { registerFactoryContainerRawStockDelegation } from "./raw-stock";
+import { registerFactoryContainerVesselTrackingRoutes } from "./vessel-tracking";
 
 export function registerFactoryContainersRoutes(app: Express) {
   registerFactoryContainerListRoutes(app);
@@ -26,4 +27,5 @@ export function registerFactoryContainersRoutes(app: Express) {
   registerFactoryContainerImportRoutes(app);
   registerFactoryContainerMoveSupplierRoutes(app);
   registerFactoryContainerRawStockDelegation(app);
+  registerFactoryContainerVesselTrackingRoutes(app);
 }

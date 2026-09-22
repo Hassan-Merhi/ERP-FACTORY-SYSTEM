@@ -116,6 +116,13 @@ export const applicationArabicTranslations = {
   "factory.workerRemaining": "المتبقي للعمال",
   "factory.totalPayroll": "إجمالي الرواتب",
   "factory.employeeExpected": "المتوقع للموظفين",
+  "factory.stockEntry.baleLimitReached": "تم بلوغ حد البالتين",
+  "factory.stockEntry.finishBeforeAdding": "أنهِ إدخال المخزون هذا قبل إضافة بالة أخرى.",
+  "factory.stockEntry.baleLimitConfirmFirst":
+    "يمكن أن يحتوي إدخال المخزون على بالتين كحد أقصى. أكّد هذا الإدخال قبل إضافة بالة أخرى.",
+  "factory.stockEntry.baleLimit": "يمكن أن يحتوي إدخال المخزون على بالتين كحد أقصى.",
+  "factory.stockEntry.baleLimitReduceQuantity":
+    "يمكن أن يحتوي إدخال المخزون على بالتين كحد أقصى. قلّل الكمية قبل التأكيد.",
   "daybook.transactions": "المعاملات",
   "daybook.editsActivity": "التعديلات والنشاط",
   "daybook.allFactoryTransactions": "جميع معاملات المصنع في عرض واحد",
