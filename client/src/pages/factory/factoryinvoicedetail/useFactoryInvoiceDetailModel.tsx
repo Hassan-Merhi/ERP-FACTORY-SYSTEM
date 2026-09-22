@@ -14,7 +14,7 @@ import { useState, useRef } from "react";
 import type { OrderDetail } from "./types";
 
 export function useFactoryInvoiceDetailModel() {
-const { formatDisplayDate } = useDateFormat();
+  const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const { selectedCompany: _selectedCompany } = useCompany();
   const [, navigate] = useLocation();
@@ -321,7 +321,7 @@ const { formatDisplayDate } = useDateFormat();
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Reverted to Draft", description: "Invoice has been reverted. You can now edit prices." });
+      toast({ title: "Invoice reverted successfully", description: "The original workflow stage has been restored." });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       invalidateCustomerBalances(order?.customerId ?? undefined);
     },

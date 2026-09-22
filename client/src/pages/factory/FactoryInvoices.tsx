@@ -171,8 +171,8 @@ export default function FactoryInvoices() {
     },
     onSuccess: () => {
       toast({
-        title: "Reverted to Verified",
-        description: "Invoice has been reverted. You can now edit and re-finalize it.",
+        title: "Invoice reverted successfully",
+        description: "The original workflow stage has been restored.",
       });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       invalidateCustomerBalances();
