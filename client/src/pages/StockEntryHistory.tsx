@@ -20,7 +20,7 @@ import {
   Tag,
   Layers,
 } from "lucide-react";
-import ProductionPlannerDialog from "./factory/ProductionPlannerDialog";
+import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
 import { MultiSelectFilter } from "./factory/productioncomparison/components/MultiSelectFilter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,14 +171,23 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   });
 
   const planDate = fromActive && toActive && fromDate === toDate ? fromDate : null;
-  const { data: workerTargets = {} } = useQuery<Record<number, { targetBales: number; workerCount: number }>>({
-    queryKey: ["/api/factory/production-planner", planDate, "worker-targets"],
-    queryFn: () =>
-      fetch(`/api/factory/production-planner/${planDate}/worker-targets`, { credentials: "include" }).then((r) =>
-        r.json()
-      ),
+  const { data: productionTargets } = useQuery<ProductionResponse>({
+    queryKey: ["/api/factory/staff-tracking", "production", "daily", planDate, planDate],
+    queryFn: () => fetchProduction("daily", planDate!, planDate!),
     enabled: !!planDate,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
+  const workerTargets = useMemo<Record<number, { targetBales: number; workerCount: number }>>(() => {
+    const targets: Record<number, { targetBales: number; workerCount: number }> = {};
+    for (const row of productionTargets?.rows ?? []) {
+      if (row.targetBales === null || row.targetBales === undefined) continue;
+      const targetBales = Number(row.targetBales);
+      if (!Number.isFinite(targetBales)) continue;
+      targets[row.personId] = { targetBales, workerCount: 1 };
+    }
+    return targets;
+  }, [productionTargets]);
 
   const expandedGroupBaleKeys = useMemo(
     () => Array.from(expandedKeys).filter((k) => k.endsWith("-bales")),
@@ -302,7 +311,6 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ProductionPlannerDialog />
           <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
             <Button
               variant={viewMode === "condensed" ? "default" : "ghost"}
@@ -630,10 +638,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                       {wg.workerName || <span className="italic text-muted-foreground">Unassigned</span>}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {plan && target > 0 ? target : <span className="text-xs text-muted-foreground">—</span>}
+                      {plan ? target : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold">
-                      {plan && target > 0 ? (
+                      {plan ? (
                         <span
                           className={
                             diff >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
