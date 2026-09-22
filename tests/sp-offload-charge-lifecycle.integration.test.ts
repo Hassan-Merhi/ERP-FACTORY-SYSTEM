@@ -120,31 +120,15 @@ describe("SP offload charge lifecycle", () => {
       invoiceTotalUsd: baseCost,
       discountPct: 0,
       freightEstimateUsd: 0,
-      lines: [{
-        articleCode: `${TEST_PREFIX}-ITEM`,
-        description: "SP charge lifecycle item",
-        qty: 50,
-        unitRateUsd: 20,
-        stockItemId,
-      }],
+      lines: [{ articleCode: `${TEST_PREFIX}-ITEM`, description: "SP charge lifecycle item", qty: 50, unitRateUsd: 20, stockItemId }],
     });
     expect(create.status).toBe(200);
     const containerId = Number(create.body.id);
 
-    const [prepaid] = await db.insert(schema.spPrepaidCharges).values({
-      companyId,
-      containerId,
-      prepaidDate: today,
-      chargeType: "freight",
-      amountPaidUsd: "150",
-      amountUsedUsd: "0",
-      notes: "Charge lifecycle prepaid",
-    }).returning();
+    const [prepaid] = await db.insert(schema.spPrepaidCharges).values({ companyId, containerId, prepaidDate: today, chargeType: "freight", amountPaidUsd: "150", amountUsedUsd: "0", notes: "Charge lifecycle prepaid" }).returning();
 
     const offload = await agent.post("/api/sp/offload").send({
-      containerId,
-      offloadDate: today,
-      locationId,
+      containerId, offloadDate: today, locationId,
       chargeLines: [
         { chargeType: "prepaid_used", amountUsd: prepaidAmount, prepaidChargeId: String(prepaid.id), description: "Prepaid freight" },
         { chargeType: "paid_now", amountUsd: paidNowAmount, creditBankAccountId: String(bankAccountId), description: "Cash transport" },
@@ -153,20 +137,14 @@ describe("SP offload charge lifecycle", () => {
     });
     expect(offload.status).toBe(200);
 
-    const offloadRow = await pool.query<{
-      id: number; total_base_cost_usd: string; total_landed_cost_usd: string; total_final_cost_usd: string; voucher_id_stock: number;
-    }>(`SELECT id, total_base_cost_usd, total_landed_cost_usd, total_final_cost_usd, voucher_id_stock
-        FROM sp_offloads WHERE company_id = $1 AND container_id = $2 LIMIT 1`, [companyId, containerId]);
+    const offloadRow = await pool.query<{ id: number; total_base_cost_usd: string; total_landed_cost_usd: string; total_final_cost_usd: string; voucher_id_stock: number }>(`SELECT id, total_base_cost_usd, total_landed_cost_usd, total_final_cost_usd, voucher_id_stock FROM sp_offloads WHERE company_id = $1 AND container_id = $2 LIMIT 1`, [companyId, containerId]);
     expect(offloadRow.rows).toHaveLength(1);
     const posted = offloadRow.rows[0];
     expect(Number(posted.total_base_cost_usd)).toBeCloseTo(baseCost, 2);
     expect(Number(posted.total_landed_cost_usd)).toBeCloseTo(landedCharges, 2);
     expect(Number(posted.total_final_cost_usd)).toBeCloseTo(baseCost + landedCharges, 2);
 
-    const charges = await pool.query<{
-      charge_type: string; amount_usd: string; prepaid_charge_id: number | null; credit_bank_account_id: number | null; credit_ledger_account_id: number | null;
-    }>(`SELECT charge_type, amount_usd, prepaid_charge_id, credit_bank_account_id, credit_ledger_account_id
-        FROM sp_offload_charges WHERE company_id = $1 AND offload_id = $2 ORDER BY charge_type`, [companyId, posted.id]);
+    const charges = await pool.query<{ charge_type: string; amount_usd: string; prepaid_charge_id: number | null; credit_bank_account_id: number | null; credit_ledger_account_id: number | null }>(`SELECT charge_type, amount_usd, prepaid_charge_id, credit_bank_account_id, credit_ledger_account_id FROM sp_offload_charges WHERE company_id = $1 AND offload_id = $2 ORDER BY charge_type`, [companyId, posted.id]);
     expect(charges.rows).toHaveLength(3);
     expect(charges.rows.find((row) => row.charge_type === "prepaid_used")?.prepaid_charge_id).toBe(prepaid.id);
     expect(charges.rows.find((row) => row.charge_type === "paid_now")?.credit_bank_account_id).toBe(bankAccountId);
@@ -175,22 +153,52 @@ describe("SP offload charge lifecycle", () => {
     const [prepaidAfter] = await db.select().from(schema.spPrepaidCharges).where(eq(schema.spPrepaidCharges.id, prepaid.id));
     expect(Number(prepaidAfter.amountUsedUsd)).toBeCloseTo(prepaidAmount, 2);
 
-    const [inventory] = await db.select().from(schema.inventory).where(and(
-      eq(schema.inventory.companyId, companyId),
-      eq(schema.inventory.locationId, locationId),
-      eq(schema.inventory.stockItemId, stockItemId)
-    )).limit(1);
+    const [inventory] = await db.select().from(schema.inventory).where(and(eq(schema.inventory.companyId, companyId), eq(schema.inventory.locationId, locationId), eq(schema.inventory.stockItemId, stockItemId))).limit(1);
     expect(Number(inventory.quantity)).toBeCloseTo(50, 4);
     expect(Number(inventory.totalValue ?? 0)).toBeCloseTo(baseCost + landedCharges, 2);
     expect(Number(inventory.averageRate)).toBeCloseTo((baseCost + landedCharges) / 50, 4);
 
-    const totals = await pool.query<{ dr: string; cr: string }>(
-      `SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS dr,
-              COALESCE(SUM(credit_amount::numeric), 0)::text AS cr
-       FROM voucher_entries WHERE voucher_id = $1`,
-      [posted.voucher_id_stock]
-    );
+    const totals = await pool.query<{ dr: string; cr: string }>(`SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS dr, COALESCE(SUM(credit_amount::numeric), 0)::text AS cr FROM voucher_entries WHERE voucher_id = $1`, [posted.voucher_id_stock]);
     expect(Number(totals.rows[0].dr)).toBeCloseTo(baseCost + landedCharges, 2);
     expect(Number(totals.rows[0].dr)).toBeCloseTo(Number(totals.rows[0].cr), 2);
+  });
+
+  it("rolls back prepaid usage and every offload side effect when a later paid-now bank reference is invalid", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const suffix = `${TEST_PREFIX}-ROLLBACK`;
+    const create = await agent.post("/api/sp/containers").send({
+      supplierName: "Rollback Supplier", containerNumber: `${suffix}-CONT`, invoiceNumber: `${suffix}-INV`, invoiceDate: today,
+      invoiceTotalUsd: 400, discountPct: 0, freightEstimateUsd: 0,
+      lines: [{ articleCode: `${TEST_PREFIX}-ITEM`, description: "Rollback item", qty: 20, unitRateUsd: 20, stockItemId }],
+    });
+    expect(create.status).toBe(200);
+    const containerId = Number(create.body.id);
+    const [prepaid] = await db.insert(schema.spPrepaidCharges).values({ companyId, containerId, prepaidDate: today, chargeType: "freight", amountPaidUsd: "80", amountUsedUsd: "0", notes: "Rollback prepaid" }).returning();
+
+    const before = await pool.query<{ vouchers: string; inventory_qty: string }>(`SELECT (SELECT COUNT(*) FROM vouchers WHERE company_id = $1)::text AS vouchers, COALESCE((SELECT SUM(quantity::numeric) FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3), 0)::text AS inventory_qty`, [companyId, locationId, stockItemId]);
+
+    // prepaid_used is processed before paid_now in the transaction. The deliberately
+    // missing bank therefore proves that the earlier prepaid mutation is rolled back.
+    const failed = await agent.post("/api/sp/offload").send({
+      containerId, offloadDate: today, locationId,
+      chargeLines: [
+        { chargeType: "prepaid_used", amountUsd: 60, prepaidChargeId: String(prepaid.id), description: "Prepaid before failure" },
+        { chargeType: "paid_now", amountUsd: 10, creditBankAccountId: "2147483647", description: "Invalid bank forces rollback" },
+      ],
+    });
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+
+    const [prepaidAfter] = await db.select().from(schema.spPrepaidCharges).where(eq(schema.spPrepaidCharges.id, prepaid.id));
+    expect(Number(prepaidAfter.amountUsedUsd)).toBe(0);
+    expect((await pool.query(`SELECT 1 FROM sp_offloads WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
+    expect((await pool.query(`SELECT 1 FROM sp_stock_movements WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
+    expect((await pool.query(`SELECT 1 FROM sp_offload_charges WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
+
+    const after = await pool.query<{ vouchers: string; inventory_qty: string }>(`SELECT (SELECT COUNT(*) FROM vouchers WHERE company_id = $1)::text AS vouchers, COALESCE((SELECT SUM(quantity::numeric) FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3), 0)::text AS inventory_qty`, [companyId, locationId, stockItemId]);
+    expect(after.rows[0].vouchers).toBe(before.rows[0].vouchers);
+    expect(after.rows[0].inventory_qty).toBe(before.rows[0].inventory_qty);
+
+    const container = await pool.query<{ status: string }>(`SELECT status FROM sp_containers WHERE company_id = $1 AND id = $2`, [companyId, containerId]);
+    expect(container.rows[0]?.status).toBe("open");
   });
 });
