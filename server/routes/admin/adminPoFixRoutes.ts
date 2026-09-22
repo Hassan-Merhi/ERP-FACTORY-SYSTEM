@@ -313,72 +313,10 @@ export function registerAdminPoFixRoutes(app: Express) {
           if (!canonicalVoucherId || distinctEntryVouchers.size > 1) {
             repairStatus = "manual_review";
           } else if (entryRows.rows.length === 0) {
-            let reroutedExistingCredit = false;
-            if (!isSubsidiary) {
-              const rerouted = await client.query(
-                `UPDATE voucher_entries
-                    SET supplier_id = $1,
-                        ledger_account_id = NULL,
-                        debit_amount = '0',
-                        credit_amount = $2,
-                        transaction_currency = COALESCE(transaction_currency, 'USD'),
-                        transaction_debit_amount = '0',
-                        transaction_credit_amount = $2,
-                        base_debit_amount = '0',
-                        base_credit_amount = $2,
-                        historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
-                        rate_convention = COALESCE(rate_convention, 'IDENTITY')
-                  WHERE id = (
-                    SELECT id FROM voucher_entries
-                     WHERE voucher_id = $3
-                       AND supplier_id IS NULL
-                       AND credit_amount::numeric > 0
-                       AND credit_amount::numeric = $2::numeric
-                       AND narration ILIKE '%intercompany credit%'
-                     ORDER BY id LIMIT 1
-                  )`,
-                [po.supplier_id, expected.toFixed(2), canonicalVoucherId]
-              );
-              reroutedExistingCredit = rerouted.rowCount === 1;
-            }
-
-            // Adding a new credit is safe only when it closes the voucher. If
-            // the opposite leg is stale too, report it rather than creating an
-            // unbalanced accounting repair.
-            if (!reroutedExistingCredit) {
-              const totals = await client.query<{ debits: string; other_credits: string }>(
-                `SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS debits,
-                        COALESCE(SUM(CASE WHEN supplier_id = $2 THEN 0 ELSE credit_amount::numeric END), 0)::text
-                          AS other_credits
-                   FROM voucher_entries
-                  WHERE voucher_id = $1`,
-                [canonicalVoucherId, po.supplier_id]
-              );
-              const canInsert = expected.plus(totals.rows[0]?.other_credits ?? "0").eq(totals.rows[0]?.debits ?? "0");
-              if (!canInsert) {
-                repairStatus = "manual_review";
-              } else {
-                await client.query(
-                  `INSERT INTO voucher_entries
-                    (voucher_id, supplier_id, debit_amount, credit_amount,
-                     transaction_currency, transaction_debit_amount, transaction_credit_amount,
-                     base_debit_amount, base_credit_amount, historical_exchange_rate,
-                     rate_convention, narration)
-                   VALUES ($1, $2, '0', $3, 'USD', '0', $3, '0', $3, 1, 'IDENTITY', $4)`,
-                  [
-                    canonicalVoucherId,
-                    po.supplier_id,
-                    expected.toFixed(2),
-                    `PO ${po.po_number} - Supplier reconciliation`,
-                  ]
-                );
-                repairStatus = "repaired";
-                repaired += 1;
-              }
-            } else {
-              repairStatus = "repaired";
-              repaired += 1;
-            }
+            // Missing historical supplier credits are never safe to invent from
+            // the PO total alone. They may already be represented by opening
+            // balances or migrated journals outside this voucher.
+            repairStatus = "manual_review";
           } else if (distinctEntryVouchers.size === 1) {
             const totals = await client.query<{ debits: string; other_credits: string }>(
               `SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS debits,
