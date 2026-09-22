@@ -10,6 +10,8 @@ import {
   type SavedPlannerContainer,
 } from "@shared/containerPlanner";
 import { loadContainerPlannerSource, type PlannerQueryable as Queryable } from "./container-planner-source";
+import { pruneOverAllocatedPlanAllocations, pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
+import { isShipmentCommitted, type ContainerLifecycleStatus } from "@shared/containerShipment";
 
 type PlannerPlanRow = {
   id: number;
@@ -497,6 +499,11 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         [companyId, planId, toContainerId, articleCode, fromLine.product_name || articleCode, quantity]
       );
 
+      // Quantities just moved, so Phase 4 assignments above the new per-product
+      // quota are released back into unassigned stock.
+      const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+
       await client.query(
         `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
          WHERE id = $1 AND company_id = $2`,
@@ -508,11 +515,13 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
           quantity,
           fromContainerId,
           toContainerId,
+          releasedBales,
+          adjustedAllocations,
         },
       });
       const detail = await loadPlanDetail(client, companyId, planId);
       await client.query("COMMIT");
-      return res.json({ plan: detail });
+      return res.json({ plan: detail, releasedBales, adjustedAllocations });
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       logger.error("[V5] container planner move error", { error });
@@ -543,6 +552,28 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         if (!plan) {
           await client.query("ROLLBACK");
           return res.status(404).json({ message: "Container plan not found" });
+        }
+
+        // A container that has left PLANNED is physically committed (Phase 6), so
+        // it must stay locked until its shipment status is walked back.
+        const lifecycleResult = await client.query<{ lifecycle_status: string }>(
+          `SELECT lifecycle_status
+           FROM factory_container_plan_containers
+           WHERE id = $1 AND plan_id = $2 AND company_id = $3
+           FOR UPDATE`,
+          [containerId, planId, companyId]
+        );
+        const lifecycleStatus = lifecycleResult.rows[0]?.lifecycle_status;
+        if (!lifecycleStatus) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Container not found" });
+        }
+        if (!isLocked && isShipmentCommitted(lifecycleStatus as ContainerLifecycleStatus)) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            code: "CONTAINER_SHIPMENT_COMMITTED",
+            message: `This container is ${lifecycleStatus}. Move its shipment status back to PLANNED before unlocking it.`,
+          });
         }
 
         const result = await client.query(
@@ -651,6 +682,9 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         }
       }
 
+      const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+
       await client.query(
         `UPDATE factory_container_plans SET revision = revision + 1, updated_at = NOW()
          WHERE id = $1 AND company_id = $2`,
@@ -660,11 +694,13 @@ export function registerV5ContainerPlannerRoutes(app: Express): void {
         rebalance: {
           unlockedContainers: unlockedIds.length,
           lockedContainers: savedContainers.length - unlockedIds.length,
+          releasedBales,
+          adjustedAllocations,
         },
       });
       const detail = await loadPlanDetail(client, companyId, planId);
       await client.query("COMMIT");
-      return res.json({ plan: detail });
+      return res.json({ plan: detail, releasedBales, adjustedAllocations });
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       logger.error("[V5] container planner rebalance error", { error });
