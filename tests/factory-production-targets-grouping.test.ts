@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   groupProductionRows,
   summarizeProductionRows,
+  updateLinkedTargetRows,
   type ProductionRow,
 } from "../client/src/pages/factory/factoryProductionTargetsModel";
 
@@ -38,6 +39,15 @@ describe("Production Targets category grouping", () => {
   it("falls back to the worker group only when category is blank", () => {
     const groups = groupProductionRows([row(5, "Worker E", "", "Pressing workers")]);
     expect(groups[0]?.label).toBe("Pressing workers");
+  });
+
+  it("updates the shared target for every member of a linked team", () => {
+    const linkedA = { ...row(1, "Worker A", "BLOUSE"), linkGroupId: 77, linkedWorkerIds: [1, 2] };
+    const linkedB = { ...row(2, "Worker B", "BLOUSE"), linkGroupId: 77, linkedWorkerIds: [1, 2] };
+    const solo = row(3, "Worker C", "TSHIRT");
+
+    const updated = updateLinkedTargetRows([linkedA, linkedB, solo], 1, 14);
+    expect(updated.map((item) => item.targetBales)).toEqual([14, 14, 10]);
   });
 
   it("counts a linked team's shared target and production once in factory totals", () => {
