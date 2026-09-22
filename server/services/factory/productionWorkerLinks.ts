@@ -228,12 +228,23 @@ export async function unlinkProductionWorkerLink(input: {
 
     for (const workerId of workerIds) {
       const existingDefaultResult = await tx.execute(sql`
-        SELECT category
-        FROM factory_worker_production_target_defaults
-        WHERE company_id = ${input.companyId}
-          AND worker_id = ${workerId}
-          AND effective_from <= ${input.effectiveTo}::date
-        ORDER BY effective_from DESC, id DESC
+        SELECT COALESCE(
+          (
+            SELECT d.category
+            FROM factory_worker_production_target_defaults d
+            WHERE d.company_id = ${input.companyId}
+              AND d.worker_id = ${workerId}
+              AND d.effective_from <= ${input.effectiveTo}::date
+            ORDER BY d.effective_from DESC, d.id DESC
+            LIMIT 1
+          ),
+          w.position,
+          w.department,
+          ''
+        ) AS category
+        FROM factory_workers w
+        WHERE w.company_id = ${input.companyId}
+          AND w.id = ${workerId}
         LIMIT 1
       `);
       const category = String(resultRows(existingDefaultResult)[0]?.category ?? "");
