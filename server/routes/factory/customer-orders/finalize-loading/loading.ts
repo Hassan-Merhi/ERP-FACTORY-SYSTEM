@@ -273,6 +273,10 @@ export function registerOrderLoadingRoutes(app: Express) {
           .update(customerOrders)
           .set({
             status: "VERIFIED",
+            // Remember that this invoice originated in the loading workflow.
+            // The later invoice-finalization step must preserve this value so a
+            // revert returns here instead of incorrectly returning to VERIFIED.
+            previousStatus: "LOADING",
             loadingFinalizedAt: now,
             verifiedAt: now,
             updatedAt: now,

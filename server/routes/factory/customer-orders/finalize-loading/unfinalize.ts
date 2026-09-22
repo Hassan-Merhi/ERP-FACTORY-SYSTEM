@@ -94,7 +94,7 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
 
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
 
-      await db.transaction(async (tx) => {
+      const restoredTo = await db.transaction(async (tx) => {
         // Locked for the same reason the finalize path locks it: this is the
         // reversal that removes the receivable and retires the charge vouchers, and
         // it must not run twice against one invoice. The status re-read after the
@@ -106,7 +106,19 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
           .for("update");
         if (!order) throw new Error("Order not found");
-        if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted to Draft");
+        if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted");
+
+        // New finalizations always persist the authoritative workflow origin.
+        // For legacy finalized rows, loading timestamps are durable evidence
+        // that the order came through Loading; rows without that evidence were
+        // direct Draft invoices. Keep this fallback until all legacy rows have
+        // been backfilled by the migration.
+        const restoreStatus =
+          order.previousStatus === "LOADING" || order.previousStatus === "DRAFT"
+            ? order.previousStatus
+            : order.loadingStartedAt || order.loadingFinalizedAt
+              ? "LOADING"
+              : "DRAFT";
 
         // Block if any payment has been recorded against this invoice
         const payments = await tx
@@ -181,12 +193,12 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
             .where(and(eq(factoryBales.id, b.baleId), eq(factoryBales.status, "SOLD")));
         }
 
-        // Reset order to VERIFIED (skip Pending step), clear invoice number
+        // Restore the original workflow and preserve the invoice number so the
+        // order remains identifiable and visible after a refresh.
         await tx
           .update(customerOrders)
           .set({
-            status: "VERIFIED",
-            invoiceNumber: null,
+            status: restoreStatus,
             updatedAt: new Date(),
           })
           .where(eq(customerOrders.id, orderId));
@@ -212,11 +224,13 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           txDate: unfToday,
           txType: "INVOICE_REVERTED",
           referenceId: orderId,
-          description: `Invoice ${order.invoiceNumber} reverted to Draft – ${unfCustomer?.legalName || "Customer"}`,
+          description: `Invoice ${order.invoiceNumber} reverted to ${restoreStatus} – ${unfCustomer?.legalName || "Customer"}`,
         });
+
+        return restoreStatus;
       });
 
-      res.json({ message: "Invoice reverted to Draft successfully" });
+      res.json({ message: "Invoice reverted successfully", restoredTo });
     } catch (error: unknown) {
       logger.error("Error unfinalizing order:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
