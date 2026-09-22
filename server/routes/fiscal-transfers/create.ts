@@ -431,12 +431,13 @@ export function registerStockTransferCreateRoutes(app: Express) {
       const actualTotal = itemsWithRate.reduce((sum: number, item) => {
         return sum + parseFloat(item.quantity) * parseFloat(item.rate);
       }, 0);
-      if (actualTotal > 0) {
-        await db
-          .update(vouchers)
-          .set({ totalAmount: actualTotal.toFixed(2) })
-          .where(eq(vouchers.id, voucherId));
-      }
+      await db
+        .update(vouchers)
+        .set({
+          description: notes || null,
+          ...(actualTotal > 0 ? { totalAmount: actualTotal.toFixed(2) } : {}),
+        })
+        .where(eq(vouchers.id, voucherId));
 
       logger.info("[Stock Transfer] Transfer created successfully:", {
         transferId: transfer.transfer.id,
