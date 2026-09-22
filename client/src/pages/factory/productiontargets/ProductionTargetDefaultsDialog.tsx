@@ -249,7 +249,10 @@ export function ProductionTargetDefaultsDialog({
                             ...current,
                             [row.personId]: {
                               category: event.target.value,
-                              targetBales: current[row.personId]?.targetBales ?? row.defaultTargetBales ?? null,
+                              targetBales:
+                                current[row.personId]?.targetBales !== undefined
+                                  ? current[row.personId].targetBales
+                                  : (row.defaultTargetBales ?? null),
                             },
                           }))
                         }
