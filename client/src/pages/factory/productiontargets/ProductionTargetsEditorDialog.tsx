@@ -22,7 +22,11 @@ import {
 } from "@/i18n/factoryStaffTrackingTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
-import type { PeriodType, ProductionRow } from "../factoryProductionTargetsModel";
+import {
+  updateLinkedTargetRows,
+  type PeriodType,
+  type ProductionRow,
+} from "../factoryProductionTargetsModel";
 
 interface ProductionTargetsEditorDialogProps {
   open: boolean;
@@ -114,15 +118,9 @@ export function ProductionTargetsEditorDialog({
 
   const updateRow = (personId: number, patch: Partial<ProductionRow>) => {
     setDraftRows((current) => {
-      const source = current.find((row) => row.personId === personId);
-      if (!source) return current;
-
-      if (Object.prototype.hasOwnProperty.call(patch, "targetBales") && source.linkGroupId != null) {
-        return current.map((row) =>
-          row.linkGroupId === source.linkGroupId ? { ...row, targetBales: patch.targetBales ?? null } : row
-        );
+      if (Object.prototype.hasOwnProperty.call(patch, "targetBales")) {
+        return updateLinkedTargetRows(current, personId, patch.targetBales ?? null);
       }
-
       return current.map((row) => (row.personId === personId ? { ...row, ...patch } : row));
     });
   };
@@ -157,7 +155,12 @@ export function ProductionTargetsEditorDialog({
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
         effectiveFrom: periodStart,
         workerIds: [workerId, partnerId],
-        targetBales: source.targetBales ?? partner.targetBales ?? null,
+        targetBales:
+          source.defaultTargetBales ??
+          partner.defaultTargetBales ??
+          source.targetBales ??
+          partner.targetBales ??
+          null,
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
