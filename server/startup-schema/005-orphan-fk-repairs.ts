@@ -15,32 +15,106 @@ const archiveColumns = (table: string) => [
   `CREATE UNIQUE INDEX IF NOT EXISTS _orphan_archive_${table}_id_idx ON _orphan_archive_${table}(id)`,
 ];
 
+/**
+ * Copies orphan rows into their archive table.
+ *
+ * The archive table is created once with `CREATE TABLE IF NOT EXISTS ... AS
+ * TABLE <source>`, so it freezes the source's column list as it stood on the
+ * first run. Later migrations and the runtime schema bridges keep adding
+ * columns to the source, and on the next startup the archive is then narrower
+ * than the source. A positional `SELECT r.*, now(), reason` insert fails at
+ * that point with "INSERT has more expressions than target columns", which
+ * aborts the repair for every environment that has orphan rows to archive.
+ *
+ * This runs the copy dynamically instead: it first adds any column the source
+ * has gained to the archive, then inserts by explicit column name. Naming the
+ * columns is what makes the backfill safe — appended columns land at the end of
+ * the archive's column order, so positional insertion could not survive it.
+ */
+const archiveOrphans = (options: {
+  table: string;
+  alias: string;
+  from: string;
+  where: string;
+  reason: string;
+}): string => {
+  const { table, alias, from, where, reason } = options;
+  const archive = `_orphan_archive_${table}`;
+  return `DO $orphan_archive$
+DECLARE
+  missing record;
+  target_columns text;
+  source_columns text;
+BEGIN
+  IF to_regclass('public.${table}') IS NULL OR to_regclass('public.${archive}') IS NULL THEN
+    RETURN;
+  END IF;
+
+  FOR missing IN
+    SELECT source_attribute.attname AS name,
+           format_type(source_attribute.atttypid, source_attribute.atttypmod) AS type_name
+      FROM pg_attribute source_attribute
+     WHERE source_attribute.attrelid = 'public.${table}'::regclass
+       AND source_attribute.attnum > 0
+       AND NOT source_attribute.attisdropped
+       AND NOT EXISTS (
+         SELECT 1
+           FROM pg_attribute archive_attribute
+          WHERE archive_attribute.attrelid = 'public.${archive}'::regclass
+            AND archive_attribute.attnum > 0
+            AND NOT archive_attribute.attisdropped
+            AND archive_attribute.attname = source_attribute.attname
+       )
+  LOOP
+    EXECUTE format('ALTER TABLE public.${archive} ADD COLUMN %I %s', missing.name, missing.type_name);
+  END LOOP;
+
+  SELECT string_agg(quote_ident(attname), ', ' ORDER BY attnum),
+         string_agg('${alias}.' || quote_ident(attname), ', ' ORDER BY attnum)
+    INTO target_columns, source_columns
+    FROM pg_attribute
+   WHERE attrelid = 'public.${table}'::regclass
+     AND attnum > 0
+     AND NOT attisdropped;
+
+  EXECUTE 'INSERT INTO public.${archive} (' || target_columns || ', archived_at, archive_reason) '
+       || 'SELECT ' || source_columns || ', now(), ' || quote_literal('${reason}') || ' '
+       || 'FROM ${from} WHERE ${where} ON CONFLICT (id) DO NOTHING';
+END
+$orphan_archive$;`;
+};
+
 export const orphanForeignKeyRepairs: string[] = [
   ...archiveColumns("customer_order_bale_removals"),
-  `INSERT INTO _orphan_archive_customer_order_bale_removals
-   SELECT r.*, now(), 'customer order foreign-key repair'
-   FROM customer_order_bale_removals r
-   WHERE NOT EXISTS (SELECT 1 FROM customer_orders o WHERE o.id = r.order_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "customer_order_bale_removals",
+    alias: "r",
+    from: "customer_order_bale_removals r",
+    where: "NOT EXISTS (SELECT 1 FROM customer_orders o WHERE o.id = r.order_id)",
+    reason: "customer order foreign-key repair",
+  }),
   `DELETE FROM customer_order_bale_removals r
    WHERE NOT EXISTS (SELECT 1 FROM customer_orders o WHERE o.id = r.order_id)`,
 
   ...archiveColumns("supplier_container_loaded_items"),
-  `INSERT INTO _orphan_archive_supplier_container_loaded_items
-   SELECT r.*, now(), 'container foreign-key repair'
-   FROM supplier_container_loaded_items r
-   WHERE NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = r.container_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "supplier_container_loaded_items",
+    alias: "r",
+    from: "supplier_container_loaded_items r",
+    where: "NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = r.container_id)",
+    reason: "container foreign-key repair",
+  }),
   `DELETE FROM supplier_container_loaded_items r
    WHERE NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = r.container_id)`,
 
   ...archiveColumns("chat_messages"),
-  `INSERT INTO _orphan_archive_chat_messages
-   SELECT m.*, now(), 'nullable company foreign-key repair'
-   FROM chat_messages m
-   WHERE m.company_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.id = m.company_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "chat_messages",
+    alias: "m",
+    from: "chat_messages m",
+    where: "m.company_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.id = m.company_id)",
+    reason: "nullable company foreign-key repair",
+  }),
   `UPDATE chat_messages m
    SET company_id = NULL
    WHERE m.company_id IS NOT NULL
@@ -48,49 +122,57 @@ export const orphanForeignKeyRepairs: string[] = [
 
   ...archiveColumns("container_offloads"),
   ...archiveColumns("container_offload_items"),
-  `INSERT INTO _orphan_archive_container_offloads
-   SELECT o.*, now(), 'location foreign-key repair'
-   FROM container_offloads o
-   WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = o.location_id)
-   ON CONFLICT (id) DO NOTHING`,
-  `INSERT INTO _orphan_archive_container_offload_items
-   SELECT i.*, now(), 'parent offload foreign-key repair'
-   FROM container_offload_items i
-   JOIN container_offloads o ON o.id = i.offload_id
-   WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = o.location_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "container_offloads",
+    alias: "o",
+    from: "container_offloads o",
+    where: "NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = o.location_id)",
+    reason: "location foreign-key repair",
+  }),
+  archiveOrphans({
+    table: "container_offload_items",
+    alias: "i",
+    from: "container_offload_items i JOIN container_offloads o ON o.id = i.offload_id",
+    where: "NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = o.location_id)",
+    reason: "parent offload foreign-key repair",
+  }),
   `DELETE FROM container_offloads o
    WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = o.location_id)`,
 
   ...archiveColumns("import_logs"),
-  `INSERT INTO _orphan_archive_import_logs
-   SELECT i.*, now(), 'nullable container foreign-key repair'
-   FROM import_logs i
-   WHERE i.container_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = i.container_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "import_logs",
+    alias: "i",
+    from: "import_logs i",
+    where: "i.container_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = i.container_id)",
+    reason: "nullable container foreign-key repair",
+  }),
   `UPDATE import_logs i
    SET container_id = NULL
    WHERE i.container_id IS NOT NULL
      AND NOT EXISTS (SELECT 1 FROM containers c WHERE c.id = i.container_id)`,
 
   ...archiveColumns("inventory"),
-  `INSERT INTO _orphan_archive_inventory
-   SELECT i.*, now(), 'location foreign-key repair'
-   FROM inventory i
-   WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = i.location_id)
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "inventory",
+    alias: "i",
+    from: "inventory i",
+    where: "NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = i.location_id)",
+    reason: "location foreign-key repair",
+  }),
   `DELETE FROM inventory i
    WHERE NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = i.location_id)`,
 
   ...archiveColumns("stock_transfer_items"),
-  `INSERT INTO _orphan_archive_stock_transfer_items
-   SELECT i.*, now(), 'transfer/location foreign-key repair'
-   FROM stock_transfer_items i
-   WHERE NOT EXISTS (SELECT 1 FROM stock_transfer_vouchers t WHERE t.id = i.transfer_id)
-      OR (i.source_location_id IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = i.source_location_id))
-   ON CONFLICT (id) DO NOTHING`,
+  archiveOrphans({
+    table: "stock_transfer_items",
+    alias: "i",
+    from: "stock_transfer_items i",
+    where:
+      "NOT EXISTS (SELECT 1 FROM stock_transfer_vouchers t WHERE t.id = i.transfer_id) " +
+      "OR (i.source_location_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = i.source_location_id))",
+    reason: "transfer/location foreign-key repair",
+  }),
   `DELETE FROM stock_transfer_items i
    WHERE NOT EXISTS (SELECT 1 FROM stock_transfer_vouchers t WHERE t.id = i.transfer_id)
       OR (i.source_location_id IS NOT NULL

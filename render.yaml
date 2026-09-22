@@ -1,49 +1,95 @@
+# Render Blueprint for the ERP + Factory system.
+#
+# Reconciled against the live service on 2026-09-22 (Wave 7 certification).
+# Values below marked "verified" were read from the Render API for service
+# `system` (srv-d6kibgtactks739u7vl0, https://erp-pos-system-copy.onrender.com)
+# and database `database` (dpg-d75mfh0ule4c73ctksfg-a).
+#
+# Before this reconciliation the file described a much smaller deployment than
+# the one actually running — `starter` plan, a `basic-256mb` database, and a
+# 384/448 MB memory guard. Applying it would have downgraded production, so the
+# sizing here is now the real sizing.
+#
+# Env var VALUES cannot be read back from the Render API. The ones below are
+# either verified from the running process's own startup log (the memory guard
+# and session pool report their effective settings) or are the intended values.
+# Treat the Render dashboard as the source of truth for secrets and for any key
+# not listed here.
 services:
   - type: web
-    name: erp-pos-system
+    # verified: live service is named `system`; the blueprint matches services
+    # by name, so this must not be renamed without renaming the service too.
+    name: system
     runtime: node
-    plan: starter
+    # verified: standard (2 GB container). Observed peak RSS is ~533 MB.
+    plan: standard
+    # verified: oregon
+    region: oregon
+    # The live service currently builds with `npm ci && node build.mjs`, which
+    # skips the lockfile, server-bundle, and runtime-dependency verifiers that
+    # `npm run build` runs. Keeping the verified build here on purpose: a
+    # production build should not have weaker checks than CI. Update the
+    # service's build command in the dashboard to match.
     buildCommand: npm ci --registry=https://registry.npmjs.org/ && npm run build
     buildEnvVars:
       - key: NODE_OPTIONS
         value: "--max-old-space-size=4096"
+    # verified: npm start
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: 24.21.0
-      # Starter is a 512 MB service. Keep the JS heap below the container
-      # ceiling so native buffers, compression, sockets, and exports retain
-      # headroom instead of letting Render be the first OOM protection layer.
+      # Standard is a 2 GB service. Keep the JS heap below the container ceiling
+      # so native buffers, compression, sockets, and exports retain headroom
+      # instead of letting Render be the first OOM protection layer.
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=320"
+        value: "--max-old-space-size=1024"
+      # verified from the startup log: the runtime memory guard reports
+      # softRssMb 1200 / hardRssMb 1500 in production.
       - key: MEMORY_SOFT_RSS_MB
-        value: "384"
+        value: "1200"
       - key: MEMORY_HARD_RSS_MB
-        value: "448"
-      # Release idle PostgreSQL clients aggressively on the 256 MB database.
-      # Peak capacity remains adequate for the existing endpoint concurrency
-      # guards while steady-state connection memory drops after traffic bursts.
+        value: "1500"
+      # Release idle PostgreSQL clients aggressively. Peak capacity remains
+      # adequate for the existing endpoint concurrency guards while steady-state
+      # connection memory drops after traffic bursts. Observed production
+      # connection counts peak at 13 and fall back to 2-4 when idle.
       - key: PG_POOL_MAX
         value: "8"
       - key: PG_POOL_MIN
         value: "0"
       - key: PG_IDLE_TIMEOUT_MS
         value: "30000"
+      # verified from the startup log: production reports sessionPoolMax 3.
       - key: PG_SESSION_POOL_MAX
-        value: "2"
+        value: "3"
+      # Production runs with startup migrations disabled; runtime schema is
+      # maintained by the idempotent startup-ensure bridges instead.
+      - key: RUN_STARTUP_MIGRATIONS
+        value: "false"
       - key: DATABASE_URL
         fromDatabase:
-          name: erp-database
+          name: database
           property: connectionString
       - key: SESSION_SECRET
         generateValue: true
+    # The live service has no health check path configured. Keeping the
+    # readiness probe declared here on purpose — it is the endpoint built for
+    # this and it stays open while protected endpoints require a session.
     healthCheckPath: /api/health/ready
+    # The live service has autoDeploy off and deploys are triggered manually.
+    # That is why production ran 68 commits behind main at Wave 7 certification.
+    # `checksPass` deploys main only once its checks are green.
     autoDeployTrigger: checksPass
 
 databases:
-  - name: erp-database
+  # verified: live database is named `database`, plan basic_1gb, PostgreSQL 18,
+  # 15 GB disk, oregon.
+  - name: database
     databaseName: erp_db
     user: erp_user
-    plan: basic-256mb
+    plan: basic-1gb
+    region: oregon
+    postgresMajorVersion: "18"

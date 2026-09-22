@@ -3,6 +3,7 @@
   "regenerate": "UPDATE_API_SMOKE_SHAPES=1 npm run test:smoke-sweep",
   "unstable": [
     "/api/reports/net-profit-excel",
+    "/api/stats/group-net-position-excel",
     "/api/stats/net-position-excel"
   ],
   "skippedFailing": [],
@@ -53,7 +54,7 @@
     },
     "/api/admin/operational-monitoring": {
       "status": 200,
-      "shape": "{alerts:[],buildVersion:scalar,events:{byCode:[],counts:{bandwidth:scalar,error:scalar,integrity:scalar},recent:[],severityCounts:{critical:scalar,info:scalar,warning:scalar}},generatedAt:scalar,metrics:{bandwidth:{apiEndpointCount:scalar,budgets:{…},endpointCount:scalar,generatedAt:scalar,ranked:[],staticAssetCount:scalar,staticAssets:[],totalApiResponseBytes:scalar,totalStaticAssetResponseBytes:scalar,violations:[],windowMs:scalar},databasePool:{active:scalar,idle:scalar,max:scalar,total:scalar,utilizationPercent:scalar,waiting:scalar},operationalEvents:{byCode:[],counts:{…},recent:[],severityCounts:{…}},process:{memoryMb:{…},nodeEnv:scalar,startedAt:scalar,uptimeSeconds:scalar},requests:{active:scalar,averageDurationMs:scalar,clientAbort:scalar,clientAbortPercent:scalar,clientError:scalar,completed:scalar,database:{…},durationBuckets:{…},expectedClientResponse:scalar,maxDurationMs:scalar,measuredCompleted:scalar,serverError:scalar,serverErrorPercent:scalar,slow:scalar,slowPercent:scalar,slowRequestThresholdMs:scalar,slowRequestThresholdsMs:{…},streamClosed:scalar,success:scalar,total:scalar},status:scalar,timestamp:scalar},readMicrocache:{bytes:scalar,coalesced:scalar,entries:scalar,evictions:scalar,hits:scalar,invalidations:scalar,misses:scalar,revalidated:scalar,stores:scalar},status:scalar,summary:{activeRequests:scalar,databasePoolUtilizationPercent:scalar,databasePoolWaiting:scalar,heapUsedMb:scalar,recentCriticalEvents:scalar,serverErrorPercent:scalar,slowRequestPercent:scalar,uptimeSeconds:scalar},thresholds:{databasePoolWaitingWarning:scalar,heapUsedMbCritical:scalar,heapUsedMbWarning:scalar,recentCriticalEventsWarning:scalar,serverErrorPercentCritical:scalar,serverErrorPercentWarning:scalar,slowRequestPercentCritical:scalar,slowRequestPercentWarning:scalar}}"
+      "shape": "{alerts:[],buildVersion:scalar,events:{byCode:[],counts:{bandwidth:scalar,error:scalar,integrity:scalar},recent:[],severityCounts:{critical:scalar,info:scalar,warning:scalar}},generatedAt:scalar,metrics:{bandwidth:{apiEndpointCount:scalar,budgets:{…},endpointCount:scalar,generatedAt:scalar,ranked:[],staticAssetCount:scalar,staticAssets:[],totalApiResponseBytes:scalar,totalStaticAssetResponseBytes:scalar,violations:[],windowMs:scalar},databasePool:{active:scalar,idle:scalar,max:scalar,total:scalar,utilizationPercent:scalar,waiting:scalar},operationalEvents:{byCode:[],counts:{…},recent:[],severityCounts:{…}},process:{memoryMb:{…},nodeEnv:scalar,startedAt:scalar,uptimeSeconds:scalar},requests:{active:scalar,averageDurationMs:scalar,clientAbort:scalar,clientAbortPercent:scalar,clientError:scalar,completed:scalar,database:{…},durationBuckets:{…},expectedClientResponse:scalar,maxDurationMs:scalar,measuredCompleted:scalar,serverError:scalar,serverErrorPercent:scalar,slow:scalar,slowPercent:scalar,slowRequestThresholdMs:scalar,slowRequestThresholdsMs:{…},streamClosed:scalar,success:scalar,total:scalar},status:scalar,timestamp:scalar},readMicrocache:{blanketInvalidations:scalar,bytes:scalar,coalesced:scalar,entries:scalar,evictions:scalar,hits:scalar,invalidatedEntries:scalar,invalidations:scalar,misses:scalar,revalidated:scalar,stores:scalar,targetedInvalidations:scalar},status:scalar,summary:{activeRequests:scalar,databasePoolUtilizationPercent:scalar,databasePoolWaiting:scalar,heapUsedMb:scalar,recentCriticalEvents:scalar,serverErrorPercent:scalar,slowRequestPercent:scalar,uptimeSeconds:scalar},thresholds:{databasePoolWaitingWarning:scalar,heapUsedMbCritical:scalar,heapUsedMbWarning:scalar,recentCriticalEventsWarning:scalar,serverErrorPercentCritical:scalar,serverErrorPercentWarning:scalar,slowRequestPercentCritical:scalar,slowRequestPercentWarning:scalar}}"
     },
     "/api/admin/orphaned-pos-sales": {
       "status": 200,
@@ -149,7 +150,7 @@
     },
     "/api/chat/users": {
       "status": 200,
-      "shape": "[{active:scalar,hasMessages:scalar,id:scalar,isOnline:scalar,lastSeen:scalar,unreadCount:scalar,username:scalar}]"
+      "shape": "[]"
     },
     "/api/chatbot/alerts": {
       "status": 200,
@@ -248,6 +249,14 @@
       "shape": "{byAgent:{},byLocation:{},byRoute:{},byTransporter:{},containers:[],totals:{amount:scalar,count:scalar,totalItems:scalar}}"
     },
     "/api/dashboard/sales-report-all": {
+      "status": 200,
+      "shape": "[]"
+    },
+    "/api/dashboard/sales-report-all/summary": {
+      "status": 200,
+      "shape": "{companies:[{code:scalar,name:scalar}],groups:[],totals:{configuredProfit:scalar,costProfit:scalar,itemCount:scalar,totalConfiguredCost:scalar,totalCost:scalar,totalQty:scalar,totalSales:scalar}}"
+    },
+    "/api/dashboard/sales-report-comparison": {
       "status": 200,
       "shape": "[]"
     },
@@ -735,6 +744,10 @@
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
     },
+    "/api/factory/staff-tracking/production-target-defaults": {
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
+    },
     "/api/factory/status-builder/log": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
@@ -1105,7 +1118,7 @@
     },
     "/api/notification-rules": {
       "status": 200,
-      "shape": "[{createdAt:scalar,eventType:scalar,id:scalar,isEnabled:scalar,recipientUserId:scalar,updatedAt:scalar}]"
+      "shape": "[]"
     },
     "/api/notification-users": {
       "status": 200,
@@ -1130,6 +1143,10 @@
     "/api/orphaned-records": {
       "status": 200,
       "shape": "{orphanedVouchers:[],unbalancedVouchers:[]}"
+    },
+    "/api/payroll/bonus-locations": {
+      "status": 200,
+      "shape": "{locations:[{companyId:scalar,companyName:scalar,hasSales:scalar,id:scalar,name:scalar}]}"
     },
     "/api/payroll/employees-with-balances": {
       "status": 200,
@@ -1175,6 +1192,14 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/pos/item-replacements/candidates": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
+    "/api/pos/item-replacements/last-sold-price": {
+      "status": 400,
+      "shape": "{message:scalar}"
+    },
     "/api/pos/last-sold-prices": {
       "status": 400,
       "shape": "{message:scalar}"
@@ -1186,6 +1211,18 @@
     "/api/pos/price-list-by-masters": {
       "status": 200,
       "shape": "{items:[{baseSellingPrice:scalar,code:scalar,costPrice:scalar,masterPrices:{…},name:scalar,offloadingCost:scalar,stockGroupName:scalar,stockItemId:scalar}],masters:[]}"
+    },
+    "/api/pos/retail/items": {
+      "status": 409,
+      "shape": "{message:scalar}"
+    },
+    "/api/pos/retail/movements": {
+      "status": 409,
+      "shape": "{message:scalar}"
+    },
+    "/api/pos/retail/sales": {
+      "status": 409,
+      "shape": "{message:scalar}"
     },
     "/api/pos/shifts/current": {
       "status": 400,
@@ -1319,6 +1356,34 @@
       "status": 200,
       "shape": "{filters:{endDate:scalar,locationId:scalar,startDate:scalar,stockGroupId:scalar},items:[{locations:[…],stockItemCode:scalar,stockItemId:scalar,stockItemName:scalar,totalQuantity:scalar,totalValue:scalar}],summary:{grandTotalQuantity:scalar,grandTotalValue:scalar,totalItems:scalar}}"
     },
+    "/api/retail/brands": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/catalog-facets": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/products": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/products-page": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/reporting/audit": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/reporting/dashboard": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/retail/reporting/readiness": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/salary-advance-deductions": {
       "status": 200,
       "shape": "[]"
@@ -1331,15 +1396,19 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/sales-report/summary": {
+      "status": 200,
+      "shape": "{companies:[],groups:[],totals:{configuredProfit:scalar,costProfit:scalar,itemCount:scalar,totalConfiguredCost:scalar,totalCost:scalar,totalQty:scalar,totalSales:scalar}}"
+    },
+    "/api/screen-feed/admin/audit-queue-health": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
     "/api/screen-feed/admin/rollout": {
       "status": 403,
       "shape": "{message:scalar}"
     },
     "/api/screen-feed/admin/runtime": {
-      "status": 403,
-      "shape": "{message:scalar}"
-    },
-    "/api/screen-feed/admin/audit-queue-health": {
       "status": 403,
       "shape": "{message:scalar}"
     },
@@ -1396,6 +1465,10 @@
       "shape": "{message:scalar}"
     },
     "/api/sp/containers": {
+      "status": 403,
+      "shape": "{message:scalar}"
+    },
+    "/api/sp/golden-coast/equity-sales-cash-settlement/readiness": {
       "status": 403,
       "shape": "{message:scalar}"
     },
@@ -1515,6 +1588,10 @@
       "status": 200,
       "shape": "[]"
     },
+    "/api/stats/group-net-position": {
+      "status": 200,
+      "shape": "{asOfDate:scalar,companies:[{companyCode:scalar,companyId:scalar,companyName:scalar,companyType:scalar,forUsLines:[…],forUsTotal:scalar,netAdjustment:scalar,netPosition:scalar,netPositionLabel:scalar,onUsLines:[],onUsTotal:scalar,sideNetPosition:scalar}],companyCount:scalar,excludedCompanyTypes:[scalar],intercompany:{additionalElimination:scalar,mode:scalar,note:scalar},totals:{forUsTotal:scalar,netAdjustments:scalar,netPosition:scalar,onUsTotal:scalar,sideNetPosition:scalar}}"
+    },
     "/api/stats/import-cycle-balance": {
       "status": 200,
       "shape": "{components:{apTransactionBalance:scalar,assetBalance:scalar,bankBalance:scalar,cashBalance:scalar,cogsBalance:scalar,consumptionBalance:scalar,directExpenseBalance:scalar,dutyAgentBalance:scalar,equityTransactionBalance:scalar,generalExpenseBalance:scalar,governmentTaxesBalance:scalar,incomeBalance:scalar,indirectExpenseBalance:scalar,liabilityBalance:scalar,loansBalance:scalar,openingBalanceEquity:scalar,openingStockValue:scalar,payrollExpenseBalance:scalar,payrollLiabilitiesBalance:scalar,productionBalance:scalar,profitBalance:scalar,salaryAdvancesBalance:scalar,stockOnFloorValue:scalar,stockOtwValue:scalar,supplierBalance:scalar,transporterAgentBalance:scalar},netImportCycleBalance:scalar,precisionTrace:{adjustedBalance:scalar,calculation:{assetTotal:{…},expenseTotal:{…},liabilityTotal:{…}},discrepancyExplanation:scalar,finalRoundedBalance:scalar,formula:scalar,rawNetBalance:scalar,storedEquityAdjustment:scalar}}"
@@ -1622,6 +1699,10 @@
     "/api/system/parent-company": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"
+    },
+    "/api/tracking-defaults/suppliers": {
+      "status": 200,
+      "shape": "{agentOptions:[],locations:[{code:scalar,id:scalar,name:scalar}],suppliers:[]}"
     },
     "/api/transporter-statement/transporters": {
       "status": 200,

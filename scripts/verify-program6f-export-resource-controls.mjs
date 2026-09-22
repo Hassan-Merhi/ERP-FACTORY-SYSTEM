@@ -46,17 +46,23 @@ assert(
   "Request-triggered memory sampling must stay limited to API traffic."
 );
 
+// Reconciled with the live service during Wave 7 certification: it runs on the
+// `standard` plan (2 GB container), not the 512 MB Starter these limits were
+// originally written for, and its runtime memory guard reports softRssMb 1200 /
+// hardRssMb 1500. The intent is unchanged — cap the JS heap below the container
+// ceiling, start shedding pressure before the container OOMs — only the ceiling
+// these are measured against moved.
 assert(
-  hasRenderEnv("NODE_OPTIONS", "--max-old-space-size=320"),
-  "Render runtime must cap the Node old-space heap for the 512 MB Starter service."
+  hasRenderEnv("NODE_OPTIONS", "--max-old-space-size=1024"),
+  "Render runtime must cap the Node old-space heap below the 2 GB standard container."
 );
 assert(
-  hasRenderEnv("MEMORY_SOFT_RSS_MB", "384"),
-  "Render memory soft pressure must start below the Starter memory ceiling."
+  hasRenderEnv("MEMORY_SOFT_RSS_MB", "1200"),
+  "Render memory soft pressure must start below the standard memory ceiling."
 );
 assert(
-  hasRenderEnv("MEMORY_HARD_RSS_MB", "448"),
-  "Render memory hard pressure must start before the Starter OOM ceiling."
+  hasRenderEnv("MEMORY_HARD_RSS_MB", "1500"),
+  "Render memory hard pressure must start before the standard OOM ceiling."
 );
 assert(hasRenderEnv("PG_POOL_MAX", "8"), "Render main database pool must keep its Phase 1 peak connection budget.");
 assert(hasRenderEnv("PG_POOL_MIN", "0"), "Render main database pool must not pin idle connections open.");
@@ -65,8 +71,8 @@ assert(
   "Render main database pool must release idle clients after 30 seconds."
 );
 assert(
-  hasRenderEnv("PG_SESSION_POOL_MAX", "2"),
-  "Render session database pool must keep its Phase 1 connection budget."
+  hasRenderEnv("PG_SESSION_POOL_MAX", "3"),
+  "Render session database pool must keep the connection budget production reports."
 );
 
 assert(puppeteer.includes("PUPPETEER_MAX_CONCURRENT"), "Puppeteer concurrency must be deployment-configurable and bounded.");
