@@ -112,6 +112,18 @@ export function ProductionTargetsEditorDialog({
     setDraftRows((current) => current.map((row) => (row.personId === personId ? { ...row, ...patch } : row)));
   };
 
+  const categoryOverrideState = (row: ProductionRow) => {
+    const original = originalById.get(row.personId);
+    if (periodType !== "daily" || !original) return row.categoryOverridden === true;
+
+    const categoryChanged = row.category.trim() !== original.category.trim();
+    if (!categoryChanged) return original.categoryOverridden === true;
+
+    // Returning to the repeating Daily Default removes the day-specific
+    // category override so future default changes can flow through.
+    return row.category.trim() !== (original.defaultCategory ?? "").trim();
+  };
+
   const targetOverrideState = (row: ProductionRow) => {
     const original = originalById.get(row.personId);
     if (periodType !== "daily" || !original) return row.targetBalesOverridden === true;
@@ -137,6 +149,7 @@ export function ProductionTargetsEditorDialog({
           personId: row.personId,
           groupName: row.groupName || "",
           category: row.category.trim(),
+          categoryOverridden: categoryOverrideState(row),
           targetBales: row.targetBales,
           targetBalesOverridden: targetOverrideState(row),
           producedBales: null,
@@ -160,6 +173,7 @@ export function ProductionTargetsEditorDialog({
                 rows: draftRows.map((row) => ({
                   ...row,
                   category: row.category.trim(),
+                  categoryOverridden: categoryOverrideState(row),
                   targetBalesOverridden: targetOverrideState(row),
                 })),
               }
