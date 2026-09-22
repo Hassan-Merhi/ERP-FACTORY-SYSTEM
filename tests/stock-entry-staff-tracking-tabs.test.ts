@@ -56,6 +56,7 @@ describe("Stock Entry staff tracking tabs", () => {
     );
     const dayEditor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const targetDefaultsService = src("server/services/factory/productionTargetDefaults.ts");
     const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
     expect(production).toContain("button-edit-production-default-targets");
@@ -71,7 +72,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(dayEditor).toContain("targetBalesOverridden");
     expect(defaultsEditor).toContain('queryKey: ["/api/factory/staff-tracking/production-target-defaults"]');
     expect(route).toContain("factory_worker_production_target_defaults");
-    expect(route).toContain("effective_from <=");
+    expect(targetDefaultsService).toContain("effective_from <=");
+    expect(targetDefaultsService).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain('category_overridden AS "categoryOverridden"');
     expect(route).toContain('target_overridden AS "targetBalesOverridden"');
     expect(route).toContain("defaultCategory");
@@ -83,6 +85,40 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(startup).toContain("category_overridden boolean NOT NULL DEFAULT true");
     expect(startup).toContain("ALTER COLUMN category_overridden SET DEFAULT false");
     expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
+  });
+
+  it("supports effective-dated linked production workers with one shared target", () => {
+    const editor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
+    const defaultsEditor = src("client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx");
+    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
+    const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const linkRoute = src("server/routes/factory/factoryProductionWorkerLinkRoutes.ts");
+    const linkService = src("server/services/factory/productionWorkerLinks.ts");
+    const startup = src("server/startup/factoryStaffTrackingSchema.ts");
+
+    expect(editor).toContain("button-link-worker-");
+    expect(editor).toContain("button-unlink-worker-");
+    expect(editor).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(editor).toContain("linkGroupId");
+    expect(defaultsEditor).toContain("linkGroupId");
+    expect(production).toContain('tr("linkedWith")');
+    expect(model).toContain("summarizeProductionRows");
+    expect(route).toContain("loadActiveProductionWorkerLinks");
+    expect(route).toContain("saveProductionLinkTargetDefault");
+    expect(linkRoute).toContain("unlinkProductionWorkerLink");
+    expect(linkRoute).toContain("hasFinalizedProductionOnOrAfter");
+    expect(linkRoute).toContain("finalized production history");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
+    expect(startup).toContain("factory_worker_production_links");
+    expect(startup).toContain("factory_worker_production_link_members");
+    expect(startup).toContain("factory_worker_production_link_target_defaults");
+    expect(linkService).toContain("w.position");
+    expect(linkService).toContain("w.department");
+    expect(linkService).toContain("pg_advisory_xact_lock");
+    expect(linkService).toContain("nextEffectiveFrom");
+
   });
 
   it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { Link2, Loader2, Search, SlidersHorizontal, Unlink2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,12 +55,16 @@ export function ProductionTargetsEditorDialog({
   const [draftRows, setDraftRows] = useState<ProductionRow[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("__all__");
+  const [linkingWorkerId, setLinkingWorkerId] = useState<number | null>(null);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setDraftRows(rows.map((row) => ({ ...row })));
     setSearch("");
     setCategoryFilter("__all__");
+    setLinkingWorkerId(null);
+    setSelectedPartnerId("");
   }, [open, rows]);
 
   const originalById = useMemo(() => new Map(rows.map((row) => [row.personId, row])), [rows]);
@@ -109,7 +113,18 @@ export function ProductionTargetsEditorDialog({
   }, [draftRows, search, categoryFilter]);
 
   const updateRow = (personId: number, patch: Partial<ProductionRow>) => {
-    setDraftRows((current) => current.map((row) => (row.personId === personId ? { ...row, ...patch } : row)));
+    setDraftRows((current) => {
+      const source = current.find((row) => row.personId === personId);
+      if (!source) return current;
+
+      if (Object.prototype.hasOwnProperty.call(patch, "targetBales") && source.linkGroupId != null) {
+        return current.map((row) =>
+          row.linkGroupId === source.linkGroupId ? { ...row, targetBales: patch.targetBales ?? null } : row
+        );
+      }
+
+      return current.map((row) => (row.personId === personId ? { ...row, ...patch } : row));
+    });
   };
 
   const categoryOverrideState = (row: ProductionRow) => {
@@ -135,6 +150,69 @@ export function ProductionTargetsEditorDialog({
     // day-specific override so later Daily Default changes can flow through.
     return (row.targetBales ?? null) !== (original.defaultTargetBales ?? null);
   };
+
+  const refreshLinkedProduction = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ["/api/factory/staff-tracking"],
+      refetchType: "active",
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["/api/factory/staff-tracking/production-target-defaults"],
+      refetchType: "active",
+    });
+  };
+
+  const linkMutation = useMutation({
+    mutationFn: async ({ workerId, partnerId }: { workerId: number; partnerId: number }) => {
+      const source = draftRows.find((row) => row.personId === workerId);
+      const partner = draftRows.find((row) => row.personId === partnerId);
+      if (!source || !partner) throw new Error(tr("workerLinkFailed"));
+
+      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
+        effectiveFrom: periodStart,
+        workerIds: [workerId, partnerId],
+        targetBales: source.targetBales ?? partner.targetBales ?? null,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || tr("workerLinkFailed"));
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      setLinkingWorkerId(null);
+      setSelectedPartnerId("");
+      refreshLinkedProduction();
+      toast({ title: tr("workerLinkSaved") });
+    },
+    onError: (error: Error) => {
+      toast({ title: tr("workerLinkFailed"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (linkGroupId: number) => {
+      const response = await factoryApiRequest(
+        "POST",
+        `/api/factory/staff-tracking/production-worker-links/${linkGroupId}/unlink`,
+        { effectiveTo: periodStart }
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || tr("workerLinkFailed"));
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      setLinkingWorkerId(null);
+      setSelectedPartnerId("");
+      refreshLinkedProduction();
+      toast({ title: tr("workerUnlinked") });
+    },
+    onError: (error: Error) => {
+      toast({ title: tr("workerLinkFailed"), description: error.message, variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -191,8 +269,11 @@ export function ProductionTargetsEditorDialog({
     },
   });
 
+  const busy = saveMutation.isPending || linkMutation.isPending || unlinkMutation.isPending;
+  const canManageLinks = periodType === "daily" && !finalized && changedCount === 0;
+
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !saveMutation.isPending && onOpenChange(nextOpen)}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !busy && onOpenChange(nextOpen)}>
       <DialogContent
         className="flex h-[88vh] w-[calc(100vw-1rem)] max-w-[1180px] flex-col gap-0 overflow-hidden p-0"
         data-testid="dialog-production-targets-editor"
@@ -257,7 +338,7 @@ export function ProductionTargetsEditorDialog({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead className="min-w-[230px]">{tr("person")}</TableHead>
+                <TableHead className="min-w-[300px]">{tr("person")}</TableHead>
                 <TableHead className="min-w-[220px]">{tr("category")}</TableHead>
                 <TableHead className="w-[130px] text-right">{tr("target")}</TableHead>
                 <TableHead className="w-[120px] text-right">{tr("produced")}</TableHead>
@@ -272,7 +353,18 @@ export function ProductionTargetsEditorDialog({
                   </TableCell>
                 </TableRow>
               ) : (
-                visibleRows.map((row) => (
+                visibleRows.map((row) => {
+                  const linkedPartners = (row.linkedWorkers ?? []).filter(
+                    (member) => member.workerId !== row.personId
+                  );
+                  const partnerOptions = draftRows.filter(
+                    (candidate) =>
+                      candidate.personId !== row.personId &&
+                      candidate.active &&
+                      candidate.linkGroupId == null
+                  );
+
+                  return (
                   <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
                     <TableCell>
                       <div className="font-medium" dir="auto">
@@ -283,11 +375,99 @@ export function ProductionTargetsEditorDialog({
                           {tr("inactive")}
                         </Badge>
                       )}
+
+                      {row.linkGroupId != null ? (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
+                            <Link2 className="h-3 w-3" />
+                            <span dir="auto">
+                              {tr("linkedWith")}: {linkedPartners.map((member) => member.workerName).join(", ")}
+                            </span>
+                          </Badge>
+                          {periodType === "daily" && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              disabled={!canManageLinks || busy}
+                              onClick={() => unlinkMutation.mutate(row.linkGroupId!)}
+                              data-testid={`button-unlink-worker-${row.personId}`}
+                            >
+                              <Unlink2 className="mr-1 h-3 w-3" />
+                              {tr("unlink")}
+                            </Button>
+                          )}
+                        </div>
+                      ) : linkingWorkerId === row.personId ? (
+                        <div className="mt-1.5 flex max-w-[290px] items-center gap-1.5">
+                          <Select value={selectedPartnerId} onValueChange={setSelectedPartnerId}>
+                            <SelectTrigger
+                              className="h-7 min-w-[150px] text-xs"
+                              data-testid={`select-link-partner-${row.personId}`}
+                            >
+                              <SelectValue placeholder={tr("chooseWorker")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {partnerOptions.map((candidate) => (
+                                <SelectItem key={candidate.personId} value={String(candidate.personId)}>
+                                  <span dir="auto">{candidate.name}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={!selectedPartnerId || busy}
+                            onClick={() =>
+                              linkMutation.mutate({
+                                workerId: row.personId,
+                                partnerId: Number(selectedPartnerId),
+                              })
+                            }
+                          >
+                            {linkMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : tr("link")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={busy}
+                            onClick={() => {
+                              setLinkingWorkerId(null);
+                              setSelectedPartnerId("");
+                            }}
+                          >
+                            {tr("cancel")}
+                          </Button>
+                        </div>
+                      ) : (
+                        periodType === "daily" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-1 h-6 px-2 text-xs text-muted-foreground"
+                            disabled={!canManageLinks || busy || partnerOptions.length === 0}
+                            onClick={() => {
+                              setLinkingWorkerId(row.personId);
+                              setSelectedPartnerId("");
+                            }}
+                            data-testid={`button-link-worker-${row.personId}`}
+                          >
+                            <Link2 className="mr-1 h-3 w-3" />
+                            {tr("linkWorker")}
+                          </Button>
+                        )
+                      )}
                     </TableCell>
                     <TableCell>
                       <Input
                         value={row.category}
-                        disabled={finalized || saveMutation.isPending}
+                        disabled={finalized || busy}
                         onChange={(event) => updateRow(row.personId, { category: event.target.value })}
                         placeholder={tr("categoryStation")}
                         list="production-editor-category-options"
@@ -300,7 +480,7 @@ export function ProductionTargetsEditorDialog({
                         min="0"
                         step="1"
                         value={row.targetBales ?? ""}
-                        disabled={finalized || saveMutation.isPending}
+                        disabled={finalized || busy}
                         onChange={(event) =>
                           updateRow(row.personId, { targetBales: targetValue(event.target.value) })
                         }
@@ -315,7 +495,8 @@ export function ProductionTargetsEditorDialog({
                       <Badge variant="outline">{tr(row.status === "Absent" ? "absent" : row.status === "New" ? "new" : "present")}</Badge>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -328,14 +509,14 @@ export function ProductionTargetsEditorDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={saveMutation.isPending}
+            disabled={busy}
             data-testid="button-cancel-production-editor"
           >
             {tr("cancel")}
           </Button>
           <Button
             onClick={() => saveMutation.mutate()}
-            disabled={finalized || changedCount === 0 || saveMutation.isPending || draftRows.length === 0}
+            disabled={finalized || changedCount === 0 || busy || draftRows.length === 0}
             data-testid="button-save-production-editor"
           >
             {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

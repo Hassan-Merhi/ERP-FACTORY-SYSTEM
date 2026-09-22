@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groupProductionRows,
+  summarizeProductionRows,
   type ProductionRow,
 } from "../client/src/pages/factory/factoryProductionTargetsModel";
 
@@ -37,5 +38,29 @@ describe("Production Targets category grouping", () => {
   it("falls back to the worker group only when category is blank", () => {
     const groups = groupProductionRows([row(5, "Worker E", "", "Pressing workers")]);
     expect(groups[0]?.label).toBe("Pressing workers");
+  });
+
+  it("counts a linked team's shared target and production once in factory totals", () => {
+    const linkedA = {
+      ...row(1, "Worker A", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 12,
+    };
+    const linkedB = {
+      ...row(2, "Worker B", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 12,
+    };
+    const solo = { ...row(3, "Worker C", "TSHIRT"), targetBales: 6, producedBales: 5 };
+
+    expect(summarizeProductionRows([linkedA, linkedB, solo])).toEqual({
+      target: 16,
+      produced: 17,
+      difference: 1,
+    });
   });
 });

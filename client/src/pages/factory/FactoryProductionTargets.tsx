@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
+  Link2,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -37,6 +38,7 @@ import {
   localDateStr,
   periodFor,
   statusTranslationKey,
+  summarizeProductionRows,
   waitForReportPaint,
   type PeriodType,
   type ProductionGroup,
@@ -275,11 +277,7 @@ export default function FactoryProductionTargets() {
 
   const productionReportGroups = useMemo(() => groupProductionRows(rows), [rows]);
 
-  const totals = useMemo(() => {
-    const target = rows.reduce((sum, row) => sum + (row.targetBales ?? 0), 0);
-    const produced = rows.reduce((sum, row) => sum + (row.producedBales ?? 0), 0);
-    return { target, produced, difference: produced - target };
-  }, [rows]);
+  const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
 
   const peopleBreakdown = useMemo(() => {
     const absent = rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length;
@@ -493,6 +491,18 @@ export default function FactoryProductionTargets() {
                           <div className="text-base font-semibold leading-6" dir="auto">
                             {row.name}
                           </div>
+                          {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" dir="auto">
+                              <Link2 className="h-3 w-3 shrink-0" />
+                              <span>
+                                {tr("linkedWith")}:{" "}
+                                {(row.linkedWorkers ?? [])
+                                  .filter((member) => member.workerId !== row.personId)
+                                  .map((member) => member.workerName)
+                                  .join(", ")}
+                              </span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-base font-semibold">
                           {row.category || "—"}
@@ -659,7 +669,16 @@ export default function FactoryProductionTargets() {
                         {row.code || "—"}
                       </td>
                       <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>
-                        {row.name}
+                        <div>{row.name}</div>
+                        {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
+                          <div style={{ marginTop: "4px", color: "#a1a1aa", fontSize: "12px", fontWeight: 400 }}>
+                            {tr("linkedWith")}:{" "}
+                            {(row.linkedWorkers ?? [])
+                              .filter((member) => member.workerId !== row.personId)
+                              .map((member) => member.workerName)
+                              .join(", ")}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
                         {row.groupName || "—"}

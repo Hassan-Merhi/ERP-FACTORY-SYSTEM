@@ -7,6 +7,15 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
 import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } from "@shared/schema";
+import {
+  indexProductionWorkerLinks,
+  loadActiveProductionWorkerLinks,
+  saveProductionLinkTargetDefault,
+} from "../../services/factory/productionWorkerLinks";
+import {
+  loadProductionTargetDefaults,
+  type ProductionTargetDefault,
+} from "../../services/factory/productionTargetDefaults";
 
 type TrackingPage = "production" | "attendance";
 type PeriodType = "daily" | "weekly" | "monthly";
@@ -37,17 +46,6 @@ type NormalizedTrackingRow = {
   targetBalesOverridden: boolean;
   producedBales: number | null;
   status: TrackingStatus;
-};
-
-type ProductionTargetDefaultRow = {
-  workerId: number | string;
-  category: string | null;
-  targetBales: string | number | null;
-};
-
-type ProductionTargetDefault = {
-  category: string | null;
-  targetBales: number | null;
 };
 
 const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
@@ -183,33 +181,6 @@ async function loadPreviousDailyCarry(
   return closure ? { date: previousDate, endedAt: closure.endedAt } : null;
 }
 
-async function loadProductionTargetDefaults(
-  companyId: number,
-  asOf: string
-): Promise<Map<number, ProductionTargetDefault>> {
-  const result = await db.execute(sql`
-    SELECT DISTINCT ON (worker_id)
-      worker_id AS "workerId",
-      category,
-      target_bales AS "targetBales"
-    FROM factory_worker_production_target_defaults
-    WHERE company_id = ${companyId}
-      AND effective_from <= ${asOf}
-    ORDER BY worker_id, effective_from DESC, id DESC
-  `);
-  const rows = resultRows(result) as ProductionTargetDefaultRow[];
-  const defaults = new Map<number, ProductionTargetDefault>();
-
-  for (const row of rows) {
-    defaults.set(Number(row.workerId), {
-      category: row.category,
-      targetBales: row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales),
-    });
-  }
-
-  return defaults;
-}
-
 async function loadProducedByWorker(
   companyId: number,
   periodStart: string,
@@ -308,13 +279,22 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         .orderBy(factoryWorkers.fullName);
 
       const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const activeProductionLinks =
+        query.page === "production" && query.periodType === "daily"
+          ? await loadActiveProductionWorkerLinks(companyId, query.periodStart)
+          : [];
+      const productionLinkByWorker = indexProductionWorkerLinks(activeProductionLinks);
       const includedWorkers = workers.filter((person) => {
         const savedForPeriod = savedMap.has(`worker:${person.id}`);
         if (query.page === "production") {
           if (finalized) return savedForPeriod;
           return (
             workerGroupNames.has(person.id) &&
-            (savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd)))
+            (
+              savedForPeriod ||
+              productionLinkByWorker.has(person.id) ||
+              (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd))
+            )
           );
         }
 
@@ -362,6 +342,21 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
           : new Map<number, ProductionTargetDefault>();
 
+      const linkedDailyOverrides = new Map<number, number | null>();
+      if (query.page === "production" && query.periodType === "daily") {
+        for (const link of activeProductionLinks) {
+          const override = link.members
+            .map((member) => savedMap.get(`worker:${member.workerId}`))
+            .find((row) => row?.targetBalesOverridden === true);
+          if (override) {
+            linkedDailyOverrides.set(
+              link.id,
+              override.targetBales === null || override.targetBales === undefined ? null : Number(override.targetBales)
+            );
+          }
+        }
+      }
+
       const workerRows = includedWorkers.map((worker) => {
         const savedRow = savedMap.get(`worker:${worker.id}`);
         const attendanceStatus = workerAttendance.get(worker.id);
@@ -398,18 +393,30 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           query.page === "production" && query.periodType === "daily" && !finalized
             ? (productionDefault?.targetBales ?? null)
             : null;
+        const productionLink = productionLinkByWorker.get(worker.id);
+        const linkedOverrideExists = productionLink ? linkedDailyOverrides.has(productionLink.id) : false;
+        const linkedOverrideTarget = productionLink ? (linkedDailyOverrides.get(productionLink.id) ?? null) : null;
         const targetBalesOverridden =
           query.page === "production" &&
           query.periodType === "daily" &&
           !finalized &&
-          savedRow?.targetBalesOverridden === true;
+          (linkedOverrideExists || savedRow?.targetBalesOverridden === true);
         const targetBales = finalized
           ? savedTargetBales
           : query.page === "production" && query.periodType === "daily"
-            ? targetBalesOverridden
-              ? savedTargetBales
-              : defaultTargetBales
+            ? linkedOverrideExists
+              ? linkedOverrideTarget
+              : targetBalesOverridden
+                ? savedTargetBales
+                : defaultTargetBales
             : savedTargetBales;
+        const linkedProducedBales =
+          productionLink && query.page === "production" && !finalized
+            ? productionLink.members.reduce(
+                (sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0),
+                0
+              )
+            : null;
 
         return {
           personType: "worker" as const,
@@ -427,13 +434,16 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             query.page === "production"
               ? finalized
                 ? Number(savedRow?.producedBales ?? 0)
-                : (producedByWorker.get(worker.id) ?? 0)
+                : linkedProducedBales ?? (producedByWorker.get(worker.id) ?? 0)
               : savedRow?.producedBales === null || savedRow?.producedBales === undefined
                 ? null
                 : Number(savedRow.producedBales),
           status: query.page === "production" && !finalized ? defaultStatus : (savedRow?.status ?? defaultStatus),
           notes: savedRow?.notes ?? "",
           active: worker.active,
+          linkGroupId: productionLink?.id ?? null,
+          linkedWorkerIds: productionLink?.members.map((member) => member.workerId) ?? [],
+          linkedWorkers: productionLink?.members ?? [],
         };
       });
 
@@ -531,6 +541,29 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         normalized.push({ workerId, category, targetBales });
       }
 
+      const activeLinks = await loadActiveProductionWorkerLinks(companyId, effectiveFrom);
+      const linkByWorker = indexProductionWorkerLinks(activeLinks);
+      const linkTargets = new Map<number, number | null>();
+
+      for (const row of normalized) {
+        const link = linkByWorker.get(row.workerId);
+        if (!link) continue;
+        if (linkTargets.has(link.id) && linkTargets.get(link.id) !== row.targetBales) {
+          return res.status(400).json({ message: "Linked workers must share one target" });
+        }
+        linkTargets.set(link.id, row.targetBales);
+      }
+
+      for (const [linkId, targetBales] of linkTargets) {
+        await saveProductionLinkTargetDefault({
+          companyId,
+          linkId,
+          effectiveFrom,
+          targetBales,
+          createdBy: req.session.userId || null,
+        });
+      }
+
       const values = normalized.map(
         ({ workerId, category, targetBales }) => sql`(
           ${companyId}, ${workerId}, ${effectiveFrom}, ${category}, ${targetBales},
@@ -618,6 +651,10 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const workerJoinDates = new Map(allWorkers.map((row) => [row.id, row.dateJoined]));
       const employeeIds = new Set(allEmployees.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const activeProductionLinks =
+        page === "production" && periodType === "daily"
+          ? await loadActiveProductionWorkerLinks(companyId, periodStart)
+          : [];
       const productionAttendance = new Map<number, string>();
 
       if (page === "production" && periodType === "daily" && workerIds.size > 0) {
@@ -723,6 +760,29 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         });
       }
 
+      if (page === "production") {
+        for (const link of activeProductionLinks) {
+          const memberIds = new Set(link.members.map((member) => member.workerId));
+          const linkedRows = normalizedRecords.filter(
+            (row) => row.personType === "worker" && memberIds.has(row.personId)
+          );
+          if (linkedRows.length === 0) continue;
+
+          const overrideRows = linkedRows.filter((row) => row.targetBalesOverridden);
+          const overrideTargets = new Set(overrideRows.map((row) => String(row.targetBales)));
+          if (overrideTargets.size > 1) {
+            return res.status(400).json({ message: "Linked workers must share one target" });
+          }
+
+          const sharedOverride = overrideRows.length > 0;
+          const sharedTarget = sharedOverride ? overrideRows[0].targetBales : link.sharedTargetBales;
+          for (const row of linkedRows) {
+            row.targetBales = sharedTarget;
+            row.targetBalesOverridden = sharedOverride;
+          }
+        }
+      }
+
       if (finalize) {
         const finalizeWorkerIds = normalizedRecords
           .filter((row) => row.personType === "worker")
@@ -737,6 +797,21 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         );
         for (const row of normalizedRecords) {
           if (row.personType === "worker") row.producedBales = producedByWorker.get(row.personId) ?? 0;
+        }
+
+        // Every linked worker displays the shared team output. The production
+        // summary de-duplicates the link so the factory total is still counted once.
+        for (const link of activeProductionLinks) {
+          const teamProduced = link.members.reduce(
+            (sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0),
+            0
+          );
+          const memberIds = new Set(link.members.map((member) => member.workerId));
+          for (const row of normalizedRecords) {
+            if (row.personType === "worker" && memberIds.has(row.personId)) {
+              row.producedBales = teamProduced;
+            }
+          }
         }
       }
 
