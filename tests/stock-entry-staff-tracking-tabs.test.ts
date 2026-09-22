@@ -81,6 +81,7 @@ describe("Stock Entry staff tracking tabs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const linkRoute = src("server/routes/factory/factoryProductionWorkerLinkRoutes.ts");
     const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
     expect(editor).toContain("button-link-worker-");
@@ -92,9 +93,10 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(model).toContain("summarizeProductionRows");
     expect(route).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain("saveProductionLinkTargetDefault");
-    expect(route).toContain("unlinkProductionWorkerLink");
-    expect(route).toContain("/api/factory/staff-tracking/production-worker-links");
-    expect(route).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
+    expect(linkRoute).toContain("createProductionWorkerLink");
+    expect(linkRoute).toContain("unlinkProductionWorkerLink");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
     expect(startup).toContain("factory_worker_production_links");
     expect(startup).toContain("factory_worker_production_link_members");
     expect(startup).toContain("factory_worker_production_link_target_defaults");
