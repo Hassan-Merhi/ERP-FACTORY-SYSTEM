@@ -52,14 +52,14 @@ const factoryStaffTrackingTranslations = {
   defaultTargets: { en: "Daily Defaults", ar: "الأهداف اليومية الافتراضية", fr: "Objectifs quotidiens par défaut" },
   dailyDefaultTarget: { en: "Daily Default", ar: "الهدف اليومي الافتراضي", fr: "Objectif quotidien par défaut" },
   defaultTargetsDescription: {
-    en: "Set each worker's repeating daily target from this date forward. Earlier days and day-specific edits stay unchanged.",
-    ar: "حدّد الهدف اليومي المتكرر لكل عامل ابتداءً من هذا التاريخ. تبقى الأيام السابقة والتعديلات الخاصة بكل يوم دون تغيير.",
-    fr: "Définissez l’objectif quotidien récurrent de chaque ouvrier à partir de cette date. Les jours antérieurs et les modifications propres à un jour restent inchangés.",
+    en: "Set each worker's repeating category and daily target from this date forward. Earlier days and day-specific edits stay unchanged.",
+    ar: "حدّد الفئة والهدف اليومي المتكررين لكل عامل ابتداءً من هذا التاريخ. تبقى الأيام السابقة والتعديلات الخاصة بكل يوم دون تغيير.",
+    fr: "Définissez la catégorie et l’objectif quotidien récurrents de chaque ouvrier à partir de cette date. Les jours antérieurs et les modifications propres à un jour restent inchangés.",
   },
   defaultTargetsSaved: {
-    en: "Daily default targets saved",
-    ar: "تم حفظ الأهداف اليومية الافتراضية",
-    fr: "Objectifs quotidiens par défaut enregistrés",
+    en: "Daily category and target defaults saved",
+    ar: "تم حفظ الفئة والهدف اليومي الافتراضيين",
+    fr: "Catégorie et objectifs quotidiens par défaut enregistrés",
   },
   productionEditorDescription: {
     en: "Edit the selected day's category and target only. This does not change the worker's repeating daily default.",
@@ -67,9 +67,9 @@ const factoryStaffTrackingTranslations = {
     fr: "Modifiez uniquement la catégorie et l’objectif du jour sélectionné. Cela ne change pas l’objectif quotidien récurrent de l’ouvrier.",
   },
   useEditorToManageTargets: {
-    en: "Daily Defaults repeat forward; Edit Targets changes only the selected day.",
-    ar: "الأهداف اليومية الافتراضية تتكرر للأيام القادمة، بينما تعديل الأهداف يغيّر اليوم المحدد فقط.",
-    fr: "Les objectifs quotidiens par défaut se répètent à l’avenir ; Modifier les objectifs ne change que le jour sélectionné.",
+    en: "Daily Defaults repeat category and target forward; Edit Targets changes only the selected day.",
+    ar: "الإعدادات اليومية الافتراضية تكرر الفئة والهدف للأيام القادمة، بينما تعديل الأهداف يغيّر اليوم المحدد فقط.",
+    fr: "Les valeurs quotidiennes par défaut répètent la catégorie et l’objectif à l’avenir ; Modifier les objectifs ne change que le jour sélectionné.",
   },
   searchNameCodeCategory: {
     en: "Search name, code or category...",
