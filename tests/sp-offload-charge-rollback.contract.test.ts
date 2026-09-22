@@ -18,14 +18,31 @@ describe("SP offload charge atomic rollback contract", () => {
   });
 
   it("throws on invalid paid-now ownership instead of continuing with partial state", () => {
-    expect(source).toContain("Bank account #${charge.creditBankAccountId} not found for this company");
+    const paidNow = source.indexOf('charge.chargeType === "paid_now"');
+    const ownership = source.indexOf("eq(bankAccounts.companyId, companyId)", paidNow);
+    const failure = source.indexOf("Bank account #${charge.creditBankAccountId} not found for this company", ownership);
+
+    expect(paidNow).toBeGreaterThan(-1);
+    expect(ownership).toBeGreaterThan(paidNow);
+    expect(failure).toBeGreaterThan(ownership);
+    expect(source.slice(ownership, failure + 100)).toContain("throw new Error");
   });
 
-  it("keeps offload, inventory, stock movement, charge and voucher writes transactional", () => {
-    expect(source).toContain("sp_offloads");
-    expect(source).toContain("sp_stock_movements");
-    expect(source).toContain("sp_offload_charges");
-    expect(source).toContain("vouchers");
-    expect(source).toContain("inventory");
+  it("keeps every state-changing offload write after the transaction boundary", () => {
+    const transactionStart = source.indexOf("db.transaction");
+    for (const mutation of ["sp_offloads", "sp_stock_movements", "sp_offload_charges", "vouchers", "inventory"]) {
+      expect(source.indexOf(mutation, transactionStart), `${mutation} must stay inside the transactional offload path`).toBeGreaterThan(transactionStart);
+    }
+  });
+
+  it("does not introduce an inner catch that can swallow charge validation failures", () => {
+    const transactionStart = source.indexOf("db.transaction");
+    const prepaidUpdate = source.indexOf("amount_used_usd", transactionStart);
+    const bankFailure = source.indexOf("Bank account #${charge.creditBankAccountId} not found for this company", prepaidUpdate);
+    const between = source.slice(prepaidUpdate, bankFailure);
+
+    expect(prepaidUpdate).toBeGreaterThan(transactionStart);
+    expect(bankFailure).toBeGreaterThan(prepaidUpdate);
+    expect(between).not.toMatch(/catch\s*\(/);
   });
 });
