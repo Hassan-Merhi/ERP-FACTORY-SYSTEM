@@ -21,6 +21,7 @@ import { registerSpContainerRoutes } from "./spContainerRoutes";
 import { registerSpLifecycleGuards } from "./spLifecycleGuards";
 import { registerSpReoffloadPreparationGuard } from "./spReoffloadPreparationGuard";
 import { registerSpOffloadConcurrencyGuard } from "./spOffloadConcurrencyGuard";
+import { registerSpOffloadPrepaidCompanyGuard } from "./spOffloadPrepaidCompanyGuard";
 import { registerSpOffloadRoutes } from "./spOffloadRoutes";
 import { registerSpOffloadLifecycleRoutes } from "./spOffloadLifecycleRoutes";
 import { registerSpChargeReconciliationRoutes } from "./spChargeReconciliationRoutes";
@@ -101,6 +102,9 @@ export function registerSpRoutes(app: Express) {
   registerSpContainerRoutes(app);
   registerSpReoffloadPreparationGuard(app);
   registerSpOffloadConcurrencyGuard(app);
+  // Fail closed before the legacy offload handler can touch a prepaid row from
+  // another company. This preserves tenant isolation for prepaid charge usage.
+  registerSpOffloadPrepaidCompanyGuard(app);
   registerSpOffloadRoutes(app);
   registerSpOffloadLifecycleRoutes(app);
   registerSpChargeReconciliationRoutes(app);
