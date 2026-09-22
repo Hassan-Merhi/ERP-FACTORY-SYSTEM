@@ -58,7 +58,13 @@ const PROPERTIES_PINNED_DEFAULTS: NavItem[] = [
   { title: "Agent Ledger", url: "/properties/agents", icon: UserRound },
 ];
 
-export function PropertiesSidebar({ user }: { user?: ShellUser }) {
+export function PropertiesSidebar({
+  user,
+  onLogout,
+}: {
+  user?: ShellUser;
+  onLogout: () => void | Promise<void>;
+}) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
@@ -141,7 +147,7 @@ export function PropertiesSidebar({ user }: { user?: ShellUser }) {
         </div>
       </SidebarContent>
 
-      <ModuleFooter user={user} accent={MODULE_ACCENT.properties} />
+      <ModuleFooter user={user} accent={MODULE_ACCENT.properties} onLogout={onLogout} />
     </Sidebar>
   );
 }
