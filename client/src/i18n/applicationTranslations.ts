@@ -117,6 +117,13 @@ export const applicationEnglishTranslations = {
   "factory.workerRemaining": "WORKER REMAINING",
   "factory.totalPayroll": "TOTAL PAYROLL",
   "factory.employeeExpected": "EMPLOYEE EXPECTED",
+  "factory.stockEntry.baleLimitReached": "2-bale limit reached",
+  "factory.stockEntry.finishBeforeAdding": "Finish this Stock Entry before adding another bale.",
+  "factory.stockEntry.baleLimitConfirmFirst":
+    "A Stock Entry can contain at most 2 bales. Confirm this entry before adding another.",
+  "factory.stockEntry.baleLimit": "A Stock Entry can contain at most 2 bales.",
+  "factory.stockEntry.baleLimitReduceQuantity":
+    "A Stock Entry can contain at most 2 bales. Reduce the quantity before confirming.",
   "daybook.transactions": "Transactions",
   "daybook.editsActivity": "Edits & Activity",
   "daybook.allFactoryTransactions": "All factory transactions in one view",
