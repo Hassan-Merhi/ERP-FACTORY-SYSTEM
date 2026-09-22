@@ -10,6 +10,8 @@ const health: AisHealthSnapshot = {
   messagesReceived: 0,
   messagesRejected: 0,
   reconnects: 0,
+  subscribedVessels: 0,
+  subscriptionUpdatedAt: null,
 };
 
 export function setAisState(state: AisConnectionState): void {
@@ -30,6 +32,11 @@ export function recordAisError(message: string): void {
 
 export function recordAisReconnect(): void {
   health.reconnects += 1;
+}
+
+export function setAisSubscriptionCount(count: number): void {
+  health.subscribedVessels = Math.max(0, Math.trunc(count));
+  health.subscriptionUpdatedAt = new Date();
 }
 
 export function getAisHealth(): AisHealthSnapshot {
