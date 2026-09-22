@@ -390,19 +390,23 @@ interface ModuleFooterProps {
   avatarClassName?: string;
   /** Module accent color — used as avatar background when no avatarClassName is set. */
   accent?: string;
+  /** Canonical app logout handler. Never duplicate session teardown in the sidebar. */
+  onLogout: () => void | Promise<void>;
 }
 
-export function ModuleFooter({ user, avatarClassName, accent }: ModuleFooterProps) {
+export function ModuleFooter({ user, avatarClassName, accent, onLogout }: ModuleFooterProps) {
   const initials = user?.username ? user.username.substring(0, 2).toUpperCase() : "AD";
   const { isOnline } = useConnectivity();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } catch {
-      // Best-effort side request; the user-visible flow does not depend on it completing.
+      await onLogout();
+    } finally {
+      setIsLoggingOut(false);
     }
-    window.location.href = "/login";
   };
 
   return (
@@ -443,8 +447,9 @@ export function ModuleFooter({ user, avatarClassName, accent }: ModuleFooterProp
         <Button
           variant="ghost"
           size="icon"
-          onClick={handleLogout}
-          title="Log out"
+          onClick={() => void handleLogout()}
+          disabled={isLoggingOut}
+          title={isLoggingOut ? "Logging out…" : "Log out"}
           data-testid="button-sidebar-logout"
           className="shrink-0 text-muted-foreground"
         >
