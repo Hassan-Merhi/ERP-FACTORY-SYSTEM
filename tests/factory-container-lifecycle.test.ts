@@ -2,7 +2,7 @@
  * Factory / Supplier Partner container lifecycle integration coverage.
  *
  * Protects setup, container creation, OTW accounting, offload accounting,
- * inventory application and exact-request idempotent replay.
+ * inventory application, exact-request idempotent replay, reversal and corrected re-offload.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
@@ -21,6 +21,7 @@ let spLocationId: number;
 let spStockItemId: number;
 let spAgent: request.SuperAgentTest;
 let createdContainerId: number;
+let originalOffloadId: number;
 let offloadVoucherIds: number[] = [];
 
 const INVOICE_TOTAL = 1000;
@@ -35,6 +36,7 @@ async function cleanupSpTables(companyId: number): Promise<void> {
      )`,
     [companyId]
   );
+  await pool.query(`DELETE FROM sp_offload_reversals WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_offloads WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_container_lines WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_containers WHERE company_id = $1`, [companyId]);
@@ -246,6 +248,7 @@ describe("SP container offload", () => {
 
     const [offload] = await db.select().from(spOffloads).where(eq(spOffloads.containerId, createdContainerId));
     expect(offload).toBeDefined();
+    originalOffloadId = offload.id;
     expect(Number(offload.totalQty)).toBeCloseTo(CONTAINER_QTY, 1);
     expect(Number(offload.totalBaseCostUsd)).toBeCloseTo(CONTAINER_QTY * UNIT_RATE, 0);
 
@@ -302,8 +305,105 @@ describe("SP container offload", () => {
   });
 });
 
-describe("SP reverse and re-offload roadmap", () => {
-  it.todo("reverse offload restores the open container and removes inventory");
-  it.todo("re-offload after reversal reproduces the original inventory result");
+describe("SP reverse and corrected re-offload", () => {
+  it("reverses the offload exactly, preserves immutable history and refuses a duplicate reversal", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const response = await spAgent.post(`/api/sp/offloads/${originalOffloadId}/reverse`).send({
+      reversalDate: today,
+      reason: "Wave 2 lifecycle regression coverage",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.containerId).toBe(createdContainerId);
+    expect(response.body.reversedMovementCount).toBeGreaterThan(0);
+    expect(response.body.originalVoucherIds).toEqual(expect.arrayContaining(offloadVoucherIds));
+    expect(response.body.reversalVoucherIds.length).toBeGreaterThanOrEqual(offloadVoucherIds.length);
+
+    const [container] = await db.select().from(spContainers).where(eq(spContainers.id, createdContainerId));
+    expect(container.status).toBe("open");
+    expect(await inventoryQuantity()).toBeCloseTo(0, 6);
+
+    const reversalHistory = await pool.query<{
+      offload_id: number;
+      snapshot_offload_id: string;
+      voucher_ids_reversal: number[];
+    }>(
+      `SELECT offload_id,
+              snapshot->'offload'->>'id' AS snapshot_offload_id,
+              voucher_ids_reversal
+       FROM sp_offload_reversals
+       WHERE company_id = $1 AND offload_id = $2`,
+      [spCompanyId, originalOffloadId]
+    );
+    expect(reversalHistory.rowCount).toBe(1);
+    expect(Number(reversalHistory.rows[0].snapshot_offload_id)).toBe(originalOffloadId);
+    expect(reversalHistory.rows[0].voucher_ids_reversal.length).toBeGreaterThanOrEqual(offloadVoucherIds.length);
+
+    for (const voucherId of reversalHistory.rows[0].voucher_ids_reversal) {
+      const totals = await pool.query(
+        `SELECT COALESCE(SUM(debit_amount::numeric), 0) AS dr,
+                COALESCE(SUM(credit_amount::numeric), 0) AS cr
+         FROM voucher_entries
+         WHERE voucher_id = $1`,
+        [voucherId]
+      );
+      expect(Number(totals.rows[0].dr)).toBeCloseTo(Number(totals.rows[0].cr), 2);
+    }
+
+    const duplicate = await spAgent.post(`/api/sp/offloads/${originalOffloadId}/reverse`).send({
+      reversalDate: today,
+      reason: "Duplicate reversal must be rejected",
+    });
+    expect(duplicate.status).toBe(409);
+    expect(await inventoryQuantity()).toBeCloseTo(0, 6);
+  });
+
+  it("re-offloads after reversal and reproduces the original inventory result without erasing reversal history", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const response = await spAgent.post("/api/sp/offload").send({
+      containerId: createdContainerId,
+      offloadDate: today,
+      locationId: spLocationId,
+      chargeLines: [],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["x-idempotent-replay"]).not.toBe("true");
+    expect(await offloadCount()).toBe(1);
+
+    const [newOffload] = await db.select().from(spOffloads).where(eq(spOffloads.containerId, createdContainerId));
+    expect(newOffload.id).not.toBe(originalOffloadId);
+    expect(Number(newOffload.totalQty)).toBeCloseTo(CONTAINER_QTY, 1);
+    expect(Number(newOffload.totalBaseCostUsd)).toBeCloseTo(CONTAINER_QTY * UNIT_RATE, 0);
+
+    const [container] = await db.select().from(spContainers).where(eq(spContainers.id, createdContainerId));
+    expect(container.status).toBe("offloaded");
+
+    const [inventory] = await db
+      .select()
+      .from(schema.inventory)
+      .where(
+        and(
+          eq(schema.inventory.companyId, spCompanyId),
+          eq(schema.inventory.locationId, spLocationId),
+          eq(schema.inventory.stockItemId, spStockItemId)
+        )
+      )
+      .limit(1);
+    expect(Number(inventory.quantity)).toBeCloseTo(CONTAINER_QTY, 1);
+    expect(Number(inventory.totalValue ?? 0)).toBeCloseTo(CONTAINER_QTY * UNIT_RATE, 0);
+    expect(Number(inventory.averageRate)).toBeCloseTo(UNIT_RATE, 1);
+
+    const history = await pool.query<{ count: string; snapshot_offload_id: string }>(
+      `SELECT COUNT(*)::text AS count,
+              MAX(snapshot->'offload'->>'id') AS snapshot_offload_id
+       FROM sp_offload_reversals
+       WHERE company_id = $1 AND container_id = $2`,
+      [spCompanyId, createdContainerId]
+    );
+    expect(Number(history.rows[0].count)).toBe(1);
+    expect(Number(history.rows[0].snapshot_offload_id)).toBe(originalOffloadId);
+  });
+
   it.todo("offload supports prepaid, paid-now and unpaid-payable charge lines");
 });
