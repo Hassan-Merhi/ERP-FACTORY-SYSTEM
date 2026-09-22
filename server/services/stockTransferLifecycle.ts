@@ -349,7 +349,10 @@ export async function saveStockTransferLifecycle(
     const voucherUpdates: Record<string, unknown> = { totalAmount: totalAmount.toFixed(2) };
     if (headerSourceLocationId(normalizedItems)) voucherUpdates.locationId = headerSourceLocationId(normalizedItems);
     if (input.voucherDate !== undefined) voucherUpdates.voucherDate = input.voucherDate;
-    if (input.description !== undefined) voucherUpdates.description = input.description;
+    // Keep the voucher header description aligned with the transfer notes.
+    // Most transfer clients submit the user-entered description as `notes`,
+    // while Daybook and voucher views read `vouchers.description`.
+    voucherUpdates.description = input.description ?? input.notes;
     await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, voucherId));
 
     return {
