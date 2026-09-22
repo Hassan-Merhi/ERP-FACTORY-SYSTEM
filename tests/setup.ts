@@ -6,7 +6,7 @@ import { pool } from "../server/db";
 import { eq, and, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { KNOWN_SECURITY_PERMISSIONS } from "../server/services/security/namedPermissionService";
-import { SESSION_COOKIE_NAME } from "../server/startup/sessionMiddleware";
+import { SESSION_COOKIE_NAME } from "../server/services/security/sessionCookiePolicy";
 
 let testApp: express.Express;
 let testServer: any;
