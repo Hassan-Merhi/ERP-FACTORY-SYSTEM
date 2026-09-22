@@ -103,6 +103,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain("saveProductionLinkTargetDefault");
     expect(route).toContain("unlinkProductionWorkerLink");
+    expect(route).toContain("hasFinalizedProductionOnOrAfter");
+    expect(route).toContain("finalized production history");
     expect(route).toContain("/api/factory/staff-tracking/production-worker-links");
     expect(route).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
     expect(startup).toContain("factory_worker_production_links");
