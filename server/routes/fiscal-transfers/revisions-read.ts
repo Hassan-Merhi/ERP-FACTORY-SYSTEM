@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { stockTransferVouchers, stockTransferRevisions, stockTransferRevisionItems } from "@shared/schema";
+import { stockTransferVouchers, stockTransferRevisions, stockTransferRevisionItems, vouchers } from "@shared/schema";
 import { eq, asc } from "drizzle-orm";
 
 export function registerStockTransferRevisionReadRoutes(app: Express) {
@@ -19,11 +19,18 @@ export function registerStockTransferRevisionReadRoutes(app: Express) {
       const id = parseInt(req.params.id);
       if (!id) return res.status(400).json({ message: "Transfer ID is required" });
       const { notes } = req.body;
-      await db
+      const [updatedTransfer] = await db
         .update(stockTransferVouchers)
         .set({ notes: notes ?? null })
         .where(eq(stockTransferVouchers.id, id))
-        .execute();
+        .returning({ voucherId: stockTransferVouchers.voucherId });
+      if (!updatedTransfer) return res.status(404).json({ message: "Transfer not found" });
+
+      await db
+        .update(vouchers)
+        .set({ description: notes ?? null })
+        .where(eq(vouchers.id, updatedTransfer.voucherId));
+
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
