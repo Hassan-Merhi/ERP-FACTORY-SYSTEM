@@ -33,6 +33,9 @@ const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
     ADD COLUMN IF NOT EXISTS group_name varchar(200);
 
   ALTER TABLE factory_staff_tracking_entries
+    ADD COLUMN IF NOT EXISTS target_overridden boolean NOT NULL DEFAULT false;
+
+  ALTER TABLE factory_staff_tracking_entries
     ALTER COLUMN created_by TYPE varchar(255)
     USING created_by::text;
 

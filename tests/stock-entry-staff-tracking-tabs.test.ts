@@ -63,10 +63,16 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(defaultsEditor).toContain("production-target-defaults");
     expect(defaultsEditor).toContain("effectiveFrom");
     expect(dayEditor).toContain("/api/factory/staff-tracking/bulk");
+    expect(dayEditor).toContain("targetOverrideState");
+    expect(dayEditor).toContain("targetBalesOverridden");
+    expect(defaultsEditor).toContain('queryKey: ["/api/factory/staff-tracking/production-target-defaults"]');
     expect(route).toContain("factory_worker_production_target_defaults");
     expect(route).toContain("effective_from <=");
-    expect(route).toContain("savedRow");
+    expect(route).toContain('target_overridden AS "targetBalesOverridden"');
+    expect(route).toContain("defaultTargetBales");
+    expect(route).toContain("targetBalesOverridden");
     expect(startup).toContain("factory_worker_production_target_defaults");
+    expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
   });
 
   it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {

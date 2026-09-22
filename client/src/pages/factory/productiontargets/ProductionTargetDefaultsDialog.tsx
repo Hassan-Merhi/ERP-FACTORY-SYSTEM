@@ -129,6 +129,10 @@ export function ProductionTargetDefaultsDialog({
         queryKey: ["/api/factory/staff-tracking"],
         refetchType: "active",
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/staff-tracking/production-target-defaults"],
+        refetchType: "active",
+      });
       toast({ title: tr("defaultTargetsSaved") });
       onOpenChange(false);
     },
