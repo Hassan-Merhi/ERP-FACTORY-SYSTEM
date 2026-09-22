@@ -77,7 +77,7 @@ vi.mock("@tanstack/react-query", () => ({
               code: null,
               category: "Pressing",
               targetBales: 4,
-              producedBales: 3,
+              producedBales: 2,
               status: "Present",
               notes: "",
               active: true,
@@ -184,7 +184,7 @@ describe("stock entry history page behavior", () => {
     expect(workerRow).not.toBeNull();
     expect(within(workerRow!).getByRole("cell", { name: "3" })).toBeInTheDocument();
     expect(within(workerRow!).getByRole("cell", { name: "75.00" })).toBeInTheDocument();
-    expect(screen.getByText("-1")).toBeInTheDocument();
+    expect(screen.getByText("-2")).toBeInTheDocument();
   });
 
   it("switches to detailed bale history and exposes the recorded reference", () => {
