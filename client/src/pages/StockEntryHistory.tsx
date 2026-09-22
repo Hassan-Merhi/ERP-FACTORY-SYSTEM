@@ -170,21 +170,24 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     refetchOnWindowFocus: false,
   });
 
-  const planDate = fromActive && toActive && fromDate === toDate ? fromDate : null;
+  const targetDate = fromActive && toActive && fromDate === toDate ? fromDate : null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
-    queryKey: ["/api/factory/staff-tracking", "production", "daily", planDate, planDate],
-    queryFn: () => fetchProduction("daily", planDate!, planDate!),
-    enabled: !!planDate,
+    queryKey: ["/api/factory/staff-tracking", "production", "daily", targetDate, targetDate],
+    queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
+    enabled: !!targetDate,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
-  const workerTargets = useMemo<Record<number, { targetBales: number; workerCount: number }>>(() => {
-    const targets: Record<number, { targetBales: number; workerCount: number }> = {};
+  const workerTargets = useMemo<
+    Record<number, { targetBales: number; producedBales: number; workerCount: number }>
+  >(() => {
+    const targets: Record<number, { targetBales: number; producedBales: number; workerCount: number }> = {};
     for (const row of productionTargets?.rows ?? []) {
       if (row.targetBales === null || row.targetBales === undefined) continue;
       const targetBales = Number(row.targetBales);
-      if (!Number.isFinite(targetBales)) continue;
-      targets[row.personId] = { targetBales, workerCount: 1 };
+      const producedBales = Number(row.producedBales ?? 0);
+      if (!Number.isFinite(targetBales) || !Number.isFinite(producedBales)) continue;
+      targets[row.personId] = { targetBales, producedBales, workerCount: 1 };
     }
     return targets;
   }, [productionTargets]);
@@ -617,10 +620,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
               )}
               {workerGroups.map((wg) => {
                 const wExpanded = expandedKeys.has(wg.workerKey);
-                const plan = wg.workerId != null ? workerTargets[wg.workerId] : undefined;
-                const target = plan?.targetBales ?? 0;
-                const workerCount = plan?.workerCount ?? 0;
-                const diff = wg.totalBales - target;
+                const targetInfo = wg.workerId != null ? workerTargets[wg.workerId] : undefined;
+                const target = targetInfo?.targetBales ?? 0;
+                const workerCount = targetInfo?.workerCount ?? 0;
+                const diff = (targetInfo?.producedBales ?? 0) - target;
                 return [
                   <tr
                     key={wg.workerKey}
@@ -632,16 +635,16 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                       {wExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {plan && workerCount > 0 ? workerCount : <span className="text-xs text-muted-foreground">—</span>}
+                      {targetInfo && workerCount > 0 ? workerCount : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     <td className="px-3 py-2 font-semibold">
                       {wg.workerName || <span className="italic text-muted-foreground">Unassigned</span>}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {plan ? target : <span className="text-xs text-muted-foreground">—</span>}
+                      {targetInfo ? target : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold">
-                      {plan ? (
+                      {targetInfo ? (
                         <span
                           className={
                             diff >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
