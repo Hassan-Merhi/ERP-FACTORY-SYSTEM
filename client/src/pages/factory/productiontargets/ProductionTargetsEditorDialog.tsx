@@ -244,7 +244,6 @@ export function ProductionTargetsEditorDialog({
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="min-w-[230px]">{tr("person")}</TableHead>
-                <TableHead className="w-[110px]">{tr("code")}</TableHead>
                 <TableHead className="min-w-[220px]">{tr("category")}</TableHead>
                 <TableHead className="w-[130px] text-right">{tr("target")}</TableHead>
                 <TableHead className="w-[120px] text-right">{tr("produced")}</TableHead>
@@ -254,7 +253,7 @@ export function ProductionTargetsEditorDialog({
             <TableBody>
               {visibleRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
                     {tr("noMatchingStaff")}
                   </TableCell>
                 </TableRow>
@@ -271,7 +270,6 @@ export function ProductionTargetsEditorDialog({
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{row.code || "—"}</TableCell>
                     <TableCell>
                       <Input
                         value={row.category}
