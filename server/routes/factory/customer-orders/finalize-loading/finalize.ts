@@ -127,6 +127,10 @@ export function registerOrderFinalizeRoutes(app: Express) {
           .set({
             invoiceNumber,
             status: "FINALIZED",
+            // A loading order reaches this endpoint as VERIFIED, but
+            // finalize-loading has already recorded LOADING as its workflow
+            // origin. Direct draft invoices record DRAFT here.
+            previousStatus: order.previousStatus === "LOADING" ? "LOADING" : "DRAFT",
             finalizedAt,
             updatedAt: finalizedAt,
           })
