@@ -7,6 +7,13 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
 import { employees, factoryAttendance, factoryUserProfiles, factoryWorkers } from "@shared/schema";
+import {
+  createProductionWorkerLink,
+  indexProductionWorkerLinks,
+  loadActiveProductionWorkerLinks,
+  saveProductionLinkTargetDefault,
+  unlinkProductionWorkerLink,
+} from "../../services/factory/productionWorkerLinks";
 
 type TrackingPage = "production" | "attendance";
 type PeriodType = "daily" | "weekly" | "monthly";
@@ -198,6 +205,13 @@ async function loadProductionTargetDefaults(
     );
   }
 
+  // An active link owns one shared repeating target. Overlay that shared value
+  // onto every member so Daily Defaults and ordinary production reads stay in sync.
+  const activeLinks = await loadActiveProductionWorkerLinks(companyId, asOf);
+  for (const link of activeLinks) {
+    for (const member of link.members) defaults.set(member.workerId, link.sharedTargetBales);
+  }
+
   return defaults;
 }
 
@@ -298,6 +312,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         .orderBy(factoryWorkers.fullName);
 
       const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const activeProductionLinks =
+        query.page === "production" ? await loadActiveProductionWorkerLinks(companyId, query.periodStart) : [];
+      const productionLinkByWorker = indexProductionWorkerLinks(activeProductionLinks);
       const includedWorkers = workers.filter((person) => {
         const savedForPeriod = savedMap.has(`worker:${person.id}`);
         if (query.page === "production") {
@@ -352,6 +369,21 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
           : new Map<number, number | null>();
 
+      const linkedDailyOverrides = new Map<number, number | null>();
+      if (query.page === "production" && query.periodType === "daily") {
+        for (const link of activeProductionLinks) {
+          const override = link.members
+            .map((member) => savedMap.get(`worker:${member.workerId}`))
+            .find((row) => row?.targetBalesOverridden === true);
+          if (override) {
+            linkedDailyOverrides.set(
+              link.id,
+              override.targetBales === null || override.targetBales === undefined ? null : Number(override.targetBales)
+            );
+          }
+        }
+      }
+
       const workerRows = includedWorkers.map((worker) => {
         const savedRow = savedMap.get(`worker:${worker.id}`);
         const attendanceStatus = workerAttendance.get(worker.id);
@@ -371,18 +403,30 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           query.page === "production" && query.periodType === "daily" && !finalized
             ? (productionTargetDefaults.get(worker.id) ?? null)
             : null;
+        const productionLink = productionLinkByWorker.get(worker.id);
+        const linkedOverrideExists = productionLink ? linkedDailyOverrides.has(productionLink.id) : false;
+        const linkedOverrideTarget = productionLink ? (linkedDailyOverrides.get(productionLink.id) ?? null) : null;
         const targetBalesOverridden =
           query.page === "production" &&
           query.periodType === "daily" &&
           !finalized &&
-          savedRow?.targetBalesOverridden === true;
+          (linkedOverrideExists || savedRow?.targetBalesOverridden === true);
         const targetBales = finalized
           ? savedTargetBales
           : query.page === "production" && query.periodType === "daily"
-            ? targetBalesOverridden
-              ? savedTargetBales
-              : defaultTargetBales
+            ? linkedOverrideExists
+              ? linkedOverrideTarget
+              : targetBalesOverridden
+                ? savedTargetBales
+                : defaultTargetBales
             : savedTargetBales;
+        const linkedProducedBales =
+          productionLink && query.page === "production" && !finalized
+            ? productionLink.members.reduce(
+                (sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0),
+                0
+              )
+            : null;
 
         return {
           personType: "worker" as const,
@@ -398,13 +442,16 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             query.page === "production"
               ? finalized
                 ? Number(savedRow?.producedBales ?? 0)
-                : (producedByWorker.get(worker.id) ?? 0)
+                : linkedProducedBales ?? (producedByWorker.get(worker.id) ?? 0)
               : savedRow?.producedBales === null || savedRow?.producedBales === undefined
                 ? null
                 : Number(savedRow.producedBales),
           status: query.page === "production" && !finalized ? defaultStatus : (savedRow?.status ?? defaultStatus),
           notes: savedRow?.notes ?? "",
           active: worker.active,
+          linkGroupId: productionLink?.id ?? null,
+          linkedWorkerIds: productionLink?.members.map((member) => member.workerId) ?? [],
+          linkedWorkers: productionLink?.members ?? [],
         };
       });
 
