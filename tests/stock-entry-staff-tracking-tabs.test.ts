@@ -116,6 +116,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(startup).toContain("factory_worker_production_link_target_defaults");
     expect(linkService).toContain("w.position");
     expect(linkService).toContain("w.department");
+    expect(linkService).toContain("pg_advisory_xact_lock");
+    expect(linkService).toContain("nextEffectiveFrom");
 
   });
 
