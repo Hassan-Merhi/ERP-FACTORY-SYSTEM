@@ -107,7 +107,7 @@ export function isDeveloperCompanyRoleAdministrationRoute(method: string, path: 
   const normalizedMethod = method.toUpperCase();
   return (
     (normalizedMethod === "POST" && path === "/api/user-company-roles") ||
-    (normalizedMethod === "PATCH" && /^\\/api\\/user-company-roles\\/\\d+$/.test(path))
+    (normalizedMethod === "PATCH" && /^\/api\/user-company-roles\/\d+$/.test(path))
   );
 }
 
