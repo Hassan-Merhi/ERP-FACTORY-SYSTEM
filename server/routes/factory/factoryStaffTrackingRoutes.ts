@@ -804,6 +804,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const workerJoinDates = new Map(allWorkers.map((row) => [row.id, row.dateJoined]));
       const employeeIds = new Set(allEmployees.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
+      const activeProductionLinks =
+        page === "production" ? await loadActiveProductionWorkerLinks(companyId, periodStart) : [];
       const productionAttendance = new Map<number, string>();
 
       if (page === "production" && periodType === "daily" && workerIds.size > 0) {
@@ -909,6 +911,24 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         });
       }
 
+      if (page === "production") {
+        for (const link of activeProductionLinks) {
+          const memberIds = new Set(link.members.map((member) => member.workerId));
+          const linkedRows = normalizedRecords.filter(
+            (row) => row.personType === "worker" && memberIds.has(row.personId)
+          );
+          if (linkedRows.length === 0) continue;
+
+          const overrideRow = linkedRows.find((row) => row.targetBalesOverridden);
+          const sharedTarget = overrideRow?.targetBales ?? linkedRows[0]?.targetBales ?? link.sharedTargetBales;
+          const sharedOverride = linkedRows.some((row) => row.targetBalesOverridden);
+          for (const row of linkedRows) {
+            row.targetBales = sharedTarget ?? null;
+            row.targetBalesOverridden = sharedOverride;
+          }
+        }
+      }
+
       if (finalize) {
         const finalizeWorkerIds = normalizedRecords
           .filter((row) => row.personType === "worker")
@@ -923,6 +943,21 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         );
         for (const row of normalizedRecords) {
           if (row.personType === "worker") row.producedBales = producedByWorker.get(row.personId) ?? 0;
+        }
+
+        // Every linked worker displays the shared team output. The production
+        // summary de-duplicates the link so the factory total is still counted once.
+        for (const link of activeProductionLinks) {
+          const teamProduced = link.members.reduce(
+            (sum, member) => sum + (producedByWorker.get(member.workerId) ?? 0),
+            0
+          );
+          const memberIds = new Set(link.members.map((member) => member.workerId));
+          for (const row of normalizedRecords) {
+            if (row.personType === "worker" && memberIds.has(row.personId)) {
+              row.producedBales = teamProduced;
+            }
+          }
         }
       }
 
