@@ -68,6 +68,7 @@ describe("production bonus payroll integration", () => {
       },
       { rows: [{ productionDate: "2026-08-10", positionId: 12, actualBales: 13 }] },
       { rows: [] },
+      { rows: [] },
       { rows: [{ id: 50 }] },
       { rows: [] },
       { rows: [] },
@@ -86,7 +87,7 @@ describe("production bonus payroll integration", () => {
         { workerId: 2, workerName: "Benoit" },
       ],
     });
-    expect(executor.execute).toHaveBeenCalledTimes(7);
+    expect(executor.execute).toHaveBeenCalledTimes(8);
   });
 
   it("attaches an approved orphan allocation by delta and rebuilds the normal payroll voucher", async () => {
