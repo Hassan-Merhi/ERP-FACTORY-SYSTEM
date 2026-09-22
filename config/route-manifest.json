@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2020,
+  "routeCount": 2022,
   "middlewareMountCount": 128,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -514,6 +514,8 @@
     "GET /api/factory/v5/container-plans/:planId/containers/:containerId/documents [requireAuth > <anonymous>]",
     "POST /api/factory/v5/container-plans/:planId/containers/:containerId/documents [requireAuth > <anonymous>]",
     "DELETE /api/factory/v5/container-plans/:planId/containers/:containerId/documents/:documentId [requireAuth > <anonymous>]",
+    "POST /api/factory/v5/container-plans/optimize [requireAuth > <anonymous>]",
+    "POST /api/factory/v5/container-plans/:planId/optimize/apply [requireAuth > <anonymous>]",
     "GET /api/factory/shipping-container-rows/available-invoices [requireAuth > <anonymous>]",
     "POST /api/factory/shipping-container-rows/sync [requireAuth > <anonymous>]",
     "GET /api/factory/shipping-container-rows [requireAuth > <anonymous>]",

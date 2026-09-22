@@ -12,6 +12,7 @@ import { ContainerPlannerReconciliation } from "./ContainerPlannerReconciliation
 import { ContainerPlannerBaleAssignment } from "./ContainerPlannerBaleAssignment";
 import { ContainerPlannerCustomerAllocation } from "./ContainerPlannerCustomerAllocation";
 import { ContainerPlannerShipments } from "./ContainerPlannerShipments";
+import { ContainerPlannerOptimizer } from "./ContainerPlannerOptimizer";
 
 interface PlanSummary {
   id: number;
@@ -566,6 +567,13 @@ export function ContainerPlannerSavedPlans({ capacityBales, includeGarbageWipers
               />
 
               <ContainerPlannerShipments planId={detail.id} onPlanChanged={() => invalidatePlanner(detail.id)} />
+
+              <ContainerPlannerOptimizer
+                planId={detail.id}
+                capacityBales={detail.capacityBales}
+                includeGarbageWipers={detail.includeGarbageWipers}
+                onPlanChanged={() => invalidatePlanner(detail.id)}
+              />
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
                 {detail.containers.map((container) => (

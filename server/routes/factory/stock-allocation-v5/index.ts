@@ -18,6 +18,7 @@ import { registerV5ContainerPlannerReconciliationRoutes } from "./container-plan
 import { registerV5ContainerPlanBaleRoutes } from "./container-plan-bales";
 import { registerV5ContainerPlanAllocationRoutes } from "./container-plan-allocations";
 import { registerV5ContainerPlanShipmentRoutes } from "./container-plan-shipment";
+import { registerV5ContainerPlanOptimizerRoutes } from "./container-plan-optimizer";
 
 export function registerFactoryStockAllocationV5Routes(app: Express) {
   // Response-only middleware: the canonical allocation handler still owns all
@@ -34,4 +35,5 @@ export function registerFactoryStockAllocationV5Routes(app: Express) {
   registerV5ContainerPlanBaleRoutes(app);
   registerV5ContainerPlanAllocationRoutes(app);
   registerV5ContainerPlanShipmentRoutes(app);
+  registerV5ContainerPlanOptimizerRoutes(app);
 }
