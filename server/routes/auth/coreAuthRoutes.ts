@@ -188,22 +188,29 @@ export function registerCoreAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
-    // Always expire the browser cookie, even if the backing session store has a
-    // transient failure. This prevents a stale session cookie from surviving a
-    // browser close/reopen after the user explicitly signed out.
-    res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
+    const sessionId = req.sessionID;
     res.setHeader("Cache-Control", "no-store");
 
     req.session.destroy((error) => {
       if (error) {
         logger.error("[Auth] Session store failed to destroy session during logout", {
           error: getErrorMessage(error),
-          sessionId: req.sessionID,
+          sessionId,
         });
-        // The client cookie is already expired, so the browser is logged out.
-        // Keep logout idempotent instead of leaving the UI on an authenticated page.
+        // A failed store delete must still log the browser out. Expire both the
+        // in-memory session cookie and the named browser cookie so rolling
+        // session middleware cannot re-issue a live cookie on this response.
+        if (req.session?.cookie) {
+          req.session.cookie.maxAge = 0;
+          req.session.cookie.expires = new Date(0);
+        }
+        res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
         return res.json({ message: "Logged out successfully", sessionCleanupPending: true });
       }
+
+      // Destroy succeeded: remove the persistent browser cookie as well. This
+      // is what makes logout stay logged out after closing and reopening the browser.
+      res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
       res.json({ message: "Logged out successfully" });
     });
   });
