@@ -53,7 +53,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
         <SidebarProvider style={style as React.CSSProperties}>
           <div ref={erpContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
             <CompanyDailyRateModal />
-            <AppSidebar user={user} />
+            <AppSidebar user={user} onLogout={handleLogout} />
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
               <OfflineBanner />
               <AppTopBar

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, resetCsrfToken } from "@/lib/queryClient";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { clearBiometricCredentials } from "@/lib/biometricCredentials";
 
@@ -19,14 +19,18 @@ export function useAuthenticatedUser() {
 
   const handleLogout = async (): Promise<void> => {
     try {
+      // Stop active query traffic before destroying the server session. This
+      // reduces the chance of an in-flight request racing the logout response.
+      await queryClient.cancelQueries();
       await apiRequest("POST", "/api/auth/logout", {});
       queryClient.clear();
+      resetCsrfToken();
       try {
         await clearBiometricCredentials();
       } catch {
         // Biometric support is optional and must not block logout.
       }
-      window.location.href = "/login";
+      window.location.replace("/login");
     } catch (logoutError: unknown) {
       console.error("Logout failed:", logoutError);
     }

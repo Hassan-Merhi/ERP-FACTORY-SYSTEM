@@ -6,6 +6,7 @@ import { pool } from "../server/db";
 import { eq, and, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { KNOWN_SECURITY_PERMISSIONS } from "../server/services/security/namedPermissionService";
+import { SESSION_COOKIE_NAME } from "../server/services/security/sessionCookiePolicy";
 
 let testApp: express.Express;
 let testServer: any;
@@ -87,6 +88,7 @@ export async function setupTestApp(): Promise<express.Express> {
 
   app.use(
     session({
+      name: SESSION_COOKIE_NAME,
       secret: "test-secret-key-for-integration-tests",
       resave: false,
       saveUninitialized: false,

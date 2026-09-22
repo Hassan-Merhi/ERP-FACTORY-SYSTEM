@@ -35,7 +35,7 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
       <SkipLink>{t("accessibility.skipToMainContent")}</SkipLink>
       <SidebarProvider style={style as React.CSSProperties}>
         <div ref={propertiesContainerRef} className="flex h-full w-full min-w-0 overflow-hidden">
-          <PropertiesSidebar user={user} />
+          <PropertiesSidebar user={user} onLogout={handleLogout} />
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <OfflineBanner />
             <AppTopBar

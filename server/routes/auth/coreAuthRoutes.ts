@@ -8,6 +8,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSessionUserId } from "../../lib/sessionUser";
 import { logger } from "../../lib/logger";
+import { SESSION_COOKIE_NAME } from "../../services/security/sessionCookiePolicy";
 import { storage } from "../../storage";
 import {
   advanceCurrentSessionAfterPasswordChange,
@@ -187,8 +188,29 @@ export function registerCoreAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    const sessionId = req.sessionID;
+    res.setHeader("Cache-Control", "no-store");
+
     req.session.destroy((error) => {
-      if (error) return res.status(500).json({ message: "Failed to logout" });
+      if (error) {
+        logger.error("[Auth] Session store failed to destroy session during logout", {
+          error: getErrorMessage(error),
+          sessionId,
+        });
+        // A failed store delete must still log the browser out. Expire both the
+        // in-memory session cookie and the named browser cookie so rolling
+        // session middleware cannot re-issue a live cookie on this response.
+        if (req.session?.cookie) {
+          req.session.cookie.maxAge = 0;
+          req.session.cookie.expires = new Date(0);
+        }
+        res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
+        return res.json({ message: "Logged out successfully", sessionCleanupPending: true });
+      }
+
+      // Destroy succeeded: remove the persistent browser cookie as well. This
+      // is what makes logout stay logged out after closing and reopening the browser.
+      res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
       res.json({ message: "Logged out successfully" });
     });
   });

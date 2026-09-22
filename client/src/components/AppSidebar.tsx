@@ -221,7 +221,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
   };
 }
 
-export function AppSidebar({ user }: { user?: SidebarUser }) {
+export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: () => void | Promise<void> }) {
   const { toast } = useToast();
   const { conflictCount } = useConnectivity();
   const { selectedCompany } = useCompany();
@@ -390,6 +390,7 @@ export function AppSidebar({ user }: { user?: SidebarUser }) {
       <ModuleFooter
         user={user ? { username: user.username ?? undefined, role: user.role ?? undefined } : undefined}
         accent={MODULE_ACCENT.erp}
+        onLogout={onLogout}
       />
     </Sidebar>
   );
