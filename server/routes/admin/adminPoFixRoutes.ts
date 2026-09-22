@@ -178,7 +178,7 @@ export function registerAdminPoFixRoutes(app: Express) {
             )
           : { rows: [] as Array<{ id: number; voucher_id: number; credit_amount: string }> };
 
-        const classification = classifyPoSupplierPosting(
+        let classification = classifyPoSupplierPosting(
           expected,
           entryRows.rows.map((entry) => entry.credit_amount)
         );
@@ -207,6 +207,10 @@ export function registerAdminPoFixRoutes(app: Express) {
                 [voucherIds, po.supplier_id, expectedCompanyId]
               );
               entryRows.rows = refreshedEntries.rows;
+              classification = classifyPoSupplierPosting(
+                expected,
+                entryRows.rows.map((entry) => entry.credit_amount)
+              );
             }
           }
 
