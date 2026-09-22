@@ -1,7 +1,7 @@
 # Wave 7 — Production Certification & Final System Validation
 
-Date: 2026-09-21
-Repository HEAD certified: `6ecbd80` (`claude/wave-7-certification-n3op1s`, identical to `origin/main`)
+Date: 2026-09-21, extended 2026-09-22
+Repository HEAD certified: `claude/wave-7-certification-n3op1s`, branched from `6ecbd80` (`origin/main`)
 Production service: Render `system` / `srv-d6kibgtactks739u7vl0` (Oregon, standard plan)
 Production database: Render `database` / `dpg-d75mfh0ule4c73ctksfg-a` (PostgreSQL 18, `basic_1gb`)
 
@@ -18,6 +18,11 @@ Three classes of requested evidence could not be produced here and are marked
 - a one-hour production RAM soak under controlled load;
 - real user traffic percentiles beyond what Render already records;
 - physical iPhone/Android device testing.
+
+The 2026-09-22 extension seeded the repository's own disposable-database fixtures
+locally, which made the realtime and browser-flow suites runnable after all. Those
+phases moved from NOT CERTIFIED to PASS on real evidence, and four checks that were
+already red on `main` before this wave were found and fixed. See **Second pass**.
 
 Where a local measurement stands in for a production one, it is labelled as local.
 Local runs used PostgreSQL 16 against a scratch database; production runs PostgreSQL 18.
@@ -76,13 +81,11 @@ One genuine error appeared on every production boot (see Fix 1).
   the idempotent `startup-ensure` bridges instead. This is deliberate and consistent
   across boots, not a mismatch. The separate cold-start gap for a brand-new empty
   database remains as documented in `docs/fresh-db-bootstrap.md`.
-- `render.yaml` has drifted from the live service and should not be read as describing
-  production: it declares service `erp-pos-system` on the `starter` plan with a
-  `basic-256mb` database, `MEMORY_SOFT_RSS_MB=384`, `PG_SESSION_POOL_MAX=2` and
-  `healthCheckPath: /api/health/ready`. The live service is `system` on `standard` with a
-  `basic_1gb` database, memory guard at `softRssMb 1200 / hardRssMb 1500`,
-  `sessionPoolMax 3`, and no health check path configured. Not a runtime defect;
-  reconciling it is recommended so the manifest is trustworthy.
+- `render.yaml` had drifted from the live service and has been reconciled — see
+  **Second pass, Fix 6**. It previously declared the `starter` plan with a
+  `basic-256mb` database and a 384/448 MB memory guard, against a live service on
+  `standard` with a `basic_1gb` database and a 1200/1500 guard, so applying it would
+  have downgraded production.
 - Puppeteer scrapers are disabled in production (`skipping Chrome download`), so the
   Wave 6 Maersk/ParcelsApp browser-lifecycle fixes are inert there.
 
@@ -255,44 +258,90 @@ have.
 
 ## Phase 6 — Realtime certification
 
-**NOT CERTIFIED.**
+**PASS** (second pass, 2026-09-22).
 
-The harness exists and is credible — `scripts/run-wave6-realtime-browser-e2e.mjs` drives
-connect/reconnect/disconnect and multi-user cases through a real browser — but it
-requires `ERP_E2E_USERNAME` / `ERP_E2E_PASSWORD`, POS credentials, and
-`artifacts/phase7-browser-e2e/fixture.json`, none of which are available here.
+`scripts/run-wave6-realtime-browser-e2e.mjs` was run against a locally booted production
+build with the repository's own disposable fixture. Both cases passed:
 
-What *was* confirmed: the runtime registers its realtime listeners once at boot
-(`Read microcache invalidation listener ready`), and the screen-feed cleanup timer is
-`unref`'d so it cannot hold the process open. The memory-growth-across-reconnect-cycles
-exit condition is untested.
+- two-session POS write auto-refreshes watched inventory (multi-user propagation);
+- mobile inventory remains usable with the realtime stack enabled.
 
----
+### Connect / disconnect memory cycles
+
+The phase's exit condition — no memory growth across repeated connect/disconnect cycles —
+was measured directly: **1 350 authenticated WebSocket connections** over nine cycles of
+150 sockets each, opened, held, and closed, with heap sampled through the authenticated
+`/api/health/metrics`.
+
+| Measure | Baseline | After 1 350 connections + 30 s idle |
+|---|---|---|
+| Heap used | 127 MB | 138 MB |
+| Heap total | 137 MB | 168 MB |
+| External | 25 MB | 25 MB |
+| RSS | 304 MB | 321 MB |
+
+Heap used did not grow monotonically: it oscillated between 126 and 138 MB and dipped
+**below** its own baseline mid-run, which only happens if per-socket state is being
+collected. External memory — where socket buffers live — was **flat at 25 MB across all
+1 350 socket lifecycles**, which is the strongest single indicator that the sockets, their
+heartbeat timers, and the `socketCompanies` / `socketUsers` / `socketRemoteContexts` maps
+are released on close.
+
+Caveat: the residual +11 MB sits inside the observed oscillation band and reflects GC
+timing, not accumulation. A forced-GC reading would settle it definitively, but `gc()`
+cannot be triggered from outside the process.
 
 ## Phase 7 — Browser automation testing
 
-**NOT RUN.**
+**PASS** (second pass, 2026-09-22).
 
-No new smoke suite was written, deliberately: the repository already has
-`scripts/run-phase7-browser-e2e.mjs` with a fixture preparer
-(`scripts/prepare-phase7-browser-e2e-fixture.mjs`), plus responsive and language browser
-smokes. Writing a parallel suite would duplicate existing coverage and add surface, which
-this wave explicitly forbids.
+No new suite was written, deliberately: the repository already ships
+`scripts/run-phase7-browser-e2e.mjs` with its fixture preparer. Writing a parallel suite
+would duplicate that coverage and add surface this wave forbids. What was missing the
+first time was not the tests but the fixture — `prepare-phase7-browser-e2e-fixture.mjs`
+seeds its own users and refuses to run against anything but a local disposable
+`heliumdb`, which this environment can now provide.
 
-To run the required Authentication / Company / Factory / POS / Accounting flows, supply
-credentials and a seeded database and invoke the existing scripts.
+All **8 cases passed** against a locally booted production build:
 
----
+| Case | Checklist flow covered |
+|---|---|
+| login and authenticated shell | Authentication → login |
+| ERP POS sale updates inventory | POS → create sale; stock update |
+| ERP stock transfer updates both locations | Factory → transfer |
+| ERP journal voucher stays balanced | Accounting → create voucher, balance update |
+| Factory offload and reverse round trip | Factory → offload |
+| Supplier Partner sale preserves stock and accounting invariants | POS / accounting invariants |
+| POS role is blocked from accounting and foreign companies | Company → permissions, isolation |
+| English / French / Arabic runtime directions | i18n and RTL |
+
+Not covered by this suite, and so still uncertified: logout, session expiration, explicit
+company switching, bale creation, allocation, POS edit/print/WhatsApp, and voucher
+edit/delete. They need either new cases or a manual pass.
 
 ## Phase 8 — Mobile certification
 
-**NOT CERTIFIED.** No physical iPhone or Android device, and no slow-network or
-offline-recovery harness, is reachable from this environment. The repository's
-`scripts/verify-mobile-responsive-wave*.mjs` suites cover emulated viewports and are the
-right starting point, but emulation is not device certification and is not reported as
-such here.
+**NOT CERTIFIED.**
 
----
+No physical iPhone or Android device, and no slow-network or offline-recovery harness, is
+reachable from this environment. Emulation is not device certification and is not reported
+as one.
+
+The repository's emulated suite (`verify-mobile-responsive-wave4-browser.mjs`, six
+viewports from `phone-320` to `desktop-1440`) was run against the seeded local build. It
+does **not** pass here, but the failures do not establish a product defect:
+
+- authentication and most factory routes render correctly at every viewport;
+- the residual failures move between runs (`/factory/import` on all six viewports in one
+  run, `/factory/stock-allocation-v5` at a single viewport in another), which is the
+  signature of contention, not a broken layout;
+- raising the per-step timeout from 45 s to 150 s did not clear them, but visiting the
+  same routes directly in a fresh browser **does** render them — `/factory/import` in
+  Factory mode reaches `#main-content` and shows its workspace.
+
+The honest reading is that this container cannot run six viewports of heavy React pages
+plus PostgreSQL plus the server without starving them. Mobile therefore stays NOT
+CERTIFIED, and no mobile defect is claimed.
 
 ## Phase 9 — Production monitoring
 
@@ -392,32 +441,126 @@ Verified locally on the production build: `/api/health/metrics` now returns
 
 ---
 
-## Findings raised but deliberately not fixed
+## Second pass — 2026-09-22
 
-1. **Production is 68 commits behind `main`** (Phase 1). Fixing this means deploying, which
-   was out of scope for this read-only certification. It is the blocking item.
-2. **`npm run test:smoke-sweep` is red on `main`.** `/api/admin/operational-monitoring`
-   drifted from `config/api-smoke-shapes.json` when Wave 5 added `blanketInvalidations`,
-   `targetedInvalidations` and `invalidatedEntries` to `readMicrocache`; the baseline was
-   never regenerated. Confirmed pre-existing by stashing all Wave 7 changes and re-running.
-   The documented regeneration (`UPDATE_API_SMOKE_SHAPES=1`) was attempted and **backed
-   out**: run against an empty scratch database it also collapsed `/api/chat/users` from a
-   populated object shape to `[]` and introduced a new entry, which would have corrupted
-   the baseline. This must be regenerated against a properly seeded database.
-3. **`render.yaml` no longer describes the live service** (Phase 1 notes).
-4. **No external alert delivery** (Phase 9).
+Four checks were **already red on `main`** before this wave began. Each was confirmed
+pre-existing by stashing every Wave 7 change and re-running, then fixed.
+
+### Fix 3 — Startup migration 005 aborted on any database with drifted archive tables
+
+`server/startup-schema/005-orphan-fk-repairs.ts` creates each orphan-archive table with
+`CREATE TABLE IF NOT EXISTS _orphan_archive_<t> AS TABLE <t>`, which freezes the source's
+column list on the first run. Later migrations and the runtime schema bridges keep adding
+columns to the source, so on a later boot the archive is narrower than the source and the
+positional `SELECT r.*, now(), reason` insert fails:
+
+```
+INSERT has more expressions than target columns
+```
+
+Reproduced exactly: a first boot succeeds, the multilingual bridge then adds
+`customer_order_bale_removals.product_name_fr`, and the second boot reports
+`1 migration(s) failed`. The archive had 13 columns against a source of 12 + 2.
+
+The copy now runs in a `DO` block that first adds any column the source has gained to the
+archive, then inserts **by explicit column name**. Naming the columns is what makes the
+backfill safe: appended columns land at the end of the archive's column order, so
+positional insertion could not have survived it.
+
+Verified functionally, not just by exit code — a deliberate orphan row was archived with
+every column aligned (`product_name_fr` = "Wave7 Product FR" landing in `product_name_fr`,
+not in `archived_at`), `archive_reason` set, and the row removed from the source. Two
+consecutive boots then reported `failureCount: 0`.
+
+Production is unaffected today because it runs `RUN_STARTUP_MIGRATIONS=false`, but every
+environment that does run them — CI's schema step, the documented fresh-database
+bootstrap, developer machines — hits this on its second boot.
+
+### Fix 4 — `npm run test:smoke-sweep` was failing
+
+This is the API smoke sweep in `main-certification.yml`, so `main`'s own certification
+workflow was red. Two independent causes:
+
+1. Wave 5 added `blanketInvalidations`, `targetedInvalidations` and `invalidatedEntries`
+   to `readMicrocache` and the baseline was never regenerated.
+2. `/api/stats/group-net-position-excel` — a workbook endpoint added during these waves —
+   was being shape-pinned at all. Its body parses into thousands of byte-offset keys that
+   shift whenever the zip container's timestamps change, so it could never stabilise. It
+   now joins the two workbook endpoints already listed as `unstable`.
+
+The baseline was regenerated on a **CI-equivalent disposable database** (`postgres` →
+`drizzle-kit push` → one server boot → sweep), which matters: an earlier regeneration
+against a reused scratch database also collapsed `/api/chat/users` to `[]` and was backed
+out rather than committed. The committed regeneration also adds 21 endpoints introduced
+across Waves 1–6 that the stale baseline never covered, taking the sweep from ~425 to 446
+pinned routes. Green and byte-identical across consecutive runs.
+
+### Fix 5 — `npm run verify:env-docs` was failing
+
+Wave 6 introduced ten memory-bounding environment variables and documented none of them,
+failing the documentation gate in `ci.yml`. All ten are now in `.env.example` with their
+defaults, their ignored-value floors, and why each bound exists:
+`SIMPLE_CACHE_MAX_ENTRIES`, `ERP_CONTEXT_CACHE_MAX_ENTRIES`, `EXPORT_JOB_MAX_ENTRIES`,
+`EXPORT_JOB_MAX_STEPS`, `POS_TEMP_FILE_MAX_ENTRIES`, `POS_TEMP_FILE_MAX_BYTES`,
+`GIT_IMPORT_UNDO_MAX_ENTRIES`, `TRACKING_RATE_LIMIT_MAX_ENTRIES`,
+`PUPPETEER_BROWSER_IDLE_MS`, `PUPPETEER_PREWARM`. The gate now reports 151 variables
+documented across four deployment examples.
+
+### Fix 6 — `npm run audit:scripts` was failing through the i18n audit
+
+The 2-bale Stock Entry limit shipped with thirteen untranslated literals in
+`StockEntryTab.tsx`, taking the factory module from 0 actionable literals to 13 and the
+total from 36 to 40. The five distinct strings are now translated into English, Arabic and
+French in `client/src/i18n/factoryStockEntryTranslations.ts` and resolved through
+`ApplicationInterfaceTranslator` like every other factory surface — the same runtime
+mechanism the rest of the application uses, not a suppression. Factory is back to 0 and
+the total is 27 against a baseline of 36.
+
+### Fix 7 — `render.yaml` described a smaller deployment than the one running
+
+It declared the `starter` plan, a `basic-256mb` database and a 384/448 MB memory guard.
+The live service is `standard` with a `basic_1gb` PostgreSQL 18 database and a 1200/1500
+guard, so **applying the manifest would have downgraded production**. Sizing, region,
+database name and session-pool budget now match the service as read from the Render API;
+values that cannot be read back through the API are marked as such in the file.
+
+`scripts/verify-program6f-export-resource-controls.mjs` pinned the same stale 512 MB
+Starter numbers and failed against the corrected manifest. Its four memory assertions were
+moved to the real ceiling; the guard's intent — cap the JS heap below the container,
+start shedding pressure before the container OOMs — is unchanged.
 
 ---
+
+## Findings raised but deliberately not fixed
+
+1. **Production is 68 commits behind `main`** (Phase 1). Fixing this means deploying to a
+   live system, which was explicitly out of scope for this read-only certification. It is
+   the one remaining blocking item.
+2. **No external alert delivery** (Phase 9) — `docs/operations/external-alerting-checklist.md`
+   is the existing record of that gap; unchanged by this wave.
+3. **The emulated mobile suite does not pass in this container** (Phase 8). Not
+   attributed to a product defect; see that phase for why.
 
 ## Verification performed on the certified tree
 
 | Check | Result |
 |---|---|
 | `npm run check` (TypeScript) | PASS |
-| `npm run build` | PASS — vite 8.3.0, 5 785 modules, 12.17 s |
-| Prettier on changed files | PASS |
-| `requestLogger` + `performanceDashboard` + phase 11 monitoring + insurance suites | PASS — 36/36 |
-| `npm run test:smoke-sweep` | Unchanged from `main` (pre-existing failure, finding 2) |
+| `npm run build` | PASS — vite 8.3.0, 5 785 modules |
+| `npm run lint` | PASS |
+| Prettier on every changed file | PASS |
+| `npm run test:frontend` | PASS — 175 files, 1 193 tests |
+| `npm run test:smoke-sweep` | PASS — green and stable across consecutive runs |
+| `npm run verify:env-docs` | PASS — 151 variables documented |
+| `npm run audit:scripts` (incl. i18n audit) | PASS |
+| `npm run audit:doc-index` / `type-escapes` / `write-routes` / `write-evidence` / `toolchain` / `lint-ratchet` | PASS |
+| `verify:lockfile` / `verify:migrations` / `verify:production-dependencies` / `verify:final-production-readiness` | PASS |
+| `verify-program6f-export-resource-controls` / `verify-readable-logging-phase-10` | PASS |
+| i18n contract suite | PASS — 13 tests |
+| requestLogger + performanceDashboard + phase 11 + insurance suites | PASS — 36 tests |
+| Phase 7 browser E2E | PASS — 8/8 cases |
+| Wave 6 realtime browser E2E | PASS — 2/2 cases |
+| Startup migrations on a disposable database | PASS — `failureCount: 0`, two consecutive boots |
 | Local production boot | PASS — 0 startup errors |
 | Health endpoint authorisation | PASS — 200/200/403/403 |
 
@@ -430,37 +573,46 @@ ERP + FACTORY SYSTEM
 Wave 7 Production Certification
 
 Deployment:      FAIL          production is 68 commits behind main
-Backend:         PASS          local build; production pre-Wave-6
+Backend:         PASS          local build; production still pre-Wave-6
 Database:        PASS          no connection leak; query profiling not certified
 Frontend:        PARTIAL       initial load certified; per-page not certified
-Realtime:        NOT CERTIFIED credentials and fixture unavailable
-Browser Tests:   NOT RUN       existing harness needs credentials and fixture
+Realtime:        PASS          1,350 connect/disconnect cycles, no accumulation
+Browser Tests:   PASS          8/8 flows against a real browser
 Mobile:          NOT CERTIFIED no physical devices
 
 Performance comparison
                       Before (prod, pre-Wave-6)    After (local, Wave 6 merged)
-RAM                   424–533 MB climbing          251 MB RSS / 115 MB heap idle
-API latency (p95)     47–149 ms                    not comparable (no load)
+RAM                   424-533 MB climbing          251 MB RSS / 115 MB heap idle
+API latency (p95)     47-149 ms                    not comparable (no load)
 DB latency            not measurable               not measurable
-Bandwidth (shell)     not measured                 1 820 KB / 29 requests
+Bandwidth (shell)     not measured                 1,820 KB / 29 requests
 Frontend load         not measured                 FCP 564 ms / LCP 972 ms
 Error rate            < 0.1 % 5xx                  0 errors at startup
 
 Final Result: REQUIRES FIXES
 ```
 
-The two defects found were fixed and merged. The wave does not reach CERTIFIED because
-production does not run the certified code, so Waves 1–6 remain unverified in production,
-and because the realtime, browser-flow and mobile exit conditions could not be exercised
-from this environment.
+Seven defects were found and fixed across the two passes: two in the first
+(the insurance repair failing closed against RLS, and `/api/health/metrics` served
+without authentication) and five in the second (the startup-migration archive drift and
+four checks that were already red on `main`). Every one is merged on the certification
+branch with its verification recorded above.
+
+The wave does not reach CERTIFIED for one reason only: **production does not run the
+certified code**, so Waves 1–6 remain unverified in production and every production
+number in this report describes a pre-Wave-6 build. Mobile is a secondary gap that needs
+hardware this environment does not have.
 
 ### To reach CERTIFIED
 
-1. Deploy `main` (`6ecbd80` or later, including both fixes) to `srv-d6kibgtactks739u7vl0`.
-2. Confirm the insurance repair error no longer appears in the boot log and that
-   `/api/health/metrics` returns 403 unauthenticated in production.
+1. Merge this branch and deploy `main` to `srv-d6kibgtactks739u7vl0`. The service has
+   `autoDeploy: no`, so this is a manual action.
+2. Confirm on the new release that the insurance repair error is gone from the boot log
+   and that `/api/health/metrics` returns 403 unauthenticated.
 3. Re-read production memory over a full business day on the Wave 6 build and compare
-   against the 424–533 MB climbing baseline recorded above.
-4. Regenerate `config/api-smoke-shapes.json` against a seeded database and land it.
-5. Run the existing realtime and Phase 7 browser suites with credentials and a fixture.
-6. Run the mobile suites on real iPhone and Android hardware.
+   against the 424–533 MB climbing baseline recorded here. That comparison is the real
+   before/after this wave was asked for, and it cannot be produced until step 1 happens.
+4. Run the mobile suites on real iPhone and Android hardware.
+5. Extend the Phase 7 suite to the flows it does not yet cover: logout, session
+   expiration, company switching, bale creation, allocation, POS edit/print/WhatsApp, and
+   voucher edit/delete.
