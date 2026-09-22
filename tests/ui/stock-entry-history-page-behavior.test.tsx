@@ -61,8 +61,30 @@ vi.mock("@tanstack/react-query", () => ({
     if (root === "/api/locations") return { data: [{ id: 11, name: "Main" }] };
     if (root === "/api/factory/worker-categories") return { data: [{ id: 4, name: "Pressing", workerIds: [1] }] };
     if (root === "/api/factory/categories") return { data: [{ id: 5, name: "Clothing" }] };
-    if (root === "/api/factory/production-planner") {
-      return { data: { 1: { targetBales: 4, workerCount: 1 } } };
+    if (root === "/api/factory/staff-tracking") {
+      return {
+        data: {
+          page: "production",
+          periodType: "daily",
+          periodStart: "2026-08-12",
+          periodEnd: "2026-08-12",
+          finalized: false,
+          rows: [
+            {
+              personType: "worker",
+              personId: 1,
+              name: "Alice",
+              code: null,
+              category: "Pressing",
+              targetBales: 4,
+              producedBales: 3,
+              status: "Present",
+              notes: "",
+              active: true,
+            },
+          ],
+        },
+      };
     }
     return { data: [] };
   },
@@ -86,7 +108,6 @@ vi.mock("@/contexts/DateFormatContext", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
 vi.mock("@/lib/queryClient", () => ({ apiRequest: harness.apiRequest }));
-vi.mock("@/pages/factory/ProductionPlannerDialog", () => ({ default: () => <div>Planner</div> }));
 vi.mock("@/lib/excelHelper", () => ({
   utils: {
     book_new: vi.fn(() => ({})),
@@ -153,7 +174,7 @@ describe("stock entry history page behavior", () => {
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
   });
 
-  it("summarizes worker production against the daily plan", () => {
+  it("summarizes worker production against Production Targets", () => {
     render(<StockEntryHistory />);
 
     expect(screen.getByRole("heading", { name: "Stock Entry History" })).toBeInTheDocument();
