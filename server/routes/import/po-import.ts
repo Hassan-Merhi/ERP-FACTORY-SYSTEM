@@ -707,6 +707,9 @@ export function registerPoImportRoutes(app: Express) {
           // ERP company; otherwise preserve the direct supplier payable behavior.
           const creditTarget = resolvePoImportCreditTarget({
             companyType,
+            // This branch is only for a root/standalone company. A stale
+            // parentCreditAccountId must never divert its supplier payable.
+            hasExplicitParentLink: false,
             configuredIntercompanyCreditAccountId,
             supplierId,
           });

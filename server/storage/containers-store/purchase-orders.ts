@@ -305,6 +305,7 @@ export async function createPurchaseOrder(
 
       const creditTarget = resolvePoImportCreditTarget({
         companyType: currentCompany?.companyType,
+        hasExplicitParentLink: Boolean(parentCompany),
         configuredIntercompanyCreditAccountId,
         supplierId: po.supplierId,
       });
