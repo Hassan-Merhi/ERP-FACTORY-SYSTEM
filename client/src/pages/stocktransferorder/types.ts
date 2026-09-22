@@ -88,12 +88,14 @@ export interface ExistingStockTransferItem {
 export interface ExistingStockTransfer {
   id: number;
   destinationLocationId?: number | null;
+  notes?: string | null;
   items?: ExistingStockTransferItem[];
 }
 
 export interface ExistingVoucherHeader {
   optional?: boolean;
   voucherDate?: string | null;
+  description?: string | null;
 }
 
 export interface StockTransferRevisionItem {
