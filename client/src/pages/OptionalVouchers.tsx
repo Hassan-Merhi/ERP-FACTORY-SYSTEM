@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -11,16 +11,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FileText, Search, Pencil, Check, Trash2, X } from "lucide-react";
+import { FileText, Search, Pencil, Check, Trash2, X, Eye } from "lucide-react";
 import { format } from "date-fns";
-
-interface OptionalVoucher {
-  id: number;
-  voucherType: string;
-  voucherDate?: string;
-  description?: string | null;
-  totalAmount?: string;
-}
+import { OptionalVoucherDetailsDialog } from "./optional-vouchers/OptionalVoucherDetailsDialog";
+import type { Voucher } from "./daybook/types";
 
 export default function OptionalVouchers() {
   const [, navigate] = useLocation();
@@ -31,6 +25,7 @@ export default function OptionalVouchers() {
   const [search, setSearch] = useState("");
   const [finalizeVoucherId, setFinalizeVoucherId] = useState<number | null>(null);
   const [deleteVoucherId, setDeleteVoucherId] = useState<number | null>(null);
+  const [viewVoucher, setViewVoucher] = useState<Voucher | null>(null);
 
   const queryParams = new URLSearchParams();
   if (typeFilter && typeFilter !== "all") queryParams.set("type", typeFilter);
@@ -45,7 +40,7 @@ export default function OptionalVouchers() {
     isLoading,
     isError,
     error,
-  } = useQuery<OptionalVoucher[]>({
+  } = useQuery<Voucher[]>({
     queryKey: ["/api/vouchers/optional", typeFilter, startDate, endDate, search],
     queryFn: async () => {
       const res = await apiRequest("GET", queryUrl);
@@ -128,9 +123,18 @@ export default function OptionalVouchers() {
     }
   };
 
-  const grandTotal = vouchers.reduce((sum, v) => sum + parseFloat(v.totalAmount || "0"), 0);
+  const orderedVouchers = useMemo(
+    () =>
+      [...vouchers].sort((a, b) => {
+        const dateCompare = a.voucherDate.localeCompare(b.voucherDate);
+        return dateCompare !== 0 ? dateCompare : a.id - b.id;
+      }),
+    [vouchers]
+  );
 
-  const handleEdit = (v: OptionalVoucher) => {
+  const grandTotal = orderedVouchers.reduce((sum, v) => sum + parseFloat(v.totalAmount || "0"), 0);
+
+  const handleEdit = (v: Voucher) => {
     const voucherTypeMap: Record<string, string> = {
       Payment: "payment",
       Receipt: "receipt",
@@ -287,7 +291,7 @@ export default function OptionalVouchers() {
                 </tr>
               </thead>
               <tbody>
-                {vouchers.map((v) => (
+                {orderedVouchers.map((v) => (
                   <tr
                     key={v.id}
                     className="border-t hover:bg-muted/30 transition-colors"
@@ -310,6 +314,17 @@ export default function OptionalVouchers() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setViewVoucher(v)}
+                          data-testid={`button-view-voucher-${v.id}`}
+                          className="h-8 w-8"
+                          title="View voucher details"
+                          aria-label="View voucher details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -363,7 +378,7 @@ export default function OptionalVouchers() {
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-2">
-            {vouchers.map((v) => (
+            {orderedVouchers.map((v) => (
               <div key={v.id} className="border rounded-xl p-4 space-y-2" data-testid={`card-voucher-${v.id}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -385,6 +400,17 @@ export default function OptionalVouchers() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1 pt-1 border-t">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setViewVoucher(v)}
+                    data-testid={`button-view-mobile-${v.id}`}
+                    className="h-8 w-8"
+                    title="View voucher details"
+                    aria-label="View voucher details"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -420,6 +446,18 @@ export default function OptionalVouchers() {
           </div>
         </>
       )}
+
+      <OptionalVoucherDetailsDialog
+        voucher={viewVoucher}
+        open={viewVoucher !== null}
+        onOpenChange={(open) => {
+          if (!open) setViewVoucher(null);
+        }}
+        onEdit={(voucher) => {
+          setViewVoucher(null);
+          handleEdit(voucher);
+        }}
+      />
 
       <ConfirmDialog
         open={finalizeVoucherId !== null}
