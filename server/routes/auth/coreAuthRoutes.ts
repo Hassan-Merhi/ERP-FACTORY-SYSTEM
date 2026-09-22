@@ -8,6 +8,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSessionUserId } from "../../lib/sessionUser";
 import { logger } from "../../lib/logger";
+import { SESSION_COOKIE_NAME } from "../../startup/sessionMiddleware";
 import { storage } from "../../storage";
 import {
   advanceCurrentSessionAfterPasswordChange,
@@ -187,8 +188,22 @@ export function registerCoreAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    // Always expire the browser cookie, even if the backing session store has a
+    // transient failure. This prevents a stale session cookie from surviving a
+    // browser close/reopen after the user explicitly signed out.
+    res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
+    res.setHeader("Cache-Control", "no-store");
+
     req.session.destroy((error) => {
-      if (error) return res.status(500).json({ message: "Failed to logout" });
+      if (error) {
+        logger.error("[Auth] Session store failed to destroy session during logout", {
+          error: getErrorMessage(error),
+          sessionId: req.sessionID,
+        });
+        // The client cookie is already expired, so the browser is logged out.
+        // Keep logout idempotent instead of leaving the UI on an authenticated page.
+        return res.json({ message: "Logged out successfully", sessionCleanupPending: true });
+      }
       res.json({ message: "Logged out successfully" });
     });
   });
