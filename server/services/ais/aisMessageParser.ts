@@ -17,6 +17,19 @@ function stringValue(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+function parseRoot(raw: string | Buffer): JsonRecord | null {
+  try {
+    return record(JSON.parse(typeof raw === "string" ? raw : raw.toString("utf8")));
+  } catch {
+    return null;
+  }
+}
+
+export function isAisStreamSubscriptionConfirmation(raw: string | Buffer): boolean {
+  const root = parseRoot(raw);
+  return root?.MessageType === "SubscriptionConfirmation" || root?.messageType === "SubscriptionConfirmation";
+}
+
 export function normalizeMmsi(value: unknown): string | null {
   const raw = typeof value === "number" ? String(Math.trunc(value)) : typeof value === "string" ? value.trim() : "";
   return /^\d{9}$/.test(raw) ? raw : null;
@@ -30,15 +43,8 @@ function dateValue(value: unknown, fallback = new Date()): Date {
 
 /** Parse only the AISStream message families the ERP consumes; unknown messages are ignored. */
 export function parseAisStreamMessage(raw: string | Buffer): AisUpdate | null {
-  let root: JsonRecord;
-  try {
-    const parsed = JSON.parse(typeof raw === "string" ? raw : raw.toString("utf8"));
-    const obj = record(parsed);
-    if (!obj) return null;
-    root = obj;
-  } catch {
-    return null;
-  }
+  const root = parseRoot(raw);
+  if (!root) return null;
 
   const metadata = record(root.MetaData) ?? record(root.metadata) ?? {};
   const message = record(root.Message) ?? record(root.message);
@@ -51,8 +57,8 @@ export function parseAisStreamMessage(raw: string | Buffer): AisUpdate | null {
 
   const position = record(message.PositionReport ?? message.positionReport);
   if (position) {
-    const latitude = finite(position.Latitude ?? position.latitude);
-    const longitude = finite(position.Longitude ?? position.longitude);
+    const latitude = finite(position.Latitude ?? position.latitude ?? metadata.Latitude ?? metadata.latitude);
+    const longitude = finite(position.Longitude ?? position.longitude ?? metadata.Longitude ?? metadata.longitude);
     if (latitude === null || longitude === null || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
       return null;
     }
