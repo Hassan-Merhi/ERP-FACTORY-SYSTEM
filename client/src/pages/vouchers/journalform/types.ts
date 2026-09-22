@@ -82,6 +82,7 @@ export interface JournalVoucherToEdit {
   voucherType: string;
   voucherDate: string;
   entries?: JournalVoucherEntry[];
+  description?: string | null;
   notes?: string | null;
   optional?: boolean;
   effectiveDate?: string | null;
