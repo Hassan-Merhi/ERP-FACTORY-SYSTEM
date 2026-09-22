@@ -355,8 +355,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       }
 
       // Daily defaults are the template for every open production day. A saved
-      // tracking row only replaces the template when Edit Targets explicitly
-      // marked that worker's target as a day-specific override.
+      // tracking row only replaces category or target when Edit Targets explicitly
+      // marked that field as a day-specific override.
       const productionTargetDefaults =
         query.page === "production" && query.periodType === "daily" && !finalized
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
