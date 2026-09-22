@@ -32,7 +32,12 @@ interface ProductionTargetDefaultsDialogProps {
 
 interface TargetDefaultsResponse {
   asOf: string;
-  targets: Array<{ workerId: number; targetBales: number | null }>;
+  targets: Array<{ workerId: number; category: string | null; targetBales: number | null }>;
+}
+
+interface TargetDefaultDraft {
+  category: string;
+  targetBales: number | null;
 }
 
 function targetValue(value: string): number | null {
@@ -50,7 +55,7 @@ export function ProductionTargetDefaultsDialog({
   const { toast } = useToast();
   const { language } = useApplicationLanguage();
   const tr = (key: FactoryStaffTrackingTranslationKey) => translateFactoryStaffTrackingText(key, language);
-  const [draftTargets, setDraftTargets] = useState<Record<number, number | null>>({});
+  const [draftDefaults, setDraftDefaults] = useState<Record<number, TargetDefaultDraft>>({});
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery<TargetDefaultsResponse>({
@@ -71,25 +76,46 @@ export function ProductionTargetDefaultsDialog({
   });
 
   const defaultsById = useMemo(
-    () => new Map((data?.targets ?? []).map((entry) => [entry.workerId, entry.targetBales])),
+    () => new Map((data?.targets ?? []).map((entry) => [entry.workerId, entry])),
     [data]
   );
 
   useEffect(() => {
     if (!open || !data) return;
-    setDraftTargets(Object.fromEntries(rows.map((row) => [row.personId, defaultsById.get(row.personId) ?? null])));
+    setDraftDefaults(
+      Object.fromEntries(
+        rows.map((row) => {
+          const savedDefault = defaultsById.get(row.personId);
+          return [
+            row.personId,
+            {
+              category: savedDefault?.category ?? row.defaultCategory ?? row.category ?? "",
+              targetBales: savedDefault?.targetBales ?? row.defaultTargetBales ?? null,
+            },
+          ];
+        })
+      )
+    );
     setSearch("");
   }, [open, data, defaultsById, rows]);
 
   const changedRecords = useMemo(
     () =>
       rows
-        .filter((row) => (draftTargets[row.personId] ?? null) !== (defaultsById.get(row.personId) ?? null))
+        .filter((row) => {
+          const draft = draftDefaults[row.personId];
+          if (!draft) return false;
+          const savedDefault = defaultsById.get(row.personId);
+          const originalCategory = savedDefault?.category ?? row.defaultCategory ?? row.category ?? "";
+          const originalTarget = savedDefault?.targetBales ?? row.defaultTargetBales ?? null;
+          return draft.category.trim() !== originalCategory.trim() || draft.targetBales !== originalTarget;
+        })
         .map((row) => ({
           workerId: row.personId,
-          targetBales: draftTargets[row.personId] ?? null,
+          category: (draftDefaults[row.personId]?.category ?? "").trim(),
+          targetBales: draftDefaults[row.personId]?.targetBales ?? null,
         })),
-    [rows, draftTargets, defaultsById]
+    [rows, draftDefaults, defaultsById]
   );
 
   const visibleRows = useMemo(() => {
@@ -100,17 +126,21 @@ export function ProductionTargetDefaultsDialog({
           !needle ||
           row.name.toLocaleLowerCase().includes(needle) ||
           (row.code || "").toLocaleLowerCase().includes(needle) ||
-          row.category.toLocaleLowerCase().includes(needle)
+          (draftDefaults[row.personId]?.category ?? row.defaultCategory ?? row.category)
+            .toLocaleLowerCase()
+            .includes(needle)
       )
       .sort((left, right) => {
-        const categoryCompare = left.category.localeCompare(right.category, undefined, {
+        const leftCategory = draftDefaults[left.personId]?.category ?? left.defaultCategory ?? left.category;
+        const rightCategory = draftDefaults[right.personId]?.category ?? right.defaultCategory ?? right.category;
+        const categoryCompare = leftCategory.localeCompare(rightCategory, undefined, {
           sensitivity: "base",
           numeric: true,
         });
         if (categoryCompare !== 0) return categoryCompare;
         return left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true });
       });
-  }, [rows, search]);
+  }, [rows, search, draftDefaults]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -210,18 +240,37 @@ export function ProductionTargetDefaultsDialog({
                         {row.name}
                       </div>
                     </TableCell>
-                    <TableCell>{row.category || "—"}</TableCell>
+                    <TableCell>
+                      <Input
+                        value={draftDefaults[row.personId]?.category ?? row.defaultCategory ?? row.category}
+                        disabled={isLoading || saveMutation.isPending}
+                        onChange={(event) =>
+                          setDraftDefaults((current) => ({
+                            ...current,
+                            [row.personId]: {
+                              category: event.target.value,
+                              targetBales: current[row.personId]?.targetBales ?? row.defaultTargetBales ?? null,
+                            },
+                          }))
+                        }
+                        placeholder={tr("categoryStation")}
+                        data-testid={`input-production-default-category-${row.personId}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Input
                         type="number"
                         min="0"
                         step="1"
-                        value={draftTargets[row.personId] ?? ""}
+                        value={draftDefaults[row.personId]?.targetBales ?? ""}
                         disabled={isLoading || saveMutation.isPending}
                         onChange={(event) =>
-                          setDraftTargets((current) => ({
+                          setDraftDefaults((current) => ({
                             ...current,
-                            [row.personId]: targetValue(event.target.value),
+                            [row.personId]: {
+                              category: current[row.personId]?.category ?? row.defaultCategory ?? row.category,
+                              targetBales: targetValue(event.target.value),
+                            },
                           }))
                         }
                         className="text-right tabular-nums"
