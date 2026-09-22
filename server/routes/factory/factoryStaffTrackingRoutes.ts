@@ -311,7 +311,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
 
       const workerGroupNames = await loadWorkerGroupNames(companyId);
       const activeProductionLinks =
-        query.page === "production" ? await loadActiveProductionWorkerLinks(companyId, query.periodStart) : [];
+        query.page === "production" && query.periodType === "daily"
+          ? await loadActiveProductionWorkerLinks(companyId, query.periodStart)
+          : [];
       const productionLinkByWorker = indexProductionWorkerLinks(activeProductionLinks);
       const includedWorkers = workers.filter((person) => {
         const savedForPeriod = savedMap.has(`worker:${person.id}`);
@@ -659,7 +661,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const employeeIds = new Set(allEmployees.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
       const activeProductionLinks =
-        page === "production" ? await loadActiveProductionWorkerLinks(companyId, periodStart) : [];
+        page === "production" && periodType === "daily"
+          ? await loadActiveProductionWorkerLinks(companyId, periodStart)
+          : [];
       const productionAttendance = new Map<number, string>();
 
       if (page === "production" && periodType === "daily" && workerIds.size > 0) {
