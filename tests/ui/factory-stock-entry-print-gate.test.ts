@@ -5,20 +5,28 @@ function source(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
 
-describe("Factory stock-entry two-bale limit", () => {
-  it("caps Stock Entry and label printing to two total bales", () => {
+describe("Factory stock-entry two-item limit", () => {
+  it("limits Stock Entry to two product lines while allowing any bale quantity", () => {
     const tab = source("client/src/pages/factory/bale-stock-entry/StockEntryTab.tsx");
 
-    expect(tab).toContain("const MAX_BALES_PER_ENTRY = 2;");
-    expect(tab).toContain("countCartBales(cart) >= MAX_BALES_PER_ENTRY");
-    expect(tab).toContain("Math.max(0, MAX_BALES_PER_ENTRY - otherQty)");
-    expect(tab).toContain("countCartBales(cart) > MAX_BALES_PER_ENTRY");
-    expect(tab).toContain("if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;");
-    // The cap message now goes through the application catalog so Arabic and
-    // French users see it translated. The English text lives in
-    // client/src/i18n/applicationTranslations.ts, where the i18n audit and the
-    // catalog's own type constraint keep it in place.
-    expect(tab).toContain('tr("factory.stockEntry.baleLimit")');
+    expect(tab).toContain("const MAX_ITEMS_PER_ENTRY = 2;");
+    expect(tab).toContain("cart.length >= MAX_ITEMS_PER_ENTRY");
+    expect(tab).toContain("prev.length >= MAX_ITEMS_PER_ENTRY");
+    expect(tab).toContain("cart.length > MAX_ITEMS_PER_ENTRY");
+    expect(tab).toContain("Math.max(0, item.qty + delta)");
+    expect(tab).toContain("setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)))");
+    expect(tab).not.toContain("MAX_BALES_PER_ENTRY");
+    expect(tab).not.toContain("countCartBales");
+    expect(tab).not.toContain("maxForProduct");
+  });
+
+  it("lets an existing item keep increasing after two product lines are already present", () => {
+    const tab = source("client/src/pages/factory/bale-stock-entry/StockEntryTab.tsx");
+
+    expect(tab).toContain("const existingInCart = cart.some((item) => item.productId === product.id);");
+    expect(tab).toContain("if (!existingInCart && cart.length >= MAX_ITEMS_PER_ENTRY)");
+    expect(tab).toContain("if (existing) {");
+    expect(tab).toContain("qty: item.qty + 1");
   });
 
   it("does not keep the Stock Entry screen locked while print tabs are open", () => {
