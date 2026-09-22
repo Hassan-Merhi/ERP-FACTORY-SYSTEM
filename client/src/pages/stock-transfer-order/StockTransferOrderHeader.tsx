@@ -20,7 +20,12 @@ import type { useStockTransferOrderModel } from "./useStockTransferOrderModel";
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 
-export function StockTransferOrderHeader({ model }: { model: Model }) {
+interface StockTransferOrderHeaderProps {
+  model: Model;
+  onSwitchToNormalView?: () => void;
+}
+
+export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockTransferOrderHeaderProps) {
   const {
     editVoucherId,
     destinationLocationId,
@@ -150,7 +155,13 @@ export function StockTransferOrderHeader({ model }: { model: Model }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`)}
+            onClick={() => {
+              if (onSwitchToNormalView) {
+                onSwitchToNormalView();
+                return;
+              }
+              navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`);
+            }}
             data-testid="button-switch-to-normal-view"
           >
             <List className="h-4 w-4 mr-2" />
