@@ -111,6 +111,29 @@ describe("factory production bonus preview", () => {
     expect(Number(result.allocations.reduce((sum, row) => sum + row.amount, 0).toFixed(2))).toBe(3);
   });
 
+  it("treats linked workers as one bonus unit and splits their unit share 50/50", () => {
+    const result = calculateProductionBonusPreview({
+      targetBales: 100,
+      actualBales: 112,
+      bonusPerExtraBale: 1,
+      bonusEnabled: true,
+      members: [
+        { workerId: 1, workerName: "A" },
+        { workerId: 2, workerName: "B" },
+        { workerId: 3, workerName: "C" },
+      ],
+      linkedWorkerGroups: [[1, 2]],
+    });
+
+    expect(result.bonusPool).toBe(12);
+    expect(result.allocations).toEqual([
+      { workerId: 1, workerName: "A", amount: 3 },
+      { workerId: 2, workerName: "B", amount: 3 },
+      { workerId: 3, workerName: "C", amount: 6 },
+    ]);
+    expect(Number(result.allocations.reduce((sum, row) => sum + row.amount, 0).toFixed(2))).toBe(12);
+  });
+
   it("keeps the pool at zero when bonuses are disabled or target is zero", () => {
     const disabled = calculateProductionBonusPreview({
       targetBales: 100,
