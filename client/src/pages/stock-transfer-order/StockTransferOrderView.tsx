@@ -14,7 +14,12 @@ import type { useStockTransferOrderModel } from "./useStockTransferOrderModel";
 
 type Model = ReturnType<typeof useStockTransferOrderModel>;
 
-export function StockTransferOrderView({ model }: { model: Model }) {
+interface StockTransferOrderViewProps {
+  model: Model;
+  onSwitchToNormalView?: () => void;
+}
+
+export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTransferOrderViewProps) {
   const {
     hasDraft,
     editVoucherId,
@@ -94,7 +99,7 @@ export function StockTransferOrderView({ model }: { model: Model }) {
         </div>
       )}
 
-      <StockTransferOrderHeader model={model} />
+      <StockTransferOrderHeader model={model} onSwitchToNormalView={onSwitchToNormalView} />
 
       {validationErrors.length > 0 && (
         <Card className="border-destructive bg-destructive/5">
