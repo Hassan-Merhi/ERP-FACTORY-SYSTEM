@@ -4,6 +4,8 @@ import { Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translateApplicationText, type ApplicationTranslationKey } from "@/i18n/applicationTranslations";
 import { queryClient } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -78,6 +80,8 @@ export function StockEntryTab() {
   const [productionPositionByProduct, setProductionPositionByProduct] = useState<Record<number, number | null>>({});
   const scanRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { language } = useApplicationLanguage();
+  const tr = (key: ApplicationTranslationKey) => translateApplicationText(key, language);
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const { selectedCompany } = useCompany();
@@ -272,8 +276,8 @@ export function StockEntryTab() {
       const defaultWeight = newProduct.weightPerBaleKg ? parseFloat(newProduct.weightPerBaleKg) : 25;
       if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
         toast({
-          title: "2-bale limit reached",
-          description: "Finish this Stock Entry before adding another bale.",
+          title: tr("factory.stockEntry.baleLimitReached"),
+          description: tr("factory.stockEntry.finishBeforeAdding"),
           variant: "destructive",
         });
         return;
@@ -320,8 +324,8 @@ export function StockEntryTab() {
     if (!value.trim()) return;
     if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
       toast({
-        title: "2-bale limit reached",
-        description: "A Stock Entry can contain at most 2 bales. Confirm this entry before adding another.",
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
         variant: "destructive",
       });
       setScanInput("");
@@ -379,8 +383,8 @@ export function StockEntryTab() {
   const selectProduct = (product: FactoryBaleProduct) => {
     if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
       toast({
-        title: "2-bale limit reached",
-        description: "A Stock Entry can contain at most 2 bales. Confirm this entry before adding another.",
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
         variant: "destructive",
       });
       setScanInput("");
@@ -415,39 +419,33 @@ export function StockEntryTab() {
   const updateQty = (productId: number, delta: number) => {
     if (delta > 0 && countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
       toast({
-        title: "2-bale limit reached",
-        description: "A Stock Entry can contain at most 2 bales.",
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimit"),
         variant: "destructive",
       });
       return;
     }
 
     setCart((prev) => {
-      const otherQty = prev
-        .filter((item) => item.productId !== productId)
-        .reduce((sum, item) => sum + item.qty, 0);
+      const otherQty = prev.filter((item) => item.productId !== productId).reduce((sum, item) => sum + item.qty, 0);
       const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
       return prev
         .map((item) =>
-          item.productId === productId
-            ? { ...item, qty: Math.min(maxForProduct, Math.max(0, item.qty + delta)) }
-            : item
+          item.productId === productId ? { ...item, qty: Math.min(maxForProduct, Math.max(0, item.qty + delta)) } : item
         )
         .filter((item) => item.qty > 0);
     });
   };
 
   const setQty = (productId: number, qty: number) => {
-    const otherQty = cart
-      .filter((item) => item.productId !== productId)
-      .reduce((sum, item) => sum + item.qty, 0);
+    const otherQty = cart.filter((item) => item.productId !== productId).reduce((sum, item) => sum + item.qty, 0);
     const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
     const cappedQty = Math.min(qty, maxForProduct);
 
     if (qty > maxForProduct) {
       toast({
-        title: "2-bale limit reached",
-        description: "A Stock Entry can contain at most 2 bales.",
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimit"),
         variant: "destructive",
       });
     }
@@ -510,8 +508,8 @@ export function StockEntryTab() {
     }
     if (totalQty > MAX_BALES_PER_ENTRY) {
       toast({
-        title: "2-bale limit reached",
-        description: "A Stock Entry can contain at most 2 bales. Reduce the quantity before confirming.",
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimitReduceQuantity"),
         variant: "destructive",
       });
       return;
@@ -556,7 +554,7 @@ export function StockEntryTab() {
   const stockEntryMutation = useMutation({
     mutationFn: async () => {
       if (countCartBales(cart) > MAX_BALES_PER_ENTRY) {
-        throw new Error("A Stock Entry can contain at most 2 bales.");
+        throw new Error(tr("factory.stockEntry.baleLimit"));
       }
       const response = await modeApiRequest("POST", "/api/factory/stock-entry", {
         erpLocationId: parseInt(selectedLocationId),

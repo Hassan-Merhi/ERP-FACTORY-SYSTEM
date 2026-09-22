@@ -14,7 +14,11 @@ describe("Factory stock-entry two-bale limit", () => {
     expect(tab).toContain("Math.max(0, MAX_BALES_PER_ENTRY - otherQty)");
     expect(tab).toContain("countCartBales(cart) > MAX_BALES_PER_ENTRY");
     expect(tab).toContain("if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;");
-    expect(tab).toContain("A Stock Entry can contain at most 2 bales.");
+    // The cap message now goes through the application catalog so Arabic and
+    // French users see it translated. The English text lives in
+    // client/src/i18n/applicationTranslations.ts, where the i18n audit and the
+    // catalog's own type constraint keep it in place.
+    expect(tab).toContain('tr("factory.stockEntry.baleLimit")');
   });
 
   it("does not keep the Stock Entry screen locked while print tabs are open", () => {
