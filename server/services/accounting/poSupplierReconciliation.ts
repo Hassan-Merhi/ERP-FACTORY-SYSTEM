@@ -28,7 +28,9 @@ export function expectedPoSupplierPayable(input: PoSupplierExpectationInput): De
     .minus(money(input.discount))
     .plus(money(input.otherCharges));
 
-  return input.freightPaidBy === "parent" && freight.gt(0) ? gross.minus(freight) : gross;
+  return (input.freightPaidBy === "own" || input.freightPaidBy === "parent") && freight.gt(0)
+    ? gross.minus(freight)
+    : gross;
 }
 
 export function classifyPoSupplierPosting(expected: Decimal, actualCredits: Array<string | number>) {
