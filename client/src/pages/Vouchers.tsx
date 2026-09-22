@@ -739,7 +739,16 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && activeTab === "transferorder" && <StockTransferOrder />}
+          {!isPOS && activeTab === "transferorder" && (
+            <StockTransferOrder
+              onSwitchToNormalView={() => {
+                setActiveTab("transfer");
+                if (voucherIdToEdit) {
+                  setLocation(`/vouchers?edit=${voucherIdToEdit}&tab=transfer`);
+                }
+              }}
+            />
+          )}
         </div>
       </div>
 
