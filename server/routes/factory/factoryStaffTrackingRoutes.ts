@@ -18,6 +18,7 @@ type SavedTrackingRow = {
   personId: number;
   groupName: string | null;
   category: string | null;
+  categoryOverridden: boolean;
   targetBales: string | null;
   targetBalesOverridden: boolean;
   producedBales: string | null;
@@ -30,6 +31,7 @@ type NormalizedTrackingRow = {
   personId: number;
   groupName: string | null;
   category: string | null;
+  categoryOverridden: boolean;
   notes: string | null;
   targetBales: number | null;
   targetBalesOverridden: boolean;
@@ -39,7 +41,13 @@ type NormalizedTrackingRow = {
 
 type ProductionTargetDefaultRow = {
   workerId: number | string;
+  category: string | null;
   targetBales: string | number | null;
+};
+
+type ProductionTargetDefault = {
+  category: string | null;
+  targetBales: number | null;
 };
 
 const PAGE_TYPES = new Set<TrackingPage>(["production", "attendance"]);
@@ -178,10 +186,11 @@ async function loadPreviousDailyCarry(
 async function loadProductionTargetDefaults(
   companyId: number,
   asOf: string
-): Promise<Map<number, number | null>> {
+): Promise<Map<number, ProductionTargetDefault>> {
   const result = await db.execute(sql`
     SELECT DISTINCT ON (worker_id)
       worker_id AS "workerId",
+      category,
       target_bales AS "targetBales"
     FROM factory_worker_production_target_defaults
     WHERE company_id = ${companyId}
@@ -189,13 +198,13 @@ async function loadProductionTargetDefaults(
     ORDER BY worker_id, effective_from DESC, id DESC
   `);
   const rows = resultRows(result) as ProductionTargetDefaultRow[];
-  const defaults = new Map<number, number | null>();
+  const defaults = new Map<number, ProductionTargetDefault>();
 
   for (const row of rows) {
-    defaults.set(
-      Number(row.workerId),
-      row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales)
-    );
+    defaults.set(Number(row.workerId), {
+      category: row.category,
+      targetBales: row.targetBales === null || row.targetBales === undefined ? null : Number(row.targetBales),
+    });
   }
 
   return defaults;
@@ -268,6 +277,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           person_id AS "personId",
           group_name AS "groupName",
           category,
+          category_overridden AS "categoryOverridden",
           target_bales AS "targetBales",
           target_overridden AS "targetBalesOverridden",
           produced_bales AS "producedBales",
@@ -345,12 +355,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       }
 
       // Daily defaults are the template for every open production day. A saved
-      // tracking row only replaces the template when Edit Targets explicitly
-      // marked that worker's target as a day-specific override.
+      // tracking row only replaces category or target when Edit Targets explicitly
+      // marked that field as a day-specific override.
       const productionTargetDefaults =
         query.page === "production" && query.periodType === "daily" && !finalized
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
-          : new Map<number, number | null>();
+          : new Map<number, ProductionTargetDefault>();
 
       const workerRows = includedWorkers.map((worker) => {
         const savedRow = savedMap.get(`worker:${worker.id}`);
@@ -367,9 +377,26 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           savedRow?.targetBales === null || savedRow?.targetBales === undefined
             ? null
             : Number(savedRow.targetBales);
+        const productionDefault =
+          query.page === "production" && query.periodType === "daily" && !finalized
+            ? productionTargetDefaults.get(worker.id)
+            : undefined;
+        const defaultCategory = productionDefault?.category ?? worker.position ?? worker.department ?? "";
+        const categoryOverridden =
+          query.page === "production" &&
+          query.periodType === "daily" &&
+          !finalized &&
+          savedRow?.categoryOverridden === true;
+        const category = finalized
+          ? (savedRow?.category ?? worker.position ?? worker.department ?? "")
+          : query.page === "production" && query.periodType === "daily"
+            ? categoryOverridden
+              ? (savedRow?.category ?? "")
+              : defaultCategory
+            : (savedRow?.category ?? worker.position ?? worker.department ?? "");
         const defaultTargetBales =
           query.page === "production" && query.periodType === "daily" && !finalized
-            ? (productionTargetDefaults.get(worker.id) ?? null)
+            ? (productionDefault?.targetBales ?? null)
             : null;
         const targetBalesOverridden =
           query.page === "production" &&
@@ -390,7 +417,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           name: worker.fullName,
           code: worker.employeeCode,
           groupName,
-          category: savedRow?.category ?? worker.position ?? worker.department ?? "",
+          category,
+          defaultCategory,
+          categoryOverridden,
           targetBales,
           defaultTargetBales,
           targetBalesOverridden,
@@ -438,7 +467,11 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       const defaults = await loadProductionTargetDefaults(companyId, asOf);
       res.json({
         asOf,
-        targets: [...defaults.entries()].map(([workerId, targetBales]) => ({ workerId, targetBales })),
+        targets: [...defaults.entries()].map(([workerId, defaultsForWorker]) => ({
+          workerId,
+          category: defaultsForWorker.category,
+          targetBales: defaultsForWorker.targetBales,
+        })),
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -468,11 +501,12 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         .where(eq(factoryWorkers.companyId, companyId));
       const workerIds = new Set(allWorkers.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
-      const normalized: Array<{ workerId: number; targetBales: number | null }> = [];
+      const normalized: Array<{ workerId: number; category: string; targetBales: number | null }> = [];
       const seen = new Set<number>();
 
       for (const raw of records) {
         const workerId = Number(raw?.workerId);
+        const category = String(raw?.category ?? "").trim().slice(0, 150);
         const targetBales = numberOrNull(raw?.targetBales);
 
         if (!Number.isInteger(workerId) || workerId <= 0 || !workerIds.has(workerId)) {
@@ -494,22 +528,23 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         }
 
         seen.add(workerId);
-        normalized.push({ workerId, targetBales });
+        normalized.push({ workerId, category, targetBales });
       }
 
       const values = normalized.map(
-        ({ workerId, targetBales }) => sql`(
-          ${companyId}, ${workerId}, ${effectiveFrom}, ${targetBales},
+        ({ workerId, category, targetBales }) => sql`(
+          ${companyId}, ${workerId}, ${effectiveFrom}, ${category}, ${targetBales},
           ${req.session.userId || null}, now(), now()
         )`
       );
 
       await db.execute(sql`
         INSERT INTO factory_worker_production_target_defaults (
-          company_id, worker_id, effective_from, target_bales, created_by, created_at, updated_at
+          company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
         ) VALUES ${sql.join(values, sql`, `)}
         ON CONFLICT (company_id, worker_id, effective_from)
         DO UPDATE SET
+          category = EXCLUDED.category,
           target_bales = EXCLUDED.target_bales,
           created_by = EXCLUDED.created_by,
           updated_at = now()
@@ -639,6 +674,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           String(raw?.notes || "")
             .trim()
             .slice(0, 4000) || null;
+        const categoryOverridden =
+          page === "production" && periodType === "daily" && raw?.categoryOverridden === true;
         const targetBales = numberOrNull(raw?.targetBales);
         const targetBalesOverridden =
           page === "production" && periodType === "daily" && raw?.targetBalesOverridden === true;
@@ -677,6 +714,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
                 : (workerGroupNames.get(personId)?.[0] ?? null)
               : null,
           category,
+          categoryOverridden,
           notes,
           targetBales,
           targetBalesOverridden,
@@ -708,6 +746,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           personId,
           groupName,
           category,
+          categoryOverridden,
           targetBales,
           targetBalesOverridden,
           producedBales,
@@ -715,8 +754,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           notes,
         }) => sql`(
           ${companyId}, ${page}, ${periodType}, ${periodStart}, ${periodEnd},
-          ${personType}, ${personId}, ${groupName}, ${category}, ${targetBales}, ${targetBalesOverridden},
-          ${producedBales}, ${status}, ${notes}, ${req.session.userId || null}, now()
+          ${personType}, ${personId}, ${groupName}, ${category}, ${categoryOverridden},
+          ${targetBales}, ${targetBalesOverridden}, ${producedBales}, ${status}, ${notes},
+          ${req.session.userId || null}, now()
         )`
       );
 
@@ -738,13 +778,14 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         await tx.execute(sql`
           INSERT INTO factory_staff_tracking_entries (
             company_id, page_type, period_type, period_start, period_end,
-            person_type, person_id, group_name, category, target_bales, target_overridden, produced_bales,
-            status, notes, created_by, updated_at
+            person_type, person_id, group_name, category, category_overridden,
+            target_bales, target_overridden, produced_bales, status, notes, created_by, updated_at
           ) VALUES ${sql.join(values, sql`, `)}
           ON CONFLICT (company_id, page_type, period_type, period_start, period_end, person_type, person_id)
           DO UPDATE SET
             group_name = EXCLUDED.group_name,
             category = EXCLUDED.category,
+            category_overridden = EXCLUDED.category_overridden,
             target_bales = EXCLUDED.target_bales,
             target_overridden = EXCLUDED.target_overridden,
             produced_bales = EXCLUDED.produced_bales,

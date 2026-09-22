@@ -49,7 +49,7 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("input-production-target-");
   });
 
-  it("keeps repeating daily worker defaults separate from day-specific target edits", () => {
+  it("keeps repeating daily category/target defaults separate from day-specific edits", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const defaultsEditor = src(
       "client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx"
@@ -62,16 +62,26 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(production).toContain("<ProductionTargetDefaultsDialog");
     expect(defaultsEditor).toContain("production-target-defaults");
     expect(defaultsEditor).toContain("effectiveFrom");
+    expect(defaultsEditor).toContain("input-production-default-category-");
+    expect(defaultsEditor).toContain("category: (draftDefaults");
     expect(dayEditor).toContain("/api/factory/staff-tracking/bulk");
+    expect(dayEditor).toContain("categoryOverrideState");
+    expect(dayEditor).toContain("categoryOverridden");
     expect(dayEditor).toContain("targetOverrideState");
     expect(dayEditor).toContain("targetBalesOverridden");
     expect(defaultsEditor).toContain('queryKey: ["/api/factory/staff-tracking/production-target-defaults"]');
     expect(route).toContain("factory_worker_production_target_defaults");
     expect(route).toContain("effective_from <=");
+    expect(route).toContain('category_overridden AS "categoryOverridden"');
     expect(route).toContain('target_overridden AS "targetBalesOverridden"');
+    expect(route).toContain("defaultCategory");
+    expect(route).toContain("categoryOverridden");
     expect(route).toContain("defaultTargetBales");
     expect(route).toContain("targetBalesOverridden");
     expect(startup).toContain("factory_worker_production_target_defaults");
+    expect(startup).toContain("ADD COLUMN IF NOT EXISTS category varchar(150)");
+    expect(startup).toContain("category_overridden boolean NOT NULL DEFAULT true");
+    expect(startup).toContain("ALTER COLUMN category_overridden SET DEFAULT false");
     expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
   });
 
