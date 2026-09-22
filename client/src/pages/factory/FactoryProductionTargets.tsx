@@ -430,82 +430,93 @@ export default function FactoryProductionTargets() {
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-md border border-border/70">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/60 hover:bg-muted/60">
-              <TableHead className="min-w-[220px]">{tr("person")}</TableHead>
-              <TableHead className="w-[150px] min-w-[150px] max-w-[150px]">{tr("category")}</TableHead>
-              <TableHead className="w-[120px] text-right">{tr("target")}</TableHead>
-              <TableHead className="w-[110px] text-right">{tr("produced")}</TableHead>
-              <TableHead className="w-[110px] text-right">{tr("difference")}</TableHead>
-              <TableHead className="w-[145px]">{tr("status")}</TableHead>
+            <TableRow className="border-b border-border/80 bg-muted/60 hover:bg-muted/60">
+              <TableHead className="min-w-[240px] border-r border-border/70 text-sm font-semibold">
+                {tr("person")}
+              </TableHead>
+              <TableHead className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-sm font-semibold">
+                {tr("category")}
+              </TableHead>
+              <TableHead className="w-[125px] border-r border-border/70 text-right text-sm font-semibold">
+                {tr("target")}
+              </TableHead>
+              <TableHead className="w-[120px] border-r border-border/70 text-right text-sm font-semibold">
+                {tr("produced")}
+              </TableHead>
+              <TableHead className="w-[120px] border-r border-border/70 text-right text-sm font-semibold">
+                {tr("difference")}
+              </TableHead>
+              <TableHead className="w-[155px] text-sm font-semibold">{tr("status")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-base text-muted-foreground">
                   {tr("loadingStaff")}
                 </TableCell>
               </TableRow>
             ) : groupedVisibleRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-base text-muted-foreground">
                   {tr("noMatchingStaff")}
                 </TableCell>
               </TableRow>
             ) : (
               groupedVisibleRows.map((group) => (
                 <Fragment key={group.label.toLocaleLowerCase() || "__blank-group__"}>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={6} className="border-y py-2.5">
+                  <TableRow className="border-y border-border/80 bg-muted/40 hover:bg-muted/40">
+                    <TableCell colSpan={6} className="py-3">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold">{group.label || "—"}</span>
-                        <Badge variant="secondary" className="font-normal tabular-nums">
+                        <span className="text-base font-semibold">{group.label || "—"}</span>
+                        <Badge variant="secondary" className="text-sm font-medium tabular-nums">
                           {group.rows.length}
                         </Badge>
                       </div>
                     </TableCell>
                   </TableRow>
                   {group.rows.map((row) => {
+                    const isAbsent = row.status === FACTORY_TRACKING_STATUSES.absent;
                     return (
-                      <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
-                        <TableCell>
-                          <div className="font-medium" dir="auto">
+                      <TableRow
+                        key={row.personId}
+                        className={`border-b border-border/70 hover:bg-muted/20 ${
+                          isAbsent ? "bg-red-500/5 hover:bg-red-500/10" : ""
+                        } ${!row.active ? "opacity-60" : ""}`}
+                      >
+                        <TableCell className="border-r border-border/70 py-3">
+                          <div className="text-base font-semibold leading-6" dir="auto">
                             {row.name}
                           </div>
-                          <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>{tr("worker")}</span>
-                            {row.code && <span>· {row.code}</span>}
-                            {!row.active && (
-                              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                {tr("inactive")}
-                              </Badge>
-                            )}
-                          </div>
                         </TableCell>
-                        <TableCell className="w-[150px] min-w-[150px] max-w-[150px] font-medium">
+                        <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-base font-semibold">
                           {row.category || "—"}
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
+                        <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
                           {row.targetBales ?? "—"}
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">
+                        <TableCell className="border-r border-border/70 text-right text-base font-semibold tabular-nums">
                           {row.producedBales ?? 0}
                         </TableCell>
                         <TableCell
-                          className={`text-right font-semibold tabular-nums ${differenceClass(row.targetBales, row.producedBales)}`}
+                          className={`border-r border-border/70 text-right text-base font-semibold tabular-nums ${differenceClass(row.targetBales, row.producedBales)}`}
                         >
                           {differenceText(row.targetBales, row.producedBales)}
                         </TableCell>
                         <TableCell>
                           <div
-                            className="flex h-8 w-[125px] cursor-not-allowed items-center gap-2 rounded-md border bg-muted/70 px-3 text-sm text-muted-foreground"
+                            className={`flex h-9 w-[135px] cursor-not-allowed items-center gap-2 rounded-md border px-3 text-base font-semibold ${
+                              isAbsent
+                                ? "border-red-500/50 bg-red-500/15 text-red-500"
+                                : "border-border bg-muted/70 text-muted-foreground"
+                            }`}
                             aria-disabled="true"
                             title={tr("statusControlledFromAttendance")}
                           >
-                            <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                            <LockKeyhole className="h-4 w-4 shrink-0" />
                             <span>{tr(statusTranslationKey(row.status))}</span>
                           </div>
                         </TableCell>
