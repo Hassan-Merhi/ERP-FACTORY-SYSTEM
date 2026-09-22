@@ -361,7 +361,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
 
         await modeApiRequest("PATCH", `/api/vouchers/${voucherIdToEdit}`, {
           voucherDate: format(data.voucherDate, "yyyy-MM-dd"),
-          description: `Stock transfer to ${destLoc?.name || ""}`,
+          description: data.notes?.trim() || `Stock transfer to ${destLoc?.name || ""}`,
           totalAmount,
           ...(wantOptional ? { optional: true } : {}),
         });
@@ -401,7 +401,7 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
         voucherType: "Stock Transfer",
         voucherNumber: `TRANSFER-${Date.now()}`,
         voucherDate: format(data.voucherDate, "yyyy-MM-dd"),
-        description: `Stock transfer to ${destLoc?.name || ""}`,
+        description: data.notes?.trim() || `Stock transfer to ${destLoc?.name || ""}`,
         totalAmount,
         optional: data.optional,
       });

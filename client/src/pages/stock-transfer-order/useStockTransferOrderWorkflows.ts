@@ -21,6 +21,7 @@ type ExistingTransferItem = {
 
 type ExistingTransfer = {
   id: number;
+  notes?: string | null;
   items?: ExistingTransferItem[];
 };
 
@@ -36,6 +37,7 @@ type ImportSheetRow = {
 type UseStockTransferOrderWorkflowsInput = {
   editVoucherId: number | null;
   existingTransfer: ExistingTransfer | undefined;
+  existingDescription?: string | null;
   locations: Location[];
   stockItems: StockItemOption[];
   orderItems: OrderItem[];
@@ -52,6 +54,7 @@ type UseStockTransferOrderWorkflowsInput = {
 export function useStockTransferOrderWorkflows({
   editVoucherId,
   existingTransfer,
+  existingDescription,
   locations,
   stockItems,
   orderItems,
@@ -369,12 +372,18 @@ export function useStockTransferOrderWorkflows({
 
     setIsSavingRevision(true);
     try {
+      const nonZeroItems = orderItems.filter((item) => item.quantity > 0);
+      const persistedDescription =
+        existingTransfer.notes?.trim() ||
+        existingDescription?.trim() ||
+        `Stock Transfer Order - ${nonZeroItems.length} items`;
+
       await apiRequest("PATCH", `/api/vouchers/${editVoucherId}`, {
         voucherDate: format(transferDate, "yyyy-MM-dd"),
+        description: persistedDescription,
         optional: isOptional,
       });
 
-      const nonZeroItems = orderItems.filter((item) => item.quantity > 0);
       if (nonZeroItems.length === 0) {
         toast({
           title: "Cannot Save",
@@ -387,7 +396,7 @@ export function useStockTransferOrderWorkflows({
 
       await apiRequest("PUT", `/api/stock-transfers/${existingTransfer.id}`, {
         destinationLocationId,
-        notes: `Stock Transfer Order - ${nonZeroItems.length} items`,
+        notes: persistedDescription,
         items: nonZeroItems.map((item) => ({
           stockItemId: item.stockItemId,
           sourceLocationId: item.sourceLocationId,
