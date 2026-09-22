@@ -257,7 +257,7 @@ describe("Phase 21 company/role/permission backend", () => {
     expect((await roleRows(targetUserId)).map((row) => row.company_id)).toEqual([ctx.companyId]);
   });
 
-  it("keeps Developer writes active-company scoped while allowing an authorized company switch", async () => {
+  it("lets Developer administer another company's user role without switching the active company", async () => {
     await pool.query(`UPDATE user_company_roles SET role = 'Developer' WHERE user_id = $1 AND company_id = $2`, [
       ctx.userId,
       ctx.companyId,
@@ -269,25 +269,10 @@ describe("Phase 21 company/role/permission backend", () => {
     );
     await grantPermission(ctx.userId, secondCompanyId, "security.permissions.manage");
 
-    // Refresh the session role after the fixture role change. Even Developer is
-    // not allowed to override the active primary company in a write payload.
+    // Refresh the session role after the fixture role change. Developer remains
+    // on the current company while Settings -> Users targets the other company.
     const refresh = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
     expect(refresh.status, refresh.text).toBe(200);
-
-    const blockedCrossRole = await agent.post("/api/user-company-roles").send({
-      userId: targetUserId,
-      companyId: secondCompanyId,
-      role: "POS",
-      assignedLocationId: secondLocationId,
-      canSellNegativeStock: true,
-    });
-    expect(blockedCrossRole.status).toBe(403);
-    expect(blockedCrossRole.body.code).toBe("CROSS_COMPANY_ACCESS_DENIED");
-
-    // Switch the canonical active company first; writes then run under that
-    // company's tenant/RLS context and remain ownership-checked.
-    const selected = await agent.post("/api/auth/set-company").send({ companyId: secondCompanyId });
-    expect(selected.status, selected.text).toBe(200);
 
     const role = await agent.post("/api/user-company-roles").send({
       userId: targetUserId,
@@ -320,6 +305,13 @@ describe("Phase 21 company/role/permission backend", () => {
       .map((row) => Number(row.companyId))
       .sort((a, b) => a - b);
     expect(companyIds).toEqual([ctx.companyId, secondCompanyId].sort((a, b) => a - b));
+
+    // The cross-company user-admin flow must not silently change the Developer's
+    // active company. A normal company-scoped route still runs in the original
+    // active tenant until set-company is explicitly called.
+    const sessionCompany = await agent.get("/api/auth/session-company");
+    expect(sessionCompany.status, sessionCompany.text).toBe(200);
+    expect(Number(sessionCompany.body.companyId)).toBe(ctx.companyId);
   });
 
   it("keeps named permissions tenant-scoped when Developer switches companies", async () => {

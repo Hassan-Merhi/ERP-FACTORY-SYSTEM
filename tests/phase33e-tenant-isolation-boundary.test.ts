@@ -192,6 +192,93 @@ describe("Phase 33E global tenant isolation boundary", () => {
     expect(harness.logger.error).toHaveBeenCalledOnce();
   });
 
+  it("keeps Developer pinned to the active company on ordinary tenant routes", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(
+      canonicalContext({ role: "Developer", developerBypass: true })
+    );
+
+    const { res, next } = await runBoundary(
+      request({ path: "/api/vouchers", query: { companyId: 20 }, currentRole: "Developer" })
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("allows Developer to add a user role to another company from the shared Users settings screen", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(
+      canonicalContext({ role: "Developer", developerBypass: true })
+    );
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Developer" }]);
+    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Developer" });
+    harness.storage.getAllCompanies.mockResolvedValue([{ id: 10 }, { id: 20 }]);
+
+    const result = await runBoundary(
+      request({
+        path: "/api/user-company-roles",
+        method: "POST",
+        body: { userId: "target-user", companyId: 20, role: "Admin" },
+        currentRole: "Developer",
+      })
+    );
+
+    expect(result.next).toHaveBeenCalledOnce();
+    expect(result.databaseContext).toEqual({
+      kind: "tenant",
+      companyId: 10,
+      authorizedCompanyIds: [20],
+      scopeMode: "authorized-companies",
+    });
+  });
+
+  it("does not grant tenant Admin the Developer cross-company role-assignment exception", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(canonicalContext({ role: "Admin" }));
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([
+      { companyId: 10, role: "Admin" },
+      { companyId: 20, role: "Admin" },
+    ]);
+
+    const { res, next } = await runBoundary(
+      request({
+        path: "/api/user-company-roles",
+        method: "POST",
+        body: { userId: "target-user", companyId: 20, role: "Manager" },
+        currentRole: "Admin",
+      })
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("authorizes Developer POS location setup only for the company encoded in the route", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(
+      canonicalContext({ role: "Developer", developerBypass: true })
+    );
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Developer" }]);
+    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Developer" });
+    harness.storage.getAllCompanies.mockResolvedValue([{ id: 10 }, { id: 20 }]);
+
+    const result = await runBoundary(
+      request({
+        path: "/api/user-locations/target-user/20",
+        method: "PUT",
+        body: { locationIds: [200] },
+        currentRole: "Developer",
+      })
+    );
+
+    expect(result.next).toHaveBeenCalledOnce();
+    expect(result.databaseContext).toEqual({
+      kind: "tenant",
+      companyId: 10,
+      authorizedCompanyIds: [20],
+      scopeMode: "authorized-companies",
+    });
+  });
+
   it("requires a privileged role for the narrow cross-company reference reads", async () => {
     const { res, next } = await runBoundary(
       request({ path: "/api/locations", query: { companyId: 20 }, currentRole: "Manager" })
@@ -355,6 +442,29 @@ describe("Phase 33E :companyId path boundary", () => {
     const denied = await runParam(request(), "20");
 
     expect(allowed.next).toHaveBeenCalledOnce();
+    expect(denied.res.statusCode).toBe(403);
+    expect(denied.res.body).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
+    expect(denied.next).not.toHaveBeenCalled();
+  });
+
+  it("allows Developer path-company access only for user location administration", async () => {
+    harness.getActiveCompanyPermissionContext.mockResolvedValue(
+      canonicalContext({ role: "Developer", developerBypass: true })
+    );
+    harness.storage.getUserCompaniesWithRoles.mockResolvedValue([{ companyId: 10, role: "Developer" }]);
+    harness.storage.getUser.mockResolvedValue({ id: "user-1", role: "Developer" });
+    harness.storage.getAllCompanies.mockResolvedValue([{ id: 10 }, { id: 20 }]);
+
+    const allowed = await runParam(
+      request({ path: "/api/user-locations/target-user/20", method: "PUT", currentRole: "Developer" }),
+      "20"
+    );
+    expect(allowed.next).toHaveBeenCalledOnce();
+
+    const denied = await runParam(
+      request({ path: "/api/companies/20/member-ids", method: "GET", currentRole: "Developer" }),
+      "20"
+    );
     expect(denied.res.statusCode).toBe(403);
     expect(denied.res.body).toMatchObject({ code: "CROSS_COMPANY_ACCESS_DENIED" });
     expect(denied.next).not.toHaveBeenCalled();
