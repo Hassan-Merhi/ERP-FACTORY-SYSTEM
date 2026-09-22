@@ -112,6 +112,20 @@ export function ProductionTargetDefaultsDialog({
       });
   }, [rows, search]);
 
+  const updateDraftTarget = (row: ProductionRow, targetBales: number | null) => {
+    setDraftTargets((current) => {
+      const next = { ...current };
+      if (row.linkGroupId != null) {
+        for (const member of rows) {
+          if (member.linkGroupId === row.linkGroupId) next[member.personId] = targetBales;
+        }
+      } else {
+        next[row.personId] = targetBales;
+      }
+      return next;
+    });
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-target-defaults", {
@@ -209,6 +223,15 @@ export function ProductionTargetDefaultsDialog({
                       <div className="font-medium" dir="auto">
                         {row.name}
                       </div>
+                      {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
+                        <div className="mt-1 text-xs text-muted-foreground" dir="auto">
+                          {tr("linkedWith")}:{" "}
+                          {(row.linkedWorkers ?? [])
+                            .filter((member) => member.workerId !== row.personId)
+                            .map((member) => member.workerName)
+                            .join(", ")}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>{row.category || "—"}</TableCell>
                     <TableCell>
@@ -218,12 +241,7 @@ export function ProductionTargetDefaultsDialog({
                         step="1"
                         value={draftTargets[row.personId] ?? ""}
                         disabled={isLoading || saveMutation.isPending}
-                        onChange={(event) =>
-                          setDraftTargets((current) => ({
-                            ...current,
-                            [row.personId]: targetValue(event.target.value),
-                          }))
-                        }
+                        onChange={(event) => updateDraftTarget(row, targetValue(event.target.value))}
                         className="text-right tabular-nums"
                         data-testid={`input-production-default-target-${row.personId}`}
                       />
