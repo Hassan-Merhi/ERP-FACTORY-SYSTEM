@@ -120,13 +120,13 @@ export const applicationFrenchTranslations = {
   "factory.workerRemaining": "RESTE AUX TRAVAILLEURS",
   "factory.totalPayroll": "PAIE TOTALE",
   "factory.employeeExpected": "PRÉVU POUR LES EMPLOYÉS",
-  "factory.stockEntry.baleLimitReached": "Limite de 2 balles atteinte",
-  "factory.stockEntry.finishBeforeAdding": "Terminez cette entrée de stock avant d’ajouter une autre balle.",
+  "factory.stockEntry.baleLimitReached": "Limite de 2 articles atteinte",
+  "factory.stockEntry.finishBeforeAdding": "Terminez cette entrée de stock avant d’ajouter un autre article.",
   "factory.stockEntry.baleLimitConfirmFirst":
-    "Une entrée de stock peut contenir au maximum 2 balles. Confirmez cette entrée avant d’en ajouter une autre.",
-  "factory.stockEntry.baleLimit": "Une entrée de stock peut contenir au maximum 2 balles.",
+    "Une entrée de stock peut contenir au maximum 2 articles différents. Augmentez la quantité de balles d’un article existant ou confirmez cette entrée avant d’ajouter un autre article.",
+  "factory.stockEntry.baleLimit": "Une entrée de stock peut contenir au maximum 2 articles différents.",
   "factory.stockEntry.baleLimitReduceQuantity":
-    "Une entrée de stock peut contenir au maximum 2 balles. Réduisez la quantité avant de confirmer.",
+    "Une entrée de stock peut contenir au maximum 2 articles différents. Supprimez un article avant de confirmer.",
   "daybook.transactions": "Transactions",
   "daybook.editsActivity": "Modifications et activité",
   "daybook.allFactoryTransactions": "Toutes les transactions de l’usine dans une seule vue",
