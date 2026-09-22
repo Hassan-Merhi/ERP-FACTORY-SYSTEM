@@ -49,22 +49,10 @@ interface CartItem {
   overrideLogoId: number | null;
 }
 
-const MAX_BALES_PER_ENTRY = 2;
+const MAX_ITEMS_PER_ENTRY = 2;
 
-function countCartBales(items: CartItem[]): number {
-  return items.reduce((sum, item) => sum + item.qty, 0);
-}
-
-function capCartToEntryLimit(items: CartItem[]): CartItem[] {
-  let remaining = MAX_BALES_PER_ENTRY;
-  const capped: CartItem[] = [];
-  for (const item of items) {
-    if (remaining <= 0) break;
-    const qty = Math.min(Math.max(0, item.qty), remaining);
-    if (qty > 0) capped.push({ ...item, qty });
-    remaining -= qty;
-  }
-  return capped;
+function capCartToItemLimit(items: CartItem[]): CartItem[] {
+  return items.filter((item) => item.qty > 0).slice(0, MAX_ITEMS_PER_ENTRY);
 }
 
 export function StockEntryTab() {
@@ -274,7 +262,7 @@ export function StockEntryTab() {
       setScanInput("");
       setShowDropdown(false);
       const defaultWeight = newProduct.weightPerBaleKg ? parseFloat(newProduct.weightPerBaleKg) : 25;
-      if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+      if (cart.length >= MAX_ITEMS_PER_ENTRY) {
         toast({
           title: tr("factory.stockEntry.baleLimitReached"),
           description: tr("factory.stockEntry.finishBeforeAdding"),
@@ -283,7 +271,7 @@ export function StockEntryTab() {
         return;
       }
       setCart((prev) => {
-        if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
+        if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
         return [
           ...prev,
           {
@@ -322,15 +310,6 @@ export function StockEntryTab() {
 
   const handleScan = (value: string) => {
     if (!value.trim()) return;
-    if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
-        variant: "destructive",
-      });
-      setScanInput("");
-      return;
-    }
     setScanError("");
 
     const trimmed = value.trim().toLowerCase();
@@ -345,13 +324,23 @@ export function StockEntryTab() {
     }
 
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
+    const existingInCart = cart.some((item) => item.productId === product.id);
+    if (!existingInCart && cart.length >= MAX_ITEMS_PER_ENTRY) {
+      toast({
+        title: tr("factory.stockEntry.baleLimitReached"),
+        description: tr("factory.stockEntry.baleLimitConfirmFirst"),
+        variant: "destructive",
+      });
+      setScanInput("");
+      return;
+    }
 
     setCart((prev) => {
-      if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
       }
+      if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
       return [
         ...prev,
         {
@@ -381,7 +370,8 @@ export function StockEntryTab() {
       : [];
 
   const selectProduct = (product: FactoryBaleProduct) => {
-    if (countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
+    const existingInCart = cart.some((item) => item.productId === product.id);
+    if (!existingInCart && cart.length >= MAX_ITEMS_PER_ENTRY) {
       toast({
         title: tr("factory.stockEntry.baleLimitReached"),
         description: tr("factory.stockEntry.baleLimitConfirmFirst"),
@@ -394,11 +384,11 @@ export function StockEntryTab() {
     }
     const defaultWeight = product.weightPerBaleKg ? parseFloat(product.weightPerBaleKg) : 25;
     setCart((prev) => {
-      if (countCartBales(prev) >= MAX_BALES_PER_ENTRY) return prev;
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
         return prev.map((item) => (item.productId === product.id ? { ...item, qty: item.qty + 1 } : item));
       }
+      if (prev.length >= MAX_ITEMS_PER_ENTRY) return prev;
       return [
         ...prev,
         {
@@ -417,40 +407,15 @@ export function StockEntryTab() {
   };
 
   const updateQty = (productId: number, delta: number) => {
-    if (delta > 0 && countCartBales(cart) >= MAX_BALES_PER_ENTRY) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimit"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setCart((prev) => {
-      const otherQty = prev.filter((item) => item.productId !== productId).reduce((sum, item) => sum + item.qty, 0);
-      const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
-      return prev
-        .map((item) =>
-          item.productId === productId ? { ...item, qty: Math.min(maxForProduct, Math.max(0, item.qty + delta)) } : item
-        )
-        .filter((item) => item.qty > 0);
-    });
+    setCart((prev) =>
+      prev
+        .map((item) => (item.productId === productId ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
+        .filter((item) => item.qty > 0)
+    );
   };
 
   const setQty = (productId: number, qty: number) => {
-    const otherQty = cart.filter((item) => item.productId !== productId).reduce((sum, item) => sum + item.qty, 0);
-    const maxForProduct = Math.max(0, MAX_BALES_PER_ENTRY - otherQty);
-    const cappedQty = Math.min(qty, maxForProduct);
-
-    if (qty > maxForProduct) {
-      toast({
-        title: tr("factory.stockEntry.baleLimitReached"),
-        description: tr("factory.stockEntry.baleLimit"),
-        variant: "destructive",
-      });
-    }
-
-    if (cappedQty <= 0) {
+    if (qty <= 0) {
       setCart((prev) => prev.filter((item) => item.productId !== productId));
       setProductionPositionByProduct((prev) => {
         if (!(productId in prev)) return prev;
@@ -459,7 +424,7 @@ export function StockEntryTab() {
         return next;
       });
     } else {
-      setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty: cappedQty } : item)));
+      setCart((prev) => prev.map((item) => (item.productId === productId ? { ...item, qty } : item)));
     }
   };
 
@@ -506,7 +471,7 @@ export function StockEntryTab() {
       toast({ title: "Error", description: "Please add items to the cart", variant: "destructive" });
       return;
     }
-    if (totalQty > MAX_BALES_PER_ENTRY) {
+    if (cart.length > MAX_ITEMS_PER_ENTRY) {
       toast({
         title: tr("factory.stockEntry.baleLimitReached"),
         description: tr("factory.stockEntry.baleLimitReduceQuantity"),
@@ -553,7 +518,7 @@ export function StockEntryTab() {
 
   const stockEntryMutation = useMutation({
     mutationFn: async () => {
-      if (countCartBales(cart) > MAX_BALES_PER_ENTRY) {
+      if (cart.length > MAX_ITEMS_PER_ENTRY) {
         throw new Error(tr("factory.stockEntry.baleLimit"));
       }
       const response = await modeApiRequest("POST", "/api/factory/stock-entry", {
@@ -642,7 +607,7 @@ export function StockEntryTab() {
                             };
                           })
                           .filter((i): i is CartItem => !!i.product);
-                        setCart(capCartToEntryLimit(restored));
+                        setCart(capCartToItemLimit(restored));
                       }
                       if (draftData?.productionPositionByProduct) {
                         setProductionPositionByProduct(draftData.productionPositionByProduct);

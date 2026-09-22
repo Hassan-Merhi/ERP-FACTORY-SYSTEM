@@ -123,80 +123,6 @@ export function registerAdminPoFixRoutes(app: Express) {
         [companyIds]
       );
 
-      const ensureLedgerAccount = async (params: {
-        companyId: number;
-        name: string;
-        preferredCode: string;
-        accountType: string;
-        subType: string;
-      }): Promise<number> => {
-        const existing = await client.query<{ id: number }>(
-          `SELECT id
-             FROM ledger_accounts
-            WHERE company_id = $1
-              AND deleted_at IS NULL
-              AND (LOWER(name) = LOWER($2) OR code = $3)
-            ORDER BY CASE WHEN LOWER(name) = LOWER($2) THEN 0 ELSE 1 END, id
-            LIMIT 1`,
-          [params.companyId, params.name, params.preferredCode]
-        );
-        if (existing.rows[0]?.id) return existing.rows[0].id;
-
-        for (let suffix = 0; suffix < 100; suffix++) {
-          const suffixText = suffix === 0 ? "" : String(suffix);
-          const code = `${params.preferredCode.slice(0, Math.max(1, 50 - suffixText.length))}${suffixText}`;
-          const inserted = await client.query<{ id: number }>(
-            `INSERT INTO ledger_accounts
-              (company_id, code, name, account_type, sub_type, opening_balance, active, is_hidden)
-             VALUES ($1, $2, $3, $4, $5, '0', true, false)
-             ON CONFLICT (company_id, code) DO NOTHING
-             RETURNING id`,
-            [params.companyId, code, params.name, params.accountType, params.subType]
-          );
-          if (inserted.rows[0]?.id) return inserted.rows[0].id;
-
-          const raced = await client.query<{ id: number }>(
-            `SELECT id
-               FROM ledger_accounts
-              WHERE company_id = $1
-                AND deleted_at IS NULL
-                AND LOWER(name) = LOWER($2)
-              ORDER BY id
-              LIMIT 1`,
-            [params.companyId, params.name]
-          );
-          if (raced.rows[0]?.id) return raced.rows[0].id;
-        }
-
-        throw new Error(`Unable to resolve ledger account ${params.name} for company ${params.companyId}`);
-      };
-
-      const insertUsdEntry = async (params: {
-        voucherId: number;
-        ledgerAccountId?: number | null;
-        supplierId?: number | null;
-        debit: string;
-        credit: string;
-        narration: string;
-      }) => {
-        await client.query(
-          `INSERT INTO voucher_entries
-            (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount,
-             transaction_currency, transaction_debit_amount, transaction_credit_amount,
-             base_debit_amount, base_credit_amount, historical_exchange_rate,
-             rate_convention, narration)
-           VALUES ($1, $2, $3, $4, $5, 'USD', $4, $5, $4, $5, 1, 'IDENTITY', $6)`,
-          [
-            params.voucherId,
-            params.ledgerAccountId ?? null,
-            params.supplierId ?? null,
-            params.debit,
-            params.credit,
-            params.narration,
-          ]
-        );
-      };
-
       const results: Array<Record<string, unknown>> = [];
       let repaired = 0;
       for (const po of poRows.rows) {
@@ -276,179 +202,11 @@ export function registerAdminPoFixRoutes(app: Express) {
         if (apply && classification.status !== "matched") {
           let canonicalVoucherId = isSubsidiary ? voucherIds[0] : po.voucher_id;
 
-          // Older imports can predate voucher creation entirely. Rebuild only
-          // the minimal, balanced accounting shell that is deterministically
-          // implied by the PO, then let the normal supplier-credit repair below
-          // add the payable. We never invent an unknown freight counterparty.
-          if (!canonicalVoucherId && entryRows.rows.length === 0) {
-            await client.query("SELECT id FROM purchase_orders WHERE id = $1 FOR UPDATE", [po.id]);
-
-            if (!isSubsidiary) {
-              const lockedPo = await client.query<{ voucher_id: number | null }>(
-                "SELECT voucher_id FROM purchase_orders WHERE id = $1",
-                [po.id]
-              );
-              canonicalVoucherId = lockedPo.rows[0]?.voucher_id ?? null;
-
-              if (!canonicalVoucherId) {
-                const voucherNumber = `RECON-PO-${po.company_id}-${po.id}`;
-                const existingVoucher = await client.query<{ id: number }>(
-                  `SELECT id FROM vouchers
-                    WHERE company_id = $1
-                      AND voucher_number = $2
-                      AND deleted_at IS NULL
-                    LIMIT 1`,
-                  [expectedCompanyId, voucherNumber]
-                );
-                canonicalVoucherId = existingVoucher.rows[0]?.id ?? null;
-
-                if (!canonicalVoucherId) {
-                  const purchasesAccountId = await ensureLedgerAccount({
-                    companyId: expectedCompanyId,
-                    name: "Purchases",
-                    preferredCode: "PURCHASES",
-                    accountType: "Expense",
-                    subType: "Direct Expense",
-                  });
-
-                  const freightPaidBy = String(po.freight_paid_by ?? "supplier").toLowerCase();
-                  const freightAccountCandidate =
-                    freightPaidBy === "own"
-                      ? po.freight_own_account_id
-                      : freightPaidBy === "parent"
-                        ? po.freight_parent_account_id
-                        : null;
-                  let freightAccountId: number | null = null;
-                  if (freightAccountCandidate && Number(po.freight ?? "0") > 0) {
-                    const account = await client.query<{ id: number }>(
-                      `SELECT id FROM ledger_accounts
-                        WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL
-                        LIMIT 1`,
-                      [freightAccountCandidate, expectedCompanyId]
-                    );
-                    freightAccountId = account.rows[0]?.id ?? null;
-                  }
-
-                  const includeFreight = freightAccountId != null && Number(po.freight ?? "0") > 0;
-                  const voucherTotal = includeFreight ? expected.plus(po.freight ?? "0") : expected;
-                  const created = await client.query<{ id: number }>(
-                    `INSERT INTO vouchers
-                      (company_id, voucher_number, voucher_type, voucher_date, description,
-                       total_amount, currency, optional, source_module)
-                     VALUES ($1, $2, 'Purchase', $3::date, $4, $5, 'USD', false, 'ERP')
-                     RETURNING id`,
-                    [
-                      expectedCompanyId,
-                      voucherNumber,
-                      po.created_date,
-                      `Historical PO reconciliation - ${po.po_number}${po.container_number ? ` - ${po.container_number}` : ""}`,
-                      voucherTotal.toFixed(2),
-                    ]
-                  );
-                  canonicalVoucherId = created.rows[0].id;
-
-                  await insertUsdEntry({
-                    voucherId: canonicalVoucherId,
-                    ledgerAccountId: purchasesAccountId,
-                    debit: voucherTotal.toFixed(2),
-                    credit: "0",
-                    narration: `PO ${po.po_number} - Historical reconciliation`,
-                  });
-                  if (includeFreight && freightAccountId) {
-                    await insertUsdEntry({
-                      voucherId: canonicalVoucherId,
-                      ledgerAccountId: freightAccountId,
-                      debit: "0",
-                      credit: Number(po.freight ?? "0").toFixed(2),
-                      narration: `Freight - PO ${po.po_number} - Historical reconciliation`,
-                    });
-                  }
-
-                  await client.query(
-                    "UPDATE purchase_orders SET voucher_id = $1 WHERE id = $2 AND voucher_id IS NULL",
-                    [canonicalVoucherId, po.id]
-                  );
-                  rebuiltVoucher = true;
-                }
-              }
-            } else {
-              const voucherNumber = `IC-${po.company_id}-${po.po_number}-RECON-${po.id}`;
-              const existingVoucher = await client.query<{ id: number }>(
-                `SELECT id FROM vouchers
-                  WHERE company_id = $1
-                    AND voucher_number = $2
-                    AND deleted_at IS NULL
-                  LIMIT 1`,
-                [expectedCompanyId, voucherNumber]
-              );
-              canonicalVoucherId = existingVoucher.rows[0]?.id ?? null;
-
-              if (!canonicalVoucherId) {
-                const receivableAccountId = await ensureLedgerAccount({
-                  companyId: expectedCompanyId,
-                  name: `${po.source_company_name} Credit`,
-                  preferredCode: `C${po.company_id}CRD`,
-                  accountType: "Asset",
-                  subType: "Current Asset",
-                });
-
-                let freightAccountId: number | null = null;
-                if (
-                  String(po.freight_paid_by ?? "").toLowerCase() === "parent" &&
-                  po.freight_parent_account_id &&
-                  Number(po.freight ?? "0") > 0
-                ) {
-                  const account = await client.query<{ id: number }>(
-                    `SELECT id FROM ledger_accounts
-                      WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL
-                      LIMIT 1`,
-                    [po.freight_parent_account_id, expectedCompanyId]
-                  );
-                  freightAccountId = account.rows[0]?.id ?? null;
-                }
-
-                const includeFreight = freightAccountId != null && Number(po.freight ?? "0") > 0;
-                const voucherTotal = includeFreight ? expected.plus(po.freight ?? "0") : expected;
-                const created = await client.query<{ id: number }>(
-                  `INSERT INTO vouchers
-                    (company_id, voucher_number, voucher_type, voucher_date, description,
-                     total_amount, currency, optional, source_module)
-                   VALUES ($1, $2, 'Journal', $3::date, $4, $5, 'USD', false, 'ERP')
-                   RETURNING id`,
-                  [
-                    expectedCompanyId,
-                    voucherNumber,
-                    po.created_date,
-                    `${po.container_number ?? po.po_number} Historical PO reconciliation for ${po.source_company_name}`,
-                    voucherTotal.toFixed(2),
-                  ]
-                );
-                canonicalVoucherId = created.rows[0].id;
-
-                await insertUsdEntry({
-                  voucherId: canonicalVoucherId,
-                  ledgerAccountId: receivableAccountId,
-                  debit: voucherTotal.toFixed(2),
-                  credit: "0",
-                  narration: `${po.source_company_name} PO ${po.po_number} - Historical reconciliation`,
-                });
-                if (includeFreight && freightAccountId) {
-                  await insertUsdEntry({
-                    voucherId: canonicalVoucherId,
-                    ledgerAccountId: freightAccountId,
-                    debit: "0",
-                    credit: Number(po.freight ?? "0").toFixed(2),
-                    narration: `Freight - ${po.source_company_name} PO ${po.po_number}`,
-                  });
-                }
-                rebuiltVoucher = true;
-              }
-            }
-
-            if (canonicalVoucherId) {
-              voucherIds = [canonicalVoucherId];
-            }
-          }
+          // A missing canonical voucher is not enough evidence to recreate a
+          // historical liability. Older data can already be represented by
+          // opening balances, legacy journals, or migrated intercompany entries.
+          // Leave these rows for manual review instead of inventing a new
+          // supplier credit that can double-count the payable.
 
           // Serialize repairs per voucher and refresh the supplier credits after
           // taking the lock. Without the refresh, two apply requests can both
@@ -481,72 +239,10 @@ export function registerAdminPoFixRoutes(app: Express) {
           if (!canonicalVoucherId || distinctEntryVouchers.size > 1) {
             repairStatus = "manual_review";
           } else if (entryRows.rows.length === 0) {
-            let reroutedExistingCredit = false;
-            if (!isSubsidiary) {
-              const rerouted = await client.query(
-                `UPDATE voucher_entries
-                    SET supplier_id = $1,
-                        ledger_account_id = NULL,
-                        debit_amount = '0',
-                        credit_amount = $2,
-                        transaction_currency = COALESCE(transaction_currency, 'USD'),
-                        transaction_debit_amount = '0',
-                        transaction_credit_amount = $2,
-                        base_debit_amount = '0',
-                        base_credit_amount = $2,
-                        historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
-                        rate_convention = COALESCE(rate_convention, 'IDENTITY')
-                  WHERE id = (
-                    SELECT id FROM voucher_entries
-                     WHERE voucher_id = $3
-                       AND supplier_id IS NULL
-                       AND credit_amount::numeric > 0
-                       AND credit_amount::numeric = $2::numeric
-                       AND narration ILIKE '%intercompany credit%'
-                     ORDER BY id LIMIT 1
-                  )`,
-                [po.supplier_id, expected.toFixed(2), canonicalVoucherId]
-              );
-              reroutedExistingCredit = rerouted.rowCount === 1;
-            }
-
-            // Adding a new credit is safe only when it closes the voucher. If
-            // the opposite leg is stale too, report it rather than creating an
-            // unbalanced accounting repair.
-            if (!reroutedExistingCredit) {
-              const totals = await client.query<{ debits: string; other_credits: string }>(
-                `SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS debits,
-                        COALESCE(SUM(CASE WHEN supplier_id = $2 THEN 0 ELSE credit_amount::numeric END), 0)::text
-                          AS other_credits
-                   FROM voucher_entries
-                  WHERE voucher_id = $1`,
-                [canonicalVoucherId, po.supplier_id]
-              );
-              const canInsert = expected.plus(totals.rows[0]?.other_credits ?? "0").eq(totals.rows[0]?.debits ?? "0");
-              if (!canInsert) {
-                repairStatus = "manual_review";
-              } else {
-                await client.query(
-                  `INSERT INTO voucher_entries
-                    (voucher_id, supplier_id, debit_amount, credit_amount,
-                     transaction_currency, transaction_debit_amount, transaction_credit_amount,
-                     base_debit_amount, base_credit_amount, historical_exchange_rate,
-                     rate_convention, narration)
-                   VALUES ($1, $2, '0', $3, 'USD', '0', $3, '0', $3, 1, 'IDENTITY', $4)`,
-                  [
-                    canonicalVoucherId,
-                    po.supplier_id,
-                    expected.toFixed(2),
-                    `PO ${po.po_number} - Supplier reconciliation`,
-                  ]
-                );
-                repairStatus = "repaired";
-                repaired += 1;
-              }
-            } else {
-              repairStatus = "repaired";
-              repaired += 1;
-            }
+            // Missing historical supplier credits are never safe to invent from
+            // the PO total alone. They may already be represented by opening
+            // balances or migrated journals outside this voucher.
+            repairStatus = "manual_review";
           } else if (distinctEntryVouchers.size === 1) {
             const totals = await client.query<{ debits: string; other_credits: string }>(
               `SELECT COALESCE(SUM(debit_amount::numeric), 0)::text AS debits,
@@ -657,6 +353,247 @@ export function registerAdminPoFixRoutes(app: Express) {
         )
     );
   });
+
+
+  /**
+   * Roll back only the accounting mutations created by the historical PO
+   * reconstruction introduced by the reconciliation repair. Dry-run is the
+   * default. This deliberately does not touch ordinary PO/import/intercompany
+   * vouchers or supplier payments.
+   */
+  app.post(
+    "/api/admin/po-supplier-reconciliation/rollback",
+    requireAuth,
+    requireRole("Admin"),
+    async (req, res) => {
+      const selectedCompanyId = Number(req.body?.companyId ?? req.session.currentCompanyId);
+      const apply = req.body?.apply === true;
+      if (!Number.isInteger(selectedCompanyId) || selectedCompanyId <= 0) {
+        return res.status(400).json({ message: "A valid companyId is required" });
+      }
+
+      const userId = String(req.session.userId ?? "").trim();
+      const requestContext = getCompanyRequestRuntimeContext();
+      if (!userId || !requestContext) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const accessibleCompanyIds = await getAccessibleCompanyIds(userId);
+      if (!accessibleCompanyIds.has(selectedCompanyId)) {
+        return res.status(403).json({ message: "No access to this company" });
+      }
+      const authorizedCompanyIds = [...accessibleCompanyIds];
+
+      return runWithCompanyRequestRuntimeContext(
+        { ...requestContext, authorizedCompanyIds },
+        () =>
+          runWithDatabaseScopeRuntimeContext(
+            createTenantDatabaseScope(requestContext.companyId, authorizedCompanyIds, "authorized-companies"),
+            async () => {
+              const client = await pool.connect();
+              try {
+                await client.query("BEGIN");
+                if (apply) {
+                  await client.query("SELECT pg_advisory_xact_lock($1, $2)", [73002, selectedCompanyId]);
+                }
+
+                const companyRows = await client.query<{ id: number }>(
+                  `SELECT id
+                     FROM companies
+                    WHERE id = $1 OR parent_company_id = $1
+                    ORDER BY id`,
+                  [selectedCompanyId]
+                );
+                if (!companyRows.rows.some((row) => row.id === selectedCompanyId)) {
+                  await client.query("ROLLBACK");
+                  return res.status(404).json({ message: "Company not found" });
+                }
+                const companyIds = companyRows.rows.map((row) => row.id);
+
+                // These names/descriptions were introduced only by the historical
+                // reconstruction repair. Keep the predicate intentionally narrow.
+                const generated = await client.query<{
+                  id: number;
+                  company_id: number;
+                  voucher_number: string;
+                  total_amount: string;
+                }>(
+                  `SELECT id, company_id, voucher_number, total_amount
+                     FROM vouchers
+                    WHERE company_id = ANY($1::int[])
+                      AND deleted_at IS NULL
+                      AND (
+                        voucher_number LIKE 'RECON-PO-%'
+                        OR (
+                          voucher_number LIKE 'IC-%-RECON-%'
+                          AND description ILIKE '%Historical PO reconciliation%'
+                        )
+                      )
+                    ORDER BY id`,
+                  [companyIds]
+                );
+                const generatedVoucherIds = generated.rows.map((row) => row.id);
+
+                const insertedEntryRows = await client.query<{
+                  id: number;
+                  voucher_id: number;
+                  supplier_id: number | null;
+                  credit_amount: string;
+                  debit_amount: string;
+                }>(
+                  `SELECT ve.id, ve.voucher_id, ve.supplier_id, ve.credit_amount, ve.debit_amount
+                     FROM voucher_entries ve
+                     JOIN vouchers v ON v.id = ve.voucher_id
+                    WHERE v.company_id = ANY($1::int[])
+                      AND v.deleted_at IS NULL
+                      AND ve.narration LIKE 'PO % - Supplier reconciliation'
+                      AND NOT (ve.voucher_id = ANY($2::int[]))
+                    ORDER BY ve.id`,
+                  [companyIds, generatedVoucherIds.length ? generatedVoucherIds : [-1]]
+                );
+
+                const impactRows = await client.query<{
+                  supplier_id: number | null;
+                  supplier_name: string | null;
+                  balance_increase: string;
+                }>(
+                  `WITH rollback_entries AS (
+                      SELECT ve.supplier_id,
+                             ve.credit_amount::numeric - ve.debit_amount::numeric AS net
+                        FROM voucher_entries ve
+                       WHERE ve.voucher_id = ANY($2::int[])
+                      UNION ALL
+                      SELECT ve.supplier_id,
+                             ve.credit_amount::numeric - ve.debit_amount::numeric AS net
+                        FROM voucher_entries ve
+                        JOIN vouchers v ON v.id = ve.voucher_id
+                       WHERE v.company_id = ANY($1::int[])
+                         AND v.deleted_at IS NULL
+                         AND ve.narration LIKE 'PO % - Supplier reconciliation'
+                         AND NOT (ve.voucher_id = ANY($2::int[]))
+                    )
+                    SELECT re.supplier_id,
+                           s.legal_name AS supplier_name,
+                           COALESCE(SUM(re.net), 0)::text AS balance_increase
+                      FROM rollback_entries re
+                      LEFT JOIN suppliers s ON s.id = re.supplier_id
+                     WHERE re.supplier_id IS NOT NULL
+                     GROUP BY re.supplier_id, s.legal_name
+                     ORDER BY ABS(COALESCE(SUM(re.net), 0)) DESC`,
+                  [companyIds, generatedVoucherIds.length ? generatedVoucherIds : [-1]]
+                );
+
+                const linkedPoRows = generatedVoucherIds.length
+                  ? await client.query<{ count: string }>(
+                      "SELECT COUNT(*)::text AS count FROM purchase_orders WHERE voucher_id = ANY($1::int[])",
+                      [generatedVoucherIds]
+                    )
+                  : { rows: [{ count: "0" }] };
+
+                // A prior reconciliation version could also reroute a legacy
+                // "intercompany credit" entry in place. We cannot restore the
+                // original ledger_account_id with certainty, so report these
+                // separately instead of guessing.
+                const reroutedCandidates = await client.query<{
+                  id: number;
+                  voucher_id: number;
+                  supplier_id: number | null;
+                  credit_amount: string;
+                  narration: string | null;
+                }>(
+                  `SELECT ve.id, ve.voucher_id, ve.supplier_id, ve.credit_amount, ve.narration
+                     FROM voucher_entries ve
+                     JOIN vouchers v ON v.id = ve.voucher_id
+                    WHERE v.company_id = ANY($1::int[])
+                      AND v.deleted_at IS NULL
+                      AND ve.supplier_id IS NOT NULL
+                      AND ve.credit_amount::numeric > 0
+                      AND ve.narration ILIKE '%intercompany credit%'
+                      AND NOT (ve.voucher_id = ANY($2::int[]))
+                    ORDER BY ve.id`,
+                  [companyIds, generatedVoucherIds.length ? generatedVoucherIds : [-1]]
+                );
+
+                let resetPoLinks = 0;
+                let removedInsertedEntries = 0;
+                let removedGeneratedVouchers = 0;
+
+                if (apply) {
+                  if (generatedVoucherIds.length > 0) {
+                    const resetResult = await client.query(
+                      "UPDATE purchase_orders SET voucher_id = NULL WHERE voucher_id = ANY($1::int[])",
+                      [generatedVoucherIds]
+                    );
+                    resetPoLinks = resetResult.rowCount ?? 0;
+                  }
+
+                  if (insertedEntryRows.rows.length > 0) {
+                    const entryIds = insertedEntryRows.rows.map((row) => row.id);
+                    const deleteInserted = await client.query(
+                      "DELETE FROM voucher_entries WHERE id = ANY($1::int[])",
+                      [entryIds]
+                    );
+                    removedInsertedEntries = deleteInserted.rowCount ?? 0;
+                  }
+
+                  if (generatedVoucherIds.length > 0) {
+                    await client.query("DELETE FROM voucher_entries WHERE voucher_id = ANY($1::int[])", [
+                      generatedVoucherIds,
+                    ]);
+                    const deleteVouchers = await client.query(
+                      "DELETE FROM vouchers WHERE id = ANY($1::int[])",
+                      [generatedVoucherIds]
+                    );
+                    removedGeneratedVouchers = deleteVouchers.rowCount ?? 0;
+                  }
+
+                  await client.query(
+                    `INSERT INTO audit_log
+                      (user_id, username, company_id, action, table_name, record_identifier, changes)
+                     VALUES ($1, $2, $3, 'rollback', 'po_supplier_payables', $4, $5::jsonb)`,
+                    [
+                      req.session.userId,
+                      req.session.username || "unknown",
+                      selectedCompanyId,
+                      `po-supplier-reconciliation-rollback:${selectedCompanyId}`,
+                      JSON.stringify({
+                        generatedVouchers: generatedVoucherIds.length,
+                        insertedEntries: insertedEntryRows.rows.length,
+                        resetPoLinks,
+                        reroutedCandidates: reroutedCandidates.rows.length,
+                      }),
+                    ]
+                  );
+                  await client.query("COMMIT");
+                } else {
+                  await client.query("ROLLBACK");
+                }
+
+                return res.json({
+                  dryRun: !apply,
+                  selectedCompanyId,
+                  companies: companyIds,
+                  generatedVouchers: generated.rows.length,
+                  insertedReconciliationEntries: insertedEntryRows.rows.length,
+                  linkedPoRows: Number(linkedPoRows.rows[0]?.count ?? "0"),
+                  impactBySupplier: impactRows.rows,
+                  reroutedCandidates: reroutedCandidates.rows,
+                  resetPoLinks,
+                  removedInsertedEntries,
+                  removedGeneratedVouchers,
+                });
+              } catch (error: unknown) {
+                await client.query("ROLLBACK").catch(() => undefined);
+                logger.error("PO supplier reconciliation rollback failed", { error });
+                return res.status(500).json({ message: getErrorMessage(error) });
+              } finally {
+                client.release();
+              }
+            }
+          )
+      );
+    }
+  );
 
   app.post("/api/test-data/vouchers", requireAuth, requireNonPOS, async (req, res) => {
     try {
