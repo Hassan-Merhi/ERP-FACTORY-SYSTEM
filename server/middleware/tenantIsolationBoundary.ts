@@ -20,6 +20,7 @@ import { assertRequestCompanyMatchesSession, CompanyIsolationError } from "../se
 import { decideExplicitCompanyScope } from "../services/security/companyRequestScopePolicy";
 import { isPinnedCompanyRoute } from "../services/security/activeCompanyPermissionPolicy";
 import { chooseAuthorizedFactoryCompany } from "../services/security/factoryCompanyScopePolicy";
+import { classifyUserLocationConfigurationRoute } from "../services/security/userLocationConfigurationPolicy";
 import { runWithCompanyRequestRuntimeContext } from "../services/security/companyRequestRuntimeContext";
 import {
   createTenantDatabaseScope,
@@ -95,6 +96,19 @@ function isAuthorizedCrossCompanyPath(method: string, path: string): boolean {
  */
 export function isCrossCompanyReferenceRead(method: string, path: string): boolean {
   return method.toUpperCase() === "GET" && CROSS_COMPANY_REFERENCE_READ_PATHS.has(path);
+}
+
+/**
+ * Settings -> Users is intentionally a global Developer administration surface.
+ * Keep this exception narrowly limited to creating/updating company-role
+ * assignments; ordinary tenant routes remain pinned to the active company.
+ */
+export function isDeveloperCompanyRoleAdministrationRoute(method: string, path: string): boolean {
+  const normalizedMethod = method.toUpperCase();
+  return (
+    (normalizedMethod === "POST" && path === "/api/user-company-roles") ||
+    (normalizedMethod === "PATCH" && /^\\/api\\/user-company-roles\\/\\d+$/.test(path))
+  );
 }
 
 async function ensurePinnedFactoryCompany(req: Request): Promise<void> {
@@ -274,10 +288,14 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
       });
     }
 
-    let referenceCompanyId: number | null = null;
+    let explicitAuthorizedCompanyId: number | null = null;
     if (decision.kind === "company") {
       const crossCompanyReference =
         decision.companyId !== context.companyId && isCrossCompanyReferenceRead(req.method, req.path);
+      const developerRoleAdministration =
+        decision.companyId !== context.companyId &&
+        context.role === "Developer" &&
+        isDeveloperCompanyRoleAdministrationRoute(req.method, req.path);
       if (crossCompanyReference) {
         if (!isPrivilegedRole(context.role)) {
           throw new CompanyAccessError(
@@ -287,7 +305,10 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
           );
         }
         await assertCompaniesAccess(context.userId, [decision.companyId]);
-        referenceCompanyId = decision.companyId;
+        explicitAuthorizedCompanyId = decision.companyId;
+      } else if (developerRoleAdministration) {
+        await assertCompaniesAccess(context.userId, [decision.companyId]);
+        explicitAuthorizedCompanyId = decision.companyId;
       } else {
         assertRequestCompanyMatchesSession(
           { userId: context.userId, role: context.role, companyId: context.companyId },
@@ -296,18 +317,29 @@ export async function tenantIsolationBoundary(req: Request, res: Response, next:
       }
     }
 
+    // POS role setup performs follow-up reads/writes whose target company is in
+    // the route path rather than query/body. Authorize only that explicit
+    // company for Developer; the route-level user/location ownership guards
+    // still validate the target user, locations, and cash accounts.
+    const userLocationRoute =
+      context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
+    if (userLocationRoute && userLocationRoute.companyId !== context.companyId) {
+      await assertCompaniesAccess(context.userId, [userLocationRoute.companyId]);
+      explicitAuthorizedCompanyId = userLocationRoute.companyId;
+    }
+
     const secondaryCompanyIds = collectSecondaryCompanyIds(req);
     if (secondaryCompanyIds.length > 0) {
       await assertCompaniesAccess(context.userId, secondaryCompanyIds);
     }
 
     const useGlobalAuthorizedCompanyScope = isAuthorizedCrossCompanyPath(req.method, req.path);
-    const useReferenceAuthorizedCompanyScope = referenceCompanyId !== null;
-    const useAuthorizedCompanyScope = useGlobalAuthorizedCompanyScope || useReferenceAuthorizedCompanyScope;
+    const useExplicitAuthorizedCompanyScope = explicitAuthorizedCompanyId !== null;
+    const useAuthorizedCompanyScope = useGlobalAuthorizedCompanyScope || useExplicitAuthorizedCompanyScope;
     const databaseAuthorizedCompanyIds = useGlobalAuthorizedCompanyScope
       ? [...(await getAccessibleCompanyIds(context.userId))]
-      : useReferenceAuthorizedCompanyScope
-        ? [referenceCompanyId!, ...secondaryCompanyIds]
+      : useExplicitAuthorizedCompanyScope
+        ? [explicitAuthorizedCompanyId!, ...secondaryCompanyIds]
         : secondaryCompanyIds;
     const databaseScope = createTenantDatabaseScope(
       context.companyId,
@@ -359,6 +391,13 @@ export async function tenantCompanyParamBoundary(req: Request, res: Response, ne
     if (!companyId) {
       return res.status(400).json({ code: "COMPANY_ID_INVALID", message: "Invalid companyId in request path." });
     }
+    const userLocationRoute =
+      context.role === "Developer" ? classifyUserLocationConfigurationRoute(req.path) : null;
+    if (userLocationRoute?.companyId === companyId) {
+      await assertCompaniesAccess(context.userId, [companyId]);
+      return next();
+    }
+
     assertRequestCompanyMatchesSession(
       { userId: context.userId, role: context.role, companyId: context.companyId },
       companyId
