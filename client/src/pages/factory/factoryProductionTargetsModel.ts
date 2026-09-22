@@ -103,6 +103,20 @@ export function summarizeProductionRows(sourceRows: ProductionRow[]) {
   return { target, produced, difference: produced - target };
 }
 
+export function updateLinkedTargetRows(
+  sourceRows: ProductionRow[],
+  personId: number,
+  targetBales: number | null
+): ProductionRow[] {
+  const source = sourceRows.find((row) => row.personId === personId);
+  const linkId = source?.linkGroupId ?? null;
+  return sourceRows.map((row) =>
+    row.personId === personId || (linkId !== null && row.linkGroupId === linkId)
+      ? { ...row, targetBales }
+      : row
+  );
+}
+
 export function differenceText(target: number | null, produced: number | null) {
   if (target === null || produced === null) return "—";
   const difference = produced - target;
