@@ -85,6 +85,31 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(startup).toContain("target_overridden boolean NOT NULL DEFAULT false");
   });
 
+  it("supports effective-dated linked production workers with one shared target", () => {
+    const editor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
+    const defaultsEditor = src("client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx");
+    const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
+    const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
+    const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const startup = src("server/startup/factoryStaffTrackingSchema.ts");
+
+    expect(editor).toContain("button-link-worker-");
+    expect(editor).toContain("button-unlink-worker-");
+    expect(editor).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(editor).toContain("linkGroupId");
+    expect(defaultsEditor).toContain("linkGroupId");
+    expect(production).toContain('tr("linkedWith")');
+    expect(model).toContain("summarizeProductionRows");
+    expect(route).toContain("loadActiveProductionWorkerLinks");
+    expect(route).toContain("saveProductionLinkTargetDefault");
+    expect(route).toContain("unlinkProductionWorkerLink");
+    expect(route).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(route).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
+    expect(startup).toContain("factory_worker_production_links");
+    expect(startup).toContain("factory_worker_production_link_members");
+    expect(startup).toContain("factory_worker_production_link_target_defaults");
+  });
+
   it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     expect(production).toContain("kpi-production-target-produced");
