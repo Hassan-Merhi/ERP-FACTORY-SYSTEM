@@ -111,6 +111,24 @@ export async function createProductionWorkerLink(input: {
   const workerIds = [...new Set(input.workerIds)].sort((a, b) => a - b);
 
   return db.transaction(async (tx) => {
+    // Serialize link timeline changes per company so concurrent link/unlink
+    // requests cannot create overlapping memberships for the same workers.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(7319, ${input.companyId})`);
+
+    const nextConflictResult = await tx.execute(sql`
+      SELECT MIN(l.effective_from)::text AS "nextEffectiveFrom"
+      FROM factory_worker_production_links l
+      JOIN factory_worker_production_link_members m
+        ON m.link_id = l.id
+       AND m.company_id = l.company_id
+      WHERE l.company_id = ${input.companyId}
+        AND l.effective_from > ${input.effectiveFrom}::date
+        AND m.worker_id = ANY(${sqlArray(workerIds)})
+    `);
+    const nextEffectiveFromRaw = resultRows(nextConflictResult)[0]?.nextEffectiveFrom;
+    const nextEffectiveFrom =
+      nextEffectiveFromRaw == null ? null : String(nextEffectiveFromRaw);
+
     await tx.execute(sql`
       UPDATE factory_worker_production_links l
       SET effective_to = ${input.effectiveFrom}::date, updated_at = now()
@@ -130,7 +148,8 @@ export async function createProductionWorkerLink(input: {
       INSERT INTO factory_worker_production_links (
         company_id, effective_from, effective_to, created_by, created_at, updated_at
       ) VALUES (
-        ${input.companyId}, ${input.effectiveFrom}::date, NULL, ${input.createdBy}, now(), now()
+        ${input.companyId}, ${input.effectiveFrom}::date, ${nextEffectiveFrom}::date,
+        ${input.createdBy}, now(), now()
       )
       RETURNING id
     `);
@@ -187,6 +206,8 @@ export async function unlinkProductionWorkerLink(input: {
   createdBy: string | number | null;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(7319, ${input.companyId})`);
+
     const linkResult = await tx.execute(sql`
       SELECT id, effective_from::text AS "effectiveFrom"
       FROM factory_worker_production_links
