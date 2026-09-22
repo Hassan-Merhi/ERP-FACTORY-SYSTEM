@@ -334,7 +334,11 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           if (finalized) return savedForPeriod;
           return (
             workerGroupNames.has(person.id) &&
-            (savedForPeriod || (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd)))
+            (
+              savedForPeriod ||
+              productionLinkByWorker.has(person.id) ||
+              (person.active && joinedByPeriodEnd(person.dateJoined, query.periodEnd))
+            )
           );
         }
 
