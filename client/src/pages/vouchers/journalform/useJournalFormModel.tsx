@@ -142,7 +142,11 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     queryFn: async () => {
       const response = await fetch(`/api/vouchers/${voucherIdToEdit}`);
       if (!response.ok) throw new Error("Failed to fetch voucher");
-      return (await response.json()) as JournalVoucherToEdit;
+      const voucher = (await response.json()) as JournalVoucherToEdit;
+      return {
+        ...voucher,
+        notes: voucher.notes ?? voucher.description ?? null,
+      };
     },
   });
 
@@ -452,7 +456,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
     journalForm.reset({
       voucherDate: parseDateLocal(voucherToEdit.voucherDate),
       entries: formEntries.length ? formEntries : emptyJournal().entries,
-      notes: voucherToEdit.notes || "",
+      notes: voucherToEdit.description ?? voucherToEdit.notes ?? "",
       optional: voucherToEdit.optional || false,
     });
     setJournalEffectiveDate(voucherToEdit.effectiveDate || "");
