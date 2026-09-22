@@ -21,3 +21,4 @@ export * from "./loading-shipping";
 export * from "./dispatch-recode";
 export * from "./container-planner";
 export * from "./ais-vessel-tracking";
+export * from "./ais-position-history";
