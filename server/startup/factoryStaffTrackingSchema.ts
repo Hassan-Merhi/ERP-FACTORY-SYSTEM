@@ -81,6 +81,53 @@ const FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL = `
     ON factory_worker_production_target_defaults (company_id, worker_id, effective_from DESC);
 `;
 
+
+const FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS factory_worker_production_links (
+    id serial PRIMARY KEY,
+    company_id integer NOT NULL,
+    effective_from date NOT NULL,
+    effective_to date,
+    created_by varchar(255),
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_worker_production_link_period_check
+      CHECK (effective_to IS NULL OR effective_to >= effective_from)
+  );
+
+  CREATE INDEX IF NOT EXISTS factory_worker_production_link_lookup_idx
+    ON factory_worker_production_links (company_id, effective_from, effective_to);
+
+  CREATE TABLE IF NOT EXISTS factory_worker_production_link_members (
+    id serial PRIMARY KEY,
+    link_id integer NOT NULL REFERENCES factory_worker_production_links(id) ON DELETE CASCADE,
+    company_id integer NOT NULL,
+    worker_id integer NOT NULL,
+    created_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_worker_production_link_member_unique UNIQUE (link_id, worker_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS factory_worker_production_link_member_lookup_idx
+    ON factory_worker_production_link_members (company_id, worker_id, link_id);
+
+  CREATE TABLE IF NOT EXISTS factory_worker_production_link_target_defaults (
+    id serial PRIMARY KEY,
+    link_id integer NOT NULL REFERENCES factory_worker_production_links(id) ON DELETE CASCADE,
+    company_id integer NOT NULL,
+    effective_from date NOT NULL,
+    target_bales numeric(12, 2),
+    created_by varchar(255),
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT factory_worker_production_link_target_nonnegative
+      CHECK (target_bales IS NULL OR target_bales >= 0),
+    CONSTRAINT factory_worker_production_link_target_unique UNIQUE (link_id, effective_from)
+  );
+
+  CREATE INDEX IF NOT EXISTS factory_worker_production_link_target_lookup_idx
+    ON factory_worker_production_link_target_defaults (company_id, link_id, effective_from DESC);
+`;
+
 export const factoryStaffTrackingSchema = [
   FACTORY_STAFF_TRACKING_TABLE_SQL,
   `CREATE UNIQUE INDEX IF NOT EXISTS factory_staff_tracking_unique_period_person
@@ -107,6 +154,10 @@ export async function ensureFactoryStaffTrackingSchema(database: StartupQueryabl
   // Daily worker targets are versioned by effective date. A new default applies
   // to that day and future days without rewriting any historical day snapshots.
   await database.query(FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL);
+
+  // Linked production workers keep effective-dated membership and a shared target
+  // history so unlinking never rewrites previous production days.
+  await database.query(FACTORY_WORKER_PRODUCTION_LINKS_SCHEMA_SQL);
 
   // Production can run with RUN_STARTUP_MIGRATIONS=false. Supplier tracking
   // defaults are required by ordinary ERP requests, so ensure their idempotent
