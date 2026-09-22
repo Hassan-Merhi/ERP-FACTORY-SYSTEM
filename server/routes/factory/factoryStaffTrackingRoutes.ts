@@ -676,8 +676,14 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       }
 
       const effectiveFrom = String(req.body?.effectiveFrom || "");
-      const rawWorkerIds = Array.isArray(req.body?.workerIds) ? req.body.workerIds : [];
-      const workerIds = [...new Set(rawWorkerIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+      const rawWorkerIds: unknown[] = Array.isArray(req.body?.workerIds) ? req.body.workerIds : [];
+      const workerIds: number[] = [
+        ...new Set(
+          rawWorkerIds
+            .map((value: unknown) => Number(value))
+            .filter((id: number) => Number.isInteger(id) && id > 0)
+        ),
+      ];
       const targetBales = numberOrNull(req.body?.targetBales);
 
       if (!ISO_DATE.test(effectiveFrom)) {
