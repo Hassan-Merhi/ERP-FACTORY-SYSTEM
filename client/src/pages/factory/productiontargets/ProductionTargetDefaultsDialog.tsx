@@ -142,6 +142,26 @@ export function ProductionTargetDefaultsDialog({
       });
   }, [rows, search, draftDefaults]);
 
+  const updateTargetDefault = (row: ProductionRow, targetBales: number | null) => {
+    setDraftDefaults((current) => {
+      const next = { ...current };
+      const affectedRows =
+        row.linkGroupId != null ? rows.filter((member) => member.linkGroupId === row.linkGroupId) : [row];
+
+      for (const member of affectedRows) {
+        next[member.personId] = {
+          category:
+            current[member.personId]?.category ??
+            member.defaultCategory ??
+            member.category ??
+            "",
+          targetBales,
+        };
+      }
+      return next;
+    });
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-target-defaults", {
@@ -239,6 +259,15 @@ export function ProductionTargetDefaultsDialog({
                       <div className="font-medium" dir="auto">
                         {row.name}
                       </div>
+                      {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
+                        <div className="mt-1 text-xs text-muted-foreground" dir="auto">
+                          {tr("linkedWith")}:{" "}
+                          {(row.linkedWorkers ?? [])
+                            .filter((member) => member.workerId !== row.personId)
+                            .map((member) => member.workerName)
+                            .join(", ")}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Input
@@ -267,15 +296,7 @@ export function ProductionTargetDefaultsDialog({
                         step="1"
                         value={draftDefaults[row.personId]?.targetBales ?? ""}
                         disabled={isLoading || saveMutation.isPending}
-                        onChange={(event) =>
-                          setDraftDefaults((current) => ({
-                            ...current,
-                            [row.personId]: {
-                              category: current[row.personId]?.category ?? row.defaultCategory ?? row.category,
-                              targetBales: targetValue(event.target.value),
-                            },
-                          }))
-                        }
+                        onChange={(event) => updateTargetDefault(row, targetValue(event.target.value))}
                         className="text-right tabular-nums"
                         data-testid={`input-production-default-target-${row.personId}`}
                       />
