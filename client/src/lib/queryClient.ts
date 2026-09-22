@@ -370,6 +370,9 @@ export async function apiRequest(
       body,
       credentials: "include",
       signal: controller.signal,
+      // Logout must survive an immediate tab/browser close after the click.
+      // keepalive asks the browser to finish this tiny request during unload.
+      keepalive: upMethod === "POST" && url === "/api/auth/logout",
     });
 
     clearTimeout(timeoutId);
