@@ -56,6 +56,7 @@ describe("Stock Entry staff tracking tabs", () => {
     );
     const dayEditor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const targetDefaultsService = src("server/services/factory/productionTargetDefaults.ts");
     const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
     expect(production).toContain("button-edit-production-default-targets");
@@ -71,7 +72,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(dayEditor).toContain("targetBalesOverridden");
     expect(defaultsEditor).toContain('queryKey: ["/api/factory/staff-tracking/production-target-defaults"]');
     expect(route).toContain("factory_worker_production_target_defaults");
-    expect(route).toContain("effective_from <=");
+    expect(targetDefaultsService).toContain("effective_from <=");
+    expect(targetDefaultsService).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain('category_overridden AS "categoryOverridden"');
     expect(route).toContain('target_overridden AS "targetBalesOverridden"');
     expect(route).toContain("defaultCategory");
@@ -91,6 +93,7 @@ describe("Stock Entry staff tracking tabs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const linkRoute = src("server/routes/factory/factoryProductionWorkerLinkRoutes.ts");
     const linkService = src("server/services/factory/productionWorkerLinks.ts");
     const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
@@ -103,11 +106,11 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(model).toContain("summarizeProductionRows");
     expect(route).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain("saveProductionLinkTargetDefault");
-    expect(route).toContain("unlinkProductionWorkerLink");
-    expect(route).toContain("hasFinalizedProductionOnOrAfter");
-    expect(route).toContain("finalized production history");
-    expect(route).toContain("/api/factory/staff-tracking/production-worker-links");
-    expect(route).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
+    expect(linkRoute).toContain("unlinkProductionWorkerLink");
+    expect(linkRoute).toContain("hasFinalizedProductionOnOrAfter");
+    expect(linkRoute).toContain("finalized production history");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(linkRoute).toContain("/api/factory/staff-tracking/production-worker-links/:linkId/unlink");
     expect(startup).toContain("factory_worker_production_links");
     expect(startup).toContain("factory_worker_production_link_members");
     expect(startup).toContain("factory_worker_production_link_target_defaults");
