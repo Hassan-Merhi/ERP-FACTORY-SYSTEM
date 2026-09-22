@@ -30,6 +30,7 @@ describe("Stock Entry staff tracking tabs", () => {
 
   it("enforces the same per-user restrictions on staff-tracking APIs", () => {
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
+    const linkService = src("server/services/factory/productionWorkerLinks.ts");
     expect(route).toContain("hide_tab_stockentry_production_targets");
     expect(route).toContain("hide_tab_stockentry_attendance_register");
     expect(route).toContain("canAccessTrackingPage");
@@ -110,6 +111,9 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(startup).toContain("factory_worker_production_links");
     expect(startup).toContain("factory_worker_production_link_members");
     expect(startup).toContain("factory_worker_production_link_target_defaults");
+    expect(linkService).toContain("w.position");
+    expect(linkService).toContain("w.department");
+
   });
 
   it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {
