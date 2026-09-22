@@ -77,9 +77,7 @@ export function ProductionTargetDefaultsDialog({
 
   useEffect(() => {
     if (!open || !data) return;
-    setDraftTargets(
-      Object.fromEntries(rows.map((row) => [row.personId, defaultsById.get(row.personId) ?? null]))
-    );
+    setDraftTargets(Object.fromEntries(rows.map((row) => [row.personId, defaultsById.get(row.personId) ?? null])));
     setSearch("");
   }, [open, data, defaultsById, rows]);
 
@@ -116,14 +114,10 @@ export function ProductionTargetDefaultsDialog({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const response = await factoryApiRequest(
-        "POST",
-        "/api/factory/staff-tracking/production-target-defaults",
-        {
-          effectiveFrom,
-          records: changedRecords,
-        }
-      );
+      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-target-defaults", {
+        effectiveFrom,
+        records: changedRecords,
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message || tr("saveDataFailed"));
@@ -183,11 +177,10 @@ export function ProductionTargetDefaultsDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <Table>
+          <Table wrapperClassName="overflow-visible rounded-none border-0">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="min-w-[230px]">{tr("person")}</TableHead>
-                <TableHead className="w-[110px]">{tr("code")}</TableHead>
                 <TableHead className="min-w-[180px]">{tr("category")}</TableHead>
                 <TableHead className="w-[170px] text-right">{tr("dailyDefaultTarget")}</TableHead>
               </TableRow>
@@ -195,13 +188,13 @@ export function ProductionTargetDefaultsDialog({
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="py-12 text-center text-muted-foreground">
                     {tr("loadingStaff")}
                   </TableCell>
                 </TableRow>
               ) : visibleRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="py-12 text-center text-muted-foreground">
                     {tr("noMatchingStaff")}
                   </TableCell>
                 </TableRow>
@@ -213,7 +206,6 @@ export function ProductionTargetDefaultsDialog({
                         {row.name}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{row.code || "—"}</TableCell>
                     <TableCell>{row.category || "—"}</TableCell>
                     <TableCell>
                       <Input
