@@ -31,14 +31,25 @@ export function registerSpOffloadPrepaidCompanyGuard(app: Express) {
           ? (req.body.chargeLines as OffloadChargeLine[])
           : [];
 
-        const prepaidIds = [
-          ...new Set(
-            charges
-              .filter((charge) => charge?.chargeType === "prepaid_used")
-              .map((charge) => Number.parseInt(String(charge.prepaidChargeId ?? ""), 10))
-              .filter((id) => Number.isInteger(id) && id > 0)
-          ),
-        ];
+        const prepaidCharges = charges.filter((charge) => charge?.chargeType === "prepaid_used");
+        const prepaidIds: number[] = [];
+
+        for (const charge of prepaidCharges) {
+          const rawId = charge.prepaidChargeId;
+          const normalized = typeof rawId === "number" ? String(rawId) : String(rawId ?? "").trim();
+          const prepaidId = Number(normalized);
+
+          // Do not let malformed/missing prepaid references fall through to the
+          // legacy handler's generic clearing-account branch. A prepaid_used line
+          // must always point at one concrete prepaid asset owned by this company.
+          if (!/^\d+$/.test(normalized) || !Number.isSafeInteger(prepaidId) || prepaidId <= 0) {
+            return res.status(400).json({
+              message: "prepaidChargeId is required and must be a positive integer for prepaid_used charges",
+            });
+          }
+
+          if (!prepaidIds.includes(prepaidId)) prepaidIds.push(prepaidId);
+        }
 
         for (const prepaidId of prepaidIds) {
           const rows = await db.execute(sql`
