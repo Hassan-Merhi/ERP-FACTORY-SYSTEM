@@ -12,8 +12,7 @@ import { randomBytes } from "crypto";
 import type { RequestHandler } from "express";
 import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 import { logger } from "../lib/logger";
-
-export const SESSION_COOKIE_NAME = "erp.session";
+import { SESSION_COOKIE_NAME } from "../services/security/sessionCookiePolicy";
 
 export function buildSessionMiddleware(): RequestHandler {
   // Session middleware
