@@ -13,6 +13,8 @@ import type { RequestHandler } from "express";
 import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 import { logger } from "../lib/logger";
 
+export const SESSION_COOKIE_NAME = "erp.session";
+
 export function buildSessionMiddleware(): RequestHandler {
   // Session middleware
   const PgSession = connectPgSimple(session);
@@ -26,7 +28,7 @@ export function buildSessionMiddleware(): RequestHandler {
   }
 
   const sessionConfig: session.SessionOptions = {
-    name: "erp.session",
+    name: SESSION_COOKIE_NAME,
     secret: process.env.SESSION_SECRET || randomBytes(32).toString("hex"),
     resave: false,
     saveUninitialized: false,
