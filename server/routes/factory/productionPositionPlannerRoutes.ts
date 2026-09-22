@@ -9,6 +9,7 @@ import {
   calculateProductionBonusPreview,
   type ProductionBonusMemberSnapshot,
 } from "../../services/factory/productionBonusPreview";
+import { loadActiveProductionWorkerLinks } from "../../services/factory/productionWorkerLinks";
 import { checkFactoryAdmin } from "./_helpers";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -212,21 +213,27 @@ async function buildPlannerResponse(companyId: number, date: string) {
   const planRow = planResult.rows[0] ?? null;
   const planId = planRow ? Number(planRow.id) : null;
 
-  const [effective, saved, actualData] = await Promise.all([
+  const [effective, saved, actualData, activeWorkerLinks] = await Promise.all([
     loadEffectivePositionSnapshots(companyId, date),
     planId ? loadSavedPositionSnapshots(planId, companyId) : Promise.resolve([]),
     loadActuals(companyId, date),
+    loadActiveProductionWorkerLinks(companyId, date),
   ]);
 
   const snapshots = mergeSnapshots(saved, effective);
   const entries = snapshots.map((entry) => {
     const actualBales = actualData.actuals.get(entry.positionId) ?? 0;
+    const memberIds = new Set(entry.members.map((member) => member.workerId));
+    const linkedWorkerGroups = activeWorkerLinks
+      .map((link) => link.members.map((member) => member.workerId).filter((workerId) => memberIds.has(workerId)))
+      .filter((workerIds) => workerIds.length >= 2);
     const preview = calculateProductionBonusPreview({
       targetBales: entry.targetBales,
       actualBales,
       bonusPerExtraBale: entry.bonusPerExtraBale,
       bonusEnabled: entry.bonusEnabled,
       members: entry.members,
+      ...(linkedWorkerGroups.length > 0 ? { linkedWorkerGroups } : {}),
     });
     return {
       ...entry,
