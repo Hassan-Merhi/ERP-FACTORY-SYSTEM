@@ -224,7 +224,8 @@ export function registerAdminPoFixRoutes(app: Express) {
                 eq(vouchers.companyId, parentCompany.id),
                 or(
                   like(vouchers.voucherNumber, `INTERCO-PARENT-%`),
-                  like(vouchers.voucherNumber, `INTERCO-LUB-%`) // Legacy format
+                  like(vouchers.voucherNumber, `INTERCO-LUB-%`), // Legacy format
+                  like(vouchers.voucherNumber, `IC-${company.id}-%`)
                 ),
                 like(vouchers.description, `%${container.containerNumber}%`)
               )

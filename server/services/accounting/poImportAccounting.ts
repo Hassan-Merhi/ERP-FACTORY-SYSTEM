@@ -3,11 +3,13 @@ export type PoImportCreditTarget =
 
 export function resolvePoImportCreditTarget(input: {
   companyType?: string | null;
+  hasExplicitParentLink?: boolean;
   configuredIntercompanyCreditAccountId?: number | null;
   supplierId?: number | null;
 }): PoImportCreditTarget {
   const configuredAccountId = input.configuredIntercompanyCreditAccountId;
   if (
+    input.hasExplicitParentLink === true &&
     input.companyType !== "supplier_partner" &&
     Number.isInteger(configuredAccountId) &&
     Number(configuredAccountId) > 0

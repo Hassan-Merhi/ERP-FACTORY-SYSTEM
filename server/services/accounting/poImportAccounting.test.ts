@@ -2,10 +2,22 @@ import { describe, expect, it } from "vitest";
 import { resolvePoImportCreditTarget } from "./poImportAccounting";
 
 describe("PO import credit target", () => {
-  it("uses the explicitly configured intercompany account for an ERP company without a parent link", () => {
+  it("does not let stale settings divert a standalone ERP supplier payable", () => {
     expect(
       resolvePoImportCreditTarget({
         companyType: "erp",
+        hasExplicitParentLink: false,
+        configuredIntercompanyCreditAccountId: 383,
+        supplierId: 71,
+      })
+    ).toEqual({ kind: "supplier", supplierId: 71 });
+  });
+
+  it("uses the configured intercompany account only for an explicitly linked child", () => {
+    expect(
+      resolvePoImportCreditTarget({
+        companyType: "erp",
+        hasExplicitParentLink: true,
         configuredIntercompanyCreditAccountId: 383,
         supplierId: 71,
       })
@@ -26,6 +38,7 @@ describe("PO import credit target", () => {
     expect(
       resolvePoImportCreditTarget({
         companyType: "supplier_partner",
+        hasExplicitParentLink: true,
         configuredIntercompanyCreditAccountId: 383,
         supplierId: 71,
       })
