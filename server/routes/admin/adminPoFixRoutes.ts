@@ -106,7 +106,7 @@ export function registerAdminPoFixRoutes(app: Express) {
         freight_paid_by: string | null;
         parent_company_id: number | null;
         source_company_name: string;
-        created_at: Date;
+        created_date: string;
         freight_own_account_id: number | null;
         freight_parent_account_id: number | null;
       }>(
@@ -114,7 +114,7 @@ export function registerAdminPoFixRoutes(app: Express) {
                 c.container_number, po.items_total, po.freight, po.surcharge,
                 po.fumigation, po.document_charges, po.discount, po.other_charges,
                 po.freight_paid_by, po.freight_own_account_id, po.freight_parent_account_id,
-                po.created_at, co.name AS source_company_name, co.parent_company_id
+                po.created_at::date::text AS created_date, co.name AS source_company_name, co.parent_company_id
            FROM purchase_orders po
            JOIN companies co ON co.id = po.company_id
            LEFT JOIN containers c ON c.id = po.container_id
@@ -229,7 +229,10 @@ export function registerAdminPoFixRoutes(app: Express) {
                 AND v.deleted_at IS NULL
                 AND (
                   apr.idempotency_key = $2
-                  OR v.voucher_number LIKE $3
+                  OR (
+                    v.voucher_number LIKE $3
+                    AND ($5::text IS NULL OR v.description LIKE '%' || $5 || '%')
+                  )
                   OR (
                     v.voucher_number LIKE $4
                     AND ($5::text IS NULL OR v.description LIKE '%' || $5 || '%')
@@ -337,7 +340,7 @@ export function registerAdminPoFixRoutes(app: Express) {
                     [
                       expectedCompanyId,
                       voucherNumber,
-                      po.created_at,
+                      po.created_date,
                       `Historical PO reconciliation - ${po.po_number}${po.container_number ? ` - ${po.container_number}` : ""}`,
                       voucherTotal.toFixed(2),
                     ]
@@ -415,7 +418,7 @@ export function registerAdminPoFixRoutes(app: Express) {
                   [
                     expectedCompanyId,
                     voucherNumber,
-                    po.created_at,
+                    po.created_date,
                     `${po.container_number ?? po.po_number} Historical PO reconciliation for ${po.source_company_name}`,
                     voucherTotal.toFixed(2),
                   ]
