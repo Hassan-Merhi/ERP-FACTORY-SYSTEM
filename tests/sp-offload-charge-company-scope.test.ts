@@ -37,6 +37,15 @@ describe("SP offload charge company isolation", () => {
     expect(guard).toContain("not found for this company");
   });
 
+  it("keeps the transactional prepaid lock and mutation company scoped", () => {
+    expect(offload).toContain(
+      "FROM sp_prepaid_charges WHERE id = ${parseInt(charge.prepaidChargeId)} AND company_id = ${companyId} FOR UPDATE"
+    );
+    expect(offload).toContain(
+      "WHERE id = ${parseInt(charge.prepaidChargeId)} AND company_id = ${companyId}"
+    );
+  });
+
   it("keeps paid_now bank references company scoped inside the transaction", () => {
     expect(offload).toContain('charge.chargeType === "paid_now"');
     expect(offload).toContain("eq(bankAccounts.companyId, companyId)");
