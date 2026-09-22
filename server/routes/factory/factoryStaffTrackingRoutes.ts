@@ -19,6 +19,7 @@ type SavedTrackingRow = {
   groupName: string | null;
   category: string | null;
   targetBales: string | null;
+  targetBalesOverridden: boolean;
   producedBales: string | null;
   status: TrackingStatus;
   notes: string | null;
@@ -31,6 +32,7 @@ type NormalizedTrackingRow = {
   category: string | null;
   notes: string | null;
   targetBales: number | null;
+  targetBalesOverridden: boolean;
   producedBales: number | null;
   status: TrackingStatus;
 };
@@ -267,6 +269,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           group_name AS "groupName",
           category,
           target_bales AS "targetBales",
+          target_overridden AS "targetBalesOverridden",
           produced_bales AS "producedBales",
           status,
           notes
@@ -341,8 +344,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         );
       }
 
-      // Repeating defaults only seed an unsaved daily row. Once a day has its
-      // own saved entry (including a deliberate blank target), that day wins.
+      // Daily defaults are the template for every open production day. A saved
+      // tracking row only replaces the template when Edit Targets explicitly
+      // marked that worker's target as a day-specific override.
       const productionTargetDefaults =
         query.page === "production" && query.periodType === "daily" && !finalized
           ? await loadProductionTargetDefaults(companyId, query.periodStart)
@@ -359,6 +363,26 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         const currentGroupName =
           query.page === "attendance" ? "All Workers" : (workerGroupNames.get(worker.id)?.[0] ?? "");
         const groupName = finalized ? (savedRow?.groupName ?? currentGroupName) : currentGroupName;
+        const savedTargetBales =
+          savedRow?.targetBales === null || savedRow?.targetBales === undefined
+            ? null
+            : Number(savedRow.targetBales);
+        const defaultTargetBales =
+          query.page === "production" && query.periodType === "daily" && !finalized
+            ? (productionTargetDefaults.get(worker.id) ?? null)
+            : null;
+        const targetBalesOverridden =
+          query.page === "production" &&
+          query.periodType === "daily" &&
+          !finalized &&
+          savedRow?.targetBalesOverridden === true;
+        const targetBales = finalized
+          ? savedTargetBales
+          : query.page === "production" && query.periodType === "daily"
+            ? targetBalesOverridden
+              ? savedTargetBales
+              : defaultTargetBales
+            : savedTargetBales;
 
         return {
           personType: "worker" as const,
@@ -367,13 +391,9 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           code: worker.employeeCode,
           groupName,
           category: savedRow?.category ?? worker.position ?? worker.department ?? "",
-          targetBales: savedRow
-            ? savedRow.targetBales === null || savedRow.targetBales === undefined
-              ? null
-              : Number(savedRow.targetBales)
-            : query.page === "production" && query.periodType === "daily"
-              ? (productionTargetDefaults.get(worker.id) ?? null)
-              : null,
+          targetBales,
+          defaultTargetBales,
+          targetBalesOverridden,
           producedBales:
             query.page === "production"
               ? finalized
@@ -620,6 +640,8 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             .trim()
             .slice(0, 4000) || null;
         const targetBales = numberOrNull(raw?.targetBales);
+        const targetBalesOverridden =
+          page === "production" && periodType === "daily" && raw?.targetBalesOverridden === true;
         const requestedProducedBales = numberOrNull(raw?.producedBales);
         const producedBales = page === "production" ? null : requestedProducedBales;
         if (
@@ -657,6 +679,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           category,
           notes,
           targetBales,
+          targetBalesOverridden,
           producedBales,
           status,
         });
@@ -680,10 +703,20 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
       }
 
       const values = normalizedRecords.map(
-        ({ personType, personId, groupName, category, targetBales, producedBales, status, notes }) => sql`(
+        ({
+          personType,
+          personId,
+          groupName,
+          category,
+          targetBales,
+          targetBalesOverridden,
+          producedBales,
+          status,
+          notes,
+        }) => sql`(
           ${companyId}, ${page}, ${periodType}, ${periodStart}, ${periodEnd},
-          ${personType}, ${personId}, ${groupName}, ${category}, ${targetBales}, ${producedBales},
-          ${status}, ${notes}, ${req.session.userId || null}, now()
+          ${personType}, ${personId}, ${groupName}, ${category}, ${targetBales}, ${targetBalesOverridden},
+          ${producedBales}, ${status}, ${notes}, ${req.session.userId || null}, now()
         )`
       );
 
@@ -705,7 +738,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         await tx.execute(sql`
           INSERT INTO factory_staff_tracking_entries (
             company_id, page_type, period_type, period_start, period_end,
-            person_type, person_id, group_name, category, target_bales, produced_bales,
+            person_type, person_id, group_name, category, target_bales, target_overridden, produced_bales,
             status, notes, created_by, updated_at
           ) VALUES ${sql.join(values, sql`, `)}
           ON CONFLICT (company_id, page_type, period_type, period_start, period_end, person_type, person_id)
@@ -713,6 +746,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
             group_name = EXCLUDED.group_name,
             category = EXCLUDED.category,
             target_bales = EXCLUDED.target_bales,
+            target_overridden = EXCLUDED.target_overridden,
             produced_bales = EXCLUDED.produced_bales,
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,

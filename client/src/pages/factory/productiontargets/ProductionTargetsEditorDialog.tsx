@@ -112,6 +112,18 @@ export function ProductionTargetsEditorDialog({
     setDraftRows((current) => current.map((row) => (row.personId === personId ? { ...row, ...patch } : row)));
   };
 
+  const targetOverrideState = (row: ProductionRow) => {
+    const original = originalById.get(row.personId);
+    if (periodType !== "daily" || !original) return row.targetBalesOverridden === true;
+
+    const targetChanged = (row.targetBales ?? null) !== (original.targetBales ?? null);
+    if (!targetChanged) return original.targetBalesOverridden === true;
+
+    // Setting the selected day's target back to the template removes the
+    // day-specific override so later Daily Default changes can flow through.
+    return (row.targetBales ?? null) !== (original.defaultTargetBales ?? null);
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
@@ -126,6 +138,7 @@ export function ProductionTargetsEditorDialog({
           groupName: row.groupName || "",
           category: row.category.trim(),
           targetBales: row.targetBales,
+          targetBalesOverridden: targetOverrideState(row),
           producedBales: null,
           status: row.status,
           notes: "",
@@ -142,7 +155,14 @@ export function ProductionTargetsEditorDialog({
         ["/api/factory/staff-tracking", "production", periodType, periodStart, periodEnd],
         (current: unknown) =>
           current && typeof current === "object"
-            ? { ...(current as Record<string, unknown>), rows: draftRows.map((row) => ({ ...row, category: row.category.trim() })) }
+            ? {
+                ...(current as Record<string, unknown>),
+                rows: draftRows.map((row) => ({
+                  ...row,
+                  category: row.category.trim(),
+                  targetBalesOverridden: targetOverrideState(row),
+                })),
+              }
             : current
       );
       void queryClient.invalidateQueries({
@@ -224,7 +244,6 @@ export function ProductionTargetsEditorDialog({
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="min-w-[230px]">{tr("person")}</TableHead>
-                <TableHead className="w-[110px]">{tr("code")}</TableHead>
                 <TableHead className="min-w-[220px]">{tr("category")}</TableHead>
                 <TableHead className="w-[130px] text-right">{tr("target")}</TableHead>
                 <TableHead className="w-[120px] text-right">{tr("produced")}</TableHead>
@@ -234,7 +253,7 @@ export function ProductionTargetsEditorDialog({
             <TableBody>
               {visibleRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
                     {tr("noMatchingStaff")}
                   </TableCell>
                 </TableRow>
@@ -251,7 +270,6 @@ export function ProductionTargetsEditorDialog({
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{row.code || "—"}</TableCell>
                     <TableCell>
                       <Input
                         value={row.category}

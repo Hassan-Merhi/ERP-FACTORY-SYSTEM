@@ -21,6 +21,8 @@ export interface ProductionRow {
   groupName?: string;
   category: string;
   targetBales: number | null;
+  defaultTargetBales?: number | null;
+  targetBalesOverridden?: boolean;
   producedBales: number | null;
   status: TrackingStatus;
   notes: string;
