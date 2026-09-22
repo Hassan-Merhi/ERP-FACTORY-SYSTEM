@@ -120,7 +120,7 @@ export function EmployeeStatementDialog({
                   </button>
 
                   {statementExpanded && (
-                    <div className="overflow-y-auto max-h-[50vh] space-y-0">
+                    <div className="space-y-0">
                       <div className="hidden md:block border rounded-md overflow-hidden">
                         <Table>
                           <TableHeader>
