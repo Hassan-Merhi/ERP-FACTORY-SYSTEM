@@ -950,11 +950,16 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
           );
           if (linkedRows.length === 0) continue;
 
-          const overrideRow = linkedRows.find((row) => row.targetBalesOverridden);
-          const sharedTarget = overrideRow?.targetBales ?? linkedRows[0]?.targetBales ?? link.sharedTargetBales;
-          const sharedOverride = linkedRows.some((row) => row.targetBalesOverridden);
+          const overrideRows = linkedRows.filter((row) => row.targetBalesOverridden);
+          const overrideTargets = new Set(overrideRows.map((row) => String(row.targetBales)));
+          if (overrideTargets.size > 1) {
+            return res.status(400).json({ message: "Linked workers must share one target" });
+          }
+
+          const sharedOverride = overrideRows.length > 0;
+          const sharedTarget = sharedOverride ? overrideRows[0].targetBales : link.sharedTargetBales;
           for (const row of linkedRows) {
-            row.targetBales = sharedTarget ?? null;
+            row.targetBales = sharedTarget;
             row.targetBalesOverridden = sharedOverride;
           }
         }
