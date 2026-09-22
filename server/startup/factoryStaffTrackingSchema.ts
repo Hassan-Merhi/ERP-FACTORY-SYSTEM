@@ -35,6 +35,14 @@ const FACTORY_STAFF_TRACKING_LOCK_SCHEMA_SQL = `
   ALTER TABLE factory_staff_tracking_entries
     ADD COLUMN IF NOT EXISTS target_overridden boolean NOT NULL DEFAULT false;
 
+  -- Existing saved daily rows predate category defaults, so preserve their
+  -- stored category as a day-specific override. New rows default to false.
+  ALTER TABLE factory_staff_tracking_entries
+    ADD COLUMN IF NOT EXISTS category_overridden boolean NOT NULL DEFAULT true;
+
+  ALTER TABLE factory_staff_tracking_entries
+    ALTER COLUMN category_overridden SET DEFAULT false;
+
   ALTER TABLE factory_staff_tracking_entries
     ALTER COLUMN created_by TYPE varchar(255)
     USING created_by::text;
@@ -66,6 +74,7 @@ const FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL = `
     company_id integer NOT NULL,
     worker_id integer NOT NULL,
     effective_from date NOT NULL,
+    category varchar(150),
     target_bales numeric(12, 2),
     created_by varchar(255),
     created_at timestamp NOT NULL DEFAULT now(),
@@ -73,6 +82,9 @@ const FACTORY_WORKER_PRODUCTION_TARGET_DEFAULTS_SCHEMA_SQL = `
     CONSTRAINT factory_worker_production_target_default_nonnegative
       CHECK (target_bales IS NULL OR target_bales >= 0)
   );
+
+  ALTER TABLE factory_worker_production_target_defaults
+    ADD COLUMN IF NOT EXISTS category varchar(150);
 
   CREATE UNIQUE INDEX IF NOT EXISTS factory_worker_production_target_default_unique
     ON factory_worker_production_target_defaults (company_id, worker_id, effective_from);
