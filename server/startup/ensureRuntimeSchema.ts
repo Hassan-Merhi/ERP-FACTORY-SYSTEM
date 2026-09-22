@@ -94,6 +94,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS json_cargo_tracking_status  TEXT,
       ADD COLUMN IF NOT EXISTS json_cargo_error            TEXT;
 
+    -- Customer-order workflow fields are read through full Drizzle row selects
+    -- in loading/scanning routes. Production can disable the bulk migration
+    -- pass, so keep this critical additive column in the always-on guard.
+    ALTER TABLE customer_orders
+      ADD COLUMN IF NOT EXISTS previous_status TEXT;
+
     CREATE TABLE IF NOT EXISTS fiscal_period_closures (
       id                          SERIAL PRIMARY KEY,
       company_id                  INTEGER      NOT NULL,

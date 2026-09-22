@@ -208,7 +208,7 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           .select({ legalName: customers.legalName })
           .from(customers)
           .where(eq(customers.id, order.customerId));
-        const unfToday = req.body.txDate || getClientDate(req);
+        const unfToday = req.body?.txDate || getClientDate(req);
         // Remove any previous INVOICE and INVOICE_REVERTED rows so only this revert shows
         await tx
           .delete(factoryDaybookEntries)
