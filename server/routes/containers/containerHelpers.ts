@@ -83,11 +83,11 @@ export async function syncIntercoParentVoucher(
     // Three naming conventions exist depending on which creation path was used:
     //   INTERCO-PARENT-{n}-{ts}  — storage.ts / adminRoutes.ts
     //   INTERCO-{n}-{ts}         — adminRoutes.ts (older path)
-    //   IC-{n}-{ts}              — importRoutes.ts (container import flow)
+    //   IC-{childCompanyId}-{n}-{ts} — importRoutes.ts (container import flow)
     const likeConditions = nums.flatMap((n) => [
       like(vouchers.voucherNumber, `INTERCO-PARENT-${n}-%`),
       like(vouchers.voucherNumber, `INTERCO-${n}-%`),
-      like(vouchers.voucherNumber, `IC-${n}-%`),
+      like(vouchers.voucherNumber, `IC-%-${n}-%`),
     ]);
     const patternClause = likeConditions.length === 1 ? likeConditions[0] : or(...likeConditions);
 
