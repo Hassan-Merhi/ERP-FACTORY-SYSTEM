@@ -25,6 +25,10 @@ describe("PO supplier reconciliation", () => {
     expect(expectedPoSupplierPayable({ ...po, freightPaidBy: "parent" }).toFixed(2)).toBe("1022.00");
   });
 
+  it("excludes own-paid freight from the supplier payable", () => {
+    expect(expectedPoSupplierPayable({ ...po, freightPaidBy: "own" }).toFixed(2)).toBe("1022.00");
+  });
+
   it("detects missing, stale and duplicate postings", () => {
     const expected = expectedPoSupplierPayable({ ...po, freightPaidBy: "parent" });
     expect(classifyPoSupplierPosting(expected, []).status).toBe("missing");

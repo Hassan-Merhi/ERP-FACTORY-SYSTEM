@@ -5,6 +5,15 @@ import type { Express } from "express";
 import { db, pool } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole, requireNonPOS } from "../../auth";
+import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
+import {
+  getCompanyRequestRuntimeContext,
+  runWithCompanyRequestRuntimeContext,
+} from "../../services/security/companyRequestRuntimeContext";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../../services/security/databaseScopeRuntimeContext";
 
 import {
   containers,
@@ -36,8 +45,26 @@ export function registerAdminPoFixRoutes(app: Express) {
       return res.status(400).json({ message: "A valid companyId is required" });
     }
 
-    const client = await pool.connect();
-    try {
+    const userId = String(req.session.userId ?? "").trim();
+    const requestContext = getCompanyRequestRuntimeContext();
+    if (!userId || !requestContext) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const accessibleCompanyIds = await getAccessibleCompanyIds(userId);
+    if (!accessibleCompanyIds.has(selectedCompanyId)) {
+      return res.status(403).json({ message: "No access to this company" });
+    }
+    const authorizedCompanyIds = [...accessibleCompanyIds];
+
+    return runWithCompanyRequestRuntimeContext(
+      { ...requestContext, authorizedCompanyIds },
+      () =>
+        runWithDatabaseScopeRuntimeContext(
+          createTenantDatabaseScope(requestContext.companyId, authorizedCompanyIds, "authorized-companies"),
+          async () => {
+            const client = await pool.connect();
+            try {
       await client.query("BEGIN");
       const companyRows = await client.query<{
         id: number;
@@ -151,15 +178,43 @@ export function registerAdminPoFixRoutes(app: Express) {
             )
           : { rows: [] as Array<{ id: number; voucher_id: number; credit_amount: string }> };
 
-        const classification = classifyPoSupplierPosting(
+        let classification = classifyPoSupplierPosting(
           expected,
           entryRows.rows.map((entry) => entry.credit_amount)
         );
         let repairStatus: "not_requested" | "repaired" | "manual_review" = "not_requested";
 
         if (apply && classification.status !== "matched") {
-          const distinctEntryVouchers = new Set(entryRows.rows.map((entry) => entry.voucher_id));
           const canonicalVoucherId = isSubsidiary ? voucherIds[0] : po.voucher_id;
+
+          // Serialize repairs per voucher and refresh the supplier credits after
+          // taking the lock. Without the refresh, two apply requests can both
+          // observe a missing credit and insert duplicates.
+          if (canonicalVoucherId) {
+            await client.query(`SELECT id FROM vouchers WHERE id = $1 FOR UPDATE`, [canonicalVoucherId]);
+            if (voucherIds.length) {
+              const refreshedEntries = await client.query<{ id: number; voucher_id: number; credit_amount: string }>(
+                `SELECT ve.id, ve.voucher_id, ve.credit_amount
+                   FROM voucher_entries ve
+                   JOIN vouchers v ON v.id = ve.voucher_id
+                  WHERE ve.voucher_id = ANY($1::int[])
+                    AND ve.supplier_id = $2
+                    AND v.company_id = $3
+                    AND v.deleted_at IS NULL
+                    AND COALESCE(v.optional, false) = false
+                    AND ve.credit_amount::numeric > 0
+                  ORDER BY ve.voucher_id, ve.id`,
+                [voucherIds, po.supplier_id, expectedCompanyId]
+              );
+              entryRows.rows = refreshedEntries.rows;
+              classification = classifyPoSupplierPosting(
+                expected,
+                entryRows.rows.map((entry) => entry.credit_amount)
+              );
+            }
+          }
+
+          const distinctEntryVouchers = new Set(entryRows.rows.map((entry) => entry.voucher_id));
           if (!canonicalVoucherId || distinctEntryVouchers.size > 1) {
             repairStatus = "manual_review";
           } else if (entryRows.rows.length === 0) {
@@ -167,8 +222,17 @@ export function registerAdminPoFixRoutes(app: Express) {
             if (!isSubsidiary) {
               const rerouted = await client.query(
                 `UPDATE voucher_entries
-                    SET supplier_id = $1, ledger_account_id = NULL,
-                        debit_amount = '0'
+                    SET supplier_id = $1,
+                        ledger_account_id = NULL,
+                        debit_amount = '0',
+                        credit_amount = $2,
+                        transaction_currency = COALESCE(transaction_currency, 'USD'),
+                        transaction_debit_amount = '0',
+                        transaction_credit_amount = $2,
+                        base_debit_amount = '0',
+                        base_credit_amount = $2,
+                        historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
+                        rate_convention = COALESCE(rate_convention, 'IDENTITY')
                   WHERE id = (
                     SELECT id FROM voucher_entries
                      WHERE voucher_id = $3
@@ -201,8 +265,11 @@ export function registerAdminPoFixRoutes(app: Express) {
               } else {
                 await client.query(
                   `INSERT INTO voucher_entries
-                    (voucher_id, supplier_id, debit_amount, credit_amount, narration)
-                   VALUES ($1, $2, '0', $3, $4)`,
+                    (voucher_id, supplier_id, debit_amount, credit_amount,
+                     transaction_currency, transaction_debit_amount, transaction_credit_amount,
+                     base_debit_amount, base_credit_amount, historical_exchange_rate,
+                     rate_convention, narration)
+                   VALUES ($1, $2, '0', $3, 'USD', '0', $3, '0', $3, 1, 'IDENTITY', $4)`,
                   [
                     canonicalVoucherId,
                     po.supplier_id,
@@ -233,10 +300,20 @@ export function registerAdminPoFixRoutes(app: Express) {
               repairStatus = "manual_review";
             } else {
               const [kept, ...duplicates] = entryRows.rows;
-              await client.query(`UPDATE voucher_entries SET credit_amount = $1 WHERE id = $2`, [
-                expected.toFixed(2),
-                kept.id,
-              ]);
+              await client.query(
+                `UPDATE voucher_entries
+                    SET debit_amount = '0',
+                        credit_amount = $1,
+                        transaction_currency = COALESCE(transaction_currency, 'USD'),
+                        transaction_debit_amount = '0',
+                        transaction_credit_amount = $1,
+                        base_debit_amount = '0',
+                        base_credit_amount = $1,
+                        historical_exchange_rate = COALESCE(historical_exchange_rate, 1),
+                        rate_convention = COALESCE(rate_convention, 'IDENTITY')
+                  WHERE id = $2`,
+                [expected.toFixed(2), kept.id]
+              );
               if (duplicates.length > 0) {
                 await client.query(`DELETE FROM voucher_entries WHERE id = ANY($1::int[])`, [
                   duplicates.map((row) => row.id),
@@ -285,13 +362,16 @@ export function registerAdminPoFixRoutes(app: Express) {
       else await client.query("ROLLBACK");
 
       return res.json({ dryRun: !apply, selectedCompanyId, companies: companyIds, counts, repaired, results });
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      logger.error("PO supplier reconciliation failed", { error });
-      return res.status(500).json({ message: getErrorMessage(error) });
-    } finally {
-      client.release();
-    }
+            } catch (error: unknown) {
+              await client.query("ROLLBACK").catch(() => undefined);
+              logger.error("PO supplier reconciliation failed", { error });
+              return res.status(500).json({ message: getErrorMessage(error) });
+            } finally {
+              client.release();
+            }
+          }
+        )
+    );
   });
 
   app.post("/api/test-data/vouchers", requireAuth, requireNonPOS, async (req, res) => {
