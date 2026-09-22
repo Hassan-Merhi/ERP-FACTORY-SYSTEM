@@ -177,6 +177,7 @@ export default function FactoryProductionTargets() {
       groupName: row.groupName || "",
       category: row.category,
       targetBales: row.targetBales,
+      targetBalesOverridden: row.targetBalesOverridden === true,
       producedBales: null,
       status: row.status,
       notes: "",
