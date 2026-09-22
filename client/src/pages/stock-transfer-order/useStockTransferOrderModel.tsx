@@ -614,13 +614,18 @@ export function useStockTransferOrderModel() {
         const wasOptional = existingVoucher?.optional === true;
         const wantOptional = data.optional;
         const isFinalizingTransfer = wasOptional && !wantOptional;
+        const persistedDescription =
+          existingTransfer.notes?.trim() ||
+          existingVoucher?.description?.trim() ||
+          `Stock Transfer Order - ${data.orderItems.length} items`;
         await apiRequest("PATCH", `/api/vouchers/${editVoucherId}`, {
           voucherDate: data.voucherDate,
+          description: persistedDescription,
           ...(wantOptional ? { optional: true } : {}),
         });
         const response = await apiRequest("PUT", `/api/stock-transfers/${existingTransfer.id}`, {
           destinationLocationId: data.destinationLocationId,
-          notes: `Stock Transfer Order - ${data.orderItems.length} items`,
+          notes: persistedDescription,
           items: data.orderItems.map((item) => ({
             stockItemId: item.stockItemId,
             sourceLocationId: item.sourceLocationId,
@@ -675,6 +680,7 @@ export function useStockTransferOrderModel() {
   const workflows = useStockTransferOrderWorkflows({
     editVoucherId,
     existingTransfer,
+    existingDescription: existingVoucher?.description,
     locations,
     stockItems,
     orderItems,
