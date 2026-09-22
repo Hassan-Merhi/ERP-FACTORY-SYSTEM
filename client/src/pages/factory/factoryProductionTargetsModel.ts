@@ -20,6 +20,8 @@ export interface ProductionRow {
   code: string | null;
   groupName?: string;
   category: string;
+  defaultCategory?: string;
+  categoryOverridden?: boolean;
   targetBales: number | null;
   defaultTargetBales?: number | null;
   targetBalesOverridden?: boolean;
