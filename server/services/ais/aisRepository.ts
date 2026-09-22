@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "../../db";
-import { factoryContainerVesselTracking } from "@shared/schema";
+import { factoryContainers, factoryContainerVesselTracking } from "@shared/schema";
 import type { AisUpdate } from "./aisTypes";
 
 export async function getVesselTracking(containerId: number, companyId: number) {
@@ -10,6 +10,25 @@ export async function getVesselTracking(containerId: number, companyId: number) 
     .where(and(eq(factoryContainerVesselTracking.containerId, containerId), eq(factoryContainerVesselTracking.companyId, companyId)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Return only MMSIs attached to containers that are still eligible for live tracking.
+ * An empty result is intentional: callers must not open a world-wide AIS subscription.
+ */
+export async function listActiveTrackedMmsis(): Promise<string[]> {
+  const rows = await db
+    .select({ mmsi: factoryContainerVesselTracking.mmsi })
+    .from(factoryContainerVesselTracking)
+    .innerJoin(factoryContainers, eq(factoryContainers.id, factoryContainerVesselTracking.containerId))
+    .where(and(
+      isNull(factoryContainers.deletedAt),
+      eq(factoryContainers.trackingEnabled, true),
+      eq(factoryContainers.trackingAutoUpdate, true),
+      ne(factoryContainers.status, "OFFLOADED")
+    ));
+
+  return [...new Set(rows.map((row) => row.mmsi).filter((mmsi): mmsi is string => Boolean(mmsi)))].sort();
 }
 
 /** Persist an AIS update only for an already-linked MMSI. Wave 2 owns creation of the mapping. */
