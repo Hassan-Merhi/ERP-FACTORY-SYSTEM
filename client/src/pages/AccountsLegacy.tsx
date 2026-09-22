@@ -48,6 +48,16 @@ export default function Accounts() {
     model.filteredAccounts,
     freshStartPresentation
   );
+  // Insurance creates one technical ledger per member ("Insurance - <name>").
+  // Those ledgers are required for posting/history, but they are implementation
+  // details and should not clutter the Factory Accounts list or account search.
+  // Keep the aggregate insurance expense/accounting ledgers visible.
+  const visibleFilteredAccounts =
+    model.appMode === "factory"
+      ? presentedFilteredAccounts.filter(
+          (account) => !account.name.trim().toLocaleLowerCase().startsWith("insurance - ")
+        )
+      : presentedFilteredAccounts;
   const selectedFreshStartPresentation =
     selectedAccount?.subType === "gc_partner_capital" && selectedAccount.accountId === freshStartAccount?.accountId
       ? freshStartPresentation
@@ -61,7 +71,7 @@ export default function Accounts() {
     vouchersWithBalance: model.vouchersWithBalance,
     presentation: selectedFreshStartPresentation,
   });
-  const presentedSearchModel = { ...model, filteredAccounts: presentedFilteredAccounts };
+  const presentedSearchModel = { ...model, filteredAccounts: visibleFilteredAccounts };
 
   const closeSelectedAccount = () => {
     model.setSelectedAccount(null);
@@ -193,7 +203,7 @@ export default function Accounts() {
               ) : (
                 /* Full account table when not searching */
                 <AccountTable
-                  filteredAccounts={presentedFilteredAccounts}
+                  filteredAccounts={visibleFilteredAccounts}
                   expandedParents={model.expandedParents}
                   toggleParent={model.toggleParent}
                   handleAccountChange={model.handleAccountChange}
