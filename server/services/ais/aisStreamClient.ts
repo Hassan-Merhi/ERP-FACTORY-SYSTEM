@@ -1,7 +1,7 @@
 import WebSocket, { type RawData } from "ws";
 import { logger } from "../../lib/logger";
-import { parseAisStreamMessage, normalizeMmsi } from "./aisMessageParser";
-import { recordAisError, recordAisMessage, recordAisReconnect, setAisState } from "./aisHealth";
+import { isAisStreamSubscriptionConfirmation, parseAisStreamMessage, normalizeMmsi } from "./aisMessageParser";
+import { recordAisControlMessage, recordAisError, recordAisMessage, recordAisReconnect, setAisState } from "./aisHealth";
 import type { AisUpdate } from "./aisTypes";
 
 const DEFAULT_URL = "wss://stream.aisstream.io/v0/stream";
@@ -88,7 +88,13 @@ export class AisStreamClient {
     });
 
     socket.on("message", (data: RawData) => {
-      const update = parseAisStreamMessage(Buffer.isBuffer(data) ? data : data.toString());
+      const raw = Buffer.isBuffer(data) ? data : data.toString();
+      if (isAisStreamSubscriptionConfirmation(raw)) {
+        recordAisControlMessage();
+        return;
+      }
+
+      const update = parseAisStreamMessage(raw);
       recordAisMessage(Boolean(update));
       if (!update) return;
       Promise.resolve(this.options.onUpdate(update)).catch((error: unknown) => {

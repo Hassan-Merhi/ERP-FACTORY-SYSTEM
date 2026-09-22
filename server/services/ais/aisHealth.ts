@@ -19,6 +19,10 @@ export function setAisState(state: AisConnectionState): void {
   if (state === "connected") health.connectedAt = new Date();
 }
 
+export function recordAisControlMessage(): void {
+  health.lastMessageAt = new Date();
+}
+
 export function recordAisMessage(accepted: boolean): void {
   health.lastMessageAt = new Date();
   if (accepted) health.messagesReceived += 1;
