@@ -1,14 +1,10 @@
 /**
  * Post-startup background jobs, run once the port is open.
- *
- * Startup diagnostics, bale-status repair, orphaned/hung export-run cleanup,
- * and the daily-export recovery retry. Extracted verbatim from
- * server/index.ts; behaviour (including the 30 s / 3 s / 90 s timings and the
- * 30-minute hung-run interval) is unchanged.
  */
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { startAisLiveTracking, stopAisLiveTracking } from "../services/ais/aisLiveTrackingService";
 import { checkAndRecoverDailyExport } from "../services/scheduler";
 
 let installed = false;
@@ -21,45 +17,35 @@ function unrefTimer(timer: ReturnType<typeof setTimeout> | ReturnType<typeof set
 export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
-  // Delayed 30 s so diagnostics don't compete with user requests for pool
-  // connections the moment the server goes live.
+
+  // AIS is optional and isolated from normal container tracking. It starts only
+  // after the HTTP server is live and shuts down independently on process signals.
+  startAisLiveTracking();
+  process.once("SIGTERM", stopAisLiveTracking);
+  process.once("SIGINT", stopAisLiveTracking);
+
   const migrationDiagTimer = setTimeout(async () => {
     try {
       const [posRows, posWithStation, normalUserRows, oldRoleRows, canDeleteCol] = await Promise.all([
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'POS'`),
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'POS' AND pos_station IS NOT NULL`),
         pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role = 'Normal User'`),
-        pool.query(
-          `SELECT COUNT(*) AS n FROM user_company_roles WHERE role IN ('POS1','POS2','POS3','POS4','POS5','POS6','User')`
-        ),
-        pool.query(
-          `SELECT COUNT(*) AS n FROM information_schema.columns
-         WHERE table_name = 'user_company_roles' AND column_name = 'can_delete_records'`
-        ),
+        pool.query(`SELECT COUNT(*) AS n FROM user_company_roles WHERE role IN ('POS1','POS2','POS3','POS4','POS5','POS6','User')`),
+        pool.query(`SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_name = 'user_company_roles' AND column_name = 'can_delete_records'`),
       ]);
       const posCount = parseInt(posRows.rows[0]?.n ?? "0", 10);
       const posWithStn = parseInt(posWithStation.rows[0]?.n ?? "0", 10);
       const normalCount = parseInt(normalUserRows.rows[0]?.n ?? "0", 10);
       const oldRoleCount = parseInt(oldRoleRows.rows[0]?.n ?? "0", 10);
       const canDeleteOk = parseInt(canDeleteCol.rows[0]?.n ?? "0", 10) > 0;
-      logger.info(
-        `[MigrationDiag] POS roles: ${posCount} (${posWithStn} with pos_station set) | ` +
-          `Normal User roles: ${normalCount} | ` +
-          `Old roles remaining: ${oldRoleCount} | ` +
-          `can_delete_records column: ${canDeleteOk ? "✓ present" : "✗ MISSING"}`
-      );
-      if (oldRoleCount > 0) {
-        logger.warn(
-          `[MigrationDiag] ⚠️  ${oldRoleCount} row(s) still have old roles (POS1–POS6 or User) — check /api/admin/deployment-diagnostics`
-        );
-      }
+      logger.info(`[MigrationDiag] POS roles: ${posCount} (${posWithStn} with pos_station set) | Normal User roles: ${normalCount} | Old roles remaining: ${oldRoleCount} | can_delete_records column: ${canDeleteOk ? "✓ present" : "✗ MISSING"}`);
+      if (oldRoleCount > 0) logger.warn(`[MigrationDiag] ⚠️  ${oldRoleCount} row(s) still have old roles (POS1–POS6 or User) — check /api/admin/deployment-diagnostics`);
     } catch (e: unknown) {
       logger.warn("[MigrationDiag] Could not run startup diagnostic:", { error: getErrorMessage(e) });
     }
   }, 30000);
   unrefTimer(migrationDiagTimer);
 
-  // ── Fix bales where deletedAt is set but status is not DELETED ────────────
   void (async () => {
     try {
       const r = await pool.query(`
@@ -79,7 +65,6 @@ export function runPostStartupJobs(): void {
     }
   })();
 
-  // ── Clean up orphaned export runs ────────────────────────────────────────
   const cleanupOrphanedRuns = async () => {
     try {
       const r = await pool.query(`
