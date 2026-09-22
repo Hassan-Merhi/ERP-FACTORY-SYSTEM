@@ -10,6 +10,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { resolveParentCompanyId, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
+import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
 import {
   vouchers,
   voucherEntries,
@@ -61,6 +62,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         banks,
         assets,
         employees,
+        customersWithBalances,
         allSuppliers,
         fSuppliers,
         fContainers,
@@ -73,6 +75,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         storage.getAllBankAccounts(companyId),
         storage.getAllFixedAssets(companyId),
         storage.getAllEmployees(companyId),
+        getCustomersWithBalances(companyId),
         isFactoryCompany || isPropertiesCompany ? Promise.resolve([]) : storage.getAllSuppliers(),
         isFactoryCompany
           ? db
@@ -324,6 +327,24 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             balance,
           };
         }),
+        // Customers are selectable in the journal form, so they must also be
+        // present in the balance source used by "New Bal". Previously the client
+        // could select a customer while this endpoint omitted customers entirely,
+        // causing getAccountBalance() to fall back to 0 and making "New Bal" show
+        // only the voucher amount. Use the same canonical customer-balance query as
+        // /api/customers/stats and preserve its Dr-positive / Cr-negative sign.
+        ...customersWithBalances.map((customer) => {
+          const amount = Number(customer.balance || 0);
+          const balance = customer.balanceSide === "Cr" ? -amount : amount;
+
+          return {
+            id: customer.id,
+            type: "customer",
+            name: customer.legalName,
+            code: customer.code,
+            balance,
+          };
+        }),
         // ERP Suppliers — only included for ERP companies (factory and properties use different account structures).
         // Child companies additionally omit suppliers with no activity in this company.
         ...suppliers
@@ -398,7 +419,6 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             balance,
           };
         }),
-        // Customers appended below after async balance computation
         // Fixed Assets
         ...assets.map((asset) => {
           const movements = assetBalances.get(asset.id) || { debits: 0, credits: 0 };
@@ -419,7 +439,6 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         }),
       ];
 
-      // Customers are excluded from the voucher account selector — only ledger/bank/supplier accounts appear
       _vsBCache.set(companyId, { data: accounts, expiresAt: Date.now() + 30_000 });
       if (_vsBCache.size > 100) {
         const now = Date.now();
