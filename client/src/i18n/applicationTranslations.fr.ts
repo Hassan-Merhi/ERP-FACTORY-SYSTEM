@@ -38,6 +38,7 @@ export const applicationFrenchTranslations = {
   "user.menu": "Menu du compte",
   "common.logout": "Se déconnecter",
   "common.refresh": "Actualiser",
+  "access.noTabsAvailable": "Aucun onglet n’est disponible pour cet utilisateur.",
   "common.updateAvailable": "Mise à jour disponible",
   "common.updateDescription": "Une nouvelle version de l’application est prête.",
   "containerVerification.itemsRefreshed": "Articles du conteneur actualisés",
