@@ -783,6 +783,83 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
             <div style={{ color: "#a1a1aa", fontSize: "14px" }}>{rows.length} {tr("totalPeople")}</div>
           </div>
 
+          <div
+            data-testid="attendance-report-kpis"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: "12px",
+              marginBottom: "18px",
+            }}
+          >
+            {[
+              {
+                key: "total",
+                label: tr("totalPeople"),
+                value: rows.length,
+                border: "#34383e",
+                valueColor: "#f4f4f5",
+              },
+              {
+                key: "present",
+                label: tr("present"),
+                value: totals.present,
+                border: "#14532d",
+                valueColor: "#34d399",
+              },
+              {
+                key: "absent",
+                label: tr("absent"),
+                value: totals.absent,
+                border: "#7f1d1d",
+                valueColor: "#f87171",
+              },
+              {
+                key: "new",
+                label: tr("new"),
+                value: totals.newCount,
+                border: "#78350f",
+                valueColor: "#fbbf24",
+              },
+            ].map((kpi) => (
+              <div
+                key={kpi.key}
+                data-testid={`attendance-report-kpi-${kpi.key}`}
+                style={{
+                  minWidth: 0,
+                  border: `1px solid ${kpi.border}`,
+                  borderRadius: "12px",
+                  background: "#181a1e",
+                  padding: "15px 17px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#a1a1aa",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {kpi.label}
+                </div>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    color: kpi.valueColor,
+                    fontSize: "30px",
+                    lineHeight: 1,
+                    fontWeight: 800,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {kpi.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "18px" }}>
             <thead>
               <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
