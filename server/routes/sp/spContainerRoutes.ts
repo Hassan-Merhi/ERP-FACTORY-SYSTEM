@@ -200,13 +200,15 @@ export function registerSpContainerRoutes(app: Express) {
       const containerId = parseInt(req.params.id);
       if (isNaN(containerId)) return res.status(400).json({ message: "Invalid container ID" });
 
+      const containerEditConflictMessage = "Cannot edit an offloaded container";
+
       const [existing] = await db
         .select()
         .from(spContainers)
         .where(and(eq(spContainers.id, containerId), eq(spContainers.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Container not found" });
       if (existing.status === "offloaded") {
-        return res.status(400).json({ message: "Cannot edit an offloaded container" });
+        return res.status(400).json({ message: containerEditConflictMessage });
       }
 
       const {
@@ -342,7 +344,7 @@ export function registerSpContainerRoutes(app: Express) {
       if (!updated) {
         return res.status(409).json({
           code: "SP_CONTAINER_STATE_CONFLICT",
-          message: "Container was offloaded while the edit was being saved",
+          message: containerEditConflictMessage,
         });
       }
 
