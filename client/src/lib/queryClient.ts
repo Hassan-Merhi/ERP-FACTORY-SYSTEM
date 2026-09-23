@@ -202,6 +202,25 @@ if (
     }
 
     const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+
+    // Factory pages reuse a small set of shared ERP accounting/inventory APIs.
+    // Mark every API request made while the browser is on a Factory route,
+    // including raw fetch() calls, so the server can enforce the Factory page/tab
+    // that owns the shared endpoint instead of trusting React visibility.
+    let effectiveInit = init;
+    const isFactoryUiRequest =
+      !!pathname &&
+      pathname.startsWith("/api/") &&
+      pathname !== "/api/csrf-token" &&
+      window.location.pathname.startsWith("/factory/");
+    if (isFactoryUiRequest) {
+      const factoryHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      factoryHeaders.set("X-App-Mode", "factory");
+      factoryHeaders.set("X-Factory-Page", window.location.pathname);
+      effectiveInit = { ...init, headers: factoryHeaders };
+      if (effectiveInit.credentials === undefined) effectiveInit.credentials = "include";
+    }
+
     const applyReferenceMutation = async (response: Response) => {
       if (!referenceMutationQueryClient || !pathname) return;
       await applyReferenceMutationResponse({
@@ -217,12 +236,14 @@ if (
       const isApi = !!pathname && pathname.startsWith("/api/") && pathname !== "/api/csrf-token";
 
       if (isStateChanging && isApi) {
-        const existingHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+        const existingHeaders = new Headers(
+          effectiveInit?.headers || (input instanceof Request ? input.headers : undefined)
+        );
         if (!existingHeaders.has("x-csrf-token")) {
           const token = await ensureCsrfToken();
           if (token) {
             existingHeaders.set("X-CSRF-Token", token);
-            const newInit: RequestInit = { ...init, headers: existingHeaders };
+            const newInit: RequestInit = { ...effectiveInit, headers: existingHeaders };
             if (newInit.credentials === undefined) newInit.credentials = "include";
             const res = await originalFetch(input, newInit);
             await applyReferenceMutation(res);
@@ -252,7 +273,7 @@ if (
     }
     // GET (and other non-state-changing) requests fall through here.
     // Capture the response so we can detect session expiry on polling queries.
-    const fallbackRes = await originalFetch(input, init);
+    const fallbackRes = await originalFetch(input, effectiveInit);
     await applyReferenceMutation(fallbackRes);
     // Verify session before redirecting — a business 401 must not log users out.
     await handlePossibleSessionExpiry(fallbackRes, pathname, originalFetch);

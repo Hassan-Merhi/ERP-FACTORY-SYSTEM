@@ -39,6 +39,7 @@ import { enforceCompanyResourceScope } from "../middleware/companyResourceScope"
 import { enforceDeletedItemCompanyScope } from "../middleware/deletedItemCompanyScope";
 import { enforceGlobalTransactionCompanyScope } from "../middleware/globalTransactionCompanyScope";
 import { enforceOperationalPermissionScope } from "../middleware/operationalPermissionScope";
+import { enforceFactoryBackendAccess } from "../middleware/factoryBackendAccessBoundary";
 import { operationalBandwidthCompactResponse } from "../middleware/operationalBandwidthCompactResponse";
 import {
   ActiveCompanyPermissionContextError,
@@ -150,6 +151,10 @@ export function registerFactoryRoutes(app: Express, requireAuth: RequestHandler,
   });
 
   app.use(enforceOperationalPermissionScope);
+
+  // Factory page/tab permissions are enforced server-side after tenant/resource
+  // isolation and before any Factory handler, so hidden UI is never the security boundary.
+  app.use("/api/factory", enforceFactoryBackendAccess);
   // Negotiated wire compaction runs after security gates but before the legacy
   // route handlers. It changes only serialized response bytes; route code still
   // sees and produces its existing business objects.
