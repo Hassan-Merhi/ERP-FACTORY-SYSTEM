@@ -17,6 +17,7 @@ export type FactoryAccessState = {
   role: string;
   privileged: boolean;
   fullAccess: boolean;
+  hasErpAccess: boolean;
   hasFactoryAccess: boolean;
   pageKeys: string[];
   hiddenTabs: string[];
@@ -65,6 +66,7 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
         role,
         privileged: true,
         fullAccess: true,
+        hasErpAccess: true,
         hasFactoryAccess: true,
         pageKeys: [],
         hiddenTabs: [],
@@ -74,6 +76,7 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
     const [[profile], pageRows] = await Promise.all([
       db
         .select({
+          hasErpAccess: factoryUserProfiles.hasErpAccess,
           hasFactoryAccess: factoryUserProfiles.hasFactoryAccess,
           hiddenCostFields: factoryUserProfiles.hiddenCostFields,
         })
@@ -98,6 +101,7 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
       role,
       privileged: false,
       fullAccess: pageKeys.length === 0,
+      hasErpAccess: profile?.hasErpAccess ?? true,
       hasFactoryAccess: profile?.hasFactoryAccess ?? true,
       pageKeys,
       hiddenTabs: Array.isArray(profile?.hiddenCostFields) ? profile.hiddenCostFields : [],
