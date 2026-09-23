@@ -60,6 +60,7 @@ export function useFactoryPayrollModel() {
     staleTime: 5 * 60000,
   });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showPayrollRecords = !hiddenTabs.includes("hide_tab_payroll_records");
   const showWorkerMaster =
     settings?.payrollTabWorkerMasterEnabled !== false && !hiddenTabs.includes("hide_tab_payroll_worker_master");
 
@@ -397,6 +398,7 @@ export function useFactoryPayrollModel() {
   return {
     formatDisplayDate,
     navigate,
+    showPayrollRecords,
     showWorkerMaster,
     setCompanyId,
     filterStartDate,

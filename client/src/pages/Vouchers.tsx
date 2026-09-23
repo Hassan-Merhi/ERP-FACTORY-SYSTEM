@@ -1,6 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
 import { format } from "date-fns";
@@ -32,7 +32,7 @@ import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { resolveWhatsAppPrompt } from "@/lib/whatsapp-prompt";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
 import { getApiRequest } from "@/lib/factoryApi";
-import type { AuthMe } from "@shared/apiTypes";
+import type { AuthMe, FactoryMyAccess } from "@shared/apiTypes";
 import { useFormDraft } from "@/hooks/useFormDraft";
 import { DraftRestorePrompt } from "@/components/DraftRestorePrompt";
 import {
@@ -61,6 +61,18 @@ import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
+
+type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
+
+const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
+  payment: "hide_tab_vouchers_payment",
+  receipt: "hide_tab_vouchers_receipt",
+  journal: "hide_tab_vouchers_journal",
+  transfer: "hide_tab_vouchers_transfer",
+  transferorder: "hide_tab_vouchers_transferorder",
+  adjustment: "hide_tab_vouchers_adjustment",
+  creditnote: "hide_tab_vouchers_creditnote",
+};
 
 interface VouchersProps {
   posUser?: Pick<AuthMe, "assignedLocationId"> | null;
@@ -114,27 +126,38 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   const tabParam = searchParams.get("tab");
   const voucherIdToEdit = editParam ? parseInt(editParam) : null;
 
-  const [activeTab, setActiveTab] = useState<
-    "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote"
-  >(
-    (tabParam as
-      | "payment"
-      | "receipt"
-      | "journal"
-      | "transfer"
-      | "transferorder"
-      | "adjustment"
-      | "creditnote"
-      | (() => "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote")) ||
-      "payment"
-  );
+  const [activeTab, setActiveTab] = useState<VoucherTab>((tabParam as VoucherTab) || "payment");
   const [editVoucherId, setEditVoucherId] = useState<number | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [accountPickersNeeded, setAccountPickersNeeded] = useState(() => !!voucherIdToEdit);
 
   const isFactoryMode = appMode === "factory";
-  const visibleSidebarGroups = isFactoryMode ? sidebarGroups.filter((g) => g.label !== "Adjustments") : sidebarGroups;
+  const { data: factoryAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+    enabled: isFactoryMode && !isPOS,
+  });
+  const factoryHiddenTabs = factoryAccess?.hiddenCostFields ?? [];
+  const visibleSidebarGroups = isFactoryMode
+    ? sidebarGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) => !factoryHiddenTabs.includes(FACTORY_VOUCHER_HIDDEN_KEYS[item.key as VoucherTab])
+          ),
+        }))
+        .filter((group) => group.items.length > 0)
+    : sidebarGroups;
+  const visibleVoucherTabs = visibleSidebarGroups.flatMap((group) => group.items.map((item) => item.key as VoucherTab));
+  const fallbackVoucherTab = visibleVoucherTabs[0] ?? null;
+  const visibleVoucherTabKey = visibleVoucherTabs.join("|");
+  const canShowVoucherTab = (tab: VoucherTab) => !isFactoryMode || visibleVoucherTabs.includes(tab);
   const modePrefix = useModePrefix();
+
+  useEffect(() => {
+    if (!isFactoryMode || isPOS || !fallbackVoucherTab || visibleVoucherTabs.includes(activeTab)) return;
+    setActiveTab(fallbackVoucherTab);
+  }, [activeTab, fallbackVoucherTab, isFactoryMode, isPOS, visibleVoucherTabKey]);
 
   const [sidebarSearchValue, setSidebarSearchValue] = useState("");
   const [sidebarHighlightedIndex, setSidebarHighlightedIndex] = useState(0);
@@ -576,7 +599,12 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
         )}
 
         <div className="flex-1 min-w-0">
-          {!isPOS && activeTab === "payment" && (
+          {!isPOS && isFactoryMode && visibleVoucherTabs.length === 0 && (
+            <div className="rounded-md border p-6 text-sm text-muted-foreground">
+              No Voucher tabs are available for this user.
+            </div>
+          )}
+          {!isPOS && canShowVoucherTab("payment") && activeTab === "payment" && (
             <div className="space-y-4">
               {hasPaymentDraft && !voucherIdToEdit && paymentDraftAge && (
                 <DraftRestorePrompt
@@ -648,7 +676,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && activeTab === "receipt" && (
+          {!isPOS && canShowVoucherTab("receipt") && activeTab === "receipt" && (
             <div className="space-y-4">
               {hasPaymentDraft && !voucherIdToEdit && paymentDraftAge && (
                 <DraftRestorePrompt
@@ -720,17 +748,17 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && activeTab === "journal" && <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />}
+          {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />}
 
-          {(isPOS || activeTab === "transfer") && (
+          {(isPOS || (canShowVoucherTab("transfer") && activeTab === "transfer")) && (
             <StockTransferForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} posUser={posUser ?? undefined} />
           )}
 
-          {!isPOS && activeTab === "adjustment" && (
+          {!isPOS && canShowVoucherTab("adjustment") && activeTab === "adjustment" && (
             <StockAdjustmentForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
           )}
 
-          {!isPOS && activeTab === "creditnote" && (
+          {!isPOS && canShowVoucherTab("creditnote") && activeTab === "creditnote" && (
             <div className="space-y-4">
               <CreditNoteTab
                 allAccounts={allAccounts}
@@ -739,7 +767,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && activeTab === "transferorder" && (
+          {!isPOS && canShowVoucherTab("transferorder") && activeTab === "transferorder" && (
             <StockTransferOrder
               onSwitchToNormalView={() => {
                 setActiveTab("transfer");

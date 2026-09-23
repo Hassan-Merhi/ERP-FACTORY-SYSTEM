@@ -53,6 +53,7 @@ export default function FactoryKpis() {
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
+  const [requestedTab, setRequestedTab] = useState<"daily" | "workers" | "mixes">("daily");
 
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
@@ -66,10 +67,17 @@ export default function FactoryKpis() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
+  const showDaily = !hiddenTabs.includes("hide_tab_kpis_daily");
   const showWorkers =
     settings?.kpisTabWorkerPerformanceEnabled !== false && !hiddenTabs.includes("hide_tab_kpis_worker_performance");
   const showMixes =
     settings?.kpisTabMixEfficiencyEnabled !== false && !hiddenTabs.includes("hide_tab_kpis_mix_efficiency");
+  const visibleTabs = [
+    showDaily ? "daily" : null,
+    showWorkers ? "workers" : null,
+    showMixes ? "mixes" : null,
+  ].filter((value): value is "daily" | "workers" | "mixes" => value !== null);
+  const activeTab = visibleTabs.includes(requestedTab) ? requestedTab : visibleTabs[0];
 
   const dailyQuery = useQuery<DailyProduction[]>({
     queryKey: ["/api/factory/kpis/daily", from, to],
@@ -78,6 +86,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load daily production");
       return res.json();
     },
+    enabled: showDaily,
   });
 
   const workersQuery = useQuery<WorkerPerformance[]>({
@@ -87,6 +96,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load worker performance");
       return res.json();
     },
+    enabled: showWorkers,
   });
 
   const mixesQuery = useQuery<MixEfficiency[]>({
@@ -96,6 +106,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load mix efficiency");
       return res.json();
     },
+    enabled: showMixes,
   });
 
   return (
@@ -128,11 +139,14 @@ export default function FactoryKpis() {
         </div>
       </div>
 
-      <Tabs defaultValue="daily" data-testid="tabs-kpi">
+      {activeTab ? (
+      <Tabs value={activeTab} onValueChange={(value) => setRequestedTab(value as "daily" | "workers" | "mixes")} data-testid="tabs-kpi">
         <TabsList>
-          <TabsTrigger value="daily" data-testid="tab-daily">
-            Daily Production
-          </TabsTrigger>
+          {showDaily && (
+            <TabsTrigger value="daily" data-testid="tab-daily">
+              Daily Production
+            </TabsTrigger>
+          )}
           {showWorkers && (
             <TabsTrigger value="workers" data-testid="tab-workers">
               Worker Performance
@@ -145,7 +159,7 @@ export default function FactoryKpis() {
           )}
         </TabsList>
 
-        <TabsContent value="daily">
+        {showDaily && <TabsContent value="daily">
           <Card>
             <CardHeader>
               <CardTitle>Daily Production</CardTitle>
@@ -190,7 +204,7 @@ export default function FactoryKpis() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {showWorkers && (
           <TabsContent value="workers">
@@ -295,6 +309,9 @@ export default function FactoryKpis() {
           </TabsContent>
         )}
       </Tabs>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">No KPI tabs are available for this user.</div>
+      )}
     </div>
   );
 }

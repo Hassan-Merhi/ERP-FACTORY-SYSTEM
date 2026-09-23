@@ -60,7 +60,7 @@ function getFactoryCompanyId(req: Request): number | undefined {
 
 const STAFF_TRACKING_HIDDEN_TAB_KEYS: Record<TrackingPage, string> = {
   production: "hide_tab_stockentry_production_targets",
-  attendance: "hide_tab_stockentry_attendance_register",
+  attendance: "hide_tab_workers_attendance",
 };
 
 async function canAccessTrackingPage(req: Request, companyId: number, page: TrackingPage): Promise<boolean> {

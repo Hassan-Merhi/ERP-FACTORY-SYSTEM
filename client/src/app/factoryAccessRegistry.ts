@@ -20,7 +20,6 @@ export interface FactoryPageDefinition {
   accessLevel?: FactoryAccessLevel;
   featureFlag?: string;
   featureFlagDefaultOn?: boolean;
-  hideKey?: string;
 }
 
 export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
@@ -33,7 +32,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     aliases: ["/factory/bale-ledger", "/factory/pos"],
     pinned: true,
     landing: true,
-    hideKey: "hide_tab_production_analytics",
   },
   {
     key: "factory/agents",
@@ -42,7 +40,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     route: "/factory/agents",
     pinned: true,
     landing: true,
-    hideKey: "hide_tab_agents",
   },
   {
     key: "factory/accounts",
@@ -61,7 +58,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     pinned: true,
     sidebar: true,
     landing: true,
-    hideKey: "hide_tab_daybook",
   },
   {
     key: "factory/vouchers",

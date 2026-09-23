@@ -59,6 +59,7 @@ export function useFactoryWorkersModel() {
     staleTime: 5 * 60000,
   });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showWorkersList = !hiddenTabs.includes("hide_tab_workers_list");
 
   const showCategories =
     settings?.workersTabCategoriesEnabled !== false && !hiddenTabs.includes("hide_tab_workers_categories");
@@ -679,6 +680,7 @@ export function useFactoryWorkersModel() {
     }, 0);
 
   return {
+    showWorkersList,
     showCategories,
     setLocation,
     searchQuery,

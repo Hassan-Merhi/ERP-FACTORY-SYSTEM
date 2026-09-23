@@ -108,11 +108,14 @@ export function AdvancedRestrictions({
             {!advancedOpen &&
               (() => {
                 const pageCount = isPrivileged ? 0 : pageAccess.size;
-                const costCount = isPrivileged ? 0 : hiddenCostFields.length;
+                const factoryTabKeys = new Set(FACTORY_TABS.map((tab) => tab.key));
+                const tabCount = isPrivileged ? 0 : hiddenCostFields.filter((key) => factoryTabKeys.has(key)).length;
+                const fieldCount = isPrivileged ? 0 : hiddenCostFields.filter((key) => !factoryTabKeys.has(key)).length;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
                 const parts: string[] = [];
                 if (pageCount > 0) parts.push(`${pageCount} page${pageCount !== 1 ? "s" : ""} explicitly allowed`);
-                if (costCount > 0) parts.push(`${costCount} field${costCount !== 1 ? "s" : ""} hidden`);
+                if (tabCount > 0) parts.push(`${tabCount} tab${tabCount !== 1 ? "s" : ""} hidden`);
+                if (fieldCount > 0) parts.push(`${fieldCount} Factory field${fieldCount !== 1 ? "s" : ""} hidden`);
                 if (erpCount > 0) parts.push(`${erpCount} ERP field${erpCount !== 1 ? "s" : ""} hidden`);
                 return (
                   <p className="text-xs text-muted-foreground font-normal mt-1">
@@ -126,7 +129,7 @@ export function AdvancedRestrictions({
           <CardContent className="space-y-5 pt-0">
             {isPrivileged ? (
               <p className="text-sm text-muted-foreground">
-                Admin / Owner accounts always have full access to all pages.
+                Admin / Owner / Developer accounts always have full access to all pages.
               </p>
             ) : (
               <>
@@ -406,9 +409,9 @@ export function AdvancedRestrictions({
 
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Hidden Cost Fields
+                    Factory Financial & Cost Fields
                   </p>
-                  <p className="text-xs text-muted-foreground">Checked fields will be hidden from this user.</p>
+                  <p className="text-xs text-muted-foreground">Checked fields and financial columns will be hidden from this user.</p>
                   <div className="space-y-1.5 border rounded-md p-3">
                     {FACTORY_COST_FIELDS.map((field) => (
                       <div key={field.key} className="flex items-center gap-2">

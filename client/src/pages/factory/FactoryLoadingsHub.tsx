@@ -25,27 +25,30 @@ export default function FactoryLoadingsHub() {
   });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
+  const showLoadings = !hiddenTabs.includes("hide_invoicing_loadings_tab");
   const showPending =
     settings?.loadingsTabPendingEnabled !== false && !hiddenTabs.includes("hide_tab_loadings_pending");
 
   const [activeTab, setActiveTab] = useState<LoadingsTab>("loadings");
+  const visibleTabs: LoadingsTab[] = [
+    ...(showLoadings ? (["loadings"] as const) : []),
+    ...(showPending ? (["pending"] as const) : []),
+  ];
+  const effectiveActiveTab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0];
 
   // Once both queries resolve, honour the URL hash (if allowed)
   useEffect(() => {
     if (!settingsLoaded || !accessLoaded) return;
     if (hash === "pending" && showPending) {
       setActiveTab("pending");
-    } else {
+    } else if (hash === "loadings" && showLoadings) {
       setActiveTab("loadings");
-    }
-  }, [settingsLoaded, accessLoaded, hash, showPending]);
-
-  // If showPending turns false while the pending tab is active, fall back
-  useEffect(() => {
-    if (!showPending && activeTab === "pending") {
+    } else if (showLoadings) {
       setActiveTab("loadings");
+    } else if (showPending) {
+      setActiveTab("pending");
     }
-  }, [showPending, activeTab]);
+  }, [settingsLoaded, accessLoaded, hash, showLoadings, showPending]);
 
   function handleTabChange(value: LoadingsTab) {
     setActiveTab(value);
@@ -67,29 +70,29 @@ export default function FactoryLoadingsHub() {
         </div>
         {/* Tab row */}
         <div className="flex gap-0 px-4" role="tablist">
-          <button
+          {showLoadings && <button
             role="tab"
-            aria-selected={activeTab === "loadings"}
+            aria-selected={effectiveActiveTab === "loadings"}
             data-testid="tab-container-loadings"
             onClick={() => handleTabChange("loadings")}
             className={[
               "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-              activeTab === "loadings"
+              effectiveActiveTab === "loadings"
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
             ].join(" ")}
           >
             Container Loadings
-          </button>
+          </button>}
           {showPending && (
             <button
               role="tab"
-              aria-selected={activeTab === "pending"}
+              aria-selected={effectiveActiveTab === "pending"}
               data-testid="tab-pending-loadings"
               onClick={() => handleTabChange("pending")}
               className={[
                 "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === "pending"
+                effectiveActiveTab === "pending"
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               ].join(" ")}
@@ -101,8 +104,11 @@ export default function FactoryLoadingsHub() {
       </div>
 
       <div className="flex-1 overflow-auto min-h-0">
-        {activeTab === "loadings" && <FactoryContainerLoadingScan />}
-        {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
+        {!effectiveActiveTab && (
+          <div className="p-6 text-sm text-muted-foreground">No Loadings tabs are available for this user.</div>
+        )}
+        {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
+        {effectiveActiveTab === "pending" && showPending && <FactoryPendingLoadings />}
       </div>
     </div>
   );

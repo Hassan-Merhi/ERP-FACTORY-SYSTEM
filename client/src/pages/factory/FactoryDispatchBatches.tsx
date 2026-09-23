@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Plus, Truck, Package, Filter, ChevronRight, Search, BarChart2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 interface Customer {
   id: number;
@@ -86,6 +87,23 @@ export default function FactoryDispatchBatches() {
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"list" | "reports">("list");
   const searchStr = useSearch();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showBatches = !hiddenTabs.includes("hide_tab_dispatch_batches");
+  const showReports = !hiddenTabs.includes("hide_tab_dispatch_reports");
+  const effectiveActiveTab =
+    activeTab === "list" && showBatches
+      ? "list"
+      : activeTab === "reports" && showReports
+        ? "reports"
+        : showBatches
+          ? "list"
+          : showReports
+            ? "reports"
+            : null;
 
   const [form, setForm] = useState({
     customerId: "",
@@ -110,9 +128,6 @@ export default function FactoryDispatchBatches() {
   const qParams = new URLSearchParams();
   if (filterCustomer && filterCustomer !== "_all") qParams.set("customerId", filterCustomer);
   if (filterStatus && filterStatus !== "_all") qParams.set("status", filterStatus);
-
-  const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
-  const isDeveloper = me?.role === "Developer";
 
   const { data: batches = [], isLoading } = useQuery<BatchRow[]>({
     queryKey: [`/api/factory/dispatch-batches`, filterCustomer, filterStatus],
@@ -160,9 +175,9 @@ export default function FactoryDispatchBatches() {
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    enabled: activeTab === "reports",
+    enabled: effectiveActiveTab === "reports",
     staleTime: 30_000,
-    refetchInterval: activeTab === "reports" ? visibleTabInterval(60_000) : false,
+    refetchInterval: effectiveActiveTab === "reports" ? visibleTabInterval(60_000) : false,
     refetchIntervalInBackground: false,
   });
 
@@ -238,31 +253,24 @@ export default function FactoryDispatchBatches() {
     );
   });
 
-  if (me && !isDeveloper) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-        <Truck className="w-10 h-10 opacity-30" />
-        <p className="text-sm">Dispatch Batches is only available in Developer mode.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <PageHeader title="Dispatch Batches" subtitle="Manage local truck dispatch batches for bale sales">
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant={activeTab === "list" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("list")}
-            data-testid="button-tab-list"
-          >
-            <Truck className="w-3.5 h-3.5 mr-1.5" />
-            Batches
-          </Button>
-          {isDeveloper && (
+          {showBatches && (
             <Button
-              variant={activeTab === "reports" ? "default" : "outline"}
+              variant={effectiveActiveTab === "list" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveTab("list")}
+              data-testid="button-tab-list"
+            >
+              <Truck className="w-3.5 h-3.5 mr-1.5" />
+              Batches
+            </Button>
+          )}
+          {showReports && (
+            <Button
+              variant={effectiveActiveTab === "reports" ? "default" : "outline"}
               size="sm"
               onClick={() => setActiveTab("reports")}
               data-testid="button-tab-reports"
@@ -271,17 +279,22 @@ export default function FactoryDispatchBatches() {
               Reports
             </Button>
           )}
-          <Button onClick={() => setCreateOpen(true)} data-testid="button-new-dispatch-batch">
+          {showBatches && <Button onClick={() => setCreateOpen(true)} data-testid="button-new-dispatch-batch">
             <Plus className="w-4 h-4 mr-2" />
             New Dispatch Batch
-          </Button>
+          </Button>}
         </div>
       </PageHeader>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
+        {!effectiveActiveTab && (
+          <div className="rounded-md border p-6 text-sm text-muted-foreground">
+            No Dispatch Batches tabs are available for this user.
+          </div>
+        )}
         {/* ── Reports tab ─────────────────────────────────────────────────────── */}
-        {isDeveloper &&
-          activeTab === "reports" &&
+        {showReports &&
+          effectiveActiveTab === "reports" &&
           (reportsLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
@@ -372,7 +385,7 @@ export default function FactoryDispatchBatches() {
             </div>
           ) : null)}
 
-        {activeTab === "list" && (
+        {showBatches && effectiveActiveTab === "list" && (
           <>
             <Card>
               <CardContent className="pt-4">

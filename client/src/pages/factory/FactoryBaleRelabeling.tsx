@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -41,6 +41,7 @@ import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
 import { LabelPreviewCard } from "./factorybalerelabeling/components/LabelPreviewCard";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 export default function FactoryBaleRelabeling() {
   const { toast } = useToast();
@@ -56,6 +57,13 @@ export default function FactoryBaleRelabeling() {
   const [printFormats, setPrintFormats] = useState<Set<"A4" | "A5" | "STICKER">>(new Set(["A4"]));
   const [designColor, setDesignColor] = useState<A4DesignColor>("purple");
   const { colors } = useLabelDesignColors();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
+  const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
 
   const toggleFormat = (fmt: "A4" | "A5" | "STICKER") => {
     setPrintFormats((prev) => {
@@ -194,6 +202,13 @@ export default function FactoryBaleRelabeling() {
 
   const [, navigate] = useLocation();
 
+  if (!showRelabeling && showWipersReEntry) {
+    return <Redirect to="/factory/bale-relabeling/wipers-re-entry" />;
+  }
+  if (!showRelabeling) {
+    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+  }
+
   return (
     <div className="flex h-full min-w-0 flex-col" data-testid="factory-bale-relabeling-page">
       {/* Sub-nav tabs */}
@@ -205,13 +220,15 @@ export default function FactoryBaleRelabeling() {
           >
             Bale Relabeling
           </button>
-          <button
-            onClick={() => navigate("/factory/bale-relabeling/wipers-re-entry")}
-            className="shrink-0 rounded-t-md px-4 py-2 text-sm font-medium text-muted-foreground hover-elevate"
-            data-testid="tab-wipers-re-entry"
-          >
-            Wipers Re-Entry by Date
-          </button>
+          {showWipersReEntry && (
+            <button
+              onClick={() => navigate("/factory/bale-relabeling/wipers-re-entry")}
+              className="shrink-0 rounded-t-md px-4 py-2 text-sm font-medium text-muted-foreground hover-elevate"
+              data-testid="tab-wipers-re-entry"
+            >
+              Wipers Re-Entry by Date
+            </button>
+          )}
         </div>
       </div>
 

@@ -86,6 +86,7 @@ export default function FactoryProfitability() {
   const defaults = getDefaultDateRange();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
+  const [requestedTab, setRequestedTab] = useState<"bales" | "containers">("bales");
 
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
@@ -99,8 +100,13 @@ export default function FactoryProfitability() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
+  const showBales = !hiddenTabs.includes("hide_tab_profitability_bales");
   const showContainers =
     settings?.profitabilityTabContainersEnabled !== false && !hiddenTabs.includes("hide_tab_profitability_containers");
+  const visibleTabs = [showBales ? "bales" : null, showContainers ? "containers" : null].filter(
+    (value): value is "bales" | "containers" => value !== null
+  );
+  const activeTab = visibleTabs.includes(requestedTab) ? requestedTab : visibleTabs[0];
 
   const balesQuery = useQuery<BaleCost[]>({
     queryKey: ["/api/factory/profitability/bales", from, to],
@@ -109,6 +115,7 @@ export default function FactoryProfitability() {
       if (!res.ok) throw new Error("Failed to load bale costs");
       return res.json();
     },
+    enabled: showBales,
   });
 
   const containersQuery = useQuery<ContainerProfit[]>({
@@ -118,6 +125,7 @@ export default function FactoryProfitability() {
       if (!res.ok) throw new Error("Failed to load container profitability");
       return res.json();
     },
+    enabled: showContainers,
   });
 
   const balesSummary = (() => {
@@ -174,11 +182,18 @@ export default function FactoryProfitability() {
         </div>
       </div>
 
-      <Tabs defaultValue="bales" data-testid="tabs-profitability">
+      {activeTab ? (
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setRequestedTab(value as "bales" | "containers")}
+        data-testid="tabs-profitability"
+      >
         <TabsList>
-          <TabsTrigger value="bales" data-testid="tab-bales">
-            Bale Costs
-          </TabsTrigger>
+          {showBales && (
+            <TabsTrigger value="bales" data-testid="tab-bales">
+              Bale Costs
+            </TabsTrigger>
+          )}
           {showContainers && (
             <TabsTrigger value="containers" data-testid="tab-containers">
               Container Profitability
@@ -186,7 +201,7 @@ export default function FactoryProfitability() {
           )}
         </TabsList>
 
-        <TabsContent value="bales">
+        {showBales && <TabsContent value="bales">
           {balesQuery.isLoading ? (
             <div className="flex items-center justify-center py-12" data-testid="loading-spinner">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -307,7 +322,7 @@ export default function FactoryProfitability() {
               </Card>
             </>
           )}
-        </TabsContent>
+        </TabsContent>}
 
         {showContainers && (
           <TabsContent value="containers">
@@ -431,6 +446,11 @@ export default function FactoryProfitability() {
           </TabsContent>
         )}
       </Tabs>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">
+          No Profitability tabs are available for this user.
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,24 @@ import {
   revokeUserSessions,
 } from "../../../services/security/credentialVersionService";
 
+const LEGACY_FACTORY_PAGE_HIDE_KEYS = new Set([
+  "hide_tab_production_analytics",
+  "hide_tab_agents",
+  "hide_tab_daybook",
+]);
+
+function normalizeFactoryHiddenFields(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && entry.length > 0 && !LEGACY_FACTORY_PAGE_HIDE_KEYS.has(entry)
+      )
+    )
+  );
+}
+
 function requesterIsDeveloper(currentRole: unknown, requestRole: unknown): boolean {
   return currentRole === "Developer" || requestRole === "Developer";
 }
@@ -95,7 +113,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           displayName: profile?.displayName || null,
           hasErpAccess: profile?.hasErpAccess ?? true,
           hasFactoryAccess: profile?.hasFactoryAccess ?? true,
-          hiddenCostFields: profile?.hiddenCostFields ?? [],
+          hiddenCostFields: normalizeFactoryHiddenFields(profile?.hiddenCostFields),
           hideAllCosts: profile?.hideAllCosts ?? false,
           pageAccess: accessMap.get(user.id) || [],
         };
@@ -258,7 +276,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           if (displayName !== undefined) profileUpdates.displayName = displayName;
           if (hasErpAccess !== undefined) profileUpdates.hasErpAccess = hasErpAccess;
           if (hasFactoryAccess !== undefined) profileUpdates.hasFactoryAccess = hasFactoryAccess;
-          if (Array.isArray(hiddenCostFields)) profileUpdates.hiddenCostFields = hiddenCostFields;
+          if (Array.isArray(hiddenCostFields)) profileUpdates.hiddenCostFields = normalizeFactoryHiddenFields(hiddenCostFields);
           if (hideAllCosts !== undefined) profileUpdates.hideAllCosts = !!hideAllCosts;
 
           const existingProfile = await tx
@@ -279,7 +297,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
               displayName: displayName || "User",
               hasErpAccess: hasErpAccess ?? true,
               hasFactoryAccess: hasFactoryAccess ?? true,
-              hiddenCostFields: Array.isArray(hiddenCostFields) ? hiddenCostFields : [],
+              hiddenCostFields: normalizeFactoryHiddenFields(hiddenCostFields),
               hideAllCosts: !!hideAllCosts,
             });
           }
@@ -455,7 +473,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         "bales_list_cost_per_kg",
         "hide_proforma_price",
       ];
-      const profileHiddenFields = profile?.hiddenCostFields ?? [];
+      const profileHiddenFields = normalizeFactoryHiddenFields(profile?.hiddenCostFields);
       const hiddenCostFields = hideAllCosts
         ? Array.from(new Set([...profileHiddenFields, ...ALL_COST_KEYS]))
         : profileHiddenFields;

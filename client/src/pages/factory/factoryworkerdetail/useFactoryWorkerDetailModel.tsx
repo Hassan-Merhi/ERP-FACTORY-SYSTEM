@@ -60,6 +60,7 @@ export function useFactoryWorkerDetailModel() {
     staleTime: 5 * 60000,
   });
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showProfile = !hiddenTabs.includes("hide_tab_workerdetail_profile");
 
   const showStatement =
     tabSettings?.workerDetailTabStatementEnabled !== false && !hiddenTabs.includes("hide_tab_workerdetail_statement");
@@ -709,6 +710,7 @@ export function useFactoryWorkerDetailModel() {
     showAdvances,
     showBales,
     showDocuments,
+    showProfile,
     showStatement,
     startDate,
     stats,

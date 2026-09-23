@@ -1,7 +1,7 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { PageHeader } from "@/components/PageHeader";
 import {
   CalendarDays,
@@ -49,12 +49,20 @@ import type { CartItem, CreatedBale } from "./wipersreentry/types";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
 import { buildLabelData, printLabelsInBrowser } from "./wipersreentry/printUtils";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 export default function WipersReEntry() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { colors } = useLabelDesignColors();
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showRelabeling = !hiddenTabs.includes("hide_tab_relabeling_main");
+  const showWipersReEntry = !hiddenTabs.includes("hide_tab_relabeling_wipers");
   const [entryDate, setEntryDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -292,17 +300,26 @@ export default function WipersReEntry() {
     }
   };
 
+  if (!showWipersReEntry && showRelabeling) {
+    return <Redirect to="/factory/bale-relabeling" />;
+  }
+  if (!showWipersReEntry) {
+    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Sub-nav tabs */}
       <div className="border-b px-6 flex items-center gap-1 pt-4">
-        <button
-          onClick={() => navigate("/factory/bale-relabeling")}
-          className="px-4 py-2 text-sm font-medium rounded-t-md text-muted-foreground hover-elevate"
-          data-testid="tab-relabeling"
-        >
-          Bale Relabeling
-        </button>
+        {showRelabeling && (
+          <button
+            onClick={() => navigate("/factory/bale-relabeling")}
+            className="px-4 py-2 text-sm font-medium rounded-t-md text-muted-foreground hover-elevate"
+            data-testid="tab-relabeling"
+          >
+            Bale Relabeling
+          </button>
+        )}
         <button
           className="px-4 py-2 text-sm font-medium rounded-t-md border-b-2 border-primary text-primary"
           data-testid="tab-wipers-re-entry"
