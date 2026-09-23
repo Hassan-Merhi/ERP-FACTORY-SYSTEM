@@ -517,23 +517,33 @@ export const FACTORY_SUBPAGE_PARENT: [prefix: string, parentKey: string][] = FAC
   (page.aliases ?? []).map((alias) => [alias, page.key] as [string, string])
 );
 
+export function normalizeFactoryAccessPath(path: string): string {
+  const queryIndex = path.indexOf("?");
+  const hashIndex = path.indexOf("#");
+  const cutAt = [queryIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  const normalized = cutAt === undefined ? path : path.slice(0, cutAt);
+  return normalized || "/";
+}
+
 function pathMatchesPrefix(path: string, prefix: string): boolean {
   return path === prefix || path.startsWith(prefix + "/");
 }
 
 export function resolveFactoryPage(path: string): FactoryPageDefinition | null {
+  const normalizedPath = normalizeFactoryAccessPath(path);
+
   // Most-specific route wins so a protected child page cannot be swallowed by
   // a broader canonical page prefix.
   const direct = [...FACTORY_ACCESS_REGISTRY]
     .sort((a, b) => b.route.length - a.route.length)
-    .find((page) => pathMatchesPrefix(path, page.route));
+    .find((page) => pathMatchesPrefix(normalizedPath, page.route));
   if (direct) return direct;
 
   const aliasMatch = FACTORY_ACCESS_REGISTRY.flatMap((page) =>
     (page.aliases ?? []).map((alias) => ({ page, alias }))
   )
     .sort((a, b) => b.alias.length - a.alias.length)
-    .find(({ alias }) => pathMatchesPrefix(path, alias));
+    .find(({ alias }) => pathMatchesPrefix(normalizedPath, alias));
 
   return aliasMatch?.page ?? null;
 }
