@@ -49,7 +49,7 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("input-production-target-");
   });
 
-  it("keeps Daily Defaults one-way and lets changed defaults replace open day-specific edits", () => {
+  it("keeps Daily Defaults separate from day-specific Edit Targets overrides", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const defaultsEditor = src(
       "client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx"
@@ -65,8 +65,6 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(defaultsEditor).toContain("effectiveFrom");
     expect(defaultsEditor).toContain("input-production-default-category-");
     expect(defaultsEditor).toContain("category: (draftDefaults");
-    expect(defaultsEditor).toContain("categoryChanged");
-    expect(defaultsEditor).toContain("targetChanged");
     expect(defaultsEditor).toContain("The new category grouping takes effect after Save + refetch");
     expect(dayEditor).toContain("/api/factory/staff-tracking/bulk");
     expect(dayEditor).toContain("originalById.get(row.personId)?.category");
@@ -85,10 +83,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("categoryOverridden");
     expect(route).toContain("defaultTargetBales");
     expect(route).toContain("targetBalesOverridden");
-    expect(route).toContain("changed.category_changed");
-    expect(route).toContain("changed.target_changed");
-    expect(route).toContain("entry.period_start >= ${effectiveFrom}");
-    expect(route).toContain("factory_staff_tracking_period_closures AS closure");
+    expect(route).toContain("savedRow?.categoryOverridden === true");
+    expect(route).toContain("savedRow?.targetBalesOverridden === true");
     expect(startup).toContain("factory_worker_production_target_defaults");
     expect(startup).toContain("ADD COLUMN IF NOT EXISTS category varchar(150)");
     expect(startup).toContain("category_overridden boolean NOT NULL DEFAULT true");
