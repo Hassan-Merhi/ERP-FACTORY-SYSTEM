@@ -109,7 +109,7 @@ const ROUTES = [
   { url: "/net-profit-report", marker: "/net-profit-report" },
   { url: "/spreadsheet", marker: "/spreadsheet" },
   { url: "/live-sheets", marker: "/live-sheets" },
-]
+];
 
 const report = {
   startedAt: new Date().toISOString(),
