@@ -239,9 +239,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           return res.status(400).json({ message: "Password must be at least 6 characters" });
         }
 
-        const normalizedPageAccess = Array.isArray(pageAccess)
-          ? normalizeAssignableFactoryPageKeys(pageAccess)
-          : null;
+        const normalizedPageAccess = Array.isArray(pageAccess) ? normalizeAssignableFactoryPageKeys(pageAccess) : null;
 
         const credentialChanged = Boolean(password || (typeof username === "string" && username.trim()));
         const newCredentialVersion = await db.transaction(async (tx) => {
@@ -269,7 +267,8 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           if (displayName !== undefined) profileUpdates.displayName = displayName;
           if (hasErpAccess !== undefined) profileUpdates.hasErpAccess = hasErpAccess;
           if (hasFactoryAccess !== undefined) profileUpdates.hasFactoryAccess = hasFactoryAccess;
-          if (Array.isArray(hiddenCostFields)) profileUpdates.hiddenCostFields = normalizeFactoryHiddenFields(hiddenCostFields);
+          if (Array.isArray(hiddenCostFields))
+            profileUpdates.hiddenCostFields = normalizeFactoryHiddenFields(hiddenCostFields);
           if (hideAllCosts !== undefined) profileUpdates.hideAllCosts = !!hideAllCosts;
 
           const existingProfile = await tx
@@ -478,9 +477,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
       // Factory page restrictions live only in factory_user_page_access; ERP
       // page restrictions use erp_user_page_access. Known legacy Factory keys
       // are canonicalized here; unknown Factory keys stay fail-closed.
-      const factoryPageKeys = normalizePersistedFactoryPageKeysFailClosed(
-        access.map((entry) => entry.pageKey)
-      );
+      const factoryPageKeys = normalizePersistedFactoryPageKeysFailClosed(access.map((entry) => entry.pageKey));
 
       res.set("Cache-Control", "private, max-age=120");
       if (factoryPageKeys.length === 0) {

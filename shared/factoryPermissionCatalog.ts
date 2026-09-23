@@ -1,8 +1,4 @@
-import {
-  FACTORY_ACCESS_REGISTRY,
-  FACTORY_SETTINGS_PAGES,
-  resolveFactoryPage,
-} from "./factoryAccessRegistry";
+import { FACTORY_ACCESS_REGISTRY, FACTORY_SETTINGS_PAGES, resolveFactoryPage } from "./factoryAccessRegistry";
 
 export interface FactoryTabDefinition {
   key: string;

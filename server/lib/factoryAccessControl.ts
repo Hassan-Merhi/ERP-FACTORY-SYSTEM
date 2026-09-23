@@ -3,11 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { getActiveCompanyPermissionContext } from "../services/security/activeCompanyPermissionContext";
 import { factoryUserPageAccess, factoryUserProfiles } from "@shared/schema";
-import {
-  FACTORY_ACCESS_REGISTRY,
-  factoryPageAllowsRole,
-  hasFactoryPageKey,
-} from "@shared/factoryAccessRegistry";
+import { FACTORY_ACCESS_REGISTRY, factoryPageAllowsRole, hasFactoryPageKey } from "@shared/factoryAccessRegistry";
 import {
   normalizeFactoryHiddenFields,
   normalizePersistedFactoryPageKeysFailClosed,

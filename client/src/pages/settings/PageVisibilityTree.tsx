@@ -157,8 +157,8 @@ export function PageVisibilityTree({ appMode }: { appMode?: string }) {
           <div className="space-y-1">
             <p className="font-medium">Factory access is managed per user</p>
             <p className="text-sm text-muted-foreground">
-              Use Users &amp; Permissions → Advanced Restrictions for Factory pages and tabs. The sidebar,
-              direct routes and Factory APIs all use the same canonical permission registry.
+              Use Users &amp; Permissions → Advanced Restrictions for Factory pages and tabs. The sidebar, direct routes
+              and Factory APIs all use the same canonical permission registry.
             </p>
           </div>
         </div>

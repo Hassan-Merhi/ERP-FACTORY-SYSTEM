@@ -19,11 +19,7 @@ import {
   normalizeFactoryHiddenFields,
   normalizePersistedFactoryPageKeysFailClosed,
 } from "@shared/factoryPermissionCatalog";
-import {
-  computeFactoryDefaultPage,
-  computeFactoryGuardRedirect,
-  type MyAccess,
-} from "@/app/factoryAccessGuard";
+import { computeFactoryDefaultPage, computeFactoryGuardRedirect, type MyAccess } from "@/app/factoryAccessGuard";
 import { canonicalizeHubLocation } from "@/hooks/use-hub-query-state";
 
 function readTree(root: string): string {
@@ -198,9 +194,7 @@ describe("Wave 5 Factory user-profile certification", () => {
     ...unrestricted,
     fullAccess: false,
     pageKeys: ["factory/stock-entry"],
-    hiddenCostFields: FACTORY_TAB_REGISTRY.map((tab) => tab.key).filter(
-      (key) => key !== "hide_tab_stockentry_entry"
-    ),
+    hiddenCostFields: FACTORY_TAB_REGISTRY.map((tab) => tab.key).filter((key) => key !== "hide_tab_stockentry_entry"),
   };
 
   it("certifies Admin, Owner and Developer role boundaries", () => {
