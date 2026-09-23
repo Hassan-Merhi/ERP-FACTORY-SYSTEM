@@ -1,24 +1,54 @@
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { voucherEntries, vouchers } from "@shared/schema";
 
 import { db } from "../../db";
 import { storage } from "../../storage";
 
-function addNetBalance(balances: Map<number, number>, key: number, entry: ({ ledgerAccountId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; }) | ({ customerId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; })): void {
-  const debit = Number.parseFloat(entry.debitAmount || "0");
-  const credit = Number.parseFloat(entry.creditAmount || "0");
-  const current = balances.get(key) ?? 0;
-  if (debit > 0 && credit === 0) balances.set(key, current + debit);
-  else if (credit > 0 && debit === 0) balances.set(key, current - credit);
+type BalanceAggregate = {
+  key: number | null;
+  netAmount: string | null;
+  baseNetAmount: string | null;
+};
+
+function toBalanceMap(rows: BalanceAggregate[]): {
+  net: Map<number, number>;
+  base: Map<number, number>;
+} {
+  const net = new Map<number, number>();
+  const base = new Map<number, number>();
+
+  for (const row of rows) {
+    if (!row.key) continue;
+    net.set(row.key, Number.parseFloat(row.netAmount || "0"));
+    base.set(row.key, Number.parseFloat(row.baseNetAmount || "0"));
+  }
+
+  return { net, base };
 }
 
-function addHistoricalBaseBalance(balances: Map<number, number>, key: number, entry: ({ ledgerAccountId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; }) | ({ customerId: number | null; debitAmount: string | null; creditAmount: string | null; transactionCurrency: string | null; transactionDebitAmount: string | null; transactionCreditAmount: string | null; baseDebitAmount: string | null; baseCreditAmount: string | null; })): void {
-  const debit = Number.parseFloat(entry.baseDebitAmount ?? entry.debitAmount ?? "0");
-  const credit = Number.parseFloat(entry.baseCreditAmount ?? entry.creditAmount ?? "0");
-  const current = balances.get(key) ?? 0;
-  if (debit > 0 && credit === 0) balances.set(key, current + debit);
-  else if (credit > 0 && debit === 0) balances.set(key, current - credit);
-}
+const netBalanceSql = sql<string>`COALESCE(SUM(
+  CASE
+    WHEN CAST(${voucherEntries.debitAmount} AS numeric) > 0
+      AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
+    THEN CAST(${voucherEntries.debitAmount} AS numeric)
+    WHEN CAST(${voucherEntries.creditAmount} AS numeric) > 0
+      AND CAST(${voucherEntries.debitAmount} AS numeric) = 0
+    THEN -CAST(${voucherEntries.creditAmount} AS numeric)
+    ELSE 0
+  END
+), 0)`;
+
+const historicalBaseBalanceSql = sql<string>`COALESCE(SUM(
+  CASE
+    WHEN COALESCE(CAST(${voucherEntries.baseDebitAmount} AS numeric), CAST(${voucherEntries.debitAmount} AS numeric), 0) > 0
+      AND COALESCE(CAST(${voucherEntries.baseCreditAmount} AS numeric), CAST(${voucherEntries.creditAmount} AS numeric), 0) = 0
+    THEN COALESCE(CAST(${voucherEntries.baseDebitAmount} AS numeric), CAST(${voucherEntries.debitAmount} AS numeric), 0)
+    WHEN COALESCE(CAST(${voucherEntries.baseCreditAmount} AS numeric), CAST(${voucherEntries.creditAmount} AS numeric), 0) > 0
+      AND COALESCE(CAST(${voucherEntries.baseDebitAmount} AS numeric), CAST(${voucherEntries.debitAmount} AS numeric), 0) = 0
+    THEN -COALESCE(CAST(${voucherEntries.baseCreditAmount} AS numeric), CAST(${voucherEntries.creditAmount} AS numeric), 0)
+    ELSE 0
+  END
+), 0)`;
 
 export async function getCustomersWithBalances(companyId: number) {
   const customers = await storage.getAllCustomers(companyId);
@@ -29,18 +59,13 @@ export async function getCustomersWithBalances(companyId: number) {
     .map((customer) => customer.ledgerAccountId as number);
   const customerOnlyIds = customers.filter((customer) => !customer.ledgerAccountId).map((customer) => customer.id);
 
-  const [ledgerEntries, customerEntries] = await Promise.all([
+  const [ledgerRows, customerRows] = await Promise.all([
     ledgerAccountIds.length > 0
       ? db
           .select({
-            ledgerAccountId: voucherEntries.ledgerAccountId,
-            debitAmount: voucherEntries.debitAmount,
-            creditAmount: voucherEntries.creditAmount,
-            transactionCurrency: voucherEntries.transactionCurrency,
-            transactionDebitAmount: voucherEntries.transactionDebitAmount,
-            transactionCreditAmount: voucherEntries.transactionCreditAmount,
-            baseDebitAmount: voucherEntries.baseDebitAmount,
-            baseCreditAmount: voucherEntries.baseCreditAmount,
+            key: voucherEntries.ledgerAccountId,
+            netAmount: netBalanceSql,
+            baseNetAmount: historicalBaseBalanceSql,
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
@@ -52,19 +77,14 @@ export async function getCustomersWithBalances(companyId: number) {
               inArray(voucherEntries.ledgerAccountId, ledgerAccountIds)
             )
           )
-          .execute()
-      : Promise.resolve(([])),
+          .groupBy(voucherEntries.ledgerAccountId)
+      : Promise.resolve([] as BalanceAggregate[]),
     customerOnlyIds.length > 0
       ? db
           .select({
-            customerId: voucherEntries.customerId,
-            debitAmount: voucherEntries.debitAmount,
-            creditAmount: voucherEntries.creditAmount,
-            transactionCurrency: voucherEntries.transactionCurrency,
-            transactionDebitAmount: voucherEntries.transactionDebitAmount,
-            transactionCreditAmount: voucherEntries.transactionCreditAmount,
-            baseDebitAmount: voucherEntries.baseDebitAmount,
-            baseCreditAmount: voucherEntries.baseCreditAmount,
+            key: voucherEntries.customerId,
+            netAmount: netBalanceSql,
+            baseNetAmount: historicalBaseBalanceSql,
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
@@ -76,34 +96,21 @@ export async function getCustomersWithBalances(companyId: number) {
               inArray(voucherEntries.customerId, customerOnlyIds)
             )
           )
-          .execute()
-      : Promise.resolve(([])),
+          .groupBy(voucherEntries.customerId)
+      : Promise.resolve([] as BalanceAggregate[]),
   ]);
 
-  const ledgerNet = new Map<number, number>();
-  const ledgerBase = new Map<number, number>();
-  for (const entry of ledgerEntries) {
-    if (!entry.ledgerAccountId) continue;
-    addNetBalance(ledgerNet, entry.ledgerAccountId, entry);
-    addHistoricalBaseBalance(ledgerBase, entry.ledgerAccountId, entry);
-  }
-
-  const customerNet = new Map<number, number>();
-  const customerBase = new Map<number, number>();
-  for (const entry of customerEntries) {
-    const customerId = entry.customerId;
-    if (!customerId) continue;
-    addNetBalance(customerNet, customerId, entry);
-    addHistoricalBaseBalance(customerBase, customerId, entry);
-  }
+  const ledgerBalances = toBalanceMap(ledgerRows as BalanceAggregate[]);
+  const customerBalances = toBalanceMap(customerRows as BalanceAggregate[]);
 
   return customers.map((customer) => {
     const openingBalance = Number.parseFloat(customer.openingBalance || "0");
     const openingNet = (customer.openingBalanceSide || "Dr") === "Dr" ? openingBalance : -openingBalance;
     const transactionNet = customer.ledgerAccountId
-      ? (ledgerNet.get(customer.ledgerAccountId) ?? 0)
-      : (customerNet.get(customer.id) ?? 0);
+      ? (ledgerBalances.net.get(customer.ledgerAccountId) ?? 0)
+      : (customerBalances.net.get(customer.id) ?? 0);
     const balance = openingNet + transactionNet;
+
     return {
       ...customer,
       balance: Math.abs(balance),
@@ -111,8 +118,8 @@ export async function getCustomersWithBalances(companyId: number) {
       historicalBaseBalance:
         openingNet +
         (customer.ledgerAccountId
-          ? (ledgerBase.get(customer.ledgerAccountId) ?? 0)
-          : (customerBase.get(customer.id) ?? 0)),
+          ? (ledgerBalances.base.get(customer.ledgerAccountId) ?? 0)
+          : (customerBalances.base.get(customer.id) ?? 0)),
     };
   });
 }
