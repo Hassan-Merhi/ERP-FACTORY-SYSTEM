@@ -107,5 +107,17 @@ and resilience checks retain their own authority for the guarantees they test.
    test data and verify its voucher, ledger, inventory, and audit evidence.
 9. Confirm no unexpected 5xx spike, repeated migration loop, or scheduler error
    appears after rollout.
+10. Run the explicit Wave 5 production measurement with a non-production
+    Admin/Developer test account:
+
+    ```bash
+    ERP_PERF_CERT_BASE_URL=https://your-production-host \
+    ERP_PERF_CERT_USERNAME=<test-admin-or-developer> \
+    ERP_PERF_CERT_PASSWORD=<password> \
+    npm run certify:performance-wave5
+    ```
+
+    Review `artifacts/performance-wave5/report.json`; do not certify the
+    rollout while the command reports qualifying route-budget breaches.
 
 If any step fails, stop the rollout and follow the rollback/recovery runbook.
