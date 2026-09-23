@@ -110,6 +110,7 @@ vi.mock("@/pages/vouchers/stock-transfer-form/dialogs/ApproveRevisionDialog", ()
   ApproveRevisionDialog: ({ approveRevisionTarget, approveRevisionMutation }: any) =>
     approveRevisionTarget ? (
       <button
+        type="button"
         data-testid="confirm-approve-revision"
         onClick={() => approveRevisionMutation.mutate(approveRevisionTarget.id)}
       >
