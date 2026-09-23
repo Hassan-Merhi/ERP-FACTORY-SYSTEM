@@ -52,9 +52,9 @@ const factoryStaffTrackingTranslations = {
   defaultTargets: { en: "Daily Defaults", ar: "الأهداف اليومية الافتراضية", fr: "Objectifs quotidiens par défaut" },
   dailyDefaultTarget: { en: "Daily Default", ar: "الهدف اليومي الافتراضي", fr: "Objectif quotidien par défaut" },
   defaultTargetsDescription: {
-    en: "Set each worker's repeating category and daily target from this date forward. Changed default fields replace open day-specific edits from this date forward; earlier and finalized days stay unchanged.",
-    ar: "حدّد الفئة والهدف اليومي المتكررين لكل عامل ابتداءً من هذا التاريخ. الحقول الافتراضية التي تغيّرها تستبدل تعديلات الأيام المفتوحة من هذا التاريخ فصاعدًا، بينما تبقى الأيام السابقة والمقفلة دون تغيير.",
-    fr: "Définissez la catégorie et l’objectif quotidien récurrents de chaque ouvrier à partir de cette date. Les champs par défaut modifiés remplacent les ajustements des jours encore ouverts à partir de cette date ; les jours antérieurs et finalisés restent inchangés.",
+    en: "Set each worker's repeating category and daily target from this date forward. A manual Edit Targets change for a specific day always wins for that day and is not changed by later Daily Defaults edits.",
+    ar: "حدّد الفئة والهدف اليومي المتكررين لكل عامل ابتداءً من هذا التاريخ. أي تعديل يدوي من «تعديل الأهداف» ليوم محدد تكون له الأولوية في ذلك اليوم ولا تغيّره التعديلات اللاحقة على الإعدادات اليومية الافتراضية.",
+    fr: "Définissez la catégorie et l’objectif quotidien récurrents de chaque ouvrier à partir de cette date. Une modification manuelle dans « Modifier les objectifs » pour un jour précis reste prioritaire pour ce jour et n’est pas remplacée par des modifications ultérieures des valeurs quotidiennes par défaut.",
   },
   defaultTargetsSaved: {
     en: "Daily category and target defaults saved",
