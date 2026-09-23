@@ -214,7 +214,7 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
                 <TableCell className="max-w-[150px] truncate py-1.5 text-xs">{group.baleName}</TableCell>
                 <TableCell className="py-1.5 text-right font-mono text-xs">{group.bales.length}</TableCell>
                 <TableCell className="py-1.5 text-right font-mono text-xs">
-                  {formatNumber(group.totalWeight, 2)} kg
+                  {formatNumber(group.totalWeight, 2)} {model.tr("kgUnit")}
                 </TableCell>
               </TableRow>
             ))}
@@ -246,7 +246,7 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
           <div className="font-mono text-base font-semibold" data-testid="text-total-weight">
             {formatNumber(model.totalWeight, 2)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">KG</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("kgUnit")}</div>
         </div>
         <div className="rounded-xl border bg-muted/20 p-3 text-center">
           <Layers3 className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
@@ -323,7 +323,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
         <span>{model.tr("proformaLines", { count: proformaProgress.length })}</span>
         <span className="font-mono">
-          {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} kg
+          {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
         </span>
       </div>
     </div>
