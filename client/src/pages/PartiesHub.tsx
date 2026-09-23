@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Truck, Users } from "lucide-react";
@@ -16,8 +15,7 @@ const TABS = [
 
 const TAB_KEYS = TABS.map((tab) => tab.key);
 
-export default function PartiesHub() {
-  const { data: access } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
+export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
   const visibleKeys = visibleTabs.map((tab) => tab.key);
 
