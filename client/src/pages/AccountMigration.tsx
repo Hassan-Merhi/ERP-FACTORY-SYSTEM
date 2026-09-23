@@ -312,13 +312,22 @@ export default function AccountMigration() {
     staleTime: 0,
   });
 
-  const { data: srcAccounts = [], isLoading: loadingSrcAccounts } = useQuery<LedgerAccount[]>({
+  const {
+    data: srcAccounts = [],
+    isLoading: loadingSrcAccounts,
+    isError: srcAccountsError,
+    error: srcAccountsQueryError,
+    refetch: refetchSrcAccounts,
+  } = useQuery<LedgerAccount[]>({
     queryKey: ["/api/admin/account-migration/accounts", srcCompanyId],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/account-migration/accounts/${srcCompanyId}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/ledger-accounts?companyId=${encodeURIComponent(srcCompanyId)}&includeHidden=true`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        }
+      );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.message || `Failed to load accounts (${res.status})`);
@@ -472,6 +481,24 @@ export default function AccountMigration() {
               <label className="text-sm font-medium">Accounts</label>
               {loadingSrcAccounts ? (
                 <Skeleton className="h-10 w-full" />
+              ) : srcAccountsError ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                  <p className="font-medium text-destructive">Accounts could not be loaded.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {srcAccountsQueryError instanceof Error
+                      ? srcAccountsQueryError.message
+                      : "The source company accounts request failed."}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => refetchSrcAccounts()}
+                  >
+                    Retry
+                  </Button>
+                </div>
               ) : (
                 <AccountMultiSelect
                   accounts={srcAccounts}
