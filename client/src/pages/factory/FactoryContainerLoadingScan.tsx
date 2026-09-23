@@ -39,7 +39,7 @@ export default function FactoryContainerLoadingScan() {
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">Container Loading</h1>
+                <h1 className="truncate text-lg font-semibold leading-tight sm:text-xl">{model.tr("containerLoading")}</h1>
                 {isResuming && orderId && (
                   <Badge
                     variant="secondary"
@@ -47,17 +47,17 @@ export default function FactoryContainerLoadingScan() {
                     data-testid="badge-resuming"
                   >
                     <Clock className="mr-1 h-3 w-3 shrink-0" />
-                    <span className="truncate">Resuming #{orderId}</span>
+                    <span className="truncate">{model.tr("resuming", { orderId })}</span>
                   </Badge>
                 )}
                 {!isResuming && orderId && (
                   <Badge variant="secondary" data-testid="badge-loading-order">
-                    Loading #{orderId}
+                    {model.tr("loadingNumber", { orderId })}
                   </Badge>
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                Scan, verify and prepare the container without leaving this workspace.
+                {model.tr("containerLoadingSubtitle")}
               </p>
             </div>
           </div>
@@ -69,7 +69,7 @@ export default function FactoryContainerLoadingScan() {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Bales</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
                   <div className="font-mono text-sm font-semibold">{model.bales.length}</div>
                 </div>
               </div>
@@ -78,7 +78,7 @@ export default function FactoryContainerLoadingScan() {
                   <Scale className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Weight</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("weight")}</div>
                   <div className="font-mono text-sm font-semibold">{formatNumber(model.totalWeight, 2)} kg</div>
                 </div>
               </div>
@@ -103,7 +103,7 @@ export default function FactoryContainerLoadingScan() {
                 data-testid="button-save-exit"
               >
                 <Save className="mr-2 h-4 w-4" />
-                Save &amp; Exit
+                {model.tr("saveAndExit")}
               </Button>
               <Button
                 className="h-11 w-full"
@@ -112,7 +112,7 @@ export default function FactoryContainerLoadingScan() {
                 data-testid="button-finalize-loading"
               >
                 <CheckCircle className="mr-2 h-5 w-5" />
-                Validate &amp; Finalize
+                {model.tr("validateFinalize")}
               </Button>
             </div>
           )}
