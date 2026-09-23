@@ -268,9 +268,9 @@ export default function AiValidationPage() {
     <div className="flex flex-col h-full overflow-hidden">
       <PageHeader title="AI Validation Center" />
 
-      <div className="flex flex-1 overflow-hidden gap-4 p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3 sm:p-4 lg:flex-row lg:overflow-hidden">
         {/* ── Left column: config ─────────────────────────────────────── */}
-        <div className="w-72 flex-shrink-0 flex flex-col gap-4">
+        <div className="flex w-full flex-none flex-col gap-4 lg:w-72">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold">Validation Setup</CardTitle>
@@ -340,7 +340,7 @@ export default function AiValidationPage() {
         </div>
 
         {/* ── Right column: results ───────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto flex flex-col gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-visible lg:overflow-y-auto">
           {!result && !runMutation.isPending && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
               <BarChart3 className="w-12 h-12 opacity-30" />
