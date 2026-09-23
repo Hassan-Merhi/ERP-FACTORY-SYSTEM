@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
+  // Emptying a loading is admin-only (#1732); most cases run as an admin.
+  currentRole: "Admin",
   toast: vi.fn(),
   navigate: vi.fn(),
   apiRequest: vi.fn(),
@@ -54,6 +56,7 @@ const capacitySnapshot = {
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
+    if (root === "/api/auth/me") return { data: { role: harness.currentRole } };
     if (root === "/api/factory/customers") return { data: [{ id: 1, legalName: "Buyer One" }] };
     if (root === "/api/locations") return { data: [{ id: 11, name: "Dock" }] };
     if (root === "/api/factory/customer-proformas/capacity") {
@@ -213,6 +216,7 @@ import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoading
 describe("factory container loading scan behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.currentRole = "Admin";
     localStorage.clear();
     Object.defineProperty(window, "AudioContext", { configurable: true, value: FakeAudioContext });
     harness.apiRequest.mockImplementation(async (method: string, url: string, body: any) => {
@@ -319,6 +323,14 @@ describe("factory container loading scan behavior", () => {
     fireEvent.click(screen.getByTestId("button-toggle-removal-log"));
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("REF-REMOVED");
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("loader");
+  });
+
+  it("hides Empty Container from users who are not admins", async () => {
+    harness.currentRole = "Staff";
+    render(<FactoryContainerLoadingScan />);
+
+    await waitFor(() => expect(screen.getByTestId("button-toggle-removal-log")).toBeInTheDocument());
+    expect(screen.queryByTestId("button-empty-container")).not.toBeInTheDocument();
   });
 
   it("empties the loading only after confirmation and returns all scanned bales to stock", async () => {
