@@ -11,6 +11,7 @@ import { getFactoryProductComparisonCopy } from "@/i18n/factoryProductComparison
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, FlaskConical, Ship, Tag, Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
 import { useDailyProductionReport } from "./dailyproductionreport/useDailyProductionReport";
 import { ProductionTabPanel } from "./dailyproductionreport/components/ProductionTabPanel";
@@ -46,12 +47,12 @@ export default function DailyProductionReport() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden = myAccess?.hiddenCostFields ?? [];
   const visibleTabs = OVERVIEW_TABS.filter((tab) => !hidden.includes(HIDDEN_KEYS[tab]));
-  const firstVisibleTab = visibleTabs[0];
-  const activeManagedTab = OVERVIEW_TABS.includes(report.activeTab as OverviewTab)
-    ? (report.activeTab as OverviewTab)
-    : null;
-  const effectiveActiveTab =
-    activeManagedTab && !visibleTabs.includes(activeManagedTab) ? (firstVisibleTab ?? report.activeTab) : report.activeTab;
+  const [effectiveActiveTab, setActiveTab] = useHubQueryState<OverviewTab>({
+    key: "tab",
+    allowedValues: visibleTabs,
+    knownValues: OVERVIEW_TABS,
+    defaultValue: visibleTabs[0] ?? "production",
+  });
 
   const show = (tab: OverviewTab) => visibleTabs.includes(tab);
 
@@ -66,7 +67,7 @@ export default function DailyProductionReport() {
       ) : (
         <Tabs
           value={effectiveActiveTab}
-          onValueChange={report.setActiveTab}
+          onValueChange={(value) => setActiveTab(value as OverviewTab)}
           className="flex flex-col flex-1 overflow-hidden"
         >
           <TabsList className="mx-4 mt-3 mb-0 flex-shrink-0 w-fit" data-testid="tabs-production-analytics">
@@ -85,9 +86,6 @@ export default function DailyProductionReport() {
                 <Tag className="h-4 w-4 mr-1.5" /> Comparison
               </TabsTrigger>
             )}
-            <TabsTrigger value="snapshot" data-testid="tab-snapshot" className="hidden">
-              Snapshot
-            </TabsTrigger>
             {show("product-comparison") && (
               <TabsTrigger value="product-comparison" data-testid="tab-product-comparison">
                 <BarChart3 className="h-4 w-4 mr-1.5" /> {productComparisonCopy.tabLabel}
@@ -123,9 +121,6 @@ export default function DailyProductionReport() {
             </TabsContent>
           )}
 
-          <TabsContent value="snapshot" className="hidden">
-            <FactoryFinancialSnapshot />
-          </TabsContent>
 
           {show("product-comparison") && (
             <TabsContent
