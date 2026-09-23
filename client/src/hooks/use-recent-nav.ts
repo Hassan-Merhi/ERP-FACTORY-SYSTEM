@@ -50,16 +50,16 @@ function sameEntries(a: RecentNavEntry[], b: RecentNavEntry[]): boolean {
   });
 }
 
-export function useRecentNav(
-  allNavItems: NavItemLike[],
+export function useRecentNav<T extends NavItemLike>(
+  allNavItems: T[],
   companyId?: number,
-  isAllowed?: (item: NavItemLike) => boolean,
+  isAllowed?: (item: T) => boolean,
 ) {
   const [location] = useLocation();
   const [recent, setRecent] = useState<RecentNavEntry[]>(() => loadFromStorage(companyId));
 
   const navByPath = useMemo(() => {
-    const map = new Map<string, NavItemLike>();
+    const map = new Map<string, T>();
     for (const item of allNavItems) {
       map.set(canonicalNavigationPath(item.url), item);
     }
@@ -76,10 +76,11 @@ export function useRecentNav(
     .join("\u0000");
 
   const allowedNavByPath = useMemo(() => {
-    const map = new Map<string, NavItemLike>();
+    const map = new Map<string, T>();
+    const allowedPathSet = new Set(allowedPathsKey ? allowedPathsKey.split("\u0000") : []);
     for (const item of allNavItems) {
       const path = canonicalNavigationPath(item.url);
-      if (allowedPathsKey.split("\u0000").includes(path)) map.set(path, item);
+      if (allowedPathSet.has(path)) map.set(path, item);
     }
     return map;
   }, [allNavItems, allowedPathsKey]);
