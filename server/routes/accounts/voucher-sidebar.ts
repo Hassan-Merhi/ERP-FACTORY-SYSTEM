@@ -147,7 +147,14 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
+          .where(
+            and(
+              eq(voucherEntries.companyId, companyId),
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt)
+            )
+          )
           .groupBy(
             voucherEntries.bankAccountId,
             voucherEntries.fixedAssetId,
@@ -173,9 +180,16 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             excludedLedgerVoucherIds.length > 0
               ? and(
                   eq(ledgerAccounts.companyId, companyId),
+                  // Ordinary sidebar requests are pinned to the active company;
+                  // make that already-enforced RLS scope planner-visible so the
+                  // voucher-entry company index can prune before aggregation.
+                  eq(voucherEntries.companyId, companyId),
                   notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)
                 )
-              : eq(ledgerAccounts.companyId, companyId)
+              : and(
+                  eq(ledgerAccounts.companyId, companyId),
+                  eq(voucherEntries.companyId, companyId)
+                )
           )
           .groupBy(voucherEntries.ledgerAccountId),
       ]);
