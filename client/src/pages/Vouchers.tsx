@@ -292,21 +292,13 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
   });
 
   useEffect(() => {
-    if (tabParam)
-      setActiveTab(
-        tabParam as React.SetStateAction<
-          "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote"
-        >
-      );
-    else setActiveTab("payment");
-
     if (voucherIdToEdit) {
       setEditVoucherId(voucherIdToEdit);
     } else {
       setEditVoucherId(null);
       hydratedVoucherIdRef.current = null;
     }
-  }, [hydratedVoucherIdRef, tabParam, voucherIdToEdit]);
+  }, [hydratedVoucherIdRef, voucherIdToEdit]);
 
   const paymentAccountType = form.watch("paymentAccountType");
   const paymentAccountId = form.watch("paymentAccountId");
