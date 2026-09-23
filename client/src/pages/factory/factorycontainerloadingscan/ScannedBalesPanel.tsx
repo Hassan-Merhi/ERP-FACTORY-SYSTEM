@@ -308,7 +308,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
                   </TableCell>
                   <TableCell>{r.articleCode || "—"}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {r.weightKg ? `${formatNumber(parseFloat(r.weightKg), 2)} {model.tr("kgUnit")}` : "—"}
+                    {r.weightKg ? <>{formatNumber(parseFloat(r.weightKg), 2)} {model.tr("kgUnit")}</> : "—"}
                   </TableCell>
                   <TableCell>{r.removedByUsername || "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(r.removedAt).toLocaleString()}</TableCell>
