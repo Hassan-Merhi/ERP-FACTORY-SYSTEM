@@ -141,6 +141,27 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
 
         const limitParam = bind(limit);
         const offsetParam = bind(offset);
+        // Stock Entry historically copied entryDate (00:00) into finalized_at. For rows
+        // created by the Stock Entry flow, created_at is the real action timestamp.
+        // Keep historical/imported data untouched by requiring its attribution snapshot.
+        const effectiveFinalizedAtSql = `CASE
+          WHEN fb.finalized_at IS NOT NULL
+            AND fb.stock_entry_date IS NOT NULL
+            AND fb.finalized_at = fb.stock_entry_date::timestamp
+            AND fb.created_at IS NOT NULL
+            AND fb.created_at <> fb.finalized_at
+            AND EXISTS (
+              SELECT 1
+              FROM factory_bale_production_attributions fbpa
+              WHERE fbpa.bale_id = fb.id
+                AND fbpa.company_id = ${companyParam}
+            )
+          THEN fb.created_at
+          ELSE fb.finalized_at
+        END`;
+        // factory_bales timestamps are stored as UTC clock values without a timezone.
+        // Attach UTC explicitly so browsers convert them to the user's local time correctly.
+        const finalizedAtJsonSql = `(${effectiveFinalizedAtSql}) AT TIME ZONE 'UTC'`;
         const balesProjection = lite
           ? `'[]'::jsonb AS bales`
           : `JSONB_AGG(JSONB_BUILD_OBJECT(
@@ -148,13 +169,13 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
               'referenceNumber', fb.reference_number,
               'weightKg', fb.weight_kg,
               'status', fb.status,
-              'finalizedAt', fb.finalized_at,
+              'finalizedAt', ${finalizedAtJsonSql},
               'stockEntryDate', fb.stock_entry_date::text,
               'locationName', COALESCE(l.name, 'Unknown'),
               'workerName', fw.full_name,
               'productName', fbp.name,
               'articleCode', fbp.article_code
-            ) ORDER BY fb.finalized_at ASC) AS bales`;
+            ) ORDER BY ${effectiveFinalizedAtSql} ASC) AS bales`;
 
         const query = `
           WITH grouped AS (
@@ -170,8 +191,8 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
               COUNT(*)::int AS "baleCount",
               ROUND(SUM(CAST(fb.weight_kg AS numeric)), 3)::text AS "totalWeight",
               ROUND(AVG(CAST(fb.weight_kg AS numeric)), 3)::text AS "avgWeight",
-              MIN(fb.finalized_at) AS "firstFinalizedAt",
-              MAX(fb.finalized_at) AS "lastFinalizedAt",
+              (MIN(${effectiveFinalizedAtSql}) AT TIME ZONE 'UTC') AS "firstFinalizedAt",
+              (MAX(${effectiveFinalizedAtSql}) AT TIME ZONE 'UTC') AS "lastFinalizedAt",
               ${balesProjection}
             FROM factory_bales fb
             LEFT JOIN factory_workers fw ON fb.finalized_by = fw.id AND fw.company_id = ${companyParam}
