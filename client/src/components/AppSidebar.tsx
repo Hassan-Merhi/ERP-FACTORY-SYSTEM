@@ -170,7 +170,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isOwner = effectiveRole === "Owner";
     const featureKeys = getErpRouteFeatureKeys(item.url);
 
-    if (item.url === "/tracking") return ["Admin", "Developer", "Owner"].includes(effectiveRole);
+    if (item.url === "/tracking") return !isPOSUser;
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
     if (
