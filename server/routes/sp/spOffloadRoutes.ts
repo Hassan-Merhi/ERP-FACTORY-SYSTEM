@@ -41,6 +41,8 @@ class SpOffloadRouteError extends Error {
   }
 }
 
+const CONTAINER_ALREADY_OFFLOADED_MESSAGE = "Container is already offloaded";
+
 // ── Parent Company Agents + Offload ──────────────────────────────────────────
 
 export function registerSpOffloadRoutes(app: Express) {
@@ -285,7 +287,7 @@ export function registerSpOffloadRoutes(app: Express) {
           .returning({ id: spContainers.id });
         if (!closedContainer) {
           throw new SpOffloadRouteError(
-            "Container lifecycle changed while offloading",
+            CONTAINER_ALREADY_OFFLOADED_MESSAGE,
             409,
             "SP_OFFLOAD_STATE_CONFLICT"
           );
