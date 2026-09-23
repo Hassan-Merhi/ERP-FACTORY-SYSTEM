@@ -259,7 +259,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
       </p>
 
       {/* Group 1: Basic Role */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs">Company</Label>
           <Select value={companyId.toString()} onValueChange={(v) => setCompanyId(parseInt(v))} disabled={isEditing}>
@@ -318,7 +318,7 @@ export function InlineRoleEditor({ userId, companies, editingRole, onClose, onSa
           />
 
           {/* POS Station + Daybook Days */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">POS Station</Label>
               <Input
