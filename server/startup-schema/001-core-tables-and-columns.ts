@@ -215,7 +215,7 @@ export const coreTablesAndColumns: string[] = [
   // Wave 5 Factory permission canonicalization. This migration is intentionally
   // separate from the historical v1 rename so current canonical keys such as
   // factory/daybook are preserved and unrestricted users (zero rows) stay unrestricted.
-  `DO $ BEGIN
+  `DO $wave5$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM migrations_log WHERE key = 'factory-permission-canonicalization-v2') THEN
         -- Insert canonical rows first, then delete aliases. ON CONFLICT preserves
         -- existing restrictions without duplicating them.
@@ -305,7 +305,7 @@ export const coreTablesAndColumns: string[] = [
 
         INSERT INTO migrations_log(key) VALUES ('factory-permission-canonicalization-v2');
       END IF;
-    END $`,
+    END $wave5,
   // Add ledger account link to customer order charges
   `ALTER TABLE customer_order_charges ADD COLUMN IF NOT EXISTS ledger_account_id integer`,
   // Bale recode / relabeling audit tables
