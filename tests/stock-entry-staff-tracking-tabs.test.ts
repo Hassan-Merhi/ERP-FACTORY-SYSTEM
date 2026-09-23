@@ -107,7 +107,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("/api/factory/staff-tracking/production-worker-links");
     expect(editor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("linkGroupId");
-    expect(production).toContain('tr("linkedWith")');
+    expect(production).toContain("collapseLinkedProductionRows");
+    expect(production).toContain("row.displayMembers");
     expect(model).toContain("summarizeProductionRows");
     expect(route).toContain("loadActiveProductionWorkerLinks");
     expect(route).toContain("saveProductionLinkTargetDefault");
@@ -126,15 +127,16 @@ describe("Stock Entry staff tracking tabs", () => {
 
   });
 
-  it("combines target and produced into one KPI and exposes People attendance breakdown on hover", () => {
+  it("shows target, absent target, expected target, and expected-minus-produced KPIs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
-    expect(production).toContain("kpi-production-target-produced");
-    expect(production).toContain("TargetProducedTile");
-    expect(production).toContain("md:grid-cols-3");
-    expect(production).toContain("kpi-production-people");
-    expect(production).toContain("tooltip-production-people");
-    expect(production).toContain("peopleBreakdown");
-    expect(production).toContain("FACTORY_TRACKING_STATUSES.absent");
-    expect(production).toContain("FACTORY_TRACKING_STATUSES.new");
+    const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
+    expect(production).toContain('tr("totalTarget")');
+    expect(production).toContain('tr("totalAbsentTarget")');
+    expect(production).toContain('tr("totalExpected")');
+    expect(production).toContain('tr("diff")');
+    expect(production).toContain("sm:grid-cols-2 xl:grid-cols-4");
+    expect(model).toContain("absentTarget");
+    expect(model).toContain("const expected = target - absentTarget");
+    expect(model).toContain("difference: expected - produced");
   });
 });
