@@ -28,7 +28,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
         className={`${BADGE_BASE} border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300`}
       >
         <CheckCircle className="mr-1 h-3 w-3" />
-        Loaded
+        {model.tr("loaded")}
       </Badge>
     );
   }
@@ -39,7 +39,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
         variant="outline"
         className={`${BADGE_BASE} border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300`}
       >
-        Overloaded
+        {model.tr("overloaded")}
       </Badge>
     );
   }
@@ -50,7 +50,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
         variant="outline"
         className={`${BADGE_BASE} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-300`}
       >
-        Less Loaded
+        {model.tr("lessLoaded")}
       </Badge>
     );
   }
@@ -61,7 +61,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
         variant="outline"
         className={`${BADGE_BASE} border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300`}
       >
-        Missing
+        {model.tr("missing")}
       </Badge>
     );
   }
@@ -69,7 +69,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
   return (
     <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
       <Info className="mr-1 h-3 w-3" />
-      On Proforma
+      {model.tr("onProforma")}
     </Badge>
   );
 }
@@ -126,13 +126,13 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
       <Table>
         <TableHeader className="sticky top-0 z-30 bg-background/95 backdrop-blur">
           <TableRow>
-            <TableHead className="text-xs">Article</TableHead>
-            <TableHead className="text-xs">Product</TableHead>
-            <TableHead className="text-right text-xs">Proforma</TableHead>
-            <TableHead className="text-right text-xs">Loaded</TableHead>
-            <TableHead className="text-right text-xs">Remaining</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-right text-xs">Stock</TableHead>
+            <TableHead className="text-xs">{model.tr("article")}</TableHead>
+            <TableHead className="text-xs">{model.tr("product")}</TableHead>
+            <TableHead className="text-right text-xs">{model.tr("proforma")}</TableHead>
+            <TableHead className="text-right text-xs">{model.tr("loadedKpi")}</TableHead>
+            <TableHead className="text-right text-xs">{model.tr("remaining")}</TableHead>
+            <TableHead className="text-xs">{model.tr("status")}</TableHead>
+            <TableHead className="text-right text-xs">{model.tr("stock")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -163,7 +163,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           {extraArticles.length > 0 && (
             <TableRow className="bg-muted/40" data-testid="row-extra-articles-heading">
               <TableCell colSpan={7} className="py-2 text-xs font-semibold text-muted-foreground">
-                Not on Proforma — Allowed
+                {model.tr("notOnProformaAllowed")}
               </TableCell>
             </TableRow>
           )}
@@ -179,7 +179,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
               <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">—</TableCell>
               <TableCell className="py-2">
                 <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
-                  Not on Proforma
+                  {model.tr("notOnProforma")}
                 </Badge>
               </TableCell>
               <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">—</TableCell>
@@ -196,15 +196,15 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
 
   return (
     <div className="border-t px-4 py-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Loaded by Article</p>
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{model.tr("loadedByArticle")}</p>
       <div className="max-h-[190px] overflow-auto rounded-xl border">
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
               <TableHead className="py-1.5 text-xs">Article</TableHead>
               <TableHead className="py-1.5 text-xs">Product</TableHead>
-              <TableHead className="py-1.5 text-right text-xs">Qty</TableHead>
-              <TableHead className="py-1.5 text-right text-xs">Weight</TableHead>
+              <TableHead className="py-1.5 text-right text-xs">{model.tr("qty")}</TableHead>
+              <TableHead className="py-1.5 text-right text-xs">{model.tr("weight")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -229,8 +229,8 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
   return (
     <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
       <div className="border-b px-4 py-3 sm:px-5">
-        <h3 className="text-sm font-semibold sm:text-base">Order Summary</h3>
-        <p className="mt-0.5 text-xs text-muted-foreground">This loading is not linked to a proforma.</p>
+        <h3 className="text-sm font-semibold sm:text-base">{model.tr("orderSummary")}</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">{model.tr("notLinkedProforma")}</p>
       </div>
 
       <div className="grid grid-cols-3 gap-2 p-4">
@@ -239,7 +239,7 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
           <div className="font-mono text-base font-semibold" data-testid="text-total-bales">
             {model.bales.length}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Bales</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("bales")}</div>
         </div>
         <div className="rounded-xl border bg-muted/20 p-3 text-center">
           <Scale className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
@@ -253,7 +253,7 @@ function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }
           <div className="font-mono text-base font-semibold" data-testid="text-article-groups">
             {Object.keys(model.groupedBalesMap).length}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Articles</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("articles")}</div>
         </div>
       </div>
     </div>
@@ -283,10 +283,10 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
             <div className="flex min-w-0 items-center gap-2">
               <h3 className="truncate text-sm font-semibold sm:text-base">{linkedProforma.name}</h3>
               <Badge variant="secondary" className="shrink-0 rounded-md" data-testid="badge-proforma-progress">
-                Reusable
+                {model.tr("reusable")}
               </Badge>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Current loading progress against this proforma.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{model.tr("currentLoadingProgress")}</p>
           </div>
           <div className="font-mono text-lg font-semibold">{progressPercent}%</div>
         </div>
@@ -306,13 +306,13 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
           </div>
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">{formatNumber(model.remainingProformaBales)}</div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("remainingKpi")}</div>
           </div>
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">
               {model.fulfilledCount}/{model.totalLines}
             </div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Lines Done</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("linesDone")}</div>
           </div>
         </div>
       </div>
@@ -321,7 +321,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
       <LoadedBalesSummary model={model} />
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
-        <span>{proformaProgress.length} proforma lines</span>
+        <span>{model.tr("proformaLines", { count: proformaProgress.length })}</span>
         <span className="font-mono">
           {bales.length} bales · {formatNumber(totalWeight, 2)} kg
         </span>
