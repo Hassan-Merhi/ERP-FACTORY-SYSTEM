@@ -70,7 +70,8 @@
     "audit:platform": "node scripts/audit-platform-modernization.mjs",
     "test:platform": "node --test tests/platform-modernization-contract.node.test.mjs",
     "verify:remote-control-registry": "node scripts/verify-remote-control-action-registry.mjs",
-    "generate:remote-control-registry": "node scripts/generate-remote-control-action-registry.mjs --write"
+    "generate:remote-control-registry": "node scripts/generate-remote-control-action-registry.mjs --write",
+    "verify:manual": "node scripts/run-manual-verification.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

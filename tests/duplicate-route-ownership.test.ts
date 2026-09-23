@@ -19,28 +19,19 @@ describe("Phase 8 duplicate route ownership", () => {
     expect([...new Set(duplicates)]).toEqual([]);
   });
 
-  it("keeps retired compatibility files deleted", () => {
+  it("keeps retired compatibility files and migration-only boundary tooling deleted", () => {
     const files = [
       "server/routesLegacy.ts",
       "server/routes/reportsRoutesLegacy.ts",
       "server/routes/authRoutesLegacy.ts",
       "server/routes/customerRoutesLegacy.ts",
+      "config/legacy-route-boundaries.json",
+      "scripts/audit-legacy-route-boundaries.mjs",
+      "tests/legacy-route-boundaries.test.ts",
     ];
 
     for (const file of files) {
-      expect(fs.existsSync(path.join(root, file))).toBe(false);
+      expect(fs.existsSync(path.join(root, file)), `${file} should remain retired`).toBe(false);
     }
-  });
-
-  it("records the retired compatibility registry as the current boundary", () => {
-    const boundaries = JSON.parse(read("config/legacy-route-boundaries.json")) as {
-      version: number;
-      description: string;
-      files: unknown[];
-    };
-
-    expect(boundaries.version).toBe(9);
-    expect(boundaries.description).toContain("removed in Phase 9");
-    expect(boundaries.files).toEqual([]);
   });
 });

@@ -31,10 +31,7 @@ describe("Phase 7 operations route ownership", () => {
     }
   });
 
-  it("keeps operations HTTP ownership out of any retired legacy registry", () => {
+  it("keeps operations HTTP ownership out of the retired legacy registry", () => {
     expect(fs.existsSync(path.join(root, "server/routesLegacy.ts"))).toBe(false);
-
-    const boundaries = JSON.parse(read("config/legacy-route-boundaries.json")) as { files: unknown[] };
-    expect(boundaries.files).toEqual([]);
   });
 });

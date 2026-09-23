@@ -9,7 +9,8 @@ describe("verification script inventory contract", () => {
     expect(report.failures).toEqual([]);
     expect(report.summary.wired).toBeGreaterThan(0);
     expect(report.summary.manual).toBeGreaterThan(0);
-    expect(report.summary.orphan).toBeLessThanOrEqual(report.summary.orphanCeiling ?? 0);
+    expect(report.summary.orphanCeiling).toBe(0);
+    expect(report.summary.orphan).toBe(0);
 
     const knownTranslationDebt = report.scripts.find(
       (entry: { script: string }) => entry.script === "verify-phase9-final-i18n-baseline.mjs"
