@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Package } from "lucide-react";
+import { History, Plus, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -55,7 +55,12 @@ function capCartToItemLimit(items: CartItem[]): CartItem[] {
   return items.filter((item) => item.qty > 0).slice(0, MAX_ITEMS_PER_ENTRY);
 }
 
-export function StockEntryTab() {
+interface StockEntryTabProps {
+  showHistory?: boolean;
+  onOpenHistory?: () => void;
+}
+
+export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntryTabProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [scanInput, setScanInput] = useState("");
   const [scanError, setScanError] = useState("");
@@ -568,6 +573,18 @@ export function StockEntryTab() {
                 <CardTitle className="text-base font-bold">New Production Entry</CardTitle>
               </div>
               <div className="flex items-center gap-2">
+                {showHistory && onOpenHistory && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs font-semibold"
+                    onClick={onOpenHistory}
+                    data-testid="button-stock-entry-history"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    History
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
