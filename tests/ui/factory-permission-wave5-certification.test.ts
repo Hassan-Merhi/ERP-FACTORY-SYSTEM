@@ -111,7 +111,9 @@ describe("Wave 5 Factory permission registry certification", () => {
     expect(tree).not.toContain("Needs mapping");
     expect(tree).not.toContain("factory/stock-allocation-v2");
     expect(tree).not.toContain("factory/stock-allocation-v3");
-    expect(tree).toContain("Factory access is managed per user");
+    expect(tree).toContain('data-testid="factory-visibility-managed-per-user"');
+    expect(tree).toContain('t("settings.userManagement")');
+    expect(tree).toContain('t("settings.selectUser")');
   });
 
   it("canonicalizes legacy page keys without widening stale persisted restrictions", () => {
@@ -146,13 +148,22 @@ describe("Wave 5 Factory permission registry certification", () => {
 
   it("keeps migration v2 separate, idempotent, and never treats canonical Daybook as stale", () => {
     const migration = readFileSync("server/startup-schema/001-core-tables-and-columns.ts", "utf8");
-    const wave5 = migration.slice(migration.indexOf("factory-permission-canonicalization-v2"));
+    const wave5Start = migration.indexOf("// Wave 5 Factory permission canonicalization");
+    const wave5End = migration.indexOf("// Add ledger account link to customer order charges", wave5Start);
+    const wave5 = migration.slice(wave5Start, wave5End);
+    const legacyV1 = migration.slice(0, wave5Start);
 
+    expect(wave5Start).toBeGreaterThan(-1);
+    expect(wave5End).toBeGreaterThan(wave5Start);
     expect(wave5).toContain("factory/stock-allocation-v2");
     expect(wave5).toContain("factory/stock-allocation-v3");
     expect(wave5).toContain("factory/stock-allocation-v5");
     expect(wave5).toContain("ON CONFLICT (company_id, user_id, page_key) DO NOTHING");
+    expect(wave5).toContain("ON CONFLICT (key) DO NOTHING");
     expect(wave5).not.toMatch(/DELETE FROM factory_user_page_access[^;]+factory\/daybook/s);
+    expect(legacyV1).not.toContain(
+      "('factory/mix-batches', 'factory/sales/new', 'factory/bale-transfers', 'factory/create', 'factory/users', 'factory/daybook')"
+    );
   });
 
   it("maps representative deep routes to the owning parent permission", () => {

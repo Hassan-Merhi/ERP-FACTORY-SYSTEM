@@ -108,7 +108,7 @@ function PageRow({
  * Factory page/tab permissions are intentionally not mirrored into this role
  * tree. They are user-specific and are managed by Users & Permissions from the
  * shared Factory page/tab registries. Keeping a second Factory tree here was the
- * source of "Needs mapping", V2/V3 duplicates and permission drift.
+ * source of placeholder mappings, V2/V3 duplicates and permission drift.
  */
 export function PageVisibilityTree({ appMode }: { appMode?: string }) {
   const { selectedCompany } = useCompany();
