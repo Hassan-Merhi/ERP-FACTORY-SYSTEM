@@ -150,6 +150,21 @@ function factoryBilingualSnapshotWriteMiddleware(req: Request, res: Response, ne
   const originalJson = res.json.bind(res);
   res.json = ((payload: unknown) => {
     if (res.statusCode < 200 || res.statusCode >= 300) return originalJson(payload);
+
+    const responseRecord =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : null;
+    if (
+      /^\/customer-orders\/\d+\/bales$/.test(req.path) &&
+      responseRecord?.compactBaleScan === true
+    ) {
+      // Compact scans persist the Arabic bale and order-line snapshots inside
+      // the scan transaction. Avoid the generic resolver UPDATE here: live
+      // production evidence showed that one-row backfill dominating scan latency.
+      return originalJson(payload);
+    }
+
     void populateAfterSuccessfulWrite(req, payload)
       .then(() => originalJson(payload))
       .catch((error) => {
