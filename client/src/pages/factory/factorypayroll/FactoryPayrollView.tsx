@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -29,6 +30,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
   const {
     formatDisplayDate,
     navigate,
+    showPayrollRecords,
     showWorkerMaster,
     setCompanyId,
     filterStartDate,
@@ -93,6 +95,13 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     handleExportExcel,
     totals,
   } = model;
+  const visibleTabs = [
+    showPayrollRecords ? "payroll" : null,
+    showWorkerMaster ? "workers" : null,
+  ].filter((value): value is "payroll" | "workers" => value !== null);
+  const [requestedTab, setRequestedTab] = useState<"payroll" | "workers">("payroll");
+  const activeTab = visibleTabs.includes(requestedTab) ? requestedTab : visibleTabs[0];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -159,11 +168,18 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
         </div>
       </div>
 
-      <Tabs defaultValue="payroll" className="space-y-4">
+      {activeTab ? (
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setRequestedTab(value as "payroll" | "workers")}
+        className="space-y-4"
+      >
         <TabsList variant="underline">
-          <TabsTrigger value="payroll" data-testid="tab-payroll-records">
-            <FileText className="mr-1 h-4 w-4" /> Payroll Records
-          </TabsTrigger>
+          {showPayrollRecords && (
+            <TabsTrigger value="payroll" data-testid="tab-payroll-records">
+              <FileText className="mr-1 h-4 w-4" /> Payroll Records
+            </TabsTrigger>
+          )}
           {showWorkerMaster && (
             <TabsTrigger value="workers" data-testid="tab-worker-master">
               <Table2 className="mr-1 h-4 w-4" /> Worker Master Sheet
@@ -171,7 +187,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
           )}
         </TabsList>
 
-        <TabsContent value="payroll" className="space-y-4">
+        {showPayrollRecords && <TabsContent value="payroll" className="space-y-4">
           <Card>
             <CardContent className="pt-4">
               <div className="flex flex-wrap items-end gap-4">
@@ -597,7 +613,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </TabsContent>
+        </TabsContent>}
 
         {showWorkerMaster && (
           <TabsContent value="workers" className="space-y-4">
@@ -736,6 +752,11 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
           </TabsContent>
         )}
       </Tabs>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">
+          No Payroll tabs are available for this user.
+        </div>
+      )}
     </div>
   );
 }
