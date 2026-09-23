@@ -79,7 +79,7 @@ export default function FactoryContainerLoadingScan() {
                 </div>
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{model.tr("weight")}</div>
-                  <div className="font-mono text-sm font-semibold">{formatNumber(model.totalWeight, 2)} kg</div>
+                  <div className="font-mono text-sm font-semibold">{formatNumber(model.totalWeight, 2)} {model.tr("kgUnit")}</div>
                 </div>
               </div>
             </div>
