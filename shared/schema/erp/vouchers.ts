@@ -132,6 +132,9 @@ export const voucherEntries = pgTable(
     voucherId: integer("voucher_id")
       .notNull()
       .references(() => vouchers.id, { onDelete: "cascade" }),
+    // DB-managed tenant key. The BEFORE trigger in migration 0016 always
+    // overwrites the fail-closed sentinel from the canonical parent voucher.
+    companyId: integer("company_id").notNull().default(0),
     ledgerAccountId: integer("ledger_account_id"),
     bankAccountId: integer("bank_account_id"),
     fixedAssetId: integer("fixed_asset_id"),
@@ -173,6 +176,7 @@ export const voucherEntries = pgTable(
   },
   (t) => ({
     voucherIdx: index("voucher_entries_voucher_idx").on(t.voucherId),
+    companyIdx: index("voucher_entries_company_idx").on(t.companyId),
     customerIdx: index("voucher_entries_customer_idx").on(t.customerId),
     ledgerAccountIdx: index("voucher_entries_ledger_account_idx").on(t.ledgerAccountId),
     ledgerVoucherIdx: index("voucher_entries_ledger_voucher_idx").on(t.ledgerAccountId, t.voucherId),
@@ -182,6 +186,7 @@ export const voucherEntries = pgTable(
 export const insertVoucherEntrySchema = createInsertSchema(voucherEntries)
   .omit({
     id: true,
+    companyId: true,
     createdAt: true,
   })
   .extend({
