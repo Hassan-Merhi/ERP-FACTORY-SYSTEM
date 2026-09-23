@@ -90,13 +90,7 @@ function employeeRequirement(path: string): FactoryApiAccessRequirement {
 }
 
 function attendanceRequirement(): FactoryApiAccessRequirement {
-  return {
-    pageKey: "factory/payroll-hub",
-    tabAlternatives: [
-      [PAYROLL_WORKERS, WORKERS_ATTENDANCE],
-      [PAYROLL_EMPLOYEES, EMPLOYEES_ATTENDANCE],
-    ],
-  };
+  return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_ATTENDANCE]);
 }
 
 function importRequirement(path: string): FactoryApiAccessRequirement {
@@ -177,6 +171,15 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     (hasPrefix(path, "/settings") && String(req.query.scope || "") === "attendance")
   ) {
     return attendanceRequirement();
+  }
+
+  if (path === "/send-mix-batch-image-whatsapp") {
+    const destination = String(req.body?.destination || req.body?.recipient || "");
+    if (destination === "attendance") return attendanceRequirement();
+    if (destination === "production") {
+      return requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]);
+    }
+    return requirement("factory/raw-materials");
   }
 
   // Additional high-risk operational utilities inherit the page that exposes them.
