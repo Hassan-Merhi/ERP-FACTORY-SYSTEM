@@ -209,6 +209,12 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/container-tracking")) {
     return requirement("factory/intelligence/production-hub", ["hide_tab_production_intel_container_tracking"]);
   }
+  if (hasPrefix(path, "/ais")) {
+    return anyOf(
+      requirement("factory/containers-hub"),
+      requirement("factory/intelligence/production-hub", ["hide_tab_production_intel_container_tracking"])
+    );
+  }
   if (
     hasPrefix(path, "/bale-products/arabic-import") ||
     hasPrefix(path, "/french-catalog/import") ||
