@@ -230,7 +230,7 @@ BEGIN
   IF to_regclass('public.voucher_entries') IS NOT NULL THEN
     DROP TRIGGER IF EXISTS voucher_entries_sync_company_id ON voucher_entries;
     CREATE TRIGGER voucher_entries_sync_company_id
-      BEFORE INSERT OR UPDATE OF voucher_id
+      BEFORE INSERT OR UPDATE OF voucher_id, company_id
       ON voucher_entries
       FOR EACH ROW
       EXECUTE FUNCTION erp_sync_voucher_entry_company_id();
