@@ -36,12 +36,25 @@ export default function FactorySheetsAndSacks() {
     refetchOnWindowFocus: false,
   });
 
-  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[] }>({
+  const { data: myAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[]; hiddenCostFields?: string[] }>({
     queryKey: ["/api/factory/my-access"],
     staleTime: 30000,
   });
 
   const canEdit = !myAccess || myAccess.fullAccess || myAccess.pageKeys.includes("factory/sheets-sacks");
+  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showStock = !hiddenTabs.includes("hide_tab_sheets_stock");
+  const showMovements = !hiddenTabs.includes("hide_tab_sheets_movements");
+  const effectiveTab =
+    activeTab === "stock" && showStock
+      ? "stock"
+      : activeTab === "movements" && showMovements
+        ? "movements"
+        : showStock
+          ? "stock"
+          : showMovements
+            ? "movements"
+            : null;
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/factory/sheets-sacks/${id}`),
@@ -161,33 +174,39 @@ export default function FactorySheetsAndSacks() {
       </div>
 
       {/* Tab switcher */}
+      {effectiveTab ? (
       <div className="flex items-center gap-1 border-b">
-        <button
+        {showStock && <button
           onClick={() => setActiveTab("stock")}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "stock"
+            effectiveTab === "stock"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <Layers className="h-4 w-4" />
           Current Stock
-        </button>
-        <button
+        </button>}
+        {showMovements && <button
           onClick={() => setActiveTab("movements")}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "movements"
+            effectiveTab === "movements"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
           <History className="h-4 w-4" />
           Movement Log
-        </button>
+        </button>}
       </div>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">
+          No Sheets & Sacks tabs are available for this user.
+        </div>
+      )}
 
       {/* ─── CURRENT STOCK TAB ───────────────────────────────────────────── */}
-      {activeTab === "stock" && (
+      {effectiveTab === "stock" && (
         <>
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -363,7 +382,7 @@ export default function FactorySheetsAndSacks() {
       )}
 
       {/* ─── MOVEMENT LOG TAB ─────────────────────────────────────────────── */}
-      {activeTab === "movements" && <MovementLog items={items} />}
+      {effectiveTab === "movements" && <MovementLog items={items} />}
 
       {/* Dialogs */}
       {(showAddDialog || editItem) && (
