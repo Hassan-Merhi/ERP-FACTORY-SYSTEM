@@ -70,6 +70,13 @@ export function AdvancedRestrictions({
     setHiddenCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
+  const setFactoryTabVisible = (key: string, visible: boolean) => {
+    setHiddenCostFields((prev) => {
+      if (visible) return prev.filter((item) => item !== key);
+      return prev.includes(key) ? prev : [...prev, key];
+    });
+  };
+
   const toggleErpCostField = (key: string) => {
     setHiddenErpCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
@@ -104,7 +111,7 @@ export function AdvancedRestrictions({
                 const costCount = isPrivileged ? 0 : hiddenCostFields.length;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
                 const parts: string[] = [];
-                if (pageCount > 0) parts.push(`${pageCount} page${pageCount !== 1 ? "s" : ""} hidden`);
+                if (pageCount > 0) parts.push(`${pageCount} page${pageCount !== 1 ? "s" : ""} explicitly allowed`);
                 if (costCount > 0) parts.push(`${costCount} field${costCount !== 1 ? "s" : ""} hidden`);
                 if (erpCount > 0) parts.push(`${erpCount} ERP field${erpCount !== 1 ? "s" : ""} hidden`);
                 return (
@@ -146,7 +153,7 @@ export function AdvancedRestrictions({
                           data-testid="button-factory-pages-all"
                         >
                           <Check className="h-3 w-3 mr-1" />
-                          All
+                          Select all
                         </Button>
                         <Button
                           variant="outline"
@@ -161,13 +168,13 @@ export function AdvancedRestrictions({
                           data-testid="button-factory-pages-none"
                         >
                           <X className="h-3 w-3 mr-1" />
-                          None
+                          Clear
                         </Button>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Checked pages will be <strong>hidden</strong> from this user. Leave all unchecked for full factory
-                      access.
+                      Checked pages are <strong>available</strong> to this user. If any Factory page is checked, only the
+                      checked Factory pages are available. Clear all Factory page checks for unrestricted Factory page access.
                     </p>
                     <div className="space-y-3 border rounded-md p-3 max-h-48 overflow-y-auto">
                       {FACTORY_PAGE_GROUPS.map((group) => {
@@ -244,8 +251,8 @@ export function AdvancedRestrictions({
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Checked pages will be <strong>hidden</strong> from this user. Leave all unchecked for full ERP
-                      access.
+                      Checked pages are <strong>available</strong> to this user. Leave all ERP page checks clear when no
+                      per-page ERP allow-list is needed.
                     </p>
                     <div className="space-y-3 border rounded-md p-3 max-h-48 overflow-y-auto">
                       {ERP_PAGE_GROUPS.map((group) => {
@@ -299,18 +306,6 @@ export function AdvancedRestrictions({
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const allKeys = FACTORY_TABS.map((t) => t.key);
-                            setHiddenCostFields((prev) => Array.from(new Set([...prev, ...allKeys])));
-                          }}
-                          data-testid="button-factory-tabs-hide-all"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          Hide All
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
                             const allKeys = new Set(FACTORY_TABS.map((t) => t.key));
                             setHiddenCostFields((prev) => prev.filter((k) => !allKeys.has(k)));
                           }}
@@ -319,13 +314,27 @@ export function AdvancedRestrictions({
                           <Check className="h-3 w-3 mr-1" />
                           Show All
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const allKeys = FACTORY_TABS.map((t) => t.key);
+                            setHiddenCostFields((prev) => Array.from(new Set([...prev, ...allKeys])));
+                          }}
+                          data-testid="button-factory-tabs-hide-all"
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          Hide All
+                        </Button>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Checked tabs will be hidden from this user.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Checked tabs are <strong>shown</strong> to this user. Uncheck a tab to hide it.
+                    </p>
                     <div className="space-y-1">
                       {FACTORY_TAB_GROUPS.map((group) => {
                         const groupTabs = FACTORY_TABS.filter((t) => t.group === group);
-                        const hiddenCount = groupTabs.filter((t) => hiddenCostFields.includes(t.key)).length;
+                        const visibleCount = groupTabs.filter((t) => !hiddenCostFields.includes(t.key)).length;
                         const isOpen = openTabGroups.has(group);
                         return (
                           <Collapsible key={group} open={isOpen} onOpenChange={() => toggleTabGroup(group)}>
@@ -341,11 +350,9 @@ export function AdvancedRestrictions({
                                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                                   )}
                                   <span className="text-xs font-semibold">{group}</span>
-                                  {hiddenCount > 0 && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {hiddenCount} hidden
-                                    </Badge>
-                                  )}
+                                  <Badge variant="secondary" className="text-xs">
+                                    {visibleCount}/{groupTabs.length} shown
+                                  </Badge>
                                 </div>
                                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                   <Button
@@ -381,8 +388,8 @@ export function AdvancedRestrictions({
                                 {groupTabs.map((tab) => (
                                   <div key={tab.key} className="flex items-center gap-2">
                                     <Checkbox
-                                      checked={hiddenCostFields.includes(tab.key)}
-                                      onCheckedChange={() => toggleCostField(tab.key)}
+                                      checked={!hiddenCostFields.includes(tab.key)}
+                                      onCheckedChange={(checked) => setFactoryTabVisible(tab.key, checked === true)}
                                       data-testid={`checkbox-tab-${tab.key}`}
                                     />
                                     <span className="text-sm">{tab.label}</span>
