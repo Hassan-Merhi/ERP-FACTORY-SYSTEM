@@ -9,6 +9,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { DailyRateModal } from "@/components/DailyRateModal";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
+import { ErpMobileBottomNav } from "@/components/ErpMobileBottomNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
@@ -35,6 +36,7 @@ function CompanyDailyRateModal() {
 
 export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog }: ErpShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [currentLocation] = useLocation();
   const { t } = useApplicationLanguage();
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
@@ -61,6 +63,9 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 user={{ username: user.username, role: user.role ?? "" }}
                 onLogout={handleLogout}
                 onSearchOpen={() => setPaletteOpen(true)}
+                mobileMoreOpen={mobileMoreOpen}
+                onMobileMoreOpenChange={setMobileMoreOpen}
+                simplifyMobileNavigation
               />
               <main
                 id="main-content"
@@ -82,6 +87,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   </div>
                 </WorkspaceRouteBoundary>
               </main>
+              <ErpMobileBottomNav user={user} onMore={() => setMobileMoreOpen(true)} />
             </div>
           </div>
         </SidebarProvider>
