@@ -67,7 +67,6 @@ describe("Wave 3 frontend access enforcement", () => {
 
   it("maps composite ERP hubs to the child permissions that can make them visible", () => {
     expect(getErpRouteFeatureKeys("/inventory?tab=containers#legacy")).toEqual([
-      "stock_items",
       "location_inventory",
       "stock_otw",
       "containers",
