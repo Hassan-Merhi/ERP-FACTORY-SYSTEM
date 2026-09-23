@@ -20,6 +20,7 @@ export interface POSDialogsProps {
   drafts: PosDraftSummary[];
   handleLoadDraft: (id: number) => void;
   deleteDraftMutation: { isPending?: boolean; mutate: (id: number) => void };
+  allowDraftMutations?: boolean;
   showPrintDialog: boolean;
   setShowPrintDialog: (open: boolean) => void;
   editVoucherId?: string;
@@ -52,6 +53,7 @@ export function POSDialogs({
   drafts,
   handleLoadDraft,
   deleteDraftMutation,
+  allowDraftMutations = true,
   showPrintDialog,
   setShowPrintDialog,
   editVoucherId,
@@ -151,15 +153,17 @@ export function POSDialogs({
                   >
                     <Check className="h-4 w-4 text-green-600" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteDraftMutation.mutate(draft.id)}
-                    disabled={deleteDraftMutation.isPending}
-                    data-testid={`button-delete-draft-${draft.id}`}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {allowDraftMutations && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteDraftMutation.mutate(draft.id)}
+                      disabled={deleteDraftMutation.isPending}
+                      data-testid={`button-delete-draft-${draft.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
