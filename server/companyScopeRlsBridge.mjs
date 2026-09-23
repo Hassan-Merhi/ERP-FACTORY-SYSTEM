@@ -192,12 +192,14 @@ export async function ensureCompanyScopeRlsReadiness() {
       throw new Error("Voucher-entry direct company-scope RLS fast path was not installed completely.");
     }
 
+    await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
     const voucherEntryMismatch = await client.query(`
       SELECT COUNT(*)::int AS mismatch_count
       FROM voucher_entries ve
       JOIN vouchers v ON v.id = ve.voucher_id
       WHERE ve.company_id IS DISTINCT FROM v.company_id
     `);
+    await client.query("SELECT set_config('app.company_scope_maintenance', 'off', true)");
     if (Number(voucherEntryMismatch.rows[0]?.mismatch_count || 0) !== 0) {
       throw new Error("Voucher-entry company scope is out of sync with parent vouchers.");
     }
