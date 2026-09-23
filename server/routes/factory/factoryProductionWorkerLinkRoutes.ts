@@ -4,8 +4,9 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMessages";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
-import { factoryUserProfiles, factoryWorkers } from "@shared/schema";
+import { factoryWorkers } from "@shared/schema";
 import {
   createProductionWorkerLink,
   loadActiveProductionWorkerLinks,
@@ -18,21 +19,10 @@ function getFactoryCompanyId(req: Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
 }
 
-async function canAccessProductionTargets(req: Request, companyId: number): Promise<boolean> {
-  const role = String(req.session.currentRole || req.user?.role || "");
-  if (["Admin", "Owner", "Developer"].includes(role)) return true;
-
-  const userId = req.session.userId;
-  if (!userId) return false;
-
-  const [profile] = await db
-    .select({ hiddenCostFields: factoryUserProfiles.hiddenCostFields })
-    .from(factoryUserProfiles)
-    .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, userId)))
-    .limit(1);
-
-  return !(profile?.hiddenCostFields ?? []).includes("hide_tab_stockentry_production_targets");
-}
+const requireProductionTargetsAccess = requireFactoryTabAccess(
+  "factory/stock-entry",
+  "hide_tab_stockentry_production_targets"
+);
 
 function numberOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -82,33 +72,34 @@ async function hasFinalizedProductionOnOrAfter(companyId: number, effectiveDate:
 }
 
 export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
-  app.get("/api/factory/staff-tracking/production-worker-links", requireAuth, async (req: Request, res: Response) => {
-    try {
+  app.get(
+    "/api/factory/staff-tracking/production-worker-links",
+    requireAuth,
+    requireProductionTargetsAccess,
+    async (req: Request, res: Response) => {
+      try {
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      if (!(await canAccessProductionTargets(req, companyId))) {
-        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
-      }
-
       const asOf = String(req.query.asOf || "");
       if (!ISO_DATE.test(asOf)) {
         return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
       }
 
       res.json({ asOf, links: await loadActiveProductionWorkerLinks(companyId, asOf) });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/factory/staff-tracking/production-worker-links", requireAuth, async (req: Request, res: Response) => {
-    try {
+  app.post(
+    "/api/factory/staff-tracking/production-worker-links",
+    requireAuth,
+    requireProductionTargetsAccess,
+    async (req: Request, res: Response) => {
+      try {
       const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      if (!(await canAccessProductionTargets(req, companyId))) {
-        return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
-      }
-
       const effectiveFrom = String(req.body?.effectiveFrom || "");
       const rawWorkerIds: unknown[] = Array.isArray(req.body?.workerIds) ? req.body.workerIds : [];
       const workerIds = [
@@ -166,22 +157,20 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
         linkId,
         links: await loadActiveProductionWorkerLinks(companyId, effectiveFrom),
       });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.post(
     "/api/factory/staff-tracking/production-worker-links/:linkId/unlink",
     requireAuth,
+    requireProductionTargetsAccess,
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
         if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-        if (!(await canAccessProductionTargets(req, companyId))) {
-          return res.status(403).json({ message: factoryStaffTrackingMessages.forbiddenTab });
-        }
-
         const linkId = Number(req.params.linkId);
         const effectiveTo = String(req.body?.effectiveTo || "");
         if (!Number.isInteger(linkId) || linkId <= 0 || !ISO_DATE.test(effectiveTo)) {
