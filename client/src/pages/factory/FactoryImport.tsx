@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Package, Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,10 @@ export default function FactoryImport() {
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
   const tabs = IMPORT_TABS.filter((tab) => !hiddenTabs.includes(tab.hiddenKey));
   const activeTab = tabs.some((tab) => tab.key === requestedTab) ? requestedTab : tabs[0]?.key;
+
+  useEffect(() => {
+    if (activeTab && requestedTab !== activeTab) setRequestedTab(activeTab);
+  }, [activeTab, requestedTab]);
 
   if (!activeTab) {
     return <div className="p-6 text-sm text-muted-foreground">No Import tabs are available for this user.</div>;
