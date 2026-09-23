@@ -49,7 +49,7 @@ vi.mock("@tanstack/react-query", () => ({
     if (root === "/api/factory/bales/stock-entry-history") {
       return { data: { items: [group], total: 1, totalBales: 3, totalWeight: 75 }, isLoading: false };
     }
-    if (root === "/api/factory/workers") {
+    if (root === "/api/factory/workers?profile=picker") {
       return {
         data: [
           { id: 1, fullName: "Alice", active: true },
@@ -128,6 +128,8 @@ vi.mock("@/pages/stockentryhistory/utils", () => ({
   STATUS_COLORS: { IN_STOCK: "ok" },
   STATUS_OPTIONS: ["IN_STOCK", "SOLD"],
   fetchAllStockEntryHistoryPages: vi.fn(async () => [group]),
+  formatDailyNum: vi.fn((value: number) => String(value)),
+  formatHistoryDateTime: vi.fn((value: string) => value),
   formatHistoryTime: vi.fn((value: string) => value),
   buildWorkerMatrix: vi.fn(() => ({
     workers: ["Alice"],
@@ -180,13 +182,18 @@ describe("stock entry history page behavior", () => {
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
   });
 
-  it("renders the simplified history summary and detailed bale rows", () => {
+  it("renders condensed by default and can switch to detailed bale rows", () => {
     render(<StockEntryHistory />);
 
     expect(screen.getByRole("heading", { name: "Stock Entry History" })).toBeInTheDocument();
     expect(screen.getByText("Groups")).toBeInTheDocument();
     expect(screen.getByText("Bales")).toBeInTheDocument();
     expect(screen.getByText("Weight")).toBeInTheDocument();
+    expect(screen.getByTestId("button-view-condensed")).toBeInTheDocument();
+    expect(screen.getByTestId("button-view-detailed")).toBeInTheDocument();
+    expect(screen.getByTestId("row-worker-1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("button-view-detailed"));
 
     const row = screen.getByTestId("row-bale-101");
     expect(within(row).getByText("REF-101")).toBeInTheDocument();
@@ -231,7 +238,8 @@ describe("stock entry history page behavior", () => {
 
     expect(screen.getByTestId("input-search")).toBeInTheDocument();
     expect(screen.getByTestId("checkbox-include-unassigned")).toBeChecked();
-    expect(screen.queryByTestId("button-view-detailed")).not.toBeInTheDocument();
+    expect(screen.getByTestId("button-view-condensed")).toBeInTheDocument();
+    expect(screen.getByTestId("button-view-detailed")).toBeInTheDocument();
     expect(screen.queryByTestId("button-send-worker-pdf-whatsapp")).not.toBeInTheDocument();
   });
 });
