@@ -1,30 +1,41 @@
 import { MapPin, Ship, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import LocationInventory from "@/pages/LocationInventory";
 import StockOTW from "@/pages/StockOTW";
 import Containers from "@/pages/ContainersPage";
+import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 
 const TABS = [
-  { value: "by-location", label: "By Location", icon: MapPin },
-  { value: "on-the-way", label: "On The Way", icon: Ship },
-  { value: "containers", label: "Containers", icon: Package },
+  { value: "by-location", label: "By Location", icon: MapPin, featureKey: "location_inventory" as const },
+  { value: "on-the-way", label: "On The Way", icon: Ship, featureKey: "stock_otw" as const },
+  { value: "containers", label: "Containers", icon: Package, featureKey: "containers" as const },
 ] as const;
 
 const TAB_VALUES = TABS.map((tab) => tab.value);
 
 export default function InventoryHub() {
+  const { data: access } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
+  const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
+  const visibleValues = visibleTabs.map((tab) => tab.value);
+
   const [activeTab, setTab] = useHubQueryState({
     key: "tab",
-    allowedValues: TAB_VALUES,
-    defaultValue: "by-location",
+    allowedValues: visibleValues,
+    knownValues: TAB_VALUES,
+    defaultValue: visibleValues[0] ?? "by-location",
   });
+
+  if (visibleTabs.length === 0) {
+    return <div className="p-6 text-sm text-muted-foreground">No Inventory tabs are available for this user.</div>;
+  }
 
   return (
     <div className="min-w-0">
       <div className="erp-mobile-scroll-tabs mb-5 pb-1">
         <div className="flex gap-1 p-1 rounded-xl border bg-card w-max min-w-full sm:min-w-0 sm:w-fit h-auto">
-          {TABS.map(({ value, label, icon: Icon }) => (
+          {visibleTabs.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"
@@ -44,9 +55,9 @@ export default function InventoryHub() {
         </div>
       </div>
 
-      {activeTab === "by-location" && <LocationInventory />}
-      {activeTab === "on-the-way" && <StockOTW />}
-      {activeTab === "containers" && <Containers />}
+      {activeTab === "by-location" && visibleValues.includes("by-location") && <LocationInventory />}
+      {activeTab === "on-the-way" && visibleValues.includes("on-the-way") && <StockOTW />}
+      {activeTab === "containers" && visibleValues.includes("containers") && <Containers />}
     </div>
   );
 }
