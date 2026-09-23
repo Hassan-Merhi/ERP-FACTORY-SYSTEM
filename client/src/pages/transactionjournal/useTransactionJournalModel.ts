@@ -7,7 +7,7 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
  * voucher detail queries, the per-entry balance fetch and the company switch
  * used by "open in Daybook". Views read this model and render only.
  */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format, addDays } from "date-fns";
@@ -57,7 +57,7 @@ export function useTransactionJournalModel() {
     hasActiveFilters,
   } = usePaginatedFilterState<TransactionJournalFilters>({
     createInitialFilters: createTransactionJournalFilters,
-    storageKey: "erp-transaction-journal-filters-v2",
+    storageKey: "erp-transaction-journal-filters-v3",
   });
   const { periodFilter, selectedCos, voucherType, currency, optionalFilter, includeFactory, searchInput, search } =
     journalFilters;
@@ -87,26 +87,66 @@ export function useTransactionJournalModel() {
   const hideAmounts = hideAmountsLocal !== null ? hideAmountsLocal : prefHidden;
   const toggleHideAmounts = () => setHideAmountsLocal((v) => !(v !== null ? v : prefHidden));
 
-  // ── Hidden rows (per-row EyeOff, local state) ──
+  // ── Hidden rows (per-user durable preference) ──
+  const { data: userPreferences } = useQuery<{ hiddenTransactionJournalVoucherIds?: number[] }>({
+    queryKey: ["/api/user-preferences"],
+  });
   const [hiddenRowIds, setHiddenRowIds] = useState<Set<number>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
+  const hiddenRowsSaveChain = useRef<Promise<void>>(Promise.resolve());
 
-  const toggleHideRow = (id: number) => {
-    setHiddenRowIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  useEffect(() => {
+    if (!userPreferences) return;
+    setHiddenRowIds(
+      new Set(
+        (userPreferences.hiddenTransactionJournalVoucherIds ?? []).filter(
+          (id) => Number.isSafeInteger(id) && id > 0
+        )
+      )
+    );
+  }, [userPreferences?.hiddenTransactionJournalVoucherIds]);
 
-  const clearHiddenRows = () => {
-    setHiddenRowIds(new Set());
+  const persistHiddenRows = useCallback(
+    (ids: Set<number>) => {
+      const hiddenTransactionJournalVoucherIds = Array.from(ids).sort((left, right) => left - right);
+      hiddenRowsSaveChain.current = hiddenRowsSaveChain.current
+        .catch(() => undefined)
+        .then(async () => {
+          await apiRequest("PUT", "/api/user-preferences", { hiddenTransactionJournalVoucherIds });
+        })
+        .catch(() => {
+          toast({
+            title: "Could not save hidden rows",
+            description: "The row visibility change may not persist after you reload the page.",
+            variant: "destructive",
+          });
+        });
+    },
+    [toast]
+  );
+
+  const toggleHideRow = useCallback(
+    (id: number) => {
+      setHiddenRowIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        persistHiddenRows(next);
+        return next;
+      });
+    },
+    [persistHiddenRows]
+  );
+
+  const clearHiddenRows = useCallback(() => {
+    const next = new Set<number>();
+    setHiddenRowIds(next);
     setShowHidden(false);
-  };
+    persistHiddenRows(next);
+  }, [persistHiddenRows]);
 
   // ── Detail dialog ──
   const [detailId, setDetailId] = useState<number | null>(null);

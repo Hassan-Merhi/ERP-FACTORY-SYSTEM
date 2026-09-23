@@ -24,7 +24,7 @@ import {
   fixedAssets,
   factorySuppliers,
 } from "../../shared/schema";
-import { eq, and, gte, lte, inArray, or, ilike, desc, sql, count, isNull, type SQL } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, or, ilike, asc, desc, sql, count, isNull, type SQL } from "drizzle-orm";
 import {
   assertCompaniesAccess,
   assertCompanyAccess,
@@ -193,7 +193,7 @@ export function registerGlobalTransactionRoutes(app: Express, requireAuth: Reque
         .from(vouchers)
         .innerJoin(companies, eq(companies.id, vouchers.companyId))
         .where(whereClause)
-        .orderBy(desc(vouchers.voucherDate), desc(vouchers.id))
+        .orderBy(asc(companies.name), desc(vouchers.voucherDate), desc(vouchers.id))
         .limit(limit)
         .offset(offset);
 

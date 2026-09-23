@@ -88,6 +88,7 @@ export const coreTablesAndColumns: string[] = [
   // ── Add missing columns to existing tables ─────────────────────────────────
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS hidden_erp_cost_fields text[] NOT NULL DEFAULT '{}'`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS chatbot_enabled boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS hidden_transaction_journal_voucher_ids integer[] NOT NULL DEFAULT '{}'`,
   // Enable chatbot for all existing users (column was added with DEFAULT false — flip to opt-out model)
   // Wrapped in migrations_log so a user turning off their chatbot is not re-enabled on next restart.
   `DO $$ BEGIN

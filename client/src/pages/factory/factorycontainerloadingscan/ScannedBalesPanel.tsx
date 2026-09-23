@@ -324,6 +324,10 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
 
 export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { scanFlash, bales, totalWeight, viewMode, lastScannedRef } = model;
+  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string | null }>({
+    queryKey: ["/api/auth/me"],
+  });
+  const canEmptyContainer = ["Admin", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
   const { data: scanAuditRows = [] } = useQuery<BaleScanAudit[]>({
     queryKey: ["/api/factory/customer-orders", model.orderId, "scan-audit", bales.length],
     queryFn: async () => {
@@ -376,21 +380,23 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               </Badge>
             )}
 
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => model.setShowEmptyContainerConfirm(true)}
-              disabled={bales.length === 0 || model.emptyContainerMutation.isPending}
-              className="h-8 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:px-2.5"
-              title={model.tr("emptyContainerTitle")}
-              data-testid="button-empty-container"
-            >
-              <Trash2 className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
-              <span className="hidden sm:inline">
-                {model.emptyContainerMutation.isPending ? model.tr("emptying") : model.tr("empty")}
-              </span>
-            </Button>
+            {canEmptyContainer && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => model.setShowEmptyContainerConfirm(true)}
+                disabled={bales.length === 0 || model.emptyContainerMutation.isPending}
+                className="h-8 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:px-2.5"
+                title={model.tr("emptyContainerTitle")}
+                data-testid="button-empty-container"
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
+                <span className="hidden sm:inline">
+                  {model.emptyContainerMutation.isPending ? model.tr("emptying") : model.tr("empty")}
+                </span>
+              </Button>
+            )}
 
             <Button
               size="icon"

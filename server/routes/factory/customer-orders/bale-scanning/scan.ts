@@ -170,6 +170,13 @@ export function registerOrderBaleScanRoutes(app: Express) {
                 AND fbp.company_id = ${companyId}
               LIMIT 1
             )`,
+            canonicalProductNameAr: sql<string | null>`(
+              SELECT fbp.name_ar
+              FROM factory_bale_products fbp
+              WHERE fbp.id = ${factoryBales.productId}
+                AND fbp.company_id = ${companyId}
+              LIMIT 1
+            )`,
             productSellingPrice: sql<string | null>`(
               SELECT fbp.selling_price
               FROM factory_bale_products fbp
@@ -364,6 +371,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
             weight: bale.weightKg,
             articleCode: effectiveArticleCode || bale.articleCode,
             baleName: resolvedBaleName,
+            baleNameAr: bale.canonicalProductNameAr,
             priceUsed,
             scannedBy: scannerName,
           })

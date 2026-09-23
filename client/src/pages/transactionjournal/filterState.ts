@@ -18,7 +18,7 @@ export function createTransactionJournalFilters(): TransactionJournalFilters {
     voucherType: "all",
     currency: "all",
     optionalFilter: "active",
-    includeFactory: true,
+    includeFactory: false,
     searchInput: "",
     search: "",
   };

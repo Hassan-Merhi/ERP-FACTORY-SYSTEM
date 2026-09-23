@@ -1,5 +1,5 @@
 import type { Express, RequestHandler } from "express";
-import { and, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { companies, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
@@ -122,7 +122,7 @@ export function registerCentralGlobalTransactionRoutes(app: Express, requireAuth
         .from(vouchers)
         .innerJoin(companies, eq(companies.id, vouchers.companyId))
         .where(whereClause)
-        .orderBy(desc(vouchers.voucherDate), desc(vouchers.id))
+        .orderBy(asc(companies.name), desc(vouchers.voucherDate), desc(vouchers.id))
         .limit(limit)
         .offset(offset);
 
