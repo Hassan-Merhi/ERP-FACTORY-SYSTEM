@@ -32,7 +32,6 @@ import {
 import { useConnectivity } from "@/contexts/ConnectivityContext";
 import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
-import { ROUTE_TO_FEATURE } from "@shared/schema";
 import { useRef, useEffect, useMemo } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useRecentNav } from "@/hooks/use-recent-nav";
@@ -42,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { companyQueryKey } from "@/lib/companyQueryScope";
 import { accessQueryPolicy, liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
 import { SUPPLIER_PARTNER_RECENT_ITEMS, SUPPLIER_PARTNER_SECTIONS } from "@/lib/supplier-partner-navigation";
+import { getErpRouteFeatureKeys } from "@/app/erpAccess";
 import {
   ModuleHeader,
   ModuleFooter,
@@ -168,12 +168,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isAdmin = effectiveRole === "Admin" || effectiveRole === "Developer";
     const isDeveloper = effectiveRole === "Developer";
     const isOwner = effectiveRole === "Owner";
-    const featureKey =
-      item.url === "/stock-in-sales-report"
-        ? "sales_report"
-        : item.url === "/pos-item-replacement"
-          ? "pos"
-          : ROUTE_TO_FEATURE[item.url];
+    const featureKeys = getErpRouteFeatureKeys(item.url);
 
     if (item.url === "/tracking") return ["Admin", "Developer", "Owner"].includes(effectiveRole);
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
@@ -199,7 +194,9 @@ export function useErpVisibleSections(user?: SidebarUser): {
       return posRoutes.includes(item.url);
     }
 
-    if (featureKey && allowedPages.size > 0) return allowedPages.has(featureKey);
+    if (featureKeys.length > 0 && myErpPages) {
+      return featureKeys.some((featureKey) => allowedPages.has(featureKey));
+    }
     if (allowedPages.size === 0 && myErpPages) return false;
     if (item.url === "/settings") return false;
 
