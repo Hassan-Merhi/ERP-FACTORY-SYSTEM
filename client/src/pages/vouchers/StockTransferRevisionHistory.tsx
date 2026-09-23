@@ -119,6 +119,7 @@ export function StockTransferRevisionHistory({
                   <div className="flex items-center justify-between gap-3 px-3 py-2 status-warning border-b">
                     <span className="text-xs font-medium">Pending POS adjustment — awaiting admin approval</span>
                     <Button
+                      type="button"
                       size="sm"
                       variant="default"
                       onClick={() => setApproveRevisionTarget(rev)}
