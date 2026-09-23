@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Info, ShieldCheck } from "lucide-react";
 import { type FeatureKey } from "@shared/schema";
@@ -112,6 +113,7 @@ function PageRow({
 export function PageVisibilityTree({ appMode }: { appMode?: string }) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const { t } = useApplicationLanguage();
 
   const { data: rolePermissions = [], isLoading } = useQuery<SettingsRolePermissionRow[]>({
     queryKey: ["/api/settings/role-permissions", selectedCompany?.id],
@@ -155,11 +157,8 @@ export function PageVisibilityTree({ appMode }: { appMode?: string }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="h-5 w-5 mt-0.5 text-muted-foreground shrink-0" />
           <div className="space-y-1">
-            <p className="font-medium">Factory access is managed per user</p>
-            <p className="text-sm text-muted-foreground">
-              Use Users &amp; Permissions → Advanced Restrictions for Factory pages and tabs. The sidebar, direct routes
-              and Factory APIs all use the same canonical permission registry.
-            </p>
+            <p className="font-medium">{t("settings.userManagement")}</p>
+            <p className="text-sm text-muted-foreground">{t("settings.selectUser")}</p>
           </div>
         </div>
       </div>
