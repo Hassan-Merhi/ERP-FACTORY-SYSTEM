@@ -181,7 +181,7 @@ vi.mock("@/components/ui/alert-dialog", () => ({
     </button>
   ),
   AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialogContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
