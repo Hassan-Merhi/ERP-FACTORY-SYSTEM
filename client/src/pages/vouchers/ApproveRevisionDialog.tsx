@@ -93,6 +93,7 @@ export function ApproveRevisionDialog({
         )}
         <DialogFooter className="gap-2">
           <Button
+            type="button"
             variant="outline"
             onClick={() => setApproveRevisionTarget(null)}
             data-testid="button-approve-revision-cancel"
@@ -100,6 +101,7 @@ export function ApproveRevisionDialog({
             Cancel
           </Button>
           <Button
+            type="button"
             variant="default"
             disabled={approveRevisionMutation.isPending}
             onClick={() => approveRevisionTarget && approveRevisionMutation.mutate(approveRevisionTarget.id)}
