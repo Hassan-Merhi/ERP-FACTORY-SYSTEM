@@ -6,26 +6,32 @@ const ROOT = resolve(__dirname, "..");
 const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
 
 describe("Stock Entry staff tracking tabs", () => {
-  it("hosts Production Targets and Attendance Register in Bale Stock Entry", () => {
+  it("keeps Production Targets in Bale Stock Entry and hides the legacy Attendance Register", () => {
     const stockEntry = src("client/src/pages/factory/BaleStockEntry.tsx");
     expect(stockEntry).toContain('value="production-targets"');
-    expect(stockEntry).toContain('value="attendance-register"');
     expect(stockEntry).toContain("<FactoryProductionTargets />");
-    expect(stockEntry).toContain('<FactoryStaffTracking mode="attendance" />');
+    expect(stockEntry).not.toContain('value="attendance-register"');
+    expect(stockEntry).not.toContain('<FactoryStaffTracking mode="attendance" />');
   });
 
-  it("removes Production Targets and Attendance Register from Payroll & Benefits", () => {
+  it("keeps Attendance under Payroll & Benefits and hosts the WhatsApp actions there", () => {
     const payroll = src("client/src/pages/factory/FactoryPayrollHub.tsx");
-    expect(payroll).not.toContain('"production-targets"');
-    expect(payroll).not.toContain('"attendance-register"');
-    expect(payroll).not.toContain("<FactoryProductionTargets />");
-    expect(payroll).not.toContain('<FactoryStaffTracking mode="attendance" />');
+    const workersHub = src("client/src/pages/factory/FactoryWorkersHub.tsx");
+    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+
+    expect(payroll).toContain("<FactoryWorkersHub />");
+    expect(workersHub).toContain('value="attendance"');
+    expect(workersHub).toContain("<FactoryAttendance />");
+    expect(attendance).toContain('data-testid="button-change-attendance-whatsapp-group"');
+    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
+    expect(attendance).toContain('data-testid="button-save-attendance-wa-group"');
+    expect(attendance).toContain('destination: "attendance"');
   });
 
-  it("exposes per-user Stock Entry restrictions in Settings", () => {
+  it("removes the obsolete Attendance Register visibility setting", () => {
     const constants = src("client/src/pages/settings/users/UserManagementConstants.tsx");
     expect(constants).toContain("hide_tab_stockentry_production_targets");
-    expect(constants).toContain("hide_tab_stockentry_attendance_register");
+    expect(constants).not.toContain("hide_tab_stockentry_attendance_register");
   });
 
   it("enforces the same per-user restrictions on staff-tracking APIs", () => {
@@ -127,18 +133,18 @@ describe("Stock Entry staff tracking tabs", () => {
 
   });
 
-  it("renders Attendance Register KPIs inside the WhatsApp attendance image", () => {
-    const attendance = src("client/src/pages/factory/FactoryStaffTracking.tsx");
+  it("renders Payroll Attendance KPIs inside the WhatsApp attendance image", () => {
+    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
     expect(attendance).toContain('data-testid="attendance-report-kpis"');
     expect(attendance).toContain('data-testid={\`attendance-report-kpi-\${kpi.key}\`}');
-    expect(attendance).toContain('label: tr("totalPeople")');
-    expect(attendance).toContain('value: rows.length');
-    expect(attendance).toContain('label: tr("present")');
-    expect(attendance).toContain('value: totals.present');
-    expect(attendance).toContain('label: tr("absent")');
-    expect(attendance).toContain('value: totals.absent');
-    expect(attendance).toContain('label: tr("new")');
-    expect(attendance).toContain('value: totals.newCount');
+    expect(attendance).toContain('label: "Total"');
+    expect(attendance).toContain('value: counts.total');
+    expect(attendance).toContain('label: "Present"');
+    expect(attendance).toContain('value: counts.present');
+    expect(attendance).toContain('label: "Absent"');
+    expect(attendance).toContain('value: counts.absent');
+    expect(attendance).toContain('label: "Other"');
+    expect(attendance).toContain('value: counts.other');
     expect(attendance).toContain("html2canvas(attendanceReportRef.current");
   });
 
