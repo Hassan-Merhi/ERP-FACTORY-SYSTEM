@@ -6,11 +6,13 @@ import {
 } from "../lib/factoryAccessControl";
 
 export type FactoryApiAccessRequirement = {
-  pageKey: string;
+  pageKey?: string;
   /** Every listed tab must be visible. */
   tabs?: string[];
-  /** At least one complete alternative tab-set must be visible. */
+  /** At least one complete alternative tab-set on the same page must be visible. */
   tabAlternatives?: string[][];
+  /** Shared APIs may be legitimately owned by more than one Factory surface. */
+  alternatives?: FactoryApiAccessRequirement[];
 };
 
 function hasPrefix(path: string, prefix: string): boolean {
@@ -23,6 +25,10 @@ function isWrite(req: Request): boolean {
 
 function requirement(pageKey: string, tabs?: string[]): FactoryApiAccessRequirement {
   return { pageKey, ...(tabs?.length ? { tabs } : {}) };
+}
+
+function anyOf(...alternatives: FactoryApiAccessRequirement[]): FactoryApiAccessRequirement {
+  return { alternatives };
 }
 
 const PAYROLL_WORKERS = "hide_tab_payrollhub_workers";
@@ -166,7 +172,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // authorization tied to the Attendance tabs rather than the admin Settings page.
   if (
     hasPrefix(path, "/attendance") ||
-    (path === "/staff-tracking" && String(req.query.page || req.body?.page || "") === "attendance") ||
+    ((path === "/staff-tracking" || path === "/staff-tracking/bulk") &&
+      String(req.query.page || req.body?.page || "") === "attendance") ||
     (hasPrefix(path, "/settings") && String(req.query.scope || "") === "attendance")
   ) {
     return attendanceRequirement();
@@ -206,6 +213,48 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
   if (hasPrefix(path, "/suppliers/fx-diagnostic")) {
     return requirement("factory/parties", ["hide_tab_parties_suppliers"]);
+  }
+
+  // Employee sub-tabs are separate API families rather than /employees children.
+  if (hasPrefix(path, "/employee-payroll-preview")) {
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_PAYROLL]);
+  }
+  if (hasPrefix(path, "/employee-attendance")) {
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_ATTENDANCE]);
+  }
+  if (hasPrefix(path, "/employee-advances") || hasPrefix(path, "/employee-advance-repayments")) {
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_ADVANCES]);
+  }
+  if (hasPrefix(path, "/employee-bonuses")) {
+    return requirement("factory/payroll-hub", [PAYROLL_EMPLOYEES, EMPLOYEES_BONUSES]);
+  }
+  if (hasPrefix(path, "/worker-bonuses")) {
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_bonuses"]);
+  }
+
+  // Worker categories/pickers are intentionally shared by Stock Entry,
+  // Production Targets and Worker management. Requiring only one parent page
+  // would incorrectly break the other two permitted surfaces.
+  if (hasPrefix(path, "/worker-categories")) {
+    if (isWrite(req)) {
+      return anyOf(
+        requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
+        requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_categories"])
+      );
+    }
+    return anyOf(
+      requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
+      requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
+      requirement("factory/payroll-hub", [PAYROLL_WORKERS, "hide_tab_workers_categories"])
+    );
+  }
+
+  if (hasPrefix(path, "/invoice-container-tracking") || hasPrefix(path, "/shipping-container-rows") || hasPrefix(path, "/shipping-invoice-docs")) {
+    return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
+  }
+
+  if (hasPrefix(path, "/net-position/payroll-breakdown")) {
+    return requirement("factory/intelligence/financial-hub");
   }
 
   // Admin/configuration mutation surfaces. Operational reads of label assets,
@@ -294,7 +343,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/production-positions") ||
     hasPrefix(path, "/staff-tracking/production-target-defaults") ||
     hasPrefix(path, "/staff-tracking/production-worker-links") ||
-    (path === "/staff-tracking" && String(req.query.page || req.body?.page || "") === "production")
+    ((path === "/staff-tracking" || path === "/staff-tracking/bulk") &&
+      String(req.query.page || req.body?.page || "") === "production") ||
+    path === "/stock-entry/production-session" ||
+    path === "/stock-entry/end-production"
   ) {
     return requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]);
   }
@@ -330,6 +382,13 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
 
   // Worker/employee/payroll families.
   if (hasPrefix(path, "/employees")) return employeeRequirement(path);
+  if (req.method === "GET" && path === "/workers" && String(req.query.profile || "") === "picker") {
+    return anyOf(
+      requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
+      requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
+      requirement("factory/payroll-hub", [PAYROLL_WORKERS])
+    );
+  }
   if (hasPrefix(path, "/workers")) return workerRequirement(req, path);
   if (
     hasPrefix(path, "/payroll") ||
@@ -358,6 +417,48 @@ function tabDeniedDecision(message: string): Exclude<FactoryAccessDecision, { al
   };
 }
 
+async function evaluateFactoryRequirement(
+  req: Request,
+  rule: FactoryApiAccessRequirement
+): Promise<FactoryAccessDecision> {
+  if (rule.alternatives?.length) {
+    let firstDenied: Exclude<FactoryAccessDecision, { allowed: true }> | null = null;
+    for (const alternative of rule.alternatives) {
+      const decision = await evaluateFactoryRequirement(req, alternative);
+      if (decision.allowed) return decision;
+      firstDenied ??= decision;
+      if (decision.code === "FACTORY_ACCESS_DISABLED") return decision;
+    }
+    return firstDenied ?? tabDeniedDecision("You do not have access to a Factory page that permits this action.");
+  }
+
+  if (!rule.pageKey) {
+    return {
+      allowed: false,
+      code: "FACTORY_PAGE_ACCESS_DENIED",
+      message: "No Factory page owns this protected action.",
+    };
+  }
+
+  const pageDecision = await authorizeFactoryPageAccess(req, rule.pageKey);
+  if (!pageDecision.allowed) return pageDecision;
+  if (pageDecision.state.privileged) return pageDecision;
+
+  const hidden = new Set(pageDecision.state.hiddenTabs);
+  if (rule.tabs?.some((tab) => hidden.has(tab))) {
+    return tabDeniedDecision("You do not have access to the Factory tab required for this action.");
+  }
+
+  if (
+    rule.tabAlternatives?.length &&
+    !rule.tabAlternatives.some((alternative) => alternative.every((tab) => !hidden.has(tab)))
+  ) {
+    return tabDeniedDecision("You do not have access to any Factory tab that permits this action.");
+  }
+
+  return pageDecision;
+}
+
 export async function enforceFactoryBackendAccess(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) return next();
 
@@ -365,29 +466,8 @@ export async function enforceFactoryBackendAccess(req: Request, res: Response, n
     const rule = resolveFactoryBackendAccessRequirement(req);
     if (!rule) return next();
 
-    const pageDecision = await authorizeFactoryPageAccess(req, rule.pageKey);
-    if (!pageDecision.allowed) return sendFactoryAccessDenied(res, pageDecision);
-    if (pageDecision.state.privileged) return next();
-
-    const hidden = new Set(pageDecision.state.hiddenTabs);
-
-    if (rule.tabs?.some((tab) => hidden.has(tab))) {
-      return sendFactoryAccessDenied(
-        res,
-        tabDeniedDecision("You do not have access to the Factory tab required for this action.")
-      );
-    }
-
-    if (
-      rule.tabAlternatives?.length &&
-      !rule.tabAlternatives.some((alternative) => alternative.every((tab) => !hidden.has(tab)))
-    ) {
-      return sendFactoryAccessDenied(
-        res,
-        tabDeniedDecision("You do not have access to any Factory tab that permits this action.")
-      );
-    }
-
+    const decision = await evaluateFactoryRequirement(req, rule);
+    if (!decision.allowed) return sendFactoryAccessDenied(res, decision);
     return next();
   } catch (error) {
     return next(error);
