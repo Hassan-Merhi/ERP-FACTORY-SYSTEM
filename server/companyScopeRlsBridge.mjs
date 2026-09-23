@@ -148,11 +148,66 @@ export async function ensureCompanyScopeRlsReadiness() {
       throw new Error(`Company-scope policy was not installed on: ${missingPolicies.join(", ")}`);
     }
 
+    const voucherEntryScopeCheck = await client.query(`
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'voucher_entries'
+            AND column_name = 'company_id'
+            AND is_nullable = 'NO'
+        ) AS company_column_ready,
+        to_regclass('public.voucher_entries_company_idx') IS NOT NULL AS company_index_ready,
+        EXISTS (
+          SELECT 1
+          FROM pg_trigger
+          WHERE tgrelid = 'public.voucher_entries'::regclass
+            AND tgname = 'voucher_entries_sync_company_id'
+            AND NOT tgisinternal
+        ) AS entry_sync_trigger_ready,
+        EXISTS (
+          SELECT 1
+          FROM pg_trigger
+          WHERE tgrelid = 'public.vouchers'::regclass
+            AND tgname = 'vouchers_sync_entry_company_id'
+            AND NOT tgisinternal
+        ) AS voucher_sync_trigger_ready,
+        (
+          SELECT qual::text
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'voucher_entries'
+            AND policyname = 'voucher_entries_company_scope_policy'
+        ) AS policy_qual
+    `);
+    const voucherEntryScope = voucherEntryScopeCheck.rows[0] || {};
+    if (
+      !voucherEntryScope.company_column_ready ||
+      !voucherEntryScope.company_index_ready ||
+      !voucherEntryScope.entry_sync_trigger_ready ||
+      !voucherEntryScope.voucher_sync_trigger_ready ||
+      !String(voucherEntryScope.policy_qual || "").includes("erp_company_scope_matches(company_id)")
+    ) {
+      throw new Error("Voucher-entry direct company-scope RLS fast path was not installed completely.");
+    }
+
+    const voucherEntryMismatch = await client.query(`
+      SELECT COUNT(*)::int AS mismatch_count
+      FROM voucher_entries ve
+      JOIN vouchers v ON v.id = ve.voucher_id
+      WHERE ve.company_id IS DISTINCT FROM v.company_id
+    `);
+    if (Number(voucherEntryMismatch.rows[0]?.mismatch_count || 0) !== 0) {
+      throw new Error("Voucher-entry company scope is out of sync with parent vouchers.");
+    }
+
     await client.query("COMMIT");
     log("INFO", "Company-scope RLS fail-closed readiness verified", {
       tablesPresent: existingTables.length,
       policiesPresent: policyCheck.rows.length,
       forcedTables: existingTables.length,
+      voucherEntryFastPath: true,
       startupMigrationsEnabled: process.env.RUN_STARTUP_MIGRATIONS !== "false",
     });
   } catch (error) {
