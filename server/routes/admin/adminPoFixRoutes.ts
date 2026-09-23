@@ -212,7 +212,18 @@ export function registerAdminPoFixRoutes(app: Express) {
           // taking the lock. Without the refresh, two apply requests can both
           // observe a missing credit and insert duplicates.
           if (canonicalVoucherId) {
-            await client.query(`SELECT id FROM vouchers WHERE id = $1 FOR UPDATE`, [canonicalVoucherId]);
+            const voucherLock = await client.query<{ id: number }>(
+              `SELECT id
+                 FROM vouchers
+                WHERE id = $1
+                  AND company_id = $2
+                FOR UPDATE`,
+              [canonicalVoucherId, expectedCompanyId]
+            );
+            if (voucherLock.rowCount !== 1) {
+              repairStatus = "manual_review";
+              canonicalVoucherId = null;
+            }
             if (voucherIds.length) {
               const refreshedEntries = await client.query<{ id: number; voucher_id: number; credit_amount: string }>(
                 `SELECT ve.id, ve.voucher_id, ve.credit_amount
