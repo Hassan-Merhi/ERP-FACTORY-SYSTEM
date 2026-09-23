@@ -19,22 +19,25 @@ import {
   revokeUserSessions,
 } from "../../../services/security/credentialVersionService";
 
-const LEGACY_FACTORY_PAGE_HIDE_KEYS = new Set([
+const LEGACY_FACTORY_HIDDEN_FIELD_REMOVALS = new Set([
   "hide_tab_production_analytics",
   "hide_tab_agents",
   "hide_tab_daybook",
+  "hide_tab_bales_remove",
+]);
+
+const LEGACY_FACTORY_HIDDEN_FIELD_REPLACEMENTS = new Map<string, string>([
+  ["hide_tab_stockentry_attendance_register", "hide_tab_workers_attendance"],
 ]);
 
 function normalizeFactoryHiddenFields(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value.filter(
-        (entry): entry is string =>
-          typeof entry === "string" && entry.length > 0 && !LEGACY_FACTORY_PAGE_HIDE_KEYS.has(entry)
-      )
-    )
-  );
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry.length === 0 || LEGACY_FACTORY_HIDDEN_FIELD_REMOVALS.has(entry)) continue;
+    normalized.push(LEGACY_FACTORY_HIDDEN_FIELD_REPLACEMENTS.get(entry) ?? entry);
+  }
+  return Array.from(new Set(normalized));
 }
 
 function requesterIsDeveloper(currentRole: unknown, requestRole: unknown): boolean {
