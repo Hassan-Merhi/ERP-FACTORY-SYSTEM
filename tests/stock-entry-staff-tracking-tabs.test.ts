@@ -122,6 +122,7 @@ describe("Stock Entry staff tracking tabs", () => {
   it("supports effective-dated linked production workers with one shared target", () => {
     const editor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const defaultsEditor = src("client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx");
+    const linkControl = src("client/src/pages/factory/productiontargets/ProductionWorkerLinkControl.tsx");
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
@@ -134,6 +135,12 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("/api/factory/staff-tracking/production-worker-links");
     expect(editor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("linkGroupId");
+    expect(defaultsEditor).toContain("<ProductionWorkerLinkControl");
+    expect(production).toContain("<ProductionWorkerLinkControl");
+    expect(linkControl).toContain("button-link-worker-");
+    expect(linkControl).toContain("button-unlink-worker-");
+    expect(linkControl).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(linkControl).toContain("effectiveFrom");
     expect(production).toContain("collapseLinkedProductionRows");
     expect(production).toContain("row.displayMembers");
     expect(model).toContain("summarizeProductionRows");

@@ -47,6 +47,7 @@ import {
 } from "./factoryProductionTargetsModel";
 import { ProductionTargetDefaultsDialog } from "./productiontargets/ProductionTargetDefaultsDialog";
 import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTargetsEditorDialog";
+import { ProductionWorkerLinkControl } from "./productiontargets/ProductionWorkerLinkControl";
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
@@ -486,6 +487,17 @@ export default function FactoryProductionTargets() {
                               </div>
                             ))}
                           </div>
+                          {periodType === "daily" && (
+                            <div className="mt-2">
+                              <ProductionWorkerLinkControl
+                                row={row}
+                                rows={rows}
+                                effectiveFrom={referenceDate}
+                                targetBales={row.targetBales}
+                                disabled={finalized || busy}
+                              />
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-base font-semibold">
                           {row.category || "—"}
