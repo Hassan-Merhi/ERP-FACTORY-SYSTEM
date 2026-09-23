@@ -7,6 +7,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
 import { logger } from "../../lib/logger";
+import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
@@ -96,9 +97,57 @@ export async function applyPurchaseOrderItemsUpdate(
   let _b1PoNumsForSync: string | string[] = existingPO.poNumber;
   let _b1ContainerNumForSync: string | undefined;
 
-  // Delete existing line items and create new ones in a transaction
+  // Delete existing line items and create new ones in a transaction.
+  // Lock order intentionally matches the offload lifecycle: container -> purchase order.
+  // This prevents an offload from materializing inventory between the route pre-check
+  // and the line-item rewrite.
   await db.transaction(async (tx) => {
-    // Delete old line items
+    // FOR UPDATE is the serialization boundary shared with executeContainerOffloadLifecycle.
+    const [lockedContainer] = await tx
+      .select({ id: containers.id, status: containers.status })
+      .from(containers)
+      .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
+      .limit(1)
+      .for("update");
+
+    if (!lockedContainer) {
+      throw new HttpError(404, "Container not found for this purchase order");
+    }
+
+    // Take the PO row second, matching the offload lifecycle's container -> PO lock
+    // order and making every item rewrite for this PO serialize behind the same row.
+    const [lockedPO] = await tx
+      .select({ id: purchaseOrders.id, containerId: purchaseOrders.containerId })
+      .from(purchaseOrders)
+      .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.companyId, existingPO.companyId)))
+      .limit(1)
+      .for("update");
+
+    if (!lockedPO || lockedPO.containerId !== existingPO.containerId) {
+      throw new HttpError(409, "Purchase order changed concurrently. Reload and try again.");
+    }
+
+    // The route performs a fast user-facing check before entering the transaction.
+    // Re-check here after the container lock so an offload that won the race cannot
+    // be followed by a stock-item swap against inventory that was already materialized.
+    if (lockedContainer.status === "OFFLOADED") {
+      const currentLineItems = await tx
+        .select({ stockItemId: poLineItems.stockItemId })
+        .from(poLineItems)
+        .where(eq(poLineItems.poId, id));
+      const currentStockItemIds = new Set(currentLineItems.map((item) => item.stockItemId));
+
+      for (const item of newItems) {
+        if (item.stockItemId && !currentStockItemIds.has(item.stockItemId)) {
+          throw new HttpError(
+            409,
+            "Cannot change stock items on an offloaded container. The inventory has already been added with the original items. Changing stock items would cause an import cycle imbalance. To fix this, first reverse the container offload, then edit the PO, then re-offload."
+          );
+        }
+      }
+    }
+
+    // Delete old line items only after the lifecycle locks and offloaded-state recheck.
     await tx.delete(poLineItems).where(eq(poLineItems.poId, id));
 
     // Insert new line items
