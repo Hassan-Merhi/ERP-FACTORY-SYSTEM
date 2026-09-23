@@ -147,8 +147,8 @@ async function openRoute(page, route) {
   return response?.status() ?? null;
 }
 
-async function readState(page, route) {
-  return page.evaluate((currentRoute) => {
+async function readState(page, route, workspace) {
+  return page.evaluate((currentRoute, currentWorkspace) => {
     const root = document.documentElement;
     const body = document.body;
     const mainContent = document.getElementById("main-content");
@@ -181,6 +181,26 @@ async function readState(page, route) {
       paneWidth: null,
       flexDirection: null,
       touchActionOpacity,
+      mobileShell:
+        currentWorkspace === "erp"
+          ? {
+              menuVisible: Boolean(visibleRect(document.querySelector('[data-testid="button-sidebar-toggle"]'))),
+              companyVisible: Boolean(visibleRect(document.querySelector('[data-testid="button-company-selector"]'))),
+              companyText:
+                document.querySelector('[data-testid="button-company-selector"]')?.textContent?.trim() || "",
+              moreVisible: Boolean(visibleRect(document.querySelector('[data-testid="button-mobile-controls"]'))),
+              directSearchVisible: Boolean(visibleRect(document.querySelector('[data-testid="button-open-palette-sm"]'))),
+              directNotificationsVisible: Boolean(
+                visibleRect(document.querySelector('[data-testid="button-notifications-bell"]')),
+              ),
+              bottomNavVisible: Boolean(visibleRect(document.querySelector('[data-testid="erp-mobile-bottom-nav"]'))),
+              trackingVisible: Boolean(visibleRect(document.querySelector('[data-testid="mobile-nav-tracking"]'))),
+              inventoryVisible: Boolean(visibleRect(document.querySelector('[data-testid="mobile-nav-inventory"]'))),
+              salesVisible: Boolean(visibleRect(document.querySelector('[data-testid="mobile-nav-sales"]'))),
+              accountsVisible: Boolean(visibleRect(document.querySelector('[data-testid="mobile-nav-accounts"]'))),
+              navMoreVisible: Boolean(visibleRect(document.querySelector('[data-testid="mobile-nav-more"]'))),
+            }
+          : null,
     };
 
     if (currentRoute.endsWith("/agents") || currentRoute === "/agents") {
@@ -206,10 +226,10 @@ async function readState(page, route) {
     }
 
     return state;
-  }, route);
+  }, route, workspace);
 }
 
-function assertState(state, viewport, route) {
+function assertState(state, viewport, route, workspace) {
   const failures = [];
   const label = `${viewport.name} ${route}`;
   const shouldStack = viewport.width <= 767;
@@ -238,6 +258,27 @@ function assertState(state, viewport, route) {
     );
   }
 
+  if (workspace === "erp" && viewport.width <= 639) {
+    if (!state.mobileShell?.menuVisible) failures.push(`${label}: compact ERP header menu is not visible`);
+    if (!state.mobileShell?.companyVisible) failures.push(`${label}: current company is not visible in the compact ERP header`);
+    if (!state.mobileShell?.companyText) failures.push(`${label}: current company label is empty in the compact ERP header`);
+    if (!state.mobileShell?.moreVisible) failures.push(`${label}: compact ERP header More control is not visible`);
+    if (state.mobileShell?.directSearchVisible) failures.push(`${label}: duplicate mobile Search control is still visible in the ERP header`);
+    if (state.mobileShell?.directNotificationsVisible) {
+      failures.push(`${label}: duplicate notification control is still visible in the ERP header`);
+    }
+    if (!state.mobileShell?.bottomNavVisible) failures.push(`${label}: ERP mobile bottom navigation is not visible`);
+    if (!state.mobileShell?.trackingVisible) failures.push(`${label}: Tracking bottom navigation item is not visible`);
+    if (!state.mobileShell?.inventoryVisible) failures.push(`${label}: Inventory bottom navigation item is not visible`);
+    if (!state.mobileShell?.salesVisible) failures.push(`${label}: Sales bottom navigation item is not visible`);
+    if (!state.mobileShell?.accountsVisible) failures.push(`${label}: Accounts bottom navigation item is not visible`);
+    if (!state.mobileShell?.navMoreVisible) failures.push(`${label}: More bottom navigation item is not visible`);
+  }
+
+  if (workspace === "erp" && viewport.width >= 640 && state.mobileShell?.bottomNavVisible) {
+    failures.push(`${label}: phone bottom navigation remains visible at the tablet/desktop breakpoint`);
+  }
+
   return failures;
 }
 
@@ -261,8 +302,8 @@ try {
         await selectCompany(page, group.companyCode);
         for (const route of group.routes) {
           const status = await openRoute(page, route);
-          const state = await readState(page, route);
-          const failures = assertState(state, viewport, route);
+          const state = await readState(page, route, group.workspace);
+          const failures = assertState(state, viewport, route, group.workspace);
           const directory = path.join(OUTPUT_DIR, viewport.name, group.workspace);
           await fs.mkdir(directory, { recursive: true });
           const screenshot = path.join(directory, `${safeName(route)}.png`);
