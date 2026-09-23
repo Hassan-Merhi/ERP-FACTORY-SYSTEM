@@ -52,7 +52,7 @@ const factoryStaffTrackingTranslations = {
   defaultTargets: { en: "Fixed Target", ar: "الهدف الثابت", fr: "Objectif fixe" },
   dailyDefaultTarget: { en: "Fixed Target", ar: "الهدف الثابت", fr: "Objectif fixe" },
   defaultTargetsDescription: {
-    en: "Set each worker's repeating category and daily target from this date forward. A manual Edit Targets change for a specific day always wins for that day and is not changed by later Daily Defaults edits.",
+    en: "Set each worker's repeating category and fixed target from this date forward. A manual Edit Targets change for a specific day always wins for that day and is not changed by later Fixed Target edits.",
     ar: "حدّد الفئة والهدف الثابت لكل عامل ابتداءً من هذا التاريخ. أي تعديل يدوي من «تعديل الأهداف» ليوم محدد تكون له الأولوية في ذلك اليوم ولا تغيّره التعديلات اللاحقة على الهدف الثابت.",
     fr: "Définissez la catégorie et l’objectif fixe de chaque ouvrier à partir de cette date. Une modification manuelle dans « Modifier les objectifs » pour un jour précis reste prioritaire pour ce jour et n’est pas remplacée par des modifications ultérieures de l’objectif fixe.",
   },
@@ -62,7 +62,7 @@ const factoryStaffTrackingTranslations = {
     fr: "Catégorie et objectif fixe enregistrés",
   },
   productionEditorDescription: {
-    en: "Edit the selected day's category and target only. This does not change the worker's repeating daily default.",
+    en: "Edit the selected day's category and target only. This does not change the worker's fixed target.",
     ar: "عدّل فئة وهدف اليوم المحدد فقط. هذا لا يغيّر الهدف الثابت للعامل.",
     fr: "Modifiez uniquement la catégorie et l’objectif du jour sélectionné. Cela ne change pas l’objectif fixe de l’ouvrier.",
   },
