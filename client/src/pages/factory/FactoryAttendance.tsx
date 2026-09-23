@@ -522,6 +522,7 @@ export default function FactoryAttendance() {
                 value={counts.total}
                 color="text-foreground"
                 testId="stat-total"
+                modern
               />
               <SummaryCard
                 icon={<CheckCircle className="h-4 w-4" />}
@@ -529,6 +530,7 @@ export default function FactoryAttendance() {
                 value={counts.present}
                 color="text-green-600 dark:text-green-400"
                 testId="stat-present"
+                modern
               />
               <SummaryCard
                 icon={<XCircle className="h-4 w-4" />}
@@ -536,6 +538,7 @@ export default function FactoryAttendance() {
                 value={counts.absent}
                 color="text-red-600 dark:text-red-400"
                 testId="stat-absent"
+                modern
               />
               <SummaryCard
                 icon={<Clock className="h-4 w-4" />}
@@ -543,6 +546,7 @@ export default function FactoryAttendance() {
                 value={counts.other}
                 color="text-amber-600 dark:text-amber-400"
                 testId="stat-other"
+                modern
               />
             </div>
           )}
