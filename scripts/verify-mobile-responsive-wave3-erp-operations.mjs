@@ -154,6 +154,15 @@ for (const file of [
   expectTokens(file, ["grid-cols-1", "sm:grid-cols-2"]);
 }
 
+expectTokens("client/src/pages/AiValidationPage.tsx", ["flex-col", "lg:flex-row", "w-full", "lg:w-72"]);
+expectTokens("client/src/components/vouchers/CreditNoteTab.tsx", [
+  "grid-cols-1",
+  "sm:grid-cols-2",
+  "lg:grid-cols-4",
+  "sm:col-span-2",
+]);
+expectTokens("client/src/pages/vouchers/VoucherForm.tsx", ["flex-wrap", "justify-end"]);
+
 // Reports/opening/closing already have responsive page contracts; Wave 3 protects them rather than redesigning formulas.
 expectTokens("client/src/pages/OpeningStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-7", "hidden sm:block"]);
 expectTokens("client/src/pages/ClosingStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-4", "sm:hidden"]);
