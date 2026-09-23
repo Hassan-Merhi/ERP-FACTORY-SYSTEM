@@ -104,8 +104,54 @@ for (const route of [
   "/optional-vouchers",
   "/barcode-manager",
   "/deleted-items",
+  "/tracking",
+  "/financial-overview",
+  "/pos",
+  "/pos-item-replacement",
+  "/agents",
+  "/analytics",
+  "/payroll",
+  "/create",
+  "/stock-transfer-order",
+  "/stock-in-sales-report",
+  "/bale-ledger",
+  "/chat",
+  "/erp/rental/warehouses",
+  "/erp/rental/shops",
+  "/erp/rental/payments",
+  "/conflicts",
+  "/intercompany-links",
+  "/intercompany-requests",
+  "/chatbot-settings",
+  "/notification-settings",
+  "/account-groups",
+  "/test-data-import",
+  "/import-cycle-diagnostics",
+  "/inventory-repair",
+  "/balance-repair",
+  "/convergence-reconciliation",
+  "/net-position-details",
+  "/company-data-reset",
+  "/account-migration",
+  "/account-transfer",
+  "/my-settings",
 ]) {
   if (!routes.includes(`"${route}"`)) failures.push(`ErpRoutes: missing Wave 3 route ${route}`);
+}
+
+// Phone forms that still share a row on larger screens must collapse before the
+// narrowest phone widths. This protects the high-use ERP edit/create flows and
+// the admin surfaces that were added after the original mobile certification.
+for (const file of [
+  "client/src/components/StockItemCreateDialog.tsx",
+  "client/src/components/StockItemEditDialog.tsx",
+  "client/src/pages/IntercompanyLinks.tsx",
+  "client/src/pages/settings/users/InlineRoleEditor.tsx",
+  "client/src/components/ExchangeRateSettings.tsx",
+  "client/src/pages/accounts/AccountDialogs.tsx",
+  "client/src/pages/POSItemReplacement.tsx",
+]) {
+  expectTokens(file, ["grid-cols-1", "sm:grid-cols-2"]);
 }
 
 // Reports/opening/closing already have responsive page contracts; Wave 3 protects them rather than redesigning formulas.
