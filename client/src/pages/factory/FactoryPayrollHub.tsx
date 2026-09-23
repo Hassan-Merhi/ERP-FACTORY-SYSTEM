@@ -9,25 +9,28 @@ import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTr
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
 type Section = "workers" | "employees" | "insurance";
+const SECTIONS: Section[] = ["workers", "employees", "insurance"];
+const HIDDEN_KEYS: Record<Section, string> = {
+  workers: "hide_tab_payrollhub_workers",
+  employees: "hide_tab_payrollhub_employees",
+  insurance: "hide_tab_payrollhub_insurance",
+};
 
 export default function FactoryPayrollHub() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const { language } = useApplicationLanguage();
   const tr = (key: Parameters<typeof translateFactoryStaffTrackingText>[0]) =>
     translateFactoryStaffTrackingText(key, language);
+  const hidden = myAccess?.hiddenCostFields ?? [];
 
-  const hasInsuranceAccess =
-    !myAccess ||
-    myAccess.fullAccess ||
-    !(myAccess.pageKeys?.length > 0) ||
-    myAccess.pageKeys.includes("factory/insurance");
-
-  const sections: Section[] = hasInsuranceAccess ? ["workers", "employees", "insurance"] : ["workers", "employees"];
+  const sections = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
+  const defaultSection: Section = sections[0] ?? "workers";
+  const allowedSections: readonly Section[] = sections.length > 0 ? sections : SECTIONS;
 
   const [activeSection, setActiveSection] = useHubQueryState<Section>({
     key: "section",
-    allowedValues: sections,
-    defaultValue: "workers",
+    allowedValues: allowedSections,
+    defaultValue: defaultSection,
     clearKeys: ["tab", "mode"],
   });
 
@@ -78,17 +81,20 @@ export default function FactoryPayrollHub() {
       </div>
 
       <div className="flex-1 overflow-auto min-h-0">
-        {activeSection === "workers" && (
+        {sections.length === 0 && (
+          <div className="p-6 text-sm text-muted-foreground">No Payroll & Benefits tabs are available for this user.</div>
+        )}
+        {activeSection === "workers" && sections.includes("workers") && (
           <div className="p-4">
             <FactoryWorkersHub />
           </div>
         )}
-        {activeSection === "employees" && (
+        {activeSection === "employees" && sections.includes("employees") && (
           <div className="p-4">
             <FactoryEmployeesHub />
           </div>
         )}
-        {activeSection === "insurance" && hasInsuranceAccess && <FactoryInsurance />}
+        {activeSection === "insurance" && sections.includes("insurance") && <FactoryInsurance />}
       </div>
     </div>
   );
