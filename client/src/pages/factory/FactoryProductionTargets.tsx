@@ -50,13 +50,13 @@ import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTar
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex min-h-[92px] items-center justify-between px-4 py-3">
-        <div>
+    <Card className="h-full shadow-none sm:col-span-1 xl:col-span-1">
+      <CardContent className="flex min-h-[108px] items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="mt-2 text-3xl font-semibold leading-none tabular-nums">{value}</p>
         </div>
-        <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
+        <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
       </CardContent>
     </Card>
   );
@@ -69,27 +69,28 @@ function SummaryGroupTile({
 }: {
   label: string;
   icon: React.ReactNode;
-  metrics: Array<{ label: string; value: string | number }>;
+  metrics: Array<{ label: string; value: string | number; title?: string }>;
 }) {
   return (
-    <Card className="overflow-hidden shadow-none">
-      <CardContent className="min-h-[124px] px-4 py-3">
+    <Card className="h-full overflow-hidden shadow-none sm:col-span-2 xl:col-span-2">
+      <CardContent className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}
           </p>
           <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
         </div>
-        <div className="mt-3 grid w-full grid-cols-3 divide-x divide-border/70">
+        <div className="mt-3 grid w-full grid-cols-3 gap-2">
           {metrics.map((metric) => (
-            <div key={metric.label} className="min-w-0 px-2 text-center first:pl-0 last:pr-0">
-              <p
-                className="min-h-[24px] whitespace-normal text-[9px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-[10px]"
-                title={metric.label}
-              >
+            <div
+              key={metric.label}
+              className="min-w-0 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2.5 text-center"
+              title={metric.title ?? metric.label}
+            >
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
                 {metric.label}
               </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl" title={String(metric.value)}>
+              <p className="mt-2 text-2xl font-semibold leading-none tabular-nums sm:text-3xl" title={String(metric.value)}>
                 {metric.value}
               </p>
             </div>
@@ -363,23 +364,23 @@ export default function FactoryProductionTargets() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <SummaryGroupTile
           label={tr("targets")}
           icon={<Target className="h-5 w-5" />}
           metrics={[
-            { label: tr("totalTarget"), value: totals.target },
-            { label: tr("totalAbsentTarget"), value: totals.absentTarget },
-            { label: tr("totalExpected"), value: totals.expected },
+            { label: tr("total"), value: totals.target, title: tr("totalTarget") },
+            { label: tr("absent"), value: totals.absentTarget, title: tr("totalAbsentTarget") },
+            { label: tr("expected"), value: totals.expected, title: tr("totalExpected") },
           ]}
         />
         <SummaryGroupTile
           label={tr("workers")}
           icon={<Users className="h-5 w-5" />}
           metrics={[
-            { label: tr("totalWorkers"), value: workerTotals.total },
-            { label: tr("totalAbsent"), value: workerTotals.absent },
-            { label: tr("totalPresent"), value: workerTotals.present },
+            { label: tr("total"), value: workerTotals.total, title: tr("totalWorkers") },
+            { label: tr("absent"), value: workerTotals.absent, title: tr("totalAbsent") },
+            { label: tr("present"), value: workerTotals.present, title: tr("totalPresent") },
           ]}
         />
         <SummaryTile
