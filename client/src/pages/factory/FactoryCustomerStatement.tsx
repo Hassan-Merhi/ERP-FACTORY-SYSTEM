@@ -364,7 +364,7 @@ export default function FactoryCustomerStatement() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {showStatementTab && <div className="flex items-center gap-2 flex-shrink-0">
           <Button
             variant="outline"
             size="sm"
@@ -402,11 +402,11 @@ export default function FactoryCustomerStatement() {
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Export Excel
           </Button>
-        </div>
+        </div>}
       </div>
 
       {/* Balance cards */}
-      <div className={`grid grid-cols-1 gap-4 mb-6 ${hasOpeningBalance ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      {showStatementTab && <div className={`grid grid-cols-1 gap-4 mb-6 ${hasOpeningBalance ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <div className="rounded-xl border p-4">
           <p className="text-xs text-muted-foreground mb-1">Current Balance</p>
           <p className="text-2xl font-bold font-mono" data-testid="text-current-balance">
@@ -433,7 +433,7 @@ export default function FactoryCustomerStatement() {
             {statement.invoices.length}
           </p>
         </div>
-      </div>
+      </div>}
 
       {/* Tabs */}
       {activeCustomerTab ? (
