@@ -254,7 +254,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                 )}
               </div>
 
-              <div className="border-t pt-3 space-y-2">
+              {showProfile && <div className="border-t pt-3 space-y-2">
                 <input
                   type="file"
                   accept="image/*"
@@ -294,7 +294,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                     {reactivateMutation.isPending ? "Reactivating..." : "Reactivate Worker"}
                   </Button>
                 )}
-              </div>
+              </div>}
             </CardContent>
           </Card>
 
