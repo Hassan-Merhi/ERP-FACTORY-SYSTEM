@@ -23,6 +23,9 @@ interface AppTopBarProps {
   showSearch?: boolean;
   leftContent?: ReactNode;
   extraActions?: ReactNode;
+  mobileMoreOpen?: boolean;
+  onMobileMoreOpenChange?: (open: boolean) => void;
+  simplifyMobileNavigation?: boolean;
 }
 
 export function AppTopBar({
@@ -33,12 +36,18 @@ export function AppTopBar({
   showSearch = true,
   leftContent,
   extraActions,
+  mobileMoreOpen,
+  onMobileMoreOpenChange,
+  simplifyMobileNavigation = false,
 }: AppTopBarProps) {
   const [currentLocation] = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
   const direction = useApplicationDirection();
   const { t } = useApplicationLanguage();
   const dividerDirection = direction === "rtl" ? "to left" : "to right";
+  const workspaceControlsFallbackClassName = simplifyMobileNavigation
+    ? "hidden h-8 w-8 shrink-0 sm:block"
+    : "h-10 w-10 shrink-0";
 
   useEffect(() => {
     if (isMobile) setOpenMobile(false);
@@ -66,7 +75,16 @@ export function AppTopBar({
         {leftContent && <div className="hidden min-w-0 sm:block">{leftContent}</div>}
       </div>
 
-      <div data-slot="app-top-bar-actions" className="ml-auto flex min-w-0 flex-nowrap items-center gap-0.5 sm:gap-1.5">
+      {simplifyMobileNavigation && (
+        <div className="flex min-w-0 flex-1 justify-center sm:hidden">
+          <CompanySelector showMobileName />
+        </div>
+      )}
+
+      <div
+        data-slot="app-top-bar-actions"
+        className="ml-auto flex min-w-0 shrink-0 flex-nowrap items-center gap-0.5 sm:gap-1.5"
+      >
         {extraActions && <div className="hidden items-center sm:flex">{extraActions}</div>}
 
         {showSearch && onSearchOpen && (
@@ -84,7 +102,7 @@ export function AppTopBar({
           </button>
         )}
 
-        {showSearch && onSearchOpen && (
+        {!simplifyMobileNavigation && showSearch && onSearchOpen && (
           <Button
             variant="ghost"
             size="icon"
@@ -97,11 +115,22 @@ export function AppTopBar({
           </Button>
         )}
 
-        <Suspense fallback={<span className="h-10 w-10 shrink-0" aria-hidden="true" />}>
-          <WorkspaceHeaderControls accentColor={accentColor} user={user} onLogout={onLogout} />
+        <Suspense fallback={<span className={workspaceControlsFallbackClassName} aria-hidden="true" />}>
+          <WorkspaceHeaderControls
+            accentColor={accentColor}
+            user={user}
+            onLogout={onLogout}
+            simplifyMobileNavigation={simplifyMobileNavigation}
+          />
         </Suspense>
 
-        <CompanySelector />
+        {simplifyMobileNavigation ? (
+          <span className="hidden sm:block">
+            <CompanySelector />
+          </span>
+        ) : (
+          <CompanySelector />
+        )}
 
         <span className="hidden sm:block">
           <ThemeToggle />
@@ -115,6 +144,9 @@ export function AppTopBar({
             onSearchOpen={onSearchOpen}
             showSearch={showSearch}
             extraActions={extraActions}
+            open={mobileMoreOpen}
+            onOpenChange={onMobileMoreOpenChange}
+            simplifyMobileNavigation={simplifyMobileNavigation}
           />
         </Suspense>
       </div>
