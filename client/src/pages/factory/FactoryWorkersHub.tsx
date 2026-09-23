@@ -80,7 +80,8 @@ export default function FactoryWorkersHub() {
 
   const [tab, setTab] = useHubQueryState<TabValue>({
     key: "tab",
-    allowedValues: visibleValues.length > 0 ? visibleValues : ALL_TAB_OPTIONS.map((option) => option.value),
+    allowedValues: visibleValues,
+    knownValues: ALL_TAB_OPTIONS.map((option) => option.value),
     defaultValue: visibleOptions[0]?.value ?? "workers",
     clearKeys: ["mode"],
   });
