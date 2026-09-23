@@ -58,7 +58,7 @@ describe("Stock Entry staff tracking tabs", () => {
   it("enforces the same per-user restrictions on staff-tracking APIs", () => {
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
     expect(route).toContain("hide_tab_stockentry_production_targets");
-    expect(route).toContain("hide_tab_stockentry_attendance_register");
+    expect(route).toContain("hide_tab_workers_attendance");
     expect(route).toContain("canAccessTrackingPage");
     expect(route).toContain("res.status(403)");
   });
