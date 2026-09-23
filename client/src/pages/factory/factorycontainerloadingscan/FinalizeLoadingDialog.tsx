@@ -121,7 +121,7 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
         )}
       </div>
       <span className="text-muted-foreground">
-        {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} kg
+        {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
       </span>
     </div>
   );
@@ -158,7 +158,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
                 <div className="flex items-center justify-between gap-2">
                   <span>{model.tr("totalWeight")}</span>
                   <span className="font-mono font-semibold" data-testid="text-dialog-total-weight">
-                    {formatNumber(totalWeight, 2)} kg
+                    {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
                   </span>
                 </div>
               </div>
