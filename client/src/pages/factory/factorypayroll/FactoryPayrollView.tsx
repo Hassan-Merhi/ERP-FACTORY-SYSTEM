@@ -130,6 +130,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
               </Select>
             </div>
           )}
+          {showPayrollRecords && <>
           <Button
             onClick={() => setShowGenerateDialog(true)}
             disabled={!selectedCompanyId}
@@ -165,6 +166,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
             {migrating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <GitMerge className="mr-1 h-4 w-4" />}{" "}
             Split by City
           </Button>
+          </>}
         </div>
       </div>
 
