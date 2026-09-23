@@ -32,6 +32,23 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(intelSettings).toContain('data-testid="button-save-attendance-wa-group"');
   });
 
+  it("keeps the Attendance workflow intact inside the modernized layout", () => {
+    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+    const summaryCard = src("client/src/pages/factory/factoryattendance/components/SummaryCard.tsx");
+
+    expect(attendance).toContain("factory-tracking-modern factory-tracking-attendance");
+    expect(attendance).toContain('data-testid="input-attendance-date"');
+    expect(attendance).toContain('data-testid="input-shift"');
+    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
+    expect(attendance).toContain('data-testid="button-actions-dropdown"');
+    expect(attendance).toContain('data-testid="button-save-attendance"');
+    expect(attendance).toContain('data-testid="button-range-export-excel"');
+    expect(attendance).toContain('data-testid="button-range-print"');
+    expect(attendance).toContain('data-testid={`select-status-${worker.id}`}');
+    expect(attendance).toContain('data-testid={`input-notes-${worker.id}`}');
+    expect(summaryCard).toContain("hover:-translate-y-0.5");
+  });
+
   it("removes the obsolete Attendance Register visibility setting", () => {
     const constants = src("client/src/pages/settings/users/UserManagementConstants.tsx");
     expect(constants).toContain("hide_tab_stockentry_production_targets");
