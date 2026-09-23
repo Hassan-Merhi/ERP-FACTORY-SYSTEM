@@ -34,6 +34,18 @@ const baseLinkClasses = "relative flex items-center gap-2.5 rounded-md py-1.5 pl
 const inactiveClasses = "text-muted-foreground hover:bg-sidebar-accent/40 hover:text-foreground";
 const activeClasses = "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs";
 
+function canonicalSidebarPath(url: string): string {
+  const queryIndex = url.indexOf("?");
+  const hashIndex = url.indexOf("#");
+  const cutAt = [queryIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  const normalized = cutAt === undefined ? url : url.slice(0, cutAt);
+  return normalized || "/";
+}
+
+function sidebarPathMatches(location: string, href: string): boolean {
+  return canonicalSidebarPath(location) === canonicalSidebarPath(href);
+}
+
 interface ActiveRailProps {
   color: string;
 }
@@ -57,7 +69,7 @@ interface SidebarNavLinkProps {
 
 export function SidebarNavLink({ item, color, testId, trailing, draggable }: SidebarNavLinkProps) {
   const [location] = useLocation();
-  const isActive = location === item.url;
+  const isActive = sidebarPathMatches(location, item.url);
   const Icon = item.icon;
   return (
     <Link
@@ -103,7 +115,7 @@ export function SidebarFlatLink({
   trailing,
 }: SidebarFlatLinkProps) {
   const [location] = useLocation();
-  const isActive = location === href;
+  const isActive = sidebarPathMatches(location, href);
   return (
     <Link
       href={href}
@@ -150,7 +162,7 @@ export function SidebarSectionGroup({
   sectionTestId,
 }: SidebarSectionGroupProps) {
   const [location] = useLocation();
-  const hasActive = section.items.some((i) => location === i.url);
+  const hasActive = section.items.some((i) => sidebarPathMatches(location, i.url));
   return (
     <div>
       <button
@@ -196,7 +208,7 @@ export function SidebarSectionGroup({
 
 export function useOpenSections(visibleSections: NavSection[], options: { defaultFirstWhenNoneActive?: boolean } = {}) {
   const [location] = useLocation();
-  const activeSection = visibleSections.find((s) => s.items.some((i) => location === i.url));
+  const activeSection = visibleSections.find((s) => s.items.some((i) => sidebarPathMatches(location, i.url)));
   const initialLabel =
     activeSection?.label ?? (options.defaultFirstWhenNoneActive ? visibleSections[0]?.label : undefined);
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(initialLabel ? [initialLabel] : []));
@@ -282,7 +294,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
   return (
     <div className="space-y-0.5 mb-2">
       {visible.map((item) => {
-        const isActive = location === item.url;
+        const isActive = sidebarPathMatches(location, item.url);
         const Icon = item.icon;
         return (
           <div
