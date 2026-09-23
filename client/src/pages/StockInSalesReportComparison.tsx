@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  ArrowLeft,
   ArrowLeftRight,
   BarChart3,
   Check,
@@ -18,11 +17,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-  PeriodFilter,
-  getDefaultPeriodValue,
-  type PeriodFilterValue,
-} from "@/components/ui/period-filter";
+import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -144,7 +139,9 @@ function GroupMultiSelect({
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-between" data-testid={`button-comparison-groups-${side}`}>
-          {selectedIds.length === 0 ? "All stock groups" : `${selectedIds.length} group${selectedIds.length === 1 ? "" : "s"}`}
+          {selectedIds.length === 0
+            ? "All stock groups"
+            : `${selectedIds.length} group${selectedIds.length === 1 ? "" : "s"}`}
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </PopoverTrigger>
@@ -359,7 +356,12 @@ export default function StockInSalesReportComparison() {
     setItemMetric("costProfit");
   };
 
-  const renderValue = (key: MetricKey, kind: "qty" | "money" | "rate", value: number, difference = false): ReactNode => (
+  const renderValue = (
+    key: MetricKey,
+    kind: "qty" | "money" | "rate",
+    value: number,
+    difference = false
+  ): ReactNode => (
     <span className={`font-mono text-sm ${difference ? differenceClass(value) : ""}`}>
       {difference && value > 0 ? "+" : ""}
       {formatMetric(key, kind, value)}
@@ -367,22 +369,17 @@ export default function StockInSalesReportComparison() {
   );
 
   return (
-    <div className="container mx-auto space-y-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <Button variant="ghost" size="sm" className="mt-0.5 gap-1.5" onClick={() => window.history.back()}>
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Button>
-          <div>
-            <PageHeader title="Stock In & Sales Comparison" />
-            <p className="text-sm text-muted-foreground">
-              Compare one location and stock-group selection against another · Difference is Side A minus Side B
-              {selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={clearComparison}>Clear</Button>
-      </div>
+    <div className="container mx-auto space-y-6 p-0 sm:p-6">
+      <PageHeader
+        title="Stock In & Sales Comparison"
+        subtitle="Compare one location and stock-group selection against another"
+        onBack={() => window.history.back()}
+        meta={<span>Difference is Side A minus Side B{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
+      >
+        <Button variant="outline" size="sm" onClick={clearComparison}>
+          Clear
+        </Button>
+      </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-stock-in-sales-comparison" />
@@ -398,7 +395,12 @@ export default function StockInSalesReportComparison() {
         </Select>
         <div className="relative min-w-52 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search item, group, location..." className="pl-9" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search item, group, location..."
+            className="pl-9"
+          />
         </div>
         {isFetching && !isLoading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
@@ -414,7 +416,13 @@ export default function StockInSalesReportComparison() {
           groups={sortedGroups}
           side="a"
         />
-        <Button variant="outline" size="icon" onClick={swapSides} disabled={!sideALocationId && !sideBLocationId} title="Swap sides">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={swapSides}
+          disabled={!sideALocationId && !sideBLocationId}
+          title="Swap sides"
+        >
           <ArrowLeftRight className="h-4 w-4" />
         </Button>
         <SidePanel
@@ -436,7 +444,9 @@ export default function StockInSalesReportComparison() {
           </div>
           <div>
             <p className="font-medium">Choose both comparison locations</p>
-            <p className="mt-1 text-sm text-muted-foreground">You may use the same location on both sides to compare different stock groups.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              You may use the same location on both sides to compare different stock groups.
+            </p>
           </div>
         </div>
       ) : isError ? (
@@ -455,7 +465,9 @@ export default function StockInSalesReportComparison() {
           <section className="space-y-3">
             <div>
               <h2 className="text-lg font-semibold">Overall comparison</h2>
-              <p className="text-xs text-muted-foreground">All metrics use the same date range and active search filter.</p>
+              <p className="text-xs text-muted-foreground">
+                All metrics use the same date range and active search filter.
+              </p>
             </div>
             <div className="overflow-hidden rounded-xl border">
               <Table>
@@ -473,16 +485,24 @@ export default function StockInSalesReportComparison() {
                         <TableRow key={metric.key}>
                           <TableCell>{metric.label}</TableCell>
                           {[0, 1, 2].map((cell) => (
-                            <TableCell key={cell}><Skeleton className="ml-auto h-4 w-24" /></TableCell>
+                            <TableCell key={cell}>
+                              <Skeleton className="ml-auto h-4 w-24" />
+                            </TableCell>
                           ))}
                         </TableRow>
                       ))
                     : METRICS.map((metric) => (
                         <TableRow key={metric.key}>
                           <TableCell className="font-medium">{metric.label}</TableCell>
-                          <TableCell className="text-right">{renderValue(metric.key, metric.kind, summary.sideA[metric.key])}</TableCell>
-                          <TableCell className="text-right">{renderValue(metric.key, metric.kind, summary.sideB[metric.key])}</TableCell>
-                          <TableCell className="text-right font-semibold">{renderValue(metric.key, metric.kind, summary.difference[metric.key], true)}</TableCell>
+                          <TableCell className="text-right">
+                            {renderValue(metric.key, metric.kind, summary.sideA[metric.key])}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {renderValue(metric.key, metric.kind, summary.sideB[metric.key])}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {renderValue(metric.key, metric.kind, summary.difference[metric.key], true)}
+                          </TableCell>
                         </TableRow>
                       ))}
                 </TableBody>
@@ -494,9 +514,15 @@ export default function StockInSalesReportComparison() {
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h2 className="text-lg font-semibold">Period comparison</h2>
-                <p className="text-xs text-muted-foreground">Each period shows Side A, Side B, and the difference for every report metric.</p>
+                <p className="text-xs text-muted-foreground">
+                  Each period shows Side A, Side B, and the difference for every report metric.
+                </p>
               </div>
-              {data && <p className="text-xs text-muted-foreground">{data.rowCount} period{data.rowCount === 1 ? "" : "s"}</p>}
+              {data && (
+                <p className="text-xs text-muted-foreground">
+                  {data.rowCount} period{data.rowCount === 1 ? "" : "s"}
+                </p>
+              )}
             </div>
             <div className="overflow-hidden rounded-xl border">
               <div className="overflow-x-auto">
@@ -515,7 +541,9 @@ export default function StockInSalesReportComparison() {
                       Array.from({ length: 8 }).map((_, index) => (
                         <TableRow key={index}>
                           {Array.from({ length: 5 }).map((__, cell) => (
-                            <TableCell key={cell}><Skeleton className="h-4 w-full max-w-28" /></TableCell>
+                            <TableCell key={cell}>
+                              <Skeleton className="h-4 w-full max-w-28" />
+                            </TableCell>
                           ))}
                         </TableRow>
                       ))
@@ -535,9 +563,15 @@ export default function StockInSalesReportComparison() {
                               </TableCell>
                             )}
                             <TableCell className="font-medium text-muted-foreground">{metric.label}</TableCell>
-                            <TableCell className="text-right">{renderValue(metric.key, metric.kind, row.sideA[metric.key])}</TableCell>
-                            <TableCell className="text-right">{renderValue(metric.key, metric.kind, row.sideB[metric.key])}</TableCell>
-                            <TableCell className="text-right font-semibold">{renderValue(metric.key, metric.kind, row.difference[metric.key], true)}</TableCell>
+                            <TableCell className="text-right">
+                              {renderValue(metric.key, metric.kind, row.sideA[metric.key])}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {renderValue(metric.key, metric.kind, row.sideB[metric.key])}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {renderValue(metric.key, metric.kind, row.difference[metric.key], true)}
+                            </TableCell>
                           </TableRow>
                         ))
                       )
@@ -552,7 +586,9 @@ export default function StockInSalesReportComparison() {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">Item comparison</h2>
-                <p className="text-xs text-muted-foreground">Choose any report metric to compare every matching stock item across the two sides.</p>
+                <p className="text-xs text-muted-foreground">
+                  Choose any report metric to compare every matching stock item across the two sides.
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Select value={itemMetric} onValueChange={(value) => setItemMetric(value as MetricKey)}>
@@ -561,11 +597,17 @@ export default function StockInSalesReportComparison() {
                   </SelectTrigger>
                   <SelectContent>
                     {METRICS.map((metric) => (
-                      <SelectItem key={metric.key} value={metric.key}>{metric.label}</SelectItem>
+                      <SelectItem key={metric.key} value={metric.key}>
+                        {metric.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {data && <span className="text-xs text-muted-foreground">{data.itemRowCount} item{data.itemRowCount === 1 ? "" : "s"}</span>}
+                {data && (
+                  <span className="text-xs text-muted-foreground">
+                    {data.itemRowCount} item{data.itemRowCount === 1 ? "" : "s"}
+                  </span>
+                )}
               </div>
             </div>
             <div className="overflow-hidden rounded-xl border">
@@ -584,36 +626,62 @@ export default function StockInSalesReportComparison() {
                     {isLoading ? (
                       Array.from({ length: 8 }).map((_, index) => (
                         <TableRow key={index}>
-                          {Array.from({ length: 5 }).map((__, cell) => <TableCell key={cell}><Skeleton className="h-4 w-full max-w-28" /></TableCell>)}
+                          {Array.from({ length: 5 }).map((__, cell) => (
+                            <TableCell key={cell}>
+                              <Skeleton className="h-4 w-full max-w-28" />
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))
                     ) : pagedItemRows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No matching stock items found.</TableCell>
-                      </TableRow>
-                    ) : pagedItemRows.map((row) => (
-                      <TableRow key={row.stockItemId}>
-                        <TableCell>
-                          <div className="font-medium">{row.stockItemName}</div>
-                          <div className="text-xs text-muted-foreground">{row.stockItemCode}</div>
+                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                          No matching stock items found.
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{row.stockGroupName}</TableCell>
-                        <TableCell className="text-right">{renderValue(itemMetric, selectedItemMetric.kind, row.sideA[itemMetric])}</TableCell>
-                        <TableCell className="text-right">{renderValue(itemMetric, selectedItemMetric.kind, row.sideB[itemMetric])}</TableCell>
-                        <TableCell className="text-right font-semibold">{renderValue(itemMetric, selectedItemMetric.kind, row.difference[itemMetric], true)}</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      pagedItemRows.map((row) => (
+                        <TableRow key={row.stockItemId}>
+                          <TableCell>
+                            <div className="font-medium">{row.stockItemName}</div>
+                            <div className="text-xs text-muted-foreground">{row.stockItemCode}</div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{row.stockGroupName}</TableCell>
+                          <TableCell className="text-right">
+                            {renderValue(itemMetric, selectedItemMetric.kind, row.sideA[itemMetric])}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {renderValue(itemMetric, selectedItemMetric.kind, row.sideB[itemMetric])}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {renderValue(itemMetric, selectedItemMetric.kind, row.difference[itemMetric], true)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>
               {data && data.itemRowCount > ITEM_PAGE_SIZE && (
                 <div className="flex items-center justify-between border-t px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Page {itemPage} of {itemTotalPages}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Page {itemPage} of {itemTotalPages}
+                  </p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setItemPage((page) => Math.max(1, page - 1))} disabled={itemPage <= 1}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setItemPage((page) => Math.max(1, page - 1))}
+                      disabled={itemPage <= 1}
+                    >
                       <ChevronLeft className="mr-1 h-4 w-4" /> Previous
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))} disabled={itemPage >= itemTotalPages}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setItemPage((page) => Math.min(itemTotalPages, page + 1))}
+                      disabled={itemPage >= itemTotalPages}
+                    >
                       Next <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
                   </div>

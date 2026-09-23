@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
-import { ArrowLeft, MapPin, Eye, ArrowDownToLine, ArrowUpFromLine, Layers } from "lucide-react";
+import { MapPin, Eye, ArrowDownToLine, ArrowUpFromLine, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -311,62 +311,53 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
   const colSpanFull = posUser ? 6 : 12;
 
   return (
-    <div className="container mx-auto p-6 space-y-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/locations/${locationId}/stock-items/${stockItemId}/history`)}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <PageHeader title="Location Vouchers" />
-            {data?.stockItem && data?.location && (
-              <div className="flex items-center gap-2 text-muted-foreground" data-testid="text-item-location">
-                <span>
-                  {data.stockItem.name} ({data.stockItem.code})
-                </span>
-                <span>•</span>
-                <MapPin className="h-4 w-4" />
-                <span>{data.location.name}</span>
-                <span>•</span>
-                <span>{showAllMonths ? String(year) : `${"monthName" in data ? data.monthName : ""} ${year}`}</span>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Button
-            variant={showAllMonths ? "default" : "outline"}
-            size="sm"
-            onClick={() => {
-              setShowAllMonths((v) => !v);
-              setSelectedRowIndex(-1);
-            }}
-            data-testid="button-show-all-months"
-            data-remote-control-safe="true"
-            data-remote-control-action="toggle-view"
-          >
-            <Eye className="h-4 w-4 mr-1.5" />
-            {showAllMonths ? "This month only" : "Show all months"}
-          </Button>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="show-stock-transfers"
-              checked={showStockTransfers}
-              onCheckedChange={(checked) => setShowStockTransfers(checked === true)}
-              data-testid="checkbox-show-stock-transfers"
-            />
-            <Label htmlFor="show-stock-transfers" className="text-sm cursor-pointer">
-              Show Stock Transfers
-            </Label>
-          </div>
-          {!showAllMonths && (
-            <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
-          )}
+    <div className="container mx-auto space-y-4 p-0 sm:p-6">
+      <PageHeader
+        title="Location Vouchers"
+        onBack={() => navigate(`/locations/${locationId}/stock-items/${stockItemId}/history`)}
+        meta={
+          data?.stockItem &&
+          data?.location && (
+            <div className="flex items-center gap-2 text-muted-foreground" data-testid="text-item-location">
+              <span>
+                {data.stockItem.name} ({data.stockItem.code})
+              </span>
+              <span>•</span>
+              <MapPin className="h-4 w-4" />
+              <span>{data.location.name}</span>
+              <span>•</span>
+              <span>{showAllMonths ? String(year) : `${"monthName" in data ? data.monthName : ""} ${year}`}</span>
+            </div>
+          )
+        }
+      >
+        <Button
+          variant={showAllMonths ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            setShowAllMonths((v) => !v);
+            setSelectedRowIndex(-1);
+          }}
+          data-testid="button-show-all-months"
+          data-remote-control-safe="true"
+          data-remote-control-action="toggle-view"
+        >
+          <Eye className="h-4 w-4 mr-1.5" />
+          {showAllMonths ? "This month only" : "Show all months"}
+        </Button>
+        {!showAllMonths && <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />}
+      </PageHeader>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="show-stock-transfers"
+            checked={showStockTransfers}
+            onCheckedChange={(checked) => setShowStockTransfers(checked === true)}
+            data-testid="checkbox-show-stock-transfers"
+          />
+          <Label htmlFor="show-stock-transfers" className="text-sm cursor-pointer">
+            Show Stock Transfers
+          </Label>
         </div>
       </div>
 

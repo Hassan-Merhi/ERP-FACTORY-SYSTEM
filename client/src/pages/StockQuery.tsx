@@ -84,23 +84,19 @@ export default function StockQuery() {
   const hasSearch = debouncedSearch.trim().length > 0;
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       {/* ── Header + Search ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1">
-          <PageHeader title="Stock Query" subtitle="Click any item to view purchase history, sales, and inventory" />
-        </div>
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by code or name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-            autoFocus
-            data-testid="input-stock-search"
-          />
-        </div>
+      <PageHeader title="Stock Query" subtitle="Click any item to view purchase history, sales, and inventory" />
+      <div role="search" aria-label="Stock query search" className="relative w-full sm:max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by code or name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9"
+          autoFocus
+          data-testid="input-stock-search"
+        />
       </div>
 
       {/* ── Result count ── */}

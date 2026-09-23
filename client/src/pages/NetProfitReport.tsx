@@ -327,12 +327,18 @@ export default function NetProfitReport() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 px-6 py-4 border-b flex-wrap">
-        <div>
-          <PageHeader title="Net Profit Report" icon={<BarChart3 className="h-5 w-5" />} />
-          <p className="text-sm text-muted-foreground mt-0.5">Income, expenses, and net profit — {periodLabel}</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="shrink-0 space-y-3 sm:px-6 sm:pt-4">
+        <PageHeader
+          title="Net Profit Report"
+          icon={<BarChart3 className="h-5 w-5" />}
+          meta={<span>Income, expenses, and net profit — {periodLabel}</span>}
+        >
+          <Button onClick={handleExport} data-testid="button-export-excel" disabled={isLoading}>
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </PageHeader>
+        <div className="flex items-center gap-2 flex-wrap pb-3" data-erp-filter-bar="net-profit-report">
           {isAdminOrDev && companies.length > 0 && (
             <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
               <SelectTrigger className="w-44" data-testid="select-company">
@@ -413,15 +419,11 @@ export default function NetProfitReport() {
               </div>
             </>
           )}
-          <Button onClick={handleExport} data-testid="button-export-excel" disabled={isLoading}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto space-y-6 sm:p-6">
         {isLoading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />

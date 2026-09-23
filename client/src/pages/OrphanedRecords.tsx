@@ -188,13 +188,12 @@ export default function OrphanedRecordsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <div className="flex items-center gap-3">
-        <AlertCircle className="h-8 w-8 text-orange-500" />
-        <div>
-          <PageHeader title="Orphaned Records" subtitle="Records with deleted locations or accounting imbalances" />
-        </div>
-      </div>
+    <div className="space-y-4 sm:p-4 md:space-y-6 md:p-6">
+      <PageHeader
+        title="Orphaned Records"
+        subtitle="Records with deleted locations or accounting imbalances"
+        icon={<AlertCircle className="h-5 w-5 text-orange-500" />}
+      />
 
       {/* Unbalanced Vouchers Section */}
       <Card className="p-4 md:p-6">

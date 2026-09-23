@@ -91,99 +91,97 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
   } = stockItems;
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       <PageHeader title="Stock Items" subtitle="Manage all stock items in your company">
-        <div className="flex flex-wrap items-center gap-2">
-          {selectedIds.length > 0 && (
-            <>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => {
-                  setPendingCategoryId("");
-                  setAssignCategoryDialogOpen(true);
-                }}
-                data-testid="button-assign-category"
-              >
-                <Package className="h-4 w-4" />
-                <span className="hidden sm:inline">Assign Category</span>
-                <span className="sm:hidden">Category</span>
-                <Badge variant="secondary" className="ml-1">
-                  {selectedIds.length}
-                </Badge>
-              </Button>
-              <Button
-                variant="destructive"
-                className="gap-2"
-                onClick={() => setDeleteDialogOpen(true)}
-                data-testid="button-delete-selected"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete {selectedIds.length}
-              </Button>
-            </>
-          )}
-          <Button className="gap-2" onClick={() => setCreateDialogOpen(true)} data-testid="button-add-item">
-            <Plus className="h-4 w-4" />
-            Add Item
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="button-manage-dropdown">
-                <Settings className="h-4 w-4" />
-                Manage
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setImportDialogOpen(true)} data-testid="menu-import">
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Import
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  void refetchAllItems();
-                  setAdjustDialogOpen(true);
-                }}
-                data-testid="menu-adjust-stock"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Adjust Stock
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToExcel} data-testid="menu-export">
-                <Download className="h-4 w-4 mr-2" />
-                Export Stock Items
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
-                <Download className="h-4 w-4 mr-2" />
-                Export Sales History
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setNewGradeName("");
-                  setEditingGradeId(null);
-                  setManageGradesOpen(true);
-                }}
-                data-testid="menu-manage-grades"
-              >
-                <Tag className="h-4 w-4 mr-2" />
-                Manage Grades
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setNewCategoryName("");
-                  setEditingCategoryId(null);
-                  setManageCategoriesOpen(true);
-                }}
-                data-testid="menu-manage-categories"
-              >
-                <Layers className="h-4 w-4 mr-2" />
-                Manage Categories
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {selectedIds.length > 0 && (
+          <>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                setPendingCategoryId("");
+                setAssignCategoryDialogOpen(true);
+              }}
+              data-testid="button-assign-category"
+            >
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Assign Category</span>
+              <span className="sm:hidden">Category</span>
+              <Badge variant="secondary" className="ml-1">
+                {selectedIds.length}
+              </Badge>
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              onClick={() => setDeleteDialogOpen(true)}
+              data-testid="button-delete-selected"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete {selectedIds.length}
+            </Button>
+          </>
+        )}
+        <Button className="gap-2" onClick={() => setCreateDialogOpen(true)} data-testid="button-add-item">
+          <Plus className="h-4 w-4" />
+          Add Item
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2" data-testid="button-manage-dropdown">
+              <Settings className="h-4 w-4" />
+              Manage
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setImportDialogOpen(true)} data-testid="menu-import">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Import
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                void refetchAllItems();
+                setAdjustDialogOpen(true);
+              }}
+              data-testid="menu-adjust-stock"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Adjust Stock
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToExcel} data-testid="menu-export">
+              <Download className="h-4 w-4 mr-2" />
+              Export Stock Items
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportSalesHistory} data-testid="menu-export-sales-history">
+              <Download className="h-4 w-4 mr-2" />
+              Export Sales History
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setNewGradeName("");
+                setEditingGradeId(null);
+                setManageGradesOpen(true);
+              }}
+              data-testid="menu-manage-grades"
+            >
+              <Tag className="h-4 w-4 mr-2" />
+              Manage Grades
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setNewCategoryName("");
+                setEditingCategoryId(null);
+                setManageCategoriesOpen(true);
+              }}
+              data-testid="menu-manage-categories"
+            >
+              <Layers className="h-4 w-4 mr-2" />
+              Manage Categories
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
 
       <div className="flex flex-wrap gap-3">

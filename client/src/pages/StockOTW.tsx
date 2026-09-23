@@ -427,11 +427,8 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
 
   if (showCombined) {
     return (
-      <div className="p-3 sm:p-0 space-y-4 sm:space-y-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <PageHeader title="Combined Inventory" subtitle="OTW stock combined with in-hand stock" />
-          </div>
+      <CombinedInventory
+        headerActions={
           <Button
             variant="outline"
             size="sm"
@@ -442,42 +439,36 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
             <Ship className="h-4 w-4" />
             Stock OTW
           </Button>
-        </div>
-        <CombinedInventory />
-      </div>
+        }
+      />
     );
   }
 
   return (
-    <div className="p-3 sm:p-0 space-y-4 sm:space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <PageHeader title="Stock On The Way" subtitle="All stock items from containers currently in transit" />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportToExcel}
-            disabled={isExporting || filteredItems.length === 0}
-            data-testid="button-export-excel"
-            className="gap-2"
-          >
-            <FileDown className="h-4 w-4" />
-            {isExporting ? "Exporting…" : "Export"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onToggleCombined}
-            data-testid="button-toggle-combined"
-            className="gap-2"
-          >
-            <Layers className="h-4 w-4" />
-            Combined
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-4 sm:space-y-6">
+      <PageHeader title="Stock On The Way" subtitle="All stock items from containers currently in transit">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportToExcel}
+          disabled={isExporting || filteredItems.length === 0}
+          data-testid="button-export-excel"
+          className="gap-2"
+        >
+          <FileDown className="h-4 w-4" />
+          {isExporting ? "Exporting…" : "Export"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onToggleCombined}
+          data-testid="button-toggle-combined"
+          className="gap-2"
+        >
+          <Layers className="h-4 w-4" />
+          Combined
+        </Button>
+      </PageHeader>
 
       {hasErrors && (
         <Alert variant="destructive">

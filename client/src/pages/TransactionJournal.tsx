@@ -8,6 +8,7 @@
  */
 import { FileText, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { useTransactionJournalModel } from "./transactionjournal/useTransactionJournalModel";
 import { JournalFilters } from "./transactionjournal/components/JournalFilters";
 import { JournalSummaryCards, JournalTypeChips } from "./transactionjournal/components/JournalOverview";
@@ -20,19 +21,18 @@ export default function TransactionJournal() {
   return (
     <div className="flex flex-col gap-4">
       {/* ── Page header ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-muted-foreground" />
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
             All Daybook
             {model.isFetching && (
               <RefreshCw className="h-4 w-4 text-muted-foreground animate-spin" data-testid="icon-refreshing" />
             )}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            All vouchers across all companies — filtered and searchable
-          </p>
-        </div>
+          </span>
+        }
+        subtitle="All vouchers across all companies — filtered and searchable"
+        icon={<FileText className="h-5 w-5" />}
+      >
         <Button
           variant="outline"
           size="default"
@@ -43,7 +43,7 @@ export default function TransactionJournal() {
           <RefreshCw className={`h-4 w-4 mr-2 ${model.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
+      </PageHeader>
 
       <JournalFilters model={model} />
       <JournalTypeChips model={model} />

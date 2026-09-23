@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "./components/StatCard";
 import { fmt } from "./utils";
 import type { ProfitSourceType, SellPriceSource, useSupplierProfitCheckModel } from "./useSupplierProfitCheckModel";
@@ -32,19 +33,12 @@ type ProfitModel = ReturnType<typeof useSupplierProfitCheckModel>;
 export function SupplierProfitCheckSetup({ model }: { model: ProfitModel }) {
   return (
     <>
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-5 py-3 border-b bg-muted/30 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500/25 to-amber-600/10 border border-amber-500/20 shrink-0">
-              <BarChart2 className="w-4 h-4 text-amber-500" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight leading-tight">Supplier Profit Check</h1>
-              <p className="text-[11px] text-muted-foreground">Analyze item profitability before ordering</p>
-            </div>
-          </div>
-
-          {model.autosaveStatus !== "idle" && (
+      <PageHeader
+        title="Supplier Profit Check"
+        subtitle="Analyze item profitability before ordering"
+        icon={<BarChart2 className="h-5 w-5 text-amber-500" />}
+        meta={
+          model.autosaveStatus !== "idle" && (
             <span
               className={`flex items-center gap-1.5 text-xs shrink-0 ${model.autosaveStatus === "saving" ? "text-muted-foreground" : model.autosaveStatus === "saved" ? "text-emerald-500" : "text-destructive"}`}
             >
@@ -56,92 +50,94 @@ export function SupplierProfitCheckSetup({ model }: { model: ProfitModel }) {
                   ? "Saved"
                   : "Save failed"}
             </span>
-          )}
-
-          {model.supplierId && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => model.setShowAddItemDialog(true)}
-              className="shrink-0"
-              data-testid="button-add-item"
-            >
-              <Plus className="w-4 h-4 mr-1.5" /> Add Item
-            </Button>
-          )}
+          )
+        }
+      >
+        {model.supplierId && (
           <Button
             variant="outline"
             size="sm"
-            onClick={() => model.importFileRef.current?.click()}
+            onClick={() => model.setShowAddItemDialog(true)}
             className="shrink-0"
-            data-testid="button-import-excel"
-            title="Import item codes from Excel to check profit"
+            data-testid="button-add-item"
           >
-            <FileSpreadsheet className="w-4 h-4 mr-1.5" /> Import Excel
+            <Plus className="w-4 h-4 mr-1.5" /> Add Item
           </Button>
-          <input
-            ref={model.importFileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                model.handleExcelFile(file);
-                event.target.value = "";
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => model.importFileRef.current?.click()}
+          className="shrink-0"
+          data-testid="button-import-excel"
+          title="Import item codes from Excel to check profit"
+        >
+          <FileSpreadsheet className="w-4 h-4 mr-1.5" /> Import Excel
+        </Button>
+        {model.importedRows.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => model.setImportedRows([])}
+            className="shrink-0 text-muted-foreground"
+            data-testid="button-clear-import"
+            title="Clear imported items"
+          >
+            <X className="w-4 h-4 mr-1.5" /> Clear Import ({model.importedRows.length})
+          </Button>
+        )}
+        {model.loaded && !model.savedProforma && !(model.sourceType === "proforma" && model.proformaId) && (
+          <Button
+            onClick={() => {
+              if (model.itemsWithQty.length === 0) {
+                model.toast({ title: "Enter qty for at least one item", variant: "destructive" });
+                return;
               }
+              model.setShowConfirmModal(true);
             }}
-          />
-          {model.importedRows.length > 0 && (
+            disabled={model.itemsWithQty.length === 0}
+            className="bg-amber-500 text-white shrink-0"
+            data-testid="button-create-proforma"
+          >
+            <Save className="w-4 h-4 mr-2" /> Create Proforma ({model.itemsWithQty.length})
+          </Button>
+        )}
+        {model.loaded && model.savedProforma && (
+          <>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => model.setImportedRows([])}
-              className="shrink-0 text-muted-foreground"
-              data-testid="button-clear-import"
-              title="Clear imported items"
+              onClick={model.handleExportSupplier}
+              data-testid="button-export-supplier-bar"
             >
-              <X className="w-4 h-4 mr-1.5" /> Clear Import ({model.importedRows.length})
+              <Download className="w-4 h-4 mr-1.5" /> Supplier Excel
             </Button>
-          )}
-          {model.loaded && !model.savedProforma && !(model.sourceType === "proforma" && model.proformaId) && (
             <Button
-              onClick={() => {
-                if (model.itemsWithQty.length === 0) {
-                  model.toast({ title: "Enter qty for at least one item", variant: "destructive" });
-                  return;
-                }
-                model.setShowConfirmModal(true);
-              }}
-              disabled={model.itemsWithQty.length === 0}
-              className="bg-amber-500 text-white shrink-0"
-              data-testid="button-create-proforma"
+              variant="outline"
+              size="sm"
+              onClick={model.handleExportInternal}
+              data-testid="button-export-internal-bar"
             >
-              <Save className="w-4 h-4 mr-2" /> Create Proforma ({model.itemsWithQty.length})
+              <FileText className="w-4 h-4 mr-1.5" /> Analysis Excel
             </Button>
-          )}
-          {model.loaded && model.savedProforma && (
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={model.handleExportSupplier}
-                data-testid="button-export-supplier-bar"
-              >
-                <Download className="w-4 h-4 mr-1.5" /> Supplier Excel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={model.handleExportInternal}
-                data-testid="button-export-internal-bar"
-              >
-                <FileText className="w-4 h-4 mr-1.5" /> Analysis Excel
-              </Button>
-            </div>
-          )}
-        </div>
+          </>
+        )}
+      </PageHeader>
+      <input
+        ref={model.importFileRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            model.handleExcelFile(file);
+            event.target.value = "";
+          }
+        }}
+      />
 
+      <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-5 py-4 space-y-4">
           <div className="flex flex-wrap gap-4 items-end">
             <div className="space-y-1.5 min-w-[180px] flex-1">

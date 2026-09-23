@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { insertSupplierSchema } from "@shared/schema";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -134,29 +134,18 @@ export default function EditSupplier() {
   if (!supplier) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <PageHeader title="Supplier Not Found" />
-        </div>
+        <PageHeader title="Supplier Not Found" onBack={handleBack} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-page-title">
-            Edit Supplier
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Update supplier information and opening balance</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Edit Supplier"
+        subtitle="Update supplier information and opening balance"
+        onBack={handleBack}
+      />
 
       <Card>
         <CardHeader>

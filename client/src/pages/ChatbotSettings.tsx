@@ -16,7 +16,6 @@ import {
   Bot,
   Users,
   MessageCircle,
-  ArrowLeft,
   Loader2,
   Check,
   Settings,
@@ -29,7 +28,6 @@ import {
   GitCommit,
   Trash2,
 } from "lucide-react";
-import { Link } from "wouter";
 import { format } from "date-fns";
 
 interface UserChatbotStatus {
@@ -255,20 +253,13 @@ export default function ChatbotSettings() {
   });
 
   return (
-    <div className="container mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/settings">
-          <Button variant="ghost" size="icon" data-testid="button-back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Bot className="h-8 w-8 text-primary" />
-          <div>
-            <PageHeader title="AI Chatbot Settings" subtitle="Manage chatbot access and view conversations" />
-          </div>
-        </div>
-      </div>
+    <div className="container mx-auto space-y-6 px-0 py-0 sm:px-6 sm:py-6">
+      <PageHeader
+        title="AI Chatbot Settings"
+        subtitle="Manage chatbot access and view conversations"
+        icon={<Bot className="h-5 w-5 text-primary" />}
+        backTarget="/settings"
+      />
 
       {!chatStatus?.hasApiKey && (
         <Card className="border-orange-500/50 bg-orange-500/10">

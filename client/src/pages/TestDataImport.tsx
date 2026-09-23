@@ -245,17 +245,11 @@ export default function TestDataImport() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <FlaskConical className="h-8 w-8 text-muted-foreground" />
-          <div>
-            <PageHeader
-              title="Test Data Import"
-              subtitle="Add historical data to test Net Profit calculations - easily removable"
-            />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Test Data Import"
+        subtitle="Add historical data to test Net Profit calculations - easily removable"
+        icon={<FlaskConical className="h-5 w-5" />}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

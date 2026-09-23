@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Download, FileCheck, List, Star } from "lucide-react";
+import { Download, FileCheck, List, Star } from "lucide-react";
 import * as XLSX from "@/lib/excelHelper";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -350,27 +350,14 @@ export default function ContainerVerification() {
   const priceDiffs = verificationResult?.comparison.filter((c) => c.priceStatus === "PRICE_DIFF") || [];
 
   return (
-    <div className="flex flex-col h-full p-4 lg:p-6 overflow-y-auto">
+    <div className="flex flex-col h-full overflow-y-auto sm:p-4 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileImport} />
 
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/containers/${containerId}`)}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <PageHeader title="Container Verification" />
-            <p className="text-muted-foreground text-sm">
-              {container?.containerNumber || `Container #${containerId}`} - Proforma vs Loaded Items
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Container Verification"
+        meta={<span>{container?.containerNumber || `Container #${containerId}`} - Proforma vs Loaded Items</span>}
+        onBack={() => navigate(`/containers/${containerId}`)}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
         <LoadedItemsCard

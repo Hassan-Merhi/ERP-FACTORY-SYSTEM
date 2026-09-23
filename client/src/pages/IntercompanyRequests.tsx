@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CheckCircle, XCircle, ArrowRight } from "lucide-react";
+import { CheckCircle, XCircle, ArrowRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface ICRequest {
@@ -139,29 +140,24 @@ export default function IntercompanyRequests() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
+    <div className="space-y-4 max-w-5xl mx-auto sm:p-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => window.history.back()} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold">Intercompany Payment Requests</h1>
-          <p className="text-sm text-muted-foreground">Review and approve cross-company payment notifications</p>
-        </div>
-        <div className="ml-auto">
-          <Select value={statusFilter} onValueChange={setStatusFilter} data-testid="select-status-filter">
-            <SelectTrigger className="w-36" data-testid="select-trigger-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="dismissed">Dismissed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <PageHeader
+        title="Intercompany Payment Requests"
+        subtitle="Review and approve cross-company payment notifications"
+        onBack={() => window.history.back()}
+      >
+        <Select value={statusFilter} onValueChange={setStatusFilter} data-testid="select-status-filter">
+          <SelectTrigger className="w-full sm:w-36" data-testid="select-trigger-status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="dismissed">Dismissed</SelectItem>
+          </SelectContent>
+        </Select>
+      </PageHeader>
 
       {/* List */}
       {isLoading ? (

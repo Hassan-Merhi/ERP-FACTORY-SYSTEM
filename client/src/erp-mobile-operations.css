@@ -204,3 +204,11 @@
     max-height: calc(var(--app-viewport-height) - 10rem) !important;
   }
 }
+
+/* Shared page-header navigation and actions are screen controls, not report content. */
+@media print {
+  [data-testid="page-header"] > nav,
+  [data-testid="page-header-actions"] {
+    display: none !important;
+  }
+}

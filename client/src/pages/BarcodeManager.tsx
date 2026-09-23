@@ -268,33 +268,22 @@ export default function BarcodeManager() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <PageHeader
-            title="Barcode Manager"
-            subtitle="Import, print, and manage barcode labels for bales"
-            icon={<Barcode className="h-5 w-5" />}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleFileUpload}
-          />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} data-testid="button-upload">
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Import Excel
-          </Button>
-          <Button onClick={handlePrint} disabled={unusedBarcodes.length === 0} data-testid="button-print">
-            <Printer className="h-4 w-4 mr-2" />
-            Print Labels {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}
-          </Button>
-        </div>
-      </div>
+    <div className="container mx-auto space-y-4 p-0 sm:p-4 md:space-y-6 md:p-6">
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
+      <PageHeader
+        title="Barcode Manager"
+        subtitle="Import, print, and manage barcode labels for bales"
+        icon={<Barcode className="h-5 w-5" />}
+      >
+        <Button variant="outline" onClick={() => fileInputRef.current?.click()} data-testid="button-upload">
+          <FileSpreadsheet className="h-4 w-4 mr-2" />
+          Import Excel
+        </Button>
+        <Button onClick={handlePrint} disabled={unusedBarcodes.length === 0} data-testid="button-print">
+          <Printer className="h-4 w-4 mr-2" />
+          Print Labels {selectedIds.length > 0 ? `(${selectedIds.length})` : ""}
+        </Button>
+      </PageHeader>
 
       <Card className="p-4 md:p-6">
         <h2 className="text-lg font-semibold mb-4">Add Barcode Manually</h2>

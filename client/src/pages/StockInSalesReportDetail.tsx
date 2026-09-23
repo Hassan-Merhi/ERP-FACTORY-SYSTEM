@@ -1,16 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import {
-  ArrowLeft,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  PackageMinus,
-  PackagePlus,
-  RefreshCw,
-  TrendingDown,
-} from "lucide-react";
+import { Download, FileSpreadsheet, FileText, PackageMinus, PackagePlus, RefreshCw, TrendingDown } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -432,7 +423,7 @@ export default function StockInSalesReportDetail() {
 
   if (!startDate || !endDate) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-0 sm:p-6">
         <PageHeader title="Stock Flow Details" />
         <p className="mt-3 text-sm text-muted-foreground">A valid report period is required.</p>
         <Button className="mt-4" variant="outline" onClick={() => (window.location.href = "/stock-in-sales-report")}>
@@ -443,25 +434,17 @@ export default function StockInSalesReportDetail() {
   }
 
   return (
-    <div className="container mx-auto space-y-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-0.5 gap-1.5 print:hidden"
-            onClick={() => window.history.back()}
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Button>
-          <div>
-            <PageHeader title="Stock Flow Details" />
-            <p className="text-sm text-muted-foreground">
-              {periodLabel}
-              {selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
-            </p>
-          </div>
-        </div>
+    <div className="container mx-auto space-y-6 p-0 sm:p-6">
+      <PageHeader
+        title="Stock Flow Details"
+        onBack={() => window.history.back()}
+        meta={
+          <span>
+            {periodLabel}
+            {selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
+          </span>
+        }
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2 print:hidden" disabled={isLoading || isExporting}>
@@ -477,7 +460,7 @@ export default function StockInSalesReportDetail() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </PageHeader>
 
       <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {isLoading ? (
@@ -647,7 +630,9 @@ export default function StockInSalesReportDetail() {
                           <TableCell colSpan={4} className="uppercase tracking-wide">
                             Total
                           </TableCell>
-                          <TableCell className="text-right font-mono">{formatNumber(stockInTotals.quantity, 0)}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {formatNumber(stockInTotals.quantity, 0)}
+                          </TableCell>
                           <TableCell className="text-right text-muted-foreground">—</TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(stockInTotals.value)}</TableCell>
                         </TableRow>
@@ -722,10 +707,14 @@ export default function StockInSalesReportDetail() {
                             <TableCell className="text-right font-mono">{formatNumber(row.quantity, 0)}</TableCell>
                             <TableCell className="text-right font-mono">{rate(row.avgRate)}</TableCell>
                             <TableCell className="text-right font-mono">{formatAmount(row.totalValue)}</TableCell>
-                            <TableCell className={`text-right font-mono font-medium ${profitClassName(row.profitPerBale)}`}>
+                            <TableCell
+                              className={`text-right font-mono font-medium ${profitClassName(row.profitPerBale)}`}
+                            >
                               {rate(row.profitPerBale)}
                             </TableCell>
-                            <TableCell className={`text-right font-mono font-medium ${profitClassName(row.totalProfit)}`}>
+                            <TableCell
+                              className={`text-right font-mono font-medium ${profitClassName(row.totalProfit)}`}
+                            >
                               {formatAmount(row.totalProfit)}
                             </TableCell>
                           </TableRow>
@@ -734,7 +723,9 @@ export default function StockInSalesReportDetail() {
                           <TableCell colSpan={3} className="uppercase tracking-wide">
                             Total
                           </TableCell>
-                          <TableCell className="text-right font-mono">{formatNumber(salesTotals.quantity, 0)}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {formatNumber(salesTotals.quantity, 0)}
+                          </TableCell>
                           <TableCell className="text-right text-muted-foreground">—</TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(salesTotals.value)}</TableCell>
                           <TableCell className="text-right text-muted-foreground">—</TableCell>

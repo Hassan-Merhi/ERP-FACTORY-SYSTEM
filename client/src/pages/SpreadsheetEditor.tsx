@@ -673,7 +673,10 @@ export default function SpreadsheetEditor() {
 
   if (openSheetId !== null) {
     return (
-      <div className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 flex flex-col" style={{ height: "calc(var(--app-viewport-height) - 56px)" }}>
+      <div
+        className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 flex flex-col"
+        style={{ height: "calc(var(--app-viewport-height) - 56px)" }}
+      >
         <div className="h-12 min-w-0 flex items-center gap-2 px-2 sm:px-3 border-b bg-background shrink-0">
           <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-spreadsheet-back">
             <ArrowLeft className="h-4 w-4" />
@@ -756,44 +759,34 @@ export default function SpreadsheetEditor() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-        <div>
-          <PageHeader title="Spreadsheets" subtitle="Shared workbooks — all users can view and edit" />
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleUpload}
-            data-testid="input-upload-xlsx"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={createMutation.isPending}
-            data-testid="button-upload-xlsx"
-          >
-            <Upload className="h-4 w-4 mr-1.5" />
-            Upload .xlsx
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleNew}
-            disabled={createMutation.isPending}
-            data-testid="button-new-spreadsheet"
-          >
-            {createMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4 mr-1.5" />
-            )}
-            New Spreadsheet
-          </Button>
-        </div>
-      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={handleUpload}
+        data-testid="input-upload-xlsx"
+      />
+      <PageHeader title="Spreadsheets" subtitle="Shared workbooks — all users can view and edit">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={createMutation.isPending}
+          data-testid="button-upload-xlsx"
+        >
+          <Upload className="h-4 w-4 mr-1.5" />
+          Upload .xlsx
+        </Button>
+        <Button size="sm" onClick={handleNew} disabled={createMutation.isPending} data-testid="button-new-spreadsheet">
+          {createMutation.isPending ? (
+            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4 mr-1.5" />
+          )}
+          New Spreadsheet
+        </Button>
+      </PageHeader>
 
       {libraryLoading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">

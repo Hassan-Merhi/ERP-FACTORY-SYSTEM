@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ChevronDown, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,92 +124,96 @@ export function LocationInventoryHeader({
         : `Send stock to ${selectedLocation.whatsappGroupName || "the linked WhatsApp group"}`;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-4 border-b shrink-0">
-      <div className="min-w-0">
-        <h1 className="text-xl sm:text-2xl font-bold">Location Inventory</h1>
-        <p className="text-sm text-muted-foreground truncate">
-          {selectedLocation ? `Manage inventory for ${selectedLocation.name}` : "Manage inventory across all locations"}
-        </p>
-      </div>
-
-      {!posUser && (
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {canManageWhatsapp && selectedLocation && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={!whatsappReady || sendMode !== null}
-                    title={whatsappButtonTitle}
-                    data-testid="button-send-location-stock-whatsapp"
-                  >
-                    {sendMode ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                    {sendMode ? "Sending…" : "Send Stock"}
-                    {!sendMode && <ChevronDown className="h-3.5 w-3.5" />}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-64">
-                  <DropdownMenuItem
-                    onClick={() => handleSendStock(false)}
-                    disabled={sendMode !== null}
-                    data-testid="menu-send-stock-whatsapp-no-cost"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    <div>
-                      <div className="font-medium">{releaseDebtEnglish("Send WITHOUT COST")}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {releaseDebtEnglish("Quantity-only Godown Summary PDF")}
+    <div className="shrink-0 sm:px-6 sm:pt-4">
+      <PageHeader
+        title="Location Inventory"
+        meta={
+          <span className="min-w-0 truncate">
+            {selectedLocation
+              ? `Manage inventory for ${selectedLocation.name}`
+              : "Manage inventory across all locations"}
+          </span>
+        }
+      >
+        {!posUser && (
+          <>
+            {canManageWhatsapp && selectedLocation && (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={!whatsappReady || sendMode !== null}
+                      title={whatsappButtonTitle}
+                      data-testid="button-send-location-stock-whatsapp"
+                    >
+                      {sendMode ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                      {sendMode ? "Sending…" : "Send Stock"}
+                      {!sendMode && <ChevronDown className="h-3.5 w-3.5" />}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-64">
+                    <DropdownMenuItem
+                      onClick={() => handleSendStock(false)}
+                      disabled={sendMode !== null}
+                      data-testid="menu-send-stock-whatsapp-no-cost"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      <div>
+                        <div className="font-medium">{releaseDebtEnglish("Send WITHOUT COST")}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {releaseDebtEnglish("Quantity-only Godown Summary PDF")}
+                        </div>
                       </div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleSendStock(true)}
-                    disabled={sendMode !== null || !canSendWithCost}
-                    data-testid="menu-send-stock-whatsapp-with-cost"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    <div>
-                      <div className="font-medium">{releaseDebtEnglish("Send WITH COST")}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {canSendWithCost
-                          ? "Includes average rate and total value"
-                          : "Requires cost-price and total-value permission"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleSendStock(true)}
+                      disabled={sendMode !== null || !canSendWithCost}
+                      data-testid="menu-send-stock-whatsapp-with-cost"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      <div>
+                        <div className="font-medium">{releaseDebtEnglish("Send WITH COST")}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {canSendWithCost
+                            ? "Includes average rate and total value"
+                            : "Requires cost-price and total-value permission"}
+                        </div>
                       </div>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-              <LocationWhatsappScheduleDialog
-                location={selectedLocation}
-                companyId={companyId}
-                canSendWithCost={canSendWithCost}
-              />
+                <LocationWhatsappScheduleDialog
+                  location={selectedLocation}
+                  companyId={companyId}
+                  canSendWithCost={canSendWithCost}
+                />
 
-              <LocationWhatsappDeliveryHistoryDialog
-                location={selectedLocation}
-                companyId={companyId}
-                canSendWithCost={canSendWithCost}
-              />
-            </>
-          )}
+                <LocationWhatsappDeliveryHistoryDialog
+                  location={selectedLocation}
+                  companyId={companyId}
+                  canSendWithCost={canSendWithCost}
+                />
+              </>
+            )}
 
-          <Button
-            variant={showNegativeStock ? "destructive" : "outline"}
-            size="sm"
-            className="gap-2"
-            onClick={() => setShowNegativeStock(!showNegativeStock)}
-            data-testid="button-negative-stock"
-          >
-            <AlertCircle className="h-4 w-4" />
-            <span>{releaseDebtEnglish("Negative Stock")}</span>
-          </Button>
-        </div>
-      )}
+            <Button
+              variant={showNegativeStock ? "destructive" : "outline"}
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowNegativeStock(!showNegativeStock)}
+              data-testid="button-negative-stock"
+            >
+              <AlertCircle className="h-4 w-4" />
+              <span>{releaseDebtEnglish("Negative Stock")}</span>
+            </Button>
+          </>
+        )}
+      </PageHeader>
     </div>
   );
 }

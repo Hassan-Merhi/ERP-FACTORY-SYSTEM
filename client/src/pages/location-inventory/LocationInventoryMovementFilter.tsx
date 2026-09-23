@@ -23,7 +23,7 @@ export function LocationInventoryMovementFilter({
   if (!selectedLocationLocal || viewAllItems) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-6 py-2.5 border-b bg-muted/10 shrink-0">
+    <div className="flex flex-wrap items-center gap-3 py-2.5 border-b bg-muted/10 shrink-0 sm:px-6">
       <div className="flex items-center gap-1.5 shrink-0">
         <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">MOVEMENT</span>

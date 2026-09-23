@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ArrowLeft, Building2, ChevronDown } from "lucide-react";
+import { Building2, ChevronDown } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -263,18 +263,15 @@ export default function SalesReportComparison() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="border-b px-6 py-4 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/sales-report")} data-testid="button-back">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <PageHeader title="Company Comparison" subtitle="Compare sales performance across companies" />
-          </div>
-        </div>
+      <div className="shrink-0 space-y-3 border-b pb-3 sm:px-6 sm:pt-4">
+        <PageHeader
+          title="Company Comparison"
+          subtitle="Compare sales performance across companies"
+          onBack={() => navigate("/sales-report")}
+        />
 
         {/* Controls */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-erp-filter-bar="sales-report-comparison">
           <div className="flex items-center gap-1">
             <Input
               type="date"
@@ -353,7 +350,7 @@ export default function SalesReportComparison() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto pt-3 sm:p-6">
         {!enabled ? (
           <div className="flex flex-col items-center justify-center h-64 text-center text-muted-foreground gap-3">
             <Building2 className="h-10 w-10 opacity-30" />

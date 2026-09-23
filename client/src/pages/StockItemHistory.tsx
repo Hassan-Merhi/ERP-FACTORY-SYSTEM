@@ -2,12 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
-import { ArrowLeft, Calendar } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  CoreErpHeader,
   CoreErpHeaderActions,
   CoreErpPage,
   CoreErpSummaryGrid,
@@ -115,7 +113,7 @@ export default function StockItemHistory() {
 
   if (isLoading) {
     return (
-      <CoreErpPage className="container mx-auto space-y-6">
+      <CoreErpPage className="container mx-auto space-y-6 p-0 sm:p-4">
         <Skeleton className="h-8 w-64 max-w-full" />
         <Skeleton className="h-[400px] w-full" />
       </CoreErpPage>
@@ -123,22 +121,18 @@ export default function StockItemHistory() {
   }
 
   return (
-    <CoreErpPage className="container mx-auto">
-      <CoreErpHeader>
-        <div className="flex min-w-0 items-start gap-2 sm:gap-4">
-          <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back" className="shrink-0">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0">
-            <PageHeader title="Stock Item Monthly Summary" />
-            {data?.stockItem && (
-              <p className="break-words text-sm text-muted-foreground" data-testid="text-item-name">
-                {data.stockItem.name} ({data.stockItem.code})
-              </p>
-            )}
-          </div>
-        </div>
-
+    <CoreErpPage className="container mx-auto p-0 sm:p-4">
+      <PageHeader
+        title="Stock Item Monthly Summary"
+        onBack={handleBack}
+        meta={
+          data?.stockItem && (
+            <span className="break-words" data-testid="text-item-name">
+              {data.stockItem.name} ({data.stockItem.code})
+            </span>
+          )
+        }
+      >
         <CoreErpHeaderActions aria-label="Stock history filters">
           <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
           <div className="flex min-w-0 items-center gap-2">
@@ -157,7 +151,7 @@ export default function StockItemHistory() {
             </Select>
           </div>
         </CoreErpHeaderActions>
-      </CoreErpHeader>
+      </PageHeader>
 
       <Card>
         <CardHeader className="pb-2">

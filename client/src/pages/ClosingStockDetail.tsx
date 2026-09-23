@@ -3,9 +3,9 @@ import { useParams, useSearch } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Package } from "lucide-react";
+import { Package } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
@@ -69,19 +69,13 @@ export default function ClosingStockDetail() {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Package className="h-6 w-6" />
-            {groupName}
-          </h1>
-          <p className="text-muted-foreground text-sm">Closing Stock Items - {selectedCompany?.name}</p>
-        </div>
-      </div>
+    <div className="space-y-6 sm:p-6">
+      <PageHeader
+        title={groupName}
+        icon={<Package className="h-5 w-5" />}
+        onBack={handleBack}
+        meta={<span>Closing Stock Items - {selectedCompany?.name}</span>}
+      />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

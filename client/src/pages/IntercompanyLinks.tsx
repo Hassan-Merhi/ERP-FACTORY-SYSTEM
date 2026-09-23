@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Pencil, Trash2, Users, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, ArrowRight } from "lucide-react";
 
 interface ICLink {
   id: number;
@@ -279,23 +280,18 @@ export default function IntercompanyLinks() {
   const canSave = form.sourceCompanyId && form.sourceLedgerAccountId && form.destCompanyId && form.destLedgerAccountId;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
+    <div className="space-y-4 max-w-5xl mx-auto sm:p-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => window.history.back()} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold">Intercompany Account Links</h1>
-          <p className="text-sm text-muted-foreground">
-            Define which source ledger accounts trigger payment notifications in other companies
-          </p>
-        </div>
-        <Button onClick={openCreate} className="ml-auto" data-testid="button-create-link">
+      <PageHeader
+        title="Intercompany Account Links"
+        subtitle="Define which source ledger accounts trigger payment notifications in other companies"
+        onBack={() => window.history.back()}
+      >
+        <Button onClick={openCreate} data-testid="button-create-link">
           <Plus className="h-4 w-4 mr-1.5" />
           New Link
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Table */}
       <Card>

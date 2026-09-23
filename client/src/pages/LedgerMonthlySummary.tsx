@@ -10,8 +10,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, parseISO } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
-import { ArrowLeft, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -126,37 +125,22 @@ export default function LedgerMonthlySummary() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-primary text-primary-foreground p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBack}
-              className="text-primary-foreground hover:bg-primary/80"
-              data-testid="button-back"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <p className="text-sm opacity-80">Ledger Monthly Summary</p>
-              <PageHeader title={data?.account?.name || "Loading..."} />
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm opacity-80">
-              {startDate && endDate ? `${formatShortDate(startDate)} to ${formatShortDate(endDate)}` : ""}
-            </p>
-          </div>
-        </div>
+      <div className="sm:px-4 sm:pt-4">
+        <PageHeader
+          title={data?.account?.name || "Loading..."}
+          onBack={handleBack}
+          meta={
+            <>
+              <span>Ledger Monthly Summary</span>
+              {startDate && endDate && <span>· {`${formatShortDate(startDate)} to ${formatShortDate(endDate)}`}</span>}
+            </>
+          }
+        >
+          <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+        </PageHeader>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* Period Filter */}
-        <div className="flex justify-end">
-          <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
-        </div>
-
+      <div className="space-y-6 sm:p-4">
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-[400px] w-full" />
