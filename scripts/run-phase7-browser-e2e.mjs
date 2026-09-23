@@ -172,6 +172,17 @@ async function selectCompany(page, companyCode) {
 
 async function openRoute(page, route) {
   const response = await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+  // Wait for the shell (or a definite failure state) instead of racing a fixed
+  // delay: the first load after a company switch can outlast one second.
+  await page
+    .waitForFunction(
+      () =>
+        Boolean(document.getElementById("main-content")) ||
+        Boolean(document.getElementById("stale-asset-recovery")) ||
+        Boolean(document.querySelector('[data-testid="button-login"]')),
+      { timeout: timeoutMs },
+    )
+    .catch(() => undefined);
   await waitForSettledUi(page);
   if (!response || response.status() >= 400) throw new Error(`${route} returned HTTP ${response?.status() ?? "unknown"}`);
 
@@ -194,6 +205,71 @@ async function setLanguage(page, language) {
     window.dispatchEvent(new CustomEvent("erp:application-language-change", { detail: nextLanguage }));
   }, language);
   await waitForSettledUi(page);
+}
+
+// ── UI interaction helpers ─────────────────────────────────────────────────
+// The cases above drive the API from inside an authenticated page. The wave 4
+// cases below drive the rendered UI itself — taps, typing, Radix selects — at
+// desktop and phone viewports, then check the database, so a broken form,
+// hidden control or mobile-only layout bug fails here even when the API is fine.
+
+const PHONE_VIEWPORT = { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+
+function testId(id) {
+  return `[data-testid="${id}"]`;
+}
+
+async function tapTestId(page, id) {
+  const handle = await page.waitForSelector(testId(id), { visible: true, timeout: timeoutMs });
+  await handle.click();
+  await waitForSettledUi(page);
+}
+
+async function typeTestId(page, id, text) {
+  const handle = await page.waitForSelector(testId(id), { visible: true, timeout: timeoutMs });
+  await handle.click();
+  await page.keyboard.type(text);
+  await waitForSettledUi(page);
+}
+
+/** Replace a field's value rather than appending to what the form prefilled. */
+async function replaceTestIdValue(page, id, text) {
+  const handle = await page.waitForSelector(testId(id), { visible: true, timeout: timeoutMs });
+  await handle.evaluate((element) => {
+    element.focus();
+    element.select?.();
+  });
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type(text);
+  await waitForSettledUi(page);
+}
+
+/** Pick an option from an open Radix select with a real pointer click. */
+async function pickOption(page, label) {
+  await page.waitForSelector('[role="option"]', { visible: true, timeout: timeoutMs });
+  for (const option of await page.$$('[role="option"]')) {
+    const text = await option.evaluate((element) => element.textContent?.trim());
+    if (text === label) {
+      await option.click();
+      await waitForSettledUi(page);
+      return;
+    }
+  }
+  throw new Error(`Select option "${label}" was not offered`);
+}
+
+async function waitForText(page, selector, expected) {
+  await page.waitForFunction(
+    (sel, text) => Boolean(document.querySelector(sel)?.textContent?.includes(text)),
+    { timeout: timeoutMs },
+    selector,
+    expected,
+  );
+}
+
+async function assertNoHorizontalOverflow(page, label) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  if (overflow > 1) throw new Error(`${label} scrolls horizontally by ${overflow}px at phone width`);
 }
 
 async function capture(page, name) {
@@ -437,6 +513,155 @@ try {
       debit: Number(totals.debit),
       credit: Number(totals.credit),
     };
+  });
+
+  await runCase("Phone POS checkout through the mobile sale UI", devPage, async () => {
+    await selectCompany(devPage, "PHASE7-ERP");
+    const phonePage = await browser.newPage();
+    await phonePage.setViewport(PHONE_VIEWPORT);
+    try {
+      const inventorySql = `SELECT quantity FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3`;
+      const inventoryArgs = [fixture.companies.erp, fixture.erp.locationId, fixture.erp.stockItemId];
+      const before = await queryOne(inventorySql, inventoryArgs);
+      const lastVoucher = await queryOne(`SELECT COALESCE(MAX(id), 0) AS id FROM vouchers WHERE company_id = $1`, [
+        fixture.companies.erp,
+      ]);
+
+      await openRoute(phonePage, "/pos");
+      await tapTestId(phonePage, `card-pos-location-${fixture.erp.locationId}`);
+      await typeTestId(phonePage, "input-mobile-product-search", "Phase 7");
+      await tapTestId(phonePage, `button-mobile-select-item-${fixture.erp.stockItemId}`);
+      // Clear and retype the quantity the way a cashier does; the line must stay put.
+      await replaceTestIdValue(phonePage, "input-mobile-qty-0", "3");
+      await waitForText(phonePage, "[data-pos-mobile-page]", "Qty 3");
+      await tapTestId(phonePage, "select-mobile-payment-account");
+      await pickOption(phonePage, "Phase 7 Cash");
+      await assertNoHorizontalOverflow(phonePage, "POS");
+      await tapTestId(phonePage, "button-mobile-checkout");
+
+      let after;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        after = await queryOne(inventorySql, inventoryArgs);
+        if (Number(after.quantity) === Number(before.quantity) - 3) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (Number(after.quantity) !== Number(before.quantity) - 3) {
+        throw new Error(`Phone POS inventory delta mismatch: ${before.quantity} -> ${after.quantity}`);
+      }
+      const voucher = await queryOne(
+        `SELECT v.id, v.voucher_type, v.total_amount,
+                COALESCE(SUM(e.debit_amount::numeric), 0) AS debit,
+                COALESCE(SUM(e.credit_amount::numeric), 0) AS credit
+         FROM vouchers v JOIN voucher_entries e ON e.voucher_id = v.id
+         WHERE v.company_id = $1 AND v.id > $2
+         GROUP BY v.id ORDER BY v.id DESC LIMIT 1`,
+        [fixture.companies.erp, lastVoucher.id],
+      );
+      if (voucher.voucher_type !== "Sales" || Number(voucher.total_amount) !== 75) {
+        throw new Error(`Phone POS voucher mismatch: ${JSON.stringify(voucher)}`);
+      }
+      if (Number(voucher.debit) !== Number(voucher.credit)) {
+        throw new Error(`Phone POS voucher is unbalanced: ${JSON.stringify(voucher)}`);
+      }
+      await capture(phonePage, "phone POS after checkout");
+      return { before: Number(before.quantity), after: Number(after.quantity), voucherId: voucher.id };
+    } finally {
+      await phonePage.close().catch(() => undefined);
+    }
+  });
+
+  await runCase("Desktop journal voucher through the form UI", devPage, async () => {
+    await selectCompany(devPage, "PHASE7-ERP");
+    const lastVoucher = await queryOne(`SELECT COALESCE(MAX(id), 0) AS id FROM vouchers WHERE company_id = $1`, [
+      fixture.companies.erp,
+    ]);
+
+    await openRoute(devPage, "/vouchers");
+    await tapTestId(devPage, "tab-journal");
+    await typeTestId(devPage, "input-journal-account-0", "Phase 7 Cash");
+    await tapTestId(devPage, "journal-account-option-0");
+    await typeTestId(devPage, "input-journal-amount-0", "60");
+    await tapTestId(devPage, "button-journal-add-row");
+    await tapTestId(devPage, "input-journal-type-1");
+    await pickOption(devPage, "CR");
+    await typeTestId(devPage, "input-journal-account-1", "Phase 7 Sales");
+    await tapTestId(devPage, "journal-account-option-0");
+    // Switching to CR pre-fills the balancing amount; replace it explicitly.
+    await replaceTestIdValue(devPage, "input-journal-amount-1", "60");
+    await typeTestId(devPage, "input-journal-notes", "Wave 4 browser UI journal");
+    await tapTestId(devPage, "button-save-journal-voucher");
+
+    let voucher;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const result = await pool.query(
+        `SELECT id, voucher_type, total_amount FROM vouchers
+         WHERE company_id = $1 AND id > $2 AND description = 'Wave 4 browser UI journal'`,
+        [fixture.companies.erp, lastVoucher.id],
+      );
+      voucher = result.rows[0];
+      if (voucher) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (!voucher) throw new Error("Journal saved through the UI was not found");
+    const entries = await pool.query(
+      `SELECT ledger_account_id, debit_amount::numeric AS debit, credit_amount::numeric AS credit
+       FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [voucher.id],
+    );
+    const debit = entries.rows.find((row) => Number(row.ledger_account_id) === fixture.erp.cashAccountId);
+    const credit = entries.rows.find((row) => Number(row.ledger_account_id) === fixture.erp.salesAccountId);
+    if (voucher.voucher_type !== "Journal" || Number(debit?.debit) !== 60 || Number(credit?.credit) !== 60) {
+      throw new Error(`UI journal mismatch: ${JSON.stringify({ voucher, entries: entries.rows })}`);
+    }
+    return { voucherId: voucher.id, debit: Number(debit.debit), credit: Number(credit.credit) };
+  });
+
+  await runCase("Phone sidebar navigation reaches live location inventory", devPage, async () => {
+    await selectCompany(devPage, "PHASE7-ERP");
+    const phonePage = await browser.newPage();
+    await phonePage.setViewport(PHONE_VIEWPORT);
+    try {
+      const stock = await queryOne(
+        `SELECT quantity FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3`,
+        [fixture.companies.erp, fixture.erp.locationId, fixture.erp.stockItemId],
+      );
+      await openRoute(phonePage, "/tracking");
+      await tapTestId(phonePage, "button-sidebar-toggle");
+      await tapTestId(phonePage, "button-section-inventory");
+      await tapTestId(phonePage, "link-/inventory");
+      const path = await phonePage.evaluate(() => window.location.pathname);
+      if (path !== "/inventory") throw new Error(`Sidebar navigation landed on ${path}`);
+      await tapTestId(phonePage, `card-location-${fixture.erp.locationId}`);
+      const expected = `${Number(stock.quantity)}BL`;
+      await waitForText(phonePage, "#main-content", expected);
+      await assertNoHorizontalOverflow(phonePage, "Location inventory");
+      await capture(phonePage, "phone location inventory");
+      return { path, quantity: Number(stock.quantity) };
+    } finally {
+      await phonePage.close().catch(() => undefined);
+    }
+  });
+
+  await runCase("Phone factory containers list shows the arrived container", devPage, async () => {
+    await selectCompany(devPage, "PHASE7-FACTORY");
+    const phonePage = await browser.newPage();
+    await phonePage.setViewport(PHONE_VIEWPORT);
+    try {
+      const container = await queryOne(
+        `SELECT c.status, s.name AS supplier FROM factory_containers c
+         JOIN factory_suppliers s ON s.id = c.supplier_id WHERE c.id = $1`,
+        [fixture.factory.containerId],
+      );
+      await openRoute(phonePage, "/factory/containers-hub?section=containers");
+      await waitForText(phonePage, "#main-content", container.supplier);
+      await tapTestId(phonePage, "button-view-list");
+      await waitForText(phonePage, "#main-content", "Containers (1)");
+      await assertNoHorizontalOverflow(phonePage, "Factory containers");
+      await capture(phonePage, "phone factory containers");
+      return container;
+    } finally {
+      await phonePage.close().catch(() => undefined);
+    }
   });
 
   await runCase("POS role is blocked from accounting and foreign companies", devPage, async () => {

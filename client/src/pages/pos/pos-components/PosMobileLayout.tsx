@@ -101,6 +101,10 @@ export function PosMobileLayout({
 }: PosMobileLayoutProps) {
   const filteredInventory = getFilteredInventory(inventory, searchTerm).slice(0, 60);
   const validRows = rows.filter((row) => row.stockItemId && row.quantity > 0);
+  // A line stays on screen while its quantity is being retyped. Filtering the
+  // cards by quantity > 0 unmounted the line (and its focused input) the moment
+  // a cashier cleared "1" to type "3", leaving an invisible zero-quantity row.
+  const cartRows = rows.filter((row) => row.stockItemId);
   const total = validRows.reduce((sum, row) => sum + row.amount, 0);
   const quantity = validRows.reduce((sum, row) => sum + row.quantity, 0);
   const resultsId = "pos-mobile-product-results";
@@ -380,13 +384,13 @@ export function PosMobileLayout({
           <ShoppingCart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         </div>
 
-        {validRows.length === 0 ? (
+        {cartRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-14 text-center text-muted-foreground">
             <ShoppingCart className="h-12 w-12 opacity-30" />
             <p className="text-sm">Search above to add items.</p>
           </div>
         ) : (
-          validRows.map((row) => {
+          cartRows.map((row) => {
             const actualIndex = rows.indexOf(row);
             return (
               <Card key={row.id} className="min-w-0 p-3 shadow-sm sm:p-4">
