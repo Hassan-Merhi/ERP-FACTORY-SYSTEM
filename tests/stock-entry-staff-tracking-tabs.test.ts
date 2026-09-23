@@ -127,6 +127,21 @@ describe("Stock Entry staff tracking tabs", () => {
 
   });
 
+  it("renders Attendance Register KPIs inside the WhatsApp attendance image", () => {
+    const attendance = src("client/src/pages/factory/FactoryStaffTracking.tsx");
+    expect(attendance).toContain('data-testid="attendance-report-kpis"');
+    expect(attendance).toContain('data-testid={\`attendance-report-kpi-\${kpi.key}\`}');
+    expect(attendance).toContain('label: tr("totalPeople")');
+    expect(attendance).toContain('value: rows.length');
+    expect(attendance).toContain('label: tr("present")');
+    expect(attendance).toContain('value: totals.present');
+    expect(attendance).toContain('label: tr("absent")');
+    expect(attendance).toContain('value: totals.absent');
+    expect(attendance).toContain('label: tr("new")');
+    expect(attendance).toContain('value: totals.newCount');
+    expect(attendance).toContain("html2canvas(attendanceReportRef.current");
+  });
+
   it("shows target, absent target, expected target, and expected-minus-produced KPIs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
