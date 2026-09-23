@@ -460,9 +460,13 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         .select({ pageKey: factoryUserPageAccess.pageKey })
         .from(factoryUserPageAccess)
         .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
+      // Factory and ERP page selections share the same persistence table. Only
+      // Factory keys may switch Factory Mode into allow-list mode; otherwise an
+      // ERP-only restriction would accidentally hide every Factory page.
+      const factoryAccess = access.filter((entry) => entry.pageKey.startsWith("factory/"));
 
       res.set("Cache-Control", "private, max-age=120");
-      if (access.length === 0) {
+      if (factoryAccess.length === 0) {
         return res.json({
           fullAccess: true,
           pageKeys: [],
@@ -477,7 +481,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
 
       res.json({
         fullAccess: false,
-        pageKeys: access.map((entry) => entry.pageKey),
+        pageKeys: factoryAccess.map((entry) => entry.pageKey),
         hasErpAccess,
         hasFactoryAccess,
         hiddenCostFields,
