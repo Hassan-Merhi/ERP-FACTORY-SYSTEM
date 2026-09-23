@@ -243,7 +243,7 @@ function AccountPreviewRow({ item }: { item: AccountPreviewItem }) {
       </button>
       {expanded && (
         <div className="px-3 pb-3 space-y-2 border-t pt-3">
-          <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
             <div>
               <p className="text-xs text-muted-foreground">Debits</p>
               <p className="font-mono font-medium">{fmt(item.totalDebit)}</p>
