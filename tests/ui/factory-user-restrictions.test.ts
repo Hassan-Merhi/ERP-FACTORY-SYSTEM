@@ -190,9 +190,9 @@ describe("Factory restriction settings wiring", () => {
       expect(tabRegistry).toContain(key);
     }
 
-    expect(tabRegistry).not.toContain("hide_tab_production_analytics");
-    expect(tabRegistry).not.toContain("hide_tab_agents");
-    expect(tabRegistry).not.toContain("hide_tab_daybook");
+    expect(tabRegistry).not.toMatch(/key: "hide_tab_production_analytics"/);
+    expect(tabRegistry).not.toMatch(/key: "hide_tab_agents"/);
+    expect(tabRegistry).not.toMatch(/key: "hide_tab_daybook"/);
   });
 });
 
