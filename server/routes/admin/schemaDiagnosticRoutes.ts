@@ -89,6 +89,7 @@ const EXPECTED_COLUMNS: {
   // ── user preferences / roles ─────────────────────────────────────────────────
   { table: "user_preferences", column: "preferred_currency",                 ddl: "VARCHAR(10)" },
   { table: "user_preferences", column: "show_profit_comparison_on_pos",      ddl: "BOOLEAN NOT NULL DEFAULT false" },
+  { table: "user_preferences", column: "hidden_transaction_journal_voucher_ids", ddl: "INTEGER[] NOT NULL DEFAULT '{}'" },
   { table: "user_company_roles", column: "can_sell_negative_stock",          ddl: "BOOLEAN NOT NULL DEFAULT false" },
   { table: "user_company_roles", column: "daybook_edit_days",                ddl: "INTEGER NOT NULL DEFAULT 0" },
   { table: "user_company_roles", column: "can_access_customers",             ddl: "BOOLEAN NOT NULL DEFAULT false" },
