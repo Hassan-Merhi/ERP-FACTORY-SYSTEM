@@ -24,6 +24,8 @@ interface FactoryWorkersModelProps {
 
 export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
   const {
+    showWorkersList,
+    showCategories,
     createOpen,
     setCreateOpen,
     editingWorker,
@@ -67,7 +69,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
     <>
       {/* Category dialog */}
       <Dialog
-        open={categoryDialogOpen}
+        open={showCategories && categoryDialogOpen}
         onOpenChange={(open) => {
           if (!open) setCategoryDialogOpen(false);
         }}
@@ -148,7 +150,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
       </Dialog>
 
       <Dialog
-        open={createOpen || editingWorker !== null}
+        open={showWorkersList && (createOpen || editingWorker !== null)}
         onOpenChange={(open) => {
           if (!open) {
             setCreateOpen(false);
@@ -193,7 +195,7 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
       </Dialog>
 
       <Dialog
-        open={endContractWorker !== null}
+        open={showWorkersList && endContractWorker !== null}
         onOpenChange={(open) => {
           if (!open) setEndContractWorker(null);
         }}
