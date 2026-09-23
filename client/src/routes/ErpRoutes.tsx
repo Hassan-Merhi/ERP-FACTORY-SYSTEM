@@ -266,7 +266,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       )}
       {G("/suppliers/:supplierId/proformas", "suppliers", SupplierProformas)}
       {G("/suppliers/:id/edit", "suppliers", EditSupplier)}
-      {canAccess("suppliers") && <Route path="/supplier-profit-check" component={SupplierProfitCheck} />}
+      {G("/supplier-profit-check", "suppliers", SupplierProfitCheck)}
 
       {canAccess("vouchers") ? (
         <Route path="/vouchers">{() => <Vouchers />}</Route>
@@ -275,8 +275,8 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
           <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccess("vouchers") && <Route path="/vouchers/:id/edit" component={VoucherEdit} />}
-      {canAccess("vouchers") && <Route path="/purchase-orders/:id/edit" component={PurchaseOrderEdit} />}
+      {G("/vouchers/:id/edit", "vouchers", VoucherEdit)}
+      {G("/purchase-orders/:id/edit", "vouchers", PurchaseOrderEdit)}
       {canAccess("vouchers") ? (
         <Route path="/voucher-detail/:voucherId" component={VoucherDetail} />
       ) : (
