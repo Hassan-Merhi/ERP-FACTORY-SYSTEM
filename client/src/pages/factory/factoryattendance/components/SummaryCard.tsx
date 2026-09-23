@@ -1,7 +1,5 @@
 /**
- * SummaryCard — extracted sub-component.
- *
- * Extracted from FactoryAttendance.tsx during the Phase 4 god-file split.
+ * SummaryCard — compact KPI card for attendance.
  */
 import {Card, CardContent} from "@/components/ui/card";
 
@@ -19,12 +17,14 @@ export function SummaryCard({
   testId: string;
 }) {
   return (
-    <Card>
-      <CardContent className="pt-4 pb-4 flex items-center gap-3">
-        <div className={`shrink-0 ${color}`}>{icon}</div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-2xl font-bold ${color}`} data-testid={testId}>
+    <Card className="rounded-xl border-border/60 bg-card/80 shadow-sm transition-shadow hover:shadow-md">
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 ${color}`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className={`mt-0.5 text-2xl font-bold leading-none tabular-nums ${color}`} data-testid={testId}>
             {value}
           </p>
         </div>
