@@ -84,10 +84,10 @@ export function ProductionTargetsEditorDialog({
 
   const categoryOptions = useMemo(
     () =>
-      Array.from(new Set(draftRows.map((row) => row.category.trim()).filter(Boolean))).sort((left, right) =>
+      Array.from(new Set(rows.map((row) => row.category.trim()).filter(Boolean))).sort((left, right) =>
         left.localeCompare(right, undefined, { sensitivity: "base", numeric: true })
       ),
-    [draftRows]
+    [rows]
   );
 
   const visibleRows = useMemo(() => {
@@ -99,18 +99,23 @@ export function ProductionTargetsEditorDialog({
           row.name.toLocaleLowerCase().includes(needle) ||
           (row.code || "").toLocaleLowerCase().includes(needle) ||
           row.category.toLocaleLowerCase().includes(needle);
-        const matchesCategory = categoryFilter === "__all__" || row.category === categoryFilter;
+        const savedCategory = originalById.get(row.personId)?.category ?? row.category;
+        const matchesCategory = categoryFilter === "__all__" || savedCategory === categoryFilter;
         return matchesSearch && matchesCategory;
       })
       .sort((left, right) => {
-        const categoryCompare = left.category.localeCompare(right.category, undefined, {
+        // Do not move workers between category groups while the user is typing.
+        // Re-group only after the edit is saved and the server rows are refreshed.
+        const leftCategory = originalById.get(left.personId)?.category ?? left.category;
+        const rightCategory = originalById.get(right.personId)?.category ?? right.category;
+        const categoryCompare = leftCategory.localeCompare(rightCategory, undefined, {
           sensitivity: "base",
           numeric: true,
         });
         if (categoryCompare !== 0) return categoryCompare;
         return left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true });
       });
-  }, [draftRows, search, categoryFilter]);
+  }, [draftRows, search, categoryFilter, originalById]);
 
   const updateRow = (personId: number, patch: Partial<ProductionRow>) => {
     setDraftRows((current) => {
