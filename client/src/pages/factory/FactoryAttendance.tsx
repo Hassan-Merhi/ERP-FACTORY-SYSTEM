@@ -58,6 +58,7 @@ import {
   generateWeeklyResultsSheetHtml,
   getInitialMode,
   getWeekDays,
+  setModeInUrl,
   todayStr,
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
@@ -70,7 +71,12 @@ interface AttendanceWhatsappSettings {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
-  const [mode] = useState<ViewMode>(getInitialMode);
+  const [mode, setMode] = useState<ViewMode>(getInitialMode);
+
+  const showDailyAttendance = () => {
+    setMode("daily");
+    setModeInUrl("daily");
+  };
 
   // ── Daily attendance state ────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
@@ -207,6 +213,14 @@ export default function FactoryAttendance() {
 
   const handleRangeExport = async (lang: "en" | "ar", mode: "excel" | "print") => {
     if (!rangeStart || !rangeEnd) return;
+    if (rangeStart > rangeEnd) {
+      toast({
+        title: "Invalid date range",
+        description: "The From date must be before or the same as the To date.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsExportingRange(true);
     setRangePrintDialog(null);
     try {
@@ -300,6 +314,7 @@ export default function FactoryAttendance() {
     .filter((worker) => attendanceMap[worker.id] === "Absent")
     .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
   const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
+  const rangeInvalid = Boolean(rangeStart && rangeEnd && rangeStart > rangeEnd);
   const workerSearchNeedle = workerSearch.trim().toLowerCase();
   const visibleWorkers = workers.filter((worker) => {
     const status = attendanceMap[worker.id] ?? "Present";
@@ -342,7 +357,13 @@ export default function FactoryAttendance() {
         </div>
 
         {mode === "perWorker" ? (
-          <PerWorkerView />
+          <div className="space-y-3">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={showDailyAttendance}>
+              <CalendarDays className="mr-1.5 h-4 w-4" />
+              Back to Attendance
+            </Button>
+            <PerWorkerView />
+          </div>
         ) : (
           <>
             {/* Attendance controls + range export */}
@@ -491,7 +512,7 @@ export default function FactoryAttendance() {
                         size="default"
                         data-testid="button-range-export-excel"
                         onClick={() => setRangePrintDialog("excel")}
-                        disabled={!rangeStart || !rangeEnd || isExportingRange}
+                        disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
                         className="rounded-xl"
                       >
                         <FileDown className="mr-1.5 h-4 w-4" />
@@ -502,13 +523,16 @@ export default function FactoryAttendance() {
                         size="default"
                         data-testid="button-range-print"
                         onClick={() => setRangePrintDialog("print")}
-                        disabled={!rangeStart || !rangeEnd || isExportingRange}
+                        disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
                         className="rounded-xl"
                       >
                         <Printer className="mr-1.5 h-4 w-4" />
                         Print
                       </Button>
                     </div>
+                    {rangeInvalid && (
+                      <p className="text-xs font-medium text-destructive">From date cannot be after To date.</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -668,12 +692,15 @@ export default function FactoryAttendance() {
                               >
                                 {worker.employeeCode ?? "—"}
                               </td>
-                              <td
-                                className="px-4 py-2 font-medium"
-                                dir="auto"
-                                data-testid={`text-worker-name-${worker.id}`}
-                              >
-                                {worker.fullName}
+                              <td className="px-4 py-2" dir="auto">
+                                <div className="font-medium" data-testid={`text-worker-name-${worker.id}`}>
+                                  {worker.fullName}
+                                </div>
+                                {(worker.position || worker.department) && (
+                                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                    {worker.position || worker.department}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-2">
                                 <Select
@@ -732,14 +759,19 @@ export default function FactoryAttendance() {
                               >
                                 {worker.fullName}
                               </p>
-                              {worker.employeeCode && (
-                                <span
-                                  className="text-xs font-mono text-muted-foreground"
-                                  data-testid={`text-worker-code-mobile-${worker.id}`}
-                                >
-                                  {worker.employeeCode}
-                                </span>
-                              )}
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                {worker.employeeCode && (
+                                  <span
+                                    className="font-mono"
+                                    data-testid={`text-worker-code-mobile-${worker.id}`}
+                                  >
+                                    {worker.employeeCode}
+                                  </span>
+                                )}
+                                {(worker.position || worker.department) && (
+                                  <span>{worker.position || worker.department}</span>
+                                )}
+                              </div>
                             </div>
                             <span className="text-xs text-muted-foreground shrink-0">{idx + 1}</span>
                           </div>
@@ -771,6 +803,31 @@ export default function FactoryAttendance() {
                     })}
                   </div>
                 </>
+              )}
+
+              {workers.length > 0 && (
+                <div className="sticky bottom-0 z-20 flex flex-col gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span><strong className="text-foreground">{counts.present}</strong> present</span>
+                    <span><strong className="text-foreground">{counts.absent}</strong> absent</span>
+                    {counts.other > 0 && <span><strong className="text-foreground">{counts.other}</strong> other</span>}
+                    <span>{attendancePct}% attendance</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="rounded-xl shadow-sm sm:min-w-36"
+                    data-testid="button-save-attendance-sticky"
+                    onClick={handleSave}
+                    disabled={saveMutation.isPending}
+                  >
+                    {saveMutation.isPending ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1.5 h-4 w-4" />
+                    )}
+                    {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
