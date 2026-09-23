@@ -147,6 +147,54 @@ async function openRoute(page, route) {
   return response?.status() ?? null;
 }
 
+async function verifyErpMoreSheet(page, viewport, route) {
+  const failures = [];
+  if (viewport.width > 639) return failures;
+
+  const readMoreState = () =>
+    page.evaluate(() => {
+      const isVisible = (element) => {
+        if (!(element instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      };
+      const anyVisible = (selector) => [...document.querySelectorAll(selector)].some((element) => isVisible(element));
+
+      return {
+        account: anyVisible('[data-testid="mobile-workspace-account"]'),
+        search: anyVisible('[data-testid="button-mobile-controls-search"]'),
+        languageEn: anyVisible('[data-testid="application-language-en"]'),
+        languageAr: anyVisible('[data-testid="application-language-ar"]'),
+        languageFr: anyVisible('[data-testid="application-language-fr"]'),
+        theme: anyVisible('[data-testid="button-theme-toggle"]'),
+        notifications: anyVisible('[data-testid="button-notifications-bell"]'),
+        logout: anyVisible('[data-testid="button-mobile-logout"]'),
+      };
+    });
+
+  const assertMoreState = (state, source) => {
+    const label = `${viewport.name} ${route} ${source}`;
+    for (const [control, visible] of Object.entries(state)) {
+      if (!visible) failures.push(`${label}: consolidated More sheet is missing visible ${control} control`);
+    }
+  };
+
+  await page.click('[data-testid="button-mobile-controls"]');
+  await page.waitForSelector('[data-testid="button-mobile-controls-search"]', { visible: true, timeout: TIMEOUT_MS });
+  assertMoreState(await readMoreState(), "header More");
+  await page.keyboard.press("Escape");
+  await settle(page);
+
+  await page.click('[data-testid="mobile-nav-more"]');
+  await page.waitForSelector('[data-testid="button-mobile-controls-search"]', { visible: true, timeout: TIMEOUT_MS });
+  assertMoreState(await readMoreState(), "bottom-nav More");
+  await page.keyboard.press("Escape");
+  await settle(page);
+
+  return failures;
+}
+
 async function readState(page, route, workspace) {
   return page.evaluate((currentRoute, currentWorkspace) => {
     const root = document.documentElement;
@@ -304,6 +352,9 @@ try {
           const status = await openRoute(page, route);
           const state = await readState(page, route, group.workspace);
           const failures = assertState(state, viewport, route, group.workspace);
+          if (group.workspace === "erp" && route === group.routes[0]) {
+            failures.push(...(await verifyErpMoreSheet(page, viewport, route)));
+          }
           const directory = path.join(OUTPUT_DIR, viewport.name, group.workspace);
           await fs.mkdir(directory, { recursive: true });
           const screenshot = path.join(directory, `${safeName(route)}.png`);
