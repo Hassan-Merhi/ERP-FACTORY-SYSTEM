@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { resolveParentCompanyId, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
+import { isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
 import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
 import {
   vouchers,
@@ -19,7 +19,7 @@ import {
   factoryContainers,
   factorySupplierPayments,
 } from "@shared/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull, isNotNull, notInArray, or } from "drizzle-orm";
 
 export function registerAccountVoucherSidebarRoutes(app: Express) {
   const _vsBCache = new Map();
@@ -38,14 +38,21 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         return res.json(_vsCached.data);
       }
 
-      // Parent is resolved from the active company's explicit relationship,
-      // with the legacy global setting retained only as a compatibility
-      // fallback for unlinked historical data.
-      const parentCompanyId = await resolveParentCompanyId(companyId);
+      // Resolve the selected company and the small set of vouchers that must
+      // never affect balances in parallel. The voucher-entry RLS policy already
+      // enforces tenant/authorized-company visibility, so the ledger aggregate
+      // can avoid rejoining vouchers for every entry below.
+      const [currentCompany, excludedLedgerVouchers] = await Promise.all([
+        storage.getCompanyById(companyId),
+        db
+          .select({ id: vouchers.id })
+          .from(vouchers)
+          .where(or(eq(vouchers.optional, true), isNotNull(vouchers.deletedAt))),
+      ]);
+      const parentCompanyId = currentCompany?.parentCompanyId || companyId;
       const isChildCompany = companyId !== parentCompanyId;
+      const excludedLedgerVoucherIds = excludedLedgerVouchers.map((voucher) => voucher.id);
 
-      // Phase 1: determine company type (other fetches are conditional on this)
-      const currentCompany = await storage.getCompanyById(companyId);
       const isFactoryCompany = currentCompany?.companyType === "factory";
       const isPropertiesCompany = currentCompany?.companyType === "properties";
 
@@ -149,8 +156,11 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             voucherEntries.factorySupplierId
           ),
         // Ledger balances intentionally follow ledger-account ownership rather
-        // than voucher ownership. Preserve that migration rule while reducing
-        // those movements in SQL as well.
+        // than voucher ownership. voucher_entries RLS already validates the
+        // parent voucher's tenant scope; joining vouchers again made PostgreSQL
+        // repeat that lookup for every ledger row. Exclude the small optional /
+        // deleted set by id instead, preserving balance semantics without the
+        // duplicate RLS-backed voucher join.
         db
           .select({
             ledgerAccountId: voucherEntries.ledgerAccountId,
@@ -158,9 +168,15 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
           })
           .from(voucherEntries)
-          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
-          .where(and(eq(ledgerAccounts.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
+          .where(
+            excludedLedgerVoucherIds.length > 0
+              ? and(
+                  eq(ledgerAccounts.companyId, companyId),
+                  notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)
+                )
+              : eq(ledgerAccounts.companyId, companyId)
+          )
           .groupBy(voucherEntries.ledgerAccountId),
       ]);
       // Strip internal system-only accounts (sp_stock, sp_opnbal are isHidden=true for a reason)
