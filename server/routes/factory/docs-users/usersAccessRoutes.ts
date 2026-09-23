@@ -475,10 +475,9 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         .select({ pageKey: factoryUserPageAccess.pageKey })
         .from(factoryUserPageAccess)
         .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
-      // Factory and ERP page selections share the same persistence table. Only
-      // Factory keys may switch Factory Mode into allow-list mode; otherwise an
-      // ERP-only restriction would accidentally hide every Factory page. Known
-      // legacy keys are canonicalized; unknown Factory keys stay fail-closed.
+      // Factory page restrictions live only in factory_user_page_access; ERP
+      // page restrictions use erp_user_page_access. Known legacy Factory keys
+      // are canonicalized here; unknown Factory keys stay fail-closed.
       const factoryPageKeys = normalizePersistedFactoryPageKeysFailClosed(
         access.map((entry) => entry.pageKey)
       );
