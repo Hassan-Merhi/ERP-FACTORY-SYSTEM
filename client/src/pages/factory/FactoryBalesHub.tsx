@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryArabicTranslationActions } from "@/components/FactoryArabicTranslationActions";
@@ -7,12 +6,13 @@ import BarcodeLookup from "../BarcodeLookup";
 import BaleProducts from "../BaleProductsBilingual";
 import CustomerLoading from "./CustomerLoading";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
 type BalesTab = "history" | "barcode" | "products" | "customer-loading";
 
-export default function FactoryBalesHub() {
-  const hash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
+const ALL_BALES_TABS: readonly BalesTab[] = ["history", "barcode", "products", "customer-loading"];
 
+export default function FactoryBalesHub() {
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
     queryFn: async () => {
@@ -32,27 +32,12 @@ export default function FactoryBalesHub() {
     !hiddenTabs.includes("hide_tab_bales_customer_loading") ? "customer-loading" : null,
   ].filter((tab): tab is BalesTab => tab !== null);
 
-  const requestedTab = (["history", "barcode", "products", "customer-loading"] as const).includes(hash as BalesTab)
-    ? (hash as BalesTab)
-    : null;
-  const defaultTab = requestedTab && visibleTabs.includes(requestedTab) ? requestedTab : (visibleTabs[0] ?? "history");
-  const [activeTab, setActiveTab] = useState<BalesTab>(defaultTab);
-
-  const activeTabVisible = visibleTabs.includes(activeTab);
-  const firstVisibleTab = visibleTabs[0];
-
-  useEffect(() => {
-    if (!firstVisibleTab || activeTabVisible) return;
-    setActiveTab(firstVisibleTab);
-    window.history.replaceState(null, "", `#${firstVisibleTab}`);
-  }, [activeTabVisible, firstVisibleTab]);
-
-  function handleTabChange(value: string) {
-    const next = value as BalesTab;
-    if (!visibleTabs.includes(next)) return;
-    setActiveTab(next);
-    window.history.replaceState(null, "", `#${next}`);
-  }
+  const [activeTab, setActiveTab] = useHubQueryState<BalesTab>({
+    key: "tab",
+    allowedValues: visibleTabs,
+    knownValues: ALL_BALES_TABS,
+    defaultValue: visibleTabs[0] ?? "history",
+  });
 
   if (visibleTabs.length === 0) {
     return <div className="p-6 text-sm text-muted-foreground">No Bale Explorer tabs are available for this user.</div>;
