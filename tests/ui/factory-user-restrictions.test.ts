@@ -76,7 +76,8 @@ describe("Factory restriction settings wiring", () => {
     expect(hub).toContain("<UsersSection appMode={appMode} />");
     expect(users).toContain('appMode === "factory" ? "/api/factory/users" : "/api/users"');
     expect(server).toContain("role: companyRole");
-    expect(server).toContain('entry.pageKey.startsWith("factory/")');
+    expect(server).toContain("normalizePersistedFactoryPageKeysFailClosed");
+    expect(server).toContain("access.map((entry) => entry.pageKey)");
   });
 
   it("shows stored Factory tab visibility with checked meaning visible", () => {
@@ -89,6 +90,7 @@ describe("Factory restriction settings wiring", () => {
   it("exposes the expanded Factory page and tab catalogs", () => {
     const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
     const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
+    const permissionCatalog = readFileSync("shared/factoryPermissionCatalog.ts", "utf8");
 
     // The page catalog lives in the access registry; Settings lists every
     // user-level page from it, and the sidebar filters through the same
@@ -107,6 +109,9 @@ describe("Factory restriction settings wiring", () => {
     }
     expect(sidebar).toContain("hasFactoryPageKey(page, myAccess.pageKeys)");
 
+    expect(constants).toContain('import { FACTORY_TAB_REGISTRY } from "@shared/factoryPermissionCatalog"');
+    expect(constants).toContain("export const FACTORY_TABS = FACTORY_TAB_REGISTRY");
+
     for (const key of [
       "hide_tab_parties_customers",
       "hide_tab_payrollhub_workers",
@@ -115,7 +120,7 @@ describe("Factory restriction settings wiring", () => {
       "hide_tab_overview_production",
       "hide_invoicing_invoices_tab",
     ]) {
-      expect(constants).toContain(key);
+      expect(permissionCatalog).toContain(key);
     }
   });
 });
