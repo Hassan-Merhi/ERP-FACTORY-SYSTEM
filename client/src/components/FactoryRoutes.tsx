@@ -294,15 +294,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/financial-snapshot" component={FactoryFinancialSnapshot} />
       <Route path="/factory/production-comparison" component={ProductionComparison} />
-      <Route path="/factory/production-report">
-        {() =>
-          myAccess?.hiddenCostFields?.includes("hide_tab_production_analytics") ? (
-            <Redirect to={factoryDefaultPage} />
-          ) : (
-            <DailyProductionReport />
-          )
-        }
-      </Route>
+      <Route path="/factory/production-report" component={DailyProductionReport} />
       <Route path="/factory/rental/warehouses" component={FactoryRentalWarehouses} />
       <Route path="/factory/rental/shops" component={FactoryRentalShops} />
       <Route path="/factory/rental/payments" component={FactoryRentalPayments} />

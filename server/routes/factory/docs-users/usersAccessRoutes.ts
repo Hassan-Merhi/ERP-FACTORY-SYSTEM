@@ -18,24 +18,11 @@ import {
   revokeUserCompanySessions,
   revokeUserSessions,
 } from "../../../services/security/credentialVersionService";
-
-const LEGACY_FACTORY_PAGE_HIDE_KEYS = new Set([
-  "hide_tab_production_analytics",
-  "hide_tab_agents",
-  "hide_tab_daybook",
-]);
-
-function normalizeFactoryHiddenFields(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value.filter(
-        (entry): entry is string =>
-          typeof entry === "string" && entry.length > 0 && !LEGACY_FACTORY_PAGE_HIDE_KEYS.has(entry)
-      )
-    )
-  );
-}
+import {
+  normalizeAssignableFactoryPageKeys,
+  normalizeFactoryHiddenFields,
+  normalizePersistedFactoryPageKeysFailClosed,
+} from "@shared/factoryPermissionCatalog";
 
 function requesterIsDeveloper(currentRole: unknown, requestRole: unknown): boolean {
   return currentRole === "Developer" || requestRole === "Developer";
@@ -115,7 +102,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           hasFactoryAccess: profile?.hasFactoryAccess ?? true,
           hiddenCostFields: normalizeFactoryHiddenFields(profile?.hiddenCostFields),
           hideAllCosts: profile?.hideAllCosts ?? false,
-          pageAccess: accessMap.get(user.id) || [],
+          pageAccess: normalizePersistedFactoryPageKeysFailClosed(accessMap.get(user.id) || []),
         };
       });
 
@@ -154,6 +141,8 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           return res.status(400).json({ message: "Username already exists" });
         }
 
+        const normalizedPageAccess = normalizeAssignableFactoryPageKeys(pageAccess);
+
         const newUser = await db.transaction(async (tx) => {
           const [created] = await tx
             .insert(users)
@@ -178,9 +167,9 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
             hasFactoryAccess: hasFactoryAccess ?? true,
           });
 
-          if (Array.isArray(pageAccess) && pageAccess.length > 0) {
+          if (normalizedPageAccess.length > 0) {
             await tx.insert(factoryUserPageAccess).values(
-              pageAccess.map((pageKey: string) => ({
+              normalizedPageAccess.map((pageKey) => ({
                 companyId,
                 userId: created.id,
                 pageKey,
@@ -196,7 +185,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           displayName: displayName || username,
           hasErpAccess: hasErpAccess ?? true,
           hasFactoryAccess: hasFactoryAccess ?? true,
-          pageAccess: pageAccess || [],
+          pageAccess: normalizedPageAccess,
         });
       } catch (error: unknown) {
         logger.error("Error creating factory user:", { error });
@@ -250,6 +239,10 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
           return res.status(400).json({ message: "Password must be at least 6 characters" });
         }
 
+        const normalizedPageAccess = Array.isArray(pageAccess)
+          ? normalizeAssignableFactoryPageKeys(pageAccess)
+          : null;
+
         const credentialChanged = Boolean(password || (typeof username === "string" && username.trim()));
         const newCredentialVersion = await db.transaction(async (tx) => {
           let credentialVersion: number | null = null;
@@ -302,14 +295,14 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
             });
           }
 
-          if (Array.isArray(pageAccess)) {
+          if (normalizedPageAccess !== null) {
             await tx
               .delete(factoryUserPageAccess)
               .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
 
-            if (pageAccess.length > 0) {
+            if (normalizedPageAccess.length > 0) {
               await tx.insert(factoryUserPageAccess).values(
-                pageAccess.map((pageKey: string) => ({
+                normalizedPageAccess.map((pageKey) => ({
                   companyId,
                   userId,
                   pageKey,
@@ -484,11 +477,14 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
       // Factory and ERP page selections share the same persistence table. Only
       // Factory keys may switch Factory Mode into allow-list mode; otherwise an
-      // ERP-only restriction would accidentally hide every Factory page.
-      const factoryAccess = access.filter((entry) => entry.pageKey.startsWith("factory/"));
+      // ERP-only restriction would accidentally hide every Factory page. Known
+      // legacy keys are canonicalized; unknown Factory keys stay fail-closed.
+      const factoryPageKeys = normalizePersistedFactoryPageKeysFailClosed(
+        access.map((entry) => entry.pageKey)
+      );
 
       res.set("Cache-Control", "private, max-age=120");
-      if (factoryAccess.length === 0) {
+      if (factoryPageKeys.length === 0) {
         return res.json({
           fullAccess: true,
           pageKeys: [],
@@ -503,7 +499,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
 
       res.json({
         fullAccess: false,
-        pageKeys: factoryAccess.map((entry) => entry.pageKey),
+        pageKeys: factoryPageKeys,
         hasErpAccess,
         hasFactoryAccess,
         hiddenCostFields,

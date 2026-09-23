@@ -8,6 +8,10 @@ import {
   factoryPageAllowsRole,
   hasFactoryPageKey,
 } from "@shared/factoryAccessRegistry";
+import {
+  normalizeFactoryHiddenFields,
+  normalizePersistedFactoryPageKeysFailClosed,
+} from "@shared/factoryPermissionCatalog";
 
 export const FACTORY_PRIVILEGED_ROLES = new Set(["Admin", "Owner", "Developer"]);
 
@@ -89,11 +93,10 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
         .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId))),
     ]);
 
-    // Keep the backend identical to GET /api/factory/my-access: only Factory
-    // keys participate in Factory allow-list authorization. No Factory rows
-    // means unrestricted Factory pages; once any Factory row exists the list
-    // becomes an allow-list.
-    const pageKeys = pageRows.map((row) => row.pageKey).filter((key) => key.startsWith("factory/"));
+    // Keep the backend identical to GET /api/factory/my-access. Known legacy
+    // keys are canonicalized before authorization; unknown Factory-prefixed
+    // rows stay present so stale data cannot accidentally widen access.
+    const pageKeys = normalizePersistedFactoryPageKeysFailClosed(pageRows.map((row) => row.pageKey));
 
     return {
       userId,
@@ -104,7 +107,7 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
       hasErpAccess: profile?.hasErpAccess ?? true,
       hasFactoryAccess: profile?.hasFactoryAccess ?? true,
       pageKeys,
-      hiddenTabs: Array.isArray(profile?.hiddenCostFields) ? profile.hiddenCostFields : [],
+      hiddenTabs: normalizeFactoryHiddenFields(profile?.hiddenCostFields),
     };
   })();
 
