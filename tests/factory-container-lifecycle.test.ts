@@ -311,6 +311,8 @@ describe("SP reverse and corrected re-offload", () => {
     const response = await spAgent.post(`/api/sp/offloads/${originalOffloadId}/reverse`).send({
       reversalDate: today,
       reason: "Wave 2 lifecycle regression coverage",
+      confirmation: "REVERSE SP OFFLOAD",
+      idempotencyKey: `sp-offload-reverse-${RUN_ID}`,
     });
 
     expect(response.status).toBe(200);
@@ -353,8 +355,11 @@ describe("SP reverse and corrected re-offload", () => {
     const duplicate = await spAgent.post(`/api/sp/offloads/${originalOffloadId}/reverse`).send({
       reversalDate: today,
       reason: "Duplicate reversal must be rejected",
+      confirmation: "REVERSE SP OFFLOAD",
+      idempotencyKey: `sp-offload-reverse-duplicate-${RUN_ID}`,
     });
     expect(duplicate.status).toBe(409);
+    expect(duplicate.body.code).toBe("SP_LIFECYCLE_ALREADY_DONE");
     expect(await inventoryQuantity()).toBeCloseTo(0, 6);
   });
 
@@ -405,5 +410,4 @@ describe("SP reverse and corrected re-offload", () => {
     expect(Number(history.rows[0].snapshot_offload_id)).toBe(originalOffloadId);
   });
 
-  it.todo("offload supports prepaid, paid-now and unpaid-payable charge lines");
 });
