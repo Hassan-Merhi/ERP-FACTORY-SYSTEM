@@ -159,13 +159,13 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       )}
 
-      {canAccessAny(["stock_items", "location_inventory", "stock_otw", "containers"]) ? (
-        <Route path="/inventory" component={InventoryHub} />
+      {canAccessAny(["location_inventory", "stock_otw", "containers"]) ? (
+        <Route path="/inventory">{() => <InventoryHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/inventory"><Redirect replace to="/tracking" /></Route>
       )}
       {canAccessAny(["stock_items", "stock_query"]) ? (
-        <Route path="/stock" component={StockHub} />
+        <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/stock"><Redirect replace to="/tracking" /></Route>
       )}
@@ -240,7 +240,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       )}
 
       {canAccess("suppliers") || canAccess("customers") ? (
-        <Route path="/parties" component={PartiesHub} />
+        <Route path="/parties">{() => <PartiesHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/parties">
           <Redirect replace to="/tracking" />
@@ -332,7 +332,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       )}
       <Route path="/stock-transfer-order" component={StockTransferOrder} />
-      <Route path="/sales-tools" component={SalesToolsHub} />
+      <Route path="/sales-tools">{() => <SalesToolsHub access={erpAccess} />}</Route>
       <Route path="/stock-transfers">
         <Redirect to="/sales-tools?tab=transfers" />
       </Route>
@@ -356,7 +356,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
 
       {canAccess("stock_items") ? (
         <Route path="/combined-inventory">
-          <Redirect to="/inventory?tab=combined" />
+          <Redirect replace to="/stock?tab=items" />
         </Route>
       ) : (
         <Route path="/combined-inventory">
