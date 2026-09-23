@@ -1,11 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, ChevronRight, Shield } from "lucide-react";
-import { FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
+import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 import { FEATURE_KEYS } from "@shared/schema";
 import type { SettingsUserRow } from "../settingsTypes";
 
-const FACTORY_PAGE_COUNT = FACTORY_NAV_PAGES.length;
+const FACTORY_PAGE_COUNT = FACTORY_SETTINGS_PAGES.length;
 const ERP_PAGE_COUNT = FEATURE_KEYS.length;
 
 function getRoleBadgeClass(role: string): string {
