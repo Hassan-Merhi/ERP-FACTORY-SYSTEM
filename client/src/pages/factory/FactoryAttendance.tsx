@@ -1,11 +1,12 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,7 +36,6 @@ import {
   ChevronDown,
   Loader2,
   MessageCircle,
-  Search,
 } from "lucide-react";
 
 import type {
@@ -61,15 +61,10 @@ import {
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { SummaryCard } from "./factoryattendance/components/SummaryCard";
+import "./factoryTrackingModern.css";
 
 interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
-}
-
-interface WhatsappChat {
-  id: string;
-  name: string;
-  type: string;
 }
 
 export default function FactoryAttendance() {
@@ -78,7 +73,7 @@ export default function FactoryAttendance() {
 
   // ── Daily attendance state ────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
-  // Shift is intentionally no longer user-selectable on this screen.
+  // Shift is no longer user-selectable on this screen. Keep an empty value for existing save/export payloads.
   const shift = "";
 
   // ── Range export state ────────────────────────────────────────
@@ -88,11 +83,6 @@ export default function FactoryAttendance() {
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
-  const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
-  const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
-  const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
-  const [workerSearch, setWorkerSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "other">("all");
   const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
@@ -114,18 +104,6 @@ export default function FactoryAttendance() {
     staleTime: 30_000,
   });
 
-  const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WhatsappChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
-      if (!res.ok) throw new Error("Failed to load WhatsApp groups");
-      return res.json();
-    },
-    enabled: attendanceWaPickerOpen,
-    staleTime: 60_000,
-    retry: false,
-  });
-
   useEffect(() => {
     if (!data) return;
     const newMap: Record<number, AttendanceStatus> = {};
@@ -141,42 +119,7 @@ export default function FactoryAttendance() {
     setNotesMap(newNotes);
   }, [data]);
 
-  useEffect(() => {
-    if (attendanceWhatsappSettings) {
-      setAttendanceWaGroupId(attendanceWhatsappSettings.attendanceWhatsappGroupId ?? "");
-    }
-  }, [attendanceWhatsappSettings]);
-
-  const filteredAttendanceWaChats = useMemo(() => {
-    const needle = attendanceWaSearch.trim().toLowerCase();
-    return attendanceWaChats.filter((chat) => {
-      const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
-      const matches = !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
-      return isGroup && matches;
-    });
-  }, [attendanceWaChats, attendanceWaSearch]);
-
-  const saveAttendanceWaGroupMutation = useMutation({
-    mutationFn: async (chatId: string) => {
-      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
-        attendanceWhatsappGroupId: chatId,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to save Attendance WhatsApp group");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
-      setAttendanceWaPickerOpen(false);
-      setAttendanceWaSearch("");
-      toast({ title: "Attendance WhatsApp group updated" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to save WhatsApp group", description: err.message, variant: "destructive" });
-    },
-  });
+  const attendanceWaGroupId = attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "";
 
   const sendWhatsappImageMutation = useMutation({
     mutationFn: async () => {
@@ -354,88 +297,81 @@ export default function FactoryAttendance() {
     .filter((worker) => attendanceMap[worker.id] === "Absent")
     .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
   const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
-  const workerSearchNeedle = workerSearch.trim().toLowerCase();
-  const visibleWorkers = workers.filter((worker) => {
-    const status = attendanceMap[worker.id] ?? "Present";
-    const matchesSearch =
-      !workerSearchNeedle ||
-      worker.fullName.toLowerCase().includes(workerSearchNeedle) ||
-      (worker.employeeCode ?? "").toLowerCase().includes(workerSearchNeedle) ||
-      (worker.position ?? "").toLowerCase().includes(workerSearchNeedle) ||
-      (worker.department ?? "").toLowerCase().includes(workerSearchNeedle);
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "present" && status === "Present") ||
-      (statusFilter === "absent" && status === "Absent") ||
-      (statusFilter === "other" && status !== "Present" && status !== "Absent");
-    return matchesSearch && matchesStatus;
-  });
 
   return (
-    <div className="space-y-5 pb-6">
-      {mode === "perWorker" ? (
-        <PerWorkerView />
-      ) : (
-        <>
-          {/* Attendance controls + range tools */}
-          <Card className="overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm">
-            <CardContent className="p-4 sm:p-5">
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.9fr)] xl:gap-0">
-                <div className="space-y-4 xl:pr-6">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <CalendarDays className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Attendance Register</p>
-                      <p className="text-xs text-muted-foreground">Pick a date, update statuses, then save once.</p>
-                    </div>
-                  </div>
+    <div className="factory-tracking-modern factory-tracking-attendance">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold tracking-tight">Attendance</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Record the day, review attendance at a glance, and send or export reports.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
+                {formatDate(selectedDate)}
+              </Badge>
+            </div>
+          </div>
+        </div>
 
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
-                        Attendance Date
-                      </Label>
-                      <Input
-                        id="attendance-date"
-                        data-testid="input-attendance-date"
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-44"
-                      />
+        {mode === "perWorker" ? (
+          <PerWorkerView />
+        ) : (
+          <>
+            {/* Attendance controls + range export */}
+            <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+              <CardContent className="p-4">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(500px,0.9fr)] xl:gap-0">
+                  <div className="space-y-3 xl:pr-5">
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted/50 text-muted-foreground">
+                        <CalendarDays className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Attendance Controls</p>
+                        <p className="text-xs text-muted-foreground">Choose the date and manage the register.</p>
+                      </div>
                     </div>
 
-                    <div className="flex flex-1 flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="default"
-                        onClick={() => setAttendanceWaPickerOpen((open) => !open)}
-                        data-testid="button-change-attendance-whatsapp-group"
-                      >
-                        <MessageCircle className="h-4 w-4 mr-1" />
-                        {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
-                      </Button>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
+                          Attendance Date
+                        </Label>
+                        <Input
+                          id="attendance-date"
+                          data-testid="input-attendance-date"
+                          type="date"
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="w-44 rounded-xl bg-background/70"
+                        />
+                      </div>
+
                       <Button
                         variant="outline"
                         size="default"
                         onClick={() => sendWhatsappImageMutation.mutate()}
-                        disabled={
-                          !attendanceWaGroupId ||
-                          !workers.length ||
-                          isLoading ||
-                          sendWhatsappImageMutation.isPending
-                        }
+                        disabled={!attendanceWaGroupId || !workers.length || isLoading || sendWhatsappImageMutation.isPending}
                         data-testid="button-send-attendance-whatsapp-image"
+                        className="rounded-xl"
                       >
                         {sendWhatsappImageMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                         ) : (
-                          <MessageCircle className="h-4 w-4 mr-1" />
+                          <MessageCircle className="mr-1.5 h-4 w-4" />
                         )}
                         {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
                       </Button>
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -443,201 +379,132 @@ export default function FactoryAttendance() {
                             size="default"
                             data-testid="button-actions-dropdown"
                             disabled={!workers.length}
+                            className="rounded-xl"
                           >
                             Actions
-                            <ChevronDown className="h-4 w-4 ml-1" />
+                            <ChevronDown className="ml-1 h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
                           <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
-                            <UserCheck className="h-4 w-4 mr-2" />
+                            <UserCheck className="mr-2 h-4 w-4" />
                             Mark All Present
                           </DropdownMenuItem>
                           <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
-                            <UserX className="h-4 w-4 mr-2" />
+                            <UserX className="mr-2 h-4 w-4" />
                             Mark All Absent
                           </DropdownMenuItem>
                           <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
-                            <RotateCcw className="h-4 w-4 mr-2" />
+                            <RotateCcw className="mr-2 h-4 w-4" />
                             Reset
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
-                            <Printer className="h-4 w-4 mr-2" />
+                            <Printer className="mr-2 h-4 w-4" />
                             Print Blank Sheet
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            data-testid="menu-export-excel-blank"
-                            onClick={() => setPrintDialog("excel-blank")}
-                          >
-                            <FileDown className="h-4 w-4 mr-2" />
+                          <DropdownMenuItem data-testid="menu-export-excel-blank" onClick={() => setPrintDialog("excel-blank")}>
+                            <FileDown className="mr-2 h-4 w-4" />
                             Blank Excel
                           </DropdownMenuItem>
                           <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
-                            <Printer className="h-4 w-4 mr-2" />
+                            <Printer className="mr-2 h-4 w-4" />
                             Export PDF
                           </DropdownMenuItem>
                           <DropdownMenuItem data-testid="menu-export-excel" onClick={() => setPrintDialog("excel-results")}>
-                            <FileDown className="h-4 w-4 mr-2" />
+                            <FileDown className="mr-2 h-4 w-4" />
                             Export Excel
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+
                       <Button
                         size="default"
+                        className="rounded-xl shadow-sm"
                         data-testid="button-save-attendance"
                         onClick={handleSave}
                         disabled={!workers.length || saveMutation.isPending}
                       >
-                        <Save className="h-4 w-4 mr-1" />
+                        {saveMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-1.5 h-4 w-4" />
+                        )}
                         {saveMutation.isPending ? "Saving…" : "Save Attendance"}
                       </Button>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-4 border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                      <FileDown className="h-4 w-4" />
+                  <div className="space-y-3 border-t pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted/50 text-muted-foreground">
+                        <FileDown className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Range Export</p>
+                        <p className="text-xs text-muted-foreground">Export or print attendance across any date range.</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold">Reports & Export</p>
-                      <p className="text-xs text-muted-foreground">Choose a range and export Excel or print.</p>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs text-muted-foreground">From</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-start"
-                        value={rangeStart}
-                        onChange={(e) => setRangeStart(e.target.value)}
-                        className="w-40"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs text-muted-foreground">To</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-end"
-                        value={rangeEnd}
-                        onChange={(e) => setRangeEnd(e.target.value)}
-                        className="w-40"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="default"
-                      data-testid="button-range-export-excel"
-                      onClick={() => setRangePrintDialog("excel")}
-                      disabled={!rangeStart || !rangeEnd || isExportingRange}
-                    >
-                      <FileDown className="h-4 w-4 mr-1" />
-                      {isExportingRange ? "Exporting…" : "Excel"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="default"
-                      data-testid="button-range-print"
-                      onClick={() => setRangePrintDialog("print")}
-                      disabled={!rangeStart || !rangeEnd || isExportingRange}
-                    >
-                      <Printer className="h-4 w-4 mr-1" />
-                      Print
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {attendanceWaPickerOpen && (
-            <Card>
-              <CardContent className="pt-4 space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">Attendance WhatsApp Group</p>
-                  <p className="text-xs text-muted-foreground">
-                    This group is used only for attendance images sent from Payroll & Benefits.
-                  </p>
-                </div>
-                <Input
-                  value={attendanceWaSearch}
-                  onChange={(event) => setAttendanceWaSearch(event.target.value)}
-                  placeholder="Search WhatsApp groups..."
-                  data-testid="input-attendance-wa-search"
-                />
-                <div className="max-h-48 overflow-y-auto rounded-md border text-sm">
-                  {attendanceWaChatsLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-5 text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading WhatsApp groups...
-                    </div>
-                  ) : filteredAttendanceWaChats.length === 0 ? (
-                    <p className="py-5 text-center text-muted-foreground">No WhatsApp groups found.</p>
-                  ) : (
-                    filteredAttendanceWaChats.map((chat) => (
-                      <button
-                        key={chat.id}
-                        type="button"
-                        onClick={() => setAttendanceWaGroupId(chat.id)}
-                        className={`w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60 ${
-                          attendanceWaGroupId === chat.id ? "bg-primary/10 text-primary" : ""
-                        }`}
-                        data-testid={`option-attendance-wa-chat-${chat.id}`}
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">From</Label>
+                        <Input
+                          type="date"
+                          data-testid="input-range-start"
+                          value={rangeStart}
+                          onChange={(e) => setRangeStart(e.target.value)}
+                          className="w-40 rounded-xl bg-background/70"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">To</Label>
+                        <Input
+                          type="date"
+                          data-testid="input-range-end"
+                          value={rangeEnd}
+                          onChange={(e) => setRangeEnd(e.target.value)}
+                          className="w-40 rounded-xl bg-background/70"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="default"
+                        data-testid="button-range-export-excel"
+                        onClick={() => setRangePrintDialog("excel")}
+                        disabled={!rangeStart || !rangeEnd || isExportingRange}
+                        className="rounded-xl"
                       >
-                        <div className="font-medium">{chat.name || chat.id}</div>
-                        <div className="text-xs text-muted-foreground">{chat.id}</div>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {attendanceWaGroupId
-                      ? `Selected group: ${attendanceWaGroupId}`
-                      : "No Attendance WhatsApp group selected."}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAttendanceWaGroupId(attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "");
-                        setAttendanceWaPickerOpen(false);
-                        setAttendanceWaSearch("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => saveAttendanceWaGroupMutation.mutate(attendanceWaGroupId)}
-                      disabled={!attendanceWaGroupId || saveAttendanceWaGroupMutation.isPending}
-                      data-testid="button-save-attendance-wa-group"
-                    >
-                      {saveAttendanceWaGroupMutation.isPending && (
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                      )}
-                      Save Group
-                    </Button>
+                        <FileDown className="mr-1.5 h-4 w-4" />
+                        {isExportingRange ? "Exporting…" : "Excel"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="default"
+                        data-testid="button-range-print"
+                        onClick={() => setRangePrintDialog("print")}
+                        disabled={!rangeStart || !rangeEnd || isExportingRange}
+                        className="rounded-xl"
+                      >
+                        <Printer className="mr-1.5 h-4 w-4" />
+                        Print
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          )}
 
           {/* Summary Cards */}
           {workers.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <SummaryCard
                 icon={<Users className="h-4 w-4" />}
                 label="Total"
                 value={counts.total}
                 color="text-foreground"
                 testId="stat-total"
+                modern
               />
               <SummaryCard
                 icon={<CheckCircle className="h-4 w-4" />}
@@ -645,6 +512,7 @@ export default function FactoryAttendance() {
                 value={counts.present}
                 color="text-green-600 dark:text-green-400"
                 testId="stat-present"
+                modern
               />
               <SummaryCard
                 icon={<XCircle className="h-4 w-4" />}
@@ -652,6 +520,7 @@ export default function FactoryAttendance() {
                 value={counts.absent}
                 color="text-red-600 dark:text-red-400"
                 testId="stat-absent"
+                modern
               />
               <SummaryCard
                 icon={<Clock className="h-4 w-4" />}
@@ -659,155 +528,89 @@ export default function FactoryAttendance() {
                 value={counts.other}
                 color="text-amber-600 dark:text-amber-400"
                 testId="stat-other"
+                modern
               />
             </div>
           )}
 
           {/* Attendance Table */}
-          <Card className="overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm">
-            <CardHeader className="space-y-4 border-b bg-muted/10 p-4 sm:p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Users className="h-4 w-4" />
-                    </div>
-                    <span className="truncate">Workers — {formatDate(selectedDate)}</span>
-                  </CardTitle>
-                  <p className="mt-1 pl-10 text-xs text-muted-foreground">
-                    Update only the workers you need; unsaved changes stay on this screen until you save.
-                  </p>
-                </div>
-                {workers.length > 0 && (
-                  <div className="flex shrink-0 items-center gap-2 text-xs">
-                    <span className="rounded-full border bg-background px-2.5 py-1 font-medium text-muted-foreground">
-                      {workers.length} worker{workers.length !== 1 ? "s" : ""}
-                    </span>
-                    <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 font-semibold text-green-600 dark:text-green-400">
-                      {attendancePct}% present
-                    </span>
-                  </div>
-                )}
+          <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  Workers
+                </CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
               </div>
-
               {workers.length > 0 && (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="relative w-full sm:max-w-sm">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={workerSearch}
-                      onChange={(event) => setWorkerSearch(event.target.value)}
-                      placeholder="Search worker, code, position…"
-                      className="h-9 bg-background pl-9"
-                      data-testid="input-attendance-worker-search"
-                    />
+                <div className="flex items-center gap-3">
+                  <div className="hidden text-right sm:block">
+                    <p className="text-sm font-semibold tabular-nums">{attendancePct}%</p>
+                    <p className="text-[11px] text-muted-foreground">present today</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={statusFilter}
-                      onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
-                    >
-                      <SelectTrigger className="h-9 w-[150px] bg-background" data-testid="select-attendance-status-filter">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="absent">Absent</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span className="whitespace-nowrap text-xs text-muted-foreground">
-                      Showing {visibleWorkers.length} of {workers.length}
-                    </span>
-                  </div>
+                  <Badge variant="outline" className="rounded-full bg-background/60 px-3 py-1">
+                    {workers.length} worker{workers.length !== 1 ? "s" : ""}
+                  </Badge>
                 </div>
               )}
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
-                <div className="space-y-2 p-4">
+                <div className="p-4 space-y-2">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full rounded-lg" />
+                    <Skeleton key={i} className="h-10 w-full rounded-md" />
                   ))}
                 </div>
               ) : workers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium">No active workers found</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Add or activate workers to start taking attendance.</p>
-                </div>
-              ) : visibleWorkers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
-                  <Search className="mb-3 h-5 w-5 text-muted-foreground" />
-                  <p className="text-sm font-medium">No workers match these filters</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => {
-                      setWorkerSearch("");
-                      setStatusFilter("all");
-                    }}
-                  >
-                    Clear filters
-                  </Button>
+                <div className="text-center text-muted-foreground py-12 text-sm">
+                  No active workers found for this company.
                 </div>
               ) : (
                 <>
                   {/* Desktop table */}
-                  <div className="hidden overflow-x-auto md:block">
+                  <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-30 bg-muted/80 backdrop-blur">
-                        <tr className="border-b">
-                          <th className="w-12 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">#</th>
-                          <th className="w-28 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Code</th>
-                          <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Worker</th>
-                          <th className="w-48 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
-                          <th className="min-w-[240px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</th>
+                      <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
+                        <tr className="border-b border-border/60">
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Worker Name</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-44">Status</th>
+                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Notes</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleWorkers.map((worker) => {
+                        {workers.map((worker, idx) => {
                           const status = attendanceMap[worker.id] ?? "Present";
-                          const originalIndex = workers.findIndex((item) => item.id === worker.id);
                           return (
                             <tr
                               key={worker.id}
                               data-testid={`row-worker-${worker.id}`}
-                              className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/25"
+                              className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20"
                             >
-                              <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{originalIndex + 1}</td>
+                              <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
                               <td
-                                className="px-4 py-3 font-mono text-xs text-muted-foreground"
+                                className="px-4 py-2 font-mono text-xs text-muted-foreground"
                                 data-testid={`text-worker-code-${worker.id}`}
                               >
                                 {worker.employeeCode ?? "—"}
                               </td>
-                              <td className="px-4 py-3">
-                                <div
-                                  className="font-medium leading-tight"
-                                  dir="auto"
-                                  data-testid={`text-worker-name-${worker.id}`}
-                                >
-                                  {worker.fullName}
-                                </div>
-                                {(worker.position || worker.department) && (
-                                  <div className="mt-1 text-xs text-muted-foreground">
-                                    {worker.position || worker.department}
-                                  </div>
-                                )}
+                              <td
+                                className="px-4 py-2 font-medium"
+                                dir="auto"
+                                data-testid={`text-worker-name-${worker.id}`}
+                              >
+                                {worker.fullName}
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-4 py-2">
                                 <Select
                                   value={status}
                                   onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}
                                 >
                                   <SelectTrigger
                                     data-testid={`select-status-${worker.id}`}
-                                    className={`h-9 rounded-lg border-transparent text-xs font-semibold shadow-none ${STATUS_COLORS[status] ?? ""}`}
+                                    className={`h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
@@ -820,13 +623,13 @@ export default function FactoryAttendance() {
                                   </SelectContent>
                                 </Select>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-4 py-2">
                                 <Input
                                   data-testid={`input-notes-${worker.id}`}
-                                  placeholder="Add a note…"
+                                  placeholder="Optional notes"
                                   value={notesMap[worker.id] ?? ""}
                                   onChange={(e) => setNotes(worker.id, e.target.value)}
-                                  className="h-9 border-transparent bg-muted/35 text-xs shadow-none transition-colors hover:bg-muted/50 focus-visible:border-input focus-visible:bg-background"
+                                  className="h-9 rounded-lg bg-background/70 text-xs"
                                   dir="auto"
                                 />
                               </td>
@@ -838,66 +641,58 @@ export default function FactoryAttendance() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="space-y-2.5 p-3 md:hidden">
-                    {visibleWorkers.map((worker) => {
+                  <div className="space-y-2.5 p-3 sm:hidden">
+                    {workers.map((worker, idx) => {
                       const status = attendanceMap[worker.id] ?? "Present";
-                      const originalIndex = workers.findIndex((item) => item.id === worker.id);
                       return (
                         <div
                           key={worker.id}
                           data-testid={`card-worker-${worker.id}`}
-                          className="rounded-xl border border-border/60 bg-background/60 p-3 shadow-sm"
+                          className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-sm"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
-                                  {originalIndex + 1}
-                                </span>
-                                <p
-                                  className="truncate text-sm font-semibold"
-                                  dir="auto"
-                                  data-testid={`text-worker-name-mobile-${worker.id}`}
-                                >
-                                  {worker.fullName}
-                                </p>
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-8 text-[11px] text-muted-foreground">
-                                {worker.employeeCode && (
-                                  <span className="font-mono" data-testid={`text-worker-code-mobile-${worker.id}`}>
-                                    {worker.employeeCode}
-                                  </span>
-                                )}
-                                {(worker.position || worker.department) && <span>{worker.position || worker.department}</span>}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
-                            <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
-                              <SelectTrigger
-                                data-testid={`select-status-mobile-${worker.id}`}
-                                className={`h-9 rounded-lg border-transparent text-sm font-semibold shadow-none ${STATUS_COLORS[status] ?? ""}`}
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p
+                                className="font-medium text-sm"
+                                dir="auto"
+                                data-testid={`text-worker-name-mobile-${worker.id}`}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {STATUS_OPTIONS.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {s}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              data-testid={`input-notes-mobile-${worker.id}`}
-                              placeholder="Notes (optional)"
-                              value={notesMap[worker.id] ?? ""}
-                              onChange={(e) => setNotes(worker.id, e.target.value)}
-                              className="h-9 bg-muted/35 text-xs"
-                              dir="auto"
-                            />
+                                {worker.fullName}
+                              </p>
+                              {worker.employeeCode && (
+                                <span
+                                  className="text-xs font-mono text-muted-foreground"
+                                  data-testid={`text-worker-code-mobile-${worker.id}`}
+                                >
+                                  {worker.employeeCode}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground shrink-0">{idx + 1}</span>
                           </div>
+                          <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
+                            <SelectTrigger
+                              data-testid={`select-status-mobile-${worker.id}`}
+                              className={`h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  {s}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            data-testid={`input-notes-mobile-${worker.id}`}
+                            placeholder="Notes (optional)"
+                            value={notesMap[worker.id] ?? ""}
+                            onChange={(e) => setNotes(worker.id, e.target.value)}
+                            className="h-9 rounded-lg bg-background/70 text-xs"
+                            dir="auto"
+                          />
                         </div>
                       );
                     })}
@@ -1113,6 +908,7 @@ export default function FactoryAttendance() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
