@@ -87,6 +87,7 @@ import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfig
 import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
+import { enforceSharedFactoryAccess } from "../middleware/sharedFactoryAccessBoundary";
 
 function registerWriteInvalidationSignal(app: Express): void {
   app.use((req, res, next) => {
@@ -108,6 +109,9 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();
   registerWriteInvalidationSignal(app);
   registerPermissionBoundaryRoutes(app);
+  // Shared ERP accounting endpoints are reused inside Factory pages. Enforce
+  // their Factory page/tab ownership before any concrete route handler runs.
+  app.use(enforceSharedFactoryAccess);
   registerWhatsAppFastSendRoutes(app);
   registerBandwidthPhase3FactoryReads(app);
   registerFactoryRoutes(app, requireAuth, db);
