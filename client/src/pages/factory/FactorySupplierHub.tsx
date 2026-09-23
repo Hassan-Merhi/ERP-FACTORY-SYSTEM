@@ -20,11 +20,12 @@ export default function FactorySupplierHub() {
   const hidden = myAccess?.hiddenCostFields ?? [];
   const sections: Section[] = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "report";
-  const allowedSections: readonly Section[] = sections.length > 0 ? sections : SECTIONS;
+  const allowedSections: readonly Section[] = sections;
 
   const [section, setSection] = useHubQueryState<Section>({
     key: "section",
     allowedValues: allowedSections,
+    knownValues: SECTIONS,
     defaultValue: defaultSection,
     clearKeys: ["tab"],
   });
