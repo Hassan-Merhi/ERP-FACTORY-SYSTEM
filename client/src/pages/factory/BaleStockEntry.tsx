@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ScanLine, List, CalendarDays, Factory, Target } from "lucide-react";
+import { ScanLine, CalendarDays, Factory, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryMobileHeader, FactoryMobileHeaderActions, FactoryMobilePage } from "@/components/ui/factory-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -147,12 +147,6 @@ export default function BaleStockEntry() {
               Stock Entry
             </TabsTrigger>
           )}
-          {showHistory && (
-            <TabsTrigger value="history" data-testid="tab-stock-entry-history">
-              <List className="mr-1 h-4 w-4" />
-              Stock Entry History
-            </TabsTrigger>
-          )}
           {showGroundScan && (
             <TabsTrigger value="ground-scan" data-testid="tab-ground-scan">
               <ScanLine className="mr-1 h-4 w-4" />
@@ -174,7 +168,13 @@ export default function BaleStockEntry() {
         </TabsList>
         {showEntry && (
           <TabsContent value="entry" className="mt-4 min-w-0">
-            <StockEntryTab />
+            <StockEntryTab
+              showHistory={showHistory}
+              onOpenHistory={() => {
+                setActiveTab("history");
+                handleTabChange("history");
+              }}
+            />
           </TabsContent>
         )}
         {showHistory && (
