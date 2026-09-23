@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import FactoryFinancialSnapshot from "@/pages/factory/FactoryFinancialSnapshot";
 import FactoryShippingContainers from "@/pages/factory/FactoryShippingContainers";
 import FactoryStatusBuilder from "@/pages/factory/FactoryStatusBuilder";
 import FactoryContainerTracking from "@/pages/factory/FactoryContainerTracking";
