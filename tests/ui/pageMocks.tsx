@@ -230,11 +230,20 @@ export function seededPayload() {
   });
 }
 
-export function stubSeededFetch() {
-  (global as any).fetch = vi.fn(async () => ({
+/**
+ * Answers every request with seeded rows. `overrides` maps a URL fragment to a
+ * payload for endpoints whose rows have a nested shape the generic record
+ * cannot satisfy.
+ */
+export function stubSeededFetch(overrides: Record<string, () => unknown> = {}) {
+  (global as any).fetch = vi.fn(async (input: unknown) => ({
     ok: true,
     status: 200,
-    json: async () => seededPayload(),
+    json: async () => {
+      const url = String(input);
+      const match = Object.keys(overrides).find((fragment) => url.includes(fragment));
+      return match ? overrides[match]() : seededPayload();
+    },
     text: async () => "",
     blob: async () => new Blob([]),
     arrayBuffer: async () => new ArrayBuffer(0),

@@ -44,8 +44,8 @@ import { LabelPrintSettings, getPaperFormat } from "@/components/LabelPrintSetti
 import { type LabelData, type A4DesignColor, formatLabelNum } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
 import type { FactoryBale, FactoryBaleProduct, Location, FactoryCategory } from "@shared/schema";
-import * as XLSX from "@/lib/excelHelper";
 import type { CartItem, CreatedBale } from "./wipersreentry/types";
+import { exportCreatedBalesWorkbook } from "./wipersreentry/exportWorkbook";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
 import { buildLabelData, printLabelsInBrowser } from "./wipersreentry/printUtils";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
@@ -280,17 +280,7 @@ export default function WipersReEntry() {
   const exportCsv = async () => {
     if (!createdBales) return;
     try {
-      const rows = createdBales.map((b) => ({
-        Reference: b.referenceNumber,
-        Product: b.productName || "",
-        "Article Code": b.articleCode || "",
-        "Weight (kg)": b.weightKg,
-        "Entry Date": b.stockEntryDate || entryDate,
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "WipersReEntry");
-      await XLSX.writeFile(wb, `wipers-re-entry-${entryDate}.xlsx`);
+      await exportCreatedBalesWorkbook(createdBales, entryDate);
     } catch (err) {
       toast({
         title: "Export failed",

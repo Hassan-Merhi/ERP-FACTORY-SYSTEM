@@ -17,7 +17,7 @@
 import React from "react";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { renderWithProviders } from "./helpers";
-import { pageState, resetPageState, stubFetchRoutes, stubSeededFetch } from "./pageMocks";
+import { pageState, resetPageState, seededRecord, stubFetchRoutes, stubSeededFetch } from "./pageMocks";
 
 vi.mock("wouter", async () => (await import("./pageMocks")).wouterMock);
 vi.mock("@/contexts/AppModeContext", async () => (await import("./pageMocks")).appModeMock);
@@ -35,6 +35,8 @@ interface PageCase {
   factory?: boolean;
   showsRows?: boolean;
   sweep?: boolean;
+  /** Payloads for endpoints whose rows nest the record (see stubSeededFetch). */
+  seedRoutes?: Record<string, () => unknown>;
 }
 
 const PAGES: PageCase[] = [
@@ -304,6 +306,8 @@ const PAGES: PageCase[] = [
     landmark: "tab-factory-factory-suppliers",
     factory: true,
     sweep: true,
+    // The Summary tab reads bales as { bale, ... } rows.
+    seedRoutes: { "/api/factory/bales": () => [1, 2, 3].map((i) => ({ bale: seededRecord(i) })) },
   },
   {
     name: "FactoryRawMaterialsHub",
@@ -384,7 +388,7 @@ describe("remaining pages — empty data", () => {
 describe("remaining pages — seeded data", () => {
   for (const page of PAGES) {
     it(`${page.name} keeps ${page.landmark}${page.showsRows ? " and renders rows" : ""}`, async () => {
-      stubSeededFetch();
+      stubSeededFetch(page.seedRoutes);
       await mount(page);
       expect(await screen.findByTestId(page.landmark)).toBeInTheDocument();
       if (page.showsRows) {
@@ -429,7 +433,7 @@ describe("remaining pages — button sweep", () => {
   for (const page of PAGES.filter((p) => p.sweep)) {
     it(`${page.name} survives pressing each of its buttons`, async () => {
       uncaught.length = 0;
-      stubSeededFetch();
+      stubSeededFetch(page.seedRoutes);
       const view = await mount(page);
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 200));

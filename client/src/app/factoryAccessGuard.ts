@@ -108,11 +108,5 @@ export function computeFactoryGuardRedirect(params: {
     if (!hasFactoryPageKey(page, myAccess.pageKeys)) return factoryDefaultPage;
   }
 
-  // Legacy page-level hide keys still work, but their metadata now lives on
-  // the same page definition instead of special-casing individual routes.
-  if (page?.hideKey && myAccess.hiddenCostFields?.includes(page.hideKey)) {
-    return factoryDefaultPage;
-  }
-
   return null;
 }

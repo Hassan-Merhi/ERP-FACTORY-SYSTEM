@@ -5,6 +5,8 @@ import { resolve } from "path";
 const ROOT = resolve(__dirname, "..");
 const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
 
+// FactoryAttendance.tsx is covered by rendering it in
+// tests/ui/factory-attendance-behavior.test.tsx rather than by reading its source.
 describe("Stock Entry staff tracking tabs", () => {
   it("keeps Production Targets in Bale Stock Entry and hides the legacy Attendance Register", () => {
     const stockEntry = src("client/src/pages/factory/BaleStockEntry.tsx");
@@ -17,35 +19,19 @@ describe("Stock Entry staff tracking tabs", () => {
   it("keeps Attendance under Payroll & Benefits and centralizes its WhatsApp group in Intel Settings", () => {
     const payroll = src("client/src/pages/factory/FactoryPayrollHub.tsx");
     const workersHub = src("client/src/pages/factory/FactoryWorkersHub.tsx");
-    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
     const intelSettings = src("client/src/pages/factory/factorysettings/FactorySettingsView.tsx");
 
     expect(payroll).toContain("<FactoryWorkersHub />");
     expect(workersHub).toContain('value="attendance"');
     expect(workersHub).toContain("<FactoryAttendance />");
-    expect(attendance).not.toContain('data-testid="button-change-attendance-whatsapp-group"');
-    expect(attendance).not.toContain('data-testid="button-save-attendance-wa-group"');
-    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
-    expect(attendance).toContain('destination: "attendance"');
     expect(intelSettings).toContain("Attendance WhatsApp Group");
     expect(intelSettings).toContain('data-testid="button-change-attendance-wa-group"');
     expect(intelSettings).toContain('data-testid="button-save-attendance-wa-group"');
   });
 
   it("keeps the Attendance workflow intact inside the modernized layout", () => {
-    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
     const summaryCard = src("client/src/pages/factory/factoryattendance/components/SummaryCard.tsx");
 
-    expect(attendance).toContain("factory-tracking-modern factory-tracking-attendance");
-    expect(attendance).toContain('data-testid="input-attendance-date"');
-    expect(attendance).toContain('data-testid="input-shift"');
-    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
-    expect(attendance).toContain('data-testid="button-actions-dropdown"');
-    expect(attendance).toContain('data-testid="button-save-attendance"');
-    expect(attendance).toContain('data-testid="button-range-export-excel"');
-    expect(attendance).toContain('data-testid="button-range-print"');
-    expect(attendance).toContain('data-testid={`select-status-${worker.id}`}');
-    expect(attendance).toContain('data-testid={`input-notes-${worker.id}`}');
     expect(summaryCard).toContain("hover:-translate-y-0.5");
   });
 
@@ -78,9 +64,7 @@ describe("Stock Entry staff tracking tabs", () => {
 
   it("keeps Daily Defaults separate from day-specific Edit Targets overrides", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
-    const defaultsEditor = src(
-      "client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx"
-    );
+    const defaultsEditor = src("client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx");
     const dayEditor = src("client/src/pages/factory/productiontargets/ProductionTargetsEditorDialog.tsx");
     const route = src("server/routes/factory/factoryStaffTrackingRoutes.ts");
     const targetDefaultsService = src("server/services/factory/productionTargetDefaults.ts");
@@ -134,7 +118,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("<ProductionWorkerLinkControl");
-    expect(production).toContain("<ProductionWorkerLinkControl");
+    // Linking lives in the target editors; the production table no longer shows it (#1724).
+    expect(production).not.toContain("<ProductionWorkerLinkControl");
     expect(linkControl).toContain("button-link-worker-");
     expect(linkControl).toContain("button-unlink-worker-");
     expect(linkControl).toContain("button-save-worker-links-");
@@ -161,44 +146,17 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(linkService).toContain("w.department");
     expect(linkService).toContain("pg_advisory_xact_lock");
     expect(linkService).toContain("nextEffectiveFrom");
-
   });
 
   it("uses the modern Attendance shell without changing the existing attendance actions", () => {
-    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
     const summaryCard = src("client/src/pages/factory/factoryattendance/components/SummaryCard.tsx");
     const perWorker = src("client/src/pages/factory/factoryattendance/components/PerWorkerView.tsx");
 
-    expect(attendance).toContain("factory-tracking-modern factory-tracking-attendance");
-    expect(attendance).toContain('import "./factoryTrackingModern.css"');
-    expect(attendance).toContain('data-testid="input-attendance-date"');
-    expect(attendance).toContain('data-testid="input-shift"');
-    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
-    expect(attendance).toContain('data-testid="button-actions-dropdown"');
-    expect(attendance).toContain('data-testid="button-save-attendance"');
-    expect(attendance).toContain('data-testid="button-range-export-excel"');
-    expect(attendance).toContain('data-testid="button-range-print"');
-    expect(attendance).toContain("modern");
     expect(summaryCard).toContain("modern = false");
     expect(perWorker).toContain("modern");
   });
 
-  it("renders Payroll Attendance KPIs inside the WhatsApp attendance image", () => {
-    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
-    expect(attendance).toContain('data-testid="attendance-report-kpis"');
-    expect(attendance).toContain('data-testid={\`attendance-report-kpi-\${kpi.key}\`}');
-    expect(attendance).toContain('label: "Total"');
-    expect(attendance).toContain('value: counts.total');
-    expect(attendance).toContain('label: "Present"');
-    expect(attendance).toContain('value: counts.present');
-    expect(attendance).toContain('label: "Absent"');
-    expect(attendance).toContain('value: counts.absent');
-    expect(attendance).toContain('label: "Other"');
-    expect(attendance).toContain('value: counts.other');
-    expect(attendance).toContain("html2canvas(attendanceReportRef.current");
-  });
-
-  it("shows target, absent target, expected target, and expected-minus-produced KPIs", () => {
+  it("shows target, absent target, expected target, and produced-minus-expected KPIs", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const model = src("client/src/pages/factory/factoryProductionTargetsModel.ts");
     expect(production).toContain('tr("totalTarget")');
@@ -209,9 +167,10 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(production).toContain('tr("totalPresent")');
     expect(production).toContain('tr("diff")');
     expect(production).toContain("grid-cols-3");
-    expect(production).toContain("sm:grid-cols-2 xl:grid-cols-4");
+    expect(production).toContain("sm:grid-cols-2 xl:grid-cols-6");
     expect(model).toContain("absentTarget");
     expect(model).toContain("const expected = target - absentTarget");
-    expect(model).toContain("difference: expected - produced");
+    // Same sign as the row difference (produced - target), per #1697.
+    expect(model).toContain("difference: produced - expected");
   });
 });

@@ -28,6 +28,14 @@ import {
 } from "@/i18n/factoryStaffTrackingTranslations";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
+import {
+  differenceClass,
+  differenceText,
+  localDateStr,
+  parseLocalDate,
+  periodFor,
+  statusTranslationKey,
+} from "./factoryProductionTargetsModel";
 
 type TrackingMode = "production" | "attendance";
 type PeriodType = "daily" | "weekly" | "monthly";
@@ -71,58 +79,12 @@ interface WhatsappChat {
   type: string;
 }
 
-function localDateStr(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function parseLocalDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function periodFor(type: PeriodType, referenceDate: string) {
-  const d = parseLocalDate(referenceDate);
-  if (type === "daily") return { start: referenceDate, end: referenceDate };
-  if (type === "monthly") {
-    const start = new Date(d.getFullYear(), d.getMonth(), 1);
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return { start: localDateStr(start), end: localDateStr(end) };
-  }
-  const day = d.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const start = new Date(d);
-  start.setDate(d.getDate() + mondayOffset);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  return { start: localDateStr(start), end: localDateStr(end) };
-}
-
 function statusClass(status: TrackingStatus) {
   if (status === FACTORY_TRACKING_STATUSES.absent)
     return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   if (status === FACTORY_TRACKING_STATUSES.new)
     return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
   return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-}
-
-function statusTranslationKey(status: TrackingStatus): FactoryStaffTrackingTranslationKey {
-  if (status === FACTORY_TRACKING_STATUSES.absent) return "absent";
-  if (status === FACTORY_TRACKING_STATUSES.new) return "new";
-  return "present";
-}
-
-function differenceText(target: number | null, produced: number | null) {
-  if (target === null || produced === null) return "—";
-  const diff = produced - target;
-  return diff > 0 ? `+${diff}` : String(diff);
-}
-
-function differenceClass(target: number | null, produced: number | null) {
-  if (target === null || produced === null) return "text-muted-foreground";
-  const diff = produced - target;
-  if (diff > 0) return "text-emerald-600 dark:text-emerald-400";
-  if (diff < 0) return "text-red-600 dark:text-red-400";
-  return "text-foreground";
 }
 
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {

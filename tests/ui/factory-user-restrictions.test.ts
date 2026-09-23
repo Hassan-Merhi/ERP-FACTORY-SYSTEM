@@ -6,6 +6,7 @@ import {
   resolvePageKey,
   type MyAccess,
 } from "@/app/factoryAccessGuard";
+import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 
 const restrictedAccountsOnly: MyAccess = {
   fullAccess: false,
@@ -87,9 +88,12 @@ describe("Factory restriction settings wiring", () => {
 
   it("exposes the expanded Factory page and tab catalogs", () => {
     const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
-    const registry = readFileSync("client/src/app/factoryAccessRegistry.ts", "utf8");
     const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
 
+    // The page catalog lives in the access registry; Settings lists every
+    // user-level page from it, and the sidebar filters through the same
+    // registry key check.
+    const settingsKeys = new Set(FACTORY_SETTINGS_PAGES.map((page) => page.key));
     for (const key of [
       "factory/production-report",
       "factory/agents",
@@ -99,7 +103,7 @@ describe("Factory restriction settings wiring", () => {
       "factory/dispatch-batches",
       "factory/production-comparison",
     ]) {
-      expect(registry).toContain(key);
+      expect(settingsKeys.has(key), key).toBe(true);
     }
     expect(sidebar).toContain("hasFactoryPageKey(page, myAccess.pageKeys)");
 
