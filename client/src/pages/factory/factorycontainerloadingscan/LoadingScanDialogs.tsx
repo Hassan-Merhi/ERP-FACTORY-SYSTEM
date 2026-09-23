@@ -111,6 +111,35 @@ function LastScannedPrompt({ model }: { model: FactoryContainerLoadingScanModel 
   );
 }
 
+function EmptyContainerConfirm({ model }: { model: FactoryContainerLoadingScanModel }) {
+  const baleCount = model.bales.length;
+  return (
+    <AlertDialog open={model.showEmptyContainerConfirm} onOpenChange={model.setShowEmptyContainerConfirm}>
+      <AlertDialogContent data-testid="dialog-confirm-empty-container">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Empty this container?</AlertDialogTitle>
+          <AlertDialogDescription>
+            All {baleCount} scanned bale{baleCount === 1 ? "" : "s"} will be removed from Loading #{model.orderId} and
+            returned to stock. The customer, proforma, loading location, and note will stay in place so you can start
+            scanning again from zero.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-empty-container">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground"
+            data-testid="button-confirm-empty-container"
+            disabled={model.emptyContainerMutation.isPending}
+            onClick={() => model.emptyContainerMutation.mutate()}
+          >
+            {model.emptyContainerMutation.isPending ? "Emptying…" : "Empty Container"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function RemoveBaleConfirm({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { baleToDelete } = model;
   return (
@@ -154,6 +183,7 @@ export function LoadingScanDialogs({ model }: { model: FactoryContainerLoadingSc
       {/* Pending Loading Warning Dialog */}
       <PendingLoadingWarning model={model} />
       <LastScannedPrompt model={model} />
+      <EmptyContainerConfirm model={model} />
       {/* Bale removal confirmation */}
       <RemoveBaleConfirm model={model} />
     </>
