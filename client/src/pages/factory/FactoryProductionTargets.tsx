@@ -73,23 +73,23 @@ function SummaryGroupTile({
 }) {
   return (
     <Card className="overflow-hidden shadow-none">
-      <CardContent className="min-h-[104px] px-4 py-3">
+      <CardContent className="min-h-[124px] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {label}
           </p>
           <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
         </div>
-        <div className="mt-2 flex w-full items-stretch divide-x divide-border/70">
+        <div className="mt-3 grid w-full grid-cols-3 divide-x divide-border/70">
           {metrics.map((metric) => (
-            <div key={metric.label} className="min-w-0 flex-1 px-2 text-center first:pl-0 last:pr-0">
+            <div key={metric.label} className="min-w-0 px-2 text-center first:pl-0 last:pr-0">
               <p
-                className="truncate text-[9px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-[10px]"
+                className="min-h-[24px] whitespace-normal text-[9px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-[10px]"
                 title={metric.label}
               >
                 {metric.label}
               </p>
-              <p className="mt-1 truncate text-lg font-semibold tabular-nums sm:text-xl" title={String(metric.value)}>
+              <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl" title={String(metric.value)}>
                 {metric.value}
               </p>
             </div>
@@ -368,18 +368,18 @@ export default function FactoryProductionTargets() {
           label={tr("targets")}
           icon={<Target className="h-5 w-5" />}
           metrics={[
-            { label: tr("total"), value: totals.target },
-            { label: tr("absent"), value: totals.absentTarget },
-            { label: tr("expected"), value: totals.expected },
+            { label: tr("totalTarget"), value: totals.target },
+            { label: tr("totalAbsentTarget"), value: totals.absentTarget },
+            { label: tr("totalExpected"), value: totals.expected },
           ]}
         />
         <SummaryGroupTile
           label={tr("workers")}
           icon={<Users className="h-5 w-5" />}
           metrics={[
-            { label: tr("total"), value: workerTotals.total },
-            { label: tr("present"), value: workerTotals.present },
-            { label: tr("absent"), value: workerTotals.absent },
+            { label: tr("totalWorkers"), value: workerTotals.total },
+            { label: tr("totalAbsent"), value: workerTotals.absent },
+            { label: tr("totalPresent"), value: workerTotals.present },
           ]}
         />
         <SummaryTile
