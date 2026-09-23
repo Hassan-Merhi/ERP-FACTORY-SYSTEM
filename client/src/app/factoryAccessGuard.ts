@@ -13,6 +13,7 @@ import {
   resolveFactoryPage,
   resolveFactoryPageKey,
 } from "@/app/factoryAccessRegistry";
+import { resolveFactoryTabRouteRestriction } from "@/app/factoryTabAccessRegistry";
 
 export interface MyAccess {
   fullAccess: boolean;
@@ -57,7 +58,7 @@ export function resolvePageKey(path: string): string | null {
  * 2. feature flag visibility from the registry
  * 3. privileged role bypass of per-user allow-lists
  * 4. per-user page allow-list
- * 5. legacy page hide keys
+ * 5. per-user tab restrictions on legacy/detail routes
  */
 export function computeFactoryGuardRedirect(params: {
   isFactoryRoute: boolean;
@@ -108,10 +109,15 @@ export function computeFactoryGuardRedirect(params: {
     if (!hasFactoryPageKey(page, myAccess.pageKeys)) return factoryDefaultPage;
   }
 
-  // Legacy page-level hide keys still work, but their metadata now lives on
-  // the same page definition instead of special-casing individual routes.
-  if (page?.hideKey && myAccess.hiddenCostFields?.includes(page.hideKey)) {
-    return factoryDefaultPage;
+  // Some legacy/detail URLs render content owned by a tab outside its hub.
+  // Apply the same hidden-tab rule to those direct URLs so a bookmark cannot
+  // bypass a tab restriction that is enforced in the visible hub UI.
+  const tabRoute = resolveFactoryTabRouteRestriction(currentLocation);
+  if (
+    tabRoute &&
+    tabRoute.hiddenKeys.some((key) => myAccess.hiddenCostFields?.includes(key))
+  ) {
+    return tabRoute.fallback;
   }
 
   return null;
