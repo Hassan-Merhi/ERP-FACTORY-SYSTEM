@@ -309,20 +309,16 @@ describe("Quick Adjust Tests", () => {
     expect(res.status).toBe(400);
   });
 
-  it.skip("should handle sequential adjustments correctly", async () => {
-    // TODO (production fix needed): quick-adjust returns non-200 in sequential test env
-    // because the supertest agent serializes requests but the server's session store
-    // occasionally drops the company selection between calls. Root cause: in-memory
-    // MemoryStore does not guarantee session persistence across rapid sequential requests
-    // in test mode. Fix: switch to a persistent session store (e.g. connect-pg-simple)
-    // even in test, OR retry with explicit session re-assert between calls.
+  it("should handle sequential adjustments correctly", async () => {
     for (let i = 0; i < 5; i++) {
-      await agent.post("/api/inventory/quick-adjust").send({
+      const res = await agent.post("/api/inventory/quick-adjust").send({
         stockItemId: ctx.stockItemIds[0],
         locationId: ctx.locationId,
         quantity: 2,
         type: "add",
       });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body.newQuantity).toBe(100 + (i + 1) * 2);
     }
 
     const qty = await getInventoryQty(ctx.locationId, ctx.stockItemIds[0]);
@@ -492,23 +488,35 @@ describe("adjustInventory Helper Tests", () => {
     expect(result.averageRate).toBe(0);
   });
 
-  it.skip("should enforce qty <= 0 implies total_value = 0 and rate = 0 (Bug 4 fix)", async () => {
-    // TODO (production fix needed): adjustInventory does not zero totalValue/averageRate
-    // when resulting qty goes negative. Production fix required in server/inventoryHelper.ts:
-    // after computing newQuantity, if newQuantity <= 0 force newTotalValue = 0 and
-    // newAverageRate = 0. This prevents phantom value accumulation in negative-stock positions.
-    // Until fixed, the invariant "qty <= 0 → value = 0, rate = 0" is NOT enforced.
+  // qty <= 0 carries no value. The average rate is deliberately kept as "cost
+  // memory" (inventoryHelper.ts): it prices the negative-stock layer and the next
+  // receipt, so zeroing it would re-cost the shortage at 0. This used to be a
+  // skipped test asserting rate = 0, which contradicts that design.
+  it("should zero total_value and keep the last cost as memory when a deduction goes negative", async () => {
     const { adjustInventory } = await import("../server/inventoryHelper");
+    const layerQty = async () => {
+      const result = await db.execute(sql`
+        SELECT COALESCE(SUM(qty::numeric), 0)::text AS qty
+        FROM inventory_negative_layers
+        WHERE location_id = ${ctx.locationId} AND stock_item_id = ${ctx.stockItemIds[0]}
+      `);
+      return Number(result.rows[0].qty);
+    };
+    const layersBefore = await layerQty();
 
     const result = await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], -150, ctx.companyId);
 
     expect(result.newQuantity).toBe(-50);
     expect(result.newTotalValue).toBe(0);
-    expect(result.averageRate).toBe(0);
+    expect(result.averageRate).toBe(10);
 
     const record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
+    expect(parseFloat(record!.quantity)).toBe(-50);
     expect(parseFloat(record!.totalValue!)).toBe(0);
-    expect(parseFloat(record!.averageRate)).toBe(0);
+    expect(parseFloat(record!.averageRate)).toBe(10);
+
+    // Only the new 50-unit shortage is recorded as a negative layer.
+    expect((await layerQty()) - layersBefore).toBeCloseTo(50, 3);
   });
 
   it("should enforce qty > 0 implies total_value >= 0 after deduction", async () => {
@@ -538,12 +546,7 @@ describe("reverseInventoryByExactValue Tests", () => {
     await resetInventory();
   });
 
-  it.skip("should subtract exact value and normalize invariants", async () => {
-    // TODO (production fix needed): reverseInventoryByExactValue leaves a non-zero averageRate
-    // when qty goes negative (same root cause as Bug 4 above). The function correctly subtracts
-    // the exact value from totalValue but does NOT reset averageRate to 0 when qty crosses zero.
-    // Production fix: after the subtraction in inventoryHelper.ts, apply the same qty<=0 guard
-    // that forces rate=0 and value=0.
+  it("should subtract exact value, zero the value below zero and keep cost memory", async () => {
     const { reverseInventoryByExactValue } = await import("../server/inventoryHelper");
 
     await db
@@ -566,14 +569,22 @@ describe("reverseInventoryByExactValue Tests", () => {
 
     expect(qty).toBeCloseTo(-10, 1);
     expect(value).toBe(0);
-    expect(rate).toBe(0);
+    expect(rate).toBeCloseTo(5.56, 2);
   });
 
-  it.skip("should produce idempotent results across reverse/re-offload cycles", async () => {
-    // TODO (production fix needed): averageRate remains non-zero after reverse when qty reaches 0,
-    // violating the idempotency invariant across reverse/re-offload cycles.
-    // Root cause: same qty<=0 normalization gap as Bug 4. Fix the invariant in inventoryHelper.ts
-    // and this test should pass without any other changes.
+  it("should subtract the exact value while stock stays positive", async () => {
+    const { reverseInventoryByExactValue } = await import("../server/inventoryHelper");
+
+    await reverseInventoryByExactValue(db as any, ctx.locationId, ctx.stockItemIds[0], 40, 520);
+
+    const record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
+    // 100 @ 10 = 1000; reversing 40 units worth 520 leaves 60 units worth 480.
+    expect(parseFloat(record!.quantity)).toBeCloseTo(60, 3);
+    expect(parseFloat(record!.totalValue!)).toBeCloseTo(480, 2);
+    expect(parseFloat(record!.averageRate)).toBeCloseTo(8, 4);
+  });
+
+  it("should produce idempotent results across reverse/re-offload cycles", async () => {
     const { adjustInventory, reverseInventoryByExactValue } = await import("../server/inventoryHelper");
 
     const offloadQty = 200;
@@ -604,7 +615,8 @@ describe("reverseInventoryByExactValue Tests", () => {
       const afterReverse = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
       expect(parseFloat(afterReverse!.quantity)).toBeCloseTo(0, 1);
       expect(parseFloat(afterReverse!.totalValue!)).toBe(0);
-      expect(parseFloat(afterReverse!.averageRate)).toBe(0);
+      // Cost memory survives the reversal, so the re-offload lands on the same rate.
+      expect(parseFloat(afterReverse!.averageRate)).toBeCloseTo(offloadRate, 4);
 
       await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, ctx.companyId, offloadRate);
 
@@ -615,11 +627,7 @@ describe("reverseInventoryByExactValue Tests", () => {
     }
   });
 
-  it.skip("should handle negative-stock offload reversal without value inflation", async () => {
-    // TODO (production fix needed): averageRate stays non-zero after reversal into a negative-stock
-    // position, causing value inflation on subsequent offloads. Same root cause as Bug 4.
-    // Production fix: in inventoryHelper.ts, after any operation that leaves qty<=0, set
-    // totalValue=0 and averageRate=0 unconditionally.
+  it("should handle negative-stock offload reversal without value inflation", async () => {
     const { adjustInventory, reverseInventoryByExactValue } = await import("../server/inventoryHelper");
 
     await db
@@ -653,7 +661,7 @@ describe("reverseInventoryByExactValue Tests", () => {
 
     expect(reverseQty).toBeCloseTo(-10, 1);
     expect(reverseValue).toBe(0);
-    expect(reverseRate).toBe(0);
+    expect(reverseRate).toBeCloseTo(parseFloat(afterOffload!.averageRate), 4);
 
     await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, ctx.companyId, offloadRate);
 

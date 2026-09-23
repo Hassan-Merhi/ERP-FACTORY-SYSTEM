@@ -34,6 +34,11 @@ import {
   getFactoryTxTypeBadge,
 } from "./daybookUtils";
 
+// Stable empty default: `= []` is a new array each render while the query is
+// disabled (entries that are not voucher-backed), and the balance effect below
+// depends on it and resets state with a new {} — an endless re-render loop.
+const NO_VIEW_ENTRIES: VoucherViewEntry[] = [];
+
 export function ViewEntryModal({
   entry,
   onClose,
@@ -68,7 +73,7 @@ export function ViewEntryModal({
   })();
   const metaContainerId: number | undefined = entryMeta.containerId;
 
-  const { data: viewEntries = [] } = useQuery<VoucherViewEntry[]>({
+  const { data: viewEntries = NO_VIEW_ENTRIES } = useQuery<VoucherViewEntry[]>({
     queryKey: [`/api/vouchers/${entry.referenceId}/view-entries`],
     enabled: isVoucherBacked && !!entry.referenceId,
   });
@@ -336,21 +341,15 @@ export function ViewEntryModal({
                         {isPaymentOrReceipt || isJournal ? (
                           <td className="px-3 py-2 text-right font-mono">
                             {sym}
-                            {formatNumber(
-                              Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount))
-                            )}
+                            {formatNumber(Math.max(apiNumber(e.debitAmount), apiNumber(e.creditAmount)))}
                           </td>
                         ) : (
                           <>
                             <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.debitAmount) > 0
-                                ? `${sym}${formatNumber(apiNumber(e.debitAmount))}`
-                                : "-"}
+                              {apiNumber(e.debitAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.debitAmount))}` : "-"}
                             </td>
                             <td className="px-3 py-2 text-right font-mono">
-                              {apiNumber(e.creditAmount) > 0
-                                ? `${sym}${formatNumber(apiNumber(e.creditAmount))}`
-                                : "-"}
+                              {apiNumber(e.creditAmount) > 0 ? `${sym}${formatNumber(apiNumber(e.creditAmount))}` : "-"}
                             </td>
                           </>
                         )}

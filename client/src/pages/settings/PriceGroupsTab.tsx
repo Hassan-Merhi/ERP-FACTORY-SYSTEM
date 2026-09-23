@@ -18,6 +18,10 @@ interface PriceGroup {
   followerLocationIds: number[];
 }
 
+// Stable empty default: if the price-group request fails, `= []` would be a new
+// array every render and the sync effect would call setGroups on each one.
+const NO_SAVED_GROUPS: PriceGroup[] = [];
+
 export function PriceGroupsTab() {
   const { toast } = useToast();
   const [groups, setGroups] = useState<PriceGroup[]>([]);
@@ -27,7 +31,7 @@ export function PriceGroupsTab() {
     queryKey: ["/api/locations"],
   });
 
-  const { data: savedGroups = [], isLoading: groupsLoading } = useQuery<PriceGroup[]>({
+  const { data: savedGroups = NO_SAVED_GROUPS, isLoading: groupsLoading } = useQuery<PriceGroup[]>({
     queryKey: ["/api/location-price-groups"],
   });
 

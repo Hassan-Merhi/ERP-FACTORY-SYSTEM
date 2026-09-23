@@ -8,6 +8,12 @@ import type { AnalysisRow, ColKey, ColVisibility, ComputedRow, LocationGroup, Ot
 import { ALL_COLUMNS, DEFAULT_COL_VISIBILITY, STATUS_OPTIONS, STORAGE_KEY_COLS, loadColVisibility } from "./utils";
 
 export type ProfitSourceType = "all" | "proforma" | "otw_containers";
+
+// Stable empty default for the analysis rows. A `= []` default is a new array
+// on every render while the analyze query is disabled (no supplier chosen),
+// and the effect that seeds quantities from `rows` then replaced qtyMap with a
+// new {} each time — re-rendering the page forever as soon as it opened.
+const NO_ANALYSIS_ROWS: AnalysisRow[] = [];
 export type SellPriceSource = "avg" | "location_group";
 
 export interface SupplierOption {
@@ -170,7 +176,7 @@ export function useSupplierProfitCheckModel() {
     (sourceType === "all" ||
       (sourceType === "proforma" && !!proformaId) ||
       (sourceType === "otw_containers" && otwContainerIds.length > 0));
-  const { data: rows = [], isLoading } = useQuery<AnalysisRow[]>({
+  const { data: rows = NO_ANALYSIS_ROWS, isLoading } = useQuery<AnalysisRow[]>({
     queryKey: [
       "/api/supplier-profit-check/analyze",
       supplierId,

@@ -598,7 +598,12 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         <h1 className="text-3xl font-bold">Point of Sale</h1>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl">
           {allLocations.map((loc) => (
-            <Card key={loc.id} className="p-6 cursor-pointer hover-elevate" onClick={() => setSelectedLocation(loc)}>
+            <Card
+              key={loc.id}
+              className="p-6 cursor-pointer hover-elevate"
+              onClick={() => setSelectedLocation(loc)}
+              data-testid={`card-pos-location-${loc.id}`}
+            >
               <h3 className="text-lg font-bold">{loc.name}</h3>
             </Card>
           ))}

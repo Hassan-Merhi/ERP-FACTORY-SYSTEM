@@ -238,7 +238,9 @@ export default function DailyScan() {
     wb.creator = "HMD ERP";
     wb.created = new Date();
 
-    const ws = wb.addWorksheet(formatDisplay(selectedDate));
+    // Excel sheet names cannot contain "/", so the dd/mm/yyyy display date made
+    // ExcelJS throw and the export never produced a file.
+    const ws = wb.addWorksheet(formatDisplay(selectedDate).replace(/\//g, "-"));
 
     const NAVY = "FF1B2A4A";
     const WHITE = "FFFFFFFF";

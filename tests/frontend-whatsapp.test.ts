@@ -203,32 +203,6 @@ describe("WhatsApp popup — response shape matches backend contract", () => {
   });
 });
 
-// ── TODO: Full render tests (require jsdom + React Testing Library) ──────────
-//
-// The following tests describe INTENDED behavior that cannot yet be verified
-// without a jsdom + @testing-library/react setup. Adding that setup requires
-// splitting the vitest config into frontend/backend projects (jsdom breaks
-// the backend Postgres-using tests). Implement in Phase 4.
-//
-// it.todo(
-//   "AlertDialog with data-testid='dialog-whatsapp-prompt' appears when " +
-//     "voucher save response has whatsapp.prompt=true [needs jsdom]"
-// );
-//
-// it.todo(
-//   "AlertDialog is absent when voucher save response has whatsapp.prompt=false [needs jsdom]"
-// );
-//
-// it.todo(
-//   "Clicking 'Skip' button (data-testid='button-whatsapp-skip') closes the dialog [needs jsdom]"
-// );
-//
-// it.todo(
-//   "POS WhatsApp deferred-send flow does not use the same waPendingPrompt state " +
-//     "(separate mechanism) [needs jsdom + POS render]"
-// );
-//
-// it.todo(
-//   "Voucher edit re-save does not show a duplicate WhatsApp prompt " +
-//     "when the first one was already dismissed [needs jsdom]"
-// );
+// Rendered behaviour (dialog opens/stays closed, Skip, Send, pending state,
+// no re-prompt after dismissal) is covered against the real JournalFormDialogs
+// in tests/ui/layout-and-whatsapp-renders.test.tsx.

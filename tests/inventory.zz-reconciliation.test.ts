@@ -488,14 +488,10 @@ describe("Concurrency Tests", () => {
     expect(finalQty).toBe(100 - NUM_CONCURRENT * QTY_PER_SALE);
   }, 30000);
 
-  it.skip("should handle concurrent quick adjustments without lost updates", async () => {
-    // TODO (two fixes needed):
-    // 1. Infrastructure: supertest agent does not support truly concurrent requests — all calls
-    //    through a single agent are serialized on the TCP level. Fix: use separate agents per
-    //    request in the test, OR switch to a raw fetch-based approach.
-    // 2. Production: quick-adjust does not use a SELECT FOR UPDATE or advisory lock, so
-    //    concurrent real requests could cause lost updates. Production fix: wrap the
-    //    inventory read-modify-write in a transaction with FOR UPDATE on the inventory row.
+  // quick-adjust now runs in a transaction and adjustInventory locks the
+  // inventory row (SELECT ... FOR UPDATE), and a supertest agent issues each
+  // request on its own connection, so concurrent adds must not lose updates.
+  it("should handle concurrent quick adjustments without lost updates", async () => {
     const initialQty = await getInventoryQty(ctx.locationId, ctx.stockItemIds[0]);
     expect(initialQty).toBe(100);
 
