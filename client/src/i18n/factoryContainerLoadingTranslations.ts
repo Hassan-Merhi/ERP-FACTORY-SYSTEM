@@ -1,0 +1,260 @@
+import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
+
+const factoryContainerLoadingTranslations = {
+  containerLoading: { en: "Container Loading", ar: "تحميل الحاوية", fr: "Chargement du conteneur" },
+  containerLoadingSubtitle: {
+    en: "Scan, verify and prepare the container without leaving this workspace.",
+    ar: "امسح البالات وتحقق منها وجهّز الحاوية من مكان عمل واحد.",
+    fr: "Scannez, vérifiez et préparez le conteneur depuis un seul espace de travail.",
+  },
+  resuming: { en: "Resuming #{orderId}", ar: "استئناف #{orderId}", fr: "Reprise #{orderId}" },
+  loadingNumber: { en: "Loading #{orderId}", ar: "تحميل #{orderId}", fr: "Chargement #{orderId}" },
+  bales: { en: "Bales", ar: "البالات", fr: "Balles" },
+  balesLower: { en: "bales", ar: "بالات", fr: "balles" },
+  weight: { en: "Weight", ar: "الوزن", fr: "Poids" },
+  scanBale: { en: "Scan Bale", ar: "مسح البالة", fr: "Scanner une balle" },
+  scanBaleHint: {
+    en: "Scan a barcode, reference, article code or product name.",
+    ar: "امسح الباركود أو المرجع أو رمز الصنف أو اسم المنتج.",
+    fr: "Scannez un code-barres, une référence, un article ou un nom de produit.",
+  },
+  ignoreOn: { en: "Ignore: ON", ar: "التجاهل: مفعّل", fr: "Ignorer : OUI" },
+  ignoreProforma: { en: "Ignore Proforma", ar: "تجاهل البروفرما", fr: "Ignorer la proforma" },
+  ignoreProformaOnTitle: {
+    en: "Ignore Proforma is ON — items not in proforma scan through immediately (still flagged). Click to turn off.",
+    ar: "تجاهل البروفرما مفعّل — يتم قبول الأصناف غير الموجودة في البروفرما مباشرة مع إبقائها مميزة. اضغط لإيقافه.",
+    fr: "Ignorer la proforma est activé — les articles hors proforma passent immédiatement tout en restant signalés. Cliquez pour désactiver.",
+  },
+  ignoreProformaOffTitle: {
+    en: "Turn on to scan items not in the proforma without needing to scan twice.",
+    ar: "فعّله لمسح الأصناف غير الموجودة في البروفرما دون الحاجة للمسح مرتين.",
+    fr: "Activez-le pour scanner les articles hors proforma sans devoir scanner deux fois.",
+  },
+  importExcel: { en: "Import Excel", ar: "استيراد Excel", fr: "Importer Excel" },
+  downloadRefTemplate: {
+    en: "Download Ref Number template",
+    ar: "تنزيل قالب رقم المرجع",
+    fr: "Télécharger le modèle de référence",
+  },
+  scanPlaceholder: {
+    en: "Scan barcode, ref no., article code, item name…",
+    ar: "امسح الباركود أو رقم المرجع أو رمز الصنف أو اسم المنتج…",
+    fr: "Scannez code-barres, référence, article ou produit…",
+  },
+  noBalesScanned: { en: "No bales scanned yet", ar: "لم يتم مسح أي بالات بعد", fr: "Aucune balle scannée" },
+  setupFirstHint: {
+    en: "Set up the loading order first, then scan bales",
+    ar: "جهّز أمر التحميل أولاً ثم ابدأ بمسح البالات",
+    fr: "Configurez d’abord le chargement, puis scannez les balles",
+  },
+  scannedAppearHint: {
+    en: "Your scanned bales will appear here instantly.",
+    ar: "ستظهر البالات الممسوحة هنا فوراً.",
+    fr: "Les balles scannées apparaîtront ici immédiatement.",
+  },
+  qty: { en: "qty", ar: "الكمية", fr: "qté" },
+  returnBaleToStock: {
+    en: "Return bale to stock",
+    ar: "إرجاع البالة إلى المخزون",
+    fr: "Remettre la balle en stock",
+  },
+  returnNamedBaleToStock: {
+    en: "Return {reference} to stock",
+    ar: "إرجاع {reference} إلى المخزون",
+    fr: "Remettre {reference} en stock",
+  },
+  removedBales: { en: "Removed Bales", ar: "البالات المُزالة", fr: "Balles retirées" },
+  reference: { en: "Reference", ar: "المرجع", fr: "Référence" },
+  article: { en: "Article", ar: "الصنف", fr: "Article" },
+  removedBy: { en: "Removed By", ar: "أزالها", fr: "Retiré par" },
+  time: { en: "Time", ar: "الوقت", fr: "Heure" },
+  scannedBy: { en: "Scanned by {name}", ar: "تم المسح بواسطة {name}", fr: "Scanné par {name}" },
+  scanned: { en: "Scanned", ar: "تم المسح", fr: "Scanné" },
+  scannedBales: { en: "Scanned Bales", ar: "البالات الممسوحة", fr: "Balles scannées" },
+  liveContents: {
+    en: "Live contents of this loading",
+    ar: "المحتوى الحالي لهذا التحميل",
+    fr: "Contenu actuel de ce chargement",
+  },
+  emptying: { en: "Emptying…", ar: "جارٍ التفريغ…", fr: "Vidage…" },
+  empty: { en: "Empty", ar: "تفريغ", fr: "Vider" },
+  emptyContainerTitle: {
+    en: "Remove all scanned bales and return them to stock",
+    ar: "إزالة جميع البالات الممسوحة وإرجاعها إلى المخزون",
+    fr: "Retirer toutes les balles scannées et les remettre en stock",
+  },
+  switchCondensed: {
+    en: "Switch to condensed view",
+    ar: "التبديل إلى العرض المختصر",
+    fr: "Passer à la vue compacte",
+  },
+  switchDetailed: {
+    en: "Switch to detailed view",
+    ar: "التبديل إلى العرض التفصيلي",
+    fr: "Passer à la vue détaillée",
+  },
+  lastScanned: { en: "Last Scanned", ar: "آخر مسح", fr: "Dernier scan" },
+  loadingDetails: { en: "Loading Details", ar: "تفاصيل التحميل", fr: "Détails du chargement" },
+  loadingDetailsLockedHint: {
+    en: "Order details stay locked while you scan.",
+    ar: "تبقى تفاصيل الطلب مقفلة أثناء المسح.",
+    fr: "Les détails de la commande restent verrouillés pendant le scan.",
+  },
+  loadingDetailsSetupHint: {
+    en: "Choose where and who this container is for.",
+    ar: "اختر موقع التحميل والعميل لهذه الحاوية.",
+    fr: "Choisissez le lieu de chargement et le client de ce conteneur.",
+  },
+  customer: { en: "Customer", ar: "العميل", fr: "Client" },
+  selectCustomer: { en: "Select customer...", ar: "اختر العميل...", fr: "Sélectionner un client..." },
+  loadingLocation: { en: "Loading Location", ar: "موقع التحميل", fr: "Lieu de chargement" },
+  selectLocation: { en: "Select location...", ar: "اختر الموقع...", fr: "Sélectionner un lieu..." },
+  proforma: { en: "Proforma", ar: "البروفرما", fr: "Proforma" },
+  selectProforma: { en: "Select a proforma...", ar: "اختر بروفرما...", fr: "Sélectionner une proforma..." },
+  noProforma: { en: "No proforma", ar: "بدون بروفرما", fr: "Sans proforma" },
+  noActiveProforma: {
+    en: "No active proforma found. Loading will proceed without price references.",
+    ar: "لا توجد بروفرما نشطة. سيستمر التحميل بدون مراجع أسعار.",
+    fr: "Aucune proforma active. Le chargement continuera sans référence de prix.",
+  },
+  note: { en: "Note", ar: "ملاحظة", fr: "Note" },
+  addLoadingNote: {
+    en: "Add a note for this loading...",
+    ar: "أضف ملاحظة لهذا التحميل...",
+    fr: "Ajouter une note pour ce chargement...",
+  },
+  optionalNote: {
+    en: "Optional note (e.g. Rush order, Handle with care)",
+    ar: "ملاحظة اختيارية (مثلاً: طلب مستعجل، التعامل بحذر)",
+    fr: "Note facultative (ex. Urgent, Manipuler avec soin)",
+  },
+  saveNote: { en: "Save note", ar: "حفظ الملاحظة", fr: "Enregistrer la note" },
+  creating: { en: "Creating...", ar: "جارٍ الإنشاء...", fr: "Création..." },
+  startLoading: { en: "Start Loading", ar: "بدء التحميل", fr: "Démarrer le chargement" },
+  loaded: { en: "Loaded", ar: "تم التحميل", fr: "Chargé" },
+  overloaded: { en: "Overloaded", ar: "تحميل زائد", fr: "Surchargé" },
+  lessLoaded: { en: "Less Loaded", ar: "تحميل أقل", fr: "Chargement insuffisant" },
+  missing: { en: "Missing", ar: "مفقود", fr: "Manquant" },
+  onProforma: { en: "On Proforma", ar: "ضمن البروفرما", fr: "Sur la proforma" },
+  product: { en: "Product", ar: "المنتج", fr: "Produit" },
+  remaining: { en: "Remaining", ar: "المتبقي", fr: "Restant" },
+  status: { en: "Status", ar: "الحالة", fr: "Statut" },
+  stock: { en: "Stock", ar: "المخزون", fr: "Stock" },
+  notOnProformaAllowed: {
+    en: "Not on Proforma — Allowed",
+    ar: "غير موجود في البروفرما — مسموح",
+    fr: "Hors proforma — Autorisé",
+  },
+  notOnProforma: { en: "Not on Proforma", ar: "غير موجود في البروفرما", fr: "Hors proforma" },
+  loadedByArticle: { en: "Loaded by Article", ar: "المحمّل حسب الصنف", fr: "Chargé par article" },
+  orderSummary: { en: "Order Summary", ar: "ملخص الطلب", fr: "Résumé de la commande" },
+  notLinkedProforma: {
+    en: "This loading is not linked to a proforma.",
+    ar: "هذا التحميل غير مرتبط ببروفرما.",
+    fr: "Ce chargement n’est lié à aucune proforma.",
+  },
+  articles: { en: "Articles", ar: "الأصناف", fr: "Articles" },
+  currentLoadingProgress: {
+    en: "Current loading progress against this proforma.",
+    ar: "تقدم التحميل الحالي مقارنة بهذه البروفرما.",
+    fr: "Progression du chargement actuel par rapport à cette proforma.",
+  },
+  reusable: { en: "Reusable", ar: "قابلة لإعادة الاستخدام", fr: "Réutilisable" },
+  loadedKpi: { en: "Loaded", ar: "محمّل", fr: "Chargé" },
+  remainingKpi: { en: "Remaining", ar: "متبقي", fr: "Restant" },
+  linesDone: { en: "Lines Done", ar: "السطور المكتملة", fr: "Lignes terminées" },
+  proformaLines: { en: "{count} proforma lines", ar: "{count} سطر بروفرما", fr: "{count} lignes proforma" },
+  validateLoading: { en: "Validate Loading", ar: "التحقق من التحميل", fr: "Valider le chargement" },
+  reviewReusableProforma: {
+    en: "Review this loading against the reusable proforma. Statuses are informational and apply to this loading only.",
+    ar: "راجع هذا التحميل مقابل البروفرما القابلة لإعادة الاستخدام. الحالات للمعلومات وتخص هذا التحميل فقط.",
+    fr: "Vérifiez ce chargement par rapport à la proforma réutilisable. Les statuts sont informatifs et ne concernent que ce chargement.",
+  },
+  completeSendVerification: {
+    en: "This will mark the loading as complete and send it for office verification.",
+    ar: "سيتم اعتبار التحميل مكتملاً وإرساله للتحقق المكتبي.",
+    fr: "Le chargement sera marqué terminé puis envoyé pour vérification au bureau.",
+  },
+  totalBales: { en: "Total Bales:", ar: "إجمالي البالات:", fr: "Total balles :" },
+  totalWeight: { en: "Total Weight:", ar: "إجمالي الوزن:", fr: "Poids total :" },
+  loadingDate: { en: "Loading Date", ar: "تاريخ التحميل", fr: "Date de chargement" },
+  cancel: { en: "Cancel", ar: "إلغاء", fr: "Annuler" },
+  confirmFinalize: { en: "Confirm Finalize", ar: "تأكيد الإنهاء", fr: "Confirmer la finalisation" },
+  finalizing: { en: "Finalizing...", ar: "جارٍ الإنهاء...", fr: "Finalisation..." },
+  proformaAlreadyLoading: {
+    en: "Proforma Already Being Loaded",
+    ar: "البروفرما قيد التحميل بالفعل",
+    fr: "Proforma déjà en cours de chargement",
+  },
+  pendingLoadingDescriptionOne: {
+    en: "This proforma already has an active loading order. You can continue it or start a new loading.",
+    ar: "لهذه البروفرما أمر تحميل نشط بالفعل. يمكنك متابعته أو بدء تحميل جديد.",
+    fr: "Cette proforma a déjà un chargement actif. Vous pouvez le reprendre ou démarrer un nouveau chargement.",
+  },
+  pendingLoadingDescriptionMany: {
+    en: "This proforma already has {count} active loading orders. You can continue one of them or start a new loading.",
+    ar: "لهذه البروفرما {count} أوامر تحميل نشطة. يمكنك متابعة أحدها أو بدء تحميل جديد.",
+    fr: "Cette proforma a déjà {count} chargements actifs. Vous pouvez en reprendre un ou démarrer un nouveau chargement.",
+  },
+  orderNumber: { en: "Order #{orderId}", ar: "طلب #{orderId}", fr: "Commande #{orderId}" },
+  resume: { en: "Resume", ar: "استئناف", fr: "Reprendre" },
+  startNewLoading: { en: "Start New Loading", ar: "بدء تحميل جديد", fr: "Nouveau chargement" },
+  resumingLoading: { en: "Resuming Loading", ar: "استئناف التحميل", fr: "Reprise du chargement" },
+  lastBaleScanned: {
+    en: "Last bale scanned in this session:",
+    ar: "آخر بالة تم مسحها في هذه الجلسة:",
+    fr: "Dernière balle scannée dans cette session :",
+  },
+  continueScanning: { en: "Continue Scanning", ar: "متابعة المسح", fr: "Continuer le scan" },
+  emptyThisContainer: { en: "Empty this container?", ar: "تفريغ هذه الحاوية؟", fr: "Vider ce conteneur ?" },
+  emptyContainerDescription: {
+    en: "All {count} scanned bale(s) will be removed from Loading #{orderId} and returned to stock. The customer, proforma, loading location, and note will stay in place so you can start scanning again from zero.",
+    ar: "ستتم إزالة جميع البالات الممسوحة وعددها {count} من التحميل #{orderId} وإعادتها إلى المخزون. سيبقى العميل والبروفرما وموقع التحميل والملاحظة كما هي لتتمكن من البدء من الصفر.",
+    fr: "Les {count} balle(s) scannée(s) seront retirées du chargement #{orderId} et remises en stock. Le client, la proforma, le lieu et la note resteront en place afin de recommencer le scan à zéro.",
+  },
+  emptyContainer: { en: "Empty Container", ar: "تفريغ الحاوية", fr: "Vider le conteneur" },
+  removeBaleQuestion: {
+    en: "Remove bale from loading?",
+    ar: "إزالة البالة من التحميل؟",
+    fr: "Retirer la balle du chargement ?",
+  },
+  removeBaleDescription: {
+    en: "Bale {reference} will be removed from this loading and returned to stock. This cannot be undone.",
+    ar: "ستتم إزالة البالة {reference} من هذا التحميل وإعادتها إلى المخزون. لا يمكن التراجع عن هذا الإجراء.",
+    fr: "La balle {reference} sera retirée de ce chargement et remise en stock. Cette action est irréversible.",
+  },
+  removeBale: { en: "Remove Bale", ar: "إزالة البالة", fr: "Retirer la balle" },
+  containerEmptied: { en: "Container emptied", ar: "تم تفريغ الحاوية", fr: "Conteneur vidé" },
+  oneBaleReturned: {
+    en: "1 scanned bale was returned to stock. You can start scanning again.",
+    ar: "تمت إعادة بالة ممسوحة واحدة إلى المخزون. يمكنك بدء المسح من جديد.",
+    fr: "1 balle scannée a été remise en stock. Vous pouvez recommencer le scan.",
+  },
+  manyBalesReturned: {
+    en: "{count} scanned bales were returned to stock. You can start scanning again.",
+    ar: "تمت إعادة {count} بالات ممسوحة إلى المخزون. يمكنك بدء المسح من جديد.",
+    fr: "{count} balles scannées ont été remises en stock. Vous pouvez recommencer le scan.",
+  },
+  couldNotEmptyContainer: {
+    en: "Could not empty container",
+    ar: "تعذر تفريغ الحاوية",
+    fr: "Impossible de vider le conteneur",
+  },
+  saveAndExit: { en: "Save & Exit", ar: "حفظ وخروج", fr: "Enregistrer et quitter" },
+  validateFinalize: { en: "Validate & Finalize", ar: "التحقق والإنهاء", fr: "Valider et finaliser" },
+} as const;
+
+export type FactoryContainerLoadingTranslationKey = keyof typeof factoryContainerLoadingTranslations;
+
+export function translateFactoryContainerLoadingText(
+  key: FactoryContainerLoadingTranslationKey,
+  language: ApplicationLanguage,
+  params?: Record<string, string | number>
+): string {
+  const entry = factoryContainerLoadingTranslations[key];
+  const template = entry[language] || entry.en;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (_match, name: string) =>
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : `{${name}}`
+  );
+}
