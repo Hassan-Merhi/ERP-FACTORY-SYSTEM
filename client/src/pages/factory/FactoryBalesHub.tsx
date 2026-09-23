@@ -38,12 +38,14 @@ export default function FactoryBalesHub() {
   const defaultTab = requestedTab && visibleTabs.includes(requestedTab) ? requestedTab : (visibleTabs[0] ?? "history");
   const [activeTab, setActiveTab] = useState<BalesTab>(defaultTab);
 
+  const activeTabVisible = visibleTabs.includes(activeTab);
+  const firstVisibleTab = visibleTabs[0];
+
   useEffect(() => {
-    if (visibleTabs.length === 0 || visibleTabs.includes(activeTab)) return;
-    const next = visibleTabs[0];
-    setActiveTab(next);
-    window.history.replaceState(null, "", `#${next}`);
-  }, [activeTab, visibleTabs.join("|")]);
+    if (!firstVisibleTab || activeTabVisible) return;
+    setActiveTab(firstVisibleTab);
+    window.history.replaceState(null, "", `#${firstVisibleTab}`);
+  }, [activeTabVisible, firstVisibleTab]);
 
   function handleTabChange(value: string) {
     const next = value as BalesTab;
