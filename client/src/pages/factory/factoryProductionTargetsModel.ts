@@ -136,8 +136,11 @@ export function collapseLinkedProductionRows(sourceRows: ProductionRow[]): Produ
       .filter((member): member is ProductionRow => Boolean(member));
     const teamMembers = orderedMembers.length > 0 ? orderedMembers : members;
     const representative = teamMembers[0] ?? row;
-    const sharedTarget =
-      teamMembers.find((member) => member.targetBales != null)?.targetBales ?? null;
+    const hasTarget = teamMembers.some((member) => member.targetBales != null);
+    const combinedTarget = teamMembers.reduce(
+      (sum, member) => sum + (member.targetBales ?? 0),
+      0
+    );
     const sharedProduced = teamMembers.reduce(
       (highest, member) => Math.max(highest, member.producedBales ?? 0),
       0
@@ -150,7 +153,7 @@ export function collapseLinkedProductionRows(sourceRows: ProductionRow[]): Produ
 
     collapsed.push({
       ...representative,
-      targetBales: sharedTarget,
+      targetBales: hasTarget ? combinedTarget : null,
       producedBales: sharedProduced,
       status,
       active: teamMembers.some((member) => member.active),
@@ -187,19 +190,26 @@ export function summarizeProductionRows(sourceRows: ProductionRow[]) {
   }
 
   for (const members of linkedRows.values()) {
-    const sharedTarget = members.find((member) => member.targetBales != null)?.targetBales ?? 0;
+    const combinedTarget = members.reduce(
+      (sum, member) => sum + (member.targetBales ?? 0),
+      0
+    );
     const sharedProduced = members.reduce(
       (highest, member) => Math.max(highest, member.producedBales ?? 0),
       0
     );
-    target += sharedTarget;
+    target += combinedTarget;
     produced += sharedProduced;
 
-    // A linked pair/team is one production unit. If any member is absent,
-    // that unit's single shared target is unavailable for the day.
-    if (members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent)) {
-      absentTarget += sharedTarget;
-    }
+    // Linked workers share one production count, but each worker still contributes
+    // their own target. Only absent members' targets are removed from expected output.
+    absentTarget += members.reduce(
+      (sum, member) =>
+        member.status === FACTORY_TRACKING_STATUSES.absent
+          ? sum + (member.targetBales ?? 0)
+          : sum,
+      0
+    );
   }
 
   const expected = target - absentTarget;
