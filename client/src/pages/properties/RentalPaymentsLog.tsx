@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { useAppMode } from "@/contexts/AppModeContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +79,7 @@ export default function RentalPaymentsLog({
 }: Props) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const isErp = useAppMode() === "erp";
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
 
@@ -121,25 +123,48 @@ export default function RentalPaymentsLog({
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
 
   return (
-    <div className="p-4 space-y-4" data-testid={`page-${testIdPrefix}-payments-log`}>
-      <div className="flex items-center gap-3 flex-wrap justify-between">
-        <div className="flex items-center gap-3">
-          {pageIcon ?? <ClipboardList className="h-7 w-7 text-indigo-600" />}
-          <div>
-            <PageHeader title={pageTitle} subtitle="All payment receipts recorded across all units, sorted by date." />
+    <div className={isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"} data-testid={`page-${testIdPrefix}-payments-log`}>
+      {isErp ? (
+        <>
+          <PageHeader
+            title={pageTitle}
+            subtitle="All payment receipts recorded across all units, sorted by date."
+            icon={pageIcon ?? <ClipboardList className="h-5 w-5" />}
+          />
+          <div role="search" aria-label="Search payments" className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder="Search tenant, unit, notes…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid={`input-${testIdPrefix}-payments-search`}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap justify-between">
+          <div className="flex items-center gap-3">
+            {pageIcon ?? <ClipboardList className="h-7 w-7 text-indigo-600" />}
+            <div>
+              <PageHeader
+                title={pageTitle}
+                subtitle="All payment receipts recorded across all units, sorted by date."
+              />
+            </div>
+          </div>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder="Search tenant, unit, notes…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid={`input-${testIdPrefix}-payments-search`}
+            />
           </div>
         </div>
-        <div className="relative w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search tenant, unit, notes…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            data-testid={`input-${testIdPrefix}-payments-search`}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -417,12 +417,23 @@ try {
       for (const route of ROUTES) {
         consoleErrors.length = 0;
         let result;
-        try {
-          const status = await openRoute(page, route);
-          result = { route, language, status, ...(await readLayout(page, viewport)) };
-        } catch (error) {
-          result = { route, language, viewport: viewport.name, error: String(error?.message || error) };
+        let navigationRetried = false;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            const status = await openRoute(page, route);
+            result = { route, language, status, ...(await readLayout(page, viewport)) };
+            break;
+          } catch (error) {
+            // A navigation timeout (the shell never mounted) is retried once and
+            // recorded; layout findings are never retried.
+            result = { route, language, viewport: viewport.name, error: String(error?.message || error) };
+            if (attempt === 1) {
+              navigationRetried = true;
+              consoleErrors.length = 0;
+            }
+          }
         }
+        result.navigationRetried = navigationRetried;
         result.consoleErrors = consoleErrors.filter((e) => !/Failed to load resource|favicon|AISStream|\[vite\]|WebSocket connection/i.test(e));
         const { blocking, warnings } = result.error ? { blocking: [result.error], warnings: [] } : classify(result);
         result.blocking = blocking;

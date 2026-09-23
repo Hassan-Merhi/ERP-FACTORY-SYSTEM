@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -47,6 +48,7 @@ const ACCOUNT_TYPES = [
 ] as const;
 
 export default function AccountGroups() {
+  const isErp = useAppMode() === "erp";
   const { toast } = useToast();
   const { selectedCompany } = useCompany();
 
@@ -250,14 +252,23 @@ export default function AccountGroups() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b px-6 py-4">
-        <div className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary shrink-0" />
-          <PageHeader title="Account Groups" />
-          <p className="text-sm text-muted-foreground ml-2 hidden sm:block">
-            Group ledger accounts together for better reporting
-          </p>
-        </div>
+      {/* The .border-b wrapper is the Phase 1 master/detail phone layout anchor. */}
+      <div className={isErp ? "border-b border-transparent px-6 pt-4" : "border-b px-6 py-4"}>
+        {isErp ? (
+          <PageHeader
+            title="Account Groups"
+            subtitle="Group ledger accounts together for better reporting"
+            icon={<Layers className="h-5 w-5 text-primary" />}
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary shrink-0" />
+            <PageHeader title="Account Groups" />
+            <p className="text-sm text-muted-foreground ml-2 hidden sm:block">
+              Group ledger accounts together for better reporting
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex h-[calc(100vh-73px)]">

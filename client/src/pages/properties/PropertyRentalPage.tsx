@@ -13,6 +13,7 @@ import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard } from
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { useAppMode } from "@/contexts/AppModeContext";
 
 import type { CashAccount, Props, Unit } from "./property-rental/types";
 import { fmtMoney, fmtMoneyCurrency } from "./property-rental/utils";
@@ -31,6 +32,7 @@ export default function PropertyRentalPage({
 }: Props) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
+  const appMode = useAppMode();
   const [, navigate] = useLocation();
   const [openUnitId, setOpenUnitId] = useState<number | null>(null);
   const [createUnitOpen, setCreateUnitOpen] = useState(false);
@@ -142,53 +144,69 @@ export default function PropertyRentalPage({
     [units, selectedContractIds]
   );
 
+  // ERP renders the shared ERP page-header contract; Properties keeps its established header.
+  const isErp = appMode === "erp";
+  const headerActions = (
+    <>
+      {selectedContractIds.size > 0 && (
+        <Button size="sm" onClick={() => setBulkPayOpen(true)} data-testid={`button-${testIdPrefix}-bulk-pay`}>
+          <CreditCard className="h-4 w-4 mr-1" />
+          Pay Selected ({selectedContractIds.size})
+        </Button>
+      )}
+      {paymentsLogUrl && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(paymentsLogUrl)}
+          data-testid={`button-${testIdPrefix}-payments-log`}
+        >
+          <ClipboardList className="h-4 w-4 mr-1" />
+          Payments Log
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => runMonthly.mutate()}
+        disabled={runMonthly.isPending}
+        data-testid={`button-${testIdPrefix}-run-monthly`}
+      >
+        <RefreshCw className={`h-4 w-4 mr-1 ${runMonthly.isPending ? "animate-spin" : ""}`} />
+        Run Monthly Update
+      </Button>
+      <Button onClick={() => setCreateUnitOpen(true)} size="sm" data-testid={`button-${testIdPrefix}-add-unit`}>
+        <Plus className="h-4 w-4 mr-1" />
+        Add {unitType === "WAREHOUSE" ? "Warehouse" : "Shop"}
+      </Button>
+    </>
+  );
+
   return (
     <ApiBaseCtx.Provider value={apiBase}>
-      <div className="p-4 space-y-4" data-testid={`page-${testIdPrefix}`}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            {pageIcon}
-            <div>
-              <PageHeader
-                title={pageTitle}
-                subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
-              />
+      <div className={isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"} data-testid={`page-${testIdPrefix}`}>
+        {isErp ? (
+          <PageHeader
+            title={pageTitle}
+            subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
+            icon={pageIcon}
+          >
+            {headerActions}
+          </PageHeader>
+        ) : (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              {pageIcon}
+              <div>
+                <PageHeader
+                  title={pageTitle}
+                  subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
+                />
+              </div>
             </div>
+            <div className="flex items-center gap-2 flex-wrap">{headerActions}</div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {selectedContractIds.size > 0 && (
-              <Button size="sm" onClick={() => setBulkPayOpen(true)} data-testid={`button-${testIdPrefix}-bulk-pay`}>
-                <CreditCard className="h-4 w-4 mr-1" />
-                Pay Selected ({selectedContractIds.size})
-              </Button>
-            )}
-            {paymentsLogUrl && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(paymentsLogUrl)}
-                data-testid={`button-${testIdPrefix}-payments-log`}
-              >
-                <ClipboardList className="h-4 w-4 mr-1" />
-                Payments Log
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => runMonthly.mutate()}
-              disabled={runMonthly.isPending}
-              data-testid={`button-${testIdPrefix}-run-monthly`}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${runMonthly.isPending ? "animate-spin" : ""}`} />
-              Run Monthly Update
-            </Button>
-            <Button onClick={() => setCreateUnitOpen(true)} size="sm" data-testid={`button-${testIdPrefix}-add-unit`}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add {unitType === "WAREHOUSE" ? "Warehouse" : "Shop"}
-            </Button>
-          </div>
-        </div>
+        )}
 
         {/* Summary tiles */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
