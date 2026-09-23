@@ -104,7 +104,7 @@ export function useTransactionJournalModel() {
         )
       )
     );
-  }, [userPreferences]);
+  }, [userPreferences?.hiddenTransactionJournalVoucherIds]);
 
   const persistHiddenRows = useCallback(
     (ids: Set<number>) => {
