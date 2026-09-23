@@ -46,7 +46,7 @@ shared/   → Types and schema shared by both sides
 
 **Entry point** — `server/index.ts`. Bootstraps Express, configures session (PostgreSQL session store), CSRF protection (two layers: Origin/Referer guard + synchronizer token), and registers all route modules.
 
-**Route registration** — `server/routes.ts` is the barrel that imports and calls every `register*Routes(app)` function. Route modules are organized into sub-directories:
+**Route registration** — `server/routes.ts` delegates application HTTP composition to `server/routes/applicationRoutes.ts`. That composition module owns registrar ordering and calls the focused `register*Routes(app)` modules; retired compatibility registries are not part of the runtime path. Route modules are organized into sub-directories:
 
 | Directory | Covers |
 |---|---|
