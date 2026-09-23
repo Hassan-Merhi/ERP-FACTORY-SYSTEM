@@ -12,6 +12,7 @@ const factoryContainerLoadingTranslations = {
   bales: { en: "Bales", ar: "البالات", fr: "Balles" },
   balesLower: { en: "bales", ar: "بالات", fr: "balles" },
   weight: { en: "Weight", ar: "الوزن", fr: "Poids" },
+  kgUnit: { en: "kg", ar: "كغ", fr: "kg" },
   scanBale: { en: "Scan Bale", ar: "مسح البالة", fr: "Scanner une balle" },
   scanBaleHint: {
     en: "Scan a barcode, reference, article code or product name.",
