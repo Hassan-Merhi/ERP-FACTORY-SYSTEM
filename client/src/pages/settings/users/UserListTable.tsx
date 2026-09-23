@@ -40,7 +40,7 @@ function accessSummary(user: SettingsUserRow): { label: string; variant: "defaul
 function pagesSummary(user: SettingsUserRow): string {
   const privileged = ["admin", "owner", "developer"].includes(user.role?.toLowerCase() ?? "");
   if (privileged || !user.pageAccess || user.pageAccess.length === 0) return "Full access";
-  const factoryKeys = new Set(FACTORY_NAV_PAGES.map((p) => p.key));
+  const factoryKeys = new Set(FACTORY_SETTINGS_PAGES.map((p) => p.key));
   const erpKeys = new Set<string>(FEATURE_KEYS);
   const fCount = user.pageAccess.filter((k: string) => factoryKeys.has(k)).length;
   const eCount = user.pageAccess.filter((k: string) => erpKeys.has(k)).length;

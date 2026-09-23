@@ -15,8 +15,7 @@ export interface DailyStockSummaryRow {
 export function normalizeDailySummaryRows(payload: unknown): DailyStockSummaryRow[] {
   if (Array.isArray(payload)) return payload as DailyStockSummaryRow[];
 
-  const nestedRows =
-    payload && typeof payload === "object" ? (payload as { rows?: unknown }).rows : undefined;
+  const nestedRows = payload && typeof payload === "object" ? (payload as { rows?: unknown }).rows : undefined;
   return Array.isArray(nestedRows) ? (nestedRows as DailyStockSummaryRow[]) : [];
 }
 
@@ -52,7 +51,7 @@ export function DailyStockSummary({ date }: { date: string }) {
   for (const row of normalizeDailySummaryRows(summaryRows)) {
     const cat = (row.category || "").toLowerCase().trim();
     const qty = Number(row.count || 0);
-    const kg = parseFloat(row.totalKg || "0");
+    const kg = parseFloat(String(row.totalKg || "0"));
     if (cat === "garbage") {
       garbageQty += qty;
       garbageKg += kg;

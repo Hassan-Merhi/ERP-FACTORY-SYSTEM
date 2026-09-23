@@ -156,7 +156,7 @@ interface FactorySidebarUser {
 
 export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   sections: FactoryNavSection[];
-  isPinnedVisible: (item: NavItem) => boolean;
+  isPinnedVisible: (item: Pick<NavItem, "url">) => boolean;
   isAdmin: boolean;
   isDeveloper: boolean;
   isPrivileged: boolean;
@@ -185,7 +185,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     enabled: !!user && !!selectedCompany?.id,
   });
 
-  const isPinnedVisible = (item: NavItem): boolean => {
+  const isPinnedVisible = (item: Pick<NavItem, "url">): boolean => {
     const page = resolveFactoryPage(item.url);
     if (!page) return false;
     if (!factoryPageAllowsRole(page, user?.role)) return false;
@@ -194,7 +194,12 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
-    if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !hasFactoryPageKey(page, myAccess.pageKeys)) {
+    if (
+      myAccess &&
+      !myAccess.fullAccess &&
+      myAccess.pageKeys.length > 0 &&
+      !hasFactoryPageKey(page, myAccess.pageKeys)
+    ) {
       return false;
     }
     if (page.hideKey && myAccess?.hiddenCostFields?.includes(page.hideKey)) return false;
@@ -216,7 +221,12 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
         }
         const page = resolveFactoryPage(item.url);
         if (!page || !factoryPageAllowsRole(page, user?.role)) return false;
-        if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !hasFactoryPageKey(page, myAccess.pageKeys)) {
+        if (
+          myAccess &&
+          !myAccess.fullAccess &&
+          myAccess.pageKeys.length > 0 &&
+          !hasFactoryPageKey(page, myAccess.pageKeys)
+        ) {
           return false;
         }
         if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
@@ -276,7 +286,7 @@ export function FactorySidebar({
   const allNavItems = useMemo(() => [...FACTORY_PINNED_DEFAULTS, ...FACTORY_NAV_SECTIONS.flatMap((s) => s.items)], []);
   const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
   const visibleRecentItems = recentItems.filter(isPinnedVisible);
-  const conflictsVisible = isPinnedVisible({ title: "Conflicts", url: "/factory/conflicts", icon: AlertTriangle });
+  const conflictsVisible = isPinnedVisible({ url: "/factory/conflicts" });
 
   const testIdFor = (i: NavItem) => `link-factory-${i.url.split("/").pop()}`;
 
