@@ -154,7 +154,7 @@ export function StockItemCreateDialog({ open, onOpenChange }: StockItemCreateDia
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4 py-4" noValidate>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="code"
@@ -184,7 +184,7 @@ export function StockItemCreateDialog({ open, onOpenChange }: StockItemCreateDia
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="uom"
@@ -229,7 +229,7 @@ export function StockItemCreateDialog({ open, onOpenChange }: StockItemCreateDia
             </div>
 
             {stockGrades.length > 0 && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="gradeId"
