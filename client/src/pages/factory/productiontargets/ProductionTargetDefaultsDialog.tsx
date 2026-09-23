@@ -101,20 +101,28 @@ export function ProductionTargetDefaultsDialog({
 
   const changedRecords = useMemo(
     () =>
-      rows
-        .filter((row) => {
-          const draft = draftDefaults[row.personId];
-          if (!draft) return false;
-          const savedDefault = defaultsById.get(row.personId);
-          const originalCategory = savedDefault?.category ?? row.defaultCategory ?? row.category ?? "";
-          const originalTarget = savedDefault?.targetBales ?? row.defaultTargetBales ?? null;
-          return draft.category.trim() !== originalCategory.trim() || draft.targetBales !== originalTarget;
-        })
-        .map((row) => ({
-          workerId: row.personId,
-          category: (draftDefaults[row.personId]?.category ?? "").trim(),
-          targetBales: draftDefaults[row.personId]?.targetBales ?? null,
-        })),
+      rows.flatMap((row) => {
+        const draft = draftDefaults[row.personId];
+        if (!draft) return [];
+
+        const savedDefault = defaultsById.get(row.personId);
+        const originalCategory = savedDefault?.category ?? row.defaultCategory ?? row.category ?? "";
+        const originalTarget = savedDefault?.targetBales ?? row.defaultTargetBales ?? null;
+        const categoryChanged = draft.category.trim() !== originalCategory.trim();
+        const targetChanged = draft.targetBales !== originalTarget;
+
+        if (!categoryChanged && !targetChanged) return [];
+
+        return [
+          {
+            workerId: row.personId,
+            category: draft.category.trim(),
+            targetBales: draft.targetBales,
+            categoryChanged,
+            targetChanged,
+          },
+        ];
+      }),
     [rows, draftDefaults, defaultsById]
   );
 
@@ -131,8 +139,12 @@ export function ProductionTargetDefaultsDialog({
             .includes(needle)
       )
       .sort((left, right) => {
-        const leftCategory = draftDefaults[left.personId]?.category ?? left.defaultCategory ?? left.category;
-        const rightCategory = draftDefaults[right.personId]?.category ?? right.defaultCategory ?? right.category;
+        // Keep the list visually stable while category text is being edited.
+        // The new category grouping takes effect after Save + refetch.
+        const leftCategory =
+          defaultsById.get(left.personId)?.category ?? left.defaultCategory ?? left.category;
+        const rightCategory =
+          defaultsById.get(right.personId)?.category ?? right.defaultCategory ?? right.category;
         const categoryCompare = leftCategory.localeCompare(rightCategory, undefined, {
           sensitivity: "base",
           numeric: true,
@@ -140,7 +152,7 @@ export function ProductionTargetDefaultsDialog({
         if (categoryCompare !== 0) return categoryCompare;
         return left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true });
       });
-  }, [rows, search, draftDefaults]);
+  }, [rows, search, draftDefaults, defaultsById]);
 
   const updateTargetDefault = (row: ProductionRow, targetBales: number | null) => {
     setDraftDefaults((current) => {
