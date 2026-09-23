@@ -43,7 +43,7 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
                 <div className="text-sm">
                   <span className="font-medium">{order.invoiceNumber || model.tr("orderNumber", { orderId: order.id })}</span>
                   <span className="text-muted-foreground ml-2">
-                    · {order.totalQtyBales} bales · {order.status}
+                    · {order.totalQtyBales} {model.tr("balesLower")} · {order.status}
                   </span>
                 </div>
                 <Button
@@ -68,7 +68,7 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
             onClick={() => model.setShowPendingWarning(false)}
             data-testid="button-cancel-pending-warning"
           >
-            Cancel
+            {model.tr("cancel")}
           </Button>
           <Button onClick={model.startNewLoadingAnyway} data-testid="button-create-new-loading">
             {model.tr("startNewLoading")}
@@ -160,7 +160,7 @@ function RemoveBaleConfirm({ model }: { model: FactoryContainerLoadingScanModel 
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-remove-bale">Cancel</AlertDialogCancel>
+          <AlertDialogCancel data-testid="button-cancel-remove-bale">{model.tr("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground"
             data-testid="button-confirm-remove-bale"
