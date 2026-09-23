@@ -51,6 +51,10 @@ const rls = requireMarkers("migrations/0016_company_scope_rls_readiness.sql", [
   "erp_authorized_company_ids()",
   "erp_company_scope_matches",
   "voucher_entries_company_scope_policy",
+  "voucher_entries_company_idx",
+  "voucher_entries_sync_company_id",
+  "vouchers_sync_entry_company_id",
+  "USING (erp_company_scope_matches(company_id))",
 ]);
 
 for (const table of [
