@@ -60,13 +60,13 @@ jobs:
               esac
 
               case "$file" in
-                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-*.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   rtl=true
                   ;;
               esac
 
               case "$file" in
-                client/*|server/*|shared/*|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
+                client/*|server/*|shared/*|scripts/audit-i18n-*.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
                   i18n=true
                   ;;
               esac
@@ -176,7 +176,7 @@ jobs:
             client/src/i18n/applicationDirection.ts \
             client/src/i18n/applicationTranslations.ts \
             client/src/styles/rtl-hardening.css \
-            scripts/audit-i18n-phase14.mjs \
+            scripts/audit-i18n-*.mjs \
             scripts/verify-program7d-accessibility-responsive.mjs \
             tests/phase14-i18n-release-gate.test.ts \
             tests/phase8-rtl-responsive-accessibility.test.ts \
