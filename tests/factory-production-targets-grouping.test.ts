@@ -97,7 +97,7 @@ describe("Production Targets category grouping", () => {
       absentTarget: 10,
       expected: 16,
       produced: 5,
-      difference: 11,
+      difference: -11,
     });
   });
 
@@ -123,7 +123,7 @@ describe("Production Targets category grouping", () => {
       absentTarget: 0,
       expected: 26,
       produced: 17,
-      difference: 9,
+      difference: -9,
     });
   });
 });

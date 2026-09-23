@@ -10,6 +10,7 @@ import {
   Search,
   SlidersHorizontal,
   Target,
+  Users,
   UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -50,12 +51,43 @@ import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTar
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
     <Card className="shadow-none">
-      <CardContent className="flex items-center justify-between px-4 py-3">
+      <CardContent className="flex min-h-[92px] items-center justify-between px-4 py-3">
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold tabular-nums">{value}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
         </div>
-        <div className="text-muted-foreground">{icon}</div>
+        <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryGroupTile({
+  label,
+  icon,
+  metrics,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  metrics: Array<{ label: string; value: string | number }>;
+}) {
+  return (
+    <Card className="shadow-none">
+      <CardContent className="min-h-[92px] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-3">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="min-w-0">
+              <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
+                {metric.label}
+              </p>
+              <p className="text-xl font-semibold tabular-nums">{metric.value}</p>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -205,6 +237,14 @@ export default function FactoryProductionTargets() {
   const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
+  const workerTotals = useMemo(
+    () => ({
+      total: rows.length,
+      present: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.present).length,
+      absent: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length,
+    }),
+    [rows]
+  );
 
   const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
@@ -317,25 +357,33 @@ export default function FactoryProductionTargets() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile
-          label={tr("totalTarget")}
-          value={totals.target}
+        <SummaryGroupTile
+          label={tr("targets")}
           icon={<Target className="h-5 w-5" />}
+          metrics={[
+            { label: tr("total"), value: totals.target },
+            { label: tr("absent"), value: totals.absentTarget },
+            { label: tr("expected"), value: totals.expected },
+          ]}
+        />
+        <SummaryGroupTile
+          label={tr("workers")}
+          icon={<Users className="h-5 w-5" />}
+          metrics={[
+            { label: tr("total"), value: workerTotals.total },
+            { label: tr("present"), value: workerTotals.present },
+            { label: tr("absent"), value: workerTotals.absent },
+          ]}
         />
         <SummaryTile
-          label={tr("totalAbsentTarget")}
-          value={totals.absentTarget}
-          icon={<UserX className="h-5 w-5" />}
-        />
-        <SummaryTile
-          label={tr("totalExpected")}
-          value={totals.expected}
+          label={tr("totalProduced")}
+          value={totals.produced}
           icon={<ClipboardCheck className="h-5 w-5" />}
         />
         <SummaryTile
           label={tr("diff")}
           value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
-          icon={<ClipboardCheck className="h-5 w-5" />}
+          icon={<UserX className="h-5 w-5" />}
         />
       </div>
 
