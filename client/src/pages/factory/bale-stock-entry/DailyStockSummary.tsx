@@ -6,13 +6,39 @@ export function formatDailyNum(val: number): string {
   return val % 1 === 0 ? val.toFixed(0) : parseFloat(val.toFixed(3)).toString();
 }
 
+export interface DailyStockSummaryRow {
+  category?: string | null;
+  count?: number | string | null;
+  totalKg?: number | string | null;
+}
+
+export function normalizeDailySummaryRows(payload: unknown): DailyStockSummaryRow[] {
+  if (Array.isArray(payload)) return payload as DailyStockSummaryRow[];
+
+  const nestedRows =
+    payload && typeof payload === "object" ? (payload as { rows?: unknown }).rows : undefined;
+  return Array.isArray(nestedRows) ? (nestedRows as DailyStockSummaryRow[]) : [];
+}
+
 export function DailyStockSummary({ date }: { date: string }) {
   const todayStr = new Date().toLocaleDateString("en-CA");
 
-  const { data: summaryRows = [] } = useQuery({
+  const { data: summaryRows = [] } = useQuery<DailyStockSummaryRow[]>({
     queryKey: ["/api/factory/bales/daily-summary", date],
-    queryFn: () =>
-      fetch(`/api/factory/bales/daily-summary?date=${date}`, { credentials: "include" }).then((r) => r.json()),
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/bales/daily-summary?date=${date}`, {
+        credentials: "include",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          payload && typeof payload === "object" && "message" in payload
+            ? String((payload as { message?: unknown }).message || "Failed to load daily production summary")
+            : "Failed to load daily production summary";
+        throw new Error(message);
+      }
+      return normalizeDailySummaryRows(payload);
+    },
     staleTime: 30000,
   });
 
@@ -23,7 +49,7 @@ export function DailyStockSummary({ date }: { date: string }) {
   let wipersQty = 0,
     wipersKg = 0;
 
-  for (const row of summaryRows) {
+  for (const row of normalizeDailySummaryRows(summaryRows)) {
     const cat = (row.category || "").toLowerCase().trim();
     const qty = Number(row.count || 0);
     const kg = parseFloat(row.totalKg || "0");
