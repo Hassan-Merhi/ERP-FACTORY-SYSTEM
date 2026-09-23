@@ -173,6 +173,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return attendanceRequirement();
   }
 
+  if (path === "/send-weekly-report-whatsapp") {
+    return requirement("factory/production-report");
+  }
+
   if (path === "/send-mix-batch-image-whatsapp") {
     const destination = String(req.body?.destination || req.body?.recipient || "");
     if (destination === "attendance") return attendanceRequirement();
@@ -333,6 +337,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/customer-proformas") ||
     hasPrefix(path, "/customer-proforma-lines") ||
     hasPrefix(path, "/customer-orders") ||
+    hasPrefix(path, "/customer-orders-loading") ||
     hasPrefix(path, "/invoice-loading-sessions") ||
     hasPrefix(path, "/invoices") ||
     hasPrefix(path, "/sales")
@@ -489,7 +494,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       requirement("factory/price-list"),
       requirement("factory/invoicing", ["hide_invoicing_proformas_tab"]),
       requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
-      requirement("factory/production-comparison")
+      requirement("factory/production-comparison"),
+      requirement("factory/intelligence/production-hub"),
+      requirement("factory/stock-allocation-v5"),
+      requirement("factory/location-inventory")
     );
   }
 
@@ -500,7 +508,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       requirement("factory/stock-bale-list"),
       requirement("factory/stock-allocation-v5"),
       requirement("factory/invoicing", ["hide_invoicing_loadings_tab"]),
-      requirement("factory/production-report")
+      requirement("factory/production-report"),
+      requirement("factory/intelligence/dashboard"),
+      requirement("factory/intelligence/production-hub"),
+      requirement("factory/production-comparison")
     );
   }
 
@@ -515,7 +526,14 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/container-doc-types") ||
     hasPrefix(path, "/freight")
   ) {
-    return requirement("factory/containers-hub");
+    if (isWrite(req)) return requirement("factory/containers-hub");
+    return anyOf(
+      requirement("factory/containers-hub"),
+      requirement("factory/raw-materials"),
+      requirement("factory/production-report"),
+      requirement("factory/intelligence/dashboard"),
+      requirement("factory/intelligence/financial-hub")
+    );
   }
 
   if (
@@ -537,7 +555,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       requirement("factory/parties", ["hide_tab_parties_suppliers"]),
       requirement("factory/raw-materials"),
       requirement("factory/containers-hub"),
-      requirement("factory/intelligence/supplier-hub")
+      requirement("factory/intelligence/supplier-hub"),
+      requirement("factory/intelligence/financial-hub"),
+      requirement("factory/intelligence/dashboard"),
+      requirement("factory/production-report")
     );
   }
   if (
