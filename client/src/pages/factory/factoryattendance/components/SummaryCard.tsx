@@ -11,13 +11,31 @@ export function SummaryCard({
   value,
   color,
   testId,
+  modern = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   color: string;
   testId: string;
+  modern?: boolean;
 }) {
+  if (!modern) {
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-3 pb-4 pt-4">
+          <div className={`shrink-0 ${color}`}>{icon}</div>
+          <div>
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className={`text-2xl font-bold ${color}`} data-testid={testId}>
+              {value}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="group overflow-hidden border-border/70 bg-card/80 shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card">
       <CardContent className="flex min-h-[96px] items-center justify-between gap-3 p-4">
