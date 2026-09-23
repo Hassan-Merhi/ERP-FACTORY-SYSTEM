@@ -133,8 +133,16 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
   if (path.startsWith("/api/voucher-entries") || path.startsWith("/api/voucher-detail")) {
     return [
       page(VOUCHERS_PAGE),
+      page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
       page(ACCOUNTS_PAGE, "hide_tab_accounts_find_voucher"),
       page(DAYBOOK_PAGE, "hide_tab_daybook_transactions"),
+    ];
+  }
+
+  if (path === "/api/vouchers/bulk-delete") {
+    return [
+      page(VOUCHERS_PAGE),
+      page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
     ];
   }
 
@@ -180,6 +188,7 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
   if (path === "/api/vouchers" || path.startsWith("/api/vouchers/")) {
     return [
       page(VOUCHERS_PAGE),
+      page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
       page(ACCOUNTS_PAGE, "hide_tab_accounts_find_voucher"),
       page(DAYBOOK_PAGE, "hide_tab_daybook_transactions"),
     ];
@@ -215,13 +224,20 @@ export async function enforceSharedFactoryAccess(req: Request, res: Response, ne
       return;
     }
 
+    const factoryMode = String(req.get("X-App-Mode") || "").toLowerCase() === "factory";
     const state = await getFactoryAccessState(req);
     if (!state) {
+      if (factoryMode) {
+        sendFactoryAccessDenied(res, {
+          allowed: false,
+          code: "FACTORY_ACCESS_CONTEXT_MISSING",
+          message: "Factory access context is unavailable.",
+        });
+        return;
+      }
       next();
       return;
     }
-
-    const factoryMode = String(req.get("X-App-Mode") || "").toLowerCase() === "factory";
 
     // Normal ERP/POS callers keep their existing authorization path. Factory-only
     // accounts cannot bypass Factory restrictions by stripping the mode header.
