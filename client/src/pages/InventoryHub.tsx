@@ -1,4 +1,4 @@
-import { MapPin, Ship, Package } from "lucide-react";
+import { MapPin, Ship, Package, Layers } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
