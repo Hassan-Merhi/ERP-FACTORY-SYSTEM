@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -40,13 +41,14 @@ describe("script inventory", () => {
     expect(report.failures, report.failures.join("\n")).toEqual([]);
   });
 
-  it("never lets the orphan count grow", () => {
+  it("keeps the verification-script orphan backlog at zero", () => {
     const report = auditScriptInventory({ run: false });
 
+    expect(inventoryConfig.orphanCeiling).toBe(0);
     expect(
       report.summary.orphan,
-      `${report.summary.orphan} verify/audit scripts are invoked by nothing; ceiling is ${inventoryConfig.orphanCeiling}.`
-    ).toBeLessThanOrEqual(inventoryConfig.orphanCeiling);
+      `${report.summary.orphan} verify/audit scripts have no maintained entry point.`
+    ).toBe(0);
   });
 
   it("still classifies most scripts as wired or chained", () => {
@@ -55,6 +57,28 @@ describe("script inventory", () => {
     // If the invoker scan broke, everything would look orphaned and the
     // ceiling would be the only thing failing — this says so directly.
     expect(report.summary.wired + report.summary.chained).toBeGreaterThan(report.summary.orphan);
+  });
+
+  it("keeps generated review output out of the tracked source tree", () => {
+    const trackedFiles = execFileSync("git", ["ls-files"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    })
+      .split(/\r?\n/)
+      .filter(Boolean);
+
+    const trackedGenerated = trackedFiles.filter(
+      (file) =>
+        file.startsWith("artifacts/mockup-sandbox/") ||
+        /^artifacts\/security\/.*-open-alerts\.json$/.test(file) ||
+        file.startsWith("screenshots/")
+    );
+    expect(trackedGenerated).toEqual([]);
+
+    const gitignore = fs.readFileSync(path.join(process.cwd(), ".gitignore"), "utf8");
+    expect(gitignore).toContain("artifacts/mockup-sandbox/");
+    expect(gitignore).toContain("artifacts/security/*-open-alerts.json");
+    expect(gitignore).toContain("/screenshots/");
   });
 
   it("keeps the known-failing list shrinking, never growing", () => {

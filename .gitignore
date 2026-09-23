@@ -45,6 +45,11 @@ artifacts/phase7-browser-e2e/
 artifacts/wave6-realtime-e2e/
 artifacts/wave6-realtime-startup/
 
+# Generated design/security review artifacts (never source inputs)
+artifacts/mockup-sandbox/
+artifacts/security/*-open-alerts.json
+/screenshots/
+
 # ESLint machine report written by scripts/run-lint.mjs (regenerated on demand)
 artifacts/lint/
 artifacts/i18n-audit/

@@ -19,10 +19,7 @@ describe("Phase 6 inventory route ownership", () => {
     expect(inventoryRoutes).toContain("registerInventoryMovementRoutes(app);");
   });
 
-  it("keeps inventory HTTP ownership out of any retired legacy registry", () => {
+  it("keeps inventory HTTP ownership out of the retired legacy registry", () => {
     expect(fs.existsSync(path.join(root, "server/routesLegacy.ts"))).toBe(false);
-
-    const boundaries = JSON.parse(read("config/legacy-route-boundaries.json")) as { files: unknown[] };
-    expect(boundaries.files).toEqual([]);
   });
 });

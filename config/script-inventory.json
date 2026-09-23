@@ -1,7 +1,7 @@
 {
-  "version": 2,
-  "description": "Inventory for scripts/verify-*.mjs and scripts/audit-*.mjs. 'wired' now means an automatic GitHub Actions or CircleCI invocation, not merely an npm alias. Package-only and workflow_dispatch-only scripts are 'manual'; scripts reached only from tests/other scripts are 'chained'; scripts with no invocation/exposure are 'orphan'. Automatic wired scripts must pass unless they explicitly require a build artifact/database/network and are listed in environmentDependent. knownFailing is allowed only for manual checks: a failing script may not be promoted into automatic CI and then suppressed. Stale exception rows fail. The orphan count remains a falling ceiling.",
-  "orphanCeiling": 17,
+  "version": 3,
+  "description": "Inventory for scripts/verify-*.mjs and scripts/audit-*.mjs. 'wired' means an automatic GitHub Actions or CircleCI invocation; 'manual' means an explicit package command or workflow_dispatch-only workflow; 'chained' means reached through another maintained script/test, including the manual verification dispatcher; and 'orphan' means there is no maintained entry point. Orphan verification scripts are not allowed. Automatic wired scripts must pass unless their environment dependency is declared. knownFailing is allowed only for manual checks, and stale exceptions fail.",
+  "orphanCeiling": 0,
   "environmentDependent": {
     "verify-server-bundle.mjs": "Reads dist/ — requires npm run build.",
     "verify-runtime-dependencies.mjs": "Reads esbuild's metafile from dist/ — requires npm run build.",
