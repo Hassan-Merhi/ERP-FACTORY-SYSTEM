@@ -5,6 +5,7 @@ import StockItems from "@/pages/StockItems";
 import StockQuery from "@/pages/StockQuery";
 import OffloadItemSearch from "@/pages/OffloadItemSearch";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
 const TABS = [
   { value: "items", label: "Items", icon: Package, featureKey: "stock_items" as const },
@@ -26,7 +27,7 @@ export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
   });
 
   if (visibleTabs.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">No Stock tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   return (
