@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowLeft,
   UserX,
@@ -101,6 +102,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
     showAdvances,
     showBales,
     showDocuments,
+    showProfile,
     showStatement,
     stats,
     statsLoading,
@@ -114,6 +116,20 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
     workerLoading,
     wrapAdminAction,
   } = model;
+  const visibleDetailTabs = [
+    showProfile ? "profile" : null,
+    showStatement ? "statement" : null,
+    showAdvances ? "advances" : null,
+    showBales ? "bales" : null,
+    showDocuments ? "documents" : null,
+  ].filter((value): value is "profile" | "statement" | "advances" | "bales" | "documents" => value !== null);
+  const [requestedDetailTab, setRequestedDetailTab] = useState<
+    "profile" | "statement" | "advances" | "bales" | "documents"
+  >("profile");
+  const activeDetailTab = visibleDetailTabs.includes(requestedDetailTab)
+    ? requestedDetailTab
+    : visibleDetailTabs[0];
+
   if (!workerId)
     return <div className="flex items-center justify-center py-20 text-muted-foreground">Invalid worker ID</div>;
 
@@ -314,11 +330,19 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
         </div>
 
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="profile">
+          {activeDetailTab ? (
+          <Tabs
+            value={activeDetailTab}
+            onValueChange={(value) =>
+              setRequestedDetailTab(value as "profile" | "statement" | "advances" | "bales" | "documents")
+            }
+          >
             <TabsList className="mb-4">
-              <TabsTrigger value="profile" data-testid="tab-profile">
-                Profile
-              </TabsTrigger>
+              {showProfile && (
+                <TabsTrigger value="profile" data-testid="tab-profile">
+                  Profile
+                </TabsTrigger>
+              )}
               {showStatement && (
                 <TabsTrigger value="statement" data-testid="tab-statement">
                   Statement
@@ -341,7 +365,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
               )}
             </TabsList>
 
-            <TabsContent value="profile" className="space-y-4">
+            {showProfile && <TabsContent value="profile" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader className="pb-2">
@@ -427,7 +451,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
+            </TabsContent>}
 
             {showStatement && (
               <TabsContent value="statement" className="space-y-4">
@@ -658,6 +682,11 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
 
             <FactoryWorkerDocumentsBalesPanel model={model} />
           </Tabs>
+          ) : (
+            <div className="rounded-md border p-6 text-sm text-muted-foreground">
+              No Worker Profile tabs are available for this user.
+            </div>
+          )}
         </div>
       </div>
 
