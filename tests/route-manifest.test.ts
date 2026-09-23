@@ -68,7 +68,11 @@ const reviewedSpMounts: string[] = [];
 // next() on every path that is not a round-trip return (a missing saved
 // migration, a non-matching one, no post-migration vouchers), so the later
 // registration stays reachable rather than becoming dead code.
-const MAX_SHADOWED_REGISTRATIONS = 167;
+// Lowered from 167 to 143 by removing registerDataToolsRoutes: it registered
+// the deleted-items, admin repair and PO-supplier fix routes a second time,
+// ahead of adminRoutes, which also put the first deleted-items permanent
+// handler in front of the dependent-row handler meant to run before it.
+const MAX_SHADOWED_REGISTRATIONS = 143;
 let actual: SerializedRouteManifest;
 
 async function buildManifest(): Promise<SerializedRouteManifest> {

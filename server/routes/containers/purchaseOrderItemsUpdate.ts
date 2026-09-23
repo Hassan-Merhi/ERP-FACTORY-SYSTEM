@@ -103,15 +103,20 @@ export async function applyPurchaseOrderItemsUpdate(
   // and the line-item rewrite.
   await db.transaction(async (tx) => {
     // FOR UPDATE is the serialization boundary shared with executeContainerOffloadLifecycle.
-    const [lockedContainer] = await tx
-      .select({ id: containers.id, status: containers.status })
-      .from(containers)
-      .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
-      .limit(1)
-      .for("update");
+    // A purchase order without a container has no offload to race with, so only
+    // the PO row is locked for it.
+    let lockedContainer: { id: number; status: string | null } | undefined;
+    if (existingPO.containerId != null) {
+      [lockedContainer] = await tx
+        .select({ id: containers.id, status: containers.status })
+        .from(containers)
+        .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
+        .limit(1)
+        .for("update");
 
-    if (!lockedContainer) {
-      throw new HttpError(404, "Container not found for this purchase order");
+      if (!lockedContainer) {
+        throw new HttpError(404, "Container not found for this purchase order");
+      }
     }
 
     // Take the PO row second, matching the offload lifecycle's container -> PO lock
@@ -130,7 +135,7 @@ export async function applyPurchaseOrderItemsUpdate(
     // The route performs a fast user-facing check before entering the transaction.
     // Re-check here after the container lock so an offload that won the race cannot
     // be followed by a stock-item swap against inventory that was already materialized.
-    if (lockedContainer.status === "OFFLOADED") {
+    if (lockedContainer?.status === "OFFLOADED") {
       const currentLineItems = await tx
         .select({ stockItemId: poLineItems.stockItemId })
         .from(poLineItems)

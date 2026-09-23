@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { registerDataToolsRoutes } from "./admin/dataToolsRoutes";
 import { registerUserManagementRoutes } from "./admin/userManagementRoutes";
 import { registerCompanySettingsRoutes } from "./admin/companySettingsRoutes";
 import { registerAccountMigrationRoundTripRoutes } from "./admin/accountMigrationRoundTripRoutes";
@@ -52,7 +51,6 @@ export function registerAdminRoutes(app: Express) {
   app.use("/api/files/:id/download", requireStoredFileAccess("download"));
   app.use("/api/files/:id/preview", requireStoredFileAccess("read"));
 
-  registerDataToolsRoutes(app);
   registerUserManagementRoutes(app);
   registerCompanySettingsRoutes(app);
   registerAccountMigrationRoundTripRoutes(app);

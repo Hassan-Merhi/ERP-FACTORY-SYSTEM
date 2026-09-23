@@ -134,7 +134,6 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_O
       developerOnly: page.accessLevel === "developer",
       featureFlag: page.featureFlag,
       featureFlagDefaultOn: page.featureFlagDefaultOn,
-      hideKey: page.hideKey,
     })),
   };
 }).filter((section) => section.items.length > 0);
@@ -202,7 +201,6 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     ) {
       return false;
     }
-    if (page.hideKey && myAccess?.hiddenCostFields?.includes(page.hideKey)) return false;
     return true;
   };
 
