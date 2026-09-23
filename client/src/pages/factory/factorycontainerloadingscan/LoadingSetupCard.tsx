@@ -1,12 +1,8 @@
 /**
  * Setup card of the container loading scan page: customer, loading location,
  * proforma, note and the Start Loading action.
- *
- * Split out of FactoryContainerLoadingScan.tsx unchanged — customer, location
- * and proforma lock once an order exists, and the note gains an explicit save
- * button only after the order is created.
  */
-import { MapPin, Play, Save } from "lucide-react";
+import { FileText, MapPin, Play, Save, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,16 +10,24 @@ import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoad
 
 export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { orderId, customerId, activeProformas } = model;
+
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20">
-        <span className="text-sm font-semibold">Setup</span>
+    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
+      <div className="border-b px-4 py-3 sm:px-5">
+        <h3 className="text-sm font-semibold sm:text-base">Loading Details</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {orderId ? "Order details stay locked while you scan." : "Choose where and who this container is for."}
+        </p>
       </div>
-      <div className="p-4 space-y-4">
+
+      <div className="space-y-4 p-4 sm:p-5">
         <div>
-          <label className="text-sm font-medium mb-1 block">Customer</label>
+          <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <UserRound className="h-3.5 w-3.5" />
+            Customer
+          </label>
           <Select value={model.selectedCustomerId} onValueChange={model.setSelectedCustomerId} disabled={!!orderId}>
-            <SelectTrigger data-testid="select-customer">
+            <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-customer">
               <SelectValue placeholder="Select customer..." />
             </SelectTrigger>
             <SelectContent>
@@ -37,12 +41,12 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
         </div>
 
         <div>
-          <label className="text-sm font-medium mb-1 block">
-            <MapPin className="inline h-3 w-3 mr-1" />
+          <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" />
             Loading Location
           </label>
           <Select value={model.selectedLocationId} onValueChange={model.setSelectedLocationId} disabled={!!orderId}>
-            <SelectTrigger data-testid="select-location">
+            <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-location">
               <SelectValue placeholder="Select location..." />
             </SelectTrigger>
             <SelectContent>
@@ -56,10 +60,13 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
         </div>
 
         {customerId && !orderId && activeProformas.length > 0 && (
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Proforma</label>
-            <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId} disabled={!!orderId}>
-              <SelectTrigger data-testid="select-proforma">
+          <div>
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              Proforma
+            </label>
+            <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId}>
+              <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-proforma">
                 <SelectValue placeholder="Select a proforma..." />
               </SelectTrigger>
               <SelectContent>
@@ -77,27 +84,30 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
         )}
 
         {customerId && !orderId && activeProformas.length === 0 && (
-          <p className="text-sm text-muted-foreground" data-testid="text-no-proforma">
+          <div
+            className="rounded-xl border border-dashed bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground"
+            data-testid="text-no-proforma"
+          >
             No active proforma found. Loading will proceed without price references.
-          </p>
+          </div>
         )}
 
-        {/* Note field — editable before and after loading starts */}
         <div>
-          <label className="text-sm font-medium mb-1 block">Note</label>
+          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Note</label>
           {orderId ? (
-            <div className="flex gap-2 items-start">
+            <div className="flex items-start gap-2">
               <Textarea
                 value={model.loadingNote}
                 onChange={(e) => model.setLoadingNote(e.target.value)}
                 placeholder="Add a note for this loading..."
-                className="resize-none text-sm"
+                className="min-h-[78px] resize-none rounded-xl bg-muted/10 text-sm"
                 rows={2}
                 data-testid="input-loading-note"
               />
               <Button
                 size="icon"
                 variant="outline"
+                className="h-10 w-10 shrink-0 rounded-xl"
                 onClick={() => model.saveNoteMutation.mutate(model.loadingNote)}
                 disabled={model.saveNoteMutation.isPending}
                 data-testid="button-save-note"
@@ -111,7 +121,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
               value={model.loadingNote}
               onChange={(e) => model.setLoadingNote(e.target.value)}
               placeholder="Optional note (e.g. Rush order, Handle with care)"
-              className="resize-none text-sm"
+              className="min-h-[78px] resize-none rounded-xl bg-muted/10 text-sm"
               rows={2}
               data-testid="input-loading-note"
             />
@@ -120,7 +130,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
 
         {!orderId && (
           <Button
-            className="w-full"
+            className="h-11 w-full rounded-xl"
             onClick={model.handleStartLoading}
             disabled={
               !customerId ||
