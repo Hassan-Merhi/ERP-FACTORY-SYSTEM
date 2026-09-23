@@ -155,14 +155,25 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = [
   },
 ];
 
-export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = [
-  ...FACTORY_NAV_SECTIONS.flatMap((s) =>
-    s.items.map((item) => ({ key: item.url.replace(/^\//, ""), label: item.title, group: s.label }))
-  ),
-  { key: "factory/daybook", label: "Daybook", group: "Other" },
+const FACTORY_ACCESS_EXTRA_PAGES: { key: string; label: string; group: string }[] = [
+  { key: "factory/production-report", label: "Overview", group: "Production" },
+  { key: "factory/agents", label: "Agent Ledger", group: "Finance" },
+  { key: "factory/accounts", label: "Accounts", group: "Finance" },
+  { key: "factory/vouchers", label: "Vouchers", group: "Finance" },
   { key: "factory/chat", label: "Chat", group: "Other" },
   { key: "factory/settings", label: "Settings", group: "Other" },
 ];
+
+export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = Array.from(
+  new Map(
+    [
+      ...FACTORY_NAV_SECTIONS.flatMap((s) =>
+        s.items.map((item) => ({ key: item.url.replace(/^\//, ""), label: item.title, group: s.label }))
+      ),
+      ...FACTORY_ACCESS_EXTRA_PAGES,
+    ].map((page) => [page.key, page])
+  ).values()
+);
 
 const FACTORY_PINNED_DEFAULTS: NavItem[] = [
   { title: "Overview", url: "/factory/production-report", icon: BarChart3 },
