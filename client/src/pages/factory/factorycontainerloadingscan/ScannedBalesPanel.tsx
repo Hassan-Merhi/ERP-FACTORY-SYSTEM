@@ -61,9 +61,9 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
               <ScanLine className="h-4 w-4 text-primary" />
             </span>
-            Scan Bale
+            {model.tr("scanBale")}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Scan a barcode, reference, article code or product name.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{model.tr("scanBaleHint")}</p>
         </div>
 
         <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 sm:flex sm:w-auto sm:items-center">
@@ -80,14 +80,14 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             }
             title={
               model.ignoreProforma
-                ? "Ignore Proforma is ON — items not in proforma scan through immediately (still flagged). Click to turn off."
-                : "Turn on to scan items not in the proforma without needing to scan twice."
+                ? model.tr("ignoreProformaOnTitle")
+                : model.tr("ignoreProformaOffTitle")
             }
             data-testid="button-ignore-proforma"
           >
             <ShieldOff className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
             <span className="hidden truncate min-[360px]:inline">
-              {model.ignoreProforma ? "Ignore: ON" : "Ignore Proforma"}
+              {model.ignoreProforma ? model.tr("ignoreOn") : model.tr("ignoreProforma")}
             </span>
           </Button>
 
@@ -99,7 +99,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             data-testid="button-import-excel"
           >
             <Upload className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
-            <span className="truncate">Import Excel</span>
+            <span className="truncate">{model.tr("importExcel")}</span>
           </Button>
 
           <Button
@@ -108,8 +108,8 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
             onClick={() => model.downloadTemplate("ref")}
             className="px-2"
             data-testid="button-template-ref"
-            title="Download Ref Number template"
-            aria-label="Download Ref Number template"
+            title={model.tr("downloadRefTemplate")}
+            aria-label={model.tr("downloadRefTemplate")}
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
@@ -132,7 +132,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           value={model.scanCode}
           onChange={(e) => model.setScanCode(e.target.value)}
           onKeyDown={model.handleScan}
-          placeholder="Scan barcode, ref no., article code, item name…"
+          placeholder={model.tr("scanPlaceholder")}
           disabled={!model.orderId || !model.selectedLocationId || model.addBaleMutation.isPending}
           className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-sm transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
           autoFocus
@@ -159,9 +159,9 @@ function BaleGroups({
         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
           <Package className="h-6 w-6 opacity-60" />
         </div>
-        <p className="font-medium text-foreground">No bales scanned yet</p>
+        <p className="font-medium text-foreground">{model.tr("noBalesScanned")}</p>
         <p className="mt-1 max-w-sm text-sm">
-          {!model.orderId ? "Set up the loading order first, then scan bales" : "Your scanned bales will appear here instantly."}
+          {!model.orderId ? model.tr("setupFirstHint") : model.tr("scannedAppearHint")}
         </p>
       </div>
     );
@@ -194,7 +194,7 @@ function BaleGroups({
 
             <div className="flex items-center gap-3 text-xs text-muted-foreground sm:text-sm">
               <span>
-                <span className="font-mono font-semibold text-foreground">{group.bales.length}</span> qty
+                <span className="font-mono font-semibold text-foreground">{group.bales.length}</span> {model.tr("qty")}
               </span>
               <span className="h-4 w-px bg-border" />
               <span className="font-mono">{formatNumber(group.totalWeight, 2)} kg</span>
@@ -227,7 +227,7 @@ function BaleGroups({
                                 className="mt-0.5 text-[11px] text-muted-foreground/80"
                                 data-testid={`text-bale-scan-audit-${bale.id}`}
                               >
-                                {scanAudit.scannedBy ? `Scanned by ${scanAudit.scannedBy}` : "Scanned"}
+                                {scanAudit.scannedBy ? model.tr("scannedBy", { name: scanAudit.scannedBy }) : model.tr("scanned")}
                                 {scannedAtText ? ` • ${scannedAtText}` : ""}
                               </div>
                             )}
@@ -243,8 +243,8 @@ function BaleGroups({
                               onClick={() => model.setBaleToDelete({ id: bale.id, baleReference: bale.baleReference })}
                               disabled={model.removeBaleMutation.isPending}
                               data-testid={`button-remove-bale-${bale.id}`}
-                              title="Return bale to stock"
-                              aria-label={`Return ${bale.baleReference} to stock`}
+                              title={model.tr("returnBaleToStock")}
+                              aria-label={model.tr("returnNamedBaleToStock", { reference: bale.baleReference })}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -276,7 +276,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
       >
         <span className="flex items-center gap-2">
           <History className="h-4 w-4 text-muted-foreground" />
-          Removed Bales
+          {model.tr("removedBales")}
           <Badge variant="secondary" data-testid="badge-removal-count">
             {baleRemovals.length}
           </Badge>
@@ -293,11 +293,11 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Reference</TableHead>
-                <TableHead>Article</TableHead>
-                <TableHead className="text-right">Weight</TableHead>
-                <TableHead>Removed By</TableHead>
-                <TableHead>Time</TableHead>
+                <TableHead>{model.tr("reference")}</TableHead>
+                <TableHead>{model.tr("article")}</TableHead>
+                <TableHead className="text-right">{model.tr("weight")}</TableHead>
+                <TableHead>{model.tr("removedBy")}</TableHead>
+                <TableHead>{model.tr("time")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -361,14 +361,14 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
         >
           <div>
             <h2 className="text-sm font-semibold sm:text-base" data-testid="text-bales-header">
-              Scanned Bales
+              {model.tr("scannedBales")}
             </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Live contents of this loading</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{model.tr("liveContents")}</p>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Badge variant="secondary" className="rounded-lg px-2.5 py-1" data-testid="badge-bale-count">
-              {bales.length} bales
+              {bales.length} {model.tr("balesLower")}
             </Badge>
             {bales.length > 0 && (
               <Badge variant="outline" className="rounded-lg px-2.5 py-1 font-mono" data-testid="badge-total-weight">
@@ -383,12 +383,12 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               onClick={() => model.setShowEmptyContainerConfirm(true)}
               disabled={bales.length === 0 || model.emptyContainerMutation.isPending}
               className="h-8 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive sm:px-2.5"
-              title="Remove all scanned bales and return them to stock"
+              title={model.tr("emptyContainerTitle")}
               data-testid="button-empty-container"
             >
               <Trash2 className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
               <span className="hidden sm:inline">
-                {model.emptyContainerMutation.isPending ? "Emptying…" : "Empty"}
+                {model.emptyContainerMutation.isPending ? model.tr("emptying") : model.tr("empty")}
               </span>
             </Button>
 
@@ -397,7 +397,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               variant={viewMode === "detailed" ? "secondary" : "ghost"}
               className="h-8 w-8"
               onClick={() => model.setViewMode(viewMode === "detailed" ? "condensed" : "detailed")}
-              title={viewMode === "detailed" ? "Switch to condensed view" : "Switch to detailed view"}
+              title={viewMode === "detailed" ? model.tr("switchCondensed") : model.tr("switchDetailed")}
               data-testid="button-toggle-view-mode"
             >
               {viewMode === "detailed" ? <Rows3 className="h-4 w-4" /> : <AlignJustify className="h-4 w-4" />}
@@ -416,7 +416,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-green-700 dark:text-green-300">
-                  Last Scanned
+                  {model.tr("lastScanned")}
                 </div>
                 <div className="truncate font-mono text-sm font-semibold text-green-950 dark:text-green-100">
                   {lastScannedRef.baleReference}
