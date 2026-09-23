@@ -47,6 +47,7 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
   it("converts bale stock entry headers, summaries, and tabs without changing routes", () => {
     const page = source("client/src/pages/factory/BaleStockEntry.tsx");
     const summary = source("client/src/pages/factory/bale-stock-entry/DailyStockSummary.tsx");
+    const reportRoute = source("server/routes/factory/bales/balesReportRoutes.ts");
 
     expect(page).toContain("FactoryMobilePage");
     expect(page).toContain("FactoryMobileHeaderActions");
@@ -56,6 +57,9 @@ describe("Mobile responsiveness Phase 7 Factory workflows", () => {
     expect(summary).toContain('data-factory-daily-summary="true"');
     expect(summary).toContain("min-[420px]:grid-cols-2");
     expect(summary).toContain("/api/factory/bales/daily-summary");
+    expect(summary).toContain("normalizeDailySummaryRows");
+    expect(summary).toContain("Array.isArray(payload)");
+    expect(reportRoute).toContain("res.json(resultRows(rows));");
   });
 
   it("makes the scanner accessible and phone safe", () => {

@@ -42,7 +42,7 @@ export function registerBalesReportRoutes(app: Express) {
         GROUP BY LOWER(TRIM(COALESCE(category, '')))
       `);
 
-      res.json(rows.rows ?? rows);
+      res.json(resultRows(rows));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
