@@ -96,7 +96,6 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         }
 
         const now = new Date();
-        const finalizedAtTs = effectiveEntryDate ?? now;
         let baleIndex = 0;
         let totalWeight = 0;
 
@@ -168,7 +167,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
               costPerKg: String(effectiveCostPerKg),
               totalCost: String(baleTotalCost),
               status: "IN_STOCK",
-              finalizedAt: finalizedAtTs,
+              // Entry date controls production attribution/history; finalizedAt is the actual action time.
+              finalizedAt: now,
               finalizedBy: attribution.workerId,
               workerName: attribution.workerName,
               stockEntryDate: effectiveDateStr,
