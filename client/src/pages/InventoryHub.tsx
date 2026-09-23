@@ -1,24 +1,20 @@
-import { MapPin, Ship, Package, Layers } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { MapPin, Ship, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import LocationInventory from "@/pages/LocationInventory";
 import StockOTW from "@/pages/StockOTW";
 import Containers from "@/pages/ContainersPage";
-import CombinedInventory from "@/pages/CombinedInventory";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 
 const TABS = [
   { value: "by-location", label: "By Location", icon: MapPin, featureKey: "location_inventory" as const },
   { value: "on-the-way", label: "On The Way", icon: Ship, featureKey: "stock_otw" as const },
-  { value: "combined", label: "Combined", icon: Layers, featureKey: "stock_items" as const },
   { value: "containers", label: "Containers", icon: Package, featureKey: "containers" as const },
 ] as const;
 
 const TAB_VALUES = TABS.map((tab) => tab.value);
 
-export default function InventoryHub() {
-  const { data: access } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
+export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) {
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
   const visibleValues = visibleTabs.map((tab) => tab.value);
 
@@ -59,7 +55,6 @@ export default function InventoryHub() {
 
       {activeTab === "by-location" && visibleValues.includes("by-location") && <LocationInventory />}
       {activeTab === "on-the-way" && visibleValues.includes("on-the-way") && <StockOTW />}
-      {activeTab === "combined" && visibleValues.includes("combined") && <CombinedInventory />}
       {activeTab === "containers" && visibleValues.includes("containers") && <Containers />}
     </div>
   );
