@@ -574,52 +574,13 @@ export default function FactoryProductionTargets() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "12px",
-            marginBottom: "20px",
-          }}
-        >
-          {[
-            [tr("totalTarget"), totals.target],
-            [tr("totalAbsentTarget"), totals.absentTarget],
-            [tr("totalExpected"), totals.expected],
-            [tr("diff"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
-          ].map(([label, value]) => (
-            <div
-              key={String(label)}
-              style={{ border: "1px solid #34383e", borderRadius: "10px", padding: "14px 16px", background: "#181a1e" }}
-            >
-              <div
-                style={{
-                  color: "#a1a1aa",
-                  fontSize: "13px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {label}
-              </div>
-              <div style={{ marginTop: "5px", fontSize: "25px", fontWeight: 800 }}>{value}</div>
-            </div>
-          ))}
-        </div>
-
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "15px" }}>
           <thead>
             <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
-              <th style={{ width: "115px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
-                {tr("code")}
-              </th>
-              <th style={{ width: "245px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+              <th style={{ width: "360px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
                 {tr("worker")}
               </th>
-              <th style={{ width: "180px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
-                {tr("group")}
-              </th>
-              <th style={{ width: "190px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
+              <th style={{ width: "260px", padding: "13px 10px", textAlign: "left", border: "1px solid #3f444b" }}>
                 {tr("category")}
               </th>
               <th style={{ width: "110px", padding: "13px 10px", textAlign: "right", border: "1px solid #3f444b" }}>
@@ -640,7 +601,7 @@ export default function FactoryProductionTargets() {
             {productionReportGroups.map((group) => (
               <Fragment key={`report-${group.label.toLocaleLowerCase() || "blank"}`}>
                 <tr style={{ background: "#202328" }}>
-                  <td colSpan={8} style={{ padding: "11px 12px", border: "1px solid #3f444b", fontWeight: 700 }}>
+                  <td colSpan={6} style={{ padding: "11px 12px", border: "1px solid #3f444b", fontWeight: 700 }}>
                     {group.label || "—"}{" "}
                     <span style={{ marginLeft: "8px", color: "#a1a1aa", fontWeight: 400 }}>({group.rows.length})</span>
                   </td>
@@ -664,18 +625,10 @@ export default function FactoryProductionTargets() {
                       }
                       style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
                     >
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
-                        {members.map((member) => (
-                          <div key={member.personId}>{member.code || "—"}</div>
-                        ))}
-                      </td>
                       <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>
                         {members.map((member) => (
                           <div key={member.personId}>{member.name}</div>
                         ))}
-                      </td>
-                      <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
-                        {row.groupName || "—"}
                       </td>
                       <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
                         {row.category || "—"}
@@ -739,7 +692,7 @@ export default function FactoryProductionTargets() {
             ))}
             <tr style={{ background: "#292c31" }}>
               <td
-                colSpan={4}
+                colSpan={2}
                 style={{ padding: "16px 12px", border: "1px solid #3f444b", fontWeight: 800, fontSize: "17px" }}
               >
                 {tr("dailyTotal")}
