@@ -12,6 +12,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -30,6 +32,12 @@ import {
   Wrench,
   RefreshCw,
   FileText,
+  Container,
+  DollarSign,
+  FileDown,
+  FileSpreadsheet,
+  GitCompare,
+  Hammer,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmtNum } from "./factorypendinginvoiceverify/utils";
@@ -86,11 +94,11 @@ export default function FactoryPendingInvoiceVerify() {
     invoiceDate: _invoiceDate,
     setInvoiceDate: _setInvoiceDate,
     showProformaDialog: _showProformaDialog,
-    setShowProformaDialog: _setShowProformaDialog,
+    setShowProformaDialog,
     showViewProformaDialog,
     setShowViewProformaDialog,
     selectedProformaId: _selectedProformaId,
-    setSelectedProformaId: _setSelectedProformaId,
+    setSelectedProformaId,
     statusFilter: _statusFilter,
     setStatusFilter: _setStatusFilter,
     showRecoverDialog: _showRecoverDialog,
@@ -116,6 +124,9 @@ export default function FactoryPendingInvoiceVerify() {
     forceSyncMutation,
     recoverBalesMutation: _recoverBalesMutation,
     autoRecoverMutation: _autoRecoverMutation,
+    applyProformaMutation,
+    applyProductionPricesMutation,
+    applySellingPricesMutation,
     fetchFinalizePreview,
     handleAddCharge,
     getStatusBadge: _getStatusBadge,
@@ -126,6 +137,11 @@ export default function FactoryPendingInvoiceVerify() {
     isLoadingStatus,
     totalNotLoadedBales,
     totalNotLoadedWeight,
+    handleExportExcel,
+    handleExportExcelNoCharges,
+    handleExportPdf,
+    handleExportPdfNoCharges,
+    handleExportLoadingStatus,
   } = model;
 
   if (isLoading) {
@@ -168,19 +184,112 @@ export default function FactoryPendingInvoiceVerify() {
                 <ChevronDown className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => setShowReturnDialog(true)}
-                disabled={returnToLoadingMutation.isPending}
-                data-testid="menu-return-to-loading"
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Return to Loading
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowViewProformaDialog(true)} data-testid="menu-view-proforma">
-                <FileText className="mr-2 h-4 w-4" />
-                View Proforma
-              </DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              {isVerified ? (
+                <>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">View</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => navigate(`/factory/sales/pending-invoices/${orderId}/verify`)}
+                    data-testid="menu-proforma-vs-loaded"
+                  >
+                    <GitCompare className="h-4 w-4" />
+                    Proforma vs Loaded
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowViewProformaDialog(true)} data-testid="menu-view-proforma">
+                    <FileText className="h-4 w-4" />
+                    View Proforma
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+
+                  {isAdminOrOwner && (
+                    <>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Pricing</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => applyProductionPricesMutation.mutate()}
+                        disabled={applyProductionPricesMutation.isPending}
+                        data-testid="menu-apply-production-prices"
+                      >
+                        <Hammer
+                          className={`h-4 w-4 ${applyProductionPricesMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        Apply Production Prices
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => applySellingPricesMutation.mutate()}
+                        disabled={applySellingPricesMutation.isPending}
+                        data-testid="menu-apply-selling-prices"
+                      >
+                        <RefreshCw
+                          className={`h-4 w-4 ${applySellingPricesMutation.isPending ? "animate-spin" : ""}`}
+                        />
+                        Apply Selling Prices
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedProformaId("");
+                          setShowProformaDialog(true);
+                        }}
+                        disabled={applyProformaMutation.isPending}
+                        data-testid="menu-apply-proforma-prices"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Apply Proforma Prices
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Download Excel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportExcelNoCharges} data-testid="menu-export-excel-no-charges">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Download Excel (No Charges)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPdf} data-testid="menu-export-pdf">
+                    <FileDown className="h-4 w-4" />
+                    Download PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPdfNoCharges} data-testid="menu-export-pdf-no-charges">
+                    <FileDown className="h-4 w-4" />
+                    Download PDF (No Charges)
+                  </DropdownMenuItem>
+                  {isAdminOrOwner && (
+                    <DropdownMenuItem onClick={handleExportLoadingStatus} data-testid="menu-export-loading-status">
+                      <Container className="h-4 w-4" />
+                      Loading Status
+                    </DropdownMenuItem>
+                  )}
+
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setShowReturnDialog(true)}
+                    disabled={returnToLoadingMutation.isPending}
+                    data-testid="menu-return-to-loading"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Return to Loading
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => setShowReturnDialog(true)}
+                    disabled={returnToLoadingMutation.isPending}
+                    data-testid="menu-return-to-loading"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Return to Loading
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowViewProformaDialog(true)} data-testid="menu-view-proforma">
+                    <FileText className="mr-2 h-4 w-4" />
+                    View Proforma
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           {isLoadingStatus && (
