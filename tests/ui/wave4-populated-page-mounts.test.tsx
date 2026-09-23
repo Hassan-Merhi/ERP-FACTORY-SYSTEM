@@ -15,7 +15,7 @@
 import React from "react";
 import { screen } from "@testing-library/react";
 import { renderWithProviders } from "./helpers";
-import { pageState, resetPageState } from "./pageMocks";
+import { pageState, resetPageState, stubSeededFetch } from "./pageMocks";
 
 vi.mock("wouter", async () => (await import("./pageMocks")).wouterMock);
 vi.mock("@/contexts/AppModeContext", async () => (await import("./pageMocks")).appModeMock);
@@ -25,80 +25,6 @@ vi.mock("@/contexts/DateFormatContext", async () => (await import("./pageMocks")
 vi.mock("@/contexts/ConnectivityContext", async () => (await import("./pageMocks")).connectivityMock);
 vi.mock("@/contexts/LocationContext", async () => (await import("./pageMocks")).locationContextMock);
 vi.mock("@/contexts/CursorNavContext", async () => (await import("./pageMocks")).cursorNavMock);
-
-function seededRecord(i: number) {
-  return {
-    id: i,
-    name: `Name ${i}`,
-    code: `C${i}`,
-    companyId: 1,
-    locationId: 1,
-    stockItemId: i,
-    customerId: i,
-    supplierId: i,
-    workerId: i,
-    containerId: i,
-    accountId: i,
-    voucherId: i,
-    quantity: 10 * i,
-    qty: 10 * i,
-    amount: 100 * i,
-    total: 100 * i,
-    balance: 50 * i,
-    rate: 5,
-    price: 5,
-    status: "active",
-    date: "2026-09-01",
-    createdAt: "2026-09-01T10:00:00Z",
-    voucherDate: "2026-09-01",
-    description: `Desc ${i}`,
-    notes: "",
-    active: true,
-    type: "Sales",
-    voucherType: "Sales",
-    accountType: "Asset",
-    locationName: "Main",
-    itemName: `Item ${i}`,
-    stockItemName: `Item ${i}`,
-    customerName: `Cust ${i}`,
-    supplierName: `Supp ${i}`,
-    containerNumber: `CONT${i}`,
-    username: `user${i}`,
-    role: "Admin",
-    weight: 100,
-    kg: 100,
-  };
-}
-
-/** Three records as an array that also answers the paginated envelope fields. */
-function seededPayload() {
-  const records = [seededRecord(1), seededRecord(2), seededRecord(3)];
-  return Object.assign(records, {
-    items: records,
-    rows: records,
-    data: records,
-    results: records,
-    total: 3,
-    totalCount: 3,
-    page: 1,
-    pageSize: 50,
-    totalPages: 1,
-    hasMore: false,
-  });
-}
-
-function stubSeededFetch() {
-  (global as any).fetch = vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => seededPayload(),
-    text: async () => "",
-    headers: new Headers({ "content-type": "application/json" }),
-    clone() {
-      return this;
-    },
-  }));
-}
 
 interface PageCase {
   name: string;
