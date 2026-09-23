@@ -55,7 +55,11 @@ function shouldPopulateAfterWrite(req: Request): boolean {
   );
 }
 
-function scopeFromRequest(req: Request, payload: unknown): FactoryBilingualSnapshotScope | null {
+function scopeFromRequest(
+  req: Request,
+  payload: unknown,
+  requestPath: string
+): FactoryBilingualSnapshotScope | null {
   const responseRecord =
     payload && typeof payload === "object" && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
@@ -66,7 +70,7 @@ function scopeFromRequest(req: Request, payload: unknown): FactoryBilingualSnaps
   // changed. Keep this synchronous post-write work row-scoped instead of
   // replaying every order-linked snapshot target before acknowledging a scan.
   if (
-    /^\/customer-orders\/\d+\/bales$/.test(req.path) &&
+    /^\/customer-orders\/\d+\/bales$/.test(requestPath) &&
     responseRecord?.compactBaleScan === true
   ) {
     const baleRecord =
@@ -98,26 +102,30 @@ function scopeFromRequest(req: Request, payload: unknown): FactoryBilingualSnaps
   ];
 
   for (const rule of pathRules) {
-    const match = req.path.match(rule.pattern);
+    const match = requestPath.match(rule.pattern);
     const id = positiveId(match?.[1]);
     if (id) return { [rule.key]: id } as FactoryBilingualSnapshotScope;
   }
 
   // Creation endpoints expose the newly-created resource id in their response.
   if (responseId) {
-    if (req.path === "/customer-orders" || req.path === "/customer-orders-loading") return { orderId: responseId };
-    if (req.path === "/customer-proformas") return { proformaId: responseId };
-    if (req.path === "/bales") return { baleId: responseId };
+    if (requestPath === "/customer-orders" || requestPath === "/customer-orders-loading") return { orderId: responseId };
+    if (requestPath === "/customer-proformas") return { proformaId: responseId };
+    if (requestPath === "/bales") return { baleId: responseId };
   }
 
   return null;
 }
 
-async function populateAfterSuccessfulWrite(req: Request, payload: unknown): Promise<void> {
+async function populateAfterSuccessfulWrite(
+  req: Request,
+  payload: unknown,
+  requestPath: string
+): Promise<void> {
   const companyId = getFactoryCompanyId(req);
   if (!companyId) return;
 
-  const productMatch = req.path.match(/^\/bale-products\/(\d+)/);
+  const productMatch = requestPath.match(/^\/bale-products\/(\d+)/);
   if (productMatch) {
     const productId = positiveId(productMatch[1]);
     if (productId) {
@@ -126,7 +134,7 @@ async function populateAfterSuccessfulWrite(req: Request, payload: unknown): Pro
     }
   }
 
-  const scope = scopeFromRequest(req, payload);
+  const scope = scopeFromRequest(req, payload, requestPath);
   if (scope) {
     await applyFactoryBilingualSnapshotBackfillForScope(companyId, scope);
     return;
@@ -147,6 +155,10 @@ function factoryBilingualSnapshotWriteMiddleware(req: Request, res: Response, ne
     return;
   }
 
+  // req.path is mount-relative only while this middleware is executing.
+  // Express restores the full request path after next(), before res.json runs.
+  // Capture the Factory-relative path now so response-time route guards stay correct.
+  const requestPath = req.path;
   const originalJson = res.json.bind(res);
   res.json = ((payload: unknown) => {
     if (res.statusCode < 200 || res.statusCode >= 300) return originalJson(payload);
@@ -156,7 +168,7 @@ function factoryBilingualSnapshotWriteMiddleware(req: Request, res: Response, ne
         ? (payload as Record<string, unknown>)
         : null;
     if (
-      /^\/customer-orders\/\d+\/bales$/.test(req.path) &&
+      /^\/customer-orders\/\d+\/bales$/.test(requestPath) &&
       responseRecord?.compactBaleScan === true
     ) {
       // Compact scans persist the Arabic bale and order-line snapshots inside
@@ -165,13 +177,13 @@ function factoryBilingualSnapshotWriteMiddleware(req: Request, res: Response, ne
       return originalJson(payload);
     }
 
-    void populateAfterSuccessfulWrite(req, payload)
+    void populateAfterSuccessfulWrite(req, payload, requestPath)
       .then(() => originalJson(payload))
       .catch((error) => {
         logger.error("Failed to populate Factory bilingual snapshots after write", {
           error,
           method: req.method,
-          path: req.path,
+          path: requestPath,
         });
         if (!res.headersSent) res.status(500);
         originalJson({ message: getErrorMessage(error) });
