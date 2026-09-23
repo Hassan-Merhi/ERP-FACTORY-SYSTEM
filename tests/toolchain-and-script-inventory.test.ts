@@ -60,20 +60,11 @@ describe("script inventory", () => {
   });
 
   it("keeps generated review output out of the tracked source tree", () => {
-    const trackedFiles = execFileSync("git", ["ls-files"], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    })
-      .split(/\r?\n/)
-      .filter(Boolean);
+    const trackedFiles = execFileSync("git", ["ls-files"], { encoding: "utf8" });
 
-    const trackedGenerated = trackedFiles.filter(
-      (file) =>
-        file.startsWith("artifacts/mockup-sandbox/") ||
-        /^artifacts\/security\/.*-open-alerts\.json$/.test(file) ||
-        file.startsWith("screenshots/")
-    );
-    expect(trackedGenerated).toEqual([]);
+    expect(trackedFiles).not.toContain("artifacts/mockup-sandbox/");
+    expect(trackedFiles).not.toMatch(/^artifacts\/security\/.*-open-alerts\.json$/m);
+    expect(trackedFiles).not.toContain("screenshots/");
 
     const gitignore = fs.readFileSync(path.join(process.cwd(), ".gitignore"), "utf8");
     expect(gitignore).toContain("artifacts/mockup-sandbox/");
