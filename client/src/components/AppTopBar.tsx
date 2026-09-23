@@ -2,7 +2,6 @@ import { type ReactNode, Suspense, useEffect } from "react";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import { useLocation } from "wouter";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CompanySelector } from "@/components/CompanySelector";
@@ -84,24 +83,13 @@ export function AppTopBar({
           </button>
         )}
 
-        {showSearch && onSearchOpen && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onSearchOpen}
-            data-testid="button-open-palette-sm"
-            aria-label={t("accessibility.openSearch")}
-            className="h-10 w-10 shrink-0 sm:hidden"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        )}
-
-        <Suspense fallback={<span className="h-10 w-10 shrink-0" aria-hidden="true" />}>
+        <Suspense fallback={<span className="hidden h-8 w-8 shrink-0 sm:block" aria-hidden="true" />}>
           <WorkspaceHeaderControls accentColor={accentColor} user={user} onLogout={onLogout} />
         </Suspense>
 
-        <CompanySelector />
+        <div className="hidden sm:block">
+          <CompanySelector />
+        </div>
 
         <span className="hidden sm:block">
           <ThemeToggle />
