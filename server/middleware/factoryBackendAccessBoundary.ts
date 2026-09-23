@@ -377,7 +377,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/daily-bale-scans")) {
     return requirement("factory/stock-entry", ["hide_tab_stockentry_daily_scan"]);
   }
-  if (hasPrefix(path, "/ground-scan")) {
+  if (hasPrefix(path, "/ground-scan") || hasPrefix(path, "/ground-scan-items")) {
     return requirement("factory/stock-entry", ["hide_tab_stockentry_ground_scan"]);
   }
   if (hasPrefix(path, "/bales/stock-entry-history")) {
@@ -634,7 +634,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
 
-  if (hasPrefix(path, "/mix-batches") || hasPrefix(path, "/fx-rates")) {
+  if (hasPrefix(path, "/mix-batches") || hasPrefix(path, "/mix-batches-by-date") || hasPrefix(path, "/fx-rates")) {
     return anyOf(
       requirement("factory/raw-materials"),
       requirement("factory/production-report"),
