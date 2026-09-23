@@ -40,7 +40,6 @@ export const FACTORY_TABS: { key: string; label: string; group: string }[] = [
   { key: "hide_tab_stockentry_ground_scan", label: "Ground Scan", group: "Stock Entry" },
   { key: "hide_tab_stockentry_daily_scan", label: "Daily Scan", group: "Stock Entry" },
   { key: "hide_tab_stockentry_production_targets", label: "Production Targets", group: "Stock Entry" },
-  { key: "hide_tab_stockentry_attendance_register", label: "Attendance Register", group: "Stock Entry" },
   { key: "hide_tab_advances_repayments", label: "Repayments", group: "Advances" },
   { key: "hide_tab_kpis_worker_performance", label: "Worker Performance", group: "KPIs" },
   { key: "hide_tab_kpis_mix_efficiency", label: "Mix Efficiency", group: "KPIs" },
