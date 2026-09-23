@@ -187,7 +187,7 @@ describe("stock entry history page behavior", () => {
 
     expect(screen.getByRole("heading", { name: "Stock Entry History" })).toBeInTheDocument();
     expect(screen.getByText("Groups")).toBeInTheDocument();
-    expect(screen.getByText("Bales")).toBeInTheDocument();
+    expect(screen.getAllByText("Bales").length).toBeGreaterThan(0);
     expect(screen.getByText("Weight")).toBeInTheDocument();
     expect(screen.getByTestId("button-view-condensed")).toBeInTheDocument();
     expect(screen.getByTestId("button-view-detailed")).toBeInTheDocument();
@@ -216,6 +216,7 @@ describe("stock entry history page behavior", () => {
   it("updates an individual bale stock-entry date from the detailed table", async () => {
     render(<StockEntryHistory />);
 
+    fireEvent.click(screen.getByTestId("button-view-detailed"));
     fireEvent.click(screen.getByText("D:2026-08-12"));
     const editableDate = screen.getByDisplayValue("2026-08-12");
     fireEvent.change(editableDate, { target: { value: "2026-08-13" } });

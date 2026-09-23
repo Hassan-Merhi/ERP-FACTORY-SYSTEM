@@ -1,0 +1,68 @@
+name: Wave 5 Branch Autoformat
+
+on:
+  push:
+    branches:
+      - perf/wave5-live-bale-scan
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wave5-autoformat
+  cancel-in-progress: true
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: perf/wave5-live-bale-scan
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --registry=https://registry.npmjs.org/ --ignore-scripts
+
+      - name: Format Wave 5 changed files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/routes/accounts/voucher-sidebar.ts \
+            server/routes/factory/customer-orders/proformaCapacity.ts \
+            tests/phase4-hotpath-performance-regression.test.ts \
+            tests/ui/factory-container-loading-scan-behavior.test.tsx \
+            tests/ui/golden-coast-pos-phase6-contract.test.ts \
+            tests/ui/stock-transfer-form-revision-behavior.test.tsx \
+            tests/ui/stock-entry-history-page-behavior.test.tsx \
+            scripts/verify-wave3-api-payload-bandwidth.mjs
+
+      - name: Commit formatted sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            server/routes/accounts/voucher-sidebar.ts \
+            server/routes/factory/customer-orders/proformaCapacity.ts \
+            tests/phase4-hotpath-performance-regression.test.ts \
+            tests/ui/factory-container-loading-scan-behavior.test.tsx \
+            tests/ui/golden-coast-pos-phase6-contract.test.ts \
+            tests/ui/stock-transfer-form-revision-behavior.test.tsx \
+            tests/ui/stock-entry-history-page-behavior.test.tsx \
+            scripts/verify-wave3-api-payload-bandwidth.mjs
+          if git diff --cached --quiet; then
+            echo "Already formatted."
+            exit 0
+          fi
+          git commit -m "style: format Wave 5 certification changes"
+          git push origin HEAD:perf/wave5-live-bale-scan
