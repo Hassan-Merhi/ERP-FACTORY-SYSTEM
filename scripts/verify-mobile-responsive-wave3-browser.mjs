@@ -31,6 +31,8 @@ const VIEWPORTS = [
 const ROUTES = [
   // Primary ERP navigation and dashboards.
   { url: "/tracking", marker: "/tracking" },
+  { url: "/tracking?tab=git-tracking", marker: "/tracking" },
+  { url: "/tracking?tab=transporter-statement", marker: "/tracking" },
   { url: "/financial-overview", marker: "/financial-overview" },
   { url: "/pos", marker: "/pos" },
   { url: "/pos-item-replacement", marker: "/pos-item-replacement" },
@@ -42,6 +44,7 @@ const ROUTES = [
   { url: "/containers", marker: "/containers", checkHoverActions: true },
   { url: "/inventory?tab=by-location", marker: "/inventory" },
   { url: "/inventory?tab=on-the-way", marker: "/inventory", mobileAlternative: true },
+  { url: "/inventory?tab=containers", marker: "/inventory" },
   { url: "/stock?tab=items", marker: "/stock" },
   { url: "/stock?tab=query", marker: "/stock", mobileAlternative: true },
   { url: "/stock?tab=offload", marker: "/stock", mobileAlternative: true },
@@ -51,6 +54,7 @@ const ROUTES = [
   { url: "/optional-vouchers", marker: "/optional-vouchers", mobileAlternative: true },
   { url: "/stock-transfer-order", marker: "/stock-transfer-order" },
   { url: "/sales-tools?tab=transfers", marker: "/sales-tools", mobileAlternative: true },
+  { url: "/sales-tools?tab=pricelist", marker: "/sales-tools" },
 
   // Reports, opening/closing stock, imports, and tools.
   { url: "/sales-report", marker: "/sales-report" },
@@ -58,6 +62,9 @@ const ROUTES = [
   { url: "/opening-stock", marker: "/opening-stock" },
   { url: "/closing-stock-summary", marker: "/closing-stock-summary" },
   { url: "/po-import", marker: "/po-import" },
+  { url: "/git", marker: "/git" },
+  { url: "/containers-otw", marker: "/containers-otw" },
+  { url: "/supplier-profit-check", marker: "/supplier-profit-check" },
   { url: "/pos-import", marker: "/pos-import" },
   { url: "/import-stock-items", marker: "/import-stock-items" },
   { url: "/barcode-manager", marker: "/barcode-manager", mobileAlternative: true },
