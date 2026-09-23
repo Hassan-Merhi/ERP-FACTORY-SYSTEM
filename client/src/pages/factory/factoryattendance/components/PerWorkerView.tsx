@@ -132,9 +132,9 @@ export function PerWorkerView() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-end">
+      <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1 min-w-[200px]">
               <Label className="text-xs text-muted-foreground">Worker</Label>
               <Popover open={workerComboOpen} onOpenChange={setWorkerComboOpen}>
@@ -144,7 +144,7 @@ export function PerWorkerView() {
                     role="combobox"
                     aria-expanded={workerComboOpen}
                     data-testid="select-worker"
-                    className="w-56 justify-between font-normal"
+                    className="w-56 justify-between rounded-xl bg-background/70 font-normal"
                   >
                     <span className="truncate" dir="auto">
                       {selectedWorker
@@ -194,7 +194,7 @@ export function PerWorkerView() {
                 data-testid="input-start-date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
+                className="w-40 rounded-xl bg-background/70"
               />
             </div>
 
@@ -205,11 +205,11 @@ export function PerWorkerView() {
                 data-testid="input-end-date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
+                className="w-40 rounded-xl bg-background/70"
               />
             </div>
 
-            <div className="flex gap-2 ml-auto items-center flex-wrap">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="default"
@@ -253,6 +253,7 @@ export function PerWorkerView() {
             value={dates.length}
             color="text-foreground"
             testId="stat-pw-total"
+            modern
           />
           <SummaryCard
             icon={<CheckCircle className="h-4 w-4" />}
@@ -260,6 +261,7 @@ export function PerWorkerView() {
             value={presentCount}
             color="text-green-600 dark:text-green-400"
             testId="stat-pw-present"
+            modern
           />
           <SummaryCard
             icon={<XCircle className="h-4 w-4" />}
@@ -267,14 +269,15 @@ export function PerWorkerView() {
             value={absentCount}
             color="text-red-600 dark:text-red-400"
             testId="stat-pw-absent"
+            modern
           />
         </div>
       )}
 
       {/* Date checkbox table */}
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
+      <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
+          <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4" />
             {selectedWorker ? selectedWorker.fullName : "Select a worker"}
             {selectedWorker?.employeeCode && <Badge variant="secondary">{selectedWorker.employeeCode}</Badge>}
@@ -301,8 +304,8 @@ export function PerWorkerView() {
           ) : (
             <div className="table-responsive">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-30 bg-muted/50">
-                  <tr className="border-b bg-muted/40">
+                <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
+                  <tr className="border-b border-border/60">
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground">Date</th>
                     <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Day</th>
@@ -320,7 +323,7 @@ export function PerWorkerView() {
                       <tr
                         key={date}
                         data-testid={`row-date-${date}`}
-                        className={`border-b last:border-0 cursor-pointer hover-elevate ${isFriday || isSaturday ? "bg-muted/20" : isSunday ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}
+                        className={`cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20 ${isFriday || isSaturday ? "bg-muted/15" : isSunday ? "bg-blue-50/30 dark:bg-blue-950/15" : ""}`}
                         onClick={() => toggleDate(date)}
                       >
                         <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
