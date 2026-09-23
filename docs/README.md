@@ -74,6 +74,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 |---|---|
 | [permissions-security.md](permissions-security.md) | Roles and permission model |
 | [security-privacy.md](security-privacy.md) | Authentication, sessions, data handling |
+| [security-company-isolation-wave3.md](security-company-isolation-wave3.md) | Company isolation, RLS, and privileged maintenance boundaries |
 | [program-8b-approval-exception-workflows.md](program-8b-approval-exception-workflows.md) | Control model for high-risk actions |
 | [audit-framework.md](audit-framework.md) | Server-side audit foundation |
 
@@ -87,6 +88,7 @@ These describe work in progress and carry live figures bound to their sources.
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
+| [performance-wave5-production-certification.md](performance-wave5-production-certification.md) | Production performance certification and remaining measurement gates |
 | [remote-support-phase-17-transport-resilience.md](remote-support-phase-17-transport-resilience.md) | Remote-support Phase 17: binary transport with a conditional HTTP polling fallback |
 | [remote-support-phase-18-control-coverage.md](remote-support-phase-18-control-coverage.md) | Remote-support Phase 18: control-surface coverage beyond the sidebar, and RTL coordinate accuracy |
 
