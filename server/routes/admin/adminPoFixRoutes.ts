@@ -198,7 +198,7 @@ export function registerAdminPoFixRoutes(app: Express) {
         );
         let repairStatus: "not_requested" | "repaired" | "manual_review" = "not_requested";
 
-        let rebuiltVoucher = false;
+        const rebuiltVoucher = false;
         if (apply && classification.status !== "matched") {
           let canonicalVoucherId = isSubsidiary ? voucherIds[0] : po.voucher_id;
 
