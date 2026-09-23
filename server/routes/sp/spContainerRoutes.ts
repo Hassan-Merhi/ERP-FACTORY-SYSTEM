@@ -200,13 +200,15 @@ export function registerSpContainerRoutes(app: Express) {
       const containerId = parseInt(req.params.id);
       if (isNaN(containerId)) return res.status(400).json({ message: "Invalid container ID" });
 
+      const containerEditConflictMessage = "Cannot edit an offloaded container";
+
       const [existing] = await db
         .select()
         .from(spContainers)
         .where(and(eq(spContainers.id, containerId), eq(spContainers.companyId, companyId)));
       if (!existing) return res.status(404).json({ message: "Container not found" });
       if (existing.status === "offloaded") {
-        return res.status(400).json({ message: "Cannot edit an offloaded container" });
+        return res.status(400).json({ message: containerEditConflictMessage });
       }
 
       const {
@@ -221,12 +223,6 @@ export function registerSpContainerRoutes(app: Express) {
         notes,
       } = req.body;
 
-      const totalUsd = parseNum(invoiceTotalUsd ?? existing.invoiceTotalUsd);
-      const supplierIdNum = supplierId ? parseInt(String(supplierId)) : (existing.supplierId ?? null);
-      const newSupplierName = supplierName ?? existing.supplierName;
-      const newInvoiceNumber = invoiceNumber ?? existing.invoiceNumber;
-      const newInvoiceDate = invoiceDate ?? existing.invoiceDate;
-
       const otwAcct = await getSpAccount(companyId, "sp_goods_otw");
       const otwClrAcct = await getSpAccount(companyId, "sp_otw_clearing");
       if (!otwAcct || !otwClrAcct) {
@@ -234,25 +230,47 @@ export function registerSpContainerRoutes(app: Express) {
       }
 
       const updated = await db.transaction(async (tx) => {
+        // Lock the lifecycle row before deriving defaults or updating the OTW
+        // voucher. This serializes container edits with offload/reversal work and
+        // prevents a stale pre-check from editing a container after it was offloaded.
+        const [lockedExisting] = await tx
+          .select()
+          .from(spContainers)
+          .where(and(eq(spContainers.id, containerId), eq(spContainers.companyId, companyId)))
+          .limit(1)
+          .for("update");
+
+        if (!lockedExisting || lockedExisting.status === "offloaded") {
+          return null;
+        }
+
+        const totalUsd = parseNum(invoiceTotalUsd ?? lockedExisting.invoiceTotalUsd);
+        const supplierIdNum = supplierId
+          ? parseInt(String(supplierId))
+          : (lockedExisting.supplierId ?? null);
+        const newSupplierName = supplierName ?? lockedExisting.supplierName;
+        const newInvoiceNumber = invoiceNumber ?? lockedExisting.invoiceNumber;
+        const newInvoiceDate = invoiceDate ?? lockedExisting.invoiceDate;
+
         // Update container fields
         const [updatedContainer] = await tx
           .update(spContainers)
           .set({
             supplierId: supplierIdNum,
             supplierName: newSupplierName,
-            containerNumber: containerNumber !== undefined ? containerNumber || null : existing.containerNumber,
+            containerNumber: containerNumber !== undefined ? containerNumber || null : lockedExisting.containerNumber,
             invoiceNumber: newInvoiceNumber,
             invoiceDate: newInvoiceDate,
             invoiceTotalUsd: String(totalUsd),
-            discountPct: String(parseNum(discountPct ?? existing.discountPct)),
-            freightEstimateUsd: String(parseNum(freightEstimateUsd ?? existing.freightEstimateUsd)),
-            notes: notes !== undefined ? notes || null : existing.notes,
+            discountPct: String(parseNum(discountPct ?? lockedExisting.discountPct)),
+            freightEstimateUsd: String(parseNum(freightEstimateUsd ?? lockedExisting.freightEstimateUsd)),
+            notes: notes !== undefined ? notes || null : lockedExisting.notes,
           })
           .where(and(eq(spContainers.id, containerId), eq(spContainers.companyId, companyId)))
           .returning();
 
         // Regenerate OTW voucher if amount or supplier changed
-        if (existing.goodsOtwVoucherId && totalUsd > 0) {
+        if (lockedExisting.goodsOtwVoucherId && totalUsd > 0) {
           // Update voucher header
           await tx
             .update(vouchers)
@@ -261,13 +279,13 @@ export function registerSpContainerRoutes(app: Express) {
               description: `Goods OTW: ${newSupplierName} — Invoice ${newInvoiceNumber}`,
               totalAmount: String(totalUsd),
             })
-            .where(eq(vouchers.id, existing.goodsOtwVoucherId));
+            .where(eq(vouchers.id, lockedExisting.goodsOtwVoucherId));
 
           // Delete old entries and recreate with updated amounts
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existing.goodsOtwVoucherId));
+          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, lockedExisting.goodsOtwVoucherId));
 
           await tx.insert(voucherEntries).values({
-            voucherId: existing.goodsOtwVoucherId,
+            voucherId: lockedExisting.goodsOtwVoucherId,
             ledgerAccountId: otwAcct.id,
             debitAmount: String(totalUsd),
             creditAmount: "0",
@@ -275,14 +293,14 @@ export function registerSpContainerRoutes(app: Express) {
           });
 
           await tx.insert(voucherEntries).values({
-            voucherId: existing.goodsOtwVoucherId,
+            voucherId: lockedExisting.goodsOtwVoucherId,
             ledgerAccountId: otwClrAcct.id,
             debitAmount: "0",
             creditAmount: String(totalUsd),
             supplierId: supplierIdNum,
             narration: `OTW Clearing — ${newSupplierName} inv ${newInvoiceNumber}`,
           });
-        } else if (!existing.goodsOtwVoucherId && totalUsd > 0) {
+        } else if (!lockedExisting.goodsOtwVoucherId && totalUsd > 0) {
           // Create new voucher if none existed
           const voucherNum = `SP-OTW-${containerId}-${Date.now()}`;
           const [voucher] = await tx
@@ -322,6 +340,13 @@ export function registerSpContainerRoutes(app: Express) {
 
         return updatedContainer;
       });
+
+      if (!updated) {
+        return res.status(409).json({
+          code: "SP_CONTAINER_STATE_CONFLICT",
+          message: containerEditConflictMessage,
+        });
+      }
 
       res.json(updated);
     } catch (error: unknown) {
