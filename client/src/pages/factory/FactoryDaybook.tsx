@@ -7,6 +7,7 @@
  * table and the dialog stack. This file is only composition.
  */
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLog } from "@/pages/settings/AuditLog";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,6 +27,7 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 
 export default function FactoryDaybook() {
   const model = useFactoryDaybookModel();
+  const { activeDaybookTab, setActiveDaybookTab } = model;
   const { data: myAccess } = useQuery<FactoryMyAccess>({
     queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60000,
@@ -37,7 +39,13 @@ export default function FactoryDaybook() {
     showTransactions ? "transactions" : null,
     showActivity ? "activity" : null,
   ].filter((value): value is "transactions" | "activity" => value !== null);
-  const effectiveTab = visibleTabs.includes(model.activeDaybookTab) ? model.activeDaybookTab : visibleTabs[0];
+  const effectiveTab = visibleTabs.includes(activeDaybookTab) ? activeDaybookTab : visibleTabs[0];
+
+  useEffect(() => {
+    if (effectiveTab && activeDaybookTab !== effectiveTab) {
+      setActiveDaybookTab(effectiveTab);
+    }
+  }, [activeDaybookTab, effectiveTab, setActiveDaybookTab]);
 
   return (
     <div className="space-y-6">
@@ -78,7 +86,7 @@ export default function FactoryDaybook() {
       ) : (
         <Tabs
           value={effectiveTab}
-          onValueChange={(value) => model.setActiveDaybookTab(value as "transactions" | "activity")}
+          onValueChange={(value) => setActiveDaybookTab(value as "transactions" | "activity")}
         >
           <TabsList className="w-fit">
             {showTransactions && <TabsTrigger value="transactions">Transactions</TabsTrigger>}

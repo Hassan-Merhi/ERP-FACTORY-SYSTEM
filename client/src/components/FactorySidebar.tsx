@@ -197,7 +197,6 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     if (
       myAccess &&
       !myAccess.fullAccess &&
-      myAccess.pageKeys.length > 0 &&
       !hasFactoryPageKey(page, myAccess.pageKeys)
     ) {
       return false;
@@ -284,7 +283,7 @@ export function FactorySidebar({
   const { openSections, toggleSection } = useOpenSections(visibleSections);
 
   const allNavItems = useMemo(() => [...FACTORY_PINNED_DEFAULTS, ...FACTORY_NAV_SECTIONS.flatMap((s) => s.items)], []);
-  const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
+  const recentItems = useRecentNav(allNavItems, selectedCompany?.id, isPinnedVisible);
   const visibleRecentItems = recentItems.filter(isPinnedVisible);
   const conflictsVisible = isPinnedVisible({ url: "/factory/conflicts" });
 

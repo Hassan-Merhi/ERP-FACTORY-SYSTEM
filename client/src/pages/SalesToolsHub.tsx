@@ -5,6 +5,7 @@ import { Book, ArrowLeftRight, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import type { AuthMe } from "@shared/apiTypes";
+import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
 
 const POSDaybook = lazy(() => import("@/pages/pos/POSDaybook"));
 const StockTransfers = lazy(() => import("@/pages/StockTransfers"));
@@ -25,20 +26,21 @@ const ERP_TABS = [
 const POS_TAB_KEYS = POS_TABS.map((t) => t.key) as unknown as readonly ("daybook" | "transfers")[];
 const ERP_TAB_KEYS = ERP_TABS.map((t) => t.key) as unknown as readonly ("transfers" | "pricelist")[];
 
-export default function SalesToolsHub() {
+export default function SalesToolsHub({ access }: { access?: ErpFeatureAccess }) {
   const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
 
   const isPOS = user?.role === "POS";
-  const tabs = isPOS ? POS_TABS : ERP_TABS;
-
-  // Use stable module-level key arrays — avoids a new array ref on every render
-  // which would cause useHubQueryState's useEffect to fire every render cycle.
-  const tabKeys = isPOS ? POS_TAB_KEYS : ERP_TAB_KEYS;
-  const defaultTab = tabs[0].key;
+  const tabs = isPOS
+    ? POS_TABS.filter((tab) => tab.key !== "daybook" || canAccessErpFeature(access, "pos_daybook"))
+    : [...ERP_TABS];
+  const knownTabKeys = isPOS ? POS_TAB_KEYS : ERP_TAB_KEYS;
+  const tabKeys = tabs.map((tab) => tab.key);
+  const defaultTab = tabKeys[0] ?? "transfers";
 
   const [activeTab, setTab] = useHubQueryState({
     key: "tab",
     allowedValues: tabKeys,
+    knownValues: knownTabKeys,
     defaultValue: defaultTab,
   });
 

@@ -105,6 +105,12 @@ export default function FactoryCustomerStatement() {
     ? requestedCustomerTab
     : visibleCustomerTabs[0];
 
+  useEffect(() => {
+    if (activeCustomerTab && requestedCustomerTab !== activeCustomerTab) {
+      setRequestedCustomerTab(activeCustomerTab);
+    }
+  }, [activeCustomerTab, requestedCustomerTab]);
+
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [rowNotes, setRowNotes] = useState<Record<number | string, string>>({});
   const [savingRowNote, setSavingRowNote] = useState<number | null>(null);

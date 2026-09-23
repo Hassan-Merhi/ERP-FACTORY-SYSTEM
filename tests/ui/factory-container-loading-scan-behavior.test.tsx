@@ -54,6 +54,7 @@ const capacitySnapshot = {
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
+    if (root === "/api/auth/me") return { data: { role: "Admin", currentRole: "Admin" } };
     if (root === "/api/factory/customers") return { data: [{ id: 1, legalName: "Buyer One" }] };
     if (root === "/api/locations") return { data: [{ id: 11, name: "Dock" }] };
     if (root === "/api/factory/customer-proformas/capacity") {

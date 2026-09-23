@@ -87,6 +87,7 @@ describe("Factory restriction settings wiring", () => {
 
   it("exposes the expanded Factory page and tab catalogs", () => {
     const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
+    const registry = readFileSync("client/src/app/factoryAccessRegistry.ts", "utf8");
     const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
 
     for (const key of [
@@ -98,9 +99,9 @@ describe("Factory restriction settings wiring", () => {
       "factory/dispatch-batches",
       "factory/production-comparison",
     ]) {
-      expect(sidebar).toContain(key);
+      expect(registry).toContain(key);
     }
-    expect(sidebar).toContain("!myAccess.pageKeys.includes(pageKey)");
+    expect(sidebar).toContain("hasFactoryPageKey(page, myAccess.pageKeys)");
 
     for (const key of [
       "hide_tab_parties_customers",

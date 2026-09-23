@@ -25,11 +25,12 @@ export default function FactoryPayrollHub() {
 
   const sections = SECTIONS.filter((section) => !hidden.includes(HIDDEN_KEYS[section]));
   const defaultSection: Section = sections[0] ?? "workers";
-  const allowedSections: readonly Section[] = sections.length > 0 ? sections : SECTIONS;
+  const allowedSections: readonly Section[] = sections;
 
   const [activeSection, setActiveSection] = useHubQueryState<Section>({
     key: "section",
     allowedValues: allowedSections,
+    knownValues: SECTIONS,
     defaultValue: defaultSection,
     clearKeys: ["tab", "mode"],
   });

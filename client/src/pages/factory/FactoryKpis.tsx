@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,10 @@ export default function FactoryKpis() {
     showMixes ? "mixes" : null,
   ].filter((value): value is "daily" | "workers" | "mixes" => value !== null);
   const activeTab = visibleTabs.includes(requestedTab) ? requestedTab : visibleTabs[0];
+
+  useEffect(() => {
+    if (activeTab && requestedTab !== activeTab) setRequestedTab(activeTab);
+  }, [activeTab, requestedTab]);
 
   const dailyQuery = useQuery<DailyProduction[]>({
     queryKey: ["/api/factory/kpis/daily", from, to],

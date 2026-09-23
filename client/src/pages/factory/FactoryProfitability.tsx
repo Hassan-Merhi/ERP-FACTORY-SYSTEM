@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -107,6 +107,10 @@ export default function FactoryProfitability() {
     (value): value is "bales" | "containers" => value !== null
   );
   const activeTab = visibleTabs.includes(requestedTab) ? requestedTab : visibleTabs[0];
+
+  useEffect(() => {
+    if (activeTab && requestedTab !== activeTab) setRequestedTab(activeTab);
+  }, [activeTab, requestedTab]);
 
   const balesQuery = useQuery<BaleCost[]>({
     queryKey: ["/api/factory/profitability/bales", from, to],
