@@ -45,7 +45,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import StockTransferOrder from "@/pages/StockTransferOrder";
+import StockTransferOrder from "@/pages/StockTransferOrder.tsx";
 import { PrintTemplate } from "@/components/vouchers/PrintTemplate";
 import { StockTransferForm } from "@/pages/vouchers/StockTransferForm";
 import { StockAdjustmentForm } from "@/pages/vouchers/StockAdjustmentForm";

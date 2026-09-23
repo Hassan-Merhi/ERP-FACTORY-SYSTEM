@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  collapseLinkedProductionRows,
   groupProductionRows,
   summarizeProductionRows,
   type ProductionRow,
@@ -40,6 +41,66 @@ describe("Production Targets category grouping", () => {
     expect(groups[0]?.label).toBe("Pressing workers");
   });
 
+  it("collapses linked workers into one production row with stacked members", () => {
+    const linkedA = {
+      ...row(1, "Worker A", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 12,
+    };
+    const linkedB = {
+      ...row(2, "Worker B", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 12,
+    };
+
+    const collapsed = collapseLinkedProductionRows([linkedA, linkedB]);
+
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0]?.targetBales).toBe(10);
+    expect(collapsed[0]?.producedBales).toBe(12);
+    expect(collapsed[0]?.displayMembers?.map((member) => member.name)).toEqual([
+      "Worker A",
+      "Worker B",
+    ]);
+  });
+
+  it("subtracts a linked unit's shared target once when a member is absent", () => {
+    const linkedA = {
+      ...row(1, "Worker A", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 0,
+      status: "Present" as const,
+    };
+    const linkedB = {
+      ...row(2, "Worker B", "BLOUSE"),
+      linkGroupId: 77,
+      linkedWorkerIds: [1, 2],
+      targetBales: 10,
+      producedBales: 0,
+      status: "Absent" as const,
+    };
+    const solo = {
+      ...row(3, "Worker C", "TSHIRT"),
+      targetBales: 6,
+      producedBales: 5,
+      status: "Present" as const,
+    };
+
+    expect(summarizeProductionRows([linkedA, linkedB, solo])).toEqual({
+      target: 16,
+      absentTarget: 10,
+      expected: 6,
+      produced: 5,
+      difference: 1,
+    });
+  });
+
   it("counts a linked team's shared target and production once in factory totals", () => {
     const linkedA = {
       ...row(1, "Worker A", "BLOUSE"),
@@ -59,8 +120,10 @@ describe("Production Targets category grouping", () => {
 
     expect(summarizeProductionRows([linkedA, linkedB, solo])).toEqual({
       target: 16,
+      absentTarget: 0,
+      expected: 16,
       produced: 17,
-      difference: 1,
+      difference: -1,
     });
   });
 });

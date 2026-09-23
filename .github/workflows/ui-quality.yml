@@ -91,6 +91,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js 24.21.0
@@ -101,6 +102,7 @@ jobs:
       - name: Run classified i18n gate when relevant
         env:
           I18N_RELEVANT: ${{ needs.changes.outputs.i18n }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +110,18 @@ jobs:
             echo "No UI/i18n paths changed; preserving the required untranslated-text context without rerunning an unrelated audit."
             exit 0
           fi
+
           node scripts/verify-i18n-audit-classifier.mjs
-          node scripts/audit-i18n-phase14.mjs \
-            --json-out artifacts/i18n-audit/report.json \
-            --markdown-out artifacts/i18n-audit/report.md
+          mkdir -p artifacts/i18n-audit
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            node scripts/run-i18n-pr-ratchet.mjs "$PR_BASE_SHA" artifacts/i18n-audit
+          else
+            node scripts/audit-i18n-phase14.mjs \
+              --json-out artifacts/i18n-audit/report.json \
+              --markdown-out artifacts/i18n-audit/report.md
+          fi
+
           cat artifacts/i18n-audit/report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload classified audit report

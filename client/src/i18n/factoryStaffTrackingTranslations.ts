@@ -86,6 +86,13 @@ const factoryStaffTrackingTranslations = {
   cancel: { en: "Cancel", ar: "إلغاء", fr: "Annuler" },
   refreshing: { en: "Refreshing…", ar: "جارٍ التحديث…", fr: "Actualisation…" },
   totalTarget: { en: "Total Target", ar: "إجمالي الهدف", fr: "Objectif total" },
+  totalAbsentTarget: {
+    en: "Total Absent Target",
+    ar: "إجمالي هدف الغياب",
+    fr: "Objectif total des absents",
+  },
+  totalExpected: { en: "Total Expected", ar: "الإجمالي المتوقع", fr: "Total attendu" },
+  diff: { en: "Diff", ar: "الفرق", fr: "Écart" },
   balesProduced: { en: "Bales Produced", ar: "البالات المنتجة", fr: "Balles produites" },
   difference: { en: "Difference", ar: "الفرق", fr: "Écart" },
   people: { en: "People", ar: "الأشخاص", fr: "Personnes" },

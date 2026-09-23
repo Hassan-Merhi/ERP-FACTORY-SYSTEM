@@ -6,8 +6,8 @@ Roles are stored in `userCompanyRoles` and set in the session as `currentRole`.
 
 | Role | Level | Notes |
 |---|---|---|
-| `Developer` | Highest | Bypasses all role checks, all date restrictions, and all advanced restrictions. Cannot be restricted. |
-| `Admin` | High | Bypasses all advanced restrictions. Cannot be restricted. Bypasses date restrictions. |
+| `Developer` | Highest | Global support/break-glass role for explicitly supported workflows. Ordinary feature restrictions may be bypassed, but tenant/company boundaries and sensitive-operation controls still apply. |
+| `Admin` | High | Broad company-scoped administration. Sensitive maintenance operations additionally require the named `administration.repair` permission. |
 | `Owner` | Medium-high | Full access by default; can be restricted via Advanced Restrictions. Cannot delete records. |
 | `Manager` | Medium | Full access by default; can be restricted. Can delete records only if `canDeleteRecords = true`. |
 | `POS` | Restricted | Limited route set. Today-only date restriction. Cannot delete records. Must be assigned to a location. |
@@ -119,13 +119,12 @@ The "Deleted Items" admin page (`server/routes/admin/deletedItemsRoutes.ts`) all
 
 ---
 
-## Known Risk Areas Needing Future Audit
+## Current Security Boundaries
 
-1. **No DB-level row security**: all tenant isolation is application-level. A `currentCompanyId` bug exposes all companies' data.
-2. **POS location isolation**: not all POS-accessible routes call `checkPOSLocation`. Audit every route accessible to the `POS` role.
-3. **`canSellNegativeStock`**: set from role at session login time. If a user's role changes mid-session, the session value is stale until re-login.
-4. **Developer role bypass**: Developer bypasses every restriction. Accounts with this role should be audited regularly.
-5. **Orphaned FK constraints**: several FKs are `NOT VALID`, meaning orphaned rows exist. Queries expecting referential integrity may return unexpected nulls.
-6. **Session fixation**: confirm `req.session.regenerate()` is called on login (Needs verification).
-7. **Audit log completeness**: not all write operations call `logAudit`. Confirm coverage for financial mutations.
-8. **Export access**: `exp_backup_download` guards bulk data downloads. Verify all backup/export endpoints check this permission.
+1. **Tenant isolation is layered**: the global application boundary validates the server-owned active company, while PostgreSQL `FORCE ROW LEVEL SECURITY` protects the highest-risk company tables and voucher entries.
+2. **Privileged maintenance is centrally narrowed**: mutation paths for repair, recalculation, rebuild, cleanup, backfill, reconciliation, resync, and fix operations require Admin with `administration.repair` or the explicit Developer support boundary before legacy handlers run.
+3. **POS location isolation uses live company-role context**: POS mutations validate assigned location, view-only state, cash-account ownership, and capability permissions from canonical storage instead of login-time session values alone.
+4. **Security permissions fail closed**: if the critical named-permission schema is unavailable, privileged permission checks return a service-unavailable denial rather than silently granting access.
+5. **Backup access is separate from application access**: the production backup role is read-only but must have `BYPASSRLS` so `pg_dump` can produce a complete dump without weakening `FORCE ROW LEVEL SECURITY`.
+6. **High/critical dependency findings and verified leaked secrets are blocking security gates** in the Security workflow. Unknown secret candidates are surfaced for review.
+7. **Historical integrity remains explicit**: `NOT VALID` foreign keys or historical anomalies are audited and repaired only through reviewed maintenance workflows; they are not silently rewritten by tenant-security migrations.
