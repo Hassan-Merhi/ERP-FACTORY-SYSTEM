@@ -50,6 +50,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
     currentLocation,
     companyType: selectedCompany.companyType,
     isAdminOwner,
+    userRole: user.role,
     myAccess,
     myAccessLoading,
     myAccessError,
