@@ -47,7 +47,7 @@ export default function FactoryBalesHub() {
 
   return (
     <div className="flex h-full flex-col">
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full flex-col">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as BalesTab)} className="flex h-full flex-col">
         <div className="flex flex-shrink-0 items-end justify-between gap-4 overflow-x-auto border-b px-4 pt-3">
           <TabsList className="flex-nowrap">
             {show("history") && (
