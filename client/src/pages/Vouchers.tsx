@@ -61,6 +61,7 @@ import { exportVoucherHelper } from "@/pages/vouchers/voucherActions";
 import { voucherFormSchema } from "@/pages/vouchers/voucherTypes";
 import type { VoucherFormData } from "@/pages/vouchers/voucherTypes";
 import { ErrorState } from "@/components/ui/page-state";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
 type VoucherTab = "payment" | "receipt" | "journal" | "transfer" | "transferorder" | "adjustment" | "creditnote";
 
