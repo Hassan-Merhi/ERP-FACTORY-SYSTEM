@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { LogOut, MoreHorizontal, Search, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CompanySelector } from "@/components/CompanySelector";
 import { CurrencyToggle } from "@/components/CurrencyToggle";
 import { NotificationsCenter } from "@/components/NotificationsCenter";
 import { PendingSyncIndicator } from "@/components/PendingSyncIndicator";
@@ -132,12 +133,12 @@ export default function MobileWorkspaceControls({
 
           <div className="rounded-lg border p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("workspace.accountLanguage")}
+              Company
             </p>
-            <UserMenu accentColor={accentColor} user={user} onLogout={logout} />
+            <div className="[&>button]:w-full">
+              <CompanySelector />
+            </div>
           </div>
-
-          {extraActions && <div className="grid gap-2 [&>*]:w-full">{extraActions}</div>}
 
           {showSearch && onSearchOpen && (
             <Button
@@ -150,6 +151,15 @@ export default function MobileWorkspaceControls({
               {t("workspace.search")}
             </Button>
           )}
+
+          <div className="rounded-lg border p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("workspace.accountLanguage")}
+            </p>
+            <UserMenu accentColor={accentColor} user={user} onLogout={logout} />
+          </div>
+
+          {extraActions && <div className="grid gap-2 [&>*]:w-full">{extraActions}</div>}
 
           <div className="rounded-lg border p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
