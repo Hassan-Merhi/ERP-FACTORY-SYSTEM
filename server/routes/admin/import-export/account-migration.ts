@@ -11,7 +11,14 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
 import { vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
+import {
+  assertCompaniesAccess,
+  CompanyAccessError,
+  getCompanyAccessContext,
+} from "../../../security/companyAccessBoundary";
+
+class AccountMigrationPreviewNotFound extends Error {}
 
 export function registerAccountMigrationRoutes(app: Express) {
   // List all companies (for source/destination pickers)
@@ -59,91 +66,121 @@ export function registerAccountMigrationRoutes(app: Express) {
         if (srcCompanyId === destCompanyId)
           return res.status(400).json({ message: "Source and destination must be different companies" });
 
-        const batchSet = new Set<number>(accountIds);
+        const context = getCompanyAccessContext(req);
+        await assertCompaniesAccess(context.userId, [srcCompanyId, destCompanyId]);
+        const authorizedCompanyIds = [...new Set([srcCompanyId, destCompanyId])]
+          .sort((left, right) => left - right)
+          .join(",");
 
-        const accountPreviews = [];
-        let grandTotalDebit = 0;
-        let grandTotalCredit = 0;
-        let grandTotalEntries = 0;
+        const preview = await db.transaction(async (tx) => {
+          // Preview is intentionally cross-company. The global tenant boundary
+          // validates src/dest membership, but ordinary request scope remains
+          // pinned to the active company. Establish the same explicit database
+          // scope used by safe execute so source ledgers and destination
+          // conflicts are visible without enabling maintenance bypass.
+          await tx.execute(sql`SELECT
+            set_config('app.company_scope_maintenance', 'off', true),
+            set_config('app.current_company_id', ${String(context.activeCompanyId)}, true),
+            set_config('app.authorized_company_ids', ${authorizedCompanyIds}, true)`);
 
-        for (const accountId of accountIds) {
-          // Verify account belongs to source company
-          const [account] = await db
-            .select()
-            .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, srcCompanyId)));
-          if (!account) return res.status(404).json({ message: `Account ${accountId} not found in source company` });
+          const batchSet = new Set<number>(accountIds);
+          const accountPreviews = [];
+          let grandTotalDebit = 0;
+          let grandTotalCredit = 0;
+          let grandTotalEntries = 0;
 
-          // Get all voucher entries for this account
-          const entryRows = await db
-            .select({
-              voucherId: voucherEntries.voucherId,
-              debit: voucherEntries.debitAmount,
-              credit: voucherEntries.creditAmount,
-            })
-            .from(voucherEntries)
-            .where(eq(voucherEntries.ledgerAccountId, accountId));
+          for (const accountId of accountIds) {
+            // Verify account belongs to source company
+            const [account] = await tx
+              .select()
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, srcCompanyId)));
+            if (!account) {
+              throw new AccountMigrationPreviewNotFound(`Account ${accountId} not found in source company`);
+            }
 
-          const totalDebit = entryRows.reduce((s, r) => s + parseFloat(r.debit || "0"), 0);
-          const totalCredit = entryRows.reduce((s, r) => s + parseFloat(r.credit || "0"), 0);
-          grandTotalDebit += totalDebit;
-          grandTotalCredit += totalCredit;
-          grandTotalEntries += entryRows.length;
-
-          const touchedVoucherIds = [...new Set(entryRows.map((r) => r.voucherId))];
-
-          // A voucher is exclusive to the batch only if:
-          //   • every ledger-account entry belongs to the migrated batch, AND
-          //   • it has NO supplier entries (supplier balance must stay in source company), AND
-          //   • it has NO employee entries (employee balance must stay in source company)
-          let exclusiveVoucherCount = 0;
-          let sharedVoucherCount = 0;
-          for (const vid of touchedVoucherIds) {
-            const allEntries = await db
+            // Get all voucher entries for this account
+            const entryRows = await tx
               .select({
-                la: voucherEntries.ledgerAccountId,
-                supplierId: voucherEntries.supplierId,
-                employeeId: voucherEntries.employeeId,
+                voucherId: voucherEntries.voucherId,
+                debit: voucherEntries.debitAmount,
+                credit: voucherEntries.creditAmount,
               })
               .from(voucherEntries)
-              .where(eq(voucherEntries.voucherId, vid));
-            const isShared = allEntries.some(
-              (e) => e.supplierId !== null || e.employeeId !== null || (e.la !== null && !batchSet.has(e.la as number))
-            );
-            if (!isShared) exclusiveVoucherCount++;
-            else sharedVoucherCount++;
+              .where(eq(voucherEntries.ledgerAccountId, accountId));
+
+            const totalDebit = entryRows.reduce((s, r) => s + parseFloat(r.debit || "0"), 0);
+            const totalCredit = entryRows.reduce((s, r) => s + parseFloat(r.credit || "0"), 0);
+            grandTotalDebit += totalDebit;
+            grandTotalCredit += totalCredit;
+            grandTotalEntries += entryRows.length;
+
+            const touchedVoucherIds = [...new Set(entryRows.map((r) => r.voucherId))];
+
+            // A voucher is exclusive to the batch only if:
+            //   • every ledger-account entry belongs to the migrated batch, AND
+            //   • it has NO supplier entries (supplier balance must stay in source company), AND
+            //   • it has NO employee entries (employee balance must stay in source company)
+            let exclusiveVoucherCount = 0;
+            let sharedVoucherCount = 0;
+            for (const vid of touchedVoucherIds) {
+              const allEntries = await tx
+                .select({
+                  la: voucherEntries.ledgerAccountId,
+                  supplierId: voucherEntries.supplierId,
+                  employeeId: voucherEntries.employeeId,
+                })
+                .from(voucherEntries)
+                .where(eq(voucherEntries.voucherId, vid));
+              const isShared = allEntries.some(
+                (e) =>
+                  e.supplierId !== null ||
+                  e.employeeId !== null ||
+                  (e.la !== null && !batchSet.has(e.la as number))
+              );
+              if (!isShared) exclusiveVoucherCount++;
+              else sharedVoucherCount++;
+            }
+
+            // Check code conflict in destination
+            const [codeConflict] = await tx
+              .select()
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, destCompanyId), eq(ledgerAccounts.code, account.code)));
+
+            accountPreviews.push({
+              account,
+              entryCount: entryRows.length,
+              totalDebit,
+              totalCredit,
+              touchedVoucherCount: touchedVoucherIds.length,
+              exclusiveVoucherCount,
+              sharedVoucherCount,
+              codeConflict: codeConflict ? { id: codeConflict.id, name: codeConflict.name } : null,
+            });
           }
 
-          // Check code conflict in destination
-          const [codeConflict] = await db
-            .select()
-            .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, destCompanyId), eq(ledgerAccounts.code, account.code)));
-
-          accountPreviews.push({
-            account,
-            entryCount: entryRows.length,
-            totalDebit,
-            totalCredit,
-            touchedVoucherCount: touchedVoucherIds.length,
-            exclusiveVoucherCount,
-            sharedVoucherCount,
-            codeConflict: codeConflict ? { id: codeConflict.id, name: codeConflict.name } : null,
-          });
-        }
+          return { accountPreviews, grandTotalDebit, grandTotalCredit, grandTotalEntries };
+        });
 
         const srcCompany = await storage.getCompanyById(srcCompanyId);
         const destCompany = await storage.getCompanyById(destCompanyId);
 
         res.json({
-          accounts: accountPreviews,
+          accounts: preview.accountPreviews,
           srcCompany,
           destCompany,
-          grandTotalEntries,
-          grandTotalDebit,
-          grandTotalCredit,
+          grandTotalEntries: preview.grandTotalEntries,
+          grandTotalDebit: preview.grandTotalDebit,
+          grandTotalCredit: preview.grandTotalCredit,
         });
       } catch (error: unknown) {
+        if (error instanceof CompanyAccessError) {
+          return res.status(error.status).json({ message: error.message, code: error.code });
+        }
+        if (error instanceof AccountMigrationPreviewNotFound) {
+          return res.status(404).json({ message: error.message });
+        }
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }
