@@ -131,10 +131,10 @@ requireText(
   'data-testid="input-stock-entry-date"',
   "Stock Entry History must preserve its single-date compact filter."
 );
-forbidText(
+requireText(
   stockEntryHistory,
   "/api/factory/workers?profile=picker",
-  "Simplified Stock Entry History must not restore the removed worker picker payload."
+  "Stock Entry History condensed worker rows must use the compact worker picker contract."
 );
 forbidText(
   stockEntryHistory,

@@ -181,7 +181,7 @@ vi.mock("@/components/ui/alert-dialog", () => ({
     </button>
   ),
   AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialogContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -327,11 +327,7 @@ describe("factory container loading scan behavior", () => {
     const emptyButton = await screen.findByTestId("button-empty-container");
     expect(emptyButton).toBeEnabled();
 
-    expect(harness.apiRequest).not.toHaveBeenCalledWith(
-      "POST",
-      "/api/factory/customer-orders/77/bales/empty",
-      {}
-    );
+    expect(harness.apiRequest).not.toHaveBeenCalledWith("POST", "/api/factory/customer-orders/77/bales/empty", {});
 
     fireEvent.click(emptyButton);
     const confirmDialog = screen.getByTestId("dialog-confirm-empty-container");
