@@ -327,11 +327,7 @@ describe("factory container loading scan behavior", () => {
     const emptyButton = await screen.findByTestId("button-empty-container");
     expect(emptyButton).toBeEnabled();
 
-    expect(harness.apiRequest).not.toHaveBeenCalledWith(
-      "POST",
-      "/api/factory/customer-orders/77/bales/empty",
-      {}
-    );
+    expect(harness.apiRequest).not.toHaveBeenCalledWith("POST", "/api/factory/customer-orders/77/bales/empty", {});
 
     fireEvent.click(emptyButton);
     const confirmDialog = screen.getByTestId("dialog-confirm-empty-container");

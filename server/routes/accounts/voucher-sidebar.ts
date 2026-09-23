@@ -140,9 +140,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(
-            and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt))
-          )
+          .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
           .groupBy(
             voucherEntries.bankAccountId,
             voucherEntries.fixedAssetId,
@@ -162,13 +160,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .innerJoin(ledgerAccounts, eq(voucherEntries.ledgerAccountId, ledgerAccounts.id))
-          .where(
-            and(
-              eq(ledgerAccounts.companyId, companyId),
-              eq(vouchers.optional, false),
-              isNull(vouchers.deletedAt)
-            )
-          )
+          .where(and(eq(ledgerAccounts.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
           .groupBy(voucherEntries.ledgerAccountId),
       ]);
       // Strip internal system-only accounts (sp_stock, sp_opnbal are isHidden=true for a reason)
@@ -205,12 +197,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
 
       for (const row of ledgerMovementRows) {
         if (!row.ledgerAccountId) continue;
-        addMovement(
-          ledgerBalances,
-          row.ledgerAccountId,
-          parseFloat(row.debits || "0"),
-          parseFloat(row.credits || "0")
-        );
+        addMovement(ledgerBalances, row.ledgerAccountId, parseFloat(row.debits || "0"), parseFloat(row.credits || "0"));
       }
 
       for (const row of movementRows) {
@@ -225,9 +212,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           const existing = supplierBalances.get(row.supplierId) || 0;
           supplierBalances.set(
             row.supplierId,
-            existing +
-              parseFloat(row.supplierPureCredits || "0") -
-              parseFloat(row.supplierPureDebits || "0")
+            existing + parseFloat(row.supplierPureCredits || "0") - parseFloat(row.supplierPureDebits || "0")
           );
         }
 

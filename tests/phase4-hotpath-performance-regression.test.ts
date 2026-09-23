@@ -29,22 +29,19 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).toContain("suppliers.length === 0");
   });
 
-  it(
-    "aggregates voucher-sidebar movements in PostgreSQL instead of materializing accounting history",
-    () => {
-      const source = read("server/routes/accounts/voucher-sidebar.ts");
+  it("aggregates voucher-sidebar movements in PostgreSQL instead of materializing accounting history", () => {
+    const source = read("server/routes/accounts/voucher-sidebar.ts");
 
-      expect(source).toContain("movementRows");
-      expect(source).toContain("ledgerMovementRows");
-      expect(source).toContain("supplierPureCredits");
-      expect(source).toContain("factorySupplierVoucherPaidUsd");
-      expect(source).toContain(".groupBy(");
-      expect(source).not.toContain("const factoryPayVoucherIds");
-      expect(source).not.toContain("const voucherCurrencyMap");
-      expect(source).not.toContain("const allEntries");
-      expect(source).not.toContain("ledgerAccountEntries");
-    }
-  );
+    expect(source).toContain("movementRows");
+    expect(source).toContain("ledgerMovementRows");
+    expect(source).toContain("supplierPureCredits");
+    expect(source).toContain("factorySupplierVoucherPaidUsd");
+    expect(source).toContain(".groupBy(");
+    expect(source).not.toContain("const factoryPayVoucherIds");
+    expect(source).not.toContain("const voucherCurrencyMap");
+    expect(source).not.toContain("const allEntries");
+    expect(source).not.toContain("ledgerAccountEntries");
+  });
 
   it("keeps bale-scan success-path lookups bounded", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
@@ -65,7 +62,7 @@ describe("Phase 4 hot-path performance regressions", () => {
     const source = read("server/routes/factory/customer-orders/proformaCapacity.ts");
 
     expect(source).toContain("options.currentOrderId != null");
-    expect(source).toContain('sql`AND co.id = ${options.currentOrderId}`');
-    expect(source).toContain('${contributionOrderScope}');
+    expect(source).toContain("sql`AND co.id = ${options.currentOrderId}`");
+    expect(source).toContain("${contributionOrderScope}");
   });
 });

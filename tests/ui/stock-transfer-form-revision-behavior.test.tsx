@@ -296,10 +296,6 @@ describe("stock transfer form revision behavior", () => {
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers", 9, "revisions"] });
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers", 90] });
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers/list"] });
-    expect(harness.apiRequest).not.toHaveBeenCalledWith(
-      "PUT",
-      "/api/stock-transfers/9",
-      expect.anything()
-    );
+    expect(harness.apiRequest).not.toHaveBeenCalledWith("PUT", "/api/stock-transfers/9", expect.anything());
   });
 });
