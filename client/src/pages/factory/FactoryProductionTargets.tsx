@@ -81,7 +81,7 @@ function SummaryGroupTile({
         <div className="mt-2 grid grid-cols-3 gap-3">
           {metrics.map((metric) => (
             <div key={metric.label} className="min-w-0">
-              <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground" title={metric.label}>
+              <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
                 {metric.label}
               </p>
               <p className="text-xl font-semibold tabular-nums">{metric.value}</p>
@@ -361,16 +361,16 @@ export default function FactoryProductionTargets() {
           label={tr("targets")}
           icon={<Target className="h-5 w-5" />}
           metrics={[
-            { label: tr("totalTarget"), value: totals.target },
-            { label: tr("totalAbsentTarget"), value: totals.absentTarget },
-            { label: tr("totalExpected"), value: totals.expected },
+            { label: tr("total"), value: totals.target },
+            { label: tr("absent"), value: totals.absentTarget },
+            { label: tr("expected"), value: totals.expected },
           ]}
         />
         <SummaryGroupTile
           label={tr("workers")}
           icon={<Users className="h-5 w-5" />}
           metrics={[
-            { label: tr("totalWorkers"), value: workerTotals.total },
+            { label: tr("total"), value: workerTotals.total },
             { label: tr("present"), value: workerTotals.present },
             { label: tr("absent"), value: workerTotals.absent },
           ]}
