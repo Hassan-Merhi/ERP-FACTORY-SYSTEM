@@ -3,9 +3,10 @@
  * proforma stays reusable and non-blocking, while the table still compares the
  * current loading against the proforma quantities for operational visibility.
  */
-import { CheckCircle, Info } from "lucide-react";
+import { CheckCircle, Info, Layers3, PackageCheck, Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumber } from "../customerLoadingFormat";
 import type { ProformaLineStatus, ProformaProgressLine } from "@/lib/proformaCapacity";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
@@ -17,16 +18,16 @@ const STATUS_ORDER: Record<ProformaLineStatus, number> = {
   reference: 4,
 };
 
-const BADGE_BASE = "text-[10px] no-default-hover-elevate no-default-active-elevate";
+const BADGE_BASE = "rounded-md text-[10px] no-default-hover-elevate no-default-active-elevate";
 
 function StatusBadge({ status }: { status: ProformaLineStatus }) {
   if (status === "fulfilled") {
     return (
       <Badge
         variant="outline"
-        className={`${BADGE_BASE} bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800`}
+        className={`${BADGE_BASE} border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300`}
       >
-        <CheckCircle className="h-3 w-3 mr-1" />
+        <CheckCircle className="mr-1 h-3 w-3" />
         Loaded
       </Badge>
     );
@@ -36,7 +37,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
     return (
       <Badge
         variant="outline"
-        className={`${BADGE_BASE} bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800`}
+        className={`${BADGE_BASE} border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300`}
       >
         Overloaded
       </Badge>
@@ -47,7 +48,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
     return (
       <Badge
         variant="outline"
-        className={`${BADGE_BASE} bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800`}
+        className={`${BADGE_BASE} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-300`}
       >
         Less Loaded
       </Badge>
@@ -58,7 +59,7 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
     return (
       <Badge
         variant="outline"
-        className={`${BADGE_BASE} bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800`}
+        className={`${BADGE_BASE} border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300`}
       >
         Missing
       </Badge>
@@ -67,23 +68,23 @@ function StatusBadge({ status }: { status: ProformaLineStatus }) {
 
   return (
     <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
-      <Info className="h-3 w-3 mr-1" />
+      <Info className="mr-1 h-3 w-3" />
       On Proforma
     </Badge>
   );
 }
 
 function progressRowClass(status: ProformaLineStatus) {
-  if (status === "fulfilled") return "bg-green-50 dark:bg-green-950/40";
-  if (status === "overloaded") return "bg-orange-50 dark:bg-orange-950/30";
-  if (status === "short") return "bg-yellow-50 dark:bg-yellow-950/30";
-  if (status === "none") return "bg-red-50 dark:bg-red-950/30";
+  if (status === "fulfilled") return "bg-green-50/70 dark:bg-green-950/25";
+  if (status === "overloaded") return "bg-orange-50/70 dark:bg-orange-950/20";
+  if (status === "short") return "bg-yellow-50/70 dark:bg-yellow-950/20";
+  if (status === "none") return "bg-red-50/70 dark:bg-red-950/20";
   return "";
 }
 
 function remainingTextClass(status: ProformaLineStatus) {
-  if (status === "none") return "text-red-600 dark:text-red-400 font-semibold";
-  if (status === "short") return "text-yellow-700 dark:text-yellow-300 font-semibold";
+  if (status === "none") return "font-semibold text-red-600 dark:text-red-400";
+  if (status === "short") return "font-semibold text-yellow-700 dark:text-yellow-300";
   return "text-muted-foreground";
 }
 
@@ -103,11 +104,13 @@ function StockCell({ model, line }: { model: FactoryContainerLoadingScanModel; l
 
   return (
     <button
-      className={`underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 ${shortage ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`}
+      className={`cursor-pointer rounded px-0.5 underline underline-offset-2 hover-elevate ${
+        shortage ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+      }`}
       onClick={() => model.navigate(`/factory/stock-bale-list?${listParams}`)}
       data-testid={`button-stock-detail-${line.articleCode}`}
     >
-      {inStock}
+      {formatNumber(inStock)}
     </button>
   );
 }
@@ -119,37 +122,39 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
   );
 
   return (
-    <div className="overflow-y-auto max-h-[340px]">
+    <div className="max-h-[360px] overflow-auto border-t">
       <Table>
-        <TableHeader className="sticky top-0 z-30 bg-background">
+        <TableHeader className="sticky top-0 z-30 bg-background/95 backdrop-blur">
           <TableRow>
             <TableHead className="text-xs">Article</TableHead>
             <TableHead className="text-xs">Product</TableHead>
-            <TableHead className="text-xs text-right">Proforma Qty</TableHead>
-            <TableHead className="text-xs text-right">Loaded Here</TableHead>
-            <TableHead className="text-xs text-right">Remaining</TableHead>
+            <TableHead className="text-right text-xs">Proforma</TableHead>
+            <TableHead className="text-right text-xs">Loaded</TableHead>
+            <TableHead className="text-right text-xs">Remaining</TableHead>
             <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs text-right">Stock</TableHead>
+            <TableHead className="text-right text-xs">Stock</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedProgress.map((line) => (
             <TableRow
               key={line.id}
-              className={progressRowClass(line.status)}
+              className={`${progressRowClass(line.status)} border-border/60`}
               data-testid={`row-progress-${line.articleCode}`}
             >
-              <TableCell className="text-xs font-mono py-1.5">{line.articleCode}</TableCell>
-              <TableCell className="text-xs py-1.5">{line.productName}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">{line.quantity}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">{line.totalLoaded}</TableCell>
-              <TableCell className={`text-xs text-right font-mono py-1.5 ${remainingTextClass(line.status)}`}>
-                {line.remaining}
+              <TableCell className="py-2 font-mono text-xs font-medium">{line.articleCode}</TableCell>
+              <TableCell className="max-w-[150px] truncate py-2 text-xs" title={line.productName}>
+                {line.productName}
               </TableCell>
-              <TableCell className="py-1.5">
+              <TableCell className="py-2 text-right font-mono text-xs">{formatNumber(line.quantity)}</TableCell>
+              <TableCell className="py-2 text-right font-mono text-xs">{formatNumber(line.totalLoaded)}</TableCell>
+              <TableCell className={`py-2 text-right font-mono text-xs ${remainingTextClass(line.status)}`}>
+                {formatNumber(line.remaining)}
+              </TableCell>
+              <TableCell className="py-2">
                 <StatusBadge status={line.status} />
               </TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5" data-testid={`text-stock-${line.articleCode}`}>
+              <TableCell className="py-2 text-right font-mono text-xs" data-testid={`text-stock-${line.articleCode}`}>
                 <StockCell model={model} line={line} />
               </TableCell>
             </TableRow>
@@ -164,20 +169,20 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
           )}
 
           {extraArticles.map((code) => (
-            <TableRow key={code} className="bg-muted/20" data-testid={`row-extra-${code}`}>
-              <TableCell className="text-xs font-mono py-1.5">{code}</TableCell>
-              <TableCell className="text-xs py-1.5 text-muted-foreground">
+            <TableRow key={code} className="bg-muted/15" data-testid={`row-extra-${code}`}>
+              <TableCell className="py-2 font-mono text-xs">{code}</TableCell>
+              <TableCell className="py-2 text-xs text-muted-foreground">
                 {groupedBalesMap[code]?.baleName || "—"}
               </TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">{loadedByArticle[code]}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
-              <TableCell className="py-1.5">
+              <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">—</TableCell>
+              <TableCell className="py-2 text-right font-mono text-xs">{formatNumber(loadedByArticle[code])}</TableCell>
+              <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">—</TableCell>
+              <TableCell className="py-2">
                 <Badge variant="outline" className={`${BADGE_BASE} text-muted-foreground`}>
-                  Not on Proforma — Allowed
+                  Not on Proforma
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5 text-muted-foreground">—</TableCell>
+              <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">—</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -190,56 +195,65 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
   if (model.orderedGroups.length === 0) return null;
 
   return (
-    <div className="border-t pt-3">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">Loaded Bales</p>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs py-1.5">Article</TableHead>
-            <TableHead className="text-xs py-1.5">Product</TableHead>
-            <TableHead className="text-xs text-right py-1.5">Qty</TableHead>
-            <TableHead className="text-xs text-right py-1.5">Weight (kg)</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {model.orderedGroups.map((group) => (
-            <TableRow key={group.articleCode} data-testid={`row-loaded-summary-${group.articleCode}`}>
-              <TableCell className="text-xs font-mono py-1.5">{group.articleCode}</TableCell>
-              <TableCell className="text-xs py-1.5">{group.baleName}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">{group.bales.length}</TableCell>
-              <TableCell className="text-xs text-right font-mono py-1.5">{group.totalWeight.toFixed(1)}</TableCell>
+    <div className="border-t px-4 py-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Loaded by Article</p>
+      <div className="max-h-[190px] overflow-auto rounded-xl border">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background">
+            <TableRow>
+              <TableHead className="py-1.5 text-xs">Article</TableHead>
+              <TableHead className="py-1.5 text-xs">Product</TableHead>
+              <TableHead className="py-1.5 text-right text-xs">Qty</TableHead>
+              <TableHead className="py-1.5 text-right text-xs">Weight</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {model.orderedGroups.map((group) => (
+              <TableRow key={group.articleCode} data-testid={`row-loaded-summary-${group.articleCode}`}>
+                <TableCell className="py-1.5 font-mono text-xs">{group.articleCode}</TableCell>
+                <TableCell className="max-w-[150px] truncate py-1.5 text-xs">{group.baleName}</TableCell>
+                <TableCell className="py-1.5 text-right font-mono text-xs">{group.bales.length}</TableCell>
+                <TableCell className="py-1.5 text-right font-mono text-xs">
+                  {formatNumber(group.totalWeight, 2)} kg
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
 
 function OrderSummaryCard({ model }: { model: FactoryContainerLoadingScanModel }) {
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20">
-        <span className="text-sm font-semibold">Order Summary</span>
+    <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
+      <div className="border-b px-4 py-3 sm:px-5">
+        <h3 className="text-sm font-semibold sm:text-base">Order Summary</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">This loading is not linked to a proforma.</p>
       </div>
-      <div className="p-4 space-y-2">
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span>Total Bales</span>
-          <span className="font-mono" data-testid="text-total-bales">
+
+      <div className="grid grid-cols-3 gap-2 p-4">
+        <div className="rounded-xl border bg-muted/20 p-3 text-center">
+          <PackageCheck className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
+          <div className="font-mono text-base font-semibold" data-testid="text-total-bales">
             {model.bales.length}
-          </span>
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Bales</div>
         </div>
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span>Total Weight</span>
-          <span className="font-mono" data-testid="text-total-weight">
-            {model.totalWeight.toFixed(2)} kg
-          </span>
+        <div className="rounded-xl border bg-muted/20 p-3 text-center">
+          <Scale className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
+          <div className="font-mono text-base font-semibold" data-testid="text-total-weight">
+            {formatNumber(model.totalWeight, 2)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">KG</div>
         </div>
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span>Article Groups</span>
-          <span className="font-mono" data-testid="text-article-groups">
+        <div className="rounded-xl border bg-muted/20 p-3 text-center">
+          <Layers3 className="mx-auto mb-1.5 h-4 w-4 text-muted-foreground" />
+          <div className="font-mono text-base font-semibold" data-testid="text-article-groups">
             {Object.keys(model.groupedBalesMap).length}
-          </span>
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Articles</div>
         </div>
       </div>
     </div>
@@ -251,24 +265,65 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
   if (!orderId) return null;
   if (!linkedProforma) return <OrderSummaryCard model={model} />;
 
+  const requestedQty = proformaProgress.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+  const loadedTowardTarget = proformaProgress.reduce(
+    (sum, line) => sum + Math.min(Number(line.totalLoaded || 0), Number(line.quantity || 0)),
+    0
+  );
+  const progressPercent = requestedQty > 0 ? Math.min(100, Math.round((loadedTowardTarget / requestedQty) * 100)) : 0;
+
   return (
-    <div className="rounded-xl border overflow-hidden flex flex-col" data-testid="card-proforma-progress">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/20 flex-wrap">
-        <div>
-          <h3 className="font-semibold text-sm">{linkedProforma.name}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Reusable proforma — statuses compare this loading only</p>
+    <div
+      className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm"
+      data-testid="card-proforma-progress"
+    >
+      <div className="px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-sm font-semibold sm:text-base">{linkedProforma.name}</h3>
+              <Badge variant="secondary" className="shrink-0 rounded-md" data-testid="badge-proforma-progress">
+                Reusable
+              </Badge>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Current loading progress against this proforma.</p>
+          </div>
+          <div className="font-mono text-lg font-semibold">{progressPercent}%</div>
         </div>
-        <Badge variant="secondary" data-testid="badge-proforma-progress">
-          Reusable
-        </Badge>
+
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${progressPercent}%` }}
+            aria-label={`Proforma progress ${progressPercent}%`}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
+            <div className="font-mono text-sm font-semibold">{bales.length}</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Loaded</div>
+          </div>
+          <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
+            <div className="font-mono text-sm font-semibold">{formatNumber(model.remainingProformaBales)}</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Remaining</div>
+          </div>
+          <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
+            <div className="font-mono text-sm font-semibold">
+              {model.fulfilledCount}/{model.totalLines}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Lines Done</div>
+          </div>
+        </div>
       </div>
 
       <ComparisonTable model={model} />
       <LoadedBalesSummary model={model} />
 
-      <div className="border-t pt-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
-        <span>
-          {bales.length} bales scanned · {totalWeight.toFixed(1)} kg · {proformaProgress.length} proforma lines
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
+        <span>{proformaProgress.length} proforma lines</span>
+        <span className="font-mono">
+          {bales.length} bales · {formatNumber(totalWeight, 2)} kg
         </span>
       </div>
     </div>
