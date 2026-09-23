@@ -66,13 +66,31 @@ export function useRecentNav(
     return map;
   }, [allNavItems]);
 
+  // Sidebar visibility callbacks are commonly recreated on render. Depend on
+  // their result, not their function identity, so permission filtering cannot
+  // cause a render/effect loop.
+  const allowedPathsKey = allNavItems
+    .filter((item) => !isAllowed || isAllowed(item))
+    .map((item) => canonicalNavigationPath(item.url))
+    .sort()
+    .join("\u0000");
+
+  const allowedNavByPath = useMemo(() => {
+    const map = new Map<string, NavItemLike>();
+    for (const item of allNavItems) {
+      const path = canonicalNavigationPath(item.url);
+      if (allowedPathsKey.split("\u0000").includes(path)) map.set(path, item);
+    }
+    return map;
+  }, [allNavItems, allowedPathsKey]);
+
   const sanitize = (entries: RecentNavEntry[]): RecentNavEntry[] => {
     const seen = new Set<string>();
     const next: RecentNavEntry[] = [];
 
     for (const entry of entries) {
-      const item = navByPath.get(canonicalNavigationPath(entry.url));
-      if (!item || (isAllowed && !isAllowed(item))) continue;
+      const item = allowedNavByPath.get(canonicalNavigationPath(entry.url));
+      if (!item) continue;
 
       const canonicalUrl = item.url;
       if (seen.has(canonicalUrl)) continue;
@@ -88,7 +106,7 @@ export function useRecentNav(
     const loaded = sanitize(loadFromStorage(companyId));
     setRecent(loaded);
     saveToStorage(loaded, companyId);
-  }, [companyId, navByPath, isAllowed]);
+  }, [companyId, allowedNavByPath]);
 
   useEffect(() => {
     setRecent((previous) => {
@@ -97,11 +115,11 @@ export function useRecentNav(
       saveToStorage(cleaned, companyId);
       return cleaned;
     });
-  }, [navByPath, isAllowed, companyId]);
+  }, [allowedNavByPath, companyId]);
 
   useEffect(() => {
-    const item = navByPath.get(canonicalNavigationPath(location));
-    if (!item || (isAllowed && !isAllowed(item))) return;
+    const item = allowedNavByPath.get(canonicalNavigationPath(location));
+    if (!item) return;
 
     setRecent((previous) => {
       const cleaned = sanitize(previous).filter((entry) => entry.url !== item.url);
@@ -109,7 +127,7 @@ export function useRecentNav(
       saveToStorage(next, companyId);
       return next;
     });
-  }, [location, navByPath, isAllowed, companyId]);
+  }, [location, allowedNavByPath, companyId]);
 
   return recent;
 }
