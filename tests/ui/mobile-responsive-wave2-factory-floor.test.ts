@@ -29,11 +29,11 @@ describe("Mobile Wave 2 Factory floor workflows", () => {
     const dispatch = source("client/src/pages/factory/FactoryDispatchBatchScan.tsx");
 
     expect(page).toContain('data-testid="factory-container-loading-page"');
-    expect(page).toContain("flex min-h-0 min-w-0 flex-1 flex-col gap-4 lg:flex-row");
+    expect(page).toContain("flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:flex-row");
     expect(page).toContain("mobile-action-bar");
 
     expect(panel).toContain('data-testid="container-loading-scan-controls"');
-    expect(panel).toContain("flex min-w-0 flex-col gap-2 sm:mb-1 sm:flex-row");
+    expect(panel).toContain("flex min-w-0 flex-col gap-3 sm:flex-row");
     expect(panel).toContain("grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]");
     expect(panel).toContain('data-testid="input-scan-code"');
 

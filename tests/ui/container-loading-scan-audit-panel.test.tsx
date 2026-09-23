@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScannedBalesPanel } from "@/pages/factory/factorycontainerloadingscan/ScannedBalesPanel";
 import type { FactoryContainerLoadingScanModel } from "@/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel";
+import { translateFactoryContainerLoadingText } from "@/i18n/factoryContainerLoadingTranslations";
 
 const BALES = [
   { id: 10, baleReference: "REF-10", baleName: "Shirts", articleCode: "A1", weight: "50" },
@@ -29,6 +30,7 @@ const BALES = [
 
 function buildModel(): FactoryContainerLoadingScanModel {
   return {
+    tr: (key: any, params?: Record<string, string | number>) => translateFactoryContainerLoadingText(key, "en", params),
     orderId: 77,
     bales: BALES,
     totalWeight: 98,
