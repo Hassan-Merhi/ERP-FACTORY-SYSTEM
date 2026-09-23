@@ -13,6 +13,11 @@ import * as XLSX from "@/lib/excelHelper";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import {
+  translateFactoryContainerLoadingText,
+  type FactoryContainerLoadingTranslationKey,
+} from "@/i18n/factoryContainerLoadingTranslations";
 import { getApiRequest } from "@/lib/factoryApi";
 import { getErrorDetails } from "@shared/errorUtils";
 import {
@@ -57,6 +62,12 @@ export function useFactoryContainerLoadingScanModel() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const appMode = useAppMode();
+  const { language } = useApplicationLanguage();
+  const tr = useCallback(
+    (key: FactoryContainerLoadingTranslationKey, params?: Record<string, string | number>) =>
+      translateFactoryContainerLoadingText(key, language, params),
+    [language]
+  );
   const modeApiRequest = getApiRequest(appMode);
   const continuationFromOrderId = new URLSearchParams(search).get("continuationFromOrderId");
 
@@ -441,18 +452,15 @@ export function useFactoryContainerLoadingScanModel() {
       setScanCode("");
 
       toast({
-        title: "Container emptied",
-        description:
-          data.removed === 1
-            ? "1 scanned bale was returned to stock. You can start scanning again."
-            : `${data.removed} scanned bales were returned to stock. You can start scanning again.`,
+        title: tr("containerEmptied"),
+        description: data.removed === 1 ? tr("oneBaleReturned") : tr("manyBalesReturned", { count: data.removed }),
       });
       setTimeout(() => scannerRef.current?.focus(), 100);
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
-        title: "Could not empty container",
+        title: tr("couldNotEmptyContainer"),
         description: error.message,
         variant: "destructive",
       });
@@ -844,6 +852,7 @@ export function useFactoryContainerLoadingScanModel() {
 
   return {
     navigate,
+    tr,
     // setup
     customers,
     locations,
