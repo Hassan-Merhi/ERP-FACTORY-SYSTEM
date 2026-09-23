@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import {useState, useMemo} from "react";
+import {useState, useMemo, useEffect} from "react";
 import {useQuery, useMutation} from "@tanstack/react-query";
 import {queryClient, apiRequest} from "@/lib/queryClient";
 import {useToast} from "@/hooks/use-toast";
@@ -55,6 +55,10 @@ export default function FactorySheetsAndSacks() {
           : showMovements
             ? "movements"
             : null;
+
+  useEffect(() => {
+    if (effectiveTab && activeTab !== effectiveTab) setActiveTab(effectiveTab);
+  }, [activeTab, effectiveTab]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/factory/sheets-sacks/${id}`),
