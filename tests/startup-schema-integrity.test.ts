@@ -112,9 +112,14 @@ import { startupMigrations } from "../server/startup-schema";
  * CREATE INDEX IF NOT EXISTS statements on last_seen / (company_id, last_seen)
  * / (user_id, last_seen), appended after stage 028, taking the count from 1363
  * to 1366. Nothing before them moved.
+ *
+ * Re-pinned for the per-user hidden All Daybook rows (2eb4ffd): one
+ * ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS
+ * hidden_transaction_journal_voucher_ids, added to 001-core-tables-and-columns
+ * next to the other user columns, taking the count from 1366 to 1367.
  */
-const EXPECTED_STATEMENT_COUNT = 1366;
-const EXPECTED_CONTENT_HASH = "05bc3c6291c721fa7011a5aa39747cceef9fdd20e6aedc8a0e9a50b19897af5e";
+const EXPECTED_STATEMENT_COUNT = 1367;
+const EXPECTED_CONTENT_HASH = "4467df3b3766f81da59fbaad586736f581a51dc854f8906eaaf46210443e9503";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
