@@ -41,6 +41,9 @@ export function useFactorySettingsModel() {
   const [weeklyWaGroupId, setWeeklyWaGroupId] = useState("");
   const [weeklyWaSearch, setWeeklyWaSearch] = useState("");
   const [weeklyWaPickerOpen, setWeeklyWaPickerOpen] = useState(false);
+  const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
+  const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
+  const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
 
   const [codePrefix, setCodePrefix] = useState("HMD13");
   const [findStr, setFindStr] = useState("-");
@@ -291,6 +294,28 @@ export function useFactorySettingsModel() {
     retry: false,
   });
 
+  const { data: attendanceWaSettings } = useQuery<{ attendanceWhatsappGroupId?: string | null }>({
+    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
+      if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WaChat[]>({
+    queryKey: ["/api/whatsapp/chats"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
+      if (!res.ok) throw new Error("Failed to load chats");
+      return res.json();
+    },
+    enabled: attendanceWaPickerOpen,
+    staleTime: 60_000,
+    retry: false,
+  });
+
   const { data: weeklyWaSettings } = useQuery<{ groupChatId: string; hasCredentials: boolean }>({
     queryKey: ["/api/factory/weekly-report-wa-settings"],
   });
@@ -298,6 +323,10 @@ export function useFactorySettingsModel() {
   useEffect(() => {
     if (weeklyWaSettings?.groupChatId) setWeeklyWaGroupId(weeklyWaSettings.groupChatId);
   }, [weeklyWaSettings]);
+
+  useEffect(() => {
+    setAttendanceWaGroupId(attendanceWaSettings?.attendanceWhatsappGroupId ?? "");
+  }, [attendanceWaSettings]);
 
   const saveWeeklyWaGroupMutation = useMutation({
     mutationFn: async (chatId: string) => {
@@ -322,6 +351,37 @@ export function useFactorySettingsModel() {
   const filteredWeeklyWaChats = weeklyWaChats.filter(
     (chat) => !weeklyWaSearch || chat.name?.toLowerCase().includes(weeklyWaSearch.toLowerCase())
   );
+
+  const saveAttendanceWaGroupMutation = useMutation({
+    mutationFn: async (chatId: string) => {
+      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
+        attendanceWhatsappGroupId: chatId,
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Save failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
+      setAttendanceWaPickerOpen(false);
+      setAttendanceWaSearch("");
+      toast({ title: "Saved", description: "Attendance WhatsApp group updated." });
+    },
+    onError: (error: Error & { _handledGlobally?: boolean }) => {
+      if (error?._handledGlobally) return;
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const filteredAttendanceWaChats = attendanceWaChats.filter((chat) => {
+    const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
+    const needle = attendanceWaSearch.trim().toLowerCase();
+    const matches =
+      !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
+    return isGroup && matches;
+  });
 
   const saveProdWaGroupMutation = useMutation({
     mutationFn: async (chatId: string) => {
@@ -479,5 +539,15 @@ export function useFactorySettingsModel() {
     weeklyWaChatsLoading,
     filteredWeeklyWaChats,
     saveWeeklyWaGroupMutation,
+    attendanceWaGroupId,
+    setAttendanceWaGroupId,
+    attendanceWaSearch,
+    setAttendanceWaSearch,
+    attendanceWaPickerOpen,
+    setAttendanceWaPickerOpen,
+    attendanceWaChats,
+    attendanceWaChatsLoading,
+    filteredAttendanceWaChats,
+    saveAttendanceWaGroupMutation,
   };
 }

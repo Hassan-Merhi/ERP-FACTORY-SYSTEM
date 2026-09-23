@@ -45,6 +45,16 @@ export function FactorySettingsView({ model }: Props) {
     weeklyWaChatsLoading,
     filteredWeeklyWaChats,
     saveWeeklyWaGroupMutation,
+    attendanceWaGroupId,
+    setAttendanceWaGroupId,
+    attendanceWaSearch,
+    setAttendanceWaSearch,
+    attendanceWaPickerOpen,
+    setAttendanceWaPickerOpen,
+    attendanceWaChats,
+    attendanceWaChatsLoading,
+    filteredAttendanceWaChats,
+    saveAttendanceWaGroupMutation,
   } = model;
 
   if (isLoading) {
@@ -399,6 +409,115 @@ export function FactorySettingsView({ model }: Props) {
                     setProdWaSearch("");
                   }}
                   data-testid="button-cancel-prod-wa-group"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5 text-muted-foreground" />
+            Attendance WhatsApp Group
+          </CardTitle>
+          <CardDescription>
+            Select the WhatsApp group used by the Attendance page when you press "Send WhatsApp Image".
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {attendanceWaGroupId && !attendanceWaPickerOpen && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium" data-testid="text-attendance-wa-group">
+                {attendanceWaChats.find((chat) => chat.id === attendanceWaGroupId)?.name ?? attendanceWaGroupId}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttendanceWaPickerOpen(true)}
+                data-testid="button-change-attendance-wa-group"
+              >
+                Change
+              </Button>
+            </div>
+          )}
+          {!attendanceWaGroupId && !attendanceWaPickerOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAttendanceWaPickerOpen(true)}
+              data-testid="button-select-attendance-wa-group"
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Select WhatsApp Group
+            </Button>
+          )}
+          {attendanceWaPickerOpen && (
+            <div className="space-y-2">
+              <Input
+                placeholder="Search WhatsApp groups…"
+                value={attendanceWaSearch}
+                onChange={(event) => setAttendanceWaSearch(event.target.value)}
+                data-testid="input-attendance-wa-search"
+              />
+              <div className="border rounded-md max-h-48 overflow-y-auto text-sm">
+                {attendanceWaChatsLoading && (
+                  <p className="text-muted-foreground text-center py-4">
+                    <Loader2 className="h-4 w-4 inline mr-1 animate-spin" />
+                    Loading WhatsApp groups…
+                  </p>
+                )}
+                {!attendanceWaChatsLoading && filteredAttendanceWaChats.length === 0 && (
+                  <p className="text-muted-foreground text-center py-4">No WhatsApp groups found</p>
+                )}
+                {filteredAttendanceWaChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    onClick={() => setAttendanceWaGroupId(chat.id)}
+                    className={`w-full text-left px-3 py-2 hover-elevate transition-colors ${
+                      attendanceWaGroupId === chat.id ? "bg-primary/10 text-primary font-medium" : ""
+                    }`}
+                    data-testid={`option-attendance-wa-chat-${chat.id}`}
+                  >
+                    <div className="font-medium">{chat.name || chat.id}</div>
+                    <div className="text-xs text-muted-foreground">{chat.id}</div>
+                  </button>
+                ))}
+              </div>
+              {attendanceWaGroupId && (
+                <p className="text-xs text-muted-foreground">
+                  Selected:{" "}
+                  <span className="font-medium">
+                    {attendanceWaChats.find((chat) => chat.id === attendanceWaGroupId)?.name ?? attendanceWaGroupId}
+                  </span>
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => saveAttendanceWaGroupMutation.mutate(attendanceWaGroupId)}
+                  disabled={!attendanceWaGroupId || saveAttendanceWaGroupMutation.isPending}
+                  data-testid="button-save-attendance-wa-group"
+                >
+                  {saveAttendanceWaGroupMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                  )}
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAttendanceWaPickerOpen(false);
+                    setAttendanceWaSearch("");
+                  }}
+                  data-testid="button-cancel-attendance-wa-group"
                 >
                   Cancel
                 </Button>

@@ -14,18 +14,22 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(stockEntry).not.toContain('<FactoryStaffTracking mode="attendance" />');
   });
 
-  it("keeps Attendance under Payroll & Benefits and hosts the WhatsApp actions there", () => {
+  it("keeps Attendance under Payroll & Benefits and centralizes its WhatsApp group in Intel Settings", () => {
     const payroll = src("client/src/pages/factory/FactoryPayrollHub.tsx");
     const workersHub = src("client/src/pages/factory/FactoryWorkersHub.tsx");
     const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+    const intelSettings = src("client/src/pages/factory/factorysettings/FactorySettingsView.tsx");
 
     expect(payroll).toContain("<FactoryWorkersHub />");
     expect(workersHub).toContain('value="attendance"');
     expect(workersHub).toContain("<FactoryAttendance />");
-    expect(attendance).toContain('data-testid="button-change-attendance-whatsapp-group"');
+    expect(attendance).not.toContain('data-testid="button-change-attendance-whatsapp-group"');
+    expect(attendance).not.toContain('data-testid="button-save-attendance-wa-group"');
     expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
-    expect(attendance).toContain('data-testid="button-save-attendance-wa-group"');
     expect(attendance).toContain('destination: "attendance"');
+    expect(intelSettings).toContain("Attendance WhatsApp Group");
+    expect(intelSettings).toContain('data-testid="button-change-attendance-wa-group"');
+    expect(intelSettings).toContain('data-testid="button-save-attendance-wa-group"');
   });
 
   it("removes the obsolete Attendance Register visibility setting", () => {

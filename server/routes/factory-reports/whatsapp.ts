@@ -122,7 +122,7 @@ export function registerFactoryMixBatchWhatsappRoutes(app: Express, requireAuth:
       if (!groupChatId) {
         return res.status(400).json({
           message: isAttendance
-            ? "No Attendance WhatsApp group configured. Open Payroll & Benefits → Workers → Attendance and choose Change WhatsApp Group."
+            ? "No Attendance WhatsApp group configured. Open Intelligence → Intel Settings and set the Attendance WhatsApp Group."
             : "No WhatsApp group configured. Go to Settings → Export Settings to configure one.",
         });
       }
