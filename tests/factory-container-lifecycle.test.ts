@@ -37,6 +37,7 @@ async function cleanupSpTables(companyId: number): Promise<void> {
     [companyId]
   );
   await pool.query(`DELETE FROM sp_offload_reversals WHERE company_id = $1`, [companyId]);
+  await pool.query(`DELETE FROM sp_prepaid_charges WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_offloads WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_container_lines WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_containers WHERE company_id = $1`, [companyId]);
@@ -148,6 +149,7 @@ afterAll(async () => {
     await pool.query(`DELETE FROM canonical_stock_movements WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM inventory WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM stock_items WHERE company_id = $1`, [spCompanyId]);
+    await pool.query(`DELETE FROM bank_accounts WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM ledger_accounts WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM locations WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [spCompanyId]);
@@ -404,6 +406,178 @@ describe("SP reverse and corrected re-offload", () => {
     expect(Number(history.rows[0].count)).toBe(1);
     expect(Number(history.rows[0].snapshot_offload_id)).toBe(originalOffloadId);
   });
+});
 
-  it.todo("offload supports prepaid, paid-now and unpaid-payable charge lines");
+describe("SP offload charge lines", () => {
+  it("offload supports prepaid, paid-now and unpaid-payable charge lines", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const PREPAID_PAID = 120;
+    const PREPAID_USED = 80;
+    const PAID_NOW = 30;
+    const PAYABLE = 50;
+    const QTY = 10;
+    const RATE = 20;
+
+    const [bank] = await db
+      .insert(schema.bankAccounts)
+      .values({
+        companyId: spCompanyId,
+        code: `${TEST_PREFIX}-BANK`.slice(0, 50),
+        name: "SP Charges Bank",
+        bankName: "Test Bank",
+        accountNumber: `${RUN_ID}-001`,
+      })
+      .returning();
+    const [payable] = await db
+      .insert(schema.ledgerAccounts)
+      .values({
+        companyId: spCompanyId,
+        code: `${TEST_PREFIX}-PAY`.slice(0, 50),
+        name: "Clearing Agent Payable",
+        accountType: "Liability",
+      })
+      .returning();
+
+    const container = await spAgent.post("/api/sp/containers").send({
+      supplierName: "Charges Supplier",
+      containerNumber: `${TEST_PREFIX}-CONT-CHG`,
+      invoiceNumber: `${TEST_PREFIX}-INV-CHG`,
+      invoiceDate: today,
+      invoiceTotalUsd: QTY * RATE,
+      discountPct: 0,
+      freightEstimateUsd: 0,
+      lines: [
+        {
+          articleCode: `${TEST_PREFIX}-ITEM`,
+          description: "charged",
+          qty: QTY,
+          unitRateUsd: RATE,
+          stockItemId: spStockItemId,
+        },
+      ],
+    });
+    expect(container.status, JSON.stringify(container.body)).toBe(200);
+    const containerId = container.body.id as number;
+
+    const prepaid = await spAgent.post("/api/sp/prepaid").send({
+      containerId,
+      prepaidDate: today,
+      chargeType: "clearing",
+      agentName: "Port Agent",
+      amountPaidUsd: PREPAID_PAID,
+      bankAccountId: String(bank.id),
+    });
+    expect(prepaid.status, JSON.stringify(prepaid.body)).toBe(200);
+    const prepaidId = prepaid.body.id as number;
+
+    const inventoryBefore = await inventoryQuantity();
+    const offload = await spAgent.post("/api/sp/offload").send({
+      containerId,
+      offloadDate: today,
+      locationId: spLocationId,
+      chargeLines: [
+        {
+          chargeType: "prepaid_used",
+          prepaidChargeId: String(prepaidId),
+          amountUsd: PREPAID_USED,
+          description: "Clearing",
+        },
+        { chargeType: "paid_now", creditBankAccountId: String(bank.id), amountUsd: PAID_NOW, description: "Handling" },
+        {
+          chargeType: "unpaid_payable",
+          creditLedgerAccountId: String(payable.id),
+          amountUsd: PAYABLE,
+          description: "Transport",
+        },
+      ],
+    });
+    expect(offload.status, JSON.stringify(offload.body)).toBe(200);
+
+    const landed = PREPAID_USED + PAID_NOW + PAYABLE;
+    const [row] = await db.select().from(spOffloads).where(eq(spOffloads.containerId, containerId));
+    expect(Number(row.totalBaseCostUsd)).toBeCloseTo(QTY * RATE, 2);
+    expect(Number(row.totalLandedCostUsd)).toBeCloseTo(landed, 2);
+    expect(Number(row.totalFinalCostUsd)).toBeCloseTo(QTY * RATE + landed, 2);
+
+    // The stock voucher is balanced and credits each funding source exactly once.
+    const entries = await pool.query<{
+      ledger_account_id: number | null;
+      bank_account_id: number | null;
+      debit: string;
+      credit: string;
+    }>(
+      `SELECT ledger_account_id, bank_account_id, debit_amount::text AS debit, credit_amount::text AS credit
+       FROM voucher_entries WHERE voucher_id = $1`,
+      [row.voucherIdStock]
+    );
+    const dr = entries.rows.reduce((sum, e) => sum + Number(e.debit), 0);
+    const cr = entries.rows.reduce((sum, e) => sum + Number(e.credit), 0);
+    expect(dr).toBeCloseTo(QTY * RATE + landed, 2);
+    expect(cr).toBeCloseTo(dr, 2);
+    expect(entries.rows.filter((e) => e.bank_account_id === bank.id).map((e) => Number(e.credit))).toEqual([PAID_NOW]);
+    expect(entries.rows.filter((e) => e.ledger_account_id === payable.id).map((e) => Number(e.credit))).toEqual([
+      PAYABLE,
+    ]);
+
+    // The prepaid asset is drawn down, not re-paid.
+    const prepaidRow = await pool.query<{ used: string; paid: string }>(
+      `SELECT amount_used_usd::text AS used, amount_paid_usd::text AS paid FROM sp_prepaid_charges WHERE id = $1`,
+      [prepaidId]
+    );
+    expect(Number(prepaidRow.rows[0].used)).toBeCloseTo(PREPAID_USED, 4);
+    expect(Number(prepaidRow.rows[0].paid)).toBeCloseTo(PREPAID_PAID, 4);
+
+    const charges = await pool.query<{ charge_type: string; amount_usd: string }>(
+      `SELECT charge_type, amount_usd::text AS amount_usd FROM sp_offload_charges WHERE offload_id = $1 ORDER BY id`,
+      [row.id]
+    );
+    expect(charges.rows.map((c) => [c.charge_type, Number(c.amount_usd)])).toEqual([
+      ["prepaid_used", PREPAID_USED],
+      ["paid_now", PAID_NOW],
+      ["unpaid_payable", PAYABLE],
+    ]);
+
+    expect(await inventoryQuantity()).toBeCloseTo(inventoryBefore + QTY, 6);
+  });
+
+  it("refuses to use more prepaid balance than remains", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const [prepaidRow] = (
+      await pool.query<{ id: number }>(
+        `SELECT id FROM sp_prepaid_charges WHERE company_id = $1 ORDER BY id DESC LIMIT 1`,
+        [spCompanyId]
+      )
+    ).rows;
+    const container = await spAgent.post("/api/sp/containers").send({
+      supplierName: "Overdraw Supplier",
+      containerNumber: `${TEST_PREFIX}-CONT-OVR`,
+      invoiceNumber: `${TEST_PREFIX}-INV-OVR`,
+      invoiceDate: today,
+      invoiceTotalUsd: 100,
+      discountPct: 0,
+      freightEstimateUsd: 0,
+      lines: [
+        {
+          articleCode: `${TEST_PREFIX}-ITEM`,
+          description: "over",
+          qty: 5,
+          unitRateUsd: 20,
+          stockItemId: spStockItemId,
+        },
+      ],
+    });
+    expect(container.status).toBe(200);
+
+    const offload = await spAgent.post("/api/sp/offload").send({
+      containerId: container.body.id,
+      offloadDate: today,
+      locationId: spLocationId,
+      // 40 of 120 remains after the previous test; ask for 41.
+      chargeLines: [{ chargeType: "prepaid_used", prepaidChargeId: String(prepaidRow.id), amountUsd: 41 }],
+    });
+    expect(offload.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(offload.body)).toMatch(/remaining/);
+    const [row] = await db.select().from(spOffloads).where(eq(spOffloads.containerId, container.body.id));
+    expect(row).toBeUndefined();
+  });
 });
