@@ -29,7 +29,13 @@ vi.mock("@/contexts/CursorNavContext", async () => (await import("./pageMocks"))
 
 const MAX_BUTTONS = 30;
 
-const PAGES: Array<{ name: string; load: () => Promise<any>; factory?: boolean }> = [
+const PAGES: Array<{
+  name: string;
+  load: () => Promise<any>;
+  factory?: boolean;
+  /** Payloads for endpoints whose rows nest the record (see stubSeededFetch). */
+  seedRoutes?: Record<string, () => unknown>;
+}> = [
   { name: "AdvancedRestrictionsPanel", load: () => import("@/components/AdvancedRestrictionsPanel") },
   { name: "GradesCategoriesManager", load: () => import("@/components/GradesCategoriesManager") },
   { name: "NotificationsCenter", load: () => import("@/components/NotificationsCenter") },
@@ -221,7 +227,12 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; factory?: boolean }
     load: () => import("@/pages/factory/FactoryContainerLoadingScan"),
     factory: true,
   },
-  { name: "FactoryShippingContainers", load: () => import("@/pages/factory/FactoryShippingContainers"), factory: true },
+  {
+    name: "FactoryShippingContainers",
+    load: () => import("@/pages/factory/FactoryShippingContainers"),
+    factory: true,
+    seedRoutes: { "/whatsapp-preview": () => ({ files: [], defaultMessage: "" }) },
+  },
   { name: "FactoryInvoices", load: () => import("@/pages/factory/FactoryInvoices"), factory: true },
   { name: "WasteDispatch", load: () => import("@/pages/factory/WasteDispatch"), factory: true },
   { name: "StockEntryTab", load: () => import("@/pages/factory/bale-stock-entry/StockEntryTab"), factory: true },
@@ -278,8 +289,9 @@ describe("wave 4 page interaction sweep", () => {
     uncaught.length = 0;
   });
 
-  for (const { name, load, factory } of PAGES) {
+  for (const { name, load, factory, seedRoutes } of PAGES) {
     it(`${name} survives pressing each of its buttons`, async () => {
+      if (seedRoutes) stubSeededFetch(seedRoutes);
       if (factory) {
         pageState.companyType = "factory";
         pageState.appMode = "factory";
