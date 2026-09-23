@@ -261,7 +261,7 @@ export function AppSidebar({ user, onLogout }: { user?: SidebarUser; onLogout: (
     ],
     [selectedCompany?.companyType]
   );
-  const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
+  const recentItems = useRecentNav(allNavItems, selectedCompany?.id, isItemVisible);
 
   const trailingFor = (item: NavItem) => {
     if (item.url !== "/chat") return null;
