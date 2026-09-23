@@ -87,11 +87,36 @@ describe("Wave 4 Factory backend access ownership", () => {
       tabs: ["hide_tab_stockentry_production_targets"],
     });
 
-    const attendance = resolveFactoryBackendAccessRequirement(
-      req("/staff-tracking/bulk", "POST", { body: { page: "attendance" } })
-    );
-    expect(attendance?.pageKey).toBe("factory/payroll-hub");
-    expect(attendance?.tabAlternatives).toHaveLength(2);
+    expect(
+      resolveFactoryBackendAccessRequirement(req("/staff-tracking/bulk", "POST", { body: { page: "attendance" } }))
+    ).toMatchObject({
+      pageKey: "factory/payroll-hub",
+      tabs: ["hide_tab_payrollhub_workers", "hide_tab_workers_attendance"],
+    });
+  });
+
+  it("maps the shared WhatsApp image sender to the requesting Factory surface", () => {
+    expect(
+      resolveFactoryBackendAccessRequirement(
+        req("/send-mix-batch-image-whatsapp", "POST", { body: { destination: "attendance" } })
+      )
+    ).toMatchObject({
+      pageKey: "factory/payroll-hub",
+      tabs: ["hide_tab_payrollhub_workers", "hide_tab_workers_attendance"],
+    });
+
+    expect(
+      resolveFactoryBackendAccessRequirement(
+        req("/send-mix-batch-image-whatsapp", "POST", { body: { recipient: "production" } })
+      )
+    ).toMatchObject({
+      pageKey: "factory/stock-entry",
+      tabs: ["hide_tab_stockentry_production_targets"],
+    });
+
+    expect(
+      resolveFactoryBackendAccessRequirement(req("/send-mix-batch-image-whatsapp", "POST", { body: {} }))
+    ).toMatchObject({ pageKey: "factory/raw-materials" });
   });
 
   it("protects employee and worker child API families with their owning tabs", () => {
