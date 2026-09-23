@@ -60,13 +60,13 @@ jobs:
               esac
 
               case "$file" in
-                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-*.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   rtl=true
                   ;;
               esac
 
               case "$file" in
-                client/*|server/*|shared/*|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
+                client/*|server/*|shared/*|scripts/audit-i18n-*.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
                   i18n=true
                   ;;
               esac
@@ -103,6 +103,7 @@ jobs:
         env:
           I18N_RELEVANT: ${{ needs.changes.outputs.i18n }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
         shell: bash
         run: |
           set -euo pipefail
@@ -114,13 +115,14 @@ jobs:
           node scripts/verify-i18n-audit-classifier.mjs
           mkdir -p artifacts/i18n-audit
 
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            node scripts/run-i18n-pr-ratchet.mjs "$PR_BASE_SHA" artifacts/i18n-audit
-          else
-            node scripts/audit-i18n-phase14.mjs \
-              --json-out artifacts/i18n-audit/report.json \
-              --markdown-out artifacts/i18n-audit/report.md
+          base_sha="$PR_BASE_SHA"
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            base_sha="$PUSH_BASE_SHA"
+            if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+              base_sha="$(git rev-parse HEAD^)"
+            fi
           fi
+          node scripts/run-i18n-pr-ratchet.mjs "$base_sha" artifacts/i18n-audit
 
           cat artifacts/i18n-audit/report.md >> "$GITHUB_STEP_SUMMARY"
 
@@ -174,7 +176,7 @@ jobs:
             client/src/i18n/applicationDirection.ts \
             client/src/i18n/applicationTranslations.ts \
             client/src/styles/rtl-hardening.css \
-            scripts/audit-i18n-phase14.mjs \
+            scripts/audit-i18n-*.mjs \
             scripts/verify-program7d-accessibility-responsive.mjs \
             tests/phase14-i18n-release-gate.test.ts \
             tests/phase8-rtl-responsive-accessibility.test.ts \

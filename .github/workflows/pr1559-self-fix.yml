@@ -1,9 +1,9 @@
 name: PR 1559 one-shot CI repair
 
+# Historical one-shot repair workflow. Keep it manually callable for audit
+# reproducibility without making its old branch an automatic repository gate.
 on:
-  push:
-    branches:
-      - test/phase33b-accounting-finance-20260917
+  workflow_dispatch:
 
 permissions:
   contents: write
