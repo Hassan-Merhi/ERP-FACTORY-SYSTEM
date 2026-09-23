@@ -30,8 +30,19 @@ describe("SP offload charge atomic rollback contract", () => {
 
   it("keeps every state-changing offload write after the transaction boundary", () => {
     const transactionStart = source.indexOf("db.transaction");
-    for (const mutation of ["sp_offloads", "sp_stock_movements", "sp_offload_charges", "vouchers", "inventory"]) {
-      expect(source.indexOf(mutation, transactionStart), `${mutation} must stay inside the transactional offload path`).toBeGreaterThan(transactionStart);
+    const mutationSites = [
+      "tx.insert(vouchers)",
+      "tx.insert(spOffloads)",
+      "tx.insert(spOffloadCharges)",
+      "tx.insert(spStockMovements)",
+      "adjustSpInventoryAtomic(tx",
+    ];
+
+    for (const mutation of mutationSites) {
+      expect(
+        source.indexOf(mutation, transactionStart),
+        `${mutation} must stay inside the transactional offload path`
+      ).toBeGreaterThan(transactionStart);
     }
   });
 

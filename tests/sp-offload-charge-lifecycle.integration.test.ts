@@ -88,11 +88,17 @@ afterAll(async () => {
     await pool.query(`DELETE FROM sp_containers WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)`, [companyId]);
     await pool.query(`DELETE FROM vouchers WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM canonical_stock_movement_audit WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM canonical_stock_movement_requests WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM canonical_stock_movements WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM inventory WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM bank_accounts WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM stock_items WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM ledger_accounts WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM locations WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM sp_audit_events WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM sp_idempotency_keys WHERE company_id = $1`, [companyId]);
+    await pool.query(`DELETE FROM sp_permission_grants WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM user_company_roles WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM audit_log WHERE company_id = $1`, [companyId]);
     await pool.query(`DELETE FROM login_history WHERE company_id = $1`, [companyId]);
@@ -177,8 +183,9 @@ describe("SP offload charge lifecycle", () => {
 
     const before = await pool.query<{ vouchers: string; inventory_qty: string }>(`SELECT (SELECT COUNT(*) FROM vouchers WHERE company_id = $1)::text AS vouchers, COALESCE((SELECT SUM(quantity::numeric) FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3), 0)::text AS inventory_qty`, [companyId, locationId, stockItemId]);
 
-    // prepaid_used is processed before paid_now in the transaction. The deliberately
-    // missing bank therefore proves that the earlier prepaid mutation is rolled back.
+    // The offload guard rejects an invalid bank before posting, while the route still
+    // validates charge ownership inside its transaction as defense in depth. Either
+    // path must leave prepaid, vouchers, inventory and offload state unchanged.
     const failed = await agent.post("/api/sp/offload").send({
       containerId, offloadDate: today, locationId,
       chargeLines: [
@@ -192,7 +199,17 @@ describe("SP offload charge lifecycle", () => {
     expect(Number(prepaidAfter.amountUsedUsd)).toBe(0);
     expect((await pool.query(`SELECT 1 FROM sp_offloads WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
     expect((await pool.query(`SELECT 1 FROM sp_stock_movements WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
-    expect((await pool.query(`SELECT 1 FROM sp_offload_charges WHERE company_id = $1 AND container_id = $2`, [companyId, containerId])).rowCount).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT 1
+           FROM sp_offload_charges c
+           JOIN sp_offloads o ON o.id = c.offload_id
+           WHERE c.company_id = $1 AND o.company_id = $1 AND o.container_id = $2`,
+          [companyId, containerId]
+        )
+      ).rowCount
+    ).toBe(0);
 
     const after = await pool.query<{ vouchers: string; inventory_qty: string }>(`SELECT (SELECT COUNT(*) FROM vouchers WHERE company_id = $1)::text AS vouchers, COALESCE((SELECT SUM(quantity::numeric) FROM inventory WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3), 0)::text AS inventory_qty`, [companyId, locationId, stockItemId]);
     expect(after.rows[0].vouchers).toBe(before.rows[0].vouchers);
