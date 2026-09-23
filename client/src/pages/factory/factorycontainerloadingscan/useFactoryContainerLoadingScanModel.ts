@@ -92,6 +92,7 @@ export function useFactoryContainerLoadingScanModel() {
     Array<{ id: number; invoiceNumber: string | null; status: string; totalQtyBales: number }>
   >([]);
   const [baleToDelete, setBaleToDelete] = useState<{ id: number; baleReference: string } | null>(null);
+  const [showEmptyContainerConfirm, setShowEmptyContainerConfirm] = useState(false);
   const [showRemovalLog, setShowRemovalLog] = useState(false);
   const [selectedProformaId, setSelectedProformaId] = useState<string>("");
   const scannerRef = useRef<HTMLInputElement>(null);
@@ -401,6 +402,57 @@ export function useFactoryContainerLoadingScanModel() {
       if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
       toast({
         title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const emptyContainerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/bales/empty`, {});
+      return (await res.json()) as { removed: number };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(
+        { queryKey: ["/api/factory/customer-orders", orderId], exact: true, refetchType: "active" },
+        { cancelRefetch: false }
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/factory/bale-stock-count"],
+        refetchType: "active",
+      });
+      if (capacityProformaId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
+          refetchType: "active",
+        });
+      }
+
+      setShowEmptyContainerConfirm(false);
+      setLastScannedRef(null);
+      setShowLastScannedPopup(false);
+      setPendingBypassBaleRef(null);
+      setPendingBypassOverloadRef(null);
+      setExpandedGroups(new Set());
+      setScanCode("");
+
+      toast({
+        title: "Container emptied",
+        description:
+          data.removed === 1
+            ? "1 scanned bale was returned to stock. You can start scanning again."
+            : `${data.removed} scanned bales were returned to stock. You can start scanning again.`,
+      });
+      setTimeout(() => scannerRef.current?.focus(), 100);
+    },
+    onError: (error: Error) => {
+      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
+      toast({
+        title: "Could not empty container",
         description: error.message,
         variant: "destructive",
       });
@@ -847,6 +899,9 @@ export function useFactoryContainerLoadingScanModel() {
     baleToDelete,
     setBaleToDelete,
     removeBaleMutation,
+    showEmptyContainerConfirm,
+    setShowEmptyContainerConfirm,
+    emptyContainerMutation,
     // import
     importFileRef,
     handleImportFile,
