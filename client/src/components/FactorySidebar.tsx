@@ -189,6 +189,11 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     const page = resolveFactoryPage(item.url);
     if (!page) return false;
     if (!factoryPageAllowsRole(page, user?.role)) return false;
+    if (page.featureFlag) {
+      const defaultOn = !!page.featureFlagDefaultOn;
+      const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
+      if (!enabled) return false;
+    }
     if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       return false;
     }
@@ -271,6 +276,7 @@ export function FactorySidebar({
   const allNavItems = useMemo(() => [...FACTORY_PINNED_DEFAULTS, ...FACTORY_NAV_SECTIONS.flatMap((s) => s.items)], []);
   const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
   const visibleRecentItems = recentItems.filter(isPinnedVisible);
+  const conflictsVisible = isPinnedVisible({ title: "Conflicts", url: "/factory/conflicts", icon: AlertTriangle });
 
   const testIdFor = (i: NavItem) => `link-factory-${i.url.split("/").pop()}`;
 
@@ -338,7 +344,7 @@ export function FactorySidebar({
               testId="link-factory-chat"
             />
           )}
-          {conflictCount > 0 && (
+          {conflictCount > 0 && conflictsVisible && (
             <a
               href="/factory/conflicts"
               data-testid="link-factory-conflicts"
