@@ -55,15 +55,22 @@ import {
   type NavItem,
   type NavSection,
 } from "@/components/sidebar/sidebarPrimitives";
+import {
+  FACTORY_PINNED_PAGES,
+  FACTORY_SETTINGS_PAGES,
+  FACTORY_SIDEBAR_PAGES,
+  factoryPageAllowsRole,
+  hasFactoryPageKey,
+  resolveFactoryPage,
+} from "@/app/factoryAccessRegistry";
 
 interface FactoryNavItem extends NavItem {
+  accessKey: string;
   adminOnly?: boolean;
   developerOnly?: boolean;
   featureFlag?: string;
   featureFlagDefaultOn?: boolean;
   hideKey?: string;
-  requiresExplicitAccess?: boolean;
-  viewableByAll?: boolean;
 }
 
 interface FactoryNavSection extends NavSection {
@@ -71,129 +78,76 @@ interface FactoryNavSection extends NavSection {
   developerOnly?: boolean;
 }
 
-export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = [
-  {
-    label: "Production",
-    color: NAV_COLOR.operations,
-    items: [
-      { title: "Stock Entry", url: "/factory/stock-entry", icon: ScanLine },
-      { title: "Raw Materials", url: "/factory/raw-materials", icon: Package },
-      { title: "Waste Dispatch", url: "/factory/waste-dispatch", icon: Trash2 },
-      { title: "Bale Explorer", url: "/factory/bales-hub", icon: History },
-    ],
-  },
-  {
-    label: "Sales",
-    color: NAV_COLOR.sales,
-    items: [
-      { title: "Invoicing", url: "/factory/invoicing", icon: FileText },
-    ],
-  },
-  {
-    label: "Inventory",
-    color: NAV_COLOR.inventory,
-    items: [
-      { title: "Location Inventory", url: "/factory/location-inventory", icon: MapPin },
-      { title: "Containers", url: "/factory/containers-hub", icon: Container },
-      { title: "Stock Allocation", url: "/factory/stock-allocation-v5", icon: LayoutGrid },
-      { title: "Sheets & Sacks", url: "/factory/sheets-sacks", icon: Layers, viewableByAll: true },
-    ],
-  },
-  {
-    label: "Finance",
-    color: NAV_COLOR.finance,
-    items: [
-      { title: "Daybook", url: "/factory/daybook", icon: BookOpen },
-      { title: "Parties", url: "/factory/parties", icon: Users },
-      { title: "Contacts", url: "/factory/contacts", icon: BookMarked },
-      { title: "Payroll & Benefits", url: "/factory/payroll-hub", icon: HardHat },
-      { title: "Analytics", url: "/factory/analytics", icon: TrendingUp, adminOnly: true },
-    ],
-  },
-  {
-    label: "Rentals",
-    color: NAV_COLOR.rentals,
-    items: [
-      { title: "Shops", url: "/factory/rental/shops", icon: Store },
-      { title: "Warehouses", url: "/factory/rental/warehouses", icon: Building2, developerOnly: true },
-      { title: "Payments", url: "/factory/rental/payments", icon: CreditCard, developerOnly: true },
-    ],
-  },
-  {
-    label: "Intelligence",
-    color: NAV_COLOR.intelligence,
-    developerOnly: true,
-    items: [
-      {
-        title: "Factory Dashboard",
-        url: "/factory/intelligence/dashboard",
-        icon: Activity,
-        featureFlag: "dashboardEnabled",
-      },
-      { title: "KPIs", url: "/factory/intelligence/kpis", icon: Gauge, featureFlag: "kpisEnabled" },
-      {
-        title: "Supplier Intel",
-        url: "/factory/intelligence/supplier-hub",
-        icon: ClipboardCheck,
-        featureFlag: "supplierReportEnabled",
-      },
-      {
-        title: "Financial Intel",
-        url: "/factory/intelligence/financial-hub",
-        icon: BarChart3,
-        featureFlag: "netProfitEnabled",
-      },
-      {
-        title: "Production Intel",
-        url: "/factory/intelligence/production-hub",
-        icon: Beaker,
-        featureFlag: "productionSummaryEnabled",
-      },
-      { title: "Alerts", url: "/factory/intelligence/alerts", icon: Bell, featureFlag: "alertsEnabled" },
-      { title: "Intel Settings", url: "/factory/intelligence/settings", icon: Settings, adminOnly: true },
-    ],
-  },
-];
+const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
+  "factory/production-report": BarChart3,
+  "factory/agents": UserRound,
+  "factory/accounts": Landmark,
+  "factory/daybook": BookOpen,
+  "factory/vouchers": FileText,
+  "factory/stock-entry": ScanLine,
+  "factory/raw-materials": Package,
+  "factory/waste-dispatch": Trash2,
+  "factory/bales-hub": History,
+  "factory/invoicing": FileText,
+  "factory/location-inventory": MapPin,
+  "factory/containers-hub": Container,
+  "factory/stock-allocation-v5": LayoutGrid,
+  "factory/sheets-sacks": Layers,
+  "factory/parties": Users,
+  "factory/contacts": BookMarked,
+  "factory/payroll-hub": HardHat,
+  "factory/analytics": TrendingUp,
+  "factory/rental/shops": Store,
+  "factory/rental/warehouses": Building2,
+  "factory/rental/payments": CreditCard,
+  "factory/intelligence/dashboard": Activity,
+  "factory/intelligence/kpis": Gauge,
+  "factory/intelligence/supplier-hub": ClipboardCheck,
+  "factory/intelligence/financial-hub": BarChart3,
+  "factory/intelligence/production-hub": Beaker,
+  "factory/intelligence/alerts": Bell,
+  "factory/intelligence/settings": Settings,
+};
 
-const FACTORY_ACCESS_EXTRA_PAGES: { key: string; label: string; group: string }[] = [
-  { key: "factory/production-report", label: "Overview", group: "Production" },
-  { key: "factory/agents", label: "Agent Ledger", group: "Finance" },
-  { key: "factory/accounts", label: "Accounts", group: "Finance" },
-  { key: "factory/vouchers", label: "Vouchers", group: "Finance" },
-  { key: "factory/transporters", label: "Transporters", group: "Finance" },
-  { key: "factory/broker-visual-statement", label: "Broker Statement", group: "Finance" },
-  { key: "factory/stock-query", label: "Stock Query", group: "Inventory" },
-  { key: "factory/stock-bale-list", label: "Stock Bale List", group: "Inventory" },
-  { key: "factory/bale-tracking", label: "Bale Tracking", group: "Inventory" },
-  { key: "factory/import", label: "Import", group: "Inventory" },
-  { key: "factory/merge-bale-products", label: "Merge Bale Products", group: "Inventory" },
-  { key: "factory/bale-product-images", label: "Bale Product Images", group: "Inventory" },
-  { key: "factory/price-list", label: "Price List", group: "Sales" },
-  { key: "factory/dispatch-batches", label: "Dispatch Batches", group: "Sales" },
-  { key: "factory/bale-relabeling", label: "Bale Relabeling", group: "Production" },
-  { key: "factory/production-comparison", label: "Production Comparison", group: "Production" },
-  { key: "factory/chat", label: "Chat", group: "Other" },
-  { key: "factory/settings", label: "Settings", group: "Other" },
-];
+const FACTORY_SIDEBAR_GROUP_ORDER = ["Production", "Sales", "Inventory", "Finance", "Rentals", "Intelligence"] as const;
+const FACTORY_SIDEBAR_COLORS: Record<string, string> = {
+  Production: NAV_COLOR.operations,
+  Sales: NAV_COLOR.sales,
+  Inventory: NAV_COLOR.inventory,
+  Finance: NAV_COLOR.finance,
+  Rentals: NAV_COLOR.rentals,
+  Intelligence: NAV_COLOR.intelligence,
+};
 
-export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = Array.from(
-  new Map(
-    [
-      ...FACTORY_NAV_SECTIONS.flatMap((s) =>
-        s.items.map((item) => ({ key: item.url.replace(/^\//, ""), label: item.title, group: s.label }))
-      ),
-      ...FACTORY_ACCESS_EXTRA_PAGES,
-    ].map((page) => [page.key, page])
-  ).values()
+export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = FACTORY_SIDEBAR_GROUP_ORDER.map((label) => {
+  const pages = FACTORY_SIDEBAR_PAGES.filter((page) => page.group === label);
+  return {
+    label,
+    color: FACTORY_SIDEBAR_COLORS[label],
+    developerOnly: pages.length > 0 && pages.every((page) => page.accessLevel === "developer"),
+    items: pages.map((page) => ({
+      title: page.label,
+      url: page.route,
+      icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
+      accessKey: page.key,
+      adminOnly: page.accessLevel === "admin",
+      developerOnly: page.accessLevel === "developer",
+      featureFlag: page.featureFlag,
+      featureFlagDefaultOn: page.featureFlagDefaultOn,
+      hideKey: page.hideKey,
+    })),
+  };
+}).filter((section) => section.items.length > 0);
+
+export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = FACTORY_SETTINGS_PAGES.map(
+  ({ key, label, group }) => ({ key, label, group })
 );
 
-const FACTORY_PINNED_DEFAULTS: NavItem[] = [
-  { title: "Overview", url: "/factory/production-report", icon: BarChart3 },
-  { title: "Agent Ledger", url: "/factory/agents", icon: UserRound },
-  { title: "Accounts", url: "/factory/accounts", icon: Landmark },
-  { title: "Daybook", url: "/factory/daybook", icon: BookOpen },
-  { title: "Vouchers", url: "/factory/vouchers", icon: FileText },
-];
+const FACTORY_PINNED_DEFAULTS: NavItem[] = FACTORY_PINNED_PAGES.map((page) => ({
+  title: page.label,
+  url: page.route,
+  icon: FACTORY_NAV_ICONS[page.key] ?? FileText,
+}));
 
 interface FactorySidebarUser {
   username?: string | null;
@@ -232,22 +186,13 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   });
 
   const isPinnedVisible = (item: NavItem): boolean => {
-    const pageKey = item.url.replace(/^\//, "");
-    if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !myAccess.pageKeys.includes(pageKey)) {
+    const page = resolveFactoryPage(item.url);
+    if (!page) return false;
+    if (!factoryPageAllowsRole(page, user?.role)) return false;
+    if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       return false;
     }
-    if (
-      item.url === "/factory/production-report" &&
-      myAccess?.hiddenCostFields?.includes("hide_tab_production_analytics")
-    ) {
-      return false;
-    }
-    if (item.url === "/factory/daybook" && myAccess?.hiddenCostFields?.includes("hide_tab_daybook")) {
-      return false;
-    }
-    if (item.url === "/factory/agents" && myAccess?.hiddenCostFields?.includes("hide_tab_agents")) {
-      return false;
-    }
+    if (page.hideKey && myAccess?.hiddenCostFields?.includes(page.hideKey)) return false;
     return true;
   };
 
@@ -264,15 +209,12 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
             if (!settings || settings[item.featureFlag] !== true) return false;
           }
         }
-        if (item.viewableByAll) {
-          // always show in sidebar — access guard handled at the page level
-        } else if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0)
-          if (!myAccess.pageKeys.includes(item.url.replace(/^\//, ""))) return false;
-        if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
-        if (item.requiresExplicitAccess && !isAdmin && myAccess) {
-          if (myAccess.fullAccess) return false;
-          if (!myAccess.pageKeys.includes(item.url.replace(/^\//, ""))) return false;
+        const page = resolveFactoryPage(item.url);
+        if (!page || !factoryPageAllowsRole(page, user?.role)) return false;
+        if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !hasFactoryPageKey(page, myAccess.pageKeys)) {
+          return false;
         }
+        if (item.hideKey && myAccess?.hiddenCostFields?.includes(item.hideKey)) return false;
         return true;
       }),
     }))
@@ -328,6 +270,7 @@ export function FactorySidebar({
 
   const allNavItems = useMemo(() => [...FACTORY_PINNED_DEFAULTS, ...FACTORY_NAV_SECTIONS.flatMap((s) => s.items)], []);
   const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
+  const visibleRecentItems = recentItems.filter(isPinnedVisible);
 
   const testIdFor = (i: NavItem) => `link-factory-${i.url.split("/").pop()}`;
 
@@ -357,13 +300,13 @@ export function FactorySidebar({
           ))}
         </div>
 
-        {recentItems.length > 0 && (
+        {visibleRecentItems.length > 0 && (
           <div className="mt-3">
             <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
               Recent
             </p>
             <div className="space-y-0.5">
-              {recentItems.map((item) => (
+              {visibleRecentItems.map((item) => (
                 <SidebarFlatLink
                   key={item.url}
                   href={item.url}
