@@ -208,10 +208,96 @@ export const coreTablesAndColumns: string[] = [
         UPDATE factory_user_page_access SET page_key = 'factory/invoicing' WHERE page_key = 'factory/sales/invoices' AND NOT EXISTS (SELECT 1 FROM factory_user_page_access b WHERE b.company_id = factory_user_page_access.company_id AND b.user_id = factory_user_page_access.user_id AND b.page_key = 'factory/invoicing');
         DELETE FROM factory_user_page_access WHERE page_key IN ('factory/sales/proformas', 'factory/sales/invoices');
         -- Delete obsolete keys that have no equivalent in the current sidebar
-        DELETE FROM factory_user_page_access WHERE page_key IN ('factory/mix-batches', 'factory/sales/new', 'factory/bale-transfers', 'factory/create', 'factory/users', 'factory/daybook');
+        DELETE FROM factory_user_page_access WHERE page_key IN ('factory/mix-batches', 'factory/bale-transfers');
         INSERT INTO migrations_log(key) VALUES ('factory-page-key-renames-v1');
       END IF;
     END $$`,
+  // Wave 5 Factory permission canonicalization. These statements are
+  // individually idempotent so they can safely run on every startup while the
+  // migrations_log row remains useful as an audit marker.
+  `INSERT INTO factory_user_page_access(company_id, user_id, page_key)
+    SELECT company_id, user_id,
+      CASE
+        WHEN page_key IN ('factory/raw-stock') THEN 'factory/raw-materials'
+        WHEN page_key IN ('factory/bales-history','factory/bale-products','factory/bale-product-history','factory/reprint-labels','factory/barcode-lookup') THEN 'factory/bales-hub'
+        WHEN page_key IN ('factory/pressing','factory/finalize') THEN 'factory/stock-entry'
+        WHEN page_key IN ('factory/sales/new','factory/sales/loading','factory/sales/loadings','factory/sales/loading/new','factory/sales/loading/pending','factory/sales/pending-invoices','factory/invoices','factory/sales/invoices','factory/sales/proformas') THEN 'factory/invoicing'
+        WHEN page_key IN ('factory/containers','factory/stock-otw') THEN 'factory/containers-hub'
+        WHEN page_key IN ('factory/stock-allocation','factory/stock-allocation-v2','factory/stock-allocation-v3') THEN 'factory/stock-allocation-v5'
+        WHEN page_key IN ('factory/customers','factory/suppliers') THEN 'factory/parties'
+        WHEN page_key IN ('factory/finance','factory/payroll','factory/worker-payroll','factory/workers','factory/employees','factory/insurance') THEN 'factory/payroll-hub'
+        WHEN page_key IN ('factory/ledger-monthly','factory/ledger-vouchers','factory/create') THEN 'factory/accounts'
+        WHEN page_key IN ('factory/voucher-detail') THEN 'factory/vouchers'
+        WHEN page_key IN ('factory/supplier-report','factory/supplier-statement','factory/intelligence/supplier-scores') THEN 'factory/intelligence/supplier-hub'
+        WHEN page_key IN ('factory/production-summary','factory/intelligence/mix-optimizer','factory/intelligence/waste') THEN 'factory/intelligence/production-hub'
+        WHEN page_key IN ('factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics') THEN 'factory/intelligence/financial-hub'
+        WHEN page_key IN ('factory/financial-snapshot') THEN 'factory/analytics'
+        WHEN page_key IN ('factory/users','factory/customer-logos','factory/label-banners') THEN 'factory/settings'
+        WHEN page_key IN ('factory/bale-ledger','factory/pos') THEN 'factory/production-report'
+        ELSE page_key
+      END
+    FROM factory_user_page_access
+    WHERE page_key IN (
+      'factory/raw-stock',
+      'factory/bales-history','factory/bale-products','factory/bale-product-history','factory/reprint-labels','factory/barcode-lookup',
+      'factory/pressing','factory/finalize',
+      'factory/sales/new','factory/sales/loading','factory/sales/loadings','factory/sales/loading/new','factory/sales/loading/pending','factory/sales/pending-invoices','factory/invoices','factory/sales/invoices','factory/sales/proformas',
+      'factory/containers','factory/stock-otw',
+      'factory/stock-allocation','factory/stock-allocation-v2','factory/stock-allocation-v3',
+      'factory/customers','factory/suppliers',
+      'factory/finance','factory/payroll','factory/worker-payroll','factory/workers','factory/employees','factory/insurance',
+      'factory/ledger-monthly','factory/ledger-vouchers','factory/create',
+      'factory/voucher-detail',
+      'factory/supplier-report','factory/supplier-statement','factory/intelligence/supplier-scores',
+      'factory/production-summary','factory/intelligence/mix-optimizer','factory/intelligence/waste',
+      'factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics',
+      'factory/financial-snapshot',
+      'factory/users','factory/customer-logos','factory/label-banners',
+      'factory/bale-ledger','factory/pos'
+    )
+    ON CONFLICT (company_id, user_id, page_key) DO NOTHING`,
+  `DELETE FROM factory_user_page_access
+    WHERE company_id IS NOT NULL
+      AND page_key IN (
+      'factory/raw-stock',
+      'factory/bales-history','factory/bale-products','factory/bale-product-history','factory/reprint-labels','factory/barcode-lookup',
+      'factory/pressing','factory/finalize',
+      'factory/sales/new','factory/sales/loading','factory/sales/loadings','factory/sales/loading/new','factory/sales/loading/pending','factory/sales/pending-invoices','factory/invoices','factory/sales/invoices','factory/sales/proformas',
+      'factory/containers','factory/stock-otw',
+      'factory/stock-allocation','factory/stock-allocation-v2','factory/stock-allocation-v3',
+      'factory/customers','factory/suppliers',
+      'factory/finance','factory/payroll','factory/worker-payroll','factory/workers','factory/employees','factory/insurance',
+      'factory/ledger-monthly','factory/ledger-vouchers','factory/create',
+      'factory/voucher-detail',
+      'factory/supplier-report','factory/supplier-statement','factory/intelligence/supplier-scores',
+      'factory/production-summary','factory/intelligence/mix-optimizer','factory/intelligence/waste',
+      'factory/intelligence/profitability','factory/intelligence/cashflow','factory/net-position-details','factory/net-position','factory/net-profit-analytics',
+      'factory/financial-snapshot',
+      'factory/users','factory/customer-logos','factory/label-banners',
+      'factory/bale-ledger','factory/pos',
+      'factory/mix-batches','factory/bale-transfers'
+    )`,
+  `UPDATE factory_user_profiles
+    SET hidden_cost_fields = ARRAY(
+      SELECT DISTINCT key
+      FROM unnest(COALESCE(hidden_cost_fields, ARRAY[]::text[])) AS key
+      WHERE key NOT IN (
+        'hide_tab_production_analytics',
+        'hide_tab_agents',
+        'hide_tab_daybook',
+        'hide_tab_stockentry_attendance_register'
+      )
+      ORDER BY key
+    )
+    WHERE hidden_cost_fields && ARRAY[
+      'hide_tab_production_analytics',
+      'hide_tab_agents',
+      'hide_tab_daybook',
+      'hide_tab_stockentry_attendance_register'
+    ]::text[]`,
+  `INSERT INTO migrations_log(key)
+    VALUES ('factory-permission-canonicalization-v2')
+    ON CONFLICT (key) DO NOTHING`,
   // Add ledger account link to customer order charges
   `ALTER TABLE customer_order_charges ADD COLUMN IF NOT EXISTS ledger_account_id integer`,
   // Bale recode / relabeling audit tables
