@@ -673,8 +673,8 @@ export default function SpreadsheetEditor() {
 
   if (openSheetId !== null) {
     return (
-      <div className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 flex flex-col" style={{ height: "calc(100vh - 56px)" }}>
-        <div className="h-12 flex items-center gap-2 px-3 border-b bg-background shrink-0">
+      <div className="-mx-3 sm:-mx-6 -mt-3 sm:-mt-6 flex flex-col" style={{ height: "calc(var(--app-viewport-height) - 56px)" }}>
+        <div className="h-12 min-w-0 flex items-center gap-2 px-2 sm:px-3 border-b bg-background shrink-0">
           <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-spreadsheet-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -688,20 +688,20 @@ export default function SpreadsheetEditor() {
                 if (e.key === "Enter") confirmRename();
                 if (e.key === "Escape") setEditingName(false);
               }}
-              className="h-8 max-w-xs text-sm font-medium"
+              className="h-8 min-w-0 flex-1 max-w-xs text-sm font-medium"
               data-testid="input-spreadsheet-name"
             />
           ) : (
             <button
-              className="flex items-center gap-1.5 group"
+              className="group flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none"
               onClick={startRename}
               data-testid="button-rename-spreadsheet"
             >
-              <span className="text-sm font-medium">{sheetName}</span>
+              <span className="truncate text-sm font-medium">{sheetName}</span>
               <Pencil className="h-3 w-3 text-muted-foreground opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
             </button>
           )}
-          <div className="flex items-center gap-1 text-xs text-muted-foreground ml-1">
+          <div className="hidden items-center gap-1 text-xs text-muted-foreground ml-1 sm:flex">
             {saveStatus === "saving" && (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -718,14 +718,14 @@ export default function SpreadsheetEditor() {
           </div>
           <div className="ml-auto flex items-center gap-1">
             <Button variant="outline" size="sm" onClick={handleDownload} data-testid="button-download-xlsx">
-              <Download className="h-4 w-4 mr-1.5" />
-              Download .xlsx
+              <Download className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Download .xlsx</span>
             </Button>
           </div>
         </div>
         <div
           ref={containerRef}
-          style={{ height: "calc(100vh - 104px)" }}
+          style={{ height: "calc(var(--app-viewport-height) - 104px)" }}
           className="overflow-visible"
           onMouseDown={markInteracted}
           onKeyDown={markInteracted}
