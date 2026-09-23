@@ -194,7 +194,11 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(production).toContain('tr("totalTarget")');
     expect(production).toContain('tr("totalAbsentTarget")');
     expect(production).toContain('tr("totalExpected")');
+    expect(production).toContain('tr("totalWorkers")');
+    expect(production).toContain('tr("totalAbsent")');
+    expect(production).toContain('tr("totalPresent")');
     expect(production).toContain('tr("diff")');
+    expect(production).toContain("grid-cols-3");
     expect(production).toContain("sm:grid-cols-2 xl:grid-cols-4");
     expect(model).toContain("absentTarget");
     expect(model).toContain("const expected = target - absentTarget");
