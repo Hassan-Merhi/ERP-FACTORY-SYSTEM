@@ -257,7 +257,8 @@ export const coreTablesAndColumns: string[] = [
     )
     ON CONFLICT (company_id, user_id, page_key) DO NOTHING`,
   `DELETE FROM factory_user_page_access
-    WHERE page_key IN (
+    WHERE company_id IS NOT NULL
+      AND page_key IN (
       'factory/raw-stock',
       'factory/bales-history','factory/bale-products','factory/bale-product-history','factory/reprint-labels','factory/barcode-lookup',
       'factory/pressing','factory/finalize',
