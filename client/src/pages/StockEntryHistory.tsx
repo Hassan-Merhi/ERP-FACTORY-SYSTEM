@@ -9,6 +9,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import type { GroupRow, StockEntryHistoryPage, StockEntryHistoryProps } from "./stockentryhistory/types";
 import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
+import { formatDailyNum } from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -144,7 +145,7 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-sky-500/10 border-sky-500/20">
           <span className="text-xs font-semibold text-sky-500">Weight</span>
           <span className="text-sm font-bold tabular-nums text-sky-600 dark:text-sky-400">
-            {(pagedGroups?.totalWeight ?? totalWeight).toFixed(2)}
+            {formatDailyNum(pagedGroups?.totalWeight ?? totalWeight)}
           </span>
           <span className="text-xs text-sky-600/70 dark:text-sky-400/70">kg</span>
         </div>
