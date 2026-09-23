@@ -26,9 +26,8 @@ const ERP_TABS = [
 const POS_TAB_KEYS = POS_TABS.map((t) => t.key) as unknown as readonly ("daybook" | "transfers")[];
 const ERP_TAB_KEYS = ERP_TABS.map((t) => t.key) as unknown as readonly ("transfers" | "pricelist")[];
 
-export default function SalesToolsHub() {
+export default function SalesToolsHub({ access }: { access?: ErpFeatureAccess }) {
   const { data: user } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const { data: access } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
 
   const isPOS = user?.role === "POS";
   const tabs = isPOS
@@ -42,7 +41,7 @@ export default function SalesToolsHub() {
     key: "tab",
     allowedValues: tabKeys,
     knownValues: knownTabKeys,
-    defaultValue,
+    defaultValue: defaultTab,
   });
 
   // Render content directly (no Radix Tabs wrapper) — same pattern as StockHub
