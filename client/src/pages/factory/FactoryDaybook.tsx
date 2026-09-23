@@ -7,6 +7,7 @@
  * table and the dialog stack. This file is only composition.
  */
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLog } from "@/pages/settings/AuditLog";
 import { PageHeader } from "@/components/PageHeader";
@@ -38,6 +39,12 @@ export default function FactoryDaybook() {
     showActivity ? "activity" : null,
   ].filter((value): value is "transactions" | "activity" => value !== null);
   const effectiveTab = visibleTabs.includes(model.activeDaybookTab) ? model.activeDaybookTab : visibleTabs[0];
+
+  useEffect(() => {
+    if (effectiveTab && model.activeDaybookTab !== effectiveTab) {
+      model.setActiveDaybookTab(effectiveTab);
+    }
+  }, [effectiveTab, model.activeDaybookTab, model.setActiveDaybookTab]);
 
   return (
     <div className="space-y-6">
