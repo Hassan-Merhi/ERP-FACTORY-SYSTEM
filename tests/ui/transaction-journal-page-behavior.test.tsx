@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   toast: vi.fn(),
   refetch: vi.fn(),
   queryError: null as Error | null,
+  hiddenJournalVoucherIds: [] as number[],
 }));
 
 const journalData = {
@@ -64,6 +65,9 @@ const journalData = {
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: any) => {
     if (queryKey?.[0] === "/api/my-erp-pages") return { data: { hiddenErpCostFields: [] } };
+    if (queryKey?.[0] === "/api/user-preferences") {
+      return { data: { hiddenTransactionJournalVoucherIds: harness.hiddenJournalVoucherIds } };
+    }
     if (queryKey?.[0] === "/api/global/transactions" && queryKey.length === 2) {
       return {
         data: journalData,
@@ -161,6 +165,7 @@ describe("transaction journal page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.queryError = null;
+    harness.hiddenJournalVoucherIds = [];
     sessionStorage.clear();
   });
 
@@ -178,7 +183,7 @@ describe("transaction journal page behavior", () => {
 
   it("supports search, quick type filters, and factory inclusion", () => {
     render(<TransactionJournal />);
-    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Included");
+    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Excluded");
 
     fireEvent.change(screen.getByTestId("input-search"), { target: { value: "PAY-101" } });
     fireEvent.click(screen.getByTestId("button-search"));
@@ -186,7 +191,7 @@ describe("transaction journal page behavior", () => {
 
     fireEvent.click(screen.getByTestId("chip-type-payment"));
     fireEvent.click(screen.getByTestId("button-toggle-factory"));
-    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Excluded");
+    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Included");
   });
 
   it("resets pagination for every filter path and can clear the complete filter set", () => {
@@ -208,20 +213,39 @@ describe("transaction journal page behavior", () => {
     expect(screen.getByTestId("button-reset-filters")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("button-reset-filters"));
     expect(screen.getByTestId("input-search")).toHaveValue("");
-    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Included");
+    expect(screen.getByTestId("button-toggle-factory")).toHaveTextContent("Excluded");
     expect(screen.queryByTestId("button-reset-filters")).not.toBeInTheDocument();
   });
 
-  it("hides individual rows and can reveal or clear them", () => {
+  it("hides individual rows and persists the per-user preference until unhidden", async () => {
     render(<TransactionJournal />);
     fireEvent.click(screen.getByTestId("button-hide-voucher-101"));
     expect(screen.queryByTestId("row-voucher-101")).not.toBeInTheDocument();
     expect(screen.getByTestId("button-toggle-show-hidden")).toHaveTextContent("1");
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PUT", "/api/user-preferences", {
+        hiddenTransactionJournalVoucherIds: [101],
+      })
+    );
 
     fireEvent.click(screen.getByTestId("button-toggle-show-hidden"));
     expect(screen.getByTestId("row-voucher-101")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("button-clear-hidden-rows"));
     expect(screen.getByTestId("row-voucher-101")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PUT", "/api/user-preferences", {
+        hiddenTransactionJournalVoucherIds: [],
+      })
+    );
+  });
+
+  it("restores hidden rows from the signed-in user's saved preference", async () => {
+    harness.hiddenJournalVoucherIds = [101];
+    render(<TransactionJournal />);
+
+    await waitFor(() => expect(screen.queryByTestId("row-voucher-101")).not.toBeInTheDocument());
+    expect(screen.getByTestId("row-voucher-102")).toBeInTheDocument();
+    expect(screen.getByTestId("button-toggle-show-hidden")).toHaveTextContent("1");
   });
 
   it("switches to a voucher company before navigating to its Daybook", async () => {

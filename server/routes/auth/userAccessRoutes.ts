@@ -238,12 +238,34 @@ export function registerUserAccessRoutes(app: Express) {
   app.put("/api/user-preferences", requireAuth, async (req, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      const { dateFormat, preferredCurrency, showProfitComparisonOnPOS, showChatWidget, showNotesPanel } = req.body;
+      const {
+        dateFormat,
+        preferredCurrency,
+        showProfitComparisonOnPOS,
+        showChatWidget,
+        showNotesPanel,
+        hiddenTransactionJournalVoucherIds,
+      } = req.body;
       if (dateFormat && !["MM/DD/YYYY", "DD/MM/YYYY"].includes(dateFormat)) {
         return res.status(400).json({ message: "Invalid date format" });
       }
       if (preferredCurrency && !["USD", "CFA"].includes(preferredCurrency)) {
         return res.status(400).json({ message: "Invalid currency" });
+      }
+      let normalizedHiddenTransactionJournalVoucherIds: number[] | undefined;
+      if (hiddenTransactionJournalVoucherIds !== undefined) {
+        if (
+          !Array.isArray(hiddenTransactionJournalVoucherIds) ||
+          hiddenTransactionJournalVoucherIds.length > 5000 ||
+          hiddenTransactionJournalVoucherIds.some(
+            (value: unknown) => !Number.isSafeInteger(value) || Number(value) <= 0
+          )
+        ) {
+          return res.status(400).json({ message: "Invalid hidden transaction journal voucher IDs" });
+        }
+        normalizedHiddenTransactionJournalVoucherIds = Array.from(
+          new Set(hiddenTransactionJournalVoucherIds.map((value: number) => Number(value)))
+        );
       }
       const existing = await db.select().from(userPreferences).where(eq(userPreferences.userId, req.user.id));
       const updateFields: PgUpdateSetSource<typeof userPreferences> = { updatedAt: new Date() };
@@ -252,6 +274,9 @@ export function registerUserAccessRoutes(app: Express) {
       if (showProfitComparisonOnPOS !== undefined) updateFields.showProfitComparisonOnPOS = showProfitComparisonOnPOS;
       if (showChatWidget !== undefined) updateFields.showChatWidget = showChatWidget;
       if (showNotesPanel !== undefined) updateFields.showNotesPanel = showNotesPanel;
+      if (normalizedHiddenTransactionJournalVoucherIds !== undefined) {
+        updateFields.hiddenTransactionJournalVoucherIds = normalizedHiddenTransactionJournalVoucherIds;
+      }
 
       if (existing.length === 0) {
         const created = await db
@@ -263,6 +288,7 @@ export function registerUserAccessRoutes(app: Express) {
             showProfitComparisonOnPOS: showProfitComparisonOnPOS ?? false,
             showChatWidget: showChatWidget ?? true,
             showNotesPanel: showNotesPanel ?? true,
+            hiddenTransactionJournalVoucherIds: normalizedHiddenTransactionJournalVoucherIds ?? [],
           })
           .returning();
         return res.json(created[0]);
