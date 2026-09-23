@@ -242,6 +242,7 @@ jobs:
           set -euo pipefail
           npm run verify:mobile-web-routing
           npm run verify:bandwidth
+          npm run verify:performance-wave5
           node scripts/verify-program7d-accessibility-responsive.mjs
 
       - name: Evaluate certification components
