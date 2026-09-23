@@ -71,7 +71,7 @@ describe("Wave 5 Factory backend access certification", () => {
       pageKey: "factory/import",
       tabs: ["hide_tab_import_raw_stock"],
     });
-    expect(resolveFactoryBackendAccessRequirement(request("/stock-allocation-v5/preview"))).toEqual({
+    expect(resolveFactoryBackendAccessRequirement(request("/v5/stock-allocation/summary"))).toEqual({
       pageKey: "factory/stock-allocation-v5",
     });
     expect(resolveFactoryBackendAccessRequirement(request("/production-planner/targets"))).toEqual({
