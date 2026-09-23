@@ -8,12 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumber } from "../customerLoadingFormat";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
 function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { proformaProgress, extraArticles, groupedBalesMap, loadedByArticle } = model;
   return (
-    <div className="overflow-y-auto max-h-[340px] border rounded-md">
+    <div className="max-h-[340px] overflow-y-auto rounded-xl border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -105,7 +106,7 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
   const lessLoaded = proformaProgress.filter((line) => line.status === "short").length;
   const missing = proformaProgress.filter((line) => line.status === "none").length;
   return (
-    <div className="flex items-center justify-between gap-2 text-sm border-t pt-2 flex-wrap gap-y-1">
+    <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1 rounded-xl border bg-muted/20 px-3 py-2.5 text-sm">
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-green-600 dark:text-green-400 font-medium">{loaded} loaded</span>
         {overloaded > 0 && (
@@ -120,7 +121,7 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
         )}
       </div>
       <span className="text-muted-foreground">
-        {bales.length} bales · {totalWeight.toFixed(1)} kg
+        {bales.length} bales · {formatNumber(totalWeight, 2)} kg
       </span>
     </div>
   );
@@ -131,9 +132,9 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
   const hasProformaReview = !!linkedProforma && proformaProgress.length > 0;
   return (
     <Dialog open={model.showFinalizeDialog} onOpenChange={model.setShowFinalizeDialog}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl rounded-2xl">
         <DialogHeader>
-          <DialogTitle>Validate Loading</DialogTitle>
+          <DialogTitle className="text-lg">Validate Loading</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {hasProformaReview ? (
@@ -160,7 +161,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
                 <div className="flex items-center justify-between gap-2">
                   <span>Total Weight:</span>
                   <span className="font-mono font-semibold" data-testid="text-dialog-total-weight">
-                    {totalWeight.toFixed(2)} kg
+                    {formatNumber(totalWeight, 2)} kg
                   </span>
                 </div>
               </div>
@@ -172,7 +173,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               type="date"
               value={model.finalizeDate}
               onChange={(e) => model.setFinalizeDate(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               data-testid="input-finalize-date"
             />
           </div>
