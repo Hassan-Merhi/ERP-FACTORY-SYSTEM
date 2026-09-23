@@ -87,10 +87,11 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         accessMap.get(entry.userId)!.push(entry.pageKey);
       });
 
-      const result = visibleUsers.map(({ companyRole: _companyRole, ...user }) => {
+      const result = visibleUsers.map(({ companyRole, ...user }) => {
         const profile = profileMap.get(user.id);
         return {
           ...user,
+          role: companyRole,
           displayName: profile?.displayName || null,
           hasErpAccess: profile?.hasErpAccess ?? true,
           hasFactoryAccess: profile?.hasFactoryAccess ?? true,
@@ -454,7 +455,10 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         "bales_list_cost_per_kg",
         "hide_proforma_price",
       ];
-      const hiddenCostFields = hideAllCosts ? ALL_COST_KEYS : (profile?.hiddenCostFields ?? []);
+      const profileHiddenFields = profile?.hiddenCostFields ?? [];
+      const hiddenCostFields = hideAllCosts
+        ? Array.from(new Set([...profileHiddenFields, ...ALL_COST_KEYS]))
+        : profileHiddenFields;
 
       const access = await db
         .select({ pageKey: factoryUserPageAccess.pageKey })
