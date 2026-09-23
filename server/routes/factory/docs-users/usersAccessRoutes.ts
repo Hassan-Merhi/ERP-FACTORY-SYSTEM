@@ -475,6 +475,8 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         "bale_history_total_cost",
         "bales_list_cost_per_kg",
         "hide_proforma_price",
+        "hide_invoicing_proforma_col",
+        "hide_invoicing_totals_usd",
       ];
       const profileHiddenFields = normalizeFactoryHiddenFields(profile?.hiddenCostFields);
       const hiddenCostFields = hideAllCosts
