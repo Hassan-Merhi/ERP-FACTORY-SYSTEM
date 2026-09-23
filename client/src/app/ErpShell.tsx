@@ -9,6 +9,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { DailyRateModal } from "@/components/DailyRateModal";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
+import { ErpMobileBottomNav } from "@/components/ErpMobileBottomNav";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
@@ -66,7 +67,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 id="main-content"
                 tabIndex={-1}
                 aria-label={t("workspace.controls")}
-                className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none sm:p-6"
+                className="flex-1 overflow-y-auto overscroll-y-contain p-3 pb-20 outline-none sm:p-6"
               >
                 <WorkspaceRouteBoundary
                   resetKey={currentLocation}
@@ -82,6 +83,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   </div>
                 </WorkspaceRouteBoundary>
               </main>
+              <ErpMobileBottomNav user={user} />
             </div>
           </div>
         </SidebarProvider>
