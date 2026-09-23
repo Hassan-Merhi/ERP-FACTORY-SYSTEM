@@ -1,5 +1,5 @@
 import { parseId } from "../../lib/parseId";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
@@ -819,7 +819,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
       }
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      sendHttpError(res, error);
     }
   });
 
