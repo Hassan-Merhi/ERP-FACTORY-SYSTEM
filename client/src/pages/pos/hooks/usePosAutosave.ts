@@ -10,6 +10,7 @@ interface PosAutosaveParams {
   setCurrentDraftId: (id: number | null) => void;
   setLastAutosaved: (date: Date | null) => void;
   refetchDrafts?: () => void;
+  disabled?: boolean;
 }
 
 function errorStatus(error: unknown): number | null {
@@ -24,8 +25,14 @@ export function usePosAutosave({
   lastSavedFingerprintRef,
   setCurrentDraftId,
   setLastAutosaved,
+  disabled = false,
 }: PosAutosaveParams) {
   useEffect(() => {
+    // View-only POS sessions may read drafts but must never create/update them.
+    // Skipping the timer entirely avoids expected 403s being emitted as
+    // operational security errors on Render.
+    if (disabled) return;
+
     let sessionLost = false;
     // A rejected client write is deterministic for the same draft payload. Keep
     // that fingerprint blocked until the operator changes the draft instead of
@@ -106,5 +113,5 @@ export function usePosAutosave({
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [autoSaveInProgressRef, autoSaveStateRef, lastSavedFingerprintRef, setCurrentDraftId, setLastAutosaved]);
+  }, [disabled, autoSaveInProgressRef, autoSaveStateRef, lastSavedFingerprintRef, setCurrentDraftId, setLastAutosaved]);
 }
