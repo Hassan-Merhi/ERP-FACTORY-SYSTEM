@@ -31,7 +31,9 @@ const harness = vi.hoisted(() => {
       const builder: any = {
         from: vi.fn(() => builder),
         where: vi.fn(() => builder),
-        limit: vi.fn(async () => []),
+        // Row locks (limit(1).for("update")) return the purchase order as the
+        // route saw it; the fixtures have no container, so only the PO is locked.
+        limit: vi.fn(() => ({ for: vi.fn(async () => [{ id: 10, containerId: null }]) })),
         then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
       };
       return builder;

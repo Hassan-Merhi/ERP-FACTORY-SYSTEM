@@ -77,11 +77,13 @@ async function settlementVoucherIds(clientSaleId: string): Promise<number[]> {
   return result.rows.map((row) => Number(row.voucher_id));
 }
 
-async function settlementMarkers(clientSaleId: string): Promise<Array<{
-  voucherId: number;
-  companyId: number;
-  sourceId: string;
-}>> {
+async function settlementMarkers(clientSaleId: string): Promise<
+  Array<{
+    voucherId: number;
+    companyId: number;
+    sourceId: string;
+  }>
+> {
   const result = await pool.query<{ voucher_id: number; company_id: number; source_id: string }>(
     `SELECT voucher_id, company_id, source_id
        FROM accounting_posting_requests
@@ -233,7 +235,10 @@ describe("Phase 19 intercompany flows", () => {
     await expectBalanced(beforeIds);
   });
 
-  it("reverses and rebuilds the mirrored settlement when a sale is edited", async () => {
+  // Settlement journals represent the sale's current state: an edit retires
+  // the previous pair and posts one pair for the edited amount (ccabbc7),
+  // rather than reversing and rebuilding.
+  it("replaces the mirrored settlement with one pair for the edited sale", async () => {
     const beforeChildIntercompany = await accountBalance(fixture.goldenCoastIntercompanyAccountId);
     const beforeParentIntercompany = await accountBalance(fixture.hadiIntercompanyAccountId);
     const created = await fixture.agent.post("/api/pos/sales").send(saleBody("p19-edit", "4", "100"));
@@ -256,13 +261,46 @@ describe("Phase 19 intercompany flows", () => {
     expect(parentDelta).toBeCloseTo(-450, 2);
     expect(childDelta + parentDelta).toBeCloseTo(0, 2);
 
-    const markerIds = await settlementVoucherIds("p19-edit");
-    expect(markerIds).toHaveLength(6);
-    await expectBalanced(markerIds);
+    const markers = await settlementMarkers("p19-edit");
+    expect(markers).toHaveLength(2);
+    expect(markers.every((marker) => marker.sourceId.includes(":edit1:"))).toBe(true);
+    expect(new Set(markers.map((marker) => marker.companyId))).toEqual(
+      new Set([fixture.ctx.companyId, fixture.hadiCompanyId])
+    );
+    await expectBalanced(markers.map((marker) => marker.voucherId));
   });
 
-  it("deletes an old edited cash journal without removing the rebuilt settlement", async () => {
-    const clientSaleId = "p19-delete-old-edit";
+  it("retires the pre-edit settlement pair instead of reversing it", async () => {
+    const clientSaleId = "p19-retire";
+    const created = await fixture.agent.post("/api/pos/sales").send(saleBody(clientSaleId, "4", "100"));
+    expect(created.status, created.text).toBe(200);
+    const voucherId = Number(created.body.voucher.id);
+    const originalIds = await settlementVoucherIds(clientSaleId);
+    expect(originalIds).toHaveLength(2);
+
+    const edited = await fixture.agent.patch(`/api/vouchers/${voucherId}/sales`).send({
+      locationId: fixture.ctx.locationId,
+      paymentAccountType: "cash",
+      paymentAccountId: fixture.ctx.cashAccountId,
+      targetCompanyId: fixture.hadiCompanyId,
+      items: [{ stockItemId: fixture.goldenCoastStockItemId, quantity: "3", sellingPrice: "150" }],
+    });
+    expect(edited.status, edited.text).toBe(200);
+
+    const retired = await pool.query<{ deleted_at: Date | null }>(
+      `SELECT deleted_at FROM vouchers WHERE id = ANY($1::int[])`,
+      [originalIds]
+    );
+    expect(retired.rows).toHaveLength(2);
+    expect(retired.rows.every((row) => row.deleted_at !== null)).toBe(true);
+
+    const markers = await settlementMarkers(clientSaleId);
+    expect(markers.map((marker) => marker.voucherId).some((id) => originalIds.includes(id))).toBe(false);
+    expect(markers.some((marker) => marker.sourceId.includes(":reversal:"))).toBe(false);
+  });
+
+  it("deletes the rebuilt settlement journal together with its counterpart", async () => {
+    const clientSaleId = "p19-delete-rebuilt";
     const beforeChildIntercompany = await accountBalance(fixture.goldenCoastIntercompanyAccountId);
     const beforeParentIntercompany = await accountBalance(fixture.hadiIntercompanyAccountId);
 
@@ -279,70 +317,20 @@ describe("Phase 19 intercompany flows", () => {
     });
     expect(edited.status, edited.text).toBe(200);
 
-    const markersBeforeDelete = await settlementMarkers(clientSaleId);
-    expect(markersBeforeDelete).toHaveLength(6);
-    const oldChildCash = markersBeforeDelete.find(
-      (marker) =>
-        marker.companyId === fixture.ctx.companyId &&
-        marker.sourceId.endsWith(":create:gc_cash_transfer")
+    const markers = await settlementMarkers(clientSaleId);
+    const childCash = markers.find(
+      (marker) => marker.companyId === fixture.ctx.companyId && marker.sourceId.endsWith(":edit1:gc_cash_transfer")
     );
-    expect(oldChildCash).toBeDefined();
+    expect(childCash, JSON.stringify(markers)).toBeDefined();
 
-    const deleted = await fixture.agent.delete(`/api/vouchers/${oldChildCash!.voucherId}`);
+    const deleted = await fixture.agent.delete(`/api/vouchers/${childCash!.voucherId}`);
     expect(deleted.status, deleted.text).toBe(200);
     expect(deleted.body.message).toMatch(/intercompany cash transfer deleted/i);
+    expect(await settlementMarkers(clientSaleId)).toHaveLength(0);
 
-    const remainingMarkers = await settlementMarkers(clientSaleId);
-    expect(remainingMarkers).toHaveLength(2);
-    expect(remainingMarkers.every((marker) => marker.sourceId.includes(":edit1:"))).toBe(true);
-
-    expect((await accountBalance(fixture.goldenCoastIntercompanyAccountId)) - beforeChildIntercompany).toBeCloseTo(
-      450,
-      2
-    );
-    expect((await accountBalance(fixture.hadiIntercompanyAccountId)) - beforeParentIntercompany).toBeCloseTo(-450, 2);
-  });
-
-  it("deletes an edited POS reversal journal with its counterpart instead of failing on digest mismatch", async () => {
-    const clientSaleId = "p19-delete-reversal";
-    const beforeChildIntercompany = await accountBalance(fixture.goldenCoastIntercompanyAccountId);
-    const beforeParentIntercompany = await accountBalance(fixture.hadiIntercompanyAccountId);
-
-    const created = await fixture.agent.post("/api/pos/sales").send(saleBody(clientSaleId, "4", "100"));
-    expect(created.status, created.text).toBe(200);
-    const voucherId = Number(created.body.voucher.id);
-
-    const edited = await fixture.agent.patch(`/api/vouchers/${voucherId}/sales`).send({
-      locationId: fixture.ctx.locationId,
-      paymentAccountType: "cash",
-      paymentAccountId: fixture.ctx.cashAccountId,
-      targetCompanyId: fixture.hadiCompanyId,
-      items: [{ stockItemId: fixture.goldenCoastStockItemId, quantity: "3", sellingPrice: "150" }],
-    });
-    expect(edited.status, edited.text).toBe(200);
-
-    const markersBeforeDelete = await settlementMarkers(clientSaleId);
-    expect(markersBeforeDelete).toHaveLength(6);
-    const childReversal = markersBeforeDelete.find(
-      (marker) =>
-        marker.companyId === fixture.ctx.companyId &&
-        marker.sourceId.endsWith(":reversal:1:gc_cash_transfer")
-    );
-    expect(childReversal).toBeDefined();
-
-    const deleted = await fixture.agent.delete(`/api/vouchers/${childReversal!.voucherId}`);
-    expect(deleted.status, deleted.text).toBe(200);
-    expect(deleted.body.message).toMatch(/intercompany cash transfer deleted/i);
-
-    const remainingMarkers = await settlementMarkers(clientSaleId);
-    expect(remainingMarkers).toHaveLength(2);
-    expect(remainingMarkers.every((marker) => marker.sourceId.includes(":edit1:"))).toBe(true);
-
-    expect((await accountBalance(fixture.goldenCoastIntercompanyAccountId)) - beforeChildIntercompany).toBeCloseTo(
-      450,
-      2
-    );
-    expect((await accountBalance(fixture.hadiIntercompanyAccountId)) - beforeParentIntercompany).toBeCloseTo(-450, 2);
+    // With the settlement gone, the intercompany accounts are back where they started.
+    expect(await accountBalance(fixture.goldenCoastIntercompanyAccountId)).toBeCloseTo(beforeChildIntercompany, 2);
+    expect(await accountBalance(fixture.hadiIntercompanyAccountId)).toBeCloseTo(beforeParentIntercompany, 2);
   });
 
   it("cancels the source sale and all linked cross-company settlement evidence atomically", async () => {
@@ -364,7 +352,9 @@ describe("Phase 19 intercompany flows", () => {
     expect(await accountBalance(fixture.hadiIntercompanyAccountId)).toBeCloseTo(beforeParentIntercompany, 2);
     expect(await accountBalance(fixture.hadiCashAccountId)).toBeCloseTo(beforeParentCash, 2);
 
-    const softDeleted = await pool.query<{ deleted_at: Date | null }>(`SELECT deleted_at FROM vouchers WHERE id = $1`, [voucherId]);
+    const softDeleted = await pool.query<{ deleted_at: Date | null }>(`SELECT deleted_at FROM vouchers WHERE id = $1`, [
+      voucherId,
+    ]);
     expect(softDeleted.rows[0].deleted_at).not.toBeNull();
   });
 

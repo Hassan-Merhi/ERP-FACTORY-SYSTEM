@@ -10,7 +10,8 @@ describe("global application language integration", () => {
     const app = read("client/src/App.tsx");
     expect(app.match(/<ApplicationLanguageProvider>/g)).toHaveLength(2);
     for (const routeScopedProvider of [
-      "<ApplicationLanguageProvider>\n                  <Login />",
+      // Login is lazy-loaded (#1600), so the provider wraps its Suspense boundary.
+      "<ApplicationLanguageProvider>\n                  <Suspense fallback={<AppLoadingState />}>\n                    <Login />",
       "<ApplicationLanguageProvider>\n      <CompanyProvider>",
     ]) {
       expect(app).toContain(routeScopedProvider);

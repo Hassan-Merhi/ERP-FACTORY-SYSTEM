@@ -42,7 +42,11 @@ describe("Wave 2 frontend speed contracts", () => {
       expect(login).not.toContain(staticImport);
     }
 
-    expect(login).toContain('import("@capacitor/preferences")');
+    // Stored-credential reads moved to biometricCredentials, which the auth
+    // session imports eagerly, so its Preferences import must stay dynamic.
+    const credentials = source("client/src/lib/biometricCredentials.ts");
+    expect(credentials).not.toContain('from "@capacitor/preferences"');
+    expect(credentials).toContain('import("@capacitor/preferences")');
     expect(login).toContain('import("@aparajita/capacitor-biometric-auth")');
     expect(login).toContain('import("@simplewebauthn/browser")');
   });

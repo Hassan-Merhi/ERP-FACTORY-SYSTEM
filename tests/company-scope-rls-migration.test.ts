@@ -249,9 +249,12 @@ describe("company scope RLS migration 0016", () => {
     const { rows } = await probe!.query("SELECT voucher_id FROM voucher_entries");
     expect(rows.map((row) => row.voucher_id)).toEqual([1]);
 
-    await expect(probe!.query("INSERT INTO voucher_entries (voucher_id, amount) VALUES (2, '999')")).rejects.toThrow(
-      /row-level security/i
-    );
+    // The company-sync trigger reads the parent voucher under RLS, so another
+    // company's voucher is invisible and the insert fails before the policy
+    // check runs (#1727). Either way the cross-tenant write is refused.
+    await expect(
+      probe!.query("INSERT INTO voucher_entries (voucher_id, amount) VALUES (2, '999')")
+    ).rejects.toMatchObject({ code: "23503", message: expect.stringMatching(/requires a visible parent voucher/) });
   });
 
   it("can be applied twice without stacking duplicate policies", async () => {
