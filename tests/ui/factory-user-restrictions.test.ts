@@ -52,6 +52,65 @@ describe("Factory per-user page restrictions", () => {
     ).toBe("/factory/accounts");
   });
 
+  it("enforces hidden tabs on direct and legacy Factory routes", () => {
+    const hiddenCustomers: MyAccess = {
+      ...restrictedAccountsOnly,
+      fullAccess: true,
+      pageKeys: [],
+      hiddenCostFields: ["hide_tab_parties_customers"],
+    };
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        myAccess: hiddenCustomers,
+        factorySettings: undefined,
+        factoryDefaultPage: "/factory/production-report",
+        currentLocation: "/factory/customers/12",
+      })
+    ).toBe("/factory/parties");
+
+    const hiddenInvoices: MyAccess = {
+      ...hiddenCustomers,
+      hiddenCostFields: ["hide_invoicing_invoices_tab"],
+    };
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        myAccess: hiddenInvoices,
+        factorySettings: undefined,
+        factoryDefaultPage: "/factory/production-report",
+        currentLocation: "/factory/sales/invoices/99",
+      })
+    ).toBe("/factory/invoicing");
+
+    const hiddenBatches: MyAccess = {
+      ...hiddenCustomers,
+      hiddenCostFields: ["hide_tab_dispatch_batches"],
+    };
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        myAccess: hiddenBatches,
+        factorySettings: undefined,
+        factoryDefaultPage: "/factory/production-report",
+        currentLocation: "/factory/dispatch-batches/7",
+      })
+    ).toBe("/factory/dispatch-batches");
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: false,
+        myAccess: hiddenBatches,
+        factorySettings: undefined,
+        factoryDefaultPage: "/factory/production-report",
+        currentLocation: "/factory/dispatch-batches",
+      })
+    ).toBeNull();
+  });
+
   it("default-denies unregistered Factory routes for restricted users", () => {
     expect(
       computeFactoryGuardRedirect({
@@ -88,6 +147,7 @@ describe("Factory restriction settings wiring", () => {
   it("exposes the expanded Factory page and tab catalogs", () => {
     const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
     const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
+    const tabRegistry = readFileSync("client/src/app/factoryTabAccessRegistry.ts", "utf8");
 
     for (const key of [
       "factory/production-report",
@@ -110,7 +170,7 @@ describe("Factory restriction settings wiring", () => {
       "hide_tab_overview_production",
       "hide_invoicing_invoices_tab",
     ]) {
-      expect(constants).toContain(key);
+      expect(tabRegistry).toContain(key);
     }
   });
 });
