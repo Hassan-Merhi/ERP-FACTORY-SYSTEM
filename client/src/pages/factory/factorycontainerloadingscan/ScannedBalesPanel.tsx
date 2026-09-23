@@ -197,7 +197,7 @@ function BaleGroups({
                 <span className="font-mono font-semibold text-foreground">{group.bales.length}</span> {model.tr("qty")}
               </span>
               <span className="h-4 w-px bg-border" />
-              <span className="font-mono">{formatNumber(group.totalWeight, 2)} kg</span>
+              <span className="font-mono">{formatNumber(group.totalWeight, 2)} {model.tr("kgUnit")}</span>
             </div>
           </button>
 
@@ -233,7 +233,7 @@ function BaleGroups({
                             )}
                           </TableCell>
                           <TableCell className="py-2.5 text-right font-mono text-sm text-muted-foreground">
-                            {formatNumber(parseFloat(bale.weight || "0"), 2)} kg
+                            {formatNumber(parseFloat(bale.weight || "0"), 2)} {model.tr("kgUnit")}
                           </TableCell>
                           <TableCell className="w-[44px] py-2.5">
                             <Button
@@ -308,7 +308,7 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
                   </TableCell>
                   <TableCell>{r.articleCode || "—"}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {r.weightKg ? `${formatNumber(parseFloat(r.weightKg), 2)} kg` : "—"}
+                    {r.weightKg ? `${formatNumber(parseFloat(r.weightKg), 2)} {model.tr("kgUnit")}` : "—"}
                   </TableCell>
                   <TableCell>{r.removedByUsername || "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(r.removedAt).toLocaleString()}</TableCell>
@@ -372,7 +372,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
             </Badge>
             {bales.length > 0 && (
               <Badge variant="outline" className="rounded-lg px-2.5 py-1 font-mono" data-testid="badge-total-weight">
-                {formatNumber(totalWeight, 2)} kg
+                {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
               </Badge>
             )}
 
