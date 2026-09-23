@@ -20,7 +20,7 @@ const STATUS_ORDER: Record<ProformaLineStatus, number> = {
 
 const BADGE_BASE = "rounded-md text-[10px] no-default-hover-elevate no-default-active-elevate";
 
-function StatusBadge({ status }: { status: ProformaLineStatus }) {
+function StatusBadge({ status, model }: { status: ProformaLineStatus; model: FactoryContainerLoadingScanModel }) {
   if (status === "fulfilled") {
     return (
       <Badge
@@ -152,7 +152,7 @@ function ComparisonTable({ model }: { model: FactoryContainerLoadingScanModel })
                 {formatNumber(line.remaining)}
               </TableCell>
               <TableCell className="py-2">
-                <StatusBadge status={line.status} />
+                <StatusBadge status={line.status} model={model} />
               </TableCell>
               <TableCell className="py-2 text-right font-mono text-xs" data-testid={`text-stock-${line.articleCode}`}>
                 <StockCell model={model} line={line} />
@@ -201,8 +201,8 @@ function LoadedBalesSummary({ model }: { model: FactoryContainerLoadingScanModel
         <Table>
           <TableHeader className="sticky top-0 bg-background">
             <TableRow>
-              <TableHead className="py-1.5 text-xs">Article</TableHead>
-              <TableHead className="py-1.5 text-xs">Product</TableHead>
+              <TableHead className="py-1.5 text-xs">{model.tr("article")}</TableHead>
+              <TableHead className="py-1.5 text-xs">{model.tr("product")}</TableHead>
               <TableHead className="py-1.5 text-right text-xs">{model.tr("qty")}</TableHead>
               <TableHead className="py-1.5 text-right text-xs">{model.tr("weight")}</TableHead>
             </TableRow>
@@ -295,14 +295,14 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
           <div
             className="h-full rounded-full bg-primary transition-all"
             style={{ width: `${progressPercent}%` }}
-            aria-label={`Proforma progress ${progressPercent}%`}
+            aria-label={`${model.tr("proforma")} ${progressPercent}%`}
           />
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">{bales.length}</div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Loaded</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{model.tr("loadedKpi")}</div>
           </div>
           <div className="rounded-xl border bg-muted/15 px-2 py-2 text-center">
             <div className="font-mono text-sm font-semibold">{formatNumber(model.remainingProformaBales)}</div>
@@ -323,7 +323,7 @@ export function ProformaProgressPanel({ model }: { model: FactoryContainerLoadin
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground">
         <span>{model.tr("proformaLines", { count: proformaProgress.length })}</span>
         <span className="font-mono">
-          {bales.length} bales · {formatNumber(totalWeight, 2)} kg
+          {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} kg
         </span>
       </div>
     </div>
