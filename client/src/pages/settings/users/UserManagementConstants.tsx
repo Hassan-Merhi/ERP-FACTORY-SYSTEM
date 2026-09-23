@@ -1,7 +1,7 @@
-import { FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
+import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 import { FEATURE_KEYS, FEATURE_PAGE_INFO } from "@shared/schema";
 
-export const ALL_FACTORY_PAGES = FACTORY_NAV_PAGES;
+export const ALL_FACTORY_PAGES = FACTORY_SETTINGS_PAGES;
 export const FACTORY_PAGE_GROUPS = Array.from(new Set(ALL_FACTORY_PAGES.map((p) => p.group)));
 export const ALL_ERP_PAGES: { key: string; label: string; group: string }[] = FEATURE_KEYS.map((key) => ({
   key,

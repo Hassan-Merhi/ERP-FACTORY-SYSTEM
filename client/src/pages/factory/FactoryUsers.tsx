@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
-import { FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
+import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 
 interface FactoryUser {
   id: string;
@@ -51,7 +51,7 @@ const COST_FIELDS: { key: string; label: string }[] = [
 ];
 
 // Central source of truth from FactorySidebar — no separate hardcoded list
-const ALL_FACTORY_PAGES = FACTORY_NAV_PAGES;
+const ALL_FACTORY_PAGES = FACTORY_SETTINGS_PAGES;
 const PAGE_GROUPS = Array.from(new Set(ALL_FACTORY_PAGES.map((p) => p.group)));
 
 export default function FactoryUsers() {

@@ -1,14 +1,18 @@
 /**
  * Factory access guard — pure helpers, no React, no hooks.
  *
- * Exports:
- *   SUBPAGE_PARENT           – sub-page → parent pageKey mapping table
- *   computeFactoryDefaultPage – first accessible landing page for a user
- *   resolvePageKey            – maps a URL path to its pageKey
- *   computeFactoryGuardRedirect – evaluates all guard conditions, returns redirect or null
+ * All page resolution comes from factoryAccessRegistry so Settings, sidebar
+ * navigation and direct-route protection share the same source of truth.
  */
 
-import { FACTORY_NAV_SECTIONS, FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
+import {
+  FACTORY_LANDING_PAGES,
+  FACTORY_SUBPAGE_PARENT,
+  factoryPageAllowsRole,
+  hasFactoryPageKey,
+  resolveFactoryPage,
+  resolveFactoryPageKey,
+} from "@/app/factoryAccessRegistry";
 
 export interface MyAccess {
   fullAccess: boolean;
@@ -20,162 +24,93 @@ export interface MyAccess {
   hiddenCostFields?: string[];
 }
 
-/**
- * Sub-page → parent pageKey for detail/action routes that are not direct
- * nav items but should inherit their parent's access requirement.
- * Also used by computeFactoryDefaultPage to accept old pre-merge page keys
- * for hub pages.
- */
-export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
-  ["/factory/finance", "factory/payroll-hub"],
-  ["/factory/pressing", "factory/stock-entry"],
-  ["/factory/finalize", "factory/stock-entry"],
-  ["/factory/raw-stock", "factory/raw-materials"],
-  ["/factory/bale-products", "factory/bales-hub"],
-  ["/factory/sales/invoices", "factory/invoicing"],
-  ["/factory/sales/new", "factory/invoicing"],
-  ["/factory/sales/pending-invoices", "factory/invoicing"],
-  ["/factory/sales/proformas", "factory/invoicing"],
-  ["/factory/invoices", "factory/invoicing"],
-  ["/factory/sales/loading/", "factory/invoicing"],
-  ["/factory/sales/loadings", "factory/invoicing"],
-  ["/factory/bale-product-history", "factory/bales-hub"],
-  ["/factory/reprint-labels", "factory/bales-hub"],
-  ["/factory/bales-history", "factory/bales-hub"],
-  ["/factory/barcode-lookup", "factory/bales-hub"],
-  ["/factory/payroll", "factory/payroll-hub"],
-  ["/factory/worker-payroll", "factory/payroll-hub"],
-  ["/factory/workers", "factory/payroll-hub"],
-  ["/factory/employees", "factory/payroll-hub"],
-  ["/factory/insurance", "factory/payroll-hub"],
-  ["/factory/containers/new", "factory/containers-hub"],
-  ["/factory/containers", "factory/containers-hub"],
-  ["/factory/stock-otw", "factory/containers-hub"],
-  ["/factory/stock-allocation-v3", "factory/stock-allocation-v5"],
-  ["/factory/stock-allocation", "factory/stock-allocation-v5"],
-  ["/factory/customers", "factory/parties"],
-  ["/factory/suppliers", "factory/parties"],
-  ["/factory/net-position-details", "factory/intelligence/financial-hub"],
-  ["/factory/net-position", "factory/intelligence/financial-hub"],
-  ["/factory/net-profit-analytics", "factory/intelligence/financial-hub"],
-  ["/factory/intelligence/profitability", "factory/intelligence/financial-hub"],
-  ["/factory/intelligence/cashflow", "factory/intelligence/financial-hub"],
-  ["/factory/supplier-report", "factory/intelligence/supplier-hub"],
-  ["/factory/supplier-statement", "factory/intelligence/supplier-hub"],
-  ["/factory/intelligence/supplier-scores", "factory/intelligence/supplier-hub"],
-  ["/factory/production-summary", "factory/intelligence/production-hub"],
-  ["/factory/intelligence/mix-optimizer", "factory/intelligence/production-hub"],
-  ["/factory/intelligence/waste", "factory/intelligence/production-hub"],
-  ["/factory/bale-ledger", "factory/production-report"],
-  ["/factory/ledger-monthly", "factory/accounts"],
-  ["/factory/ledger-vouchers", "factory/accounts"],
-  ["/factory/voucher-detail", "factory/vouchers"],
-  ["/factory/create", "factory/accounts"],
-  ["/factory/financial-snapshot", "factory/analytics"],
-];
+// Compatibility export for existing callers/tests. The data is now generated
+// from the canonical page registry instead of maintained independently.
+export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [...FACTORY_SUBPAGE_PARENT];
 
 /**
- * Compute the right landing page for this factory user.
- * For restricted users (fullAccess:false) walks the complete manageable Factory
- * page registry and returns the first accessible page. Falls back to My Settings
- * when the stored allow-list contains only stale/unknown keys.
+ * Compute the first usable Factory landing page.
+ * Legacy pre-hub page keys remain accepted through each registry entry's aliases.
  */
-export function computeFactoryDefaultPage(myAccess: MyAccess | undefined): string {
+export function computeFactoryDefaultPage(myAccess: MyAccess | undefined, userRole?: string | null): string {
   if (!myAccess || myAccess.fullAccess) return "/factory/production-report";
 
-  const nonLandingKeys = new Set(["factory/settings", "factory/intelligence/settings"]);
-  for (const page of FACTORY_NAV_PAGES) {
-    if (nonLandingKeys.has(page.key)) continue;
-    const url = "/" + page.key;
-    if (myAccess.pageKeys.includes(page.key)) return url;
-
-    // Accept old pre-hub-merge keys that now resolve to this canonical page.
-    const legacyKeys = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === page.key).map(([prefix]) =>
-      prefix.replace(/^\//, "")
-    );
-    if (legacyKeys.some((key) => myAccess.pageKeys.includes(key))) return url;
+  for (const page of FACTORY_LANDING_PAGES) {
+    if (userRole && !factoryPageAllowsRole(page, userRole)) continue;
+    if (hasFactoryPageKey(page, myAccess.pageKeys)) return page.route;
   }
 
   // A stale/unknown allow-list must never loop back into a denied Factory page.
   return "/my-settings";
 }
 
-/**
- * Resolve the pageKey for the given path.
- * Uses FACTORY_NAV_PAGES as the canonical list so sidebar, pinned, and
- * explicitly registered Factory pages are all guarded consistently.
- */
+/** Resolve a Factory URL to its canonical per-user page-access key. */
 export function resolvePageKey(path: string): string | null {
-  // 1. Direct match against every known page (exact or sub-path)
-  for (const page of FACTORY_NAV_PAGES) {
-    const url = "/" + page.key;
-    if (path === url || path.startsWith(url + "/")) return page.key;
-  }
-  // 2. Sub-page map for detail routes that aren't direct nav entries
-  for (const [prefix, parentKey] of SUBPAGE_PARENT) {
-    if (path === prefix || path.startsWith(prefix + "/") || path.startsWith(prefix)) return parentKey;
-  }
-  return null;
+  return resolveFactoryPageKey(path);
 }
 
 /**
- * Evaluate all factory route-level access guard conditions.
- * Returns a redirect path if the user should be redirected, or null if allowed.
+ * Evaluate Factory route-level access conditions.
  *
- * Covers:
- *   1. Per-user page restriction (pageKeys allow-list + legacy key support)
- *   2. Feature-flag restriction (factory settings toggles)
- *   3. hiddenCostFields tab restriction (production analytics)
+ * Order matters:
+ * 1. role classification from the registry
+ * 2. feature flag visibility from the registry
+ * 3. privileged role bypass of per-user allow-lists
+ * 4. per-user page allow-list
+ * 5. legacy page hide keys
  */
 export function computeFactoryGuardRedirect(params: {
   isFactoryRoute: boolean;
   isAdminOwner: boolean;
+  userRole?: string | null;
   myAccess: MyAccess | undefined;
   factorySettings: Record<string, unknown> | undefined;
   factoryDefaultPage: string;
   currentLocation: string;
 }): string | null {
-  const { isFactoryRoute, isAdminOwner, myAccess, factorySettings, factoryDefaultPage, currentLocation } = params;
+  const {
+    isFactoryRoute,
+    isAdminOwner,
+    userRole,
+    myAccess,
+    factorySettings,
+    factoryDefaultPage,
+    currentLocation,
+  } = params;
 
-  if (!isFactoryRoute || isAdminOwner || myAccess === undefined) return null;
+  if (!isFactoryRoute || myAccess === undefined) return null;
 
-  const isRestrictedUser = !myAccess.fullAccess;
-  const requiredKey = resolvePageKey(currentLocation);
-  const VIEWABLE_BY_ALL = new Set(["factory/sheets-sacks"]);
+  const page = resolveFactoryPage(currentLocation);
 
-  // 1. Per-user page restriction. Restricted Factory users are default-deny:
-  // an unregistered route must never become a bypass around the page allow-list.
-  if (isRestrictedUser) {
-    if (!requiredKey) return factoryDefaultPage;
-    if (!VIEWABLE_BY_ALL.has(requiredKey)) {
-      const hasDirectAccess = myAccess.pageKeys.includes(requiredKey);
-      const hasLegacyAccess = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === requiredKey).some(([prefix]) =>
-        myAccess.pageKeys.includes(prefix.replace(/^\//, ""))
-      );
-      if (!hasDirectAccess && !hasLegacyAccess) return factoryDefaultPage;
-    }
+  // Protected system routes are classified in the same registry used by the
+  // sidebar. When role context is supplied, direct URLs cannot bypass it.
+  if (page && userRole && !factoryPageAllowsRole(page, userRole)) {
+    return factoryDefaultPage;
   }
 
-  // 2. Feature-flag restriction
-  if (factorySettings && requiredKey) {
-    for (const section of FACTORY_NAV_SECTIONS) {
-      for (const item of section.items) {
-        const itemKey = item.url.replace(/^\//, "");
-        if (itemKey === requiredKey && item.featureFlag) {
-          const flag = item.featureFlag as string;
-          const defaultOn = !!item.featureFlagDefaultOn;
-          const enabled = defaultOn ? factorySettings[flag] !== false : factorySettings[flag] === true;
-          if (!enabled) return factoryDefaultPage;
-        }
-      }
-    }
+  if (page?.featureFlag && factorySettings) {
+    const defaultOn = !!page.featureFlagDefaultOn;
+    const enabled = defaultOn
+      ? factorySettings[page.featureFlag] !== false
+      : factorySettings[page.featureFlag] === true;
+    if (!enabled) return factoryDefaultPage;
   }
 
-  // 3. hiddenCostFields tab restriction
-  if (
-    currentLocation === "/factory/production-report" &&
-    myAccess.hiddenCostFields?.includes("hide_tab_production_analytics")
-  ) {
+  // Admin/Owner/Developer keep their established page allow-list bypass after
+  // role classification and feature-flag checks.
+  if (isAdminOwner) return null;
+
+  // Restricted Factory users are default-deny. Every current Factory route is
+  // represented in the registry; an unknown future route cannot bypass an
+  // existing allow-list.
+  if (!myAccess.fullAccess) {
+    if (!page) return factoryDefaultPage;
+    if (!hasFactoryPageKey(page, myAccess.pageKeys)) return factoryDefaultPage;
+  }
+
+  // Legacy page-level hide keys still work, but their metadata now lives on
+  // the same page definition instead of special-casing individual routes.
+  if (page?.hideKey && myAccess.hiddenCostFields?.includes(page.hideKey)) {
     return factoryDefaultPage;
   }
 

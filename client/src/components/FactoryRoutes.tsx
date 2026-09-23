@@ -123,7 +123,9 @@ interface FactoryRoutesProps {
 }
 
 export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRoutesProps) {
-  const isAdminOrDev = user?.role === "Admin" || user?.role === "Developer";
+  const isDeveloper = user?.role === "Developer";
+  const isAdminOrDev = user?.role === "Admin" || isDeveloper;
+  const isAdminOwnerOrDev = user?.role === "Admin" || user?.role === "Owner" || isDeveloper;
 
   return (
     <Switch>
@@ -174,7 +176,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       <Route path="/factory/stock-query" component={StockQuery} />
       <Route path="/factory/contacts" component={FactoryContacts} />
       <Route path="/factory/accounts" component={FactoryAccounts} />
-      {isAdminOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
+      {isAdminOwnerOrDev && <Route path="/factory/account-groups" component={AccountGroups} />}
       <Route path="/factory/agents" component={Agents} />
       <Route path="/factory/vouchers">{() => <FactoryVouchers />}</Route>
       <Route path="/factory/vouchers/:id/edit" component={VoucherEdit} />
@@ -268,21 +270,19 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         {() => <Redirect replace to="/factory/production-report?tab=product-comparison" />}
       </Route>
       <Route path="/factory/intelligence/settings" component={FactoryIntelSettings} />
-      {(user?.role === "Admin" || user?.role === "Developer" || myAccess?.fullAccess) && (
-        <Route path="/factory/spreadsheet" component={SpreadsheetEditor} />
-      )}
-      <Route path="/factory/chat" component={Chat} />
+      {isDeveloper && <Route path="/factory/spreadsheet" component={SpreadsheetEditor} />}
+      {isDeveloper && <Route path="/factory/chat" component={Chat} />}
       <Route path="/factory/conflicts" component={ConflictCenter} />
-      {isAdminOrDev && <Route path="/factory/settings" component={Settings} />}
+      {isAdminOwnerOrDev && <Route path="/factory/settings" component={Settings} />}
       <Route path="/my-settings" component={MySettings} />
       <Route path="/intercompany-requests" component={IntercompanyRequests} />
       <Route path="/intercompany-links" component={IntercompanyLinks} />
-      {isAdminOrDev && <Route path="/factory/deleted-items" component={DeletedItems} />}
-      {isAdminOrDev && <Route path="/factory/orphaned-records" component={OrphanedRecords} />}
-      {isAdminOrDev && <Route path="/factory/chatbot-settings" component={ChatbotSettings} />}
-      {isAdminOrDev && <Route path="/factory/import-cycle-diagnostics" component={ImportCycleDiagnostics} />}
-      {isAdminOrDev && <Route path="/factory/inventory-repair" component={InventoryRepair} />}
-      {isAdminOrDev && <Route path="/factory/company-data-reset" component={CompanyDataReset} />}
+      {isAdminOwnerOrDev && <Route path="/factory/deleted-items" component={DeletedItems} />}
+      {isAdminOwnerOrDev && <Route path="/factory/orphaned-records" component={OrphanedRecords} />}
+      {isAdminOwnerOrDev && <Route path="/factory/chatbot-settings" component={ChatbotSettings} />}
+      {isAdminOwnerOrDev && <Route path="/factory/import-cycle-diagnostics" component={ImportCycleDiagnostics} />}
+      {isAdminOwnerOrDev && <Route path="/factory/inventory-repair" component={InventoryRepair} />}
+      {isAdminOwnerOrDev && <Route path="/factory/company-data-reset" component={CompanyDataReset} />}
       <Route path="/factory/net-position-details" component={FactoryNetPositionDetails} />
       <Route path="/factory/net-profit-analytics">
         <Redirect replace to="/factory/intelligence/financial-hub?section=net-profit" />

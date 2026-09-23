@@ -21,6 +21,7 @@ interface ResolveAuthenticatedAppRouteOptions {
   currentLocation: string;
   companyType?: string | null;
   isAdminOwner: boolean;
+  userRole?: string | null;
   myAccess?: FactoryAccess;
   myAccessLoading: boolean;
   myAccessError: boolean;
@@ -31,6 +32,7 @@ export function resolveAuthenticatedAppRoute({
   currentLocation,
   companyType,
   isAdminOwner,
+  userRole,
   myAccess,
   myAccessLoading,
   myAccessError,
@@ -46,7 +48,7 @@ export function resolveAuthenticatedAppRoute({
   const isFactoryRoute = currentLocation.startsWith("/factory/");
   const hasErpAccess = !isFactoryCompany || !myAccess || myAccess.hasErpAccess;
   const hasFactoryAccess = isFactoryCompany && (!myAccess || myAccess.hasFactoryAccess);
-  const factoryDefaultPage = computeFactoryDefaultPage(myAccess);
+  const factoryDefaultPage = computeFactoryDefaultPage(myAccess, userRole);
   const isFactoryBootstrapExemptRoute =
     currentLocation === "/my-settings" || currentLocation === "/intercompany-requests";
   const isFactoryBootstrapRoute = isFactoryCompany && (isFactoryRoute || !isFactoryBootstrapExemptRoute);
@@ -102,6 +104,7 @@ export function resolveAuthenticatedAppRoute({
     const factoryGuardRedirect = computeFactoryGuardRedirect({
       isFactoryRoute,
       isAdminOwner,
+      userRole,
       myAccess,
       factorySettings,
       factoryDefaultPage,
