@@ -88,12 +88,14 @@ export function PageHeader({
 
   const hasBack = showBackButton && !hasNearbyManualBack && (!!resolvedBackTarget || hasTrackedErpBack);
   const hasNav = hasBack || (showCursorNavButtons && !!config);
+  const isErp = mode === "erp";
 
   return (
     <header
       ref={headerRef}
-      className="mb-5 flex min-w-0 flex-col gap-3 border-b border-border pb-4"
+      className="mb-3 flex min-w-0 flex-col gap-2 border-b border-border pb-3 sm:mb-5 sm:gap-3 sm:pb-4"
       data-testid="page-header"
+      data-erp-mobile-header={isErp ? "true" : undefined}
     >
       {hasNav && (
         <nav className="-ml-2 flex flex-wrap items-center gap-1" aria-label="Page navigation">
@@ -137,17 +139,24 @@ export function PageHeader({
           )}
         </nav>
       )}
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1 border-l-[3px] border-primary pl-3">
           <h1
-            className="flex min-w-0 items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl"
+            className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight sm:text-2xl"
             data-testid="text-page-title"
           >
             {icon && <span className="inline-flex shrink-0 text-muted-foreground">{icon}</span>}
             <span className="min-w-0 break-words">{title}</span>
           </h1>
           {subtitle && (
-            <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground" data-testid="text-page-subtitle">
+            <p
+              className={
+                isErp
+                  ? "mt-1 hidden max-w-3xl text-sm leading-5 text-muted-foreground sm:block"
+                  : "mt-1 max-w-3xl text-sm leading-5 text-muted-foreground"
+              }
+              data-testid="text-page-subtitle"
+            >
               {subtitle}
             </p>
           )}
