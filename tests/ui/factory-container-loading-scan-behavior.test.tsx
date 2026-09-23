@@ -168,8 +168,8 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open }: any) => (open ? <div>{children}</div> : null),
-  AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
+  AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   AlertDialogContent: ({ children }: any) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
@@ -215,6 +215,9 @@ describe("factory container loading scan behavior", () => {
             ],
           }),
         };
+      }
+      if (method === "POST" && url === "/api/factory/customer-orders/77/bales/empty") {
+        return { json: async () => ({ removed: 1 }) };
       }
       return { json: async () => ({ success: true }) };
     });
@@ -305,5 +308,30 @@ describe("factory container loading scan behavior", () => {
     fireEvent.click(screen.getByTestId("button-toggle-removal-log"));
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("REF-REMOVED");
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("loader");
+  });
+
+  it("empties the loading only after confirmation and returns all scanned bales to stock", async () => {
+    render(<FactoryContainerLoadingScan />);
+
+    const emptyButton = await screen.findByTestId("button-empty-container");
+    expect(emptyButton).toBeEnabled();
+
+    fireEvent.click(emptyButton);
+    expect(screen.getByTestId("dialog-confirm-empty-container")).toHaveTextContent("All 1 scanned bale");
+    expect(screen.getByTestId("dialog-confirm-empty-container")).toHaveTextContent("start scanning again from zero");
+
+    fireEvent.click(screen.getByTestId("button-confirm-empty-container"));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith(
+        "POST",
+        "/api/factory/customer-orders/77/bales/empty",
+        {}
+      )
+    );
+    expect(harness.toast).toHaveBeenCalledWith({
+      title: "Container emptied",
+      description: "1 scanned bale was returned to stock. You can start scanning again.",
+    });
   });
 });
