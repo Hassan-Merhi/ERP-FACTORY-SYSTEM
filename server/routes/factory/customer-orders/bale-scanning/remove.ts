@@ -21,7 +21,7 @@ import {
   factoryDaybookEntries,
   customerOrderBaleRemovals,
 } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
@@ -95,14 +95,24 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         return removedLinks.length;
       });
 
-      const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
+      const [updatedOrder] = await db
+        .select({
+          status: customerOrders.status,
+          totalQtyBales: customerOrders.totalQtyBales,
+          totalWeightKg: sql<string>`COALESCE(
+            (SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}),
+            0
+          )::text`,
+        })
+        .from(customerOrders)
+        .where(eq(customerOrders.id, orderId));
       res.json({
         message: removedCount === 0 ? "Container is already empty" : "Container emptied and bales returned to stock",
         removed: removedCount,
         orderId,
         status: updatedOrder?.status,
         totalQtyBales: updatedOrder?.totalQtyBales,
-        totalWeightKg: updatedOrder?.totalWeightKg,
+        totalWeightKg: updatedOrder?.totalWeightKg ?? "0",
       });
     } catch (error: unknown) {
       logger.error("Error emptying loading container:", { error });
