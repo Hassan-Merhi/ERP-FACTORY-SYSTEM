@@ -35,6 +35,7 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).toContain("movementRows");
     expect(source).toContain("ledgerMovementRows");
     expect(source).toContain("excludedLedgerVoucherIds");
+    expect(source).toContain("eq(voucherEntries.companyId, companyId)");
     expect(source).toContain("notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)");
     expect(source).toContain("supplierPureCredits");
     expect(source).toContain("factorySupplierVoucherPaidUsd");
