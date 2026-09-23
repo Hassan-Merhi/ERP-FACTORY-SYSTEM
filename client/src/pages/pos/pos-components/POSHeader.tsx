@@ -137,14 +137,16 @@ export function POSHeader({
                   Load Draft{drafts.length > 0 ? ` (${drafts.length})` : ""}
                 </DropdownMenuItem>
 
-                <DropdownMenuItem
-                  onClick={onUpdateDraft}
-                  className="cursor-pointer gap-2"
-                  data-testid="button-update-draft"
-                >
-                  <Save className="h-4 w-4" />
-                  Update Draft
-                </DropdownMenuItem>
+                {onUpdateDraft && (
+                  <DropdownMenuItem
+                    onClick={onUpdateDraft}
+                    className="cursor-pointer gap-2"
+                    data-testid="button-update-draft"
+                  >
+                    <Save className="h-4 w-4" />
+                    Update Draft
+                  </DropdownMenuItem>
+                )}
 
                 <DropdownMenuSeparator />
 
