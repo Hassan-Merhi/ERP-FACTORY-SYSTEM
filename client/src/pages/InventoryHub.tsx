@@ -5,6 +5,7 @@ import LocationInventory from "@/pages/LocationInventory";
 import StockOTW from "@/pages/StockOTW";
 import Containers from "@/pages/ContainersPage";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
 const TABS = [
   { value: "by-location", label: "By Location", icon: MapPin, featureKey: "location_inventory" as const },
@@ -26,7 +27,7 @@ export default function InventoryHub({ access }: { access?: ErpFeatureAccess }) 
   });
 
   if (visibleTabs.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">No Inventory tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   return (
