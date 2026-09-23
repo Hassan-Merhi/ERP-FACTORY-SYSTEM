@@ -511,21 +511,13 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         .where(eq(factoryWorkers.companyId, companyId));
       const workerIds = new Set(allWorkers.map((row) => row.id));
       const workerGroupNames = await loadWorkerGroupNames(companyId);
-      const normalized: Array<{
-        workerId: number;
-        category: string;
-        targetBales: number | null;
-        categoryChanged: boolean;
-        targetChanged: boolean;
-      }> = [];
+      const normalized: Array<{ workerId: number; category: string; targetBales: number | null }> = [];
       const seen = new Set<number>();
 
       for (const raw of records) {
         const workerId = Number(raw?.workerId);
         const category = String(raw?.category ?? "").trim().slice(0, 150);
         const targetBales = numberOrNull(raw?.targetBales);
-        const categoryChanged = raw?.categoryChanged === true;
-        const targetChanged = raw?.targetChanged === true;
 
         if (!Number.isInteger(workerId) || workerId <= 0 || !workerIds.has(workerId)) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
@@ -546,7 +538,7 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         }
 
         seen.add(workerId);
-        normalized.push({ workerId, category, targetBales, categoryChanged, targetChanged });
+        normalized.push({ workerId, category, targetBales });
       }
 
       const activeLinks = await loadActiveProductionWorkerLinks(companyId, effectiveFrom);
@@ -579,81 +571,17 @@ export function registerFactoryStaffTrackingRoutes(app: Express): void {
         )`
       );
 
-      const changedValues = normalized.map(
-        ({ workerId, category, targetBales, categoryChanged, targetChanged }) => sql`(
-          ${workerId}::integer,
-          ${category}::text,
-          ${targetBales}::numeric,
-          ${categoryChanged}::boolean,
-          ${targetChanged}::boolean
-        )`
-      );
-
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`
-          INSERT INTO factory_worker_production_target_defaults (
-            company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
-          ) VALUES ${sql.join(values, sql`, `)}
-          ON CONFLICT (company_id, worker_id, effective_from)
-          DO UPDATE SET
-            category = EXCLUDED.category,
-            target_bales = EXCLUDED.target_bales,
-            created_by = EXCLUDED.created_by,
-            updated_at = now()
-        `);
-
-        // Daily Defaults are one-way authoritative from effectiveFrom forward.
-        // Reset only the field(s) the user actually changed, and never touch
-        // finalized production history. Edit Targets can still create a fresh
-        // day-specific override afterwards without changing these defaults.
-        await tx.execute(sql`
-          WITH changed_defaults (
-            worker_id,
-            category,
-            target_bales,
-            category_changed,
-            target_changed
-          ) AS (
-            VALUES ${sql.join(changedValues, sql`, `)}
-          )
-          UPDATE factory_staff_tracking_entries AS entry
-          SET
-            category = CASE
-              WHEN changed.category_changed THEN changed.category
-              ELSE entry.category
-            END,
-            category_overridden = CASE
-              WHEN changed.category_changed THEN false
-              ELSE entry.category_overridden
-            END,
-            target_bales = CASE
-              WHEN changed.target_changed THEN changed.target_bales
-              ELSE entry.target_bales
-            END,
-            target_overridden = CASE
-              WHEN changed.target_changed THEN false
-              ELSE entry.target_overridden
-            END,
-            updated_at = now()
-          FROM changed_defaults AS changed
-          WHERE entry.company_id = ${companyId}
-            AND entry.page_type = 'production'
-            AND entry.period_type = 'daily'
-            AND entry.period_start >= ${effectiveFrom}
-            AND entry.person_type = 'worker'
-            AND entry.person_id = changed.worker_id
-            AND (changed.category_changed OR changed.target_changed)
-            AND NOT EXISTS (
-              SELECT 1
-              FROM factory_staff_tracking_period_closures AS closure
-              WHERE closure.company_id = entry.company_id
-                AND closure.page_type = entry.page_type
-                AND closure.period_type = entry.period_type
-                AND closure.period_start = entry.period_start
-                AND closure.period_end = entry.period_end
-            )
-        `);
-      });
+      await db.execute(sql`
+        INSERT INTO factory_worker_production_target_defaults (
+          company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
+        ) VALUES ${sql.join(values, sql`, `)}
+        ON CONFLICT (company_id, worker_id, effective_from)
+        DO UPDATE SET
+          category = EXCLUDED.category,
+          target_bales = EXCLUDED.target_bales,
+          created_by = EXCLUDED.created_by,
+          updated_at = now()
+      `);
 
       res.json({ success: true, saved: normalized.length, effectiveFrom });
     } catch (error: unknown) {
