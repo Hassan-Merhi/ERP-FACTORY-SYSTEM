@@ -231,7 +231,7 @@ describe("factory container loading scan behavior", () => {
     render(<FactoryContainerLoadingScan />);
     await waitFor(() => expect(screen.getByTestId("badge-resuming")).toHaveTextContent("Resuming Loading #77"));
     expect(screen.getByTestId("badge-bale-count")).toHaveTextContent("1 bales");
-    expect(screen.getByTestId("badge-total-weight")).toHaveTextContent("50.00 kg");
+    expect(screen.getByTestId("badge-total-weight")).toHaveTextContent("50 kg");
     expect(screen.queryByTestId("banner-last-scanned")).not.toBeInTheDocument();
     expect(screen.getByTestId("card-proforma-progress")).toBeInTheDocument();
     expect(screen.getByTestId("row-progress-A1")).toHaveTextContent("2");
