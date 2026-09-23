@@ -327,9 +327,13 @@ describe("factory container loading scan behavior", () => {
     const emptyButton = await screen.findByTestId("button-empty-container");
     expect(emptyButton).toBeEnabled();
 
-    expect(screen.getByTestId("alert-dialog-root")).toHaveAttribute("data-open", "false");
+    expect(harness.apiRequest).not.toHaveBeenCalledWith(
+      "POST",
+      "/api/factory/customer-orders/77/bales/empty",
+      {}
+    );
+
     fireEvent.click(emptyButton);
-    await waitFor(() => expect(screen.getByTestId("alert-dialog-root")).toHaveAttribute("data-open", "true"));
     const confirmDialog = screen.getByTestId("dialog-confirm-empty-container");
     expect(confirmDialog).toHaveTextContent("All 1 scanned bale");
     expect(confirmDialog).toHaveTextContent("start scanning again from zero");
