@@ -2,21 +2,10 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { resultRows } from "../../../../lib/queryResult";
 
-/**
- * The only surface this helper needs from its connection. Typing it
- * structurally rather than as the concrete Drizzle database keeps both real
- * callers working — `db` and a transaction `tx` alike — without naming a
- * generic that would drag the whole schema in.
- */
 type SqlExecutor = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
-/**
- * The aggregate statement's result row. Every column is read through a `String`
- * or `Number` coercion below except `updated_at`, which is returned as-is, so
- * that one column is the only member worth naming a type for.
- */
 type OrderTotalsRow = Record<string, unknown> & {
   updated_at?: Date | string | null;
 };
@@ -48,17 +37,13 @@ export interface ScannedArticleTotalsPatch {
 /**
  * Fast path for a single bale add.
  *
- * The legacy recalculateOrderTotals helper rebuilds every customer_order_lines
- * row one-by-one, which makes query count grow with the number of article groups.
- * A scan only changes one article. This helper therefore:
- *   1) serializes recalculation per order with a row lock,
- *   2) aggregates all bale groups in one SQL statement so per-kg pricing remains
- *      authoritative for every article,
- *   3) replaces only the affected customer_order_lines row,
- *   4) refreshes order totals and charges in the same statement, and
- *   5) returns the affected line + totals so the HTTP response needs no follow-up reads.
- *
- * Query cost is constant (two SQL statements) instead of O(article groups).
+ * The scanner already holds the customer_orders row FOR UPDATE before calling
+ * this helper, so there is no need for another lock round-trip here. Only the
+ * scanned article can have changed. Rebuild that one article from its bales,
+ * then derive the order totals from the already-materialized order lines plus
+ * the replacement line returned by this statement. This keeps scan work
+ * proportional to the affected article instead of re-aggregating every bale
+ * and every article group in the loading on every scan.
  */
 export async function recalculateOrderTotalsForScannedArticle(
   dbConn: SqlExecutor,
@@ -67,18 +52,8 @@ export async function recalculateOrderTotalsForScannedArticle(
 ): Promise<ScannedArticleTotalsPatch> {
   const normalizedArticleCode = String(articleCode || "UNKNOWN").trim() || "UNKNOWN";
 
-  // Serialize total updates for the same order. The aggregate statement below is
-  // intentionally separate so, after waiting for this lock, PostgreSQL takes a
-  // fresh READ COMMITTED snapshot that includes any scan which committed first.
-  await dbConn.execute(sql`
-    SELECT id
-    FROM customer_orders
-    WHERE id = ${orderId}
-    FOR UPDATE
-  `);
-
   const result = await dbConn.execute(sql`
-    WITH bale_groups AS (
+    WITH target_group AS (
       SELECT
         COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN') AS article_code,
         COUNT(*)::int AS qty,
@@ -87,39 +62,34 @@ export async function recalculateOrderTotalsForScannedArticle(
         COALESCE(MAX(NULLIF(cob.bale_name, '')), COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN')) AS bale_name
       FROM customer_order_bales cob
       WHERE cob.order_id = ${orderId}
+        AND COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN') = ${normalizedArticleCode}
       GROUP BY COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN')
     ),
-    priced_groups AS (
+    priced_target AS (
       SELECT
-        bg.article_code,
-        bg.qty,
-        bg.total_weight,
-        bg.bale_name,
+        tg.article_code,
+        tg.qty,
+        tg.total_weight,
+        tg.bale_name,
         COALESCE(cpl.pricing_mode, 'per_bale') AS pricing_mode,
         cpl.price_per_kg,
         CASE
           WHEN COALESCE(cpl.pricing_mode, 'per_bale') = 'per_kg'
             AND COALESCE(cpl.price_per_kg, 0) > 0
-            AND bg.total_weight > 0
-          THEN bg.total_weight * cpl.price_per_kg
-          ELSE bg.summed_price
+            AND tg.total_weight > 0
+          THEN tg.total_weight * cpl.price_per_kg
+          ELSE tg.summed_price
         END::numeric AS total_price
-      FROM bale_groups bg
+      FROM target_group tg
       JOIN customer_orders co ON co.id = ${orderId}
       LEFT JOIN LATERAL (
         SELECT cpl.pricing_mode, cpl.price_per_kg
         FROM customer_proforma_lines cpl
         WHERE cpl.proforma_id = co.proforma_id_used
-          AND cpl.article_code = bg.article_code
+          AND cpl.article_code = tg.article_code
         ORDER BY cpl.id DESC
         LIMIT 1
       ) cpl ON TRUE
-    ),
-    target_line AS (
-      SELECT *
-      FROM priced_groups
-      WHERE article_code = ${normalizedArticleCode}
-      LIMIT 1
     ),
     deleted_target AS (
       DELETE FROM customer_order_lines
@@ -142,17 +112,17 @@ export async function recalculateOrderTotalsForScannedArticle(
       )
       SELECT
         ${orderId},
-        tl.article_code,
-        tl.bale_name,
-        tl.qty,
-        CASE WHEN tl.qty > 0 THEN tl.total_weight / tl.qty ELSE 0 END,
-        tl.total_weight,
-        CASE WHEN tl.qty > 0 THEN tl.total_price / tl.qty ELSE 0 END,
-        tl.total_price,
-        tl.pricing_mode,
-        tl.price_per_kg
-      FROM target_line tl
-      WHERE tl.qty > 0
+        pt.article_code,
+        pt.bale_name,
+        pt.qty,
+        CASE WHEN pt.qty > 0 THEN pt.total_weight / pt.qty ELSE 0 END,
+        pt.total_weight,
+        CASE WHEN pt.qty > 0 THEN pt.total_price / pt.qty ELSE 0 END,
+        pt.total_price,
+        pt.pricing_mode,
+        pt.price_per_kg
+      FROM priced_target pt
+      WHERE pt.qty > 0
       RETURNING
         id,
         order_id,
@@ -166,11 +136,19 @@ export async function recalculateOrderTotalsForScannedArticle(
         pricing_mode,
         price_per_kg
     ),
+    existing_other_lines AS (
+      SELECT
+        COALESCE(SUM(col.total_price), 0)::numeric AS subtotal_bales,
+        COALESCE(SUM(col.qty), 0)::int AS total_qty_bales
+      FROM customer_order_lines col
+      WHERE col.order_id = ${orderId}
+        AND col.article_code <> ${normalizedArticleCode}
+    ),
     order_totals AS (
       SELECT
-        COALESCE(SUM(pg.total_price), 0)::numeric AS subtotal_bales,
-        COALESCE(SUM(pg.qty), 0)::int AS total_qty_bales
-      FROM priced_groups pg
+        (eol.subtotal_bales + COALESCE((SELECT total_price FROM inserted_target LIMIT 1), 0))::numeric AS subtotal_bales,
+        (eol.total_qty_bales + COALESCE((SELECT qty FROM inserted_target LIMIT 1), 0))::int AS total_qty_bales
+      FROM existing_other_lines eol
     ),
     charges AS (
       SELECT
