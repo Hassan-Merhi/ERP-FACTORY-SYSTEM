@@ -50,6 +50,27 @@ function sameEntries(a: RecentNavEntry[], b: RecentNavEntry[]): boolean {
   });
 }
 
+function sanitizeRecentEntries<T extends NavItemLike>(
+  entries: RecentNavEntry[],
+  allowedNavByPath: Map<string, T>,
+): RecentNavEntry[] {
+  const seen = new Set<string>();
+  const next: RecentNavEntry[] = [];
+
+  for (const entry of entries) {
+    const item = allowedNavByPath.get(canonicalNavigationPath(entry.url));
+    if (!item) continue;
+
+    const canonicalUrl = item.url;
+    if (seen.has(canonicalUrl)) continue;
+    seen.add(canonicalUrl);
+    next.push({ url: canonicalUrl, title: item.title, visitedAt: entry.visitedAt });
+    if (next.length >= MAX_ITEMS) break;
+  }
+
+  return next;
+}
+
 export function useRecentNav<T extends NavItemLike>(
   allNavItems: T[],
   companyId?: number,
@@ -77,33 +98,15 @@ export function useRecentNav<T extends NavItemLike>(
     return map;
   }, [allNavItems, allowedPathsKey]);
 
-  const sanitize = (entries: RecentNavEntry[]): RecentNavEntry[] => {
-    const seen = new Set<string>();
-    const next: RecentNavEntry[] = [];
-
-    for (const entry of entries) {
-      const item = allowedNavByPath.get(canonicalNavigationPath(entry.url));
-      if (!item) continue;
-
-      const canonicalUrl = item.url;
-      if (seen.has(canonicalUrl)) continue;
-      seen.add(canonicalUrl);
-      next.push({ url: canonicalUrl, title: item.title, visitedAt: entry.visitedAt });
-      if (next.length >= MAX_ITEMS) break;
-    }
-
-    return next;
-  };
-
   useEffect(() => {
-    const loaded = sanitize(loadFromStorage(companyId));
+    const loaded = sanitizeRecentEntries(loadFromStorage(companyId), allowedNavByPath);
     setRecent(loaded);
     saveToStorage(loaded, companyId);
   }, [companyId, allowedNavByPath]);
 
   useEffect(() => {
     setRecent((previous) => {
-      const cleaned = sanitize(previous);
+      const cleaned = sanitizeRecentEntries(previous, allowedNavByPath);
       if (sameEntries(previous, cleaned)) return previous;
       saveToStorage(cleaned, companyId);
       return cleaned;
@@ -115,7 +118,7 @@ export function useRecentNav<T extends NavItemLike>(
     if (!item) return;
 
     setRecent((previous) => {
-      const cleaned = sanitize(previous).filter((entry) => entry.url !== item.url);
+      const cleaned = sanitizeRecentEntries(previous, allowedNavByPath).filter((entry) => entry.url !== item.url);
       const next = [{ url: item.url, title: item.title, visitedAt: Date.now() }, ...cleaned].slice(0, MAX_ITEMS);
       saveToStorage(next, companyId);
       return next;
