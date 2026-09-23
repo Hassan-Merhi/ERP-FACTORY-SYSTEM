@@ -330,7 +330,7 @@ export default function FactoryAttendance() {
                 <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
                 Daily View
               </Button>
-              <Badge variant="outline" className="rounded-full bg-background/55 px-2.5 py-1 text-[11px] font-medium">
+              <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
                 {formatDate(selectedDate)}
               </Badge>
               {shift && (
@@ -357,7 +357,7 @@ export default function FactoryAttendance() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="shift-input" className="text-xs text-muted-foreground">
-                Shift
+                Shift (optional)
               </Label>
               <Input
                 id="shift-input"
@@ -381,7 +381,7 @@ export default function FactoryAttendance() {
               ) : (
                 <MessageCircle className="mr-1.5 h-4 w-4" />
               )}
-              {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp"}
+              {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -495,7 +495,7 @@ export default function FactoryAttendance() {
                     className="rounded-xl"
                   >
                     <FileDown className="mr-1.5 h-4 w-4" />
-                    {isExportingRange ? "Exporting…" : "Export Excel"}
+                    {isExportingRange ? "Exporting…" : "Export Range Excel"}
                   </Button>
                   <Button
                     variant="outline"
@@ -586,7 +586,7 @@ export default function FactoryAttendance() {
                   {/* Desktop table */}
                   <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-30 bg-muted/35 backdrop-blur">
+                      <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
                         <tr className="border-b border-border/60">
                           <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                           <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>
@@ -663,7 +663,7 @@ export default function FactoryAttendance() {
                         <div
                           key={worker.id}
                           data-testid={`card-worker-${worker.id}`}
-                          className="space-y-3 rounded-xl border border-border/70 bg-background/45 p-3.5 shadow-sm"
+                          className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-sm"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
