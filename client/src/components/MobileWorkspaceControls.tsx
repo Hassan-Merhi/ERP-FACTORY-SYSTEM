@@ -134,7 +134,7 @@ export default function MobileWorkspaceControls({
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3" data-testid="mobile-workspace-account">
             <span
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
               style={{ backgroundColor: accentColor }}
