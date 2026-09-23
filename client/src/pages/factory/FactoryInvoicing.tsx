@@ -8,6 +8,7 @@ import { FileText } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 
 type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending";
+type TabDef = { key: InvoicingTab; label: string };
 
 export default function FactoryInvoicing() {
   const [, navigate] = useLocation();
@@ -16,19 +17,10 @@ export default function FactoryInvoicing() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
 
-  // ── Proformas tab access (existing restriction) ──────────────────────────
-  const hideProformasTab = hidden.includes("hide_invoicing_proformas_tab");
+  const showProformas = !hidden.includes("hide_invoicing_proformas_tab");
+  const showInvoices = !hidden.includes("hide_invoicing_invoices_tab");
+  const showLoadings = !hidden.includes("hide_invoicing_loadings_tab");
 
-  // ── Loadings tab access — mirrors the sidebar pageKeys guard ─────────────
-  // A user with restricted pageKeys loses the loadings tab if their allowed
-  // list doesn't include "factory/sales/loadings" (same key the sidebar uses).
-  const hasLoadingsAccess =
-    !myAccess ||
-    myAccess.fullAccess ||
-    !(myAccess.pageKeys?.length > 0) ||
-    myAccess.pageKeys.includes("factory/sales/loadings");
-
-  // ── Pending loadings — mirrors FactoryLoadingsHub restrictions ───────────
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
     queryFn: async () => {
@@ -36,47 +28,35 @@ export default function FactoryInvoicing() {
       return r.ok ? r.json() : {};
     },
     staleTime: 60000,
-    enabled: hasLoadingsAccess,
+    enabled: showLoadings,
   });
   const showPending =
-    hasLoadingsAccess && settings?.loadingsTabPendingEnabled !== false && !hidden.includes("hide_tab_loadings_pending");
+    showLoadings && settings?.loadingsTabPendingEnabled !== false && !hidden.includes("hide_tab_loadings_pending");
 
-  // ── Active tab from URL ?tab= param ─────────────────────────────────────
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const rawTab = params.get("tab");
-
-  function resolveTab(t: string | null): InvoicingTab {
-    if (t === "invoices") return "invoices";
-    if (t === "loadings" && hasLoadingsAccess) return "loadings";
-    if (t === "pending" && showPending) return "pending";
-    if (t === "proformas" && !hideProformasTab) return "proformas";
-    // Default: first visible tab
-    if (!hideProformasTab) return "proformas";
-    return "invoices";
-  }
-
-  const activeTab = resolveTab(rawTab);
-  const goTo = (tab: InvoicingTab) => navigate(`/factory/invoicing?tab=${tab}`);
-
-  // ── Build visible tab list ────────────────────────────────────────────────
-  type TabDef = { key: InvoicingTab; label: string };
   const allTabs: TabDef[] = [
     { key: "proformas", label: "Proformas" },
     { key: "invoices", label: "Invoices" },
     { key: "loadings", label: "Container Loadings" },
     { key: "pending", label: "Pending Loadings" },
   ];
-  const tabs = allTabs.filter((t) => {
-    if (t.key === "proformas") return !hideProformasTab;
-    if (t.key === "loadings") return hasLoadingsAccess;
-    if (t.key === "pending") return showPending;
-    return true; // invoices always visible
+  const tabs = allTabs.filter((tab) => {
+    if (tab.key === "proformas") return showProformas;
+    if (tab.key === "invoices") return showInvoices;
+    if (tab.key === "loadings") return showLoadings;
+    return showPending;
   });
+
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const rawTab = params.get("tab");
+  const requested = tabs.find((tab) => tab.key === rawTab)?.key;
+  const activeTab: InvoicingTab = requested ?? tabs[0]?.key ?? "invoices";
+  const goTo = (tab: InvoicingTab) => {
+    if (tabs.some((visibleTab) => visibleTab.key === tab)) navigate(`/factory/invoicing?tab=${tab}`);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b bg-background shrink-0">
-        {/* Header */}
         <div className="flex items-center gap-3 px-5 pt-4 pb-3">
           <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             <FileText className="h-4 w-4 text-primary" />
@@ -87,7 +67,6 @@ export default function FactoryInvoicing() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-0 px-4" role="tablist">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
@@ -112,11 +91,13 @@ export default function FactoryInvoicing() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto min-h-0">
-        {activeTab === "proformas" && !hideProformasTab && <FactoryProformas />}
-        {activeTab === "invoices" && <FactoryInvoices />}
-        {activeTab === "loadings" && hasLoadingsAccess && <FactoryContainerLoadingScan />}
+        {tabs.length === 0 && (
+          <div className="p-6 text-sm text-muted-foreground">No Invoicing tabs are available for this user.</div>
+        )}
+        {activeTab === "proformas" && showProformas && <FactoryProformas />}
+        {activeTab === "invoices" && showInvoices && <FactoryInvoices />}
+        {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
         {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
       </div>
     </div>
