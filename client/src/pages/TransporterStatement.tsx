@@ -404,13 +404,13 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
 
         {/* ── Toolbar (hidden when printing) ──────────── */}
         <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0 print:hidden">
-          <div className="flex flex-col gap-1 min-w-[220px]">
+          <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[220px]">
             <Label className="text-xs text-muted-foreground">Transporter Account</Label>
             {loadingTransporters ? (
               <Skeleton className="h-9 w-[220px]" />
             ) : (
               <Select value={selectedAccountId} onValueChange={setSelectedAccountId} data-testid="select-transporter">
-                <SelectTrigger className="w-[220px]" data-testid="trigger-transporter">
+                <SelectTrigger className="w-full sm:w-[220px]" data-testid="trigger-transporter">
                   <SelectValue placeholder="Select transporter…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -429,29 +429,29 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
             )}
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex w-full flex-col gap-1 sm:w-auto">
             <Label className="text-xs text-muted-foreground">From</Label>
             <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-[140px]"
+              className="w-full sm:w-[140px]"
               data-testid="input-date-from"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex w-full flex-col gap-1 sm:w-auto">
             <Label className="text-xs text-muted-foreground">To</Label>
             <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-[140px]"
+              className="w-full sm:w-[140px]"
               data-testid="input-date-to"
             />
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             {selectedAccountId && (
               <>
                 <Button
