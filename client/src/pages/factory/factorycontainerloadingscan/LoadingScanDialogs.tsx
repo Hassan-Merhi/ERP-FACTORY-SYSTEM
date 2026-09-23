@@ -24,7 +24,7 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
   const { pendingOrders } = model;
   return (
     <Dialog open={model.showPendingWarning} onOpenChange={model.setShowPendingWarning}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md rounded-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
@@ -83,7 +83,7 @@ function LastScannedPrompt({ model }: { model: FactoryContainerLoadingScanModel 
   const { lastScannedRef } = model;
   return (
     <Dialog open={model.showLastScannedPopup} onOpenChange={model.setShowLastScannedPopup}>
-      <DialogContent className="max-w-sm" data-testid="dialog-last-scanned">
+      <DialogContent className="max-w-sm rounded-2xl" data-testid="dialog-last-scanned">
         <DialogHeader>
           <DialogTitle className="text-base">Resuming Loading</DialogTitle>
         </DialogHeader>
@@ -115,10 +115,15 @@ function EmptyContainerConfirm({ model }: { model: FactoryContainerLoadingScanMo
   const baleCount = model.bales.length;
   return (
     <AlertDialog open={model.showEmptyContainerConfirm} onOpenChange={model.setShowEmptyContainerConfirm}>
-      <AlertDialogContent data-testid="dialog-confirm-empty-container">
+      <AlertDialogContent className="rounded-2xl" data-testid="dialog-confirm-empty-container">
         <AlertDialogHeader>
-          <AlertDialogTitle>Empty this container?</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </span>
+            Empty this container?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="rounded-xl border bg-muted/20 p-3">
             All {baleCount} scanned bale{baleCount === 1 ? "" : "s"} will be removed from Loading #{model.orderId} and
             returned to stock. The customer, proforma, loading location, and note will stay in place so you can start
             scanning again from zero.
@@ -149,7 +154,7 @@ function RemoveBaleConfirm({ model }: { model: FactoryContainerLoadingScanModel 
         if (!open) model.setBaleToDelete(null);
       }}
     >
-      <AlertDialogContent data-testid="dialog-confirm-remove-bale">
+      <AlertDialogContent className="rounded-2xl" data-testid="dialog-confirm-remove-bale">
         <AlertDialogHeader>
           <AlertDialogTitle>Remove bale from loading?</AlertDialogTitle>
           <AlertDialogDescription>
