@@ -61,6 +61,17 @@ describe("Wave 4 Factory backend access ownership", () => {
     }
   });
 
+  it("maps AIS health to legitimate container tracking surfaces", () => {
+    const rule = resolveFactoryBackendAccessRequirement(req("/ais/health"));
+    expect(rule?.alternatives).toEqual([
+      { pageKey: "factory/containers-hub" },
+      {
+        pageKey: "factory/intelligence/production-hub",
+        tabs: ["hide_tab_production_intel_container_tracking"],
+      },
+    ]);
+  });
+
   it("maps raw-stock adjustments and repair children to Raw Materials", () => {
     expect(resolveFactoryBackendAccessRequirement(req("/raw-stock/adjustment", "POST"))).toMatchObject({
       pageKey: "factory/raw-materials",
