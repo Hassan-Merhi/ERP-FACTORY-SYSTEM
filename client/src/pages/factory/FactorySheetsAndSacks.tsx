@@ -123,7 +123,7 @@ export default function FactorySheetsAndSacks() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <PageHeader title="Sheets & Sacks" subtitle="Track packaging materials inventory" />
-        {canEdit && (
+        {canEdit && showStock && (
           <Button onClick={() => setShowAddDialog(true)} data-testid="button-add-item">
             <Plus className="h-4 w-4 mr-1" />
             Add Item
