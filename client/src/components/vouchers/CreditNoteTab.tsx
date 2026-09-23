@@ -407,11 +407,11 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-200px)]">
       <Card className="flex-1 flex flex-col">
         <CardHeader className="pb-3 flex-shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               {isEditMode ? <><Pencil className="h-5 w-5" />Edit {noteType}</> : <><Package className="h-5 w-5" />{noteType === "Credit Note" ? "Credit Note (Customer Return)" : "Debit Note"}</>}
             </CardTitle>
-            <div className="flex gap-2">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
               {isEditMode && <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">Cancel</Button>}
               <Button type="button" onClick={form.handleSubmit(onSubmit)} disabled={items.length === 0 || isPending} data-testid="button-create-credit-note">
                 <Plus className="h-4 w-4 mr-1" />{isPending ? "Saving..." : isEditMode ? "Update Note" : "Create Note"}
@@ -422,7 +422,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
         <CardContent className="flex-1 overflow-auto">
           <Form {...form}>
             <form className="space-y-4" noValidate>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <FormField control={form.control} name="noteType" render={({ field }) => (
                   <FormItem><FormLabel>Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}><FormControl><SelectTrigger data-testid="select-note-type"><SelectValue placeholder="Select type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Credit Note">Credit Note</SelectItem><SelectItem value="Debit Note">Debit Note</SelectItem></SelectContent></Select></FormItem>
                 )} />
@@ -430,7 +430,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
                   <FormItem><FormLabel>Date</FormLabel><FormControl><Input type="date" value={field.value || ""} onChange={(event) => field.onChange(event.target.value)} data-testid="input-credit-note-date" /></FormControl></FormItem>
                 )} />
                 <FormField control={form.control} name="cashAccountId" render={() => (
-                  <FormItem className="col-span-2"><FormLabel>{noteType === "Credit Note" ? "Refund From (Cash/Bank)" : "Receive Into"}</FormLabel><FormControl><AccountAutocomplete value={cashAccountId > 0 ? { type: cashAccountType, id: cashAccountId, name: cashAccountName || "" } : null} onChange={(type, id, name) => { form.setValue("cashAccountType", type); form.setValue("cashAccountId", id); form.setValue("cashAccountName", name); }} allAccounts={allAccounts} rowIndex={-1} placeholder="Select cash/bank account..." testId="input-credit-note-account" /></FormControl></FormItem>
+                  <FormItem className="sm:col-span-2"><FormLabel>{noteType === "Credit Note" ? "Refund From (Cash/Bank)" : "Receive Into"}</FormLabel><FormControl><AccountAutocomplete value={cashAccountId > 0 ? { type: cashAccountType, id: cashAccountId, name: cashAccountName || "" } : null} onChange={(type, id, name) => { form.setValue("cashAccountType", type); form.setValue("cashAccountId", id); form.setValue("cashAccountName", name); }} allAccounts={allAccounts} rowIndex={-1} placeholder="Select cash/bank account..." testId="input-credit-note-account" /></FormControl></FormItem>
                 )} />
               </div>
 
