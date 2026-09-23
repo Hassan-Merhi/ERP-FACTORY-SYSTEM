@@ -209,7 +209,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/sheets-sacks", ["hide_tab_sheets_stock"]);
   }
   if (path === "/repair-perkg-prices") {
-    return requirement("factory/invoicing", ["hide_invoicing_invoices_tab"]);
+    return requirement("factory/settings");
   }
   if (path === "/repair-orphaned-vouchers") {
     return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL, "hide_tab_payroll_records"]);
@@ -268,6 +268,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/admin") ||
     path === "/admin-verify" ||
     path === "/import-company-data" ||
+    path === "/export-company-data" ||
     path === "/migrate-voucher-descriptions" ||
     path === "/payroll/migrate-city-split" ||
     path === "/payroll/migrate-worker-names" ||
@@ -407,6 +408,239 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     hasPrefix(path, "/cash-account-balance")
   ) {
     return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_ADVANCES]);
+  }
+
+  // ── Canonical page ownership fallback ────────────────────────────────────
+  // The cases above handle sensitive child tabs first. These family mappings
+  // close the remaining page-level bypasses so a hidden Factory page cannot be
+  // reached by calling its API directly.
+
+  if (hasPrefix(path, "/alerts")) {
+    return requirement("factory/intelligence/alerts");
+  }
+  if (hasPrefix(path, "/analytics")) {
+    return requirement("factory/analytics");
+  }
+  if (path === "/dashboard" || hasPrefix(path, "/dashboard-kpis")) {
+    return requirement("factory/intelligence/dashboard");
+  }
+  if (hasPrefix(path, "/kpis")) {
+    return requirement("factory/intelligence/kpis");
+  }
+  if (hasPrefix(path, "/profitability") || hasPrefix(path, "/cashflow") || hasPrefix(path, "/net-position")) {
+    return requirement("factory/intelligence/financial-hub");
+  }
+  if (hasPrefix(path, "/reports/supplier-usage") || hasPrefix(path, "/suppliers/score")) {
+    return requirement("factory/intelligence/supplier-hub");
+  }
+  if (hasPrefix(path, "/mix/optimize") || hasPrefix(path, "/waste")) {
+    return requirement("factory/intelligence/production-hub");
+  }
+  if (hasPrefix(path, "/financial-snapshot")) {
+    return requirement("factory/analytics");
+  }
+
+  if (hasPrefix(path, "/location-inventory")) {
+    return requirement("factory/location-inventory");
+  }
+  if (hasPrefix(path, "/bale-stock-list") || hasPrefix(path, "/bale-stock-count")) {
+    return requirement("factory/stock-bale-list");
+  }
+  if (hasPrefix(path, "/bales/relabel")) {
+    return requirement("factory/bale-relabeling", ["hide_tab_relabeling_main"]);
+  }
+  if (hasPrefix(path, "/customer-loading")) {
+    return requirement("factory/bales-hub", ["hide_tab_bales_customer_loading"]);
+  }
+  if (hasPrefix(path, "/bales/lookup")) {
+    return requirement("factory/bales-hub", ["hide_tab_bales_barcode"]);
+  }
+  if (hasPrefix(path, "/bale-product-history")) {
+    return requirement("factory/bales-hub", ["hide_tab_bales_history"]);
+  }
+  if (hasPrefix(path, "/bale-product-detail")) {
+    return requirement("factory/bales-hub", ["hide_tab_bales_products"]);
+  }
+  if (hasPrefix(path, "/bale-product-images")) {
+    return requirement("factory/bale-product-images");
+  }
+  if (hasPrefix(path, "/bale-lookup")) {
+    return anyOf(
+      requirement("factory/bale-tracking"),
+      requirement("factory/invoicing", ["hide_invoicing_loadings_tab"])
+    );
+  }
+  if (hasPrefix(path, "/bale-photos")) {
+    return requirement("factory/bales-hub", ["hide_tab_bales_history"]);
+  }
+
+  if (hasPrefix(path, "/bale-products") || hasPrefix(path, "/categories") || hasPrefix(path, "/french-catalog")) {
+    if (path === "/bale-products/bulk-update-prices") {
+      return requirement("factory/price-list");
+    }
+    if (path === "/bale-products/merge" || hasPrefix(path, "/bale-products/merge-stats")) {
+      return requirement("factory/merge-bale-products");
+    }
+    if (isWrite(req)) {
+      return requirement("factory/bales-hub", ["hide_tab_bales_products"]);
+    }
+    return anyOf(
+      requirement("factory/bales-hub", ["hide_tab_bales_products"]),
+      requirement("factory/price-list"),
+      requirement("factory/invoicing", ["hide_invoicing_proformas_tab"]),
+      requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
+      requirement("factory/production-comparison")
+    );
+  }
+
+  if (hasPrefix(path, "/bales")) {
+    return anyOf(
+      requirement("factory/bales-hub"),
+      requirement("factory/stock-entry"),
+      requirement("factory/stock-bale-list"),
+      requirement("factory/stock-allocation-v5"),
+      requirement("factory/invoicing", ["hide_invoicing_loadings_tab"]),
+      requirement("factory/production-report")
+    );
+  }
+
+  if (
+    /^\/containers\/\d+\/(?:reverse-offload|post-offload-charges|confirm-duty)(?:\/|$)/.test(path) ||
+    hasPrefix(path, "/container-commissions")
+  ) {
+    return requirement("factory/raw-materials");
+  }
+  if (
+    hasPrefix(path, "/containers") ||
+    hasPrefix(path, "/container-doc-types") ||
+    hasPrefix(path, "/freight")
+  ) {
+    return requirement("factory/containers-hub");
+  }
+
+  if (
+    hasPrefix(path, "/shipping-availability") ||
+    hasPrefix(path, "/shipping-containers") ||
+    hasPrefix(path, "/shipping-container-docs")
+  ) {
+    return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
+  }
+
+  if (hasPrefix(path, "/suppliers")) {
+    if (/\/broker-visual-statement(?:\/|$)/.test(path)) {
+      return requirement("factory/broker-visual-statement");
+    }
+    if (isWrite(req)) {
+      return requirement("factory/parties", ["hide_tab_parties_suppliers"]);
+    }
+    return anyOf(
+      requirement("factory/parties", ["hide_tab_parties_suppliers"]),
+      requirement("factory/raw-materials"),
+      requirement("factory/containers-hub"),
+      requirement("factory/intelligence/supplier-hub")
+    );
+  }
+  if (
+    hasPrefix(path, "/supplier-categories") ||
+    hasPrefix(path, "/supplier-payments") ||
+    hasPrefix(path, "/supplier-fx-transfers")
+  ) {
+    return requirement("factory/parties", ["hide_tab_parties_suppliers"]);
+  }
+
+  if (hasPrefix(path, "/customers")) {
+    if (isWrite(req)) {
+      return requirement("factory/parties", ["hide_tab_parties_customers"]);
+    }
+    return anyOf(
+      requirement("factory/parties", ["hide_tab_parties_customers"]),
+      requirement("factory/invoicing"),
+      requirement("factory/stock-entry")
+    );
+  }
+
+  if (hasPrefix(path, "/contacts")) {
+    return requirement("factory/contacts");
+  }
+  if (hasPrefix(path, "/transporters") || hasPrefix(path, "/transporter-accounts")) {
+    return requirement("factory/transporters");
+  }
+
+  if (hasPrefix(path, "/dispatch-reports")) {
+    return requirement("factory/dispatch-batches", ["hide_tab_dispatch_reports"]);
+  }
+  if (
+    hasPrefix(path, "/dispatch-batches") ||
+    hasPrefix(path, "/dispatch-truck-rides") ||
+    hasPrefix(path, "/dispatch-bale-scans") ||
+    hasPrefix(path, "/bale-search")
+  ) {
+    return requirement("factory/dispatch-batches", ["hide_tab_dispatch_batches"]);
+  }
+
+  if (hasPrefix(path, "/sheets-sacks")) {
+    if (hasPrefix(path, "/sheets-sacks/log")) {
+      return requirement("factory/sheets-sacks", ["hide_tab_sheets_movements"]);
+    }
+    return requirement("factory/sheets-sacks", ["hide_tab_sheets_stock"]);
+  }
+  if (hasPrefix(path, "/sheets")) {
+    return anyOf(
+      requirement("factory/sheets-sacks", ["hide_tab_sheets_stock"]),
+      requirement("factory/production-report", ["hide_tab_overview_sheets"])
+    );
+  }
+
+  if (hasPrefix(path, "/mix-batches") || hasPrefix(path, "/fx-rates")) {
+    return anyOf(
+      requirement("factory/raw-materials"),
+      requirement("factory/production-report"),
+      requirement("factory/intelligence/production-hub")
+    );
+  }
+
+  if (hasPrefix(path, "/pos")) {
+    return requirement("factory/production-report");
+  }
+
+  if (hasPrefix(path, "/monthly-salary-summary")) {
+    return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL]);
+  }
+
+  if (hasPrefix(path, "/waste-dispatch")) {
+    return requirement("factory/waste-dispatch");
+  }
+
+  if (hasPrefix(path, "/rental")) {
+    if (
+      hasPrefix(path, "/rental/payments") ||
+      hasPrefix(path, "/rental/cash-accounts") ||
+      hasPrefix(path, "/rental/auto-transfer-config") ||
+      hasPrefix(path, "/rental/reconciliation")
+    ) {
+      return anyOf(
+        requirement("factory/rental/shops"),
+        requirement("factory/rental/payments")
+      );
+    }
+    return anyOf(
+      requirement("factory/rental/shops"),
+      requirement("factory/rental/warehouses")
+    );
+  }
+
+  if (hasPrefix(path, "/uploads/workers")) {
+    return requirement("factory/payroll-hub");
+  }
+  if (hasPrefix(path, "/uploads/bale-photos")) {
+    return requirement("factory/bales-hub");
+  }
+  if (hasPrefix(path, "/uploads")) {
+    return anyOf(
+      requirement("factory/containers-hub"),
+      requirement("factory/bales-hub"),
+      requirement("factory/payroll-hub")
+    );
   }
 
   return null;
