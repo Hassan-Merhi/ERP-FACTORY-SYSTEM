@@ -23,6 +23,18 @@ function isWrite(req: Request): boolean {
   return !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase());
 }
 
+function isFactoryAccessBoundaryExempt(req: Request, path: string): boolean {
+  if (path === "/my-access") return true;
+  if (req.method.toUpperCase() !== "GET") return false;
+
+  // Shared read-only configuration/assets are consumed by multiple permitted
+  // Factory pages. Their mutations are still explicitly protected by Settings.
+  if (path === "/settings") return true;
+  if (path === "/label-design-colors" || path === "/label-banners") return true;
+  if (/^\/customer-logos\/\d+\/image$/.test(path)) return true;
+  return false;
+}
+
 function requirement(pageKey: string, tabs?: string[]): FactoryApiAccessRequirement {
   return { pageKey, ...(tabs?.length ? { tabs } : {}) };
 }
@@ -159,8 +171,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
         ? requestPath.slice("/api/factory".length)
         : req.path;
 
-  // Access bootstrap must remain callable so the UI can learn what is denied.
-  if (path === "/my-access") return null;
+  // Explicit shared/bootstrap exceptions are handled fail-open here; every
+  // other Factory route must resolve to an owner or the middleware denies it.
+  if (isFactoryAccessBoundaryExempt(req, path)) return null;
 
   // Attendance is an active-company exception in factoryRoutes.ts. Keep its
   // authorization tied to the Attendance tabs rather than the admin Settings page.
@@ -387,6 +400,15 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   // Raw-material reads, adjustments, offload/recalc detail/actions inherit Raw Materials.
   if (hasPrefix(path, "/raw-stock")) {
     return requirement("factory/raw-materials");
+  }
+
+  // Generic staff-tracking requests still require one of the two owning tabs;
+  // malformed requests then continue to the route's normal 400 validation.
+  if (hasPrefix(path, "/staff-tracking")) {
+    return anyOf(
+      requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
+      attendanceRequirement()
+    );
   }
 
   // Worker/employee/payroll families.
@@ -722,7 +744,20 @@ export async function enforceFactoryBackendAccess(req: Request, res: Response, n
 
   try {
     const rule = resolveFactoryBackendAccessRequirement(req);
-    if (!rule) return next();
+    if (!rule) {
+      const requestPath = (req.originalUrl.split("?", 1)[0] || req.path);
+      const path =
+        requestPath === "/api/factory"
+          ? "/"
+          : requestPath.startsWith("/api/factory/")
+            ? requestPath.slice("/api/factory".length)
+            : req.path;
+      if (isFactoryAccessBoundaryExempt(req, path)) return next();
+      return res.status(403).json({
+        message: "This Factory API has no declared page permission owner.",
+        code: "FACTORY_PAGE_ACCESS_DENIED",
+      });
+    }
 
     const decision = await evaluateFactoryRequirement(req, rule);
     if (!decision.allowed) return sendFactoryAccessDenied(res, decision);
