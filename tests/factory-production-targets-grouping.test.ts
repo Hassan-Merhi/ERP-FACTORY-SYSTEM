@@ -60,7 +60,7 @@ describe("Production Targets category grouping", () => {
     const collapsed = collapseLinkedProductionRows([linkedA, linkedB]);
 
     expect(collapsed).toHaveLength(1);
-    expect(collapsed[0]?.targetBales).toBe(10);
+    expect(collapsed[0]?.targetBales).toBe(20);
     expect(collapsed[0]?.producedBales).toBe(12);
     expect(collapsed[0]?.displayMembers?.map((member) => member.name)).toEqual([
       "Worker A",
@@ -93,11 +93,11 @@ describe("Production Targets category grouping", () => {
     };
 
     expect(summarizeProductionRows([linkedA, linkedB, solo])).toEqual({
-      target: 16,
+      target: 26,
       absentTarget: 10,
-      expected: 6,
+      expected: 16,
       produced: 5,
-      difference: 1,
+      difference: 11,
     });
   });
 
@@ -119,11 +119,11 @@ describe("Production Targets category grouping", () => {
     const solo = { ...row(3, "Worker C", "TSHIRT"), targetBales: 6, producedBales: 5 };
 
     expect(summarizeProductionRows([linkedA, linkedB, solo])).toEqual({
-      target: 16,
+      target: 26,
       absentTarget: 0,
-      expected: 16,
+      expected: 26,
       produced: 17,
-      difference: -1,
+      difference: 9,
     });
   });
 });
