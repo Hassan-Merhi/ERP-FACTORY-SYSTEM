@@ -20,7 +20,7 @@ const ALL_TAB_OPTIONS: {
   settingKey?: string;
   hiddenKey?: string;
 }[] = [
-  { value: "workers", label: "Workers", icon: HardHat },
+  { value: "workers", label: "Workers", icon: HardHat, hiddenKey: "hide_tab_workers_workers" },
   {
     value: "payroll",
     label: "Payroll",
@@ -72,22 +72,25 @@ export default function FactoryWorkersHub() {
   const hiddenTabs = myAccess?.hiddenCostFields ?? [];
 
   const visibleOptions = ALL_TAB_OPTIONS.filter(({ settingKey, hiddenKey }) => {
-    if (!settingKey) return true;
-    if (settings && settings[settingKey] === false) return false;
     if (hiddenKey && hiddenTabs.includes(hiddenKey)) return false;
+    if (settingKey && settings && settings[settingKey] === false) return false;
     return true;
   });
   const visibleValues = visibleOptions.map((option) => option.value);
 
   const [tab, setTab] = useHubQueryState<TabValue>({
     key: "tab",
-    allowedValues: visibleValues,
+    allowedValues: visibleValues.length > 0 ? visibleValues : ALL_TAB_OPTIONS.map((option) => option.value),
     defaultValue: visibleOptions[0]?.value ?? "workers",
     clearKeys: ["mode"],
   });
 
   const current = visibleOptions.find((option) => option.value === tab) ?? visibleOptions[0];
   const Icon = current?.icon ?? HardHat;
+
+  if (visibleOptions.length === 0) {
+    return <div className="p-4 text-sm text-muted-foreground">No Workers tabs are available for this user.</div>;
+  }
 
   return (
     <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)}>
@@ -114,24 +117,36 @@ export default function FactoryWorkersHub() {
         </Select>
       </div>
 
-      <TabsContent value="workers" className="mt-0">
-        <FactoryWorkers />
-      </TabsContent>
-      <TabsContent value="payroll" className="mt-0">
-        <FactoryPayrollTab />
-      </TabsContent>
-      <TabsContent value="attendance" className="mt-0">
-        <FactoryAttendance />
-      </TabsContent>
-      <TabsContent value="report" className="mt-0">
-        <FactoryWorkerAttendanceReport />
-      </TabsContent>
-      <TabsContent value="advances" className="mt-0">
-        <FactoryAdvancesTab />
-      </TabsContent>
-      <TabsContent value="bonuses" className="mt-0">
-        <FactoryWorkerBonusesTab />
-      </TabsContent>
+      {visibleValues.includes("workers") && (
+        <TabsContent value="workers" className="mt-0">
+          <FactoryWorkers />
+        </TabsContent>
+      )}
+      {visibleValues.includes("payroll") && (
+        <TabsContent value="payroll" className="mt-0">
+          <FactoryPayrollTab />
+        </TabsContent>
+      )}
+      {visibleValues.includes("attendance") && (
+        <TabsContent value="attendance" className="mt-0">
+          <FactoryAttendance />
+        </TabsContent>
+      )}
+      {visibleValues.includes("report") && (
+        <TabsContent value="report" className="mt-0">
+          <FactoryWorkerAttendanceReport />
+        </TabsContent>
+      )}
+      {visibleValues.includes("advances") && (
+        <TabsContent value="advances" className="mt-0">
+          <FactoryAdvancesTab />
+        </TabsContent>
+      )}
+      {visibleValues.includes("bonuses") && (
+        <TabsContent value="bonuses" className="mt-0">
+          <FactoryWorkerBonusesTab />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }
