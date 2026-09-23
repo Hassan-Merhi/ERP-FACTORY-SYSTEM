@@ -47,6 +47,7 @@
     "audit:ux-consistency": "node scripts/audit-ux-module-consistency.mjs",
     "start": "node --expose-gc --import ./server/factoryContainerSchemaBridge.mjs --import ./server/supplierCompanyScopeBridge.mjs --import ./server/exportBufferBridge.mjs --import ./server/scheduledAttachmentBridge.mjs --import ./server/apiPaginationBridge.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js",
     "check": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit",
+    "verify:security-wave3": "node scripts/verify-security-wave3-closeout.mjs",
     "check:security": "node scripts/run-program-6-focused-security-checks.mjs",
     "db:push": "drizzle-kit push",
     "build:cap": "vite build --mode capacitor",
@@ -70,8 +71,7 @@
     "audit:platform": "node scripts/audit-platform-modernization.mjs",
     "test:platform": "node --test tests/platform-modernization-contract.node.test.mjs",
     "verify:remote-control-registry": "node scripts/verify-remote-control-action-registry.mjs",
-    "generate:remote-control-registry": "node scripts/generate-remote-control-action-registry.mjs --write",
-    "verify:manual": "node scripts/run-manual-verification.mjs"
+    "generate:remote-control-registry": "node scripts/generate-remote-control-action-registry.mjs --write"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
