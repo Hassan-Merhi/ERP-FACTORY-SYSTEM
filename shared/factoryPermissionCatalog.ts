@@ -177,7 +177,7 @@ export function normalizePersistedFactoryPageKeysFailClosed(value: unknown): str
   const out = new Set<string>();
   for (const entry of value) {
     if (typeof entry !== "string") continue;
-    const raw = entry.trim().replace(/^\\/+/, "");
+    const raw = entry.trim().replace(/^\/+/, "");
     if (!raw.startsWith("factory/")) continue;
     out.add(canonicalFactoryPageKey(raw) ?? raw);
   }
