@@ -2,6 +2,8 @@ import type { ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Switch, Route, Redirect } from "wouter";
 import NotFound from "@/pages/not-found";
+import { canAccessAnyErpFeature, canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import type { FeatureKey } from "@shared/schema";
 import SpOverview from "@/pages/sp/SpOverview";
 import {
   AICommandCenter,
@@ -102,54 +104,78 @@ interface ErpRoutesProps {
 type RouteComponent = ComponentType;
 
 export function ErpRoutes({ user }: ErpRoutesProps) {
-  const { data: erpAccess } = useQuery<{ fullAccess: boolean; pageKeys: string[] }>({
+  const { data: erpAccess } = useQuery<ErpFeatureAccess>({
     queryKey: ["/api/my-erp-pages"],
     enabled: !!user,
     staleTime: 30000,
   });
 
-  const isAdminOrDev = user?.role === "Admin" || user?.role === "Developer";
-  const canAccess = (key: string) => !erpAccess || erpAccess.fullAccess || erpAccess.pageKeys.includes(key);
-  const G = (path: string, key: string, Comp: RouteComponent) =>
+  const effectiveRole = user?.currentRole ?? user?.role ?? "";
+  const isDeveloper = effectiveRole === "Developer";
+  const isAdminOrDev = effectiveRole === "Admin" || isDeveloper;
+  const isAdminOwnerOrDev = effectiveRole === "Admin" || effectiveRole === "Owner" || isDeveloper;
+  const canAccess = (key: FeatureKey) => canAccessErpFeature(erpAccess, key);
+  const canAccessAny = (keys: readonly FeatureKey[]) => canAccessAnyErpFeature(erpAccess, keys);
+  const G = (path: string, key: FeatureKey, Comp: RouteComponent) =>
     canAccess(key) ? (
       <Route path={path} component={Comp} />
     ) : (
       <Route path={path}>
-        <Redirect to="/tracking" />
+        <Redirect replace to="/tracking" />
+      </Route>
+    );
+  const R = (path: string, allowed: boolean, Comp: RouteComponent) =>
+    allowed ? (
+      <Route path={path} component={Comp} />
+    ) : (
+      <Route path={path}>
+        <Redirect replace to="/tracking" />
       </Route>
     );
 
   return (
     <Switch>
-      <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect to="/tracking" />)}</Route>
+      <Route path="/">{() => (isAdminOrDev ? <ContainersOTW /> : <Redirect replace to="/tracking" />)}</Route>
       <Route path="/tracking" component={TrackingHub} />
-      <Route path="/financial-overview" component={Dashboard} />
+      {G("/financial-overview", "dashboard", Dashboard)}
 
       {canAccess("pos") ? (
         <Route path="/pos">{() => <POSPage />}</Route>
       ) : (
         <Route path="/pos">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccess("pos") && <Route path="/pos/edit/:id">{(params) => <POS editVoucherId={params.id} />}</Route>}
-      {(user?.currentRole ?? user?.role) !== "POS" && canAccess("pos") ? (
+      {canAccess("pos") ? (
+        <Route path="/pos/edit/:id">{(params) => <POS editVoucherId={params.id} />}</Route>
+      ) : (
+        <Route path="/pos/edit/:id"><Redirect replace to="/tracking" /></Route>
+      )}
+      {effectiveRole !== "POS" && canAccess("pos") ? (
         <Route path="/pos-item-replacement" component={POSItemReplacement} />
       ) : (
         <Route path="/pos-item-replacement">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
 
-      {G("/inventory", "stock_items", InventoryHub)}
-      {G("/stock", "stock_items", StockHub)}
+      {canAccessAny(["location_inventory", "stock_otw", "containers"]) ? (
+        <Route path="/inventory">{() => <InventoryHub access={erpAccess} />}</Route>
+      ) : (
+        <Route path="/inventory"><Redirect replace to="/tracking" /></Route>
+      )}
+      {canAccessAny(["stock_items", "stock_query"]) ? (
+        <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
+      ) : (
+        <Route path="/stock"><Redirect replace to="/tracking" /></Route>
+      )}
       {canAccess("location_inventory") ? (
         <Route path="/location-inventory">
           <Redirect to="/inventory?tab=by-location" />
         </Route>
       ) : (
         <Route path="/location-inventory">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("stock_items") ? (
@@ -158,7 +184,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/stock-items">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("stock_otw") ? (
@@ -167,14 +193,14 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/stock-otw">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
 
-      {isAdminOrDev && <Route path="/mock-containers-otw" component={ContainersOTW as RouteComponent} />}
-      {isAdminOrDev && <Route path="/containers-otw" component={ContainersOTW as RouteComponent} />}
-      <Route path="/mock-git" component={GITMockup as RouteComponent} />
-      <Route path="/git" component={GITMockup as RouteComponent} />
+      {R("/mock-containers-otw", isAdminOrDev, ContainersOTW as RouteComponent)}
+      {R("/containers-otw", isAdminOrDev, ContainersOTW as RouteComponent)}
+      {R("/mock-git", isAdminOrDev, GITMockup as RouteComponent)}
+      {R("/git", isAdminOrDev, GITMockup as RouteComponent)}
 
       {G("/containers/:containerId/verification", "containers", ContainerVerification)}
       {G("/containers/:id", "containers", ContainerDetailPage)}
@@ -185,15 +211,15 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/sold-containers">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      <Route path="/offloads/:id" component={OffloadDetail} />
+      {G("/offloads/:id", "containers", OffloadDetail)}
 
-      <Route path="/po-import" component={POImport} />
-      <Route path="/ai-validation" component={AiValidationPage} />
-      <Route path="/ai-command-center" component={AICommandCenter} />
-      <Route path="/pos-import" component={POSImport} />
+      {G("/po-import", "containers", POImport)}
+      {R("/ai-validation", isDeveloper, AiValidationPage)}
+      {R("/ai-command-center", isDeveloper, AICommandCenter)}
+      {G("/pos-import", "pos", POSImport)}
       <Route path="/agents" component={Agents} />
       {G("/analytics", "analytics", Analytics)}
 
@@ -202,22 +228,22 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         <Route path="/ledger-monthly/:accountId" component={LedgerMonthlySummary} />
       ) : (
         <Route path="/ledger-monthly/:accountId">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("accounts") ? (
         <Route path="/ledger-vouchers/:accountId/:year/:month" component={LedgerVouchers} />
       ) : (
         <Route path="/ledger-vouchers/:accountId/:year/:month">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
 
       {canAccess("suppliers") || canAccess("customers") ? (
-        <Route path="/parties" component={PartiesHub} />
+        <Route path="/parties">{() => <PartiesHub access={erpAccess} />}</Route>
       ) : (
         <Route path="/parties">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("suppliers") ? (
@@ -226,7 +252,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/suppliers">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("customers") ? (
@@ -235,27 +261,27 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/customers">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccess("suppliers") && <Route path="/suppliers/:supplierId/proformas" component={SupplierProformas} />}
-      {canAccess("suppliers") && <Route path="/suppliers/:id/edit" component={EditSupplier} />}
-      {canAccess("suppliers") && <Route path="/supplier-profit-check" component={SupplierProfitCheck} />}
+      {G("/suppliers/:supplierId/proformas", "suppliers", SupplierProformas)}
+      {G("/suppliers/:id/edit", "suppliers", EditSupplier)}
+      {G("/supplier-profit-check", "suppliers", SupplierProfitCheck)}
 
       {canAccess("vouchers") ? (
         <Route path="/vouchers">{() => <Vouchers />}</Route>
       ) : (
         <Route path="/vouchers">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccess("vouchers") && <Route path="/vouchers/:id/edit" component={VoucherEdit} />}
-      {canAccess("vouchers") && <Route path="/purchase-orders/:id/edit" component={PurchaseOrderEdit} />}
+      {G("/vouchers/:id/edit", "vouchers", VoucherEdit)}
+      {G("/purchase-orders/:id/edit", "vouchers", PurchaseOrderEdit)}
       {canAccess("vouchers") ? (
         <Route path="/voucher-detail/:voucherId" component={VoucherDetail} />
       ) : (
         <Route path="/voucher-detail/:voucherId">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
 
@@ -263,19 +289,19 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         <Route path="/daybook">{() => <Daybook user={user} />}</Route>
       ) : (
         <Route path="/daybook">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      <Route path="/transaction-journal" component={TransactionJournal} />
+      {G("/transaction-journal", "daybook", TransactionJournal)}
       {G("/payroll", "payroll", Payroll)}
       {G("/create", "create", AccountingCreate)}
 
-      <Route path="/import-stock-items" component={ImportStockItems} />
+      {G("/import-stock-items", "stock_items", ImportStockItems)}
       {canAccess("stock_query") ? (
         <Route path="/stock-query/:id" component={StockItemDetail} />
       ) : (
         <Route path="/stock-query/:id">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("stock_query") ? (
@@ -284,7 +310,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/stock-query">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       {canAccess("stock_items") ? (
@@ -293,67 +319,59 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
         </Route>
       ) : (
         <Route path="/offload-item-search">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
-      {canAccess("stock_query") ? (
+      {canAccess("location_summary") && canAccess("stock_query") ? (
         <Route path="/location-summary">
-          <Redirect to="/stock-query?tab=summary" />
+          <Redirect replace to="/stock-query?tab=summary" />
         </Route>
       ) : (
         <Route path="/location-summary">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       <Route path="/stock-transfer-order" component={StockTransferOrder} />
-      <Route path="/sales-tools" component={SalesToolsHub} />
+      <Route path="/sales-tools">{() => <SalesToolsHub access={erpAccess} />}</Route>
       <Route path="/stock-transfers">
         <Redirect to="/sales-tools?tab=transfers" />
       </Route>
       {G("/optional-vouchers", "optional_vouchers", OptionalVouchers)}
 
-      {canAccess("stock_items") && <Route path="/stock-items/:id/history" component={StockItemHistory} />}
-      {canAccess("stock_items") && <Route path="/stock-items/:id/history/:year/:month" component={StockItemVouchers} />}
-      {canAccess("stock_items") && (
-        <Route path="/stock-items/:stockItemId/monthly-summary">{() => <LocationMonthlySummary />}</Route>
-      )}
-      {canAccess("location_inventory") && (
-        <Route path="/locations/:locationId/stock-items/:stockItemId/history">{() => <LocationMonthlySummary />}</Route>
-      )}
-      {canAccess("location_inventory") && (
-        <Route path="/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month">
-          {() => <LocationVouchers />}
-        </Route>
-      )}
+      {G("/stock-items/:id/history", "stock_items", StockItemHistory)}
+      {G("/stock-items/:id/history/:year/:month", "stock_items", StockItemVouchers)}
+      {G("/stock-items/:stockItemId/monthly-summary", "stock_items", LocationMonthlySummary)}
+      {G("/locations/:locationId/stock-items/:stockItemId/history", "location_inventory", LocationMonthlySummary)}
+      {G("/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month", "location_inventory", LocationVouchers)}
 
       {G("/sales-report", "sales_report", SalesReport)}
       {G("/stock-in-sales-report", "sales_report", StockInSalesReport)}
-      {canAccess("sales_report") && <Route path="/sales-report/detail" component={SalesReportDetail} />}
-      {canAccess("sales_report") && <Route path="/sales-report/comparison" component={SalesReportComparison} />}
+      {G("/sales-report/detail", "sales_report", SalesReportDetail)}
+      {G("/sales-report/comparison", "sales_report", SalesReportComparison)}
 
-      {user?.role === "Developer" && <Route path="/company-transfer" component={CompanyTransfer} />}
-      {user?.role === "Developer" && <Route path="/net-profit-report" component={NetProfitReport} />}
-      {user?.role === "Developer" && <Route path="/spreadsheet" component={SpreadsheetEditor} />}
-      {user?.role === "Developer" && <Route path="/live-sheets" component={LiveSheets} />}
+      {R("/company-transfer", isDeveloper, CompanyTransfer)}
+      {R("/net-profit-report", isDeveloper, NetProfitReport)}
+      {R("/spreadsheet", isDeveloper, SpreadsheetEditor)}
+      {R("/live-sheets", isDeveloper, LiveSheets)}
 
       {canAccess("stock_items") ? (
         <Route path="/combined-inventory">
-          <Redirect to="/inventory?tab=combined" />
+          <Redirect replace to="/stock?tab=items" />
         </Route>
       ) : (
         <Route path="/combined-inventory">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
 
-      <Route path="/bale-ledger" component={BaleLedger} />
+      {G("/bale-ledger", "stock_items", BaleLedger)}
       {canAccess("pos_daybook") ? (
         <Route path="/pos-daybook">
           <Redirect to="/sales-tools?tab=daybook" />
         </Route>
       ) : (
         <Route path="/pos-daybook">
-          <Redirect to="/tracking" />
+          <Redirect replace to="/tracking" />
         </Route>
       )}
       <Route path="/pos-price-list">
@@ -362,12 +380,12 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/price-list">
         <Redirect to="/sales-tools?tab=pricelist" />
       </Route>
-      <Route path="/opening-stock" component={OpeningStockSummary} />
-      <Route path="/opening-stock/:groupId" component={OpeningStockDetail} />
-      <Route path="/closing-stock-summary" component={ClosingStockSummary} />
-      <Route path="/closing-stock/:groupId" component={ClosingStockDetail} />
-      <Route path="/barcode-manager" component={BarcodeManager} />
-      <Route path="/chat" component={Chat} />
+      {G("/opening-stock", "stock_items", OpeningStockSummary)}
+      {G("/opening-stock/:groupId", "stock_items", OpeningStockDetail)}
+      {G("/closing-stock-summary", "stock_items", ClosingStockSummary)}
+      {G("/closing-stock/:groupId", "stock_items", ClosingStockDetail)}
+      {G("/barcode-manager", "stock_items", BarcodeManager)}
+      {R("/chat", isDeveloper, Chat)}
 
       <Route path="/factory-production">
         <Redirect to="/factory/raw-stock" />
@@ -387,56 +405,23 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       <Route path="/erp/rental/payments" component={ErpRentalPayments} />
       <Route path="/conflicts" component={ConflictCenter} />
 
-      {(user?.role === "Admin" || user?.role === "Developer") && <Route path="/settings" component={Settings} />}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/intercompany-links" component={IntercompanyLinks} />
-      )}
+      {R("/settings", isAdminOrDev, Settings)}
+      {R("/intercompany-links", isAdminOrDev, IntercompanyLinks)}
       <Route path="/intercompany-requests" component={IntercompanyRequests} />
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/orphaned-records" component={OrphanedRecords} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/deleted-items" component={DeletedItems} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/chatbot-settings" component={ChatbotSettings} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/notification-settings" component={NotificationSettings} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/account-groups" component={AccountGroups} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/test-data-import" component={TestDataImport} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/import-cycle-diagnostics" component={ImportCycleDiagnostics} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/inventory-repair" component={InventoryRepair} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/balance-repair" component={BalanceRepair} />
-      )}
-      {/* Matches the endpoint's own guard: requireRole("Admin", "Owner"), which
-          Developer passes through. A wider gate here would put a page in the
-          menu that answers 403 to everyone who found it. */}
-      {(user?.role === "Admin" || user?.role === "Owner" || user?.role === "Developer") && (
-        <Route path="/convergence-reconciliation" component={ConvergenceReconciliation} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/net-position-details" component={NetProfitDetails} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/company-data-reset" component={CompanyDataReset} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/account-migration" component={AccountMigration} />
-      )}
-      {(user?.role === "Admin" || user?.role === "Developer") && (
-        <Route path="/account-transfer" component={AccountTransfer} />
-      )}
+      {R("/orphaned-records", isAdminOrDev, OrphanedRecords)}
+      {R("/deleted-items", isAdminOrDev, DeletedItems)}
+      {R("/chatbot-settings", isAdminOrDev, ChatbotSettings)}
+      {R("/notification-settings", isAdminOrDev, NotificationSettings)}
+      {R("/account-groups", isAdminOrDev, AccountGroups)}
+      {R("/test-data-import", isAdminOrDev, TestDataImport)}
+      {R("/import-cycle-diagnostics", isAdminOrDev, ImportCycleDiagnostics)}
+      {R("/inventory-repair", isAdminOrDev, InventoryRepair)}
+      {R("/balance-repair", isAdminOrDev, BalanceRepair)}
+      {R("/convergence-reconciliation", isAdminOwnerOrDev, ConvergenceReconciliation)}
+      {R("/net-position-details", isAdminOrDev, NetProfitDetails)}
+      {R("/company-data-reset", isAdminOrDev, CompanyDataReset)}
+      {R("/account-migration", isAdminOrDev, AccountMigration)}
+      {R("/account-transfer", isAdminOrDev, AccountTransfer)}
       <Route path="/my-settings" component={MySettings} />
 
       <Route path="/sp" component={SpOverview} />

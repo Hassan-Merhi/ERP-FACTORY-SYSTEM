@@ -1,16 +1,16 @@
-import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import FactoryContainerLoadingScan from "./FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "./FactoryPendingLoadings";
 import { Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
 type LoadingsTab = "loadings" | "pending";
+const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending"];
 
 export default function FactoryLoadingsHub() {
-  const hash = typeof window !== "undefined" ? window.location.hash.replace("#", "") : "";
 
-  const { data: settings, isSuccess: settingsLoaded } = useQuery({
+  const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
     queryFn: async () => {
       const r = await fetch("/api/factory/settings");
@@ -19,7 +19,7 @@ export default function FactoryLoadingsHub() {
     staleTime: 60000,
   });
 
-  const { data: myAccess, isSuccess: accessLoaded } = useQuery<FactoryMyAccess>({
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
     queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60000,
   });
@@ -29,30 +29,19 @@ export default function FactoryLoadingsHub() {
   const showPending =
     settings?.loadingsTabPendingEnabled !== false && !hiddenTabs.includes("hide_tab_loadings_pending");
 
-  const [activeTab, setActiveTab] = useState<LoadingsTab>("loadings");
   const visibleTabs: LoadingsTab[] = [
     ...(showLoadings ? (["loadings"] as const) : []),
     ...(showPending ? (["pending"] as const) : []),
   ];
-  const effectiveActiveTab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0];
-
-  // Once both queries resolve, honour the URL hash (if allowed)
-  useEffect(() => {
-    if (!settingsLoaded || !accessLoaded) return;
-    if (hash === "pending" && showPending) {
-      setActiveTab("pending");
-    } else if (hash === "loadings" && showLoadings) {
-      setActiveTab("loadings");
-    } else if (showLoadings) {
-      setActiveTab("loadings");
-    } else if (showPending) {
-      setActiveTab("pending");
-    }
-  }, [settingsLoaded, accessLoaded, hash, showLoadings, showPending]);
+  const [effectiveActiveTab, setActiveTab] = useHubQueryState<LoadingsTab>({
+    key: "tab",
+    allowedValues: visibleTabs,
+    knownValues: ALL_LOADING_TABS,
+    defaultValue: visibleTabs[0] ?? "loadings",
+  });
 
   function handleTabChange(value: LoadingsTab) {
     setActiveTab(value);
-    window.history.replaceState(null, "", `#${value}`);
   }
 
   return (

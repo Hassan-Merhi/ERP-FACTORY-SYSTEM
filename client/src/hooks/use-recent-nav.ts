@@ -13,6 +13,14 @@ function storageKey(companyId: number | undefined) {
   return companyId ? `recent-nav-v1-company-${companyId}` : "recent-nav-v1-global";
 }
 
+export function canonicalNavigationPath(url: string): string {
+  const queryIndex = url.indexOf("?");
+  const hashIndex = url.indexOf("#");
+  const cutAt = [queryIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
+  const normalized = cutAt === undefined ? url : url.slice(0, cutAt);
+  return normalized || "/";
+}
+
 function loadFromStorage(companyId: number | undefined): RecentNavEntry[] {
   try {
     const raw = localStorage.getItem(storageKey(companyId));
@@ -35,32 +43,87 @@ interface NavItemLike {
   title: string;
 }
 
-export function useRecentNav(allNavItems: NavItemLike[], companyId?: number) {
+function sameEntries(a: RecentNavEntry[], b: RecentNavEntry[]): boolean {
+  return a.length === b.length && a.every((entry, index) => {
+    const other = b[index];
+    return other && entry.url === other.url && entry.title === other.title && entry.visitedAt === other.visitedAt;
+  });
+}
+
+function sanitizeRecentEntries<T extends NavItemLike>(
+  entries: RecentNavEntry[],
+  allowedNavByPath: Map<string, T>,
+): RecentNavEntry[] {
+  const seen = new Set<string>();
+  const next: RecentNavEntry[] = [];
+
+  for (const entry of entries) {
+    const item = allowedNavByPath.get(canonicalNavigationPath(entry.url));
+    if (!item) continue;
+
+    const canonicalUrl = item.url;
+    if (seen.has(canonicalUrl)) continue;
+    seen.add(canonicalUrl);
+    next.push({ url: canonicalUrl, title: item.title, visitedAt: entry.visitedAt });
+    if (next.length >= MAX_ITEMS) break;
+  }
+
+  return next;
+}
+
+export function useRecentNav<T extends NavItemLike>(
+  allNavItems: T[],
+  companyId?: number,
+  isAllowed?: (item: T) => boolean,
+) {
   const [location] = useLocation();
   const [recent, setRecent] = useState<RecentNavEntry[]>(() => loadFromStorage(companyId));
 
-  useEffect(() => {
-    setRecent(loadFromStorage(companyId));
-  }, [companyId]);
+  // Sidebar visibility callbacks are commonly recreated on render. Depend on
+  // their result, not their function identity, so permission filtering cannot
+  // cause a render/effect loop.
+  const allowedPathsKey = allNavItems
+    .filter((item) => !isAllowed || isAllowed(item))
+    .map((item) => canonicalNavigationPath(item.url))
+    .sort()
+    .join("\u0000");
 
-  const titleMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    allNavItems.forEach((item) => {
-      map[item.url] = item.title;
-    });
+  const allowedNavByPath = useMemo(() => {
+    const map = new Map<string, T>();
+    const allowedPathSet = new Set(allowedPathsKey ? allowedPathsKey.split("\u0000") : []);
+    for (const item of allNavItems) {
+      const path = canonicalNavigationPath(item.url);
+      if (allowedPathSet.has(path)) map.set(path, item);
+    }
     return map;
-  }, [allNavItems]);
+  }, [allNavItems, allowedPathsKey]);
 
   useEffect(() => {
-    const title = titleMap[location];
-    if (!title) return;
-    setRecent((prev) => {
-      const filtered = prev.filter((r) => r.url !== location);
-      const next = [{ url: location, title, visitedAt: Date.now() }, ...filtered].slice(0, MAX_ITEMS);
+    const loaded = sanitizeRecentEntries(loadFromStorage(companyId), allowedNavByPath);
+    setRecent(loaded);
+    saveToStorage(loaded, companyId);
+  }, [companyId, allowedNavByPath]);
+
+  useEffect(() => {
+    setRecent((previous) => {
+      const cleaned = sanitizeRecentEntries(previous, allowedNavByPath);
+      if (sameEntries(previous, cleaned)) return previous;
+      saveToStorage(cleaned, companyId);
+      return cleaned;
+    });
+  }, [allowedNavByPath, companyId]);
+
+  useEffect(() => {
+    const item = allowedNavByPath.get(canonicalNavigationPath(location));
+    if (!item) return;
+
+    setRecent((previous) => {
+      const cleaned = sanitizeRecentEntries(previous, allowedNavByPath).filter((entry) => entry.url !== item.url);
+      const next = [{ url: item.url, title: item.title, visitedAt: Date.now() }, ...cleaned].slice(0, MAX_ITEMS);
       saveToStorage(next, companyId);
       return next;
     });
-  }, [location, titleMap, companyId]);
+  }, [location, allowedNavByPath, companyId]);
 
   return recent;
 }

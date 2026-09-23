@@ -1,4 +1,3 @@
-import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import FactoryProformas from "@/pages/factory/FactoryProformas";
 import FactoryInvoices from "@/pages/factory/FactoryInvoices";
@@ -6,13 +5,13 @@ import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoading
 import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
 import { FileText } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
 type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending";
 type TabDef = { key: InvoicingTab; label: string };
+const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending"];
 
 export default function FactoryInvoicing() {
-  const [, navigate] = useLocation();
-  const search = useSearch();
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
@@ -46,13 +45,13 @@ export default function FactoryInvoicing() {
     return showPending;
   });
 
-  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const rawTab = params.get("tab");
-  const requested = tabs.find((tab) => tab.key === rawTab)?.key;
-  const activeTab: InvoicingTab = requested ?? tabs[0]?.key ?? "invoices";
-  const goTo = (tab: InvoicingTab) => {
-    if (tabs.some((visibleTab) => visibleTab.key === tab)) navigate(`/factory/invoicing?tab=${tab}`);
-  };
+  const visibleTabKeys = tabs.map((tab) => tab.key);
+  const [activeTab, setActiveTab] = useHubQueryState<InvoicingTab>({
+    key: "tab",
+    allowedValues: visibleTabKeys,
+    knownValues: ALL_INVOICING_TABS,
+    defaultValue: visibleTabKeys[0] ?? "invoices",
+  });
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -76,7 +75,7 @@ export default function FactoryInvoicing() {
                 role="tab"
                 aria-selected={isActive}
                 data-testid={`tab-${tab.key}`}
-                onClick={() => goTo(tab.key)}
+                onClick={() => setActiveTab(tab.key)}
                 className={[
                   "px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                   isActive

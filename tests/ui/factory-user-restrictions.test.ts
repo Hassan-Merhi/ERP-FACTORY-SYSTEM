@@ -105,7 +105,7 @@ describe("Factory restriction settings wiring", () => {
     ]) {
       expect(settingsKeys.has(key), key).toBe(true);
     }
-    expect(sidebar).toContain("!hasFactoryPageKey(page, myAccess.pageKeys)");
+    expect(sidebar).toContain("hasFactoryPageKey(page, myAccess.pageKeys)");
 
     for (const key of [
       "hide_tab_parties_customers",

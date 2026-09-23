@@ -7,7 +7,7 @@
  * under ./accountslegacy. The account table, statement view and the existing
  * AccountDialogs bundle are unchanged.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,12 @@ export default function Accounts() {
   const activeAccountTab = visibleAccountTabs.includes(requestedAccountTab)
     ? requestedAccountTab
     : visibleAccountTabs[0];
+
+  useEffect(() => {
+    if (activeAccountTab && requestedAccountTab !== activeAccountTab) {
+      setRequestedAccountTab(activeAccountTab);
+    }
+  }, [activeAccountTab, requestedAccountTab]);
 
   const freshStartAccount = model.allAccounts.find(
     (account) => account.subType === "gc_partner_capital" && account.active !== false

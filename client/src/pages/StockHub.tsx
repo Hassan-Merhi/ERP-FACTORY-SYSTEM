@@ -4,27 +4,37 @@ import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import StockItems from "@/pages/StockItems";
 import StockQuery from "@/pages/StockQuery";
 import OffloadItemSearch from "@/pages/OffloadItemSearch";
+import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
 const TABS = [
-  { value: "items", label: "Items", icon: Package },
-  { value: "query", label: "Query", icon: Search },
-  { value: "offload", label: "Offload Search", icon: Truck },
+  { value: "items", label: "Items", icon: Package, featureKey: "stock_items" as const },
+  { value: "query", label: "Query", icon: Search, featureKey: "stock_query" as const },
+  { value: "offload", label: "Offload Search", icon: Truck, featureKey: "stock_items" as const },
 ] as const;
 
 const TAB_VALUES = TABS.map((tab) => tab.value);
 
-export default function StockHub() {
+export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
+  const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
+  const visibleValues = visibleTabs.map((tab) => tab.value);
+
   const [activeTab, setTab] = useHubQueryState({
     key: "tab",
-    allowedValues: TAB_VALUES,
-    defaultValue: "items",
+    allowedValues: visibleValues,
+    knownValues: TAB_VALUES,
+    defaultValue: visibleValues[0] ?? "items",
   });
+
+  if (visibleTabs.length === 0) {
+    return <RestrictedTabsState />;
+  }
 
   return (
     <div className="min-w-0">
       <div className="erp-mobile-scroll-tabs mb-5 pb-1">
         <div className="flex gap-1 p-1 rounded-xl border bg-card w-max min-w-full sm:min-w-0 sm:w-fit h-auto">
-          {TABS.map(({ value, label, icon: Icon }) => (
+          {visibleTabs.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"
@@ -44,9 +54,9 @@ export default function StockHub() {
         </div>
       </div>
 
-      {activeTab === "items" && <StockItems />}
-      {activeTab === "query" && <StockQuery />}
-      {activeTab === "offload" && <OffloadItemSearch />}
+      {activeTab === "items" && visibleValues.includes("items") && <StockItems />}
+      {activeTab === "query" && visibleValues.includes("query") && <StockQuery />}
+      {activeTab === "offload" && visibleValues.includes("offload") && <OffloadItemSearch />}
     </div>
   );
 }

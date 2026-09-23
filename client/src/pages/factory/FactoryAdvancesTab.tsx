@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Banknote, RotateCcw, Scissors } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,6 +34,10 @@ export default function FactoryAdvancesTab() {
     showDeductions ? "deductions" : null,
   ].filter((value): value is "advances" | "repayments" | "deductions" => value !== null);
   const activeTab = visibleTabs.includes(subTab) ? subTab : visibleTabs[0];
+
+  useEffect(() => {
+    if (activeTab && subTab !== activeTab) setSubTab(activeTab);
+  }, [activeTab, subTab]);
 
   if (!activeTab) {
     return <div className="p-4 text-sm text-muted-foreground">No Advances tabs are available for this user.</div>;

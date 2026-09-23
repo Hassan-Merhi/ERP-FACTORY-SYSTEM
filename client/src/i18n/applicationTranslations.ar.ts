@@ -36,6 +36,7 @@ export const applicationArabicTranslations = {
   "user.menu": "قائمة الحساب",
   "common.logout": "تسجيل الخروج",
   "common.refresh": "تحديث",
+  "access.noTabsAvailable": "لا توجد علامات تبويب متاحة لهذا المستخدم.",
   "common.updateAvailable": "يتوفر تحديث",
   "common.updateDescription": "نسخة جديدة من التطبيق جاهزة.",
   "containerVerification.itemsRefreshed": "تم تحديث عناصر الحاوية",

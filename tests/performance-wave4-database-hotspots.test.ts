@@ -73,6 +73,9 @@ describe("Performance Wave 4 database hotspot guards", () => {
 
   it("keeps compact bale-scan bilingual snapshots inline and off the synchronous resolver hot path", () => {
     expect(snapshotRoutes).toContain("responseRecord?.compactBaleScan === true");
+    expect(snapshotRoutes).toContain("const requestPath = req.path");
+    expect(snapshotRoutes).toContain("test(requestPath)");
+    expect(snapshotRoutes).toContain("populateAfterSuccessfulWrite(req, payload, requestPath)");
     expect(snapshotRoutes).toContain("return originalJson(payload)");
     expect(baleScanRoute).toContain("canonicalProductNameAr");
     expect(baleScanRoute).toContain("baleNameAr: bale.canonicalProductNameAr");
