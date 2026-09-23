@@ -327,6 +327,7 @@
     "GET /api/factory/bale-lookup [requireAuth > <anonymous>]",
     "POST /api/factory/customer-orders/:id/bales [requireAuth > <anonymous>]",
     "POST /api/factory/customer-orders/:id/bales/bulk-import [requireAuth > <anonymous>]",
+    "POST /api/factory/customer-orders/:id/bales/empty [requireAuth > <anonymous>]",
     "DELETE /api/factory/customer-orders/:id/bales/:baleId [requireAuth > <anonymous>]",
     "POST /api/factory/bales/:id/return-to-stock [requireAuth > <anonymous>]",
     "GET /api/factory/bales/:id/order-info [requireAuth > <anonymous>]",
