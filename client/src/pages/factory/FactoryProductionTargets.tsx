@@ -72,19 +72,26 @@ function SummaryGroupTile({
   metrics: Array<{ label: string; value: string | number }>;
 }) {
   return (
-    <Card className="shadow-none">
-      <CardContent className="min-h-[92px] px-4 py-3">
+    <Card className="overflow-hidden shadow-none">
+      <CardContent className="min-h-[104px] px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
+          <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-3">
+        <div className="mt-2 flex w-full items-stretch divide-x divide-border/70">
           {metrics.map((metric) => (
-            <div key={metric.label} className="min-w-0">
-              <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
+            <div key={metric.label} className="min-w-0 flex-1 px-2 text-center first:pl-0 last:pr-0">
+              <p
+                className="truncate text-[9px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-[10px]"
+                title={metric.label}
+              >
                 {metric.label}
               </p>
-              <p className="text-xl font-semibold tabular-nums">{metric.value}</p>
+              <p className="mt-1 truncate text-lg font-semibold tabular-nums sm:text-xl" title={String(metric.value)}>
+                {metric.value}
+              </p>
             </div>
           ))}
         </div>
