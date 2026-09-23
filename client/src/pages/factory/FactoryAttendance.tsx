@@ -36,6 +36,7 @@ import {
   ChevronDown,
   Loader2,
   MessageCircle,
+  Search,
 } from "lucide-react";
 
 import type {
@@ -83,6 +84,8 @@ export default function FactoryAttendance() {
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
+  const [workerSearch, setWorkerSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "other">("all");
   const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
@@ -297,6 +300,22 @@ export default function FactoryAttendance() {
     .filter((worker) => attendanceMap[worker.id] === "Absent")
     .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
   const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
+  const workerSearchNeedle = workerSearch.trim().toLowerCase();
+  const visibleWorkers = workers.filter((worker) => {
+    const status = attendanceMap[worker.id] ?? "Present";
+    const matchesSearch =
+      !workerSearchNeedle ||
+      worker.fullName.toLowerCase().includes(workerSearchNeedle) ||
+      (worker.employeeCode ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.position ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.department ?? "").toLowerCase().includes(workerSearchNeedle);
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "present" && status === "Present") ||
+      (statusFilter === "absent" && status === "Absent") ||
+      (statusFilter === "other" && status !== "Present" && status !== "Absent");
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="factory-tracking-modern factory-tracking-attendance">
@@ -535,23 +554,59 @@ export default function FactoryAttendance() {
 
           {/* Attendance Table */}
           <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
-              <div className="min-w-0">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CalendarDays className="h-4 w-4 text-primary" />
-                  Workers
-                </CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
-              </div>
-              {workers.length > 0 && (
-                <div className="flex items-center gap-3">
-                  <div className="hidden text-right sm:block">
-                    <p className="text-sm font-semibold tabular-nums">{attendancePct}%</p>
-                    <p className="text-[11px] text-muted-foreground">present today</p>
+            <CardHeader className="gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Workers
+                  </CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
+                </div>
+                {workers.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <div className="hidden text-right sm:block">
+                      <p className="text-sm font-semibold tabular-nums">{attendancePct}%</p>
+                      <p className="text-[11px] text-muted-foreground">present today</p>
+                    </div>
+                    <Badge variant="outline" className="rounded-full bg-background/60 px-3 py-1">
+                      {workers.length} worker{workers.length !== 1 ? "s" : ""}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="rounded-full bg-background/60 px-3 py-1">
-                    {workers.length} worker{workers.length !== 1 ? "s" : ""}
-                  </Badge>
+                )}
+              </div>
+
+              {workers.length > 0 && (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative w-full sm:max-w-sm">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={workerSearch}
+                      onChange={(event) => setWorkerSearch(event.target.value)}
+                      placeholder="Search worker, code, position…"
+                      className="h-9 rounded-xl bg-background/70 pl-9"
+                      data-testid="input-attendance-worker-search"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                    >
+                      <SelectTrigger className="h-9 w-[145px] rounded-xl bg-background/70" data-testid="select-attendance-status-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="present">Present</SelectItem>
+                        <SelectItem value="absent">Absent</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[11px] text-muted-foreground">
+                      Showing {visibleWorkers.length} of {workers.length}
+                    </span>
+                  </div>
                 </div>
               )}
             </CardHeader>
@@ -563,8 +618,24 @@ export default function FactoryAttendance() {
                   ))}
                 </div>
               ) : workers.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12 text-sm">
+                <div className="py-12 text-center text-sm text-muted-foreground">
                   No active workers found for this company.
+                </div>
+              ) : visibleWorkers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                  <Search className="mb-2 h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium">No workers match these filters</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 rounded-xl"
+                    onClick={() => {
+                      setWorkerSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
                 </div>
               ) : (
                 <>
@@ -581,7 +652,8 @@ export default function FactoryAttendance() {
                         </tr>
                       </thead>
                       <tbody>
-                        {workers.map((worker, idx) => {
+                        {visibleWorkers.map((worker) => {
+                          const idx = workers.findIndex((item) => item.id === worker.id);
                           const status = attendanceMap[worker.id] ?? "Present";
                           return (
                             <tr
@@ -642,7 +714,8 @@ export default function FactoryAttendance() {
 
                   {/* Mobile cards */}
                   <div className="space-y-2.5 p-3 sm:hidden">
-                    {workers.map((worker, idx) => {
+                    {visibleWorkers.map((worker) => {
+                      const idx = workers.findIndex((item) => item.id === worker.id);
                       const status = attendanceMap[worker.id] ?? "Present";
                       return (
                         <div
