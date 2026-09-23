@@ -1,5 +1,4 @@
 import { Package, Search, Truck } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import StockItems from "@/pages/StockItems";
@@ -15,8 +14,7 @@ const TABS = [
 
 const TAB_VALUES = TABS.map((tab) => tab.value);
 
-export default function StockHub() {
-  const { data: access } = useQuery<ErpFeatureAccess>({ queryKey: ["/api/my-erp-pages"], staleTime: 30000 });
+export default function StockHub({ access }: { access?: ErpFeatureAccess }) {
   const visibleTabs = TABS.filter((tab) => canAccessErpFeature(access, tab.featureKey));
   const visibleValues = visibleTabs.map((tab) => tab.value);
 
