@@ -67,9 +67,8 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         fSuppliers,
         fContainers,
         fPayments,
-        companyVouchers,
-        allEntries,
-        ledgerAccountEntries,
+        movementRows,
+        ledgerMovementRows,
       ] = await Promise.all([
         storage.getAllLedgerAccounts(companyId, true), // include hidden so cash/loan/bank accounts appear in pickers
         storage.getAllBankAccounts(companyId),
@@ -90,33 +89,75 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         isFactoryCompany
           ? db.select().from(factorySupplierPayments).where(eq(factorySupplierPayments.companyId, companyId))
           : Promise.resolve([]),
+        // The sidebar only needs account totals. Aggregate company-scoped
+        // non-ledger movements in PostgreSQL instead of materializing the full
+        // voucher-entry history in Node on every cold-cache read.
         db
           .select({
-            id: vouchers.id,
-            voucherNumber: vouchers.voucherNumber,
-            currency: vouchers.currency,
-            exchangeRate: vouchers.exchangeRate,
+            bankAccountId: voucherEntries.bankAccountId,
+            fixedAssetId: voucherEntries.fixedAssetId,
+            supplierId: voucherEntries.supplierId,
+            employeeId: voucherEntries.employeeId,
+            factorySupplierId: voucherEntries.factorySupplierId,
+            debits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric)), 0)`,
+            credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
+            supplierPureCredits: sql<string>`COALESCE(SUM(
+              CASE
+                WHEN ${voucherEntries.supplierId} IS NOT NULL
+                  AND CAST(${voucherEntries.creditAmount} AS numeric) > 0
+                  AND CAST(${voucherEntries.debitAmount} AS numeric) = 0
+                THEN CAST(${voucherEntries.creditAmount} AS numeric)
+                ELSE 0
+              END
+            ), 0)`,
+            supplierPureDebits: sql<string>`COALESCE(SUM(
+              CASE
+                WHEN ${voucherEntries.supplierId} IS NOT NULL
+                  AND CAST(${voucherEntries.debitAmount} AS numeric) > 0
+                  AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
+                THEN CAST(${voucherEntries.debitAmount} AS numeric)
+                ELSE 0
+              END
+            ), 0)`,
+            factorySupplierVoucherPaidUsd: sql<string>`COALESCE(SUM(
+              CASE
+                WHEN ${voucherEntries.factorySupplierId} IS NOT NULL
+                  AND COALESCE(${vouchers.voucherNumber}, '') NOT LIKE 'FACTORY-PAY-%'
+                  AND CAST(${voucherEntries.debitAmount} AS numeric) > 0
+                  AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
+                THEN CASE
+                  WHEN COALESCE(${vouchers.currency}, 'USD') = 'USD'
+                    THEN CAST(${voucherEntries.debitAmount} AS numeric)
+                  ELSE CAST(${voucherEntries.debitAmount} AS numeric) /
+                    CASE
+                      WHEN COALESCE(CAST(${vouchers.exchangeRate} AS numeric), 0) = 0 THEN 1
+                      ELSE CAST(${vouchers.exchangeRate} AS numeric)
+                    END
+                END
+                ELSE 0
+              END
+            ), 0)`,
           })
-          .from(vouchers)
-          .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
-          .execute(),
-        // Company-scoped entries remain authoritative for supplier, bank,
-        // employee, fixed-asset and factory-supplier balances.
-        db
-          .select()
           .from(voucherEntries)
+          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .where(
-            sql`${voucherEntries.voucherId} IN (SELECT id FROM vouchers WHERE company_id = ${companyId} AND optional = false AND deleted_at IS NULL)`
+            and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt))
           )
-          .execute(),
-        // Ledger balances intentionally follow the ledger account's company.
-        // This mirrors statsNetPositionRoutes and keeps journal "New Bal" in
-        // sync with the balance sheet after account/voucher migrations.
+          .groupBy(
+            voucherEntries.bankAccountId,
+            voucherEntries.fixedAssetId,
+            voucherEntries.supplierId,
+            voucherEntries.employeeId,
+            voucherEntries.factorySupplierId
+          ),
+        // Ledger balances intentionally follow ledger-account ownership rather
+        // than voucher ownership. Preserve that migration rule while reducing
+        // those movements in SQL as well.
         db
           .select({
             ledgerAccountId: voucherEntries.ledgerAccountId,
-            debitAmount: voucherEntries.debitAmount,
-            creditAmount: voucherEntries.creditAmount,
+            debits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric)), 0)`,
+            credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
@@ -128,7 +169,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
               isNull(vouchers.deletedAt)
             )
           )
-          .execute(),
+          .groupBy(voucherEntries.ledgerAccountId),
       ]);
       // Strip internal system-only accounts (sp_stock, sp_opnbal are isHidden=true for a reason)
       const ledgers = ledgersRaw.filter((a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? ""));
@@ -139,96 +180,63 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
       // also apply those suppliers' opening balances.
       const suppliers = allSuppliers.filter((supplier) => isSupplierVisibleToCompany(supplier, companyId));
 
-      const _companyVoucherIds = companyVouchers.map((v) => v.id);
-      // FACTORY-PAY-* voucher IDs — excluded when computing factory supplier voucher-paid amounts
-      // to prevent double-counting with fPayments (factorySupplierPayments).
-      const factoryPayVoucherIds = new Set(
-        companyVouchers.filter((v) => (v.voucherNumber || "").startsWith("FACTORY-PAY-")).map((v) => v.id)
-      );
-      // Map from voucherId -> {currency, exchangeRate} for USD conversion of factory supplier entries
-      const voucherCurrencyMap = new Map<number, { currency: string; exchangeRate: string }>(
-        companyVouchers.map((v) => [v.id, { currency: v.currency || "USD", exchangeRate: v.exchangeRate || "1" }])
-      );
-
-      // Group entries by account type and calculate balances
+      // Fold the compact aggregate rows into the same balance maps used by
+      // the response-building code below.
       const ledgerBalances = new Map<number, { debits: number; credits: number }>();
       const bankBalances = new Map<number, { debits: number; credits: number }>();
       const assetBalances = new Map<number, { debits: number; credits: number }>();
       const supplierBalances = new Map<number, number>();
       const employeeBalances = new Map<number, { debits: number; credits: number }>();
       const factorySupplierBalances = new Map<number, number>();
-      const customerBalances = new Map<number, { debits: number; credits: number }>();
 
-      for (const entry of ledgerAccountEntries) {
-        if (!entry.ledgerAccountId) continue;
-        const debit = parseFloat(entry.debitAmount || "0");
-        const credit = parseFloat(entry.creditAmount || "0");
-        const existing = ledgerBalances.get(entry.ledgerAccountId) || { debits: 0, credits: 0 };
-        ledgerBalances.set(entry.ledgerAccountId, {
-          debits: existing.debits + debit,
-          credits: existing.credits + credit,
+      const addMovement = (
+        target: Map<number, { debits: number; credits: number }>,
+        id: number | null | undefined,
+        debits: number,
+        credits: number
+      ) => {
+        if (!id) return;
+        const existing = target.get(id) || { debits: 0, credits: 0 };
+        target.set(id, {
+          debits: existing.debits + debits,
+          credits: existing.credits + credits,
         });
+      };
+
+      for (const row of ledgerMovementRows) {
+        if (!row.ledgerAccountId) continue;
+        addMovement(
+          ledgerBalances,
+          row.ledgerAccountId,
+          parseFloat(row.debits || "0"),
+          parseFloat(row.credits || "0")
+        );
       }
 
-      for (const entry of allEntries) {
-        const debit = parseFloat(entry.debitAmount || "0");
-        const credit = parseFloat(entry.creditAmount || "0");
+      for (const row of movementRows) {
+        const debits = parseFloat(row.debits || "0");
+        const credits = parseFloat(row.credits || "0");
 
-        if (entry.bankAccountId) {
-          const existing = bankBalances.get(entry.bankAccountId) || { debits: 0, credits: 0 };
-          bankBalances.set(entry.bankAccountId, {
-            debits: existing.debits + debit,
-            credits: existing.credits + credit,
-          });
+        addMovement(bankBalances, row.bankAccountId, debits, credits);
+        addMovement(assetBalances, row.fixedAssetId, debits, credits);
+        addMovement(employeeBalances, row.employeeId, debits, credits);
+
+        if (row.supplierId) {
+          const existing = supplierBalances.get(row.supplierId) || 0;
+          supplierBalances.set(
+            row.supplierId,
+            existing +
+              parseFloat(row.supplierPureCredits || "0") -
+              parseFloat(row.supplierPureDebits || "0")
+          );
         }
 
-        if (entry.fixedAssetId) {
-          const existing = assetBalances.get(entry.fixedAssetId) || { debits: 0, credits: 0 };
-          assetBalances.set(entry.fixedAssetId, {
-            debits: existing.debits + debit,
-            credits: existing.credits + credit,
-          });
-        }
-
-        if (entry.supplierId) {
-          const existing = supplierBalances.get(entry.supplierId) || 0;
-          // Only count pure credit or pure debit entries to prevent double-counting
-          if (credit > 0 && debit === 0) {
-            supplierBalances.set(entry.supplierId, existing + credit); // Increase payable
-          } else if (debit > 0 && credit === 0) {
-            supplierBalances.set(entry.supplierId, existing - debit); // Decrease payable
-          }
-        }
-
-        if (entry.factorySupplierId) {
-          const fsId = entry.factorySupplierId as number;
-          // Only track non-FACTORY-PAY-* debits as ERP voucher payments.
-          // FACTORY-PAY-* vouchers are already counted via fPayments.
-          if (!factoryPayVoucherIds.has(entry.voucherId) && debit > 0 && credit === 0) {
-            // Convert to USD using the voucher's exchange rate
-            const vInfo = voucherCurrencyMap.get(entry.voucherId) || { currency: "USD", exchangeRate: "1" };
-            const fx = parseFloat(vInfo.exchangeRate) || 1;
-            const debitUsd = vInfo.currency === "USD" ? debit : debit / fx;
-            const existing = factorySupplierBalances.get(fsId) || 0;
-            factorySupplierBalances.set(fsId, existing + debitUsd);
-          }
-        }
-
-        if (entry.employeeId) {
-          const existing = employeeBalances.get(entry.employeeId) || { debits: 0, credits: 0 };
-          employeeBalances.set(entry.employeeId, {
-            debits: existing.debits + debit,
-            credits: existing.credits + credit,
-          });
-        }
-
-        if (entry.customerId) {
-          const cId = entry.customerId as number;
-          const existing = customerBalances.get(cId) || { debits: 0, credits: 0 };
-          customerBalances.set(cId, {
-            debits: existing.debits + debit,
-            credits: existing.credits + credit,
-          });
+        if (row.factorySupplierId) {
+          const existing = factorySupplierBalances.get(row.factorySupplierId) || 0;
+          factorySupplierBalances.set(
+            row.factorySupplierId,
+            existing + parseFloat(row.factorySupplierVoucherPaidUsd || "0")
+          );
         }
       }
 
