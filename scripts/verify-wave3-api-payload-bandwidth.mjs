@@ -104,7 +104,6 @@ requireText(gitServer, "createGitContinuousSnapshot", "GIT server must snapshot 
 requireText(gitServer, "readGitContinuousSnapshot", "GIT later chunks must read the snapshot instead of rerunning enrichment.");
 
 const migratedPickerFiles = [
-  "client/src/pages/StockEntryHistory.tsx",
   "client/src/pages/factory/ProductionComparison.tsx",
   "client/src/pages/factory/ProductionPlannerDialog.tsx",
   "client/src/pages/factory/FactoryWorkerBonusesTab.tsx",
@@ -114,13 +113,34 @@ for (const file of migratedPickerFiles) {
 }
 
 for (const file of [
-  "client/src/pages/StockEntryHistory.tsx",
   "client/src/pages/factory/ProductionComparison.tsx",
   "client/src/pages/factory/ProformaAddLine.tsx",
   "client/src/pages/factory/FactoryMixOptimizer.tsx",
 ]) {
   requireText(read(file), "/api/factory/bale-products?profile=picker", `${file} must use the bale-product picker contract.`);
 }
+
+const stockEntryHistory = read("client/src/pages/StockEntryHistory.tsx");
+requireText(
+  stockEntryHistory,
+  "/api/factory/bales/stock-entry-history",
+  "Stock Entry History must use the bounded stock-entry history endpoint."
+);
+requireText(
+  stockEntryHistory,
+  'data-testid="input-stock-entry-date"',
+  "Stock Entry History must preserve its single-date compact filter."
+);
+requireText(
+  stockEntryHistory,
+  "/api/factory/workers?profile=picker",
+  "Stock Entry History condensed worker rows must use the compact worker picker contract."
+);
+forbidText(
+  stockEntryHistory,
+  "/api/factory/bale-products?profile=picker",
+  "Simplified Stock Entry History must not restore the removed bale-product picker payload."
+);
 
 for (const file of [
   "client/src/components/OffloadDialog.tsx",

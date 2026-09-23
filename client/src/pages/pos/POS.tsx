@@ -155,6 +155,11 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     isSpCompany,
   });
 
+  // POS view-only is a real write boundary, not just a server-side fallback.
+  // Keep every client mutation path quiet so expected denials do not become
+  // repeated production ERROR logs.
+  const posWritesDisabled = posUser?.posViewOnly === true || authUser?.posViewOnly === true;
+
   // Supplier Partner sales support cash or bank settlement, same as normal
   // ERP POS — but never credit: /api/sp/sales has no credit-sale support.
   // Enforce only the credit restriction in state (not just hidden UI) so a
@@ -363,6 +368,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     selectedCustomerId,
     currentDraftId,
     notes,
+    writesDisabled: posWritesDisabled,
     lastSavedFingerprintRef,
     setSavedSale,
     setSaleJustCompleted,
@@ -386,6 +392,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     setCurrentDraftId,
     setLastAutosaved,
     refetchDrafts,
+    disabled: posWritesDisabled,
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -619,12 +626,12 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         navigate={navigate}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
         handleSaveSale={handleSaveSale}
         lastAutosaved={lastAutosaved}
         drafts={drafts}
         onOpenDraftDialog={() => setShowDraftDialog(true)}
-        onUpdateDraft={() => saveDraftMutation.mutate(undefined)}
+        onUpdateDraft={posWritesDisabled ? undefined : () => saveDraftMutation.mutate(undefined)}
         onSummaryExport={handleSummaryExport}
         onDetailedExport={handleDetailedExport}
         onExportTransaction={
@@ -754,7 +761,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         setNotes={setNotes}
         saveMutation={saveMutation}
         hasValidItems={hasValidItems}
-        disableSave={goldenCoastPosSaveDisabled}
+        disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}
         handleSaveSale={handleSaveSale}
         formatDisplayAmount={fmtAmount}
         isSpCompany={isSpCompany}
@@ -769,6 +776,7 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         drafts={drafts}
         handleLoadDraft={handleLoadDraft}
         deleteDraftMutation={deleteDraftMutation}
+        allowDraftMutations={!posWritesDisabled}
         showPrintDialog={showPrintDialog}
         setShowPrintDialog={setShowPrintDialog}
         editVoucherId={editVoucherId}

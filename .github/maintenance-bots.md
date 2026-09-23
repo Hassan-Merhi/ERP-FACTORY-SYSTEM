@@ -10,7 +10,7 @@ Set the repository secret `PRODUCTION_HEALTH_URL` to a read-only production heal
 
 ### Backup restore verification
 
-Set the repository secret `BACKUP_DATABASE_URL` to a read-only PostgreSQL connection string suitable for `pg_dump`. The workflow creates a logical backup and restores it only into the isolated PostgreSQL service running inside GitHub Actions. Until configured, the workflow stays inert and exits successfully.
+Set the repository secret `BACKUP_DATABASE_URL` to the external connection string for a **read-only backup role with `BYPASSRLS`**. The workflow fails loudly when the secret is missing or the role cannot bypass row-level security, creates a logical backup, and restores it only into the isolated PostgreSQL service running inside GitHub Actions.
 
 ## Safety behavior
 

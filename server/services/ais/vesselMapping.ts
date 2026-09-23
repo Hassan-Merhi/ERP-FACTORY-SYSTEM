@@ -45,10 +45,12 @@ export async function saveVesselMapping(containerId: number, input: VesselMappin
   const [existing] = await db
     .select()
     .from(factoryContainerVesselTracking)
-    .where(and(
-      eq(factoryContainerVesselTracking.containerId, containerId),
-      eq(factoryContainerVesselTracking.companyId, container.companyId),
-    ))
+    .where(
+      and(
+        eq(factoryContainerVesselTracking.containerId, containerId),
+        eq(factoryContainerVesselTracking.companyId, container.companyId)
+      )
+    )
     .limit(1);
 
   if (existing?.mappingConfidence === "manual" && input.confidence !== "manual") return existing;
@@ -68,7 +70,8 @@ export async function saveVesselMapping(containerId: number, input: VesselMappin
   };
 
   if (existing) {
-    const [row] = await db.update(factoryContainerVesselTracking)
+    const [row] = await db
+      .update(factoryContainerVesselTracking)
       .set(values)
       .where(eq(factoryContainerVesselTracking.id, existing.id))
       .returning();
@@ -81,7 +84,8 @@ export async function saveVesselMapping(containerId: number, input: VesselMappin
 
 /** Mark a mapping stale without deleting its history/state. */
 export async function markVesselMappingStale(containerId: number): Promise<void> {
-  await db.update(factoryContainerVesselTracking)
+  await db
+    .update(factoryContainerVesselTracking)
     .set({ mappingConfidence: "stale", updatedAt: new Date() })
     .where(eq(factoryContainerVesselTracking.containerId, containerId));
 }
@@ -90,22 +94,29 @@ export async function markVesselMappingStale(containerId: number): Promise<void>
  * Conservative extraction from carrier payloads. Only explicit vessel fields are
  * accepted; fuzzy vessel-name matching is intentionally forbidden.
  */
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 export function extractVesselIdentity(raw: unknown): VesselIdentity | null {
-  if (!raw || typeof raw !== "object") return null;
-  const root = (Array.isArray(raw) ? raw[0] : raw) as Record<string, any> | undefined;
-  if (!root || typeof root !== "object") return null;
-  const container = Array.isArray(root.containers) ? root.containers[0] : root.container;
+  const root = recordValue(Array.isArray(raw) ? raw[0] : raw);
+  if (!root) return null;
+
+  const transport = recordValue(root.transport);
+  const container = recordValue(Array.isArray(root.containers) ? root.containers[0] : root.container);
   const candidates = [
-    root.vessel,
-    root.currentVessel,
-    root.transport?.vessel,
-    container?.vessel,
-    container?.currentVessel,
-  ].filter((v) => v && typeof v === "object");
-  const vessel = candidates[0] as Record<string, unknown> | undefined;
+    recordValue(root.vessel),
+    recordValue(root.currentVessel),
+    recordValue(transport?.vessel),
+    recordValue(container?.vessel),
+    recordValue(container?.currentVessel),
+  ].filter((value): value is Record<string, unknown> => value !== null);
+  const vessel = candidates[0];
   if (!vessel) return null;
 
-  const text = (v: unknown) => typeof v === "string" || typeof v === "number" ? String(v) : null;
+  const text = (value: unknown) => (typeof value === "string" || typeof value === "number" ? String(value) : null);
   const result: VesselIdentity = {
     name: text(vessel.name ?? vessel.vesselName ?? vessel.shipName),
     imo: text(vessel.imo ?? vessel.imoNumber ?? vessel.IMO),

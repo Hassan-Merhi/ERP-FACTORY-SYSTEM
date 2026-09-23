@@ -206,6 +206,27 @@ if (journalSource) {
   }
 }
 
+requireMarkers("scripts/run-performance-wave5-production-certification.mjs", [
+  "/api/health/ready",
+  "/api/health/db",
+  "/api/health/performance.json",
+  "ERP_PERF_CERT_MIN_ROUTE_SAMPLES",
+  "artifacts/performance-wave5",
+]);
+
+requireMarkers("scripts/verify-performance-wave5-certification.mjs", [
+  "Wave 5 performance certification contract verified",
+  "certify:performance-wave5",
+]);
+
+requireMarkers("docs/performance-wave5-production-certification.md", [
+  "PR #1599",
+  "PR #1600",
+  "PR #1601",
+  "PR #1608",
+  "npm run certify:performance-wave5",
+]);
+
 const packageSource = read("package.json");
 if (packageSource) {
   try {
@@ -213,6 +234,12 @@ if (packageSource) {
     const script = packageJson.scripts?.["verify:final-production-readiness"];
     if (script !== "node scripts/verify-final-production-readiness.mjs") {
       failures.push("package.json is missing the exact verify:final-production-readiness script");
+    }
+    if (packageJson.scripts?.["verify:performance-wave5"] !== "node scripts/verify-performance-wave5-certification.mjs") {
+      failures.push("package.json is missing the exact verify:performance-wave5 script");
+    }
+    if (packageJson.scripts?.["certify:performance-wave5"] !== "node scripts/run-performance-wave5-production-certification.mjs") {
+      failures.push("package.json is missing the exact certify:performance-wave5 script");
     }
     if (String(packageJson.scripts?.start ?? "").includes("run-versioned-migrations")) {
       failures.push("npm start must not invoke the versioned migration runner");

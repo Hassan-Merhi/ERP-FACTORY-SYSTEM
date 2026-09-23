@@ -1,8 +1,9 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { factoryApiRequest } from "@/lib/factoryApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,9 @@ import {
   Clock,
   Languages,
   ChevronDown,
+  Loader2,
+  MessageCircle,
+  Search,
 } from "lucide-react";
 
 import type {
@@ -59,18 +63,25 @@ import {
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { SummaryCard } from "./factoryattendance/components/SummaryCard";
+import "./factoryTrackingModern.css";
+
+interface AttendanceWhatsappSettings {
+  attendanceWhatsappGroupId?: string | null;
+}
+
 export default function FactoryAttendance() {
   const { toast } = useToast();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
-  const handleSetMode = (m: ViewMode) => {
-    setMode(m);
-    setModeInUrl(m);
+  const showDailyAttendance = () => {
+    setMode("daily");
+    setModeInUrl("daily");
   };
 
-  // ── Daily view state ──────────────────────────────────────────
+  // ── Daily attendance state ────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
-  const [shift, setShift] = useState<string>("");
+  // Shift is no longer user-selectable on this screen. Keep an empty value for existing save/export payloads.
+  const shift = "";
 
   // ── Range export state ────────────────────────────────────────
   const [rangeStart, setRangeStart] = useState<string>(todayStr());
@@ -79,6 +90,9 @@ export default function FactoryAttendance() {
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
+  const [workerSearch, setWorkerSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "other">("all");
+  const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
     queryKey: ["/api/factory/attendance", selectedDate],
@@ -87,6 +101,16 @@ export default function FactoryAttendance() {
       if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch attendance");
       return res.json();
     },
+  });
+
+  const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
+    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
+      if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -103,6 +127,42 @@ export default function FactoryAttendance() {
     setAttendanceMap(newMap);
     setNotesMap(newNotes);
   }, [data]);
+
+  const attendanceWaGroupId = attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "";
+
+  const sendWhatsappImageMutation = useMutation({
+    mutationFn: async () => {
+      if (!attendanceReportRef.current) throw new Error("Attendance image is not ready");
+
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(attendanceReportRef.current, {
+        backgroundColor: "#111315",
+        scale: 2,
+        logging: false,
+      });
+
+      const title = `Attendance Report — ${selectedDate}`;
+      const res = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
+        imageBase64: canvas.toDataURL("image/png"),
+        date: selectedDate,
+        fileName: `Attendance_${selectedDate}.png`,
+        caption: title,
+        reportLabel: title,
+        destination: "attendance",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to send attendance image");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Attendance image sent to WhatsApp" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send WhatsApp image", description: err.message, variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: (records: AttendanceBulkRecord[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
@@ -153,6 +213,14 @@ export default function FactoryAttendance() {
 
   const handleRangeExport = async (lang: "en" | "ar", mode: "excel" | "print") => {
     if (!rangeStart || !rangeEnd) return;
+    if (rangeStart > rangeEnd) {
+      toast({
+        title: "Invalid date range",
+        description: "The From date must be before or the same as the To date.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsExportingRange(true);
     setRangePrintDialog(null);
     try {
@@ -242,183 +310,244 @@ export default function FactoryAttendance() {
     }).length,
   };
 
+  const reportAbsentWorkers = workers
+    .filter((worker) => attendanceMap[worker.id] === "Absent")
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
+  const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
+  const rangeInvalid = Boolean(rangeStart && rangeEnd && rangeStart > rangeEnd);
+  const workerSearchNeedle = workerSearch.trim().toLowerCase();
+  const visibleWorkers = workers.filter((worker) => {
+    const status = attendanceMap[worker.id] ?? "Present";
+    const matchesSearch =
+      !workerSearchNeedle ||
+      worker.fullName.toLowerCase().includes(workerSearchNeedle) ||
+      (worker.employeeCode ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.position ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.department ?? "").toLowerCase().includes(workerSearchNeedle);
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "present" && status === "Present") ||
+      (statusFilter === "absent" && status === "Absent") ||
+      (statusFilter === "other" && status !== "Present" && status !== "Absent");
+    return matchesSearch && matchesStatus;
+  });
+
   return (
-    <div className="space-y-4 p-1">
-      {/* Mode toggle */}
-      <div className="flex gap-2">
-        <Button
-          variant={mode === "daily" ? "default" : "outline"}
-          size="default"
-          data-testid="button-mode-daily"
-          onClick={() => handleSetMode("daily")}
-        >
-          <CalendarDays className="h-4 w-4 mr-2" />
-          Daily View
-        </Button>
-      </div>
+    <div className="factory-tracking-modern factory-tracking-attendance">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold tracking-tight">Attendance</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Record the day, review attendance at a glance, and send or export reports.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="rounded-full bg-background/50 px-2.5 py-1 text-[11px] font-medium">
+                {formatDate(selectedDate)}
+              </Badge>
+            </div>
+          </div>
+        </div>
 
-      {mode === "perWorker" ? (
-        <PerWorkerView />
-      ) : (
-        <>
-          {/* Filters + Actions */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
-                    Attendance Date
-                  </Label>
-                  <Input
-                    id="attendance-date"
-                    data-testid="input-attendance-date"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-44"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="shift-input" className="text-xs text-muted-foreground">
-                    Shift (optional)
-                  </Label>
-                  <Input
-                    id="shift-input"
-                    data-testid="input-shift"
-                    placeholder="e.g. Morning"
-                    value={shift}
-                    onChange={(e) => setShift(e.target.value)}
-                    className="w-36"
-                    dir="auto"
-                  />
-                </div>
+        {mode === "perWorker" ? (
+          <div className="space-y-3">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={showDailyAttendance}>
+              <CalendarDays className="mr-1.5 h-4 w-4" />
+              Back to Attendance
+            </Button>
+            <PerWorkerView />
+          </div>
+        ) : (
+          <>
+            {/* Attendance controls + range export */}
+            <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+              <CardContent className="p-4">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(500px,0.9fr)] xl:gap-0">
+                  <div className="space-y-3 xl:pr-5">
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted/50 text-muted-foreground">
+                        <CalendarDays className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Attendance Controls</p>
+                        <p className="text-xs text-muted-foreground">Choose the date and manage the register.</p>
+                      </div>
+                    </div>
 
-                <div className="flex gap-2 ml-auto items-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
+                          Attendance Date
+                        </Label>
+                        <Input
+                          id="attendance-date"
+                          data-testid="input-attendance-date"
+                          type="date"
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="w-44 rounded-xl bg-background/70"
+                        />
+                      </div>
+
                       <Button
                         variant="outline"
                         size="default"
-                        data-testid="button-actions-dropdown"
-                        disabled={!workers.length}
+                        onClick={() => sendWhatsappImageMutation.mutate()}
+                        disabled={!attendanceWaGroupId || !workers.length || isLoading || sendWhatsappImageMutation.isPending}
+                        data-testid="button-send-attendance-whatsapp-image"
+                        className="rounded-xl"
                       >
-                        Actions
-                        <ChevronDown className="h-4 w-4 ml-1" />
+                        {sendWhatsappImageMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="mr-1.5 h-4 w-4" />
+                        )}
+                        {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
-                        <UserCheck className="h-4 w-4 mr-2" />
-                        Mark All Present
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
-                        <UserX className="h-4 w-4 mr-2" />
-                        Mark All Absent
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Reset
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Blank Sheet
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="menu-export-excel-blank"
-                        onClick={() => setPrintDialog("excel-blank")}
-                      >
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Blank Excel
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Export PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-export-excel" onClick={() => setPrintDialog("excel-results")}>
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Export Excel
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    size="default"
-                    data-testid="button-save-attendance"
-                    onClick={handleSave}
-                    disabled={!workers.length || saveMutation.isPending}
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Range Export Card */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-muted-foreground font-medium">Range Export</Label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">From</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-start"
-                        value={rangeStart}
-                        onChange={(e) => setRangeStart(e.target.value)}
-                        className="w-40"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">To</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-end"
-                        value={rangeEnd}
-                        onChange={(e) => setRangeEnd(e.target.value)}
-                        className="w-40"
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="default"
+                            data-testid="button-actions-dropdown"
+                            disabled={!workers.length}
+                            className="rounded-xl"
+                          >
+                            Actions
+                            <ChevronDown className="ml-1 h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
+                            <UserCheck className="mr-2 h-4 w-4" />
+                            Mark All Present
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
+                            <UserX className="mr-2 h-4 w-4" />
+                            Mark All Absent
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Reset
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
+                            <Printer className="mr-2 h-4 w-4" />
+                            Print Blank Sheet
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-export-excel-blank" onClick={() => setPrintDialog("excel-blank")}>
+                            <FileDown className="mr-2 h-4 w-4" />
+                            Blank Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
+                            <Printer className="mr-2 h-4 w-4" />
+                            Export PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-export-excel" onClick={() => setPrintDialog("excel-results")}>
+                            <FileDown className="mr-2 h-4 w-4" />
+                            Export Excel
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <Button
+                        size="default"
+                        className="rounded-xl shadow-sm"
+                        data-testid="button-save-attendance"
+                        onClick={handleSave}
+                        disabled={!workers.length || saveMutation.isPending}
+                      >
+                        {saveMutation.isPending ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-1.5 h-4 w-4" />
+                        )}
+                        {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                      </Button>
                     </div>
                   </div>
+
+                  <div className="space-y-3 border-t pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                    <div className="flex items-center gap-2">
+                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted/50 text-muted-foreground">
+                        <FileDown className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Range Export</p>
+                        <p className="text-xs text-muted-foreground">Export or print attendance across any date range.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">From</Label>
+                        <Input
+                          type="date"
+                          data-testid="input-range-start"
+                          value={rangeStart}
+                          onChange={(e) => setRangeStart(e.target.value)}
+                          className="w-40 rounded-xl bg-background/70"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">To</Label>
+                        <Input
+                          type="date"
+                          data-testid="input-range-end"
+                          value={rangeEnd}
+                          onChange={(e) => setRangeEnd(e.target.value)}
+                          className="w-40 rounded-xl bg-background/70"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="default"
+                        data-testid="button-range-export-excel"
+                        onClick={() => setRangePrintDialog("excel")}
+                        disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
+                        className="rounded-xl"
+                      >
+                        <FileDown className="mr-1.5 h-4 w-4" />
+                        {isExportingRange ? "Exporting…" : "Excel"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="default"
+                        data-testid="button-range-print"
+                        onClick={() => setRangePrintDialog("print")}
+                        disabled={!rangeStart || !rangeEnd || rangeInvalid || isExportingRange}
+                        className="rounded-xl"
+                      >
+                        <Printer className="mr-1.5 h-4 w-4" />
+                        Print
+                      </Button>
+                    </div>
+                    {rangeInvalid && (
+                      <p className="text-xs font-medium text-destructive">From date cannot be after To date.</p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2 items-center flex-wrap ml-auto">
-                  <Button
-                    variant="outline"
-                    size="default"
-                    data-testid="button-range-export-excel"
-                    onClick={() => setRangePrintDialog("excel")}
-                    disabled={!rangeStart || !rangeEnd || isExportingRange}
-                  >
-                    <FileDown className="h-4 w-4 mr-1" />
-                    {isExportingRange ? "Exporting…" : "Export Range Excel"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    data-testid="button-range-print"
-                    onClick={() => setRangePrintDialog("print")}
-                    disabled={!rangeStart || !rangeEnd || isExportingRange}
-                  >
-                    <Printer className="h-4 w-4 mr-1" />
-                    Print Range
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
           {/* Summary Cards */}
           {workers.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <SummaryCard
                 icon={<Users className="h-4 w-4" />}
                 label="Total"
                 value={counts.total}
                 color="text-foreground"
                 testId="stat-total"
+                modern
               />
               <SummaryCard
                 icon={<CheckCircle className="h-4 w-4" />}
@@ -426,6 +555,7 @@ export default function FactoryAttendance() {
                 value={counts.present}
                 color="text-green-600 dark:text-green-400"
                 testId="stat-present"
+                modern
               />
               <SummaryCard
                 icon={<XCircle className="h-4 w-4" />}
@@ -433,6 +563,7 @@ export default function FactoryAttendance() {
                 value={counts.absent}
                 color="text-red-600 dark:text-red-400"
                 testId="stat-absent"
+                modern
               />
               <SummaryCard
                 icon={<Clock className="h-4 w-4" />}
@@ -440,22 +571,67 @@ export default function FactoryAttendance() {
                 value={counts.other}
                 color="text-amber-600 dark:text-amber-400"
                 testId="stat-other"
+                modern
               />
             </div>
           )}
 
           {/* Attendance Table */}
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Workers — {formatDate(selectedDate)}
-                {shift && <Badge variant="secondary">{shift}</Badge>}
-              </CardTitle>
+          <Card className="overflow-hidden border-border/70 bg-card/75 shadow-none">
+            <CardHeader className="gap-3 border-b border-border/60 bg-muted/15 px-4 py-4 sm:px-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Workers
+                  </CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
+                </div>
+                {workers.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <div className="hidden text-right sm:block">
+                      <p className="text-sm font-semibold tabular-nums">{attendancePct}%</p>
+                      <p className="text-[11px] text-muted-foreground">present today</p>
+                    </div>
+                    <Badge variant="outline" className="rounded-full bg-background/60 px-3 py-1">
+                      {workers.length} worker{workers.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
               {workers.length > 0 && (
-                <span className="text-sm text-muted-foreground">
-                  {workers.length} worker{workers.length !== 1 ? "s" : ""}
-                </span>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative w-full sm:max-w-sm">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={workerSearch}
+                      onChange={(event) => setWorkerSearch(event.target.value)}
+                      placeholder="Search worker, code, position…"
+                      className="h-9 rounded-xl bg-background/70 pl-9"
+                      data-testid="input-attendance-worker-search"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                    >
+                      <SelectTrigger className="h-9 w-[145px] rounded-xl bg-background/70" data-testid="select-attendance-status-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="present">Present</SelectItem>
+                        <SelectItem value="absent">Absent</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[11px] text-muted-foreground">
+                      Showing {visibleWorkers.length} of {workers.length}
+                    </span>
+                  </div>
+                </div>
               )}
             </CardHeader>
             <CardContent className="p-0">
@@ -466,16 +642,32 @@ export default function FactoryAttendance() {
                   ))}
                 </div>
               ) : workers.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12 text-sm">
+                <div className="py-12 text-center text-sm text-muted-foreground">
                   No active workers found for this company.
+                </div>
+              ) : visibleWorkers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                  <Search className="mb-2 h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium">No workers match these filters</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 rounded-xl"
+                    onClick={() => {
+                      setWorkerSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
                 </div>
               ) : (
                 <>
                   {/* Desktop table */}
-                  <div className="hidden sm:block overflow-x-auto">
+                  <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-30 bg-muted/50">
-                        <tr className="border-b bg-muted/40">
+                      <thead className="sticky top-0 z-30 bg-muted/30 backdrop-blur">
+                        <tr className="border-b border-border/60">
                           <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                           <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>
                           <th className="text-left px-4 py-2 font-medium text-muted-foreground">Worker Name</th>
@@ -484,13 +676,14 @@ export default function FactoryAttendance() {
                         </tr>
                       </thead>
                       <tbody>
-                        {workers.map((worker, idx) => {
+                        {visibleWorkers.map((worker) => {
+                          const idx = workers.findIndex((item) => item.id === worker.id);
                           const status = attendanceMap[worker.id] ?? "Present";
                           return (
                             <tr
                               key={worker.id}
                               data-testid={`row-worker-${worker.id}`}
-                              className="border-b last:border-0 hover-elevate"
+                              className="border-b border-border/50 transition-colors last:border-0 hover:bg-muted/20"
                             >
                               <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
                               <td
@@ -499,12 +692,15 @@ export default function FactoryAttendance() {
                               >
                                 {worker.employeeCode ?? "—"}
                               </td>
-                              <td
-                                className="px-4 py-2 font-medium"
-                                dir="auto"
-                                data-testid={`text-worker-name-${worker.id}`}
-                              >
-                                {worker.fullName}
+                              <td className="px-4 py-2" dir="auto">
+                                <div className="font-medium" data-testid={`text-worker-name-${worker.id}`}>
+                                  {worker.fullName}
+                                </div>
+                                {(worker.position || worker.department) && (
+                                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                    {worker.position || worker.department}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-2">
                                 <Select
@@ -513,7 +709,7 @@ export default function FactoryAttendance() {
                                 >
                                   <SelectTrigger
                                     data-testid={`select-status-${worker.id}`}
-                                    className={`h-8 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                    className={`h-9 rounded-lg bg-background/70 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
@@ -532,7 +728,7 @@ export default function FactoryAttendance() {
                                   placeholder="Optional notes"
                                   value={notesMap[worker.id] ?? ""}
                                   onChange={(e) => setNotes(worker.id, e.target.value)}
-                                  className="h-8 text-xs"
+                                  className="h-9 rounded-lg bg-background/70 text-xs"
                                   dir="auto"
                                 />
                               </td>
@@ -544,14 +740,15 @@ export default function FactoryAttendance() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="sm:hidden space-y-2 p-3">
-                    {workers.map((worker, idx) => {
+                  <div className="space-y-2.5 p-3 sm:hidden">
+                    {visibleWorkers.map((worker) => {
+                      const idx = workers.findIndex((item) => item.id === worker.id);
                       const status = attendanceMap[worker.id] ?? "Present";
                       return (
                         <div
                           key={worker.id}
                           data-testid={`card-worker-${worker.id}`}
-                          className="border rounded-md p-3 space-y-2"
+                          className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-3.5 shadow-sm"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
@@ -562,21 +759,26 @@ export default function FactoryAttendance() {
                               >
                                 {worker.fullName}
                               </p>
-                              {worker.employeeCode && (
-                                <span
-                                  className="text-xs font-mono text-muted-foreground"
-                                  data-testid={`text-worker-code-mobile-${worker.id}`}
-                                >
-                                  {worker.employeeCode}
-                                </span>
-                              )}
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                {worker.employeeCode && (
+                                  <span
+                                    className="font-mono"
+                                    data-testid={`text-worker-code-mobile-${worker.id}`}
+                                  >
+                                    {worker.employeeCode}
+                                  </span>
+                                )}
+                                {(worker.position || worker.department) && (
+                                  <span>{worker.position || worker.department}</span>
+                                )}
+                              </div>
                             </div>
                             <span className="text-xs text-muted-foreground shrink-0">{idx + 1}</span>
                           </div>
                           <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
                             <SelectTrigger
                               data-testid={`select-status-mobile-${worker.id}`}
-                              className={`h-9 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
+                              className={`h-10 rounded-lg bg-background/70 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
                             >
                               <SelectValue />
                             </SelectTrigger>
@@ -593,7 +795,7 @@ export default function FactoryAttendance() {
                             placeholder="Notes (optional)"
                             value={notesMap[worker.id] ?? ""}
                             onChange={(e) => setNotes(worker.id, e.target.value)}
-                            className="h-8 text-xs"
+                            className="h-9 rounded-lg bg-background/70 text-xs"
                             dir="auto"
                           />
                         </div>
@@ -602,10 +804,182 @@ export default function FactoryAttendance() {
                   </div>
                 </>
               )}
+
+              {workers.length > 0 && (
+                <div className="sticky bottom-0 z-20 flex flex-col gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span><strong className="text-foreground">{counts.present}</strong> present</span>
+                    <span><strong className="text-foreground">{counts.absent}</strong> absent</span>
+                    {counts.other > 0 && <span><strong className="text-foreground">{counts.other}</strong> other</span>}
+                    <span>{attendancePct}% attendance</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="rounded-xl shadow-sm sm:min-w-36"
+                    data-testid="button-save-attendance-sticky"
+                    onClick={handleSave}
+                    disabled={saveMutation.isPending}
+                  >
+                    {saveMutation.isPending ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1.5 h-4 w-4" />
+                    )}
+                    {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>
       )}
+
+      <div
+        ref={attendanceReportRef}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          left: "-12000px",
+          top: 0,
+          width: "1080px",
+          background: "#111315",
+          color: "#f4f4f5",
+          padding: "28px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div style={{ marginBottom: "18px", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
+          <div>
+            <div style={{ fontSize: "26px", fontWeight: 700 }}>Attendance Report</div>
+            <div style={{ marginTop: "5px", color: "#a1a1aa", fontSize: "15px" }}>{selectedDate}</div>
+          </div>
+          <div style={{ color: "#a1a1aa", fontSize: "14px" }}>{counts.total} total workers</div>
+        </div>
+
+        <div
+          data-testid="attendance-report-kpis"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: "12px",
+            marginBottom: "18px",
+          }}
+        >
+          {[
+            { key: "total", label: "Total", value: counts.total, border: "#34383e", valueColor: "#f4f4f5" },
+            { key: "present", label: "Present", value: counts.present, border: "#14532d", valueColor: "#34d399" },
+            { key: "absent", label: "Absent", value: counts.absent, border: "#7f1d1d", valueColor: "#f87171" },
+            { key: "other", label: "Other", value: counts.other, border: "#78350f", valueColor: "#fbbf24" },
+          ].map((kpi) => (
+            <div
+              key={kpi.key}
+              data-testid={`attendance-report-kpi-${kpi.key}`}
+              style={{
+                minWidth: 0,
+                border: `1px solid ${kpi.border}`,
+                borderRadius: "12px",
+                background: "#181a1e",
+                padding: "15px 17px",
+              }}
+            >
+              <div
+                style={{
+                  color: "#a1a1aa",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {kpi.label}
+              </div>
+              <div
+                style={{
+                  marginTop: "6px",
+                  color: kpi.valueColor,
+                  fontSize: "30px",
+                  lineHeight: 1,
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {kpi.value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "18px" }}>
+          <thead>
+            <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
+              <th style={{ width: "160px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>
+                Code
+              </th>
+              <th style={{ padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>Worker</th>
+              <th style={{ width: "150px", padding: "16px 14px", textAlign: "center", border: "1px solid #3f444b" }}>
+                Status
+              </th>
+              <th style={{ width: "300px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>
+                Notes
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {reportAbsentWorkers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  style={{ padding: "30px 14px", textAlign: "center", color: "#a1a1aa", border: "1px solid #3f444b" }}
+                >
+                  No absent workers.
+                </td>
+              </tr>
+            ) : (
+              reportAbsentWorkers.map((worker, index) => (
+                <tr
+                  key={`attendance-report-${worker.id}`}
+                  style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
+                >
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                    {worker.employeeCode || "—"}
+                  </td>
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e" }}>
+                    <div dir="auto" style={{ fontWeight: 600 }}>{worker.fullName}</div>
+                    <div style={{ marginTop: "4px", color: "#8b9098", fontSize: "13px" }}>
+                      {worker.position || worker.department || "—"}
+                    </div>
+                  </td>
+                  <td
+                    style={{
+                      padding: "15px 14px",
+                      textAlign: "center",
+                      border: "1px solid #34383e",
+                      color: "#f87171",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Absent
+                  </td>
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                    {notesMap[worker.id] || "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+            <tr style={{ background: "#292c31" }}>
+              <td colSpan={2} style={{ padding: "18px 14px", border: "1px solid #3f444b", fontWeight: 700 }}>
+                Daily Total
+              </td>
+              <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", color: "#f87171", fontWeight: 800 }}>
+                {counts.absent} absent
+              </td>
+              <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", fontWeight: 800 }}>
+                {attendancePct}% present
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <Dialog
         open={printDialog !== null}
@@ -664,6 +1038,7 @@ export default function FactoryAttendance() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

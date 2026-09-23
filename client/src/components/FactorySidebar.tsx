@@ -155,14 +155,37 @@ export const FACTORY_NAV_SECTIONS: FactoryNavSection[] = [
   },
 ];
 
-export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = [
-  ...FACTORY_NAV_SECTIONS.flatMap((s) =>
-    s.items.map((item) => ({ key: item.url.replace(/^\//, ""), label: item.title, group: s.label }))
-  ),
-  { key: "factory/daybook", label: "Daybook", group: "Other" },
+const FACTORY_ACCESS_EXTRA_PAGES: { key: string; label: string; group: string }[] = [
+  { key: "factory/production-report", label: "Overview", group: "Production" },
+  { key: "factory/agents", label: "Agent Ledger", group: "Finance" },
+  { key: "factory/accounts", label: "Accounts", group: "Finance" },
+  { key: "factory/vouchers", label: "Vouchers", group: "Finance" },
+  { key: "factory/transporters", label: "Transporters", group: "Finance" },
+  { key: "factory/broker-visual-statement", label: "Broker Statement", group: "Finance" },
+  { key: "factory/stock-query", label: "Stock Query", group: "Inventory" },
+  { key: "factory/stock-bale-list", label: "Stock Bale List", group: "Inventory" },
+  { key: "factory/bale-tracking", label: "Bale Tracking", group: "Inventory" },
+  { key: "factory/import", label: "Import", group: "Inventory" },
+  { key: "factory/merge-bale-products", label: "Merge Bale Products", group: "Inventory" },
+  { key: "factory/bale-product-images", label: "Bale Product Images", group: "Inventory" },
+  { key: "factory/price-list", label: "Price List", group: "Sales" },
+  { key: "factory/dispatch-batches", label: "Dispatch Batches", group: "Sales" },
+  { key: "factory/bale-relabeling", label: "Bale Relabeling", group: "Production" },
+  { key: "factory/production-comparison", label: "Production Comparison", group: "Production" },
   { key: "factory/chat", label: "Chat", group: "Other" },
   { key: "factory/settings", label: "Settings", group: "Other" },
 ];
+
+export const FACTORY_NAV_PAGES: { key: string; label: string; group: string }[] = Array.from(
+  new Map(
+    [
+      ...FACTORY_NAV_SECTIONS.flatMap((s) =>
+        s.items.map((item) => ({ key: item.url.replace(/^\//, ""), label: item.title, group: s.label }))
+      ),
+      ...FACTORY_ACCESS_EXTRA_PAGES,
+    ].map((page) => [page.key, page])
+  ).values()
+);
 
 const FACTORY_PINNED_DEFAULTS: NavItem[] = [
   { title: "Overview", url: "/factory/production-report", icon: BarChart3 },
@@ -209,27 +232,21 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
   });
 
   const isPinnedVisible = (item: NavItem): boolean => {
-    if (item.url === "/factory/production-report") {
-      return !myAccess?.hiddenCostFields?.includes("hide_tab_production_analytics");
+    const pageKey = item.url.replace(/^\//, "");
+    if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0 && !myAccess.pageKeys.includes(pageKey)) {
+      return false;
     }
-    if (item.url === "/factory/daybook") {
-      if (myAccess?.hiddenCostFields?.includes("hide_tab_daybook")) return false;
-      if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0) {
-        return myAccess.pageKeys.includes("factory/daybook");
-      }
-      return true;
+    if (
+      item.url === "/factory/production-report" &&
+      myAccess?.hiddenCostFields?.includes("hide_tab_production_analytics")
+    ) {
+      return false;
     }
-    if (item.url === "/factory/agents") {
-      return !myAccess?.hiddenCostFields?.includes("hide_tab_agents");
+    if (item.url === "/factory/daybook" && myAccess?.hiddenCostFields?.includes("hide_tab_daybook")) {
+      return false;
     }
-    // Accounts and Vouchers: only show when the user has explicit page access.
-    // Mirrors the Finance section's pageKeys check so restricted users can't see
-    // them in the pinned area either.
-    if (item.url === "/factory/accounts" || item.url === "/factory/vouchers") {
-      if (myAccess && !myAccess.fullAccess && myAccess.pageKeys.length > 0) {
-        return myAccess.pageKeys.includes(item.url.replace(/^\//, ""));
-      }
-      return true; // full access or no per-page restrictions configured
+    if (item.url === "/factory/agents" && myAccess?.hiddenCostFields?.includes("hide_tab_agents")) {
+      return false;
     }
     return true;
   };

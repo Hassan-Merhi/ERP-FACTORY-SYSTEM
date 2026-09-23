@@ -61,13 +61,13 @@ requireTokens("Mix Batch history", sources.mixBatches, [
 requireTokens("Container Loading", sources.containerLoading, [
   'data-testid="factory-container-loading-page"',
   "p-3 sm:p-4 lg:p-6",
-  "flex min-h-0 min-w-0 flex-1 flex-col gap-4 lg:flex-row",
+  "flex min-h-0 min-w-0 flex-1 flex-col gap-4 xl:flex-row",
   "mobile-action-bar",
 ]);
 
 requireTokens("Container scanner controls", sources.scannedPanel, [
   'data-testid="container-loading-scan-controls"',
-  "flex min-w-0 flex-col gap-2 sm:mb-1 sm:flex-row",
+  "mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
   "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]",
   'data-testid="input-scan-code"',
 ]);

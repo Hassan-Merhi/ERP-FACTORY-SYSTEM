@@ -51,11 +51,23 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Please try again.";
 }
 
-export function CompanySelector() {
+export function CompanySelector({ showMobileName = false }: { showMobileName?: boolean } = {}) {
   const { selectedCompany, companies, isLoading, error: companyError, selectCompany } = useCompany();
   const { isOnline } = useConnectivity();
   const { t } = useApplicationLanguage();
   const { toast } = useToast();
+  const mobileStatusLabelClassName = showMobileName
+    ? "max-w-[7rem] truncate text-xs sm:max-w-[9rem]"
+    : "hidden sm:inline";
+  const singleCompanyLabelClassName = showMobileName
+    ? "max-w-[7rem] truncate text-xs sm:max-w-[120px]"
+    : "hidden max-w-[120px] truncate sm:inline";
+  const selectorClassName = `h-10 gap-1 px-1.5 sm:h-8 sm:max-w-[8rem] sm:pr-1.5 ${
+    showMobileName ? "max-w-[10rem]" : "max-w-[4.5rem]"
+  }`;
+  const selectorLabelClassName = showMobileName
+    ? "max-w-[6.75rem] truncate text-xs sm:max-w-[72px]"
+    : "hidden max-w-[72px] truncate text-xs sm:inline";
 
   const handleCompanyChange = async (company: Company) => {
     if (company.id === selectedCompany?.id || isLoading) return;
@@ -107,7 +119,7 @@ export function CompanySelector() {
         className="h-10 gap-1.5 px-2 text-destructive sm:h-8"
       >
         <AlertTriangle className="h-4 w-4 shrink-0" />
-        <span className="hidden sm:inline">Company unavailable</span>
+        <span className={mobileStatusLabelClassName}>Company unavailable</span>
       </Button>
     );
   }
@@ -123,7 +135,7 @@ export function CompanySelector() {
         className="h-10 gap-1.5 px-2 sm:h-8"
       >
         <span className="h-5 w-5 shrink-0 animate-pulse rounded-md bg-muted" />
-        <span className="hidden sm:inline">Loading…</span>
+        <span className={mobileStatusLabelClassName}>Loading…</span>
       </Button>
     );
   }
@@ -142,7 +154,7 @@ export function CompanySelector() {
         className="h-10 gap-1.5 px-2 sm:h-8"
       >
         <CompanyAvatar name={selectedCompany.name} type={activeType} />
-        <span className="hidden max-w-[120px] truncate sm:inline">{selectedCompany.name}</span>
+        <span className={singleCompanyLabelClassName}>{selectedCompany.name}</span>
       </Button>
     );
   }
@@ -156,14 +168,14 @@ export function CompanySelector() {
           data-testid="button-company-selector"
           aria-label={[[t("company.current"), selectedCompany.name].join(": "), t("company.openSwitcher")].join(". ")}
           title={selectedCompany.name}
-          className="h-10 max-w-[4.5rem] gap-1 px-1.5 sm:h-8 sm:max-w-[8rem] sm:pr-1.5"
+          className={selectorClassName}
         >
           {isOnline ? (
             <CompanyAvatar name={selectedCompany.name} type={activeType} />
           ) : (
             <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <span className="hidden max-w-[72px] truncate text-xs sm:inline">{selectedCompany.name}</span>
+          <span className={selectorLabelClassName}>{selectedCompany.name}</span>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>

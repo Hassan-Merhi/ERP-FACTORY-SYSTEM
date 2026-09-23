@@ -108,7 +108,7 @@ describe("Golden Coast POS Phase 6 frontend contract", () => {
 
   it("shows accounting blockers without requiring a cutover", () => {
     expect(posSource).toContain("goldenCoastPosBlocked");
-    expect(posSource).toContain("disableSave={goldenCoastPosSaveDisabled}");
+    expect(posSource).toContain("disableSave={goldenCoastPosSaveDisabled || posWritesDisabled}");
     expect(readinessAlertSource).toContain('data-testid="golden-coast-pos-readiness-alert"');
     expect(readinessAlertSource).toContain("current inventory cost");
     expect(readinessAlertSource).not.toContain("Phase 3 opening cutover");

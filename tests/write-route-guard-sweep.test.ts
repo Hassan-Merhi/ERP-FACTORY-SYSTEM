@@ -240,6 +240,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/customer-orders/:id/assign-container",
   "POST /api/factory/customer-orders/:id/bales",
   "POST /api/factory/customer-orders/:id/bales/bulk-import",
+  "POST /api/factory/customer-orders/:id/bales/empty",
   "POST /api/factory/customer-orders/:id/bales/exchange",
   "POST /api/factory/customer-orders/:id/cancel",
   "POST /api/factory/customer-orders/:id/charges",

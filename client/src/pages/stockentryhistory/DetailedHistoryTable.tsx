@@ -1,5 +1,5 @@
 import type { BaleDetail } from "./types";
-import { STATUS_COLORS } from "./utils";
+import { STATUS_COLORS, formatDailyNum, formatHistoryDateTime } from "./utils";
 import { StockEntryHistoryEditableDateCell } from "./EditableDateCell";
 
 interface DetailedHistoryTableProps {
@@ -75,7 +75,7 @@ export function DetailedHistoryTable({
               </td>
               <td className="px-3 py-1.5">{bale.productName || "—"}</td>
               <td className="px-3 py-1.5 text-muted-foreground text-xs">{bale.articleCode || "—"}</td>
-              <td className="px-3 py-1.5 text-right">{parseFloat(bale.weightKg || "0").toFixed(2)}</td>
+              <td className="px-3 py-1.5 text-right">{formatDailyNum(parseFloat(bale.weightKg || "0"))}</td>
               <td className="px-3 py-1.5">
                 <span
                   className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${STATUS_COLORS[bale.status] || "bg-muted text-muted-foreground"}`}
@@ -84,7 +84,7 @@ export function DetailedHistoryTable({
                 </span>
               </td>
               <td className="px-3 py-1.5 text-muted-foreground text-xs">
-                {bale.finalizedAt ? new Date(bale.finalizedAt).toLocaleString() : "—"}
+                {formatHistoryDateTime(bale.finalizedAt)}
               </td>
             </tr>
           ))}

@@ -1,5 +1,0 @@
-{
-  "version": 9,
-  "description": "Legacy route compatibility registrars were removed in Phase 9. Active route ownership lives exclusively in focused domain modules composed by server/routes/applicationRoutes.ts.",
-  "files": []
-}

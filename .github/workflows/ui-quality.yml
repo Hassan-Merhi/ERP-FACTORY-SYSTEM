@@ -60,13 +60,13 @@ jobs:
               esac
 
               case "$file" in
-                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-phase14.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|shared/applicationLanguageContract.ts|scripts/audit-i18n-*.mjs|scripts/verify-program7d-accessibility-responsive.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase8-rtl-responsive-accessibility.test.ts|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|vitest.config.i18n-contracts.ts|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   rtl=true
                   ;;
               esac
 
               case "$file" in
-                client/*|server/*|shared/*|scripts/audit-i18n-phase14.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
+                client/*|server/*|shared/*|scripts/audit-i18n-*.mjs|scripts/verify-i18n-audit-classifier.mjs|tests/phase14-i18n-release-gate.test.ts|config/i18n-*.json|docs/archive/translation/*|.github/workflows/ui-quality.yml)
                   i18n=true
                   ;;
               esac
@@ -91,6 +91,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node.js 24.21.0
@@ -101,6 +102,8 @@ jobs:
       - name: Run classified i18n gate when relevant
         env:
           I18N_RELEVANT: ${{ needs.changes.outputs.i18n }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +111,19 @@ jobs:
             echo "No UI/i18n paths changed; preserving the required untranslated-text context without rerunning an unrelated audit."
             exit 0
           fi
+
           node scripts/verify-i18n-audit-classifier.mjs
-          node scripts/audit-i18n-phase14.mjs \
-            --json-out artifacts/i18n-audit/report.json \
-            --markdown-out artifacts/i18n-audit/report.md
+          mkdir -p artifacts/i18n-audit
+
+          base_sha="$PR_BASE_SHA"
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            base_sha="$PUSH_BASE_SHA"
+            if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+              base_sha="$(git rev-parse HEAD^)"
+            fi
+          fi
+          node scripts/run-i18n-pr-ratchet.mjs "$base_sha" artifacts/i18n-audit
+
           cat artifacts/i18n-audit/report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload classified audit report
@@ -164,7 +176,7 @@ jobs:
             client/src/i18n/applicationDirection.ts \
             client/src/i18n/applicationTranslations.ts \
             client/src/styles/rtl-hardening.css \
-            scripts/audit-i18n-phase14.mjs \
+            scripts/audit-i18n-*.mjs \
             scripts/verify-program7d-accessibility-responsive.mjs \
             tests/phase14-i18n-release-gate.test.ts \
             tests/phase8-rtl-responsive-accessibility.test.ts \

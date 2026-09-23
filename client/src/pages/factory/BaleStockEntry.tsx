@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ScanLine, List, CalendarDays, Factory, ClipboardCheck, Target } from "lucide-react";
+import { ScanLine, CalendarDays, Factory, Target } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FactoryMobileHeader, FactoryMobileHeaderActions, FactoryMobilePage } from "@/components/ui/factory-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -12,7 +12,6 @@ import StockEntryHistory from "../StockEntryHistory";
 import GroundScan from "./GroundScan";
 import DailyScan from "./DailyScan";
 import FactoryProductionTargets from "./FactoryProductionTargets";
-import { FactoryStaffTracking } from "./FactoryStaffTracking";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { translateFactoryStaffTrackingText } from "@/i18n/factoryStaffTrackingTranslations";
 import "./factoryTrackingModern.css";
@@ -52,7 +51,6 @@ export default function BaleStockEntry() {
   const showGroundScan = !hiddenTabs.includes("hide_tab_stockentry_ground_scan");
   const showDailyScan = !hiddenTabs.includes("hide_tab_stockentry_daily_scan");
   const showProductionTargets = !hiddenTabs.includes("hide_tab_stockentry_production_targets");
-  const showAttendanceRegister = !hiddenTabs.includes("hide_tab_stockentry_attendance_register");
 
   const defaultTab = showEntry
     ? "entry"
@@ -64,17 +62,14 @@ export default function BaleStockEntry() {
           ? "daily-scan"
           : showProductionTargets
             ? "production-targets"
-            : showAttendanceRegister
-              ? "attendance-register"
-              : "entry";
+            : "entry";
 
   const activeTabVisible =
     (activeTab === "entry" && showEntry) ||
     (activeTab === "history" && showHistory) ||
     (activeTab === "ground-scan" && showGroundScan) ||
     (activeTab === "daily-scan" && showDailyScan) ||
-    (activeTab === "production-targets" && showProductionTargets) ||
-    (activeTab === "attendance-register" && showAttendanceRegister);
+    (activeTab === "production-targets" && showProductionTargets);
 
   useEffect(() => {
     if (activeTabVisible) return;
@@ -152,12 +147,6 @@ export default function BaleStockEntry() {
               Stock Entry
             </TabsTrigger>
           )}
-          {showHistory && (
-            <TabsTrigger value="history" data-testid="tab-stock-entry-history">
-              <List className="mr-1 h-4 w-4" />
-              Stock Entry History
-            </TabsTrigger>
-          )}
           {showGroundScan && (
             <TabsTrigger value="ground-scan" data-testid="tab-ground-scan">
               <ScanLine className="mr-1 h-4 w-4" />
@@ -176,16 +165,16 @@ export default function BaleStockEntry() {
               {tr("productionTargets")}
             </TabsTrigger>
           )}
-          {showAttendanceRegister && (
-            <TabsTrigger value="attendance-register" data-testid="tab-attendance-register">
-              <ClipboardCheck className="mr-1 h-4 w-4" />
-              {tr("attendanceRegister")}
-            </TabsTrigger>
-          )}
         </TabsList>
         {showEntry && (
           <TabsContent value="entry" className="mt-4 min-w-0">
-            <StockEntryTab />
+            <StockEntryTab
+              showHistory={showHistory}
+              onOpenHistory={() => {
+                setActiveTab("history");
+                handleTabChange("history");
+              }}
+            />
           </TabsContent>
         )}
         {showHistory && (
@@ -207,13 +196,6 @@ export default function BaleStockEntry() {
           <TabsContent value="production-targets" className="mt-0 min-w-0 p-0">
             <div className="factory-tracking-modern factory-tracking-production">
               <FactoryProductionTargets />
-            </div>
-          </TabsContent>
-        )}
-        {showAttendanceRegister && (
-          <TabsContent value="attendance-register" className="mt-0 min-w-0 p-0">
-            <div className="factory-tracking-modern factory-tracking-attendance">
-              <FactoryStaffTracking mode="attendance" />
             </div>
           </TabsContent>
         )}

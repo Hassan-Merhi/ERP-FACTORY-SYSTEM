@@ -4,7 +4,6 @@ import {
   CalendarClock,
   CalendarDays,
   ClipboardCheck,
-  Link2,
   Loader2,
   LockKeyhole,
   MessageCircle,
@@ -12,6 +11,7 @@ import {
   SlidersHorizontal,
   Target,
   Users,
+  UserX,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -31,6 +30,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import {
   addIsoDays,
+  collapseLinkedProductionRows,
   differenceClass,
   differenceText,
   fetchProduction,
@@ -51,94 +51,52 @@ import { ProductionTargetsEditorDialog } from "./productiontargets/ProductionTar
 function SummaryTile({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
   return (
     <Card className="shadow-none">
-      <CardContent className="flex items-center justify-between px-4 py-3">
+      <CardContent className="flex min-h-[92px] items-center justify-between px-4 py-3">
         <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold tabular-nums">{value}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
         </div>
-        <div className="text-muted-foreground">{icon}</div>
+        <div className="rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
       </CardContent>
     </Card>
   );
 }
 
-function TargetProducedTile({
-  targetLabel,
-  producedLabel,
-  target,
-  produced,
-}: {
-  targetLabel: string;
-  producedLabel: string;
-  target: number;
-  produced: number;
-}) {
-  return (
-    <Card className="shadow-none" data-testid="kpi-production-target-produced">
-      <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
-        <div className="grid min-w-0 flex-1 grid-cols-2 gap-5">
-          <div className="min-w-0">
-            <p className="truncate text-xs text-muted-foreground">{targetLabel}</p>
-            <p className="text-xl font-semibold tabular-nums">{target}</p>
-          </div>
-          <div className="min-w-0 border-l pl-5">
-            <p className="truncate text-xs text-muted-foreground">{producedLabel}</p>
-            <p className="text-xl font-semibold tabular-nums">{produced}</p>
-          </div>
-        </div>
-        <div className="shrink-0 text-muted-foreground">
-          <Target className="h-5 w-5" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PeopleSummaryTile({
+function SummaryGroupTile({
   label,
-  value,
-  presentLabel,
-  absentLabel,
-  newLabel,
-  present,
-  absent,
-  newlyJoined,
+  icon,
+  metrics,
 }: {
   label: string;
-  value: number;
-  presentLabel: string;
-  absentLabel: string;
-  newLabel: string;
-  present: number;
-  absent: number;
-  newlyJoined: number;
+  icon: React.ReactNode;
+  metrics: Array<{ label: string; value: string | number }>;
 }) {
   return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="cursor-help" tabIndex={0} data-testid="kpi-production-people">
-            <SummaryTile label={label} value={value} icon={<Users className="h-5 w-5" />} />
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="min-w-[180px] space-y-1.5 px-3 py-2" data-testid="tooltip-production-people">
-          <div className="flex items-center justify-between gap-5">
-            <span>{presentLabel}</span>
-            <span className="font-semibold tabular-nums">{present}</span>
-          </div>
-          <div className="flex items-center justify-between gap-5">
-            <span>{absentLabel}</span>
-            <span className="font-semibold tabular-nums">{absent}</span>
-          </div>
-          {newlyJoined > 0 && (
-            <div className="flex items-center justify-between gap-5">
-              <span>{newLabel}</span>
-              <span className="font-semibold tabular-nums">{newlyJoined}</span>
+    <Card className="overflow-hidden shadow-none">
+      <CardContent className="min-h-[124px] px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
+        </div>
+        <div className="mt-3 grid w-full grid-cols-3 divide-x divide-border/70">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="min-w-0 px-2 text-center first:pl-0 last:pr-0">
+              <p
+                className="min-h-[24px] whitespace-normal text-[9px] font-medium uppercase leading-tight tracking-wide text-muted-foreground sm:text-[10px]"
+                title={metric.label}
+              >
+                {metric.label}
+              </p>
+              <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl" title={String(metric.value)}>
+                {metric.value}
+              </p>
             </div>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -261,11 +219,19 @@ export default function FactoryProductionTargets() {
     },
   });
 
+  const collapsedRows = useMemo(() => collapseLinkedProductionRows(rows), [rows]);
+
   const groupedVisibleRows = useMemo<ProductionGroup[]>(() => {
     const needle = search.trim().toLowerCase();
-    const visibleRows = rows.filter((row) => {
+    const visibleRows = collapsedRows.filter((row) => {
+      const memberMatch = (row.displayMembers ?? []).some(
+        (member) =>
+          member.name.toLowerCase().includes(needle) ||
+          (member.code || "").toLowerCase().includes(needle)
+      );
       return (
         !needle ||
+        memberMatch ||
         row.name.toLowerCase().includes(needle) ||
         row.category.toLowerCase().includes(needle) ||
         (row.groupName || "").toLowerCase().includes(needle) ||
@@ -273,18 +239,19 @@ export default function FactoryProductionTargets() {
       );
     });
     return groupProductionRows(visibleRows);
-  }, [rows, search]);
+  }, [collapsedRows, search]);
 
-  const productionReportGroups = useMemo(() => groupProductionRows(rows), [rows]);
+  const productionReportGroups = useMemo(() => groupProductionRows(collapsedRows), [collapsedRows]);
 
   const totals = useMemo(() => summarizeProductionRows(rows), [rows]);
-
-  const peopleBreakdown = useMemo(() => {
-    const absent = rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length;
-    const newlyJoined = rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.new).length;
-    const present = rows.length - absent - newlyJoined;
-    return { present, absent, newlyJoined };
-  }, [rows]);
+  const workerTotals = useMemo(
+    () => ({
+      total: rows.length,
+      present: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.present).length,
+      absent: rows.filter((row) => row.status === FACTORY_TRACKING_STATUSES.absent).length,
+    }),
+    [rows]
+  );
 
   const busy = sendWhatsappMutation.isPending || endProductionMutation.isPending;
 
@@ -396,27 +363,34 @@ export default function FactoryProductionTargets() {
         </div>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <TargetProducedTile
-          targetLabel={tr("totalTarget")}
-          producedLabel={tr("balesProduced")}
-          target={totals.target}
-          produced={totals.produced}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryGroupTile
+          label={tr("targets")}
+          icon={<Target className="h-5 w-5" />}
+          metrics={[
+            { label: tr("totalTarget"), value: totals.target },
+            { label: tr("totalAbsentTarget"), value: totals.absentTarget },
+            { label: tr("totalExpected"), value: totals.expected },
+          ]}
+        />
+        <SummaryGroupTile
+          label={tr("workers")}
+          icon={<Users className="h-5 w-5" />}
+          metrics={[
+            { label: tr("totalWorkers"), value: workerTotals.total },
+            { label: tr("totalAbsent"), value: workerTotals.absent },
+            { label: tr("totalPresent"), value: workerTotals.present },
+          ]}
         />
         <SummaryTile
-          label={tr("difference")}
-          value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+          label={tr("totalProduced")}
+          value={totals.produced}
           icon={<ClipboardCheck className="h-5 w-5" />}
         />
-        <PeopleSummaryTile
-          label={tr("people")}
-          value={rows.length}
-          presentLabel={tr("present")}
-          absentLabel={tr("absent")}
-          newLabel={tr("new")}
-          present={peopleBreakdown.present}
-          absent={peopleBreakdown.absent}
-          newlyJoined={peopleBreakdown.newlyJoined}
+        <SummaryTile
+          label={tr("diff")}
+          value={totals.difference > 0 ? `+${totals.difference}` : totals.difference}
+          icon={<UserX className="h-5 w-5" />}
         />
       </div>
 
@@ -479,30 +453,38 @@ export default function FactoryProductionTargets() {
                     </TableCell>
                   </TableRow>
                   {group.rows.map((row) => {
-                    const isAbsent = row.status === FACTORY_TRACKING_STATUSES.absent;
+                    const members = row.displayMembers ?? [
+                      {
+                        personId: row.personId,
+                        name: row.name,
+                        code: row.code,
+                        status: row.status,
+                        active: row.active,
+                      },
+                    ];
+                    const isAbsent = members.some(
+                      (member) => member.status === FACTORY_TRACKING_STATUSES.absent
+                    );
                     return (
                       <TableRow
-                        key={row.personId}
+                        key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
                         className={`border-b border-border/70 hover:bg-muted/20 ${
                           isAbsent ? "bg-red-500/5 hover:bg-red-500/10" : ""
                         } ${!row.active ? "opacity-60" : ""}`}
                       >
                         <TableCell className="border-r border-border/70 py-3">
-                          <div className="text-base font-semibold leading-6" dir="auto">
-                            {row.name}
+                          <div className="space-y-1" dir="auto">
+                            {members.map((member) => (
+                              <div
+                                key={member.personId}
+                                className={`text-base font-semibold leading-6 ${
+                                  !member.active ? "opacity-60" : ""
+                                }`}
+                              >
+                                {member.name}
+                              </div>
+                            ))}
                           </div>
-                          {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
-                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" dir="auto">
-                              <Link2 className="h-3 w-3 shrink-0" />
-                              <span>
-                                {tr("linkedWith")}:{" "}
-                                {(row.linkedWorkers ?? [])
-                                  .filter((member) => member.workerId !== row.personId)
-                                  .map((member) => member.workerName)
-                                  .join(", ")}
-                              </span>
-                            </div>
-                          )}
                         </TableCell>
                         <TableCell className="w-[170px] min-w-[170px] max-w-[170px] border-r border-border/70 text-base font-semibold">
                           {row.category || "—"}
@@ -519,17 +501,25 @@ export default function FactoryProductionTargets() {
                           {differenceText(row.targetBales, row.producedBales)}
                         </TableCell>
                         <TableCell>
-                          <div
-                            className={`flex h-9 w-[135px] cursor-not-allowed items-center gap-2 rounded-md border px-3 text-base font-semibold ${
-                              isAbsent
-                                ? "border-red-500/50 bg-red-500/15 text-red-500"
-                                : "border-border bg-muted/70 text-muted-foreground"
-                            }`}
-                            aria-disabled="true"
-                            title={tr("statusControlledFromAttendance")}
-                          >
-                            <LockKeyhole className="h-4 w-4 shrink-0" />
-                            <span>{tr(statusTranslationKey(row.status))}</span>
+                          <div className="space-y-1.5">
+                            {members.map((member) => {
+                              const memberAbsent = member.status === FACTORY_TRACKING_STATUSES.absent;
+                              return (
+                                <div
+                                  key={member.personId}
+                                  className={`flex min-h-8 w-[135px] cursor-not-allowed items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+                                    memberAbsent
+                                      ? "border-red-500/50 bg-red-500/15 text-red-500"
+                                      : "border-border bg-muted/70 text-muted-foreground"
+                                  }`}
+                                  aria-disabled="true"
+                                  title={`${member.name}: ${tr("statusControlledFromAttendance")}`}
+                                >
+                                  <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{tr(statusTranslationKey(member.status))}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -586,15 +576,16 @@ export default function FactoryProductionTargets() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: "repeat(4, 1fr)",
             gap: "12px",
             marginBottom: "20px",
           }}
         >
           {[
-            [`${tr("totalTarget")} / ${tr("balesProduced")}`, `${totals.target} / ${totals.produced}`],
-            [tr("difference"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
-            [tr("people"), rows.length],
+            [tr("totalTarget"), totals.target],
+            [tr("totalAbsentTarget"), totals.absentTarget],
+            [tr("totalExpected"), totals.expected],
+            [tr("diff"), totals.difference > 0 ? `+${totals.difference}` : totals.difference],
           ].map(([label, value]) => (
             <div
               key={String(label)}
@@ -654,31 +645,33 @@ export default function FactoryProductionTargets() {
                   </td>
                 </tr>
                 {group.rows.map((row, index) => {
-                  const statusColor =
-                    row.status === FACTORY_TRACKING_STATUSES.absent
-                      ? "#f87171"
-                      : row.status === FACTORY_TRACKING_STATUSES.new
-                        ? "#fbbf24"
-                        : "#34d399";
+                  const members = row.displayMembers ?? [
+                    {
+                      personId: row.personId,
+                      name: row.name,
+                      code: row.code,
+                      status: row.status,
+                      active: row.active,
+                    },
+                  ];
                   return (
                     <tr
-                      key={`production-report-${row.personId}`}
+                      key={
+                        row.linkGroupId != null
+                          ? `production-report-link-${row.linkGroupId}`
+                          : `production-report-worker-${row.personId}`
+                      }
                       style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
                     >
                       <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
-                        {row.code || "—"}
+                        {members.map((member) => (
+                          <div key={member.personId}>{member.code || "—"}</div>
+                        ))}
                       </td>
                       <td dir="auto" style={{ padding: "12px 10px", border: "1px solid #34383e", fontWeight: 600 }}>
-                        <div>{row.name}</div>
-                        {row.linkGroupId != null && (row.linkedWorkers?.length ?? 0) > 1 && (
-                          <div style={{ marginTop: "4px", color: "#a1a1aa", fontSize: "12px", fontWeight: 400 }}>
-                            {tr("linkedWith")}:{" "}
-                            {(row.linkedWorkers ?? [])
-                              .filter((member) => member.workerId !== row.personId)
-                              .map((member) => member.workerName)
-                              .join(", ")}
-                          </div>
-                        )}
+                        {members.map((member) => (
+                          <div key={member.personId}>{member.name}</div>
+                        ))}
                       </td>
                       <td style={{ padding: "12px 10px", border: "1px solid #34383e", color: "#d4d4d8" }}>
                         {row.groupName || "—"}
@@ -721,11 +714,22 @@ export default function FactoryProductionTargets() {
                           padding: "12px 10px",
                           textAlign: "center",
                           border: "1px solid #34383e",
-                          color: statusColor,
                           fontWeight: 700,
                         }}
                       >
-                        {tr(statusTranslationKey(row.status))}
+                        {members.map((member) => {
+                          const statusColor =
+                            member.status === FACTORY_TRACKING_STATUSES.absent
+                              ? "#f87171"
+                              : member.status === FACTORY_TRACKING_STATUSES.new
+                                ? "#fbbf24"
+                                : "#34d399";
+                          return (
+                            <div key={member.personId} style={{ color: statusColor }}>
+                              {tr(statusTranslationKey(member.status))}
+                            </div>
+                          );
+                        })}
                       </td>
                     </tr>
                   );

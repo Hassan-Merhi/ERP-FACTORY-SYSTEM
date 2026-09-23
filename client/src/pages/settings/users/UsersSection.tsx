@@ -8,13 +8,18 @@ import { AddUserDialog } from "./AddUserDialog";
 import type { SettingsUserRow } from "../settingsTypes";
 import type { Company } from "@shared/schema";
 
-export function UsersSection() {
+interface UsersSectionProps {
+  appMode?: string;
+}
+
+export function UsersSection({ appMode }: UsersSectionProps) {
   const [selectedUser, setSelectedUser] = useState<SettingsUserRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
+  const usersEndpoint = appMode === "factory" ? "/api/factory/users" : "/api/users";
   const { data: rawUsers = [], isLoading } = useQuery<SettingsUserRow[]>({
-    queryKey: ["/api/users"],
+    queryKey: [usersEndpoint],
   });
   const users = [...rawUsers].sort((a, b) =>
     (a.displayName || a.username || "").localeCompare(b.displayName || b.username || "")

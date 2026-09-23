@@ -32,6 +32,13 @@ export interface ProductionRow {
   linkGroupId?: number | null;
   linkedWorkerIds?: number[];
   linkedWorkers?: Array<{ workerId: number; workerName: string }>;
+  displayMembers?: Array<{
+    personId: number;
+    name: string;
+    code: string | null;
+    status: TrackingStatus;
+    active: boolean;
+  }>;
 }
 
 export interface ProductionResponse {
@@ -88,21 +95,125 @@ export function periodFor(type: PeriodType, referenceDate: string) {
   return { start: localDateStr(start), end: localDateStr(end) };
 }
 
+function productionDisplayMember(row: ProductionRow) {
+  return {
+    personId: row.personId,
+    name: row.name,
+    code: row.code,
+    status: row.status,
+    active: row.active,
+  };
+}
+
+export function collapseLinkedProductionRows(sourceRows: ProductionRow[]): ProductionRow[] {
+  const rowsByLink = new Map<number, ProductionRow[]>();
+  for (const row of sourceRows) {
+    if (row.linkGroupId == null) continue;
+    const members = rowsByLink.get(row.linkGroupId) ?? [];
+    members.push(row);
+    rowsByLink.set(row.linkGroupId, members);
+  }
+
+  const emittedLinks = new Set<number>();
+  const collapsed: ProductionRow[] = [];
+
+  for (const row of sourceRows) {
+    if (row.linkGroupId == null) {
+      collapsed.push({ ...row, displayMembers: [productionDisplayMember(row)] });
+      continue;
+    }
+    if (emittedLinks.has(row.linkGroupId)) continue;
+    emittedLinks.add(row.linkGroupId);
+
+    const members = rowsByLink.get(row.linkGroupId) ?? [row];
+    const memberById = new Map(members.map((member) => [member.personId, member]));
+    const orderedIds = [
+      ...(row.linkedWorkerIds ?? []),
+      ...members.map((member) => member.personId),
+    ].filter((id, index, ids) => ids.indexOf(id) === index);
+    const orderedMembers = orderedIds
+      .map((id) => memberById.get(id))
+      .filter((member): member is ProductionRow => Boolean(member));
+    const teamMembers = orderedMembers.length > 0 ? orderedMembers : members;
+    const representative = teamMembers[0] ?? row;
+    const hasTarget = teamMembers.some((member) => member.targetBales != null);
+    const combinedTarget = teamMembers.reduce(
+      (sum, member) => sum + (member.targetBales ?? 0),
+      0
+    );
+    const sharedProduced = teamMembers.reduce(
+      (highest, member) => Math.max(highest, member.producedBales ?? 0),
+      0
+    );
+    const status = teamMembers.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent)
+      ? FACTORY_TRACKING_STATUSES.absent
+      : teamMembers.some((member) => member.status === FACTORY_TRACKING_STATUSES.new)
+        ? FACTORY_TRACKING_STATUSES.new
+        : FACTORY_TRACKING_STATUSES.present;
+
+    collapsed.push({
+      ...representative,
+      targetBales: hasTarget ? combinedTarget : null,
+      producedBales: sharedProduced,
+      status,
+      active: teamMembers.some((member) => member.active),
+      linkedWorkerIds: teamMembers.map((member) => member.personId),
+      linkedWorkers: teamMembers.map((member) => ({
+        workerId: member.personId,
+        workerName: member.name,
+      })),
+      displayMembers: teamMembers.map(productionDisplayMember),
+    });
+  }
+
+  return collapsed;
+}
+
 export function summarizeProductionRows(sourceRows: ProductionRow[]) {
   let target = 0;
+  let absentTarget = 0;
   let produced = 0;
-  const countedLinks = new Set<number>();
+  const linkedRows = new Map<number, ProductionRow[]>();
 
   for (const row of sourceRows) {
     if (row.linkGroupId != null) {
-      if (countedLinks.has(row.linkGroupId)) continue;
-      countedLinks.add(row.linkGroupId);
+      const members = linkedRows.get(row.linkGroupId) ?? [];
+      members.push(row);
+      linkedRows.set(row.linkGroupId, members);
+      continue;
     }
-    target += row.targetBales ?? 0;
+
+    const rowTarget = row.targetBales ?? 0;
+    target += rowTarget;
     produced += row.producedBales ?? 0;
+    if (row.status === FACTORY_TRACKING_STATUSES.absent) absentTarget += rowTarget;
   }
 
-  return { target, produced, difference: produced - target };
+  for (const members of linkedRows.values()) {
+    const combinedTarget = members.reduce(
+      (sum, member) => sum + (member.targetBales ?? 0),
+      0
+    );
+    const sharedProduced = members.reduce(
+      (highest, member) => Math.max(highest, member.producedBales ?? 0),
+      0
+    );
+    target += combinedTarget;
+    produced += sharedProduced;
+
+    // Linked workers share one production count, but each worker still contributes
+    // their own target. Only absent members' targets are removed from expected output.
+    absentTarget += members.reduce(
+      (sum, member) =>
+        member.status === FACTORY_TRACKING_STATUSES.absent
+          ? sum + (member.targetBales ?? 0)
+          : sum,
+      0
+    );
+  }
+
+  const expected = target - absentTarget;
+  return { target, absentTarget, expected, produced, difference: produced - expected };
 }
 
 export function differenceText(target: number | null, produced: number | null) {

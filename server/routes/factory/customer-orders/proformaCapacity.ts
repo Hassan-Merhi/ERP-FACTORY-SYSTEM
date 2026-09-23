@@ -265,6 +265,11 @@ export async function getProformaCapacitySnapshot(
     `)
   );
 
+  // Live loading capacity is deliberately per-loading. Push that scope into
+  // SQL so scans do not aggregate sibling/historical loadings that the reducer
+  // would immediately discard.
+  const contributionOrderScope = options.currentOrderId != null ? sql`AND co.id = ${options.currentOrderId}` : sql``;
+
   const contributionRows = resultRows<ContributionRow>(
     await executor.execute(sql`
       SELECT
@@ -285,6 +290,7 @@ export async function getProformaCapacitySnapshot(
        AND fbp.company_id = co.company_id
       WHERE co.company_id = ${options.companyId}
         AND co.proforma_id_used = ${options.proformaId}
+        ${contributionOrderScope}
         AND co.status <> 'CANCELLED'
         AND co.deleted_at IS NULL
         AND COALESCE(

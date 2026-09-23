@@ -49,6 +49,7 @@ interface UsePosMutationsParams {
   selectedCustomerId: string;
   currentDraftId: number | null;
   notes: string;
+  writesDisabled?: boolean;
   lastSavedFingerprintRef: React.MutableRefObject<string>;
   setSavedSale: (sale: InvoiceSale | null) => void;
   setSaleJustCompleted: (v: boolean) => void;
@@ -123,6 +124,7 @@ export function usePosMutations({
   selectedCustomerId,
   currentDraftId,
   notes,
+  writesDisabled = false,
   lastSavedFingerprintRef,
   setSavedSale,
   setSaleJustCompleted,
@@ -136,6 +138,7 @@ export function usePosMutations({
 }: UsePosMutationsParams) {
   const saveMutation = useMutation({
     mutationFn: async (saleData: PosSalePayload) => {
+      if (writesDisabled) throw new Error("This POS account is view-only.");
       if (editVoucherId) {
         const updateData = {
           description: saleData.notes,
@@ -324,7 +327,10 @@ export function usePosMutations({
   });
 
   const deleteDraftMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/pos/drafts/${id}`),
+    mutationFn: async (id: number) => {
+      if (writesDisabled) throw new Error("This POS account is view-only.");
+      return apiRequest("DELETE", `/api/pos/drafts/${id}`);
+    },
     onSuccess: (_data, draftId) => {
       removePosDraftSummary(activeLocation?.id, draftId);
       toast({ title: "Draft Deleted", description: "Draft has been deleted successfully" });
@@ -333,6 +339,7 @@ export function usePosMutations({
 
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
+      if (writesDisabled) throw new Error("This POS account is view-only.");
       if (!activeLocation) throw new Error("No location selected");
       const validItems = rows.filter((r) => r.stockItemId && r.quantity > 0 && r.rate > 0);
       if (validItems.length === 0) throw new Error("No items to save");

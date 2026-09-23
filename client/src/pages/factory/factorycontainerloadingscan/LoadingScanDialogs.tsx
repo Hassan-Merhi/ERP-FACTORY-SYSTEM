@@ -24,26 +24,26 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
   const { pendingOrders } = model;
   return (
     <Dialog open={model.showPendingWarning} onOpenChange={model.setShowPendingWarning}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md rounded-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Proforma Already Being Loaded
+            {model.tr("proformaAlreadyLoading")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            This proforma already has{" "}
-            {pendingOrders.length === 1 ? "an active loading order" : `${pendingOrders.length} active loading orders`}.
-            You can continue one of them or start a new loading.
+            {pendingOrders.length === 1
+              ? model.tr("pendingLoadingDescriptionOne")
+              : model.tr("pendingLoadingDescriptionMany", { count: pendingOrders.length })}
           </p>
           <div className="space-y-2">
             {pendingOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between gap-2 rounded-md border p-3">
                 <div className="text-sm">
-                  <span className="font-medium">{order.invoiceNumber || `Order #${order.id}`}</span>
+                  <span className="font-medium">{order.invoiceNumber || model.tr("orderNumber", { orderId: order.id })}</span>
                   <span className="text-muted-foreground ml-2">
-                    · {order.totalQtyBales} bales · {order.status}
+                    · {order.totalQtyBales} {model.tr("balesLower")} · {order.status}
                   </span>
                 </div>
                 <Button
@@ -55,7 +55,7 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
                   }}
                   data-testid={`button-resume-order-${order.id}`}
                 >
-                  Resume
+                  {model.tr("resume")}
                   <ArrowRight className="h-3 w-3 ml-1" />
                 </Button>
               </div>
@@ -68,10 +68,10 @@ function PendingLoadingWarning({ model }: { model: FactoryContainerLoadingScanMo
             onClick={() => model.setShowPendingWarning(false)}
             data-testid="button-cancel-pending-warning"
           >
-            Cancel
+            {model.tr("cancel")}
           </Button>
           <Button onClick={model.startNewLoadingAnyway} data-testid="button-create-new-loading">
-            Start New Loading
+            {model.tr("startNewLoading")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -83,12 +83,12 @@ function LastScannedPrompt({ model }: { model: FactoryContainerLoadingScanModel 
   const { lastScannedRef } = model;
   return (
     <Dialog open={model.showLastScannedPopup} onOpenChange={model.setShowLastScannedPopup}>
-      <DialogContent className="max-w-sm" data-testid="dialog-last-scanned">
+      <DialogContent className="max-w-sm rounded-2xl" data-testid="dialog-last-scanned">
         <DialogHeader>
-          <DialogTitle className="text-base">Resuming Loading</DialogTitle>
+          <DialogTitle className="text-base">{model.tr("resumingLoading")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Last bale scanned in this session:</p>
+          <p className="text-sm text-muted-foreground">{model.tr("lastBaleScanned")}</p>
           <div
             className="bg-muted rounded-md px-4 py-3 font-mono text-lg font-semibold text-center"
             data-testid="text-last-scanned-ref"
@@ -103,11 +103,43 @@ function LastScannedPrompt({ model }: { model: FactoryContainerLoadingScanModel 
             onClick={() => model.setShowLastScannedPopup(false)}
             data-testid="button-dismiss-last-scanned"
           >
-            Continue Scanning
+            {model.tr("continueScanning")}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EmptyContainerConfirm({ model }: { model: FactoryContainerLoadingScanModel }) {
+  const baleCount = model.bales.length;
+  return (
+    <AlertDialog open={model.showEmptyContainerConfirm} onOpenChange={model.setShowEmptyContainerConfirm}>
+      <AlertDialogContent className="rounded-2xl" data-testid="dialog-confirm-empty-container">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </span>
+            {model.tr("emptyThisContainer")}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="rounded-xl border bg-muted/20 p-3">
+            {model.tr("emptyContainerDescription", { count: baleCount, orderId: model.orderId ?? "" })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid="button-cancel-empty-container">{model.tr("cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground"
+            data-testid="button-confirm-empty-container"
+            disabled={model.emptyContainerMutation.isPending}
+            onClick={() => model.emptyContainerMutation.mutate()}
+          >
+            {model.emptyContainerMutation.isPending ? model.tr("emptying") : model.tr("emptyContainer")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -120,16 +152,15 @@ function RemoveBaleConfirm({ model }: { model: FactoryContainerLoadingScanModel 
         if (!open) model.setBaleToDelete(null);
       }}
     >
-      <AlertDialogContent data-testid="dialog-confirm-remove-bale">
+      <AlertDialogContent className="rounded-2xl" data-testid="dialog-confirm-remove-bale">
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove bale from loading?</AlertDialogTitle>
+          <AlertDialogTitle>{model.tr("removeBaleQuestion")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Bale <span className="font-mono font-semibold">{baleToDelete?.baleReference}</span> will be removed from
-            this loading and returned to stock. This cannot be undone.
+            {model.tr("removeBaleDescription", { reference: baleToDelete?.baleReference ?? "" })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-remove-bale">Cancel</AlertDialogCancel>
+          <AlertDialogCancel data-testid="button-cancel-remove-bale">{model.tr("cancel")}</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground"
             data-testid="button-confirm-remove-bale"
@@ -140,7 +171,7 @@ function RemoveBaleConfirm({ model }: { model: FactoryContainerLoadingScanModel 
               }
             }}
           >
-            Remove Bale
+            {model.tr("removeBale")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -154,6 +185,7 @@ export function LoadingScanDialogs({ model }: { model: FactoryContainerLoadingSc
       {/* Pending Loading Warning Dialog */}
       <PendingLoadingWarning model={model} />
       <LastScannedPrompt model={model} />
+      <EmptyContainerConfirm model={model} />
       {/* Bale removal confirmation */}
       <RemoveBaleConfirm model={model} />
     </>

@@ -21,9 +21,105 @@ import {
   factoryDaybookEntries,
   customerOrderBaleRemovals,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
+  // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
+  // without cancelling the loading order, so the loader can start the container again from zero.
+  app.post("/api/factory/customer-orders/:id/bales/empty", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const orderId = parseId(req.params.id);
+      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
+
+      const [order] = await db
+        .select()
+        .from(customerOrders)
+        .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)));
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      if (!["DRAFT", "LOADING"].includes(order.status)) {
+        return res.status(400).json({
+          message: "Can only empty a container while the loading order is in DRAFT or LOADING",
+        });
+      }
+
+      const userId = req.user?.id ? String(req.user.id) : null;
+      const username = req.user?.username || null;
+
+      const removedCount = await db.transaction(async (tx) => {
+        // Delete the order links first and use RETURNING so concurrent requests
+        // cannot both claim the same scanned bales.
+        const removedLinks = await tx
+          .delete(customerOrderBales)
+          .where(eq(customerOrderBales.orderId, orderId))
+          .returning({
+            id: customerOrderBales.id,
+            baleId: customerOrderBales.baleId,
+          });
+
+        if (removedLinks.length === 0) {
+          await recalculateOrderTotals(tx, orderId);
+          return 0;
+        }
+
+        const baleIds = removedLinks.map((row) => row.baleId);
+        const baleDetails = await tx
+          .select()
+          .from(factoryBales)
+          .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
+
+        await tx
+          .update(factoryBales)
+          .set({ status: "IN_STOCK", updatedAt: new Date() })
+          .where(and(inArray(factoryBales.id, baleIds), eq(factoryBales.companyId, companyId)));
+
+        if (baleDetails.length > 0) {
+          await tx.insert(customerOrderBaleRemovals).values(
+            baleDetails.map((bale) => ({
+              orderId,
+              baleId: bale.id,
+              referenceNumber: bale.referenceNumber,
+              articleCode: bale.articleCode || null,
+              productName: bale.productName || null,
+              weightKg: bale.weightKg,
+              removedByUserId: userId,
+              removedByUsername: username,
+            }))
+          );
+        }
+
+        await recalculateOrderTotals(tx, orderId);
+        return removedLinks.length;
+      });
+
+      const [updatedOrder] = await db
+        .select({
+          status: customerOrders.status,
+          totalQtyBales: customerOrders.totalQtyBales,
+          totalWeightKg: sql<string>`COALESCE(
+            (SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}),
+            0
+          )::text`,
+        })
+        .from(customerOrders)
+        .where(eq(customerOrders.id, orderId));
+      res.json({
+        message: removedCount === 0 ? "Container is already empty" : "Container emptied and bales returned to stock",
+        removed: removedCount,
+        orderId,
+        status: updatedOrder?.status,
+        totalQtyBales: updatedOrder?.totalQtyBales,
+        totalWeightKg: updatedOrder?.totalWeightKg ?? "0",
+      });
+    } catch (error: unknown) {
+      logger.error("Error emptying loading container:", { error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.delete("/api/factory/customer-orders/:id/bales/:baleId", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

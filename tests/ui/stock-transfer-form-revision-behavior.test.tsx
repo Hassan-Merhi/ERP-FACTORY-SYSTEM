@@ -110,6 +110,7 @@ vi.mock("@/pages/vouchers/stock-transfer-form/dialogs/ApproveRevisionDialog", ()
   ApproveRevisionDialog: ({ approveRevisionTarget, approveRevisionMutation }: any) =>
     approveRevisionTarget ? (
       <button
+        type="button"
         data-testid="confirm-approve-revision"
         onClick={() => approveRevisionMutation.mutate(approveRevisionTarget.id)}
       >
@@ -284,7 +285,9 @@ describe("stock transfer form revision behavior", () => {
     render(<StockTransferForm voucherIdToEdit={90} />);
     const historyToggle = await screen.findByText("Revision History");
     fireEvent.click(historyToggle.closest("button")!);
-    fireEvent.click(await screen.findByTestId("button-approve-revision-41"));
+    const approveButton = await screen.findByTestId("button-approve-revision-41");
+    expect(approveButton).toHaveAttribute("type", "button");
+    fireEvent.click(approveButton);
     fireEvent.click(await screen.findByTestId("confirm-approve-revision"));
 
     await waitFor(() =>
@@ -293,5 +296,6 @@ describe("stock transfer form revision behavior", () => {
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers", 9, "revisions"] });
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers", 90] });
     expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/stock-transfers/list"] });
+    expect(harness.apiRequest).not.toHaveBeenCalledWith("PUT", "/api/stock-transfers/9", expect.anything());
   });
 });

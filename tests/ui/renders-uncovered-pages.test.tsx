@@ -128,7 +128,7 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
     landmark: "select-destination-location",
   },
   { name: "StockTransferOrder", load: () => import("@/pages/StockTransferOrder"), landmark: "select-destination" },
-  { name: "StockEntryHistory", load: () => import("@/pages/StockEntryHistory"), landmark: "button-view-condensed" },
+  { name: "StockEntryHistory", load: () => import("@/pages/StockEntryHistory"), landmark: "input-search" },
   { name: "StockItems", load: () => import("@/pages/StockItems"), landmark: "button-add-item" },
   { name: "StockOTW", load: () => import("@/pages/StockOTW"), landmark: "button-export-excel" },
   { name: "ImportStockItems", load: () => import("@/pages/ImportStockItems"), landmark: "button-back" },

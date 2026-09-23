@@ -8,20 +8,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumber } from "../customerLoadingFormat";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
 function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
   const { proformaProgress, extraArticles, groupedBalesMap, loadedByArticle } = model;
   return (
-    <div className="overflow-y-auto max-h-[340px] border rounded-md">
+    <div className="max-h-[340px] overflow-y-auto rounded-xl border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Article / Product</TableHead>
-            <TableHead className="text-right">Proforma</TableHead>
-            <TableHead className="text-right">Loaded Here</TableHead>
-            <TableHead className="text-right">Remaining</TableHead>
-            <TableHead className="text-right">Status</TableHead>
+            <TableHead>{model.tr("article")} / {model.tr("product")}</TableHead>
+            <TableHead className="text-right">{model.tr("proforma")}</TableHead>
+            <TableHead className="text-right">{model.tr("loadedKpi")}</TableHead>
+            <TableHead className="text-right">{model.tr("remaining")}</TableHead>
+            <TableHead className="text-right">{model.tr("status")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -47,24 +48,24 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
                 <TableCell className="text-right font-mono text-sm">{line.remaining}</TableCell>
                 <TableCell className="text-right text-sm">
                   {line.status === "fulfilled" && (
-                    <span className="text-green-600 dark:text-green-400 font-semibold">Loaded</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold">{model.tr("loaded")}</span>
                   )}
                   {line.status === "overloaded" && (
                     <span className="text-orange-600 dark:text-orange-400 font-semibold flex items-center justify-end gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      Overloaded +{line.excess}
+                      {model.tr("overloaded")} +{line.excess}
                     </span>
                   )}
                   {line.status === "short" && (
                     <span className="text-yellow-700 dark:text-yellow-300 font-semibold flex items-center justify-end gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      Less Loaded
+                      {model.tr("lessLoaded")}
                     </span>
                   )}
                   {line.status === "none" && (
                     <span className="text-red-600 dark:text-red-400 font-semibold flex items-center justify-end gap-1">
                       <AlertTriangle className="h-3 w-3" />
-                      Missing
+                      {model.tr("missing")}
                     </span>
                   )}
                 </TableCell>
@@ -80,14 +81,14 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
                     {groupedBalesMap[code].baleName}
                   </div>
                 )}
-                <div className="text-muted-foreground text-xs">Not on Proforma — Allowed</div>
+                <div className="text-muted-foreground text-xs">{model.tr("notOnProformaAllowed")}</div>
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
               <TableCell className="text-right font-mono text-sm font-semibold">{loadedByArticle[code]}</TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
               <TableCell className="text-right text-sm">
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Not on Proforma — Allowed
+                  {model.tr("notOnProformaAllowed")}
                 </Badge>
               </TableCell>
             </TableRow>
@@ -105,22 +106,22 @@ function ReviewTotals({ model }: { model: FactoryContainerLoadingScanModel }) {
   const lessLoaded = proformaProgress.filter((line) => line.status === "short").length;
   const missing = proformaProgress.filter((line) => line.status === "none").length;
   return (
-    <div className="flex items-center justify-between gap-2 text-sm border-t pt-2 flex-wrap gap-y-1">
+    <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1 rounded-xl border bg-muted/20 px-3 py-2.5 text-sm">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-green-600 dark:text-green-400 font-medium">{loaded} loaded</span>
+        <span className="text-green-600 dark:text-green-400 font-medium">{loaded} {model.tr("loaded").toLowerCase()}</span>
         {overloaded > 0 && (
-          <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} overloaded</span>
+          <span className="text-orange-600 dark:text-orange-400 font-medium">{overloaded} {model.tr("overloaded").toLowerCase()}</span>
         )}
         {lessLoaded > 0 && (
-          <span className="text-yellow-700 dark:text-yellow-300 font-medium">{lessLoaded} less loaded</span>
+          <span className="text-yellow-700 dark:text-yellow-300 font-medium">{lessLoaded} {model.tr("lessLoaded").toLowerCase()}</span>
         )}
-        {missing > 0 && <span className="text-red-600 dark:text-red-400 font-medium">{missing} missing</span>}
+        {missing > 0 && <span className="text-red-600 dark:text-red-400 font-medium">{missing} {model.tr("missing").toLowerCase()}</span>}
         {extraArticles.length > 0 && (
-          <span className="text-muted-foreground font-medium">{extraArticles.length} not on proforma — allowed</span>
+          <span className="text-muted-foreground font-medium">{extraArticles.length} {model.tr("notOnProformaAllowed").toLowerCase()}</span>
         )}
       </div>
       <span className="text-muted-foreground">
-        {bales.length} bales · {totalWeight.toFixed(1)} kg
+        {bales.length} {model.tr("balesLower")} · {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
       </span>
     </div>
   );
@@ -131,48 +132,45 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
   const hasProformaReview = !!linkedProforma && proformaProgress.length > 0;
   return (
     <Dialog open={model.showFinalizeDialog} onOpenChange={model.setShowFinalizeDialog}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl rounded-2xl">
         <DialogHeader>
-          <DialogTitle>Validate Loading</DialogTitle>
+          <DialogTitle className="text-lg">{model.tr("validateLoading")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {hasProformaReview ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Review this loading against the reusable proforma. Statuses are informational and apply to this loading
-                only.
-              </p>
+              <p className="text-sm text-muted-foreground">{model.tr("reviewReusableProforma")}</p>
               <ReviewTable model={model} />
               <ReviewTotals model={model} />
             </>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                This will mark the loading as complete and send it for office verification.
+                {model.tr("completeSendVerification")}
               </p>
               <div className="space-y-1 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span>Total Bales:</span>
+                  <span>{model.tr("totalBales")}</span>
                   <span className="font-mono font-semibold" data-testid="text-dialog-total-bales">
                     {bales.length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span>Total Weight:</span>
+                  <span>{model.tr("totalWeight")}</span>
                   <span className="font-mono font-semibold" data-testid="text-dialog-total-weight">
-                    {totalWeight.toFixed(2)} kg
+                    {formatNumber(totalWeight, 2)} {model.tr("kgUnit")}
                   </span>
                 </div>
               </div>
             </>
           )}
           <div className="space-y-1">
-            <label className="text-sm font-medium">Loading Date</label>
+            <label className="text-sm font-medium">{model.tr("loadingDate")}</label>
             <input
               type="date"
               value={model.finalizeDate}
               onChange={(e) => model.setFinalizeDate(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               data-testid="input-finalize-date"
             />
           </div>
@@ -182,7 +180,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               onClick={() => model.setShowFinalizeDialog(false)}
               data-testid="button-cancel-finalize"
             >
-              Cancel
+              {model.tr("cancel")}
             </Button>
             <Button
               onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate })}
@@ -190,7 +188,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               data-testid="button-confirm-finalize"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
-              {finalizeMutation.isPending ? "Finalizing..." : "Confirm Finalize"}
+              {finalizeMutation.isPending ? model.tr("finalizing") : model.tr("confirmFinalize")}
             </Button>
           </div>
         </div>

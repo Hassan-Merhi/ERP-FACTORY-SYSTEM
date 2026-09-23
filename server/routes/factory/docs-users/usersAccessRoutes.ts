@@ -87,10 +87,11 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         accessMap.get(entry.userId)!.push(entry.pageKey);
       });
 
-      const result = visibleUsers.map(({ companyRole: _companyRole, ...user }) => {
+      const result = visibleUsers.map(({ companyRole, ...user }) => {
         const profile = profileMap.get(user.id);
         return {
           ...user,
+          role: companyRole,
           displayName: profile?.displayName || null,
           hasErpAccess: profile?.hasErpAccess ?? true,
           hasFactoryAccess: profile?.hasFactoryAccess ?? true,
@@ -454,15 +455,22 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         "bales_list_cost_per_kg",
         "hide_proforma_price",
       ];
-      const hiddenCostFields = hideAllCosts ? ALL_COST_KEYS : (profile?.hiddenCostFields ?? []);
+      const profileHiddenFields = profile?.hiddenCostFields ?? [];
+      const hiddenCostFields = hideAllCosts
+        ? Array.from(new Set([...profileHiddenFields, ...ALL_COST_KEYS]))
+        : profileHiddenFields;
 
       const access = await db
         .select({ pageKey: factoryUserPageAccess.pageKey })
         .from(factoryUserPageAccess)
         .where(and(eq(factoryUserPageAccess.companyId, companyId), eq(factoryUserPageAccess.userId, userId)));
+      // Factory and ERP page selections share the same persistence table. Only
+      // Factory keys may switch Factory Mode into allow-list mode; otherwise an
+      // ERP-only restriction would accidentally hide every Factory page.
+      const factoryAccess = access.filter((entry) => entry.pageKey.startsWith("factory/"));
 
       res.set("Cache-Control", "private, max-age=120");
-      if (access.length === 0) {
+      if (factoryAccess.length === 0) {
         return res.json({
           fullAccess: true,
           pageKeys: [],
@@ -477,7 +485,7 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
 
       res.json({
         fullAccess: false,
-        pageKeys: access.map((entry) => entry.pageKey),
+        pageKeys: factoryAccess.map((entry) => entry.pageKey),
         hasErpAccess,
         hasFactoryAccess,
         hiddenCostFields,

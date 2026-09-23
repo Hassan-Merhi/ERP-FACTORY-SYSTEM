@@ -119,6 +119,9 @@ vi.mock("wouter", () => ({
   useSearch: () => "?orderId=77",
 }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
+vi.mock("@/contexts/ApplicationLanguageContext", () => ({
+  useApplicationLanguage: () => ({ language: "en" }),
+}));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: harness.invalidateQueries, setQueryData: harness.setQueryData },
@@ -167,10 +170,18 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogTitle: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
-  AlertDialog: ({ children, open }: any) => (open ? <div>{children}</div> : null),
-  AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
-  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialog: ({ children, open }: any) => (
+    <div data-testid="alert-dialog-root" data-open={String(Boolean(open))}>
+      {children}
+    </div>
+  ),
+  AlertDialogAction: ({ children, onClick, ...props }: any) => (
+    <button onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
+  AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  AlertDialogContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -216,6 +227,9 @@ describe("factory container loading scan behavior", () => {
           }),
         };
       }
+      if (method === "POST" && url === "/api/factory/customer-orders/77/bales/empty") {
+        return { json: async () => ({ removed: 1 }) };
+      }
       return { json: async () => ({ success: true }) };
     });
     vi.stubGlobal(
@@ -226,9 +240,9 @@ describe("factory container loading scan behavior", () => {
 
   it("resumes an in-progress loading without restoring persisted scan evidence", async () => {
     render(<FactoryContainerLoadingScan />);
-    await waitFor(() => expect(screen.getByTestId("badge-resuming")).toHaveTextContent("Resuming Loading #77"));
+    await waitFor(() => expect(screen.getByTestId("badge-resuming")).toHaveTextContent("Resuming #77"));
     expect(screen.getByTestId("badge-bale-count")).toHaveTextContent("1 bales");
-    expect(screen.getByTestId("badge-total-weight")).toHaveTextContent("50.00 kg");
+    expect(screen.getByTestId("badge-total-weight")).toHaveTextContent("50 kg");
     expect(screen.queryByTestId("banner-last-scanned")).not.toBeInTheDocument();
     expect(screen.getByTestId("card-proforma-progress")).toBeInTheDocument();
     expect(screen.getByTestId("row-progress-A1")).toHaveTextContent("2");
@@ -305,5 +319,29 @@ describe("factory container loading scan behavior", () => {
     fireEvent.click(screen.getByTestId("button-toggle-removal-log"));
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("REF-REMOVED");
     expect(screen.getByTestId("row-removal-201")).toHaveTextContent("loader");
+  });
+
+  it("empties the loading only after confirmation and returns all scanned bales to stock", async () => {
+    render(<FactoryContainerLoadingScan />);
+
+    const emptyButton = await screen.findByTestId("button-empty-container");
+    expect(emptyButton).toBeEnabled();
+
+    expect(harness.apiRequest).not.toHaveBeenCalledWith("POST", "/api/factory/customer-orders/77/bales/empty", {});
+
+    fireEvent.click(emptyButton);
+    const confirmDialog = screen.getByTestId("dialog-confirm-empty-container");
+    expect(confirmDialog).toHaveTextContent("All 1 scanned bale");
+    expect(confirmDialog).toHaveTextContent("start scanning again from zero");
+
+    fireEvent.click(screen.getByTestId("button-confirm-empty-container"));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/customer-orders/77/bales/empty", {})
+    );
+    expect(harness.toast).toHaveBeenCalledWith({
+      title: "Container emptied",
+      description: "1 scanned bale was returned to stock. You can start scanning again.",
+    });
   });
 });

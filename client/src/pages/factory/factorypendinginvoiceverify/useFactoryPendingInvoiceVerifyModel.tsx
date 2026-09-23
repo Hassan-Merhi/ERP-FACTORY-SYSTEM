@@ -416,6 +416,70 @@ export function useFactoryPendingInvoiceVerifyModel() {
     });
   };
 
+  // Keep the verified-order Actions menu in parity with finalized invoices.
+  // Fetching as a blob preserves auth cookies and lets us surface export errors
+  // instead of opening a new tab that can fail silently.
+  const downloadFromUrl = async (url: string, fallbackName: string) => {
+    try {
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Server error ${res.status}`);
+      }
+      const blob = await res.blob();
+      if (blob.size === 0) {
+        throw new Error("Server returned an empty file.");
+      }
+      const cd = res.headers.get("content-disposition") || "";
+      const starMatch = cd.match(/filename\*=UTF-8''([^;\s]+)/i);
+      const plainMatch = cd.match(/filename="([^"]+)"/i);
+      const rawName = starMatch ? starMatch[1] : plainMatch ? plainMatch[1] : null;
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = rawName ? decodeURIComponent(rawName) : fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      }, 10000);
+    } catch (error) {
+      toast({ title: "Export failed", description: getErrorDetails(error).message, variant: "destructive" });
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!orderId) return;
+    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel`, "invoice.xlsx");
+  };
+
+  const handleExportExcelNoCharges = () => {
+    if (!orderId) return;
+    void downloadFromUrl(
+      `/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`,
+      "invoice-no-charges.xlsx"
+    );
+  };
+
+  const handleExportPdf = () => {
+    if (!orderId) return;
+    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf`, "invoice.pdf");
+  };
+
+  const handleExportPdfNoCharges = () => {
+    if (!orderId) return;
+    void downloadFromUrl(
+      `/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`,
+      "invoice-no-charges.pdf"
+    );
+  };
+
+  const handleExportLoadingStatus = () => {
+    if (!orderId) return;
+    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/loading-status-export`, "loading-status.xlsx");
+  };
+
   const _getComparisonRowClass = (status: ComparisonItem["status"]) => {
     switch (status) {
       case "LOADED_NOT_IN_PROFORMA":
@@ -604,5 +668,10 @@ export function useFactoryPendingInvoiceVerifyModel() {
     isLoadingStatus,
     totalNotLoadedBales,
     totalNotLoadedWeight,
+    handleExportExcel,
+    handleExportExcelNoCharges,
+    handleExportPdf,
+    handleExportPdfNoCharges,
+    handleExportLoadingStatus,
   } as const;
 }
