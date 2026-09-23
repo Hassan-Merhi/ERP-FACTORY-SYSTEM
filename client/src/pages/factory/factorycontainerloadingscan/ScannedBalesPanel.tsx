@@ -317,6 +317,21 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
               </Badge>
             )}
             <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => model.setShowEmptyContainerConfirm(true)}
+              disabled={bales.length === 0 || model.emptyContainerMutation.isPending}
+              className="h-8 border-destructive/40 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive sm:px-3"
+              title="Remove all scanned bales and return them to stock"
+              data-testid="button-empty-container"
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
+              <span className="hidden sm:inline">
+                {model.emptyContainerMutation.isPending ? "Emptying…" : "Empty Container"}
+              </span>
+            </Button>
+            <Button
               size="icon"
               variant={viewMode === "detailed" ? "secondary" : "ghost"}
               onClick={() => model.setViewMode(viewMode === "detailed" ? "condensed" : "detailed")}
