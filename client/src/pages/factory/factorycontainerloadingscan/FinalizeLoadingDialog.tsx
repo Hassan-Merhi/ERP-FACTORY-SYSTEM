@@ -88,7 +88,7 @@ function ReviewTable({ model }: { model: FactoryContainerLoadingScanModel }) {
               <TableCell className="text-right font-mono text-sm text-muted-foreground">—</TableCell>
               <TableCell className="text-right text-sm">
                 <Badge variant="outline" className="text-xs text-muted-foreground">
-                  Not on Proforma — Allowed
+                  {model.tr("notOnProformaAllowed")}
                 </Badge>
               </TableCell>
             </TableRow>
@@ -139,10 +139,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
         <div className="space-y-4">
           {hasProformaReview ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Review this loading against the reusable proforma. Statuses are informational and apply to this loading
-                only.
-              </p>
+              <p className="text-sm text-muted-foreground">{model.tr("reviewReusableProforma")}</p>
               <ReviewTable model={model} />
               <ReviewTotals model={model} />
             </>
@@ -183,7 +180,7 @@ export function FinalizeLoadingDialog({ model }: { model: FactoryContainerLoadin
               onClick={() => model.setShowFinalizeDialog(false)}
               data-testid="button-cancel-finalize"
             >
-              Cancel
+              {model.tr("cancel")}
             </Button>
             <Button
               onClick={() => finalizeMutation.mutate({ txDate: model.finalizeDate })}
