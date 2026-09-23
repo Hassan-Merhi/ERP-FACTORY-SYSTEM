@@ -29,6 +29,13 @@ const VIEWPORTS = [
 ];
 
 const ROUTES = [
+  // Primary ERP navigation and dashboards.
+  { url: "/tracking", marker: "/tracking" },
+  { url: "/financial-overview", marker: "/financial-overview" },
+  { url: "/pos", marker: "/pos" },
+  { url: "/pos-item-replacement", marker: "/pos-item-replacement" },
+
+  // Inventory, parties, containers, accounting, and vouchers.
   { url: "/accounts", marker: "/accounts", checkHoverActions: true },
   { url: "/parties?tab=suppliers", marker: "/parties", checkHoverActions: true },
   { url: "/parties?tab=customers", marker: "/parties", checkHoverActions: true },
@@ -41,18 +48,61 @@ const ROUTES = [
   { url: "/daybook", marker: "/daybook" },
   { url: "/transaction-journal", marker: "/transaction-journal" },
   { url: "/vouchers", marker: "/vouchers" },
+  { url: "/optional-vouchers", marker: "/optional-vouchers", mobileAlternative: true },
+  { url: "/stock-transfer-order", marker: "/stock-transfer-order" },
   { url: "/sales-tools?tab=transfers", marker: "/sales-tools", mobileAlternative: true },
+
+  // Reports, opening/closing stock, imports, and tools.
   { url: "/sales-report", marker: "/sales-report" },
+  { url: "/stock-in-sales-report", marker: "/stock-in-sales-report" },
   { url: "/opening-stock", marker: "/opening-stock" },
   { url: "/closing-stock-summary", marker: "/closing-stock-summary" },
   { url: "/po-import", marker: "/po-import" },
+  { url: "/pos-import", marker: "/pos-import" },
   { url: "/import-stock-items", marker: "/import-stock-items" },
-  { url: "/optional-vouchers", marker: "/optional-vouchers", mobileAlternative: true },
   { url: "/barcode-manager", marker: "/barcode-manager", mobileAlternative: true },
-  { url: "/deleted-items", marker: "/deleted-items", mobileAlternative: true },
-  { url: "/orphaned-records", marker: "/orphaned-records", mobileAlternative: true },
+  { url: "/bale-ledger", marker: "/bale-ledger" },
+  { url: "/payroll", marker: "/payroll" },
+  { url: "/create", marker: "/create" },
+  { url: "/analytics", marker: "/analytics" },
+  { url: "/agents", marker: "/agents" },
+  { url: "/chat", marker: "/chat" },
+
+  // ERP rental and reconciliation surfaces.
+  { url: "/erp/rental/warehouses", marker: "/erp/rental/warehouses" },
+  { url: "/erp/rental/shops", marker: "/erp/rental/shops" },
+  { url: "/erp/rental/payments", marker: "/erp/rental/payments" },
+  { url: "/conflicts", marker: "/conflicts" },
+  { url: "/intercompany-links", marker: "/intercompany-links" },
+  { url: "/intercompany-requests", marker: "/intercompany-requests" },
+
+  // Admin / developer ERP surfaces. These are part of ERP mode and must remain
+  // phone-safe even though they are used less frequently.
   { url: "/settings", marker: "/settings", checkHoverActions: true },
-];
+  { url: "/orphaned-records", marker: "/orphaned-records", mobileAlternative: true },
+  { url: "/deleted-items", marker: "/deleted-items", mobileAlternative: true },
+  { url: "/chatbot-settings", marker: "/chatbot-settings" },
+  { url: "/notification-settings", marker: "/notification-settings" },
+  { url: "/account-groups", marker: "/account-groups" },
+  { url: "/test-data-import", marker: "/test-data-import" },
+  { url: "/import-cycle-diagnostics", marker: "/import-cycle-diagnostics" },
+  { url: "/inventory-repair", marker: "/inventory-repair" },
+  { url: "/balance-repair", marker: "/balance-repair" },
+  { url: "/convergence-reconciliation", marker: "/convergence-reconciliation" },
+  { url: "/net-position-details", marker: "/net-position-details" },
+  { url: "/company-data-reset", marker: "/company-data-reset" },
+  { url: "/account-migration", marker: "/account-migration" },
+  { url: "/account-transfer", marker: "/account-transfer" },
+  { url: "/my-settings", marker: "/my-settings" },
+
+  // Developer-only ERP utilities still render inside the ERP shell.
+  { url: "/ai-validation", marker: "/ai-validation" },
+  { url: "/ai-command-center", marker: "/ai-command-center" },
+  { url: "/company-transfer", marker: "/company-transfer" },
+  { url: "/net-profit-report", marker: "/net-profit-report" },
+  { url: "/spreadsheet", marker: "/spreadsheet" },
+  { url: "/live-sheets", marker: "/live-sheets" },
+]
 
 const report = {
   startedAt: new Date().toISOString(),
@@ -205,6 +255,37 @@ async function readState(page, route, viewport) {
               .filter((element) => Number(getComputedStyle(element).opacity || "1") < 0.5).length
           : 0;
 
+      const hasHorizontalScrollOwner = (element) => {
+        for (let current = element.parentElement; current && current !== routeRoot; current = current.parentElement) {
+          const style = getComputedStyle(current);
+          if (/auto|scroll/.test(style.overflowX)) return true;
+        }
+        return false;
+      };
+
+      const escapedContent =
+        phoneClass && routeRoot
+          ? [...routeRoot.querySelectorAll("*")]
+              .filter(visible)
+              .filter((element) => {
+                if (!(element instanceof HTMLElement)) return false;
+                const rect = element.getBoundingClientRect();
+                if (rect.left >= -2 && rect.right <= viewportWidth + 2) return false;
+                const style = getComputedStyle(element);
+                if (style.position === "fixed") return false;
+                return !hasHorizontalScrollOwner(element);
+              })
+              .map((element) => {
+                const rect = element.getBoundingClientRect();
+                const label =
+                  element.getAttribute("data-testid") ||
+                  element.getAttribute("aria-label") ||
+                  element.tagName.toLowerCase();
+                return `${label}:${Math.round(rect.left)}..${Math.round(rect.right)}`;
+              })
+              .slice(0, 12)
+          : [];
+
       const mobileCandidates = mobileAlternative && routeRoot ? [...routeRoot.querySelectorAll('[class~="md:hidden"]')] : [];
       const desktopCandidates =
         mobileAlternative && routeRoot ? [...routeRoot.querySelectorAll('[class~="hidden"][class~="md:block"]')] : [];
@@ -221,6 +302,7 @@ async function readState(page, route, viewport) {
         phoneLandscapeMedia: matchMedia("(hover: none) and (pointer: coarse) and (max-height: 500px)").matches,
         undersized,
         hiddenActionButtons,
+        escapedContent,
         mobileCandidateCount: mobileCandidates.length,
         desktopCandidateCount: desktopCandidates.length,
         mobileVisibleCount,
@@ -253,6 +335,9 @@ function assertState(state, viewport, route) {
   }
   if (viewport.phoneClass && route.checkHoverActions && state.hiddenActionButtons > 0) {
     failures.push(`${label}: ${state.hiddenActionButtons} actionable hover-hidden button(s) remain`);
+  }
+  if (viewport.phoneClass && state.escapedContent.length > 0) {
+    failures.push(`${label}: content escaped the phone viewport outside a horizontal scroll region: ${state.escapedContent.join(", ")}`);
   }
   if (viewport.name === "phone-landscape" && !state.phoneLandscapeMedia) {
     failures.push(`${label}: coarse landscape-phone media query did not activate`);
