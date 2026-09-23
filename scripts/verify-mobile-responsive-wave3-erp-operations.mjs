@@ -31,6 +31,7 @@ expectTokens("client/src/erp-mobile-operations.css", [
   '[data-erp-route="/stock"] [class~="md:hidden"]',
   '[data-erp-route="/sales-tools"] [class~="md:hidden"]',
   '[data-erp-route="/optional-vouchers"] [class~="md:hidden"]',
+  '[data-erp-route="/settings"] .grid.grid-cols-2',
   'max-height: calc(var(--app-viewport-height) - 10rem) !important',
 ]);
 
@@ -135,6 +136,15 @@ for (const route of [
   "/account-migration",
   "/account-transfer",
   "/my-settings",
+  "/git",
+  "/containers-otw",
+  "/supplier-profit-check",
+  "/ai-validation",
+  "/ai-command-center",
+  "/company-transfer",
+  "/net-profit-report",
+  "/spreadsheet",
+  "/live-sheets",
 ]) {
   if (!routes.includes(`"${route}"`)) failures.push(`ErpRoutes: missing Wave 3 route ${route}`);
 }
@@ -162,6 +172,17 @@ expectTokens("client/src/components/vouchers/CreditNoteTab.tsx", [
   "sm:col-span-2",
 ]);
 expectTokens("client/src/pages/vouchers/VoucherForm.tsx", ["flex-wrap", "justify-end"]);
+expectTokens("client/src/pages/SpreadsheetEditor.tsx", [
+  "var(--app-viewport-height)",
+  "min-w-0 flex-1",
+  "hidden sm:inline",
+]);
+expectTokens("client/src/pages/TransporterStatement.tsx", [
+  "w-full sm:w-[220px]",
+  "w-full sm:w-[140px]",
+  "flex w-full flex-wrap",
+]);
+expectTokens("client/src/pages/AccountMigration.tsx", ["grid grid-cols-1 gap-2 text-sm sm:grid-cols-3"]);
 
 // Reports/opening/closing already have responsive page contracts; Wave 3 protects them rather than redesigning formulas.
 expectTokens("client/src/pages/OpeningStockSummary.tsx", ["grid-cols-2", "sm:grid-cols-7", "hidden sm:block"]);
