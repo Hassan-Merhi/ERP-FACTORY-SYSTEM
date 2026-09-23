@@ -175,11 +175,7 @@ export default function VoucherDetail() {
       <div className="sm:px-4 sm:pt-4">
         <PageHeader
           title={`No. ${data?.voucherNumber || ""}`}
-          subtitle={
-            fromDaybook
-              ? "Accounting Voucher Alteration (Secondary) · from Daybook"
-              : "Accounting Voucher Alteration (Secondary)"
-          }
+          subtitle="Accounting Voucher Alteration (Secondary)"
           onBack={handleBack}
           meta={
             <>
