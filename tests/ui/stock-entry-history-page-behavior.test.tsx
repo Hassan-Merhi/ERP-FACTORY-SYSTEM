@@ -107,7 +107,13 @@ vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({ formatDisplayDate: (value: string) => `D:${value}` }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
-vi.mock("@/lib/queryClient", () => ({ apiRequest: harness.apiRequest }));
+vi.mock("@/lib/queryClient", () => ({
+  apiRequest: harness.apiRequest,
+  queryClient: {
+    invalidateQueries: harness.invalidateQueries,
+    fetchQuery: harness.fetchQuery,
+  },
+}));
 vi.mock("@/lib/excelHelper", () => ({
   utils: {
     book_new: vi.fn(() => ({})),
@@ -174,48 +180,58 @@ describe("stock entry history page behavior", () => {
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
   });
 
-  it("summarizes worker production against Production Targets", () => {
+  it("renders the simplified history summary and detailed bale rows", () => {
     render(<StockEntryHistory />);
 
     expect(screen.getByRole("heading", { name: "Stock Entry History" })).toBeInTheDocument();
-    const workerCell = screen.getByRole("cell", { name: "Alice" });
-    expect(workerCell).toBeInTheDocument();
-    const workerRow = workerCell.closest("tr");
-    expect(workerRow).not.toBeNull();
-    expect(within(workerRow!).getByRole("cell", { name: "3" })).toBeInTheDocument();
-    expect(within(workerRow!).getByRole("cell", { name: "75.00" })).toBeInTheDocument();
-    expect(screen.getByText("-2")).toBeInTheDocument();
+    expect(screen.getByText("Groups")).toBeInTheDocument();
+    expect(screen.getByText("Bales")).toBeInTheDocument();
+    expect(screen.getByText("Weight")).toBeInTheDocument();
+
+    const row = screen.getByTestId("row-bale-101");
+    expect(within(row).getByText("REF-101")).toBeInTheDocument();
+    expect(within(row).getByText("Alice")).toBeInTheDocument();
+    expect(within(row).getByText("Shirts")).toBeInTheDocument();
+    expect(within(row).getByText("SH-1")).toBeInTheDocument();
+    expect(within(row).getByText("25")).toBeInTheDocument();
+    expect(within(row).getByText("IN_STOCK")).toBeInTheDocument();
   });
 
-  it("switches to detailed bale history and exposes the recorded reference", () => {
-    render(<StockEntryHistory />);
-    fireEvent.click(screen.getByTestId("button-view-detailed"));
-
-    expect(screen.getByText("REF-101")).toBeInTheDocument();
-    expect(screen.getByText("SH-1")).toBeInTheDocument();
-    expect(screen.getAllByText("IN_STOCK")).not.toHaveLength(0);
-  });
-
-  it("reports the active date and deactivates it when the From toggle is cleared", async () => {
+  it("reports the active date and clears it when the date filter is cleared", async () => {
     const onActiveDateChange = vi.fn();
     render(<StockEntryHistory onActiveDateChange={onActiveDateChange} />);
 
     await waitFor(() => expect(onActiveDateChange).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)));
-    fireEvent.click(screen.getByTestId("button-toggle-from-date"));
+    fireEvent.change(screen.getByTestId("input-stock-entry-date"), { target: { value: "" } });
     await waitFor(() => expect(onActiveDateChange).toHaveBeenLastCalledWith(null));
   });
 
-  it("sends the worker PDF to WhatsApp and surfaces success feedback", async () => {
+  it("updates an individual bale stock-entry date from the detailed table", async () => {
     render(<StockEntryHistory />);
-    fireEvent.click(screen.getByTestId("button-send-worker-pdf-whatsapp"));
+
+    fireEvent.click(screen.getByText("D:2026-08-12"));
+    const editableDate = screen.getByDisplayValue("2026-08-12");
+    fireEvent.change(editableDate, { target: { value: "2026-08-13" } });
+    fireEvent.keyDown(editableDate, { key: "Enter" });
 
     await waitFor(() =>
-      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/bales/send-worker-pdf-whatsapp", {
-        date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      expect(harness.apiRequest).toHaveBeenCalledWith("PATCH", "/api/factory/bales/bulk-date", {
+        ids: [101],
+        stockEntryDate: "2026-08-13",
       })
     );
-    expect(harness.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Sent", description: "Worker PDF sent to production WhatsApp group." })
-    );
+    expect(harness.toast).toHaveBeenCalledWith({
+      title: "Date updated",
+      description: "Updated date for 1 bale(s).",
+    });
+  });
+
+  it("keeps search and unassigned filters available without loading removed picker payloads", () => {
+    render(<StockEntryHistory />);
+
+    expect(screen.getByTestId("input-search")).toBeInTheDocument();
+    expect(screen.getByTestId("checkbox-include-unassigned")).toBeChecked();
+    expect(screen.queryByTestId("button-view-detailed")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-send-worker-pdf-whatsapp")).not.toBeInTheDocument();
   });
 });
