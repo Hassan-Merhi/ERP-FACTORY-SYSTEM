@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { parseId } from "../../../../lib/parseId";
 import { db } from "../../../../db";
-import { requireAuth } from "../../../../auth";
+import { requireAuth, requireRole } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
 import {
   factoryBales,
@@ -26,7 +26,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
   // without cancelling the loading order, so the loader can start the container again from zero.
-  app.post("/api/factory/customer-orders/:id/bales/empty", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/customer-orders/:id/bales/empty", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
