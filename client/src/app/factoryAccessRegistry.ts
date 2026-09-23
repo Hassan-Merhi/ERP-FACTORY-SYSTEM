@@ -20,6 +20,7 @@ export interface FactoryPageDefinition {
   accessLevel?: FactoryAccessLevel;
   featureFlag?: string;
   featureFlagDefaultOn?: boolean;
+  hideKey?: string;
 }
 
 export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
