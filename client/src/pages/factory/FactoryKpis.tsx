@@ -86,6 +86,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load daily production");
       return res.json();
     },
+    enabled: showDaily,
   });
 
   const workersQuery = useQuery<WorkerPerformance[]>({
@@ -95,6 +96,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load worker performance");
       return res.json();
     },
+    enabled: showWorkers,
   });
 
   const mixesQuery = useQuery<MixEfficiency[]>({
@@ -104,6 +106,7 @@ export default function FactoryKpis() {
       if (!res.ok) throw new Error("Failed to load mix efficiency");
       return res.json();
     },
+    enabled: showMixes,
   });
 
   return (
