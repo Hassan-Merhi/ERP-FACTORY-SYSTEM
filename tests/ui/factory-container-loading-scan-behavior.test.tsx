@@ -119,6 +119,9 @@ vi.mock("wouter", () => ({
   useSearch: () => "?orderId=77",
 }));
 vi.mock("@/contexts/AppModeContext", () => ({ useAppMode: () => "factory" }));
+vi.mock("@/contexts/ApplicationLanguageContext", () => ({
+  useApplicationLanguage: () => ({ language: "en" }),
+}));
 vi.mock("@/lib/factoryApi", () => ({ getApiRequest: () => harness.apiRequest }));
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: harness.invalidateQueries, setQueryData: harness.setQueryData },
