@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { FactoryContainerLoadingScanModel } from "./useFactoryContainerLoadingScanModel";
 
 export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScanModel }) {
-  const { orderId, customerId, active{model.tr("proforma")}s } = model;
+  const { orderId, customerId, activeProformas } = model;
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-background/90 shadow-sm">
@@ -63,7 +63,7 @@ export function LoadingSetupCard({ model }: { model: FactoryContainerLoadingScan
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <FileText className="h-3.5 w-3.5" />
-              Proforma
+              {model.tr("proforma")}
             </label>
             <Select value={model.selectedProformaId} onValueChange={model.setSelectedProformaId}>
               <SelectTrigger className="h-10 rounded-xl bg-muted/10" data-testid="select-proforma">
