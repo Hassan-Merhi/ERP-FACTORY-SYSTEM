@@ -3,7 +3,7 @@
  *
  * Extracted from FactoryAttendance.tsx during the Phase 4 god-file split.
  */
-import {Card, CardContent} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function SummaryCard({
   icon,
@@ -27,7 +27,7 @@ export function SummaryCard({
             {value}
           </p>
         </div>
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border/70 bg-muted/35 ${color}`}>
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border/70 bg-muted/30 ${color}`}>
           {icon}
         </div>
       </CardContent>
