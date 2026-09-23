@@ -60,31 +60,34 @@ export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
 
 /**
  * Compute the right landing page for this factory user.
- * For restricted users (fullAccess:false) walks the sidebar nav in order and
- * returns the first accessible page. Falls back to production-report for
- * admins / while myAccess is still loading.
+ * For restricted users (fullAccess:false) walks the complete manageable Factory
+ * page registry and returns the first accessible page. Falls back to My Settings
+ * when the stored allow-list contains only stale/unknown keys.
  */
 export function computeFactoryDefaultPage(myAccess: MyAccess | undefined): string {
   if (!myAccess || myAccess.fullAccess) return "/factory/production-report";
-  for (const section of FACTORY_NAV_SECTIONS) {
-    for (const item of section.items) {
-      const key = item.url.replace(/^\//, "");
-      if (myAccess.pageKeys.includes(key)) return item.url;
-      // Accept old pre-hub-merge keys that now redirect to this hub
-      const legacyKeys = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === key).map(([prefix]) =>
-        prefix.replace(/^\//, "")
-      );
-      if (legacyKeys.some((lk) => myAccess.pageKeys.includes(lk))) return item.url;
-    }
+
+  const nonLandingKeys = new Set(["factory/settings", "factory/intelligence/settings"]);
+  for (const page of FACTORY_NAV_PAGES) {
+    if (nonLandingKeys.has(page.key)) continue;
+    const url = "/" + page.key;
+    if (myAccess.pageKeys.includes(page.key)) return url;
+
+    // Accept old pre-hub-merge keys that now resolve to this canonical page.
+    const legacyKeys = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === page.key).map(([prefix]) =>
+      prefix.replace(/^\//, "")
+    );
+    if (legacyKeys.some((key) => myAccess.pageKeys.includes(key))) return url;
   }
-  if (myAccess.pageKeys.includes("factory/daybook")) return "/factory/daybook";
-  return "/factory/production-report";
+
+  // A stale/unknown allow-list must never loop back into a denied Factory page.
+  return "/my-settings";
 }
 
 /**
  * Resolve the pageKey for the given path.
- * Uses FACTORY_NAV_PAGES as the canonical list so that pages only in the
- * manual section (Dashboard, Daybook, Chat) are covered too.
+ * Uses FACTORY_NAV_PAGES as the canonical list so sidebar, pinned, and
+ * explicitly registered Factory pages are all guarded consistently.
  */
 export function resolvePageKey(path: string): string | null {
   // 1. Direct match against every known page (exact or sub-path)
