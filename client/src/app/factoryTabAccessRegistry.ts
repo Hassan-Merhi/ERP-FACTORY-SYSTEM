@@ -128,6 +128,7 @@ export interface FactoryTabRouteRestriction {
   prefix: string;
   hiddenKeys: readonly string[];
   fallback: string;
+  includeRoot?: boolean;
 }
 
 /**
@@ -141,7 +142,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
   { prefix: "/factory/customers", hiddenKeys: ["hide_tab_parties_customers"], fallback: "/factory/parties" },
   { prefix: "/factory/suppliers", hiddenKeys: ["hide_tab_parties_suppliers"], fallback: "/factory/parties" },
 
-  { prefix: "/factory/workers", hiddenKeys: ["hide_tab_payrollhub_workers"], fallback: "/factory/payroll-hub" },
+  { prefix: "/factory/workers", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_workers"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/worker-payroll", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_payroll"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/payroll", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_payroll"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/employees", hiddenKeys: ["hide_tab_payrollhub_employees"], fallback: "/factory/payroll-hub" },
@@ -160,7 +161,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
   { prefix: "/factory/sales/loading/new", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/loadings", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
 
-  { prefix: "/factory/dispatch-batches", hiddenKeys: ["hide_tab_dispatch_batches"], fallback: "/factory/dispatch-batches?tab=reports" },
+  { prefix: "/factory/dispatch-batches", hiddenKeys: ["hide_tab_dispatch_batches"], fallback: "/factory/dispatch-batches", includeRoot: false },
 
   { prefix: "/factory/create", hiddenKeys: ["hide_tab_accounts_view"], fallback: "/factory/accounts" },
 ] as const;
@@ -175,8 +176,8 @@ function cleanFactoryPath(path: string): string {
 export function resolveFactoryTabRouteRestriction(path: string): FactoryTabRouteRestriction | null {
   const clean = cleanFactoryPath(path);
   return (
-    FACTORY_TAB_ROUTE_RESTRICTIONS.find(
-      (rule) => clean === rule.prefix || clean.startsWith(`${rule.prefix}/`)
+    FACTORY_TAB_ROUTE_RESTRICTIONS.find((rule) =>
+      rule.includeRoot === false ? clean.startsWith(`${rule.prefix}/`) : clean === rule.prefix || clean.startsWith(`${rule.prefix}/`)
     ) ?? null
   );
 }
