@@ -145,9 +145,10 @@ describe("Factory restriction settings wiring", () => {
   });
 
   it("exposes the expanded Factory page and tab catalogs", () => {
-    const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
-    const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
+    const pageRegistry = readFileSync("client/src/app/factoryAccessRegistry.ts", "utf8");
     const tabRegistry = readFileSync("client/src/app/factoryTabAccessRegistry.ts", "utf8");
+    const constants = readFileSync("client/src/pages/settings/users/UserManagementConstants.tsx", "utf8");
+    const sidebar = readFileSync("client/src/components/FactorySidebar.tsx", "utf8");
 
     for (const key of [
       "factory/production-report",
@@ -158,19 +159,94 @@ describe("Factory restriction settings wiring", () => {
       "factory/dispatch-batches",
       "factory/production-comparison",
     ]) {
-      expect(sidebar).toContain(key);
+      expect(pageRegistry).toContain(key);
     }
-    expect(sidebar).toContain("!myAccess.pageKeys.includes(pageKey)");
+    expect(sidebar).toContain("!hasFactoryPageKey(page, myAccess.pageKeys)");
+    expect(constants).toContain("FACTORY_SETTINGS_TABS");
 
     for (const key of [
+      "hide_tab_workers_workers",
+      "hide_tab_employees_withdrawals",
       "hide_tab_parties_customers",
       "hide_tab_payrollhub_workers",
       "hide_tab_supplier_intel_report",
       "hide_tab_production_intel_summary",
       "hide_tab_overview_production",
       "hide_invoicing_invoices_tab",
+      "hide_tab_daybook_activity",
+      "hide_tab_import_opening_stock",
+      "hide_tab_customer_pricelist",
+      "hide_tab_dispatch_reports",
+      "hide_tab_sheets_movements",
+      "hide_tab_relabeling_wipers",
+      "hide_tab_accounts_find_voucher",
+      "hide_tab_vouchers_transferorder",
+      "hide_tab_kpis_daily",
+      "hide_tab_payroll_records",
+      "hide_tab_profitability_bales",
+      "hide_tab_workers_list",
+      "hide_tab_workerdetail_profile",
     ]) {
       expect(tabRegistry).toContain(key);
+    }
+
+    expect(tabRegistry).not.toContain("hide_tab_production_analytics");
+    expect(tabRegistry).not.toContain("hide_tab_agents");
+    expect(tabRegistry).not.toContain("hide_tab_daybook");
+  });
+});
+
+describe("Factory tab catalog parity", () => {
+  it("keeps all 84 configurable Factory tabs wired to current Factory surfaces", () => {
+    const registry = readFileSync("client/src/app/factoryTabAccessRegistry.ts", "utf8");
+    const start = registry.indexOf("export const FACTORY_TAB_ACCESS_REGISTRY");
+    const end = registry.indexOf("export const FACTORY_SETTINGS_TABS");
+    const registryBlock = registry.slice(start, end);
+    const catalogKeys = Array.from(
+      registryBlock.matchAll(/key: "(hide_(?:tab|invoicing)_[a-z0-9_]+)"/g),
+      (match) => match[1]
+    );
+
+    const runtimeSources = [
+      "client/src/pages/factory/BaleStockEntry.tsx",
+      "client/src/pages/factory/FactoryBalesHub.tsx",
+      "client/src/pages/factory/FactoryPartiesHub.tsx",
+      "client/src/pages/factory/FactoryPayrollHub.tsx",
+      "client/src/pages/factory/FactorySupplierHub.tsx",
+      "client/src/pages/factory/DailyProductionReport.tsx",
+      "client/src/pages/factory/FactoryProductionIntelHub.tsx",
+      "client/src/pages/factory/FactoryWorkersHub.tsx",
+      "client/src/pages/factory/FactoryEmployeesHub.tsx",
+      "client/src/pages/factory/FactoryLoadingsHub.tsx",
+      "client/src/pages/factory/FactoryKpis.tsx",
+      "client/src/pages/factory/FactoryProfitability.tsx",
+      "client/src/pages/factory/FactoryAdvancesTab.tsx",
+      "client/src/pages/factory/FactoryDaybook.tsx",
+      "client/src/pages/factory/FactoryImport.tsx",
+      "client/src/pages/factory/FactoryCustomerStatement.tsx",
+      "client/src/pages/factory/FactoryDispatchBatches.tsx",
+      "client/src/pages/factory/FactorySheetsAndSacks.tsx",
+      "client/src/pages/AccountsLegacy.tsx",
+      "client/src/pages/Vouchers.tsx",
+      "client/src/pages/factory/factoryworkers/useFactoryWorkersModel.tsx",
+      "client/src/pages/factory/factoryworkerdetail/useFactoryWorkerDetailModel.tsx",
+      "client/src/pages/factory/factorypayroll/useFactoryPayrollModel.tsx",
+      "client/src/pages/factory/FactoryBaleRelabeling.tsx",
+      "client/src/pages/factory/WipersReEntry.tsx",
+      "client/src/pages/factory/FactoryInvoicing.tsx",
+    ].map((file) => readFileSync(file, "utf8")).join("\n");
+
+    const runtimeKeys = new Set(
+      Array.from(runtimeSources.matchAll(/hide_(?:tab|invoicing)_[a-z0-9_]+/g), (match) => match[0])
+    );
+
+    expect(catalogKeys).toHaveLength(84);
+    expect(new Set(catalogKeys).size).toBe(catalogKeys.length);
+    for (const key of catalogKeys) {
+      expect(runtimeKeys.has(key), `Settings tab key is not wired: ${key}`).toBe(true);
+    }
+    for (const key of runtimeKeys) {
+      expect(catalogKeys, `Factory tab key is missing from Settings: ${key}`).toContain(key);
     }
   });
 });
