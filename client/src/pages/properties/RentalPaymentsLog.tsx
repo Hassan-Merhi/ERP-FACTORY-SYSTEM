@@ -131,7 +131,7 @@ export default function RentalPaymentsLog({
             subtitle="All payment receipts recorded across all units, sorted by date."
             icon={pageIcon ?? <ClipboardList className="h-5 w-5" />}
           />
-          <div role="search" aria-label="Search payments" className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-8"

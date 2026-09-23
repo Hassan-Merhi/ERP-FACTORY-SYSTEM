@@ -62,7 +62,7 @@ export default function OffloadItemSearch() {
         title="Offload Item Search"
         subtitle="Search any item name to see every offloaded container it arrived in"
       />
-      <div role="search" aria-label="Offload item search" className="flex w-full gap-2 sm:max-w-xl">
+      <div className="flex w-full gap-2 sm:max-w-xl">
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

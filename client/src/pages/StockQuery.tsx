@@ -87,7 +87,7 @@ export default function StockQuery() {
     <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       {/* ── Header + Search ── */}
       <PageHeader title="Stock Query" subtitle="Click any item to view purchase history, sales, and inventory" />
-      <div role="search" aria-label="Stock query search" className="relative w-full sm:max-w-md">
+      <div className="relative w-full sm:max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search by code or name..."
