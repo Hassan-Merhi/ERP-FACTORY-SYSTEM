@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link2, Loader2, Search, SlidersHorizontal, Unlink2 } from "lucide-react";
+import { Loader2, Search, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import {
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
 import type { PeriodType, ProductionRow } from "../factoryProductionTargetsModel";
+import { ProductionWorkerLinkControl } from "./ProductionWorkerLinkControl";
 
 interface ProductionTargetsEditorDialogProps {
   open: boolean;
@@ -55,16 +56,12 @@ export function ProductionTargetsEditorDialog({
   const [draftRows, setDraftRows] = useState<ProductionRow[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("__all__");
-  const [linkingWorkerId, setLinkingWorkerId] = useState<number | null>(null);
-  const [selectedPartnerId, setSelectedPartnerId] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setDraftRows(rows.map((row) => ({ ...row })));
     setSearch("");
     setCategoryFilter("__all__");
-    setLinkingWorkerId(null);
-    setSelectedPartnerId("");
   }, [open, rows]);
 
   const originalById = useMemo(() => new Map(rows.map((row) => [row.personId, row])), [rows]);
@@ -156,69 +153,6 @@ export function ProductionTargetsEditorDialog({
     return (row.targetBales ?? null) !== (original.defaultTargetBales ?? null);
   };
 
-  const refreshLinkedProduction = () => {
-    void queryClient.invalidateQueries({
-      queryKey: ["/api/factory/staff-tracking"],
-      refetchType: "active",
-    });
-    void queryClient.invalidateQueries({
-      queryKey: ["/api/factory/staff-tracking/production-target-defaults"],
-      refetchType: "active",
-    });
-  };
-
-  const linkMutation = useMutation({
-    mutationFn: async ({ workerId, partnerId }: { workerId: number; partnerId: number }) => {
-      const source = draftRows.find((row) => row.personId === workerId);
-      const partner = draftRows.find((row) => row.personId === partnerId);
-      if (!source || !partner) throw new Error(tr("workerLinkFailed"));
-
-      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
-        effectiveFrom: periodStart,
-        workerIds: [workerId, partnerId],
-        targetBales: source.targetBales ?? partner.targetBales ?? null,
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || tr("workerLinkFailed"));
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      setLinkingWorkerId(null);
-      setSelectedPartnerId("");
-      refreshLinkedProduction();
-      toast({ title: tr("workerLinkSaved") });
-    },
-    onError: (error: Error) => {
-      toast({ title: tr("workerLinkFailed"), description: error.message, variant: "destructive" });
-    },
-  });
-
-  const unlinkMutation = useMutation({
-    mutationFn: async (linkGroupId: number) => {
-      const response = await factoryApiRequest(
-        "POST",
-        `/api/factory/staff-tracking/production-worker-links/${linkGroupId}/unlink`,
-        { effectiveTo: periodStart }
-      );
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || tr("workerLinkFailed"));
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      setLinkingWorkerId(null);
-      setSelectedPartnerId("");
-      refreshLinkedProduction();
-      toast({ title: tr("workerUnlinked") });
-    },
-    onError: (error: Error) => {
-      toast({ title: tr("workerLinkFailed"), description: error.message, variant: "destructive" });
-    },
-  });
-
   const saveMutation = useMutation({
     mutationFn: async () => {
       const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/bulk", {
@@ -274,7 +208,7 @@ export function ProductionTargetsEditorDialog({
     },
   });
 
-  const busy = saveMutation.isPending || linkMutation.isPending || unlinkMutation.isPending;
+  const busy = saveMutation.isPending;
   const canManageLinks = periodType === "daily" && !finalized && changedCount === 0;
 
   return (
@@ -362,13 +296,6 @@ export function ProductionTargetsEditorDialog({
                   const linkedPartners = (row.linkedWorkers ?? []).filter(
                     (member) => member.workerId !== row.personId
                   );
-                  const partnerOptions = draftRows.filter(
-                    (candidate) =>
-                      candidate.personId !== row.personId &&
-                      candidate.active &&
-                      candidate.linkGroupId == null
-                  );
-
                   return (
                   <TableRow key={row.personId} className={!row.active ? "opacity-60" : undefined}>
                     <TableCell>
@@ -381,92 +308,25 @@ export function ProductionTargetsEditorDialog({
                         </Badge>
                       )}
 
-                      {row.linkGroupId != null ? (
+                      {row.linkGroupId != null && linkedPartners.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           <Badge variant="secondary" className="gap-1 text-[11px] font-normal">
-                            <Link2 className="h-3 w-3" />
                             <span dir="auto">
                               {tr("linkedWith")}: {linkedPartners.map((member) => member.workerName).join(", ")}
                             </span>
                           </Badge>
-                          {periodType === "daily" && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              disabled={!canManageLinks || busy}
-                              onClick={() => unlinkMutation.mutate(row.linkGroupId!)}
-                              data-testid={`button-unlink-worker-${row.personId}`}
-                            >
-                              <Unlink2 className="mr-1 h-3 w-3" />
-                              {tr("unlink")}
-                            </Button>
-                          )}
                         </div>
-                      ) : linkingWorkerId === row.personId ? (
-                        <div className="mt-1.5 flex max-w-[290px] items-center gap-1.5">
-                          <Select value={selectedPartnerId} onValueChange={setSelectedPartnerId}>
-                            <SelectTrigger
-                              className="h-7 min-w-[150px] text-xs"
-                              data-testid={`select-link-partner-${row.personId}`}
-                            >
-                              <SelectValue placeholder={tr("chooseWorker")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {partnerOptions.map((candidate) => (
-                                <SelectItem key={candidate.personId} value={String(candidate.personId)}>
-                                  <span dir="auto">{candidate.name}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            disabled={!selectedPartnerId || busy}
-                            onClick={() =>
-                              linkMutation.mutate({
-                                workerId: row.personId,
-                                partnerId: Number(selectedPartnerId),
-                              })
-                            }
-                          >
-                            {linkMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : tr("link")}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            disabled={busy}
-                            onClick={() => {
-                              setLinkingWorkerId(null);
-                              setSelectedPartnerId("");
-                            }}
-                          >
-                            {tr("cancel")}
-                          </Button>
+                      )}
+                      {periodType === "daily" && (
+                        <div className="mt-1.5">
+                          <ProductionWorkerLinkControl
+                            row={row}
+                            rows={draftRows}
+                            effectiveFrom={periodStart}
+                            targetBales={row.targetBales}
+                            disabled={!canManageLinks || busy}
+                          />
                         </div>
-                      ) : (
-                        periodType === "daily" && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="mt-1 h-6 px-2 text-xs text-muted-foreground"
-                            disabled={!canManageLinks || busy || partnerOptions.length === 0}
-                            onClick={() => {
-                              setLinkingWorkerId(row.personId);
-                              setSelectedPartnerId("");
-                            }}
-                            data-testid={`button-link-worker-${row.personId}`}
-                          >
-                            <Link2 className="mr-1 h-3 w-3" />
-                            {tr("linkWorker")}
-                          </Button>
-                        )
                       )}
                     </TableCell>
                     <TableCell>
