@@ -213,7 +213,7 @@ export function summarizeProductionRows(sourceRows: ProductionRow[]) {
   }
 
   const expected = target - absentTarget;
-  return { target, absentTarget, expected, produced, difference: expected - produced };
+  return { target, absentTarget, expected, produced, difference: produced - expected };
 }
 
 export function differenceText(target: number | null, produced: number | null) {
