@@ -145,7 +145,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
   { prefix: "/factory/workers", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_workers"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/worker-payroll", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_payroll"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/payroll", hiddenKeys: ["hide_tab_payrollhub_workers", "hide_tab_workers_payroll"], fallback: "/factory/payroll-hub" },
-  { prefix: "/factory/employees", hiddenKeys: ["hide_tab_payrollhub_employees"], fallback: "/factory/payroll-hub" },
+  { prefix: "/factory/employees", hiddenKeys: ["hide_tab_payrollhub_employees", "hide_tab_employees_employees"], fallback: "/factory/payroll-hub" },
   { prefix: "/factory/insurance", hiddenKeys: ["hide_tab_payrollhub_insurance"], fallback: "/factory/payroll-hub" },
 
   { prefix: "/factory/bales-history", hiddenKeys: ["hide_tab_bales_history"], fallback: "/factory/bales-hub" },
@@ -156,6 +156,7 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
   { prefix: "/factory/sales/proformas", hiddenKeys: ["hide_invoicing_proformas_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/new", hiddenKeys: ["hide_invoicing_invoices_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/invoices", hiddenKeys: ["hide_invoicing_invoices_tab"], fallback: "/factory/invoicing" },
+  { prefix: "/factory/sales/pending-invoices", hiddenKeys: ["hide_invoicing_invoices_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/invoices", hiddenKeys: ["hide_invoicing_invoices_tab"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/loading/pending", hiddenKeys: ["hide_tab_loadings_pending"], fallback: "/factory/invoicing" },
   { prefix: "/factory/sales/loading/new", hiddenKeys: ["hide_invoicing_loadings_tab"], fallback: "/factory/invoicing" },
@@ -163,6 +164,8 @@ export const FACTORY_TAB_ROUTE_RESTRICTIONS: readonly FactoryTabRouteRestriction
 
   { prefix: "/factory/dispatch-batches", hiddenKeys: ["hide_tab_dispatch_batches"], fallback: "/factory/dispatch-batches", includeRoot: false },
 
+  { prefix: "/factory/ledger-monthly", hiddenKeys: ["hide_tab_accounts_view"], fallback: "/factory/accounts" },
+  { prefix: "/factory/ledger-vouchers", hiddenKeys: ["hide_tab_accounts_view"], fallback: "/factory/accounts" },
   { prefix: "/factory/create", hiddenKeys: ["hide_tab_accounts_view"], fallback: "/factory/accounts" },
 ] as const;
 
