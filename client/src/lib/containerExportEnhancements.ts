@@ -153,7 +153,11 @@ function prepareFullExportSheet(
   if (!isSimpleFullExportSheet(worksheet)) return;
 
   const rows = readFullExportRows(worksheet);
-  worksheet.spliceRows(1, worksheet.rowCount);
+  // ExcelJS's spliceRows(1, rowCount) leaves the rows in place when nothing sits
+  // below them, which left the raw export on top of the rebuilt sheet (and the
+  // title merge stamped "CODE" across row 1). Removing one row at a time from
+  // the bottom actually empties the sheet.
+  for (let rowNumber = worksheet.rowCount; rowNumber >= 1; rowNumber -= 1) worksheet.spliceRows(rowNumber, 1);
   worksheet.columns = [
     { key: "no", width: 6 },
     { key: "code", width: 18 },
