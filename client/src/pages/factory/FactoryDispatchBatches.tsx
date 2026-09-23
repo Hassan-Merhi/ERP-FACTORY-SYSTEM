@@ -105,6 +105,12 @@ export default function FactoryDispatchBatches() {
             ? "reports"
             : null;
 
+  useEffect(() => {
+    if (effectiveActiveTab && activeTab !== effectiveActiveTab) {
+      setActiveTab(effectiveActiveTab);
+    }
+  }, [activeTab, effectiveActiveTab]);
+
   const [form, setForm] = useState({
     customerId: "",
     proformaId: "_none",
@@ -117,13 +123,27 @@ export default function FactoryDispatchBatches() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchStr);
-    if (params.get("openCreate") === "1") {
-      const cid = params.get("customerId") || "";
-      const pid = params.get("proformaId") || "_none";
-      setForm((f) => ({ ...f, customerId: cid, proformaId: pid }));
-      setCreateOpen(true);
+    if (params.get("openCreate") !== "1") return;
+
+    if (!showBatches) {
+      params.delete("openCreate");
+      params.delete("customerId");
+      params.delete("proformaId");
+      const next = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        next ? `${window.location.pathname}?${next}` : window.location.pathname
+      );
+      setCreateOpen(false);
+      return;
     }
-  }, [searchStr]);
+
+    const cid = params.get("customerId") || "";
+    const pid = params.get("proformaId") || "_none";
+    setForm((f) => ({ ...f, customerId: cid, proformaId: pid }));
+    setCreateOpen(true);
+  }, [searchStr, showBatches]);
 
   const qParams = new URLSearchParams();
   if (filterCustomer && filterCustomer !== "_all") qParams.set("customerId", filterCustomer);
