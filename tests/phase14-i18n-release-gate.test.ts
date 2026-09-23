@@ -23,6 +23,8 @@ describe("Phase 14 trilingual release gate", () => {
     const policy = JSON.parse(fs.readFileSync("config/i18n-audit-policy.json", "utf8"));
     const baseline = JSON.parse(fs.readFileSync("config/i18n-phase14-baseline.json", "utf8"));
     const workflow = fs.readFileSync(".github/workflows/ui-quality.yml", "utf8");
+    const prRatchet = fs.readFileSync("scripts/run-i18n-pr-ratchet.mjs", "utf8");
+    const prRatchetVerifier = fs.readFileSync("scripts/verify-i18n-pr-ratchet.mjs", "utf8");
 
     expect(audit).toContain("compatibility-covered");
     expect(audit).toContain("applicationTranslations.ts");
@@ -48,7 +50,14 @@ describe("Phase 14 trilingual release gate", () => {
     expect(baseline.modules["reports-exports"].maxActionable).toBeLessThanOrEqual(2);
     expect(baseline.modules["backend-messages"].maxActionable).toBeLessThanOrEqual(15);
     expect(workflow).toContain("verify-i18n-audit-classifier.mjs");
-    expect(workflow).toContain("--json-out");
+    expect(workflow).toContain("run-i18n-pr-ratchet.mjs");
+    expect(prRatchet).toContain("--json-out");
+    expect(prRatchet).toContain("--no-enforce");
+    expect(prRatchetVerifier).toContain("currentTotal > baseTotal");
+    expect(prRatchetVerifier).toContain("after > before");
+    // The full historical baseline is measured inside the base-relative ratchet,
+    // not invoked directly by the automatic workflow.
+    expect(workflow).not.toContain("node scripts/audit-i18n-phase14.mjs");
     // Actions are SHA-pinned for supply-chain hardening, so match either the
     // bare tag or a commit SHA carrying the `# v7` comment.
     expect(workflow).toMatch(/actions\/upload-artifact@(?:v7\b|[0-9a-f]{40} # v7\b)/);
