@@ -65,13 +65,15 @@ export function ProductionWorkerLinkControl({
       const partner = rows.find((candidate) => candidate.personId === partnerId);
       if (!partner) throw new Error(tr("workerLinkFailed"));
 
+      const sharedTargetBales =
+        targetBales === undefined ? (row.targetBales ?? partner.targetBales ?? null) : targetBales;
       const response = await factoryApiRequest(
         "POST",
         "/api/factory/staff-tracking/production-worker-links",
         {
           effectiveFrom,
           workerIds: [row.personId, partnerId],
-          targetBales: targetBales ?? row.targetBales ?? partner.targetBales ?? null,
+          targetBales: sharedTargetBales,
         }
       );
       if (!response.ok) {
