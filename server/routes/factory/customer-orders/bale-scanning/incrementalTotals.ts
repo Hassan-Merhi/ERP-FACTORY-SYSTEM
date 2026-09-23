@@ -16,6 +16,7 @@ export interface ScannedArticleTotalsPatch {
     orderId: number;
     articleCode: string;
     baleName: string;
+    baleNameAr: string | null;
     qty: number;
     weightPerBale: string;
     totalWeight: string;
@@ -59,7 +60,8 @@ export async function recalculateOrderTotalsForScannedArticle(
         COUNT(*)::int AS qty,
         COALESCE(SUM(cob.weight), 0)::numeric AS total_weight,
         COALESCE(SUM(cob.price_used), 0)::numeric AS summed_price,
-        COALESCE(MAX(NULLIF(cob.bale_name, '')), COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN')) AS bale_name
+        COALESCE(MAX(NULLIF(cob.bale_name, '')), COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN')) AS bale_name,
+        MAX(NULLIF(cob.bale_name_ar, '')) AS bale_name_ar
       FROM customer_order_bales cob
       WHERE cob.order_id = ${orderId}
         AND COALESCE(NULLIF(cob.article_code, ''), 'UNKNOWN') = ${normalizedArticleCode}
@@ -71,6 +73,7 @@ export async function recalculateOrderTotalsForScannedArticle(
         tg.qty,
         tg.total_weight,
         tg.bale_name,
+        tg.bale_name_ar,
         COALESCE(cpl.pricing_mode, 'per_bale') AS pricing_mode,
         cpl.price_per_kg,
         CASE
@@ -102,6 +105,7 @@ export async function recalculateOrderTotalsForScannedArticle(
         order_id,
         article_code,
         bale_name,
+        bale_name_ar,
         qty,
         weight_per_bale,
         total_weight,
@@ -114,6 +118,7 @@ export async function recalculateOrderTotalsForScannedArticle(
         ${orderId},
         pt.article_code,
         pt.bale_name,
+        pt.bale_name_ar,
         pt.qty,
         CASE WHEN pt.qty > 0 THEN pt.total_weight / pt.qty ELSE 0 END,
         pt.total_weight,
@@ -128,6 +133,7 @@ export async function recalculateOrderTotalsForScannedArticle(
         order_id,
         article_code,
         bale_name,
+        bale_name_ar,
         qty,
         weight_per_bale,
         total_weight,
@@ -187,6 +193,7 @@ export async function recalculateOrderTotalsForScannedArticle(
       it.order_id AS line_order_id,
       it.article_code AS line_article_code,
       it.bale_name AS line_bale_name,
+      it.bale_name_ar AS line_bale_name_ar,
       it.qty AS line_qty,
       it.weight_per_bale AS line_weight_per_bale,
       it.total_weight AS line_total_weight,
@@ -209,6 +216,7 @@ export async function recalculateOrderTotalsForScannedArticle(
             orderId: Number(row.line_order_id),
             articleCode: String(row.line_article_code || normalizedArticleCode),
             baleName: String(row.line_bale_name || row.line_article_code || normalizedArticleCode),
+            baleNameAr: row.line_bale_name_ar == null ? null : String(row.line_bale_name_ar),
             qty: Number(row.line_qty || 0),
             weightPerBale: String(row.line_weight_per_bale ?? "0"),
             totalWeight: String(row.line_total_weight ?? "0"),

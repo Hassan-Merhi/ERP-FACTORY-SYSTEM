@@ -19,6 +19,14 @@ const snapshotService = readFileSync(
   resolve(process.cwd(), "server/services/factoryBilingualSnapshotService.ts"),
   "utf8"
 );
+const baleScanRoute = readFileSync(
+  resolve(process.cwd(), "server/routes/factory/customer-orders/bale-scanning/scan.ts"),
+  "utf8"
+);
+const incrementalTotals = readFileSync(
+  resolve(process.cwd(), "server/routes/factory/customer-orders/bale-scanning/incrementalTotals.ts"),
+  "utf8"
+);
 
 describe("Performance Wave 4 database hotspot guards", () => {
   it("batches read-only supplier lookups instead of issuing N+1 queries", () => {
@@ -63,14 +71,16 @@ describe("Performance Wave 4 database hotspot guards", () => {
     expect(baleLedger).not.toContain("WHERE cob.bale_id = fb.id");
   });
 
-  it("targets only the rows changed by a compact bale scan for bilingual snapshots", () => {
+  it("keeps compact bale-scan bilingual snapshots inline and off the synchronous resolver hot path", () => {
     expect(snapshotRoutes).toContain("responseRecord?.compactBaleScan === true");
-    expect(snapshotRoutes).toContain("orderBaleId");
-    expect(snapshotRoutes).toContain("orderLineId");
+    expect(snapshotRoutes).toContain("return originalJson(payload)");
+    expect(baleScanRoute).toContain("canonicalProductNameAr");
+    expect(baleScanRoute).toContain("baleNameAr: bale.canonicalProductNameAr");
+    expect(incrementalTotals).toContain("MAX(NULLIF(cob.bale_name_ar, '')) AS bale_name_ar");
+    expect(incrementalTotals).toContain("bale_name_ar,");
+    // Non-scan order writes retain the original order-scoped behavior.
     expect(snapshotService).toContain('item.table === "customer_order_bales"');
     expect(snapshotService).toContain('item.table === "customer_order_lines"');
-    expect(snapshotService).toContain("if (orderBaleId || orderLineId) return null");
-    // Non-scan order writes retain the original order-scoped behavior.
     expect(snapshotService).toContain("return `t.order_id=${orderId}`");
   });
 });
