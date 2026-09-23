@@ -188,7 +188,9 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         <Redirect replace to="/factory/intelligence/production-hub?section=production-summary" />
       </Route>
       <Route path="/factory/sales/new" component={FactoryInvoiceCreate} />
-      <Route path="/factory/sales/loading/pending" component={FactoryPendingLoadings} />
+      <Route path="/factory/sales/loading/pending">
+        <Redirect replace to="/factory/sales/loadings?tab=pending" />
+      </Route>
       <Route path="/factory/sales/loading/new" component={FactoryContainerLoadingScan} />
       <Route path="/factory/sales/loadings" component={FactoryLoadingsHub} />
       <Route path="/factory/sales/pending-invoices/:id/verify" component={FactoryPendingInvoiceVerify} />
@@ -210,7 +212,9 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         <Redirect replace to="/factory/parties?section=customers" />
       </Route>
       <Route path="/factory/payroll-hub" component={FactoryPayrollHub} />
-      <Route path="/factory/insurance" component={FactoryInsurance} />
+      <Route path="/factory/insurance">
+        <Redirect replace to="/factory/payroll-hub?section=insurance" />
+      </Route>
       <Route path="/factory/sheets-sacks" component={FactorySheetsAndSacks} />
       <Route path="/factory/employees/:id" component={FactoryEmployeeDetail} />
       <Route path="/factory/employees">
