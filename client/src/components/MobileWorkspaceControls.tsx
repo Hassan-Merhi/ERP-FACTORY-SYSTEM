@@ -6,18 +6,9 @@ import { NotificationsCenter } from "@/components/NotificationsCenter";
 import { PendingSyncIndicator } from "@/components/PendingSyncIndicator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserMenu } from "@/components/UserMenu";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  useApplicationDirection,
-  useApplicationLanguage,
-} from "@/contexts/ApplicationLanguageContext";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useApplicationDirection, useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 interface WorkspaceUser {
   username: string;
@@ -28,13 +19,25 @@ interface WorkspaceHeaderControlsProps {
   accentColor: string;
   user: WorkspaceUser;
   onLogout: () => void;
+  simplifyMobileNavigation?: boolean;
 }
 
 interface MobileWorkspaceControlsProps extends WorkspaceHeaderControlsProps {
   onSearchOpen?: () => void;
   showSearch: boolean;
   extraActions?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
+
+const languageOptions: Array<{
+  value: ApplicationLanguage;
+  labelKey: "language.english" | "language.arabic" | "language.french";
+}> = [
+  { value: "en", labelKey: "language.english" },
+  { value: "ar", labelKey: "language.arabic" },
+  { value: "fr", labelKey: "language.french" },
+];
 
 function getInitials(username: string) {
   const words = username.trim().split(/\s+/);
@@ -42,14 +45,25 @@ function getInitials(username: string) {
   return username.substring(0, 2).toUpperCase();
 }
 
-export function WorkspaceHeaderControls({ accentColor, user, onLogout }: WorkspaceHeaderControlsProps) {
+export function WorkspaceHeaderControls({
+  accentColor,
+  user,
+  onLogout,
+  simplifyMobileNavigation = false,
+}: WorkspaceHeaderControlsProps) {
   return (
     <>
       <div className="hidden sm:block">
         <PendingSyncIndicator />
       </div>
 
-      <NotificationsCenter />
+      {simplifyMobileNavigation ? (
+        <div className="hidden sm:block">
+          <NotificationsCenter />
+        </div>
+      ) : (
+        <NotificationsCenter />
+      )}
 
       <div className="mx-1 hidden h-5 w-px bg-border/60 sm:block" />
 
@@ -73,10 +87,19 @@ export default function MobileWorkspaceControls({
   onSearchOpen,
   showSearch,
   extraActions,
+  open: controlledOpen,
+  onOpenChange,
+  simplifyMobileNavigation = false,
 }: MobileWorkspaceControlsProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const direction = useApplicationDirection();
-  const { t } = useApplicationLanguage();
+  const { language, setLanguage, isSaving, t } = useApplicationLanguage();
+  const open = controlledOpen ?? internalOpen;
+
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
 
   const openSearch = () => {
     setOpen(false);
@@ -130,21 +153,12 @@ export default function MobileWorkspaceControls({
             <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </div>
 
-          <div className="rounded-lg border p-3">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {t("workspace.accountLanguage")}
-            </p>
-            <UserMenu accentColor={accentColor} user={user} onLogout={logout} />
-          </div>
-
-          {extraActions && <div className="grid gap-2 [&>*]:w-full">{extraActions}</div>}
-
           {showSearch && onSearchOpen && (
             <Button
               variant="outline"
               onClick={openSearch}
               data-testid="button-mobile-controls-search"
-              className="w-full justify-start gap-2"
+              className="min-h-11 w-full justify-start gap-2"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
               {t("workspace.search")}
@@ -153,14 +167,45 @@ export default function MobileWorkspaceControls({
 
           <div className="rounded-lg border p-3">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("language.label")}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {languageOptions.map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  size="sm"
+                  variant={language === option.value ? "secondary" : "outline"}
+                  disabled={isSaving}
+                  onClick={() => void setLanguage(option.value)}
+                  aria-pressed={language === option.value}
+                  data-testid={`application-language-${option.value}`}
+                  className="min-h-10 px-2"
+                >
+                  {t(option.labelKey)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {extraActions && <div className="grid gap-2 [&>*]:w-full">{extraActions}</div>}
+
+          <div className="rounded-lg border p-3">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("workspace.statusDisplay")}
             </p>
-            <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <div className="flex min-h-10 items-center justify-between gap-3 border-b pb-3">
               <span className="text-sm">{t("workspace.pendingSync")}</span>
               <PendingSyncIndicator />
             </div>
+            {simplifyMobileNavigation && (
+              <div className="flex min-h-11 items-center justify-between gap-3 border-b py-3">
+                <span className="text-sm">{t("workspace.notifications")}</span>
+                <NotificationsCenter />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 pt-3">
-              <div className="[&>button]:w-full">
+              <div className="[&>button]:min-h-10 [&>button]:w-full">
                 <CurrencyToggle />
               </div>
               <div className="flex min-h-10 items-center justify-between rounded-md border px-3">
@@ -174,7 +219,7 @@ export default function MobileWorkspaceControls({
             variant="destructive"
             onClick={logout}
             data-testid="button-mobile-logout"
-            className="mt-auto w-full gap-2"
+            className="mt-auto min-h-11 w-full gap-2"
           >
             <LogOut className="h-4 w-4" aria-hidden="true" />
             {t("common.logout")}
