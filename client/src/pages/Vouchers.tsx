@@ -73,6 +73,9 @@ const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
   adjustment: "hide_tab_vouchers_adjustment",
   creditnote: "hide_tab_vouchers_creditnote",
 };
+const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
+  "payment", "receipt", "journal", "transfer", "transferorder", "adjustment", "creditnote",
+];
 
 interface VouchersProps {
   posUser?: Pick<AuthMe, "assignedLocationId"> | null;
@@ -123,10 +126,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
 
   const searchParams = new URLSearchParams(window.location.search);
   const editParam = searchParams.get("edit");
-  const tabParam = searchParams.get("tab");
   const voucherIdToEdit = editParam ? parseInt(editParam) : null;
 
-  const [activeTab, setActiveTab] = useState<VoucherTab>((tabParam as VoucherTab) || "payment");
   const [editVoucherId, setEditVoucherId] = useState<number | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [accountPickersNeeded, setAccountPickersNeeded] = useState(() => !!voucherIdToEdit);
@@ -150,14 +151,15 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     : sidebarGroups;
   const visibleVoucherTabs = visibleSidebarGroups.flatMap((group) => group.items.map((item) => item.key as VoucherTab));
   const fallbackVoucherTab = visibleVoucherTabs[0] ?? null;
-  const visibleVoucherTabKey = visibleVoucherTabs.join("|");
   const canShowVoucherTab = (tab: VoucherTab) => !isFactoryMode || visibleVoucherTabs.includes(tab);
+  const allowedVoucherTabs = isFactoryMode && !isPOS ? visibleVoucherTabs : ALL_VOUCHER_TABS;
+  const [activeTab, setActiveTab] = useHubQueryState<VoucherTab>({
+    key: "tab",
+    allowedValues: allowedVoucherTabs,
+    knownValues: ALL_VOUCHER_TABS,
+    defaultValue: fallbackVoucherTab ?? "payment",
+  });
   const modePrefix = useModePrefix();
-
-  useEffect(() => {
-    if (!isFactoryMode || isPOS || !fallbackVoucherTab || visibleVoucherTabs.includes(activeTab)) return;
-    setActiveTab(fallbackVoucherTab);
-  }, [activeTab, fallbackVoucherTab, isFactoryMode, isPOS, visibleVoucherTabKey]);
 
   const [sidebarSearchValue, setSidebarSearchValue] = useState("");
   const [sidebarHighlightedIndex, setSidebarHighlightedIndex] = useState(0);
