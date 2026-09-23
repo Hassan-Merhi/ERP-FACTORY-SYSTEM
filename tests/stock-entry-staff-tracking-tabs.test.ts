@@ -14,18 +14,39 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(stockEntry).not.toContain('<FactoryStaffTracking mode="attendance" />');
   });
 
-  it("keeps Attendance under Payroll & Benefits and hosts the WhatsApp actions there", () => {
+  it("keeps Attendance under Payroll & Benefits and centralizes its WhatsApp group in Intel Settings", () => {
     const payroll = src("client/src/pages/factory/FactoryPayrollHub.tsx");
     const workersHub = src("client/src/pages/factory/FactoryWorkersHub.tsx");
     const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+    const intelSettings = src("client/src/pages/factory/factorysettings/FactorySettingsView.tsx");
 
     expect(payroll).toContain("<FactoryWorkersHub />");
     expect(workersHub).toContain('value="attendance"');
     expect(workersHub).toContain("<FactoryAttendance />");
-    expect(attendance).toContain('data-testid="button-change-attendance-whatsapp-group"');
+    expect(attendance).not.toContain('data-testid="button-change-attendance-whatsapp-group"');
+    expect(attendance).not.toContain('data-testid="button-save-attendance-wa-group"');
     expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
-    expect(attendance).toContain('data-testid="button-save-attendance-wa-group"');
     expect(attendance).toContain('destination: "attendance"');
+    expect(intelSettings).toContain("Attendance WhatsApp Group");
+    expect(intelSettings).toContain('data-testid="button-change-attendance-wa-group"');
+    expect(intelSettings).toContain('data-testid="button-save-attendance-wa-group"');
+  });
+
+  it("keeps the Attendance workflow intact inside the modernized layout", () => {
+    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+    const summaryCard = src("client/src/pages/factory/factoryattendance/components/SummaryCard.tsx");
+
+    expect(attendance).toContain("factory-tracking-modern factory-tracking-attendance");
+    expect(attendance).toContain('data-testid="input-attendance-date"');
+    expect(attendance).toContain('data-testid="input-shift"');
+    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
+    expect(attendance).toContain('data-testid="button-actions-dropdown"');
+    expect(attendance).toContain('data-testid="button-save-attendance"');
+    expect(attendance).toContain('data-testid="button-range-export-excel"');
+    expect(attendance).toContain('data-testid="button-range-print"');
+    expect(attendance).toContain('data-testid={`select-status-${worker.id}`}');
+    expect(attendance).toContain('data-testid={`input-notes-${worker.id}`}');
+    expect(summaryCard).toContain("hover:-translate-y-0.5");
   });
 
   it("removes the obsolete Attendance Register visibility setting", () => {
@@ -131,6 +152,25 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(linkService).toContain("pg_advisory_xact_lock");
     expect(linkService).toContain("nextEffectiveFrom");
 
+  });
+
+  it("uses the modern Attendance shell without changing the existing attendance actions", () => {
+    const attendance = src("client/src/pages/factory/FactoryAttendance.tsx");
+    const summaryCard = src("client/src/pages/factory/factoryattendance/components/SummaryCard.tsx");
+    const perWorker = src("client/src/pages/factory/factoryattendance/components/PerWorkerView.tsx");
+
+    expect(attendance).toContain("factory-tracking-modern factory-tracking-attendance");
+    expect(attendance).toContain('import "./factoryTrackingModern.css"');
+    expect(attendance).toContain('data-testid="input-attendance-date"');
+    expect(attendance).toContain('data-testid="input-shift"');
+    expect(attendance).toContain('data-testid="button-send-attendance-whatsapp-image"');
+    expect(attendance).toContain('data-testid="button-actions-dropdown"');
+    expect(attendance).toContain('data-testid="button-save-attendance"');
+    expect(attendance).toContain('data-testid="button-range-export-excel"');
+    expect(attendance).toContain('data-testid="button-range-print"');
+    expect(attendance).toContain("modern");
+    expect(summaryCard).toContain("modern = false");
+    expect(perWorker).toContain("modern");
   });
 
   it("renders Payroll Attendance KPIs inside the WhatsApp attendance image", () => {

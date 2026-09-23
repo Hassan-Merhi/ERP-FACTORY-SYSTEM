@@ -122,11 +122,22 @@ export function formatDailyNum(val: number): string {
   return val % 1 === 0 ? val.toFixed(0) : parseFloat(val.toFixed(3)).toString();
 }
 
+function normalizeHistoryTimestamp(iso: string): string {
+  const trimmed = iso.trim();
+  if (!trimmed) return trimmed;
+  return /(?:Z|[+-]\\d{2}:?\\d{2})$/i.test(trimmed) ? trimmed : `${trimmed}Z`;
+}
+
+export function formatHistoryDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const date = new Date(normalizeHistoryTimestamp(iso));
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
 export function formatHistoryTime(iso: string | null): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "—";
-  }
+  const date = new Date(normalizeHistoryTimestamp(iso));
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

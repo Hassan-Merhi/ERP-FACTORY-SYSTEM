@@ -43,11 +43,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         return res.status(400).json({ message: "Location is required" });
       }
 
-      // Parse optional backdated entry date; default to today so history is always populated
-      let effectiveEntryDate: Date | null = null;
+      // Parse optional backdated entry date; default to today so history is always populated.
+      // This date is the production/history date only; finalizedAt records the actual action time.
       let effectiveDateStr: string = getClientDate(req);
       if (entryDate && typeof entryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
-        effectiveEntryDate = new Date(entryDate + "T00:00:00.000Z");
         effectiveDateStr = entryDate;
       }
 
@@ -96,7 +95,6 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         }
 
         const now = new Date();
-        const finalizedAtTs = effectiveEntryDate ?? now;
         let baleIndex = 0;
         let totalWeight = 0;
 
@@ -168,7 +166,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
               costPerKg: String(effectiveCostPerKg),
               totalCost: String(baleTotalCost),
               status: "IN_STOCK",
-              finalizedAt: finalizedAtTs,
+              // Entry date controls production attribution/history; finalizedAt is the actual action time.
+              finalizedAt: now,
               finalizedBy: attribution.workerId,
               workerName: attribution.workerName,
               stockEntryDate: effectiveDateStr,
