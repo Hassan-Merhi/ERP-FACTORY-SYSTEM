@@ -32,7 +32,7 @@ import {
   FEATURE_KEYS,
   FEATURE_PAGE_INFO,
 } from "@shared/schema";
-import { FACTORY_NAV_PAGES } from "@/components/FactorySidebar";
+import { FACTORY_SETTINGS_PAGES } from "@/app/factoryAccessRegistry";
 
 const _userFormSchema = insertUserSchema;
 const _companyFormSchema = insertCompanySchema;
@@ -328,7 +328,7 @@ export function BulkRenameTab() {
 }
 
 // Single source of truth: derived from FactorySidebar nav — new pages appear automatically
-const ALL_FACTORY_PAGES_SETTINGS = FACTORY_NAV_PAGES;
+const ALL_FACTORY_PAGES_SETTINGS = FACTORY_SETTINGS_PAGES;
 const _FACTORY_PAGE_GROUPS_SETTINGS = Array.from(new Set(ALL_FACTORY_PAGES_SETTINGS.map((p) => p.group)));
 
 // Single source of truth: derived from FEATURE_KEYS + FEATURE_PAGE_INFO in shared/schema
