@@ -37,9 +37,31 @@ function replaceIfPresent(
 }
 
 function transformStockEntryShell(source: string): string {
+  // The current StockEntryHistory page performs a direct paged query and already
+  // forwards its search/date filters to the API. The older condensed view used
+  // per-group lazy queries, which still need this compatibility patch when that
+  // legacy shape is present.
   const before = `      if (group.erpLocationId) gp.set("locationId", String(group.erpLocationId));\n      return {`;
+  const first = source.indexOf(before);
+
+  if (first < 0) {
+    const directPagedSearch =
+      'if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());';
+    if (source.includes(directPagedSearch)) return source;
+
+    throw new Error(
+      "[heavy-list-pagination] Missing transform target: stock-entry lazy expanded group filters"
+    );
+  }
+
+  if (source.indexOf(before, first + before.length) >= 0) {
+    throw new Error(
+      "[heavy-list-pagination] Ambiguous transform target: stock-entry lazy expanded group filters"
+    );
+  }
+
   const after = `      if (group.erpLocationId) gp.set("locationId", String(group.erpLocationId));\n      if (statusFilter.length > 0) gp.set("status", statusFilter.join(","));\n      if (debouncedSearch.trim()) gp.set("search", debouncedSearch.trim());\n      return {`;
-  return replaceExactly(source, before, after, "stock-entry lazy expanded group filters");
+  return source.slice(0, first) + after + source.slice(first + before.length);
 }
 
 function transformV5AllocationModel(source: string): string {

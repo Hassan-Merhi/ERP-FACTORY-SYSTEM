@@ -1,8 +1,9 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { factoryApiRequest } from "@/lib/factoryApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,8 @@ import {
   Clock,
   Languages,
   ChevronDown,
+  Loader2,
+  MessageCircle,
 } from "lucide-react";
 
 import type {
@@ -59,6 +62,17 @@ import {
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
 import { SummaryCard } from "./factoryattendance/components/SummaryCard";
+
+interface AttendanceWhatsappSettings {
+  attendanceWhatsappGroupId?: string | null;
+}
+
+interface WhatsappChat {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export default function FactoryAttendance() {
   const { toast } = useToast();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
@@ -79,6 +93,10 @@ export default function FactoryAttendance() {
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
+  const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
+  const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
+  const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
+  const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
     queryKey: ["/api/factory/attendance", selectedDate],
@@ -87,6 +105,28 @@ export default function FactoryAttendance() {
       if (!res.ok) throw new Error((await res.json()).message || "Failed to fetch attendance");
       return res.json();
     },
+  });
+
+  const { data: attendanceWhatsappSettings } = useQuery<AttendanceWhatsappSettings>({
+    queryKey: ["/api/factory/settings?scope=attendance"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/factory/settings?scope=attendance");
+      if (!res.ok) throw new Error("Failed to load Attendance WhatsApp settings");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WhatsappChat[]>({
+    queryKey: ["/api/whatsapp/chats"],
+    queryFn: async () => {
+      const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
+      if (!res.ok) throw new Error("Failed to load WhatsApp groups");
+      return res.json();
+    },
+    enabled: attendanceWaPickerOpen,
+    staleTime: 60_000,
+    retry: false,
   });
 
   useEffect(() => {
@@ -103,6 +143,77 @@ export default function FactoryAttendance() {
     setAttendanceMap(newMap);
     setNotesMap(newNotes);
   }, [data]);
+
+  useEffect(() => {
+    if (attendanceWhatsappSettings) {
+      setAttendanceWaGroupId(attendanceWhatsappSettings.attendanceWhatsappGroupId ?? "");
+    }
+  }, [attendanceWhatsappSettings]);
+
+  const filteredAttendanceWaChats = useMemo(() => {
+    const needle = attendanceWaSearch.trim().toLowerCase();
+    return attendanceWaChats.filter((chat) => {
+      const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
+      const matches = !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
+      return isGroup && matches;
+    });
+  }, [attendanceWaChats, attendanceWaSearch]);
+
+  const saveAttendanceWaGroupMutation = useMutation({
+    mutationFn: async (chatId: string) => {
+      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
+        attendanceWhatsappGroupId: chatId,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to save Attendance WhatsApp group");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
+      setAttendanceWaPickerOpen(false);
+      setAttendanceWaSearch("");
+      toast({ title: "Attendance WhatsApp group updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to save WhatsApp group", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const sendWhatsappImageMutation = useMutation({
+    mutationFn: async () => {
+      if (!attendanceReportRef.current) throw new Error("Attendance image is not ready");
+
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(attendanceReportRef.current, {
+        backgroundColor: "#111315",
+        scale: 2,
+        logging: false,
+      });
+
+      const title = `Attendance Report — ${selectedDate}`;
+      const res = await factoryApiRequest("POST", "/api/factory/send-mix-batch-image-whatsapp", {
+        imageBase64: canvas.toDataURL("image/png"),
+        date: selectedDate,
+        fileName: `Attendance_${selectedDate}.png`,
+        caption: title,
+        reportLabel: title,
+        destination: "attendance",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to send attendance image");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Attendance image sent to WhatsApp" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send WhatsApp image", description: err.message, variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: (records: AttendanceBulkRecord[]) => apiRequest("POST", "/api/factory/attendance/bulk", { records }),
@@ -242,6 +353,11 @@ export default function FactoryAttendance() {
     }).length,
   };
 
+  const reportAbsentWorkers = workers
+    .filter((worker) => attendanceMap[worker.id] === "Absent")
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
+  const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
+
   return (
     <div className="space-y-4 p-1">
       {/* Mode toggle */}
@@ -293,7 +409,35 @@ export default function FactoryAttendance() {
                   />
                 </div>
 
-                <div className="flex gap-2 ml-auto items-center">
+                <div className="flex gap-2 ml-auto items-center flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => setAttendanceWaPickerOpen((open) => !open)}
+                    data-testid="button-change-attendance-whatsapp-group"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-1" />
+                    {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => sendWhatsappImageMutation.mutate()}
+                    disabled={
+                      !attendanceWaGroupId ||
+                      !workers.length ||
+                      isLoading ||
+                      sendWhatsappImageMutation.isPending
+                    }
+                    data-testid="button-send-attendance-whatsapp-image"
+                  >
+                    {sendWhatsappImageMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                    )}
+                    {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
+                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -354,6 +498,81 @@ export default function FactoryAttendance() {
               </div>
             </CardContent>
           </Card>
+
+          {attendanceWaPickerOpen && (
+            <Card>
+              <CardContent className="pt-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold">Attendance WhatsApp Group</p>
+                  <p className="text-xs text-muted-foreground">
+                    This group is used only for attendance images sent from Payroll & Benefits.
+                  </p>
+                </div>
+                <Input
+                  value={attendanceWaSearch}
+                  onChange={(event) => setAttendanceWaSearch(event.target.value)}
+                  placeholder="Search WhatsApp groups..."
+                  data-testid="input-attendance-wa-search"
+                />
+                <div className="max-h-48 overflow-y-auto rounded-md border text-sm">
+                  {attendanceWaChatsLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-5 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading WhatsApp groups...
+                    </div>
+                  ) : filteredAttendanceWaChats.length === 0 ? (
+                    <p className="py-5 text-center text-muted-foreground">No WhatsApp groups found.</p>
+                  ) : (
+                    filteredAttendanceWaChats.map((chat) => (
+                      <button
+                        key={chat.id}
+                        type="button"
+                        onClick={() => setAttendanceWaGroupId(chat.id)}
+                        className={`w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60 ${
+                          attendanceWaGroupId === chat.id ? "bg-primary/10 text-primary" : ""
+                        }`}
+                        data-testid={`option-attendance-wa-chat-${chat.id}`}
+                      >
+                        <div className="font-medium">{chat.name || chat.id}</div>
+                        <div className="text-xs text-muted-foreground">{chat.id}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {attendanceWaGroupId
+                      ? `Selected group: ${attendanceWaGroupId}`
+                      : "No Attendance WhatsApp group selected."}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAttendanceWaGroupId(attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "");
+                        setAttendanceWaPickerOpen(false);
+                        setAttendanceWaSearch("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => saveAttendanceWaGroupMutation.mutate(attendanceWaGroupId)}
+                      disabled={!attendanceWaGroupId || saveAttendanceWaGroupMutation.isPending}
+                      data-testid="button-save-attendance-wa-group"
+                    >
+                      {saveAttendanceWaGroupMutation.isPending && (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      )}
+                      Save Group
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Range Export Card */}
           <Card>
@@ -606,6 +825,153 @@ export default function FactoryAttendance() {
           </Card>
         </>
       )}
+
+      <div
+        ref={attendanceReportRef}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          left: "-12000px",
+          top: 0,
+          width: "1080px",
+          background: "#111315",
+          color: "#f4f4f5",
+          padding: "28px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div style={{ marginBottom: "18px", display: "flex", justifyContent: "space-between", alignItems: "end" }}>
+          <div>
+            <div style={{ fontSize: "26px", fontWeight: 700 }}>Attendance Report</div>
+            <div style={{ marginTop: "5px", color: "#a1a1aa", fontSize: "15px" }}>{selectedDate}</div>
+          </div>
+          <div style={{ color: "#a1a1aa", fontSize: "14px" }}>{counts.total} total workers</div>
+        </div>
+
+        <div
+          data-testid="attendance-report-kpis"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: "12px",
+            marginBottom: "18px",
+          }}
+        >
+          {[
+            { key: "total", label: "Total", value: counts.total, border: "#34383e", valueColor: "#f4f4f5" },
+            { key: "present", label: "Present", value: counts.present, border: "#14532d", valueColor: "#34d399" },
+            { key: "absent", label: "Absent", value: counts.absent, border: "#7f1d1d", valueColor: "#f87171" },
+            { key: "other", label: "Other", value: counts.other, border: "#78350f", valueColor: "#fbbf24" },
+          ].map((kpi) => (
+            <div
+              key={kpi.key}
+              data-testid={`attendance-report-kpi-${kpi.key}`}
+              style={{
+                minWidth: 0,
+                border: `1px solid ${kpi.border}`,
+                borderRadius: "12px",
+                background: "#181a1e",
+                padding: "15px 17px",
+              }}
+            >
+              <div
+                style={{
+                  color: "#a1a1aa",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {kpi.label}
+              </div>
+              <div
+                style={{
+                  marginTop: "6px",
+                  color: kpi.valueColor,
+                  fontSize: "30px",
+                  lineHeight: 1,
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {kpi.value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: "18px" }}>
+          <thead>
+            <tr style={{ background: "#292c31", color: "#f4f4f5" }}>
+              <th style={{ width: "160px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>
+                Code
+              </th>
+              <th style={{ padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>Worker</th>
+              <th style={{ width: "150px", padding: "16px 14px", textAlign: "center", border: "1px solid #3f444b" }}>
+                Status
+              </th>
+              <th style={{ width: "300px", padding: "16px 14px", textAlign: "left", border: "1px solid #3f444b" }}>
+                Notes
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {reportAbsentWorkers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  style={{ padding: "30px 14px", textAlign: "center", color: "#a1a1aa", border: "1px solid #3f444b" }}
+                >
+                  No absent workers.
+                </td>
+              </tr>
+            ) : (
+              reportAbsentWorkers.map((worker, index) => (
+                <tr
+                  key={`attendance-report-${worker.id}`}
+                  style={{ background: index % 2 === 0 ? "#111315" : "#181a1e" }}
+                >
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                    {worker.employeeCode || "—"}
+                  </td>
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e" }}>
+                    <div dir="auto" style={{ fontWeight: 600 }}>{worker.fullName}</div>
+                    <div style={{ marginTop: "4px", color: "#8b9098", fontSize: "13px" }}>
+                      {worker.position || worker.department || "—"}
+                    </div>
+                  </td>
+                  <td
+                    style={{
+                      padding: "15px 14px",
+                      textAlign: "center",
+                      border: "1px solid #34383e",
+                      color: "#f87171",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Absent
+                  </td>
+                  <td style={{ padding: "15px 14px", border: "1px solid #34383e", color: "#d4d4d8" }}>
+                    {notesMap[worker.id] || "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+            <tr style={{ background: "#292c31" }}>
+              <td colSpan={2} style={{ padding: "18px 14px", border: "1px solid #3f444b", fontWeight: 700 }}>
+                Daily Total
+              </td>
+              <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", color: "#f87171", fontWeight: 800 }}>
+                {counts.absent} absent
+              </td>
+              <td style={{ padding: "14px", textAlign: "center", border: "1px solid #3f444b", fontWeight: 800 }}>
+                {attendancePct}% present
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <Dialog
         open={printDialog !== null}
