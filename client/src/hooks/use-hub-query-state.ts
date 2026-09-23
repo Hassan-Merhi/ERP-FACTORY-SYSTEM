@@ -40,6 +40,10 @@ function replaceBrowserUrl(url: URL) {
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
+function decodeValueKey<T extends string>(valueKey: string): T[] {
+  return valueKey ? (valueKey.split("\u0000") as T[]) : [];
+}
+
 export function canonicalizeHubLocation<T extends string>(options: HubQueryStateOptions<T>): T {
   const fallback = fallbackValue(options.allowedValues, options.defaultValue);
   if (typeof window === "undefined") return fallback;
@@ -103,8 +107,20 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
   );
 
   useEffect(() => {
+    const effectAllowedValues = decodeValueKey<T>(allowedValuesKey);
+    const effectKnownValues = decodeValueKey<T>(knownValuesKey);
+    const effectClearKeys = decodeValueKey<string>(clearKeysKey);
     const syncFromLocation = () =>
-      setValue(canonicalizeHubLocation({ key, allowedValues, knownValues, defaultValue, clearKeys, omitDefault }));
+      setValue(
+        canonicalizeHubLocation({
+          key,
+          allowedValues: effectAllowedValues,
+          knownValues: effectKnownValues,
+          defaultValue,
+          clearKeys: effectClearKeys,
+          omitDefault,
+        }),
+      );
 
     syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
@@ -117,9 +133,13 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
 
   const updateValue = useCallback(
     (nextValue: T) => {
-      if (!allowedValues.includes(nextValue)) {
+      const currentAllowedValues = decodeValueKey<T>(allowedValuesKey);
+      const currentKnownValues = decodeValueKey<T>(knownValuesKey);
+      const currentClearKeys = decodeValueKey<string>(clearKeysKey);
+
+      if (!currentAllowedValues.includes(nextValue)) {
         // Programmatic callers cannot select a value the current user cannot see.
-        setValue(fallbackValue(allowedValues, defaultValue));
+        setValue(fallbackValue(currentAllowedValues, defaultValue));
         return;
       }
 
@@ -132,13 +152,13 @@ export function useHubQueryState<T extends string>(options: HubQueryStateOptions
         url.searchParams.set(key, nextValue);
       }
 
-      for (const clearKey of clearKeys) {
+      for (const clearKey of currentClearKeys) {
         url.searchParams.delete(clearKey);
       }
 
       // Once a hub uses canonical query state, discard any recognized legacy
       // tab/section hash so a stale hash cannot reopen a restricted child.
-      if (readLegacyHash(url, key, knownValues) !== null) {
+      if (readLegacyHash(url, key, currentKnownValues) !== null) {
         url.hash = "";
       }
 
