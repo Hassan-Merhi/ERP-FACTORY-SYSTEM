@@ -45,6 +45,21 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).not.toContain("ledgerAccountEntries");
   });
 
+  it("keeps voucher-entry RLS on the direct DB-managed company key", () => {
+    const migration = read("migrations/0016_company_scope_rls_readiness.sql");
+    const schema = read("shared/schema/erp/vouchers.ts");
+    const bridge = read("server/companyScopeRlsBridge.mjs");
+
+    expect(schema).toContain('companyId: integer("company_id").notNull().default(0)');
+    expect(schema).toContain('index("voucher_entries_company_idx").on(t.companyId)');
+    expect(migration).toContain("voucher_entries_sync_company_id");
+    expect(migration).toContain("vouchers_sync_entry_company_id");
+    expect(migration).toContain("USING (erp_company_scope_matches(company_id))");
+    expect(migration).not.toContain("WHERE vouchers.id = voucher_entries.voucher_id");
+    expect(bridge).toContain("voucherEntryFastPath: true");
+    expect(bridge).toContain("Voucher-entry company scope is out of sync with parent vouchers.");
+  });
+
   it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {
     const source = read("server/routes/customers/customerBalanceQuery.ts");
 
