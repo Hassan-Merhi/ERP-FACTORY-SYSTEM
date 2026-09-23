@@ -4,6 +4,10 @@
  * Extracted from useBaleProductsModel.tsx during the god-file split so the
  * model hook stays under the repository size limit. These build the workbook
  * in memory and trigger the download; toasts stay with the calling hook.
+ *
+ * ExcelJS writes formula text verbatim into the sheet XML, where a leading "="
+ * is invalid OOXML: Excel "repairs" such a file and drops the formulas. Write
+ * formulas without it.
  */
 import type { Cell as ExcelCell, FillPattern } from "exceljs";
 import type { FactoryBaleProduct } from "@shared/schema";
@@ -125,7 +129,7 @@ export async function downloadPricedBaleOrderSheet(
       weight,
       numPrice,
       "", // Bales — blank for user input
-      { formula: `=F${rowNum}*G${rowNum}`, result: 0 }, // Total = Price × Bales
+      { formula: `F${rowNum}*G${rowNum}`, result: 0 }, // Total = Price × Bales
     ]);
     row.height = 18;
 
@@ -162,8 +166,8 @@ export async function downloadPricedBaleOrderSheet(
     "",
     "",
     "",
-    { formula: `=SUM(G${DATA_START}:G${lastDataRow})`, result: 0 },
-    { formula: `=SUM(H${DATA_START}:H${lastDataRow})`, result: 0 },
+    { formula: `SUM(G${DATA_START}:G${lastDataRow})`, result: 0 },
+    { formula: `SUM(H${DATA_START}:H${lastDataRow})`, result: 0 },
   ]);
   totalRow.height = 22;
   const totalFill: FillPattern = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
@@ -325,7 +329,7 @@ export async function downloadNoPriceBaleOrderSheet(options: BaleOrderSheetInput
     "TOTAL ORDER",
     "",
     "",
-    { formula: `=SUM(F${DATA_START}:F${lastDataRow})`, result: 0 },
+    { formula: `SUM(F${DATA_START}:F${lastDataRow})`, result: 0 },
   ]);
   totalRow.height = 22;
   const totalFill: FillPattern = { type: "pattern", pattern: "solid", fgColor: { argb: C_TOTAL } };
