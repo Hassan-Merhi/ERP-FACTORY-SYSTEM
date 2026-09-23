@@ -115,6 +115,7 @@ export default function FactoryProfitability() {
       if (!res.ok) throw new Error("Failed to load bale costs");
       return res.json();
     },
+    enabled: showBales,
   });
 
   const containersQuery = useQuery<ContainerProfit[]>({
@@ -124,6 +125,7 @@ export default function FactoryProfitability() {
       if (!res.ok) throw new Error("Failed to load container profitability");
       return res.json();
     },
+    enabled: showContainers,
   });
 
   const balesSummary = (() => {
