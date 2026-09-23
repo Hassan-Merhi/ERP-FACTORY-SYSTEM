@@ -5,6 +5,7 @@ const skipTypeScript = process.env.PROGRAM6_SKIP_TYPESCRIPT === "1";
 const commands = [
   ...(skipTypeScript ? [] : [["npm", ["run", "check"]]]),
   ["node", ["scripts/audit-company-scope.mjs", "--fail-on-findings"]],
+  ["node", ["scripts/verify-security-wave3-closeout.mjs"]],
   [
     "node",
     [
@@ -15,6 +16,10 @@ const commands = [
       "tests/company-user-admin-scope-policy.test.ts",
       "tests/company-context-enforcement.test.ts",
       "tests/phase3-tenant-isolation-boundary.test.ts",
+      "tests/phase33e-tenant-isolation-boundary.test.ts",
+      "tests/global-maintenance-route-policy.test.ts",
+      "tests/operational-permission-route-policy.test.ts",
+      "tests/privileged-maintenance-route-policy.test.ts",
       "tests/legacy-privileged-write-guard.test.ts",
       "tests/raw-stock-sensitive-input-guard.test.ts",
       "tests/stored-file-protected-access.test.ts",
