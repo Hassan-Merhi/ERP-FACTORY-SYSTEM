@@ -30,6 +30,17 @@ type SpOffloadChargeLine = {
   creditBankAccountId?: string;
 };
 
+class SpOffloadRouteError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string
+  ) {
+    super(message);
+    this.name = "SpOffloadRouteError";
+  }
+}
+
 // ── Parent Company Agents + Offload ──────────────────────────────────────────
 
 export function registerSpOffloadRoutes(app: Express) {
@@ -85,21 +96,9 @@ export function registerSpOffloadRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid location for this company" });
       }
 
-      const [container] = await db
-        .select()
-        .from(spContainers)
-        .where(and(eq(spContainers.id, parseInt(containerId)), eq(spContainers.companyId, companyId)));
-
-      if (!container) return res.status(404).json({ message: "Container not found" });
-      if (container.status !== "open") return res.status(400).json({ message: "Container is already offloaded" });
-
-      const containerLines = await db
-        .select()
-        .from(spContainerLines)
-        .where(eq(spContainerLines.containerId, container.id));
-
-      if (containerLines.length === 0) {
-        return res.status(400).json({ message: "Container has no lines" });
+      const parsedContainerId = Number(containerId);
+      if (!Number.isInteger(parsedContainerId) || parsedContainerId <= 0) {
+        return res.status(400).json({ message: "Invalid containerId" });
       }
 
       // Fetch SP accounts
@@ -113,20 +112,58 @@ export function registerSpOffloadRoutes(app: Express) {
         return res.status(400).json({ message: "SP accounts not configured. Run setup first." });
       }
 
-      const discountPct = parseNum(container.discountPct);
-      const discountFactor = 1 - discountPct / 100;
-      const totalQty = containerLines.reduce((s, l) => s + parseNum(l.qty), 0);
-      const totalBaseCost = containerLines.reduce(
-        (s, l) => s + parseNum(l.qty) * parseNum(l.unitRateUsd) * discountFactor,
-        0
-      );
       const charges: SpOffloadChargeLine[] = chargeLines || [];
-      const totalLandedCost = charges.reduce((s: number, c) => s + parseNum(c.amountUsd), 0);
-      const landedPerUnit = totalQty > 0 ? totalLandedCost / totalQty : 0;
-      const totalFinalCost = totalBaseCost + totalLandedCost;
-      const invoiceTotal = parseNum(container.invoiceTotalUsd);
 
       const result = await db.transaction(async (tx) => {
+        // Serialize every lifecycle mutation on the container row. The pre-transaction
+        // status check used here previously allowed two simultaneous requests to both
+        // observe "open" and double-post vouchers, stock and prepaid usage.
+        const [container] = await tx
+          .select()
+          .from(spContainers)
+          .where(and(eq(spContainers.id, parsedContainerId), eq(spContainers.companyId, companyId)))
+          .limit(1)
+          .for("update");
+
+        if (!container) {
+          throw new SpOffloadRouteError("Container not found", 404, "SP_OFFLOAD_NOT_FOUND");
+        }
+        if (container.status !== "open") {
+          throw new SpOffloadRouteError(
+            "Container is already offloaded",
+            409,
+            "SP_OFFLOAD_ALREADY_DONE"
+          );
+        }
+
+        // Read the posting inputs only after the lifecycle lock is held, so an edit
+        // that commits first is included and an edit that arrives later must wait.
+        const containerLines = await tx
+          .select()
+          .from(spContainerLines)
+          .where(
+            and(
+              eq(spContainerLines.containerId, container.id),
+              eq(spContainerLines.companyId, companyId)
+            )
+          );
+
+        if (containerLines.length === 0) {
+          throw new SpOffloadRouteError("Container has no lines", 400, "SP_OFFLOAD_EMPTY");
+        }
+
+        const discountPct = parseNum(container.discountPct);
+        const discountFactor = 1 - discountPct / 100;
+        const totalQty = containerLines.reduce((s, l) => s + parseNum(l.qty), 0);
+        const totalBaseCost = containerLines.reduce(
+          (s, l) => s + parseNum(l.qty) * parseNum(l.unitRateUsd) * discountFactor,
+          0
+        );
+        const totalLandedCost = charges.reduce((s: number, charge) => s + parseNum(charge.amountUsd), 0);
+        const landedPerUnit = totalQty > 0 ? totalLandedCost / totalQty : 0;
+        const totalFinalCost = totalBaseCost + totalLandedCost;
+        const invoiceTotal = parseNum(container.invoiceTotalUsd);
+
         const [voucherA] = await tx.insert(vouchers).values({
           companyId, voucherType: "Journal", voucherNumber: `SP-OTW-REV-${container.id}-${Date.now()}`,
           voucherDate: offloadDate, description: `Goods OTW Reversal — ${container.supplierName} inv ${container.invoiceNumber}`,
@@ -235,12 +272,32 @@ export function registerSpOffloadRoutes(app: Express) {
           if (!movement) throw new Error(`SP offload container #${container.id} failed to create its stock movement`);
         }
 
-        await tx.update(spContainers).set({ status: "offloaded" }).where(eq(spContainers.id, container.id));
+        const [closedContainer] = await tx
+          .update(spContainers)
+          .set({ status: "offloaded" })
+          .where(
+            and(
+              eq(spContainers.id, container.id),
+              eq(spContainers.companyId, companyId),
+              eq(spContainers.status, "open")
+            )
+          )
+          .returning({ id: spContainers.id });
+        if (!closedContainer) {
+          throw new SpOffloadRouteError(
+            "Container lifecycle changed while offloading",
+            409,
+            "SP_OFFLOAD_STATE_CONFLICT"
+          );
+        }
         return offload;
       });
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof SpOffloadRouteError) {
+        return res.status(error.status).json({ code: error.code, message: error.message });
+      }
       if (respondToSpInventoryIntegrityError(res, error)) return;
       res.status(500).json({ message: getErrorMessage(error) });
     }
