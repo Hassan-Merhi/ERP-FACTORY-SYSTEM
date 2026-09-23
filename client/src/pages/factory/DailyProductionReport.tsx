@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import FactoryFinancialSnapshot from "@/pages/factory/FactoryFinancialSnapshot";
 import FactoryShippingContainers from "@/pages/factory/FactoryShippingContainers";
@@ -47,15 +46,12 @@ export default function DailyProductionReport() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden = myAccess?.hiddenCostFields ?? [];
   const visibleTabs = OVERVIEW_TABS.filter((tab) => !hidden.includes(HIDDEN_KEYS[tab]));
-  const visibleTabsKey = visibleTabs.join("|");
   const firstVisibleTab = visibleTabs[0];
-
-  useEffect(() => {
-    if (!firstVisibleTab) return;
-    if (OVERVIEW_TABS.includes(report.activeTab as OverviewTab) && !visibleTabs.includes(report.activeTab as OverviewTab)) {
-      report.setActiveTab(firstVisibleTab);
-    }
-  }, [firstVisibleTab, report.activeTab, report.setActiveTab, visibleTabsKey]);
+  const activeManagedTab = OVERVIEW_TABS.includes(report.activeTab as OverviewTab)
+    ? (report.activeTab as OverviewTab)
+    : null;
+  const effectiveActiveTab =
+    activeManagedTab && !visibleTabs.includes(activeManagedTab) ? (firstVisibleTab ?? report.activeTab) : report.activeTab;
 
   const show = (tab: OverviewTab) => visibleTabs.includes(tab);
 
@@ -69,7 +65,7 @@ export default function DailyProductionReport() {
         <div className="p-6 text-sm text-muted-foreground">No Overview tabs are available for this user.</div>
       ) : (
         <Tabs
-          value={report.activeTab}
+          value={effectiveActiveTab}
           onValueChange={report.setActiveTab}
           className="flex flex-col flex-1 overflow-hidden"
         >
