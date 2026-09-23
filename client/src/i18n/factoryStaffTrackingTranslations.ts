@@ -94,6 +94,8 @@ const factoryStaffTrackingTranslations = {
   totalExpected: { en: "Total Expected", ar: "الإجمالي المتوقع", fr: "Total attendu" },
   targets: { en: "Targets", ar: "الأهداف", fr: "Objectifs" },
   workers: { en: "Workers", ar: "العمال", fr: "Ouvriers" },
+  total: { en: "Total", ar: "الإجمالي", fr: "Total" },
+  expected: { en: "Expected", ar: "المتوقع", fr: "Attendu" },
   totalWorkers: { en: "Total Workers", ar: "إجمالي العمال", fr: "Total ouvriers" },
   totalProduced: { en: "Total Produced", ar: "إجمالي الإنتاج", fr: "Production totale" },
   diff: { en: "Diff", ar: "الفرق", fr: "Écart" },
