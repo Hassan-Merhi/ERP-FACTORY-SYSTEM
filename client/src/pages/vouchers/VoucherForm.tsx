@@ -69,7 +69,7 @@ export function VoucherForm({
 
             {children}
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t">
               {footerActions}
               <Button type="submit" disabled={isPending} className="min-w-[120px]">
                 {isPending ? (
