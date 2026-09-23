@@ -129,6 +129,7 @@ vi.mock("@/pages/stockentryhistory/utils", () => ({
   STATUS_OPTIONS: ["IN_STOCK", "SOLD"],
   fetchAllStockEntryHistoryPages: vi.fn(async () => [group]),
   formatHistoryTime: vi.fn((value: string) => value),
+  formatDailyNum: vi.fn((value: number) => String(value)),
   buildWorkerMatrix: vi.fn(() => ({
     workers: ["Alice"],
     rows: [{ productLabel: "Shirts (SH-1)", counts: { Alice: 3 }, total: 3 }],
