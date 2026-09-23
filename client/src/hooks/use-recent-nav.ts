@@ -58,14 +58,6 @@ export function useRecentNav<T extends NavItemLike>(
   const [location] = useLocation();
   const [recent, setRecent] = useState<RecentNavEntry[]>(() => loadFromStorage(companyId));
 
-  const navByPath = useMemo(() => {
-    const map = new Map<string, T>();
-    for (const item of allNavItems) {
-      map.set(canonicalNavigationPath(item.url), item);
-    }
-    return map;
-  }, [allNavItems]);
-
   // Sidebar visibility callbacks are commonly recreated on render. Depend on
   // their result, not their function identity, so permission filtering cannot
   // cause a render/effect loop.
