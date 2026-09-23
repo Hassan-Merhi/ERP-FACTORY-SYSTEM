@@ -38,6 +38,7 @@ async function cleanupSpTables(companyId: number): Promise<void> {
   );
   await pool.query(`DELETE FROM sp_offload_reversals WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_offloads WHERE company_id = $1`, [companyId]);
+  await pool.query(`DELETE FROM sp_prepaid_charges WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_container_lines WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM sp_containers WHERE company_id = $1`, [companyId]);
 }
@@ -143,6 +144,7 @@ afterAll(async () => {
       [spCompanyId]
     );
     await pool.query(`DELETE FROM vouchers WHERE company_id = $1`, [spCompanyId]);
+    await pool.query(`DELETE FROM bank_accounts WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM canonical_stock_movement_audit WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM canonical_stock_movement_requests WHERE company_id = $1`, [spCompanyId]);
     await pool.query(`DELETE FROM canonical_stock_movements WHERE company_id = $1`, [spCompanyId]);
@@ -405,5 +407,164 @@ describe("SP reverse and corrected re-offload", () => {
     expect(Number(history.rows[0].snapshot_offload_id)).toBe(originalOffloadId);
   });
 
-  it.todo("offload supports prepaid, paid-now and unpaid-payable charge lines");
+  it("offload supports prepaid, paid-now and unpaid-payable charge lines atomically", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const activeResult = await pool.query<{ id: number }>(
+      `SELECT id
+       FROM sp_offloads
+       WHERE company_id = $1 AND container_id = $2
+       ORDER BY id DESC
+       LIMIT 1`,
+      [spCompanyId, createdContainerId]
+    );
+    const activeOffloadId = Number(activeResult.rows[0]?.id);
+    expect(activeOffloadId).toBeGreaterThan(0);
+
+    const reverse = await spAgent.post(`/api/sp/offloads/${activeOffloadId}/reverse`).send({
+      reversalDate: today,
+      reason: "Prepare mixed charge-line lifecycle regression",
+    });
+    expect(reverse.status).toBe(200);
+    expect(await inventoryQuantity()).toBeCloseTo(0, 6);
+
+    const [bank] = await db
+      .insert(schema.bankAccounts)
+      .values({
+        companyId: spCompanyId,
+        code: `${TEST_PREFIX}-BANK`,
+        name: "SP Test Bank",
+        bankName: "SP Test Bank",
+        accountNumber: `${RUN_ID}-001`,
+        openingBalance: "0",
+        active: true,
+      })
+      .returning();
+
+    const [payable] = await db
+      .insert(schema.ledgerAccounts)
+      .values({
+        companyId: spCompanyId,
+        code: `${TEST_PREFIX}-PAY`,
+        name: "SP Test Offload Payable",
+        accountType: "Accounts Payable",
+        openingBalance: "0",
+        active: true,
+      })
+      .returning();
+
+    const prepaid = await spAgent.post("/api/sp/prepaid").send({
+      containerId: createdContainerId,
+      prepaidDate: today,
+      chargeType: "freight",
+      agentName: "SP Test Agent",
+      amountPaidUsd: 10,
+      bankAccountId: bank.id,
+      notes: "Wave 2 mixed charge-line regression",
+    });
+    expect(prepaid.status).toBe(200);
+    expect(Number(prepaid.body.amountPaidUsd)).toBeCloseTo(10, 2);
+
+    const offloadResponse = await spAgent.post("/api/sp/offload").send({
+      containerId: createdContainerId,
+      offloadDate: today,
+      locationId: spLocationId,
+      chargeLines: [
+        {
+          chargeType: "prepaid_used",
+          description: "Use prepaid freight",
+          amountUsd: 10,
+          prepaidChargeId: prepaid.body.id,
+        },
+        {
+          chargeType: "paid_now",
+          description: "Port cash charge",
+          amountUsd: 5,
+          creditBankAccountId: bank.id,
+        },
+        {
+          chargeType: "unpaid_payable",
+          description: "Outstanding clearing charge",
+          amountUsd: 15,
+          creditLedgerAccountId: payable.id,
+        },
+      ],
+    });
+    expect(offloadResponse.status).toBe(200);
+
+    const [offload] = await db
+      .select()
+      .from(spOffloads)
+      .where(and(eq(spOffloads.companyId, spCompanyId), eq(spOffloads.containerId, createdContainerId)))
+      .limit(1);
+    expect(Number(offload.totalLandedCostUsd)).toBeCloseTo(30, 2);
+    expect(Number(offload.totalFinalCostUsd)).toBeCloseTo(INVOICE_TOTAL + 30, 2);
+
+    const prepaidUsage = await pool.query<{ amount_used_usd: string }>(
+      `SELECT amount_used_usd
+       FROM sp_prepaid_charges
+       WHERE id = $1 AND company_id = $2`,
+      [prepaid.body.id, spCompanyId]
+    );
+    expect(Number(prepaidUsage.rows[0]?.amount_used_usd ?? 0)).toBeCloseTo(10, 2);
+
+    const prepaidLedger = await pool.query<{ id: number }>(
+      `SELECT id
+       FROM ledger_accounts
+       WHERE company_id = $1 AND sub_type = 'sp_prepaid' AND deleted_at IS NULL
+       LIMIT 1`,
+      [spCompanyId]
+    );
+    const prepaidLedgerId = Number(prepaidLedger.rows[0]?.id);
+    expect(prepaidLedgerId).toBeGreaterThan(0);
+
+    const chargeCredits = await pool.query<{
+      ledger_account_id: number | null;
+      bank_account_id: number | null;
+      credit: string;
+    }>(
+      `SELECT ledger_account_id,
+              bank_account_id,
+              SUM(credit_amount::numeric)::text AS credit
+       FROM voucher_entries
+       WHERE voucher_id = $1 AND credit_amount::numeric > 0
+       GROUP BY ledger_account_id, bank_account_id`,
+      [offload.voucherIdStock]
+    );
+    const creditFor = (ledgerAccountId: number | null, bankAccountId: number | null) =>
+      Number(
+        chargeCredits.rows.find(
+          (row) =>
+            Number(row.ledger_account_id ?? 0) === Number(ledgerAccountId ?? 0) &&
+            Number(row.bank_account_id ?? 0) === Number(bankAccountId ?? 0)
+        )?.credit ?? 0
+      );
+
+    expect(creditFor(prepaidLedgerId, null)).toBeCloseTo(10, 2);
+    expect(creditFor(null, bank.id)).toBeCloseTo(5, 2);
+    expect(creditFor(payable.id, null)).toBeCloseTo(15, 2);
+
+    const [inventory] = await db
+      .select()
+      .from(schema.inventory)
+      .where(
+        and(
+          eq(schema.inventory.companyId, spCompanyId),
+          eq(schema.inventory.locationId, spLocationId),
+          eq(schema.inventory.stockItemId, spStockItemId)
+        )
+      )
+      .limit(1);
+    expect(Number(inventory.quantity)).toBeCloseTo(CONTAINER_QTY, 1);
+    expect(Number(inventory.totalValue ?? 0)).toBeCloseTo(INVOICE_TOTAL + 30, 2);
+    expect(Number(inventory.averageRate)).toBeCloseTo((INVOICE_TOTAL + 30) / CONTAINER_QTY, 4);
+
+    const totals = await pool.query(
+      `SELECT COALESCE(SUM(debit_amount::numeric), 0) AS dr,
+              COALESCE(SUM(credit_amount::numeric), 0) AS cr
+       FROM voucher_entries
+       WHERE voucher_id = $1`,
+      [offload.voucherIdStock]
+    );
+    expect(Number(totals.rows[0].dr)).toBeCloseTo(Number(totals.rows[0].cr), 2);
+  });
 });
