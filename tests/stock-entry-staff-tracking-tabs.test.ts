@@ -130,16 +130,19 @@ describe("Stock Entry staff tracking tabs", () => {
     const linkService = src("server/services/factory/productionWorkerLinks.ts");
     const startup = src("server/startup/factoryStaffTrackingSchema.ts");
 
-    expect(editor).toContain("button-link-worker-");
-    expect(editor).toContain("button-unlink-worker-");
-    expect(editor).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(editor).toContain("<ProductionWorkerLinkControl");
     expect(editor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("linkGroupId");
     expect(defaultsEditor).toContain("<ProductionWorkerLinkControl");
     expect(production).toContain("<ProductionWorkerLinkControl");
     expect(linkControl).toContain("button-link-worker-");
     expect(linkControl).toContain("button-unlink-worker-");
+    expect(linkControl).toContain("button-save-worker-links-");
     expect(linkControl).toContain("/api/factory/staff-tracking/production-worker-links");
+    expect(linkControl).toContain("currentMemberIds");
+    expect(linkControl).toContain("selectedPartnerIds");
+    expect(linkControl).toContain("MAX_LINKED_WORKERS = 10");
+    expect(linkControl).toContain("workerIds");
     expect(linkControl).toContain("effectiveFrom");
     expect(production).toContain("collapseLinkedProductionRows");
     expect(production).toContain("row.displayMembers");
