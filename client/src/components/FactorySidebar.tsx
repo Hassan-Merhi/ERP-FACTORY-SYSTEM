@@ -197,7 +197,6 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
     if (
       myAccess &&
       !myAccess.fullAccess &&
-      myAccess.pageKeys.length > 0 &&
       !hasFactoryPageKey(page, myAccess.pageKeys)
     ) {
       return false;
