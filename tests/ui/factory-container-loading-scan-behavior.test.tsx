@@ -170,7 +170,11 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogTitle: ({ children }: any) => <div>{children}</div>,
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
-  AlertDialog: ({ children, open }: any) => (open ? <div>{children}</div> : null),
+  AlertDialog: ({ children, open }: any) => (
+    <div data-testid="alert-dialog-root" data-open={String(Boolean(open))}>
+      {children}
+    </div>
+  ),
   AlertDialogAction: ({ children, onClick, ...props }: any) => (
     <button onClick={onClick} {...props}>
       {children}
@@ -323,8 +327,10 @@ describe("factory container loading scan behavior", () => {
     const emptyButton = await screen.findByTestId("button-empty-container");
     expect(emptyButton).toBeEnabled();
 
+    expect(screen.getByTestId("alert-dialog-root")).toHaveAttribute("data-open", "false");
     fireEvent.click(emptyButton);
-    const confirmDialog = await screen.findByTestId("dialog-confirm-empty-container");
+    await waitFor(() => expect(screen.getByTestId("alert-dialog-root")).toHaveAttribute("data-open", "true"));
+    const confirmDialog = screen.getByTestId("dialog-confirm-empty-container");
     expect(confirmDialog).toHaveTextContent("All 1 scanned bale");
     expect(confirmDialog).toHaveTextContent("start scanning again from zero");
 
