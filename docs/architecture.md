@@ -46,7 +46,7 @@ shared/   → Types and schema shared by both sides
 
 **Entry point** — `server/index.ts`. Bootstraps Express, configures session (PostgreSQL session store), CSRF protection (two layers: Origin/Referer guard + synchronizer token), and registers all route modules.
 
-**Route registration** — `server/routes.ts` delegates application HTTP composition to `server/routes/applicationRoutes.ts`. That composition module owns registrar ordering and calls the focused `register*Routes(app)` modules; retired compatibility registries are not part of the runtime path. Route modules are organized into sub-directories:
+**Route registration** — `server/routes.ts` is the barrel that imports and calls every `register*Routes(app)` function. Route modules are organized into sub-directories:
 
 | Directory | Covers |
 |---|---|
@@ -148,7 +148,9 @@ shared/schema  ──► Drizzle table defs + Zod insert schemas + TypeScript ty
 
 ## Multi-tenancy
 
-Every DB query is scoped by `companyId` taken from `req.session.currentCompanyId`. Routes trust the session; no row-level security is enforced at the database level. Cross-company data leaks are prevented only by application-level filtering.
+Tenant identity is server-owned. The global `tenantIsolationBoundary` resolves the active company from authenticated session/company-role state, rejects forged caller-supplied primary company IDs, and membership-checks intentional secondary-company references. Factory and Properties use their server-pinned company context; ordinary ERP/POS routes use the active ERP company.
+
+PostgreSQL adds a second fail-closed boundary for high-risk tenant tables. Migration `0016_company_scope_rls_readiness.sql` enables and **FORCES ROW LEVEL SECURITY** on vouchers, customers, ledger accounts, bank accounts, fixed assets, stock groups, stock items, and inventory; voucher entries are scoped through their parent voucher. Request transactions bind `app.current_company_id` and any explicitly authorized secondary companies. Missing or malformed database tenant context is denied rather than falling back to all-company access.
 
 ---
 
