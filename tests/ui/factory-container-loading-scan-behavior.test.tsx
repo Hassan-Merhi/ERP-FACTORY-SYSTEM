@@ -171,7 +171,11 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children, open }: any) => (open ? <div>{children}</div> : null),
-  AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  AlertDialogAction: ({ children, onClick, ...props }: any) => (
+    <button onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
   AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   AlertDialogContent: ({ children }: any) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
@@ -232,7 +236,7 @@ describe("factory container loading scan behavior", () => {
 
   it("resumes an in-progress loading without restoring persisted scan evidence", async () => {
     render(<FactoryContainerLoadingScan />);
-    await waitFor(() => expect(screen.getByTestId("badge-resuming")).toHaveTextContent("Resuming Loading #77"));
+    await waitFor(() => expect(screen.getByTestId("badge-resuming")).toHaveTextContent("Resuming #77"));
     expect(screen.getByTestId("badge-bale-count")).toHaveTextContent("1 bales");
     expect(screen.getByTestId("badge-total-weight")).toHaveTextContent("50 kg");
     expect(screen.queryByTestId("banner-last-scanned")).not.toBeInTheDocument();
@@ -320,17 +324,14 @@ describe("factory container loading scan behavior", () => {
     expect(emptyButton).toBeEnabled();
 
     fireEvent.click(emptyButton);
-    expect(screen.getByTestId("dialog-confirm-empty-container")).toHaveTextContent("All 1 scanned bale");
-    expect(screen.getByTestId("dialog-confirm-empty-container")).toHaveTextContent("start scanning again from zero");
+    const confirmDialog = await screen.findByTestId("dialog-confirm-empty-container");
+    expect(confirmDialog).toHaveTextContent("All 1 scanned bale");
+    expect(confirmDialog).toHaveTextContent("start scanning again from zero");
 
     fireEvent.click(screen.getByTestId("button-confirm-empty-container"));
 
     await waitFor(() =>
-      expect(harness.apiRequest).toHaveBeenCalledWith(
-        "POST",
-        "/api/factory/customer-orders/77/bales/empty",
-        {}
-      )
+      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/factory/customer-orders/77/bales/empty", {})
     );
     expect(harness.toast).toHaveBeenCalledWith({
       title: "Container emptied",
