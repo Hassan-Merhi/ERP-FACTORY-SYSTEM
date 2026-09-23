@@ -1,4 +1,3 @@
-import { pathToFileURL } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -93,7 +92,7 @@ const PRIORITY_ROUTE_FILES = new Set([
   "../server/routes/factory/customer-orders/verify-recover/verification-summary.ts",
   "../server/routes/admin/companySettingsRoutes.ts",
   "../server/routes/vouchers/voucherPaymentRoutes.ts",
-  "../server/routes/factory-payroll/generate.ts",
+  "../server/routes/payroll/centralFactoryPayrollGenerationRoute.ts",
   "../server/routes/payroll/worker-statement/statement.ts",
   "../server/routes/erp-payroll/runs-migration.ts",
 ]);
