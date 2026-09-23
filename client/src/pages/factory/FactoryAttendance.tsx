@@ -6,7 +6,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -57,7 +56,6 @@ import {
   generateWeeklyResultsSheetHtml,
   getInitialMode,
   getWeekDays,
-  setModeInUrl,
   todayStr,
 } from "./factoryattendance/utils";
 import { PerWorkerView } from "./factoryattendance/components/PerWorkerView";
@@ -75,16 +73,12 @@ interface WhatsappChat {
 
 export default function FactoryAttendance() {
   const { toast } = useToast();
-  const [mode, setMode] = useState<ViewMode>(getInitialMode);
+  const [mode] = useState<ViewMode>(getInitialMode);
 
-  const handleSetMode = (m: ViewMode) => {
-    setMode(m);
-    setModeInUrl(m);
-  };
-
-  // ── Daily view state ──────────────────────────────────────────
+  // ── Daily attendance state ────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(todayStr());
-  const [shift, setShift] = useState<string>("");
+  // Shift is intentionally no longer user-selectable on this screen.
+  const shift = "";
 
   // ── Range export state ────────────────────────────────────────
   const [rangeStart, setRangeStart] = useState<string>(todayStr());
@@ -360,140 +354,178 @@ export default function FactoryAttendance() {
 
   return (
     <div className="space-y-4 p-1">
-      {/* Mode toggle */}
-      <div className="flex gap-2">
-        <Button
-          variant={mode === "daily" ? "default" : "outline"}
-          size="default"
-          data-testid="button-mode-daily"
-          onClick={() => handleSetMode("daily")}
-        >
-          <CalendarDays className="h-4 w-4 mr-2" />
-          Daily View
-        </Button>
-      </div>
-
       {mode === "perWorker" ? (
         <PerWorkerView />
       ) : (
         <>
-          {/* Filters + Actions */}
+          {/* Attendance controls + range tools */}
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
-                    Attendance Date
-                  </Label>
-                  <Input
-                    id="attendance-date"
-                    data-testid="input-attendance-date"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-44"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="shift-input" className="text-xs text-muted-foreground">
-                    Shift (optional)
-                  </Label>
-                  <Input
-                    id="shift-input"
-                    data-testid="input-shift"
-                    placeholder="e.g. Morning"
-                    value={shift}
-                    onChange={(e) => setShift(e.target.value)}
-                    className="w-36"
-                    dir="auto"
-                  />
-                </div>
+            <CardContent className="p-4">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.9fr)] xl:gap-0">
+                <div className="space-y-3 xl:pr-5">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-semibold">Attendance</p>
+                      <p className="text-xs text-muted-foreground">Choose the date and manage today&apos;s register.</p>
+                    </div>
+                  </div>
 
-                <div className="flex gap-2 ml-auto items-center flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={() => setAttendanceWaPickerOpen((open) => !open)}
-                    data-testid="button-change-attendance-whatsapp-group"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-1" />
-                    {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={() => sendWhatsappImageMutation.mutate()}
-                    disabled={
-                      !attendanceWaGroupId ||
-                      !workers.length ||
-                      isLoading ||
-                      sendWhatsappImageMutation.isPending
-                    }
-                    data-testid="button-send-attendance-whatsapp-image"
-                  >
-                    {sendWhatsappImageMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                    )}
-                    {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="attendance-date" className="text-xs text-muted-foreground">
+                        Attendance Date
+                      </Label>
+                      <Input
+                        id="attendance-date"
+                        data-testid="input-attendance-date"
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-44"
+                      />
+                    </div>
+
+                    <div className="flex flex-1 flex-wrap items-center gap-2">
                       <Button
                         variant="outline"
                         size="default"
-                        data-testid="button-actions-dropdown"
-                        disabled={!workers.length}
+                        onClick={() => setAttendanceWaPickerOpen((open) => !open)}
+                        data-testid="button-change-attendance-whatsapp-group"
                       >
-                        Actions
-                        <ChevronDown className="h-4 w-4 ml-1" />
+                        <MessageCircle className="h-4 w-4 mr-1" />
+                        {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
-                        <UserCheck className="h-4 w-4 mr-2" />
-                        Mark All Present
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
-                        <UserX className="h-4 w-4 mr-2" />
-                        Mark All Absent
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Reset
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Blank Sheet
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        data-testid="menu-export-excel-blank"
-                        onClick={() => setPrintDialog("excel-blank")}
+                      <Button
+                        variant="outline"
+                        size="default"
+                        onClick={() => sendWhatsappImageMutation.mutate()}
+                        disabled={
+                          !attendanceWaGroupId ||
+                          !workers.length ||
+                          isLoading ||
+                          sendWhatsappImageMutation.isPending
+                        }
+                        data-testid="button-send-attendance-whatsapp-image"
                       >
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Blank Excel
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
-                        <Printer className="h-4 w-4 mr-2" />
-                        Export PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem data-testid="menu-export-excel" onClick={() => setPrintDialog("excel-results")}>
-                        <FileDown className="h-4 w-4 mr-2" />
-                        Export Excel
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    size="default"
-                    data-testid="button-save-attendance"
-                    onClick={handleSave}
-                    disabled={!workers.length || saveMutation.isPending}
-                  >
-                    <Save className="h-4 w-4 mr-1" />
-                    {saveMutation.isPending ? "Saving…" : "Save Attendance"}
-                  </Button>
+                        {sendWhatsappImageMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                        )}
+                        {sendWhatsappImageMutation.isPending ? "Sending…" : "Send WhatsApp Image"}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="default"
+                            data-testid="button-actions-dropdown"
+                            disabled={!workers.length}
+                          >
+                            Actions
+                            <ChevronDown className="h-4 w-4 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuItem data-testid="menu-mark-all-present" onClick={() => markAll("Present")}>
+                            <UserCheck className="h-4 w-4 mr-2" />
+                            Mark All Present
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-mark-all-absent" onClick={() => markAll("Absent")}>
+                            <UserX className="h-4 w-4 mr-2" />
+                            Mark All Absent
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-reset" onClick={reset}>
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                            Reset
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem data-testid="menu-print-blank" onClick={() => setPrintDialog("blank")}>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print Blank Sheet
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            data-testid="menu-export-excel-blank"
+                            onClick={() => setPrintDialog("excel-blank")}
+                          >
+                            <FileDown className="h-4 w-4 mr-2" />
+                            Blank Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-export-pdf" onClick={() => setPrintDialog("results")}>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Export PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem data-testid="menu-export-excel" onClick={() => setPrintDialog("excel-results")}>
+                            <FileDown className="h-4 w-4 mr-2" />
+                            Export Excel
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        size="default"
+                        data-testid="button-save-attendance"
+                        onClick={handleSave}
+                        disabled={!workers.length || saveMutation.isPending}
+                      >
+                        <Save className="h-4 w-4 mr-1" />
+                        {saveMutation.isPending ? "Saving…" : "Save Attendance"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                  <div className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-semibold">Range Export</p>
+                      <p className="text-xs text-muted-foreground">Export or print attendance for a date range.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">From</Label>
+                      <Input
+                        type="date"
+                        data-testid="input-range-start"
+                        value={rangeStart}
+                        onChange={(e) => setRangeStart(e.target.value)}
+                        className="w-40"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">To</Label>
+                      <Input
+                        type="date"
+                        data-testid="input-range-end"
+                        value={rangeEnd}
+                        onChange={(e) => setRangeEnd(e.target.value)}
+                        className="w-40"
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      data-testid="button-range-export-excel"
+                      onClick={() => setRangePrintDialog("excel")}
+                      disabled={!rangeStart || !rangeEnd || isExportingRange}
+                    >
+                      <FileDown className="h-4 w-4 mr-1" />
+                      {isExportingRange ? "Exporting…" : "Excel"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="default"
+                      data-testid="button-range-print"
+                      onClick={() => setRangePrintDialog("print")}
+                      disabled={!rangeStart || !rangeEnd || isExportingRange}
+                    >
+                      <Printer className="h-4 w-4 mr-1" />
+                      Print
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -574,61 +606,6 @@ export default function FactoryAttendance() {
             </Card>
           )}
 
-          {/* Range Export Card */}
-          <Card>
-            <CardContent className="pt-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-muted-foreground font-medium">Range Export</Label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">From</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-start"
-                        value={rangeStart}
-                        onChange={(e) => setRangeStart(e.target.value)}
-                        className="w-40"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">To</Label>
-                      <Input
-                        type="date"
-                        data-testid="input-range-end"
-                        value={rangeEnd}
-                        onChange={(e) => setRangeEnd(e.target.value)}
-                        className="w-40"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 items-center flex-wrap ml-auto">
-                  <Button
-                    variant="outline"
-                    size="default"
-                    data-testid="button-range-export-excel"
-                    onClick={() => setRangePrintDialog("excel")}
-                    disabled={!rangeStart || !rangeEnd || isExportingRange}
-                  >
-                    <FileDown className="h-4 w-4 mr-1" />
-                    {isExportingRange ? "Exporting…" : "Export Range Excel"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    data-testid="button-range-print"
-                    onClick={() => setRangePrintDialog("print")}
-                    disabled={!rangeStart || !rangeEnd || isExportingRange}
-                  >
-                    <Printer className="h-4 w-4 mr-1" />
-                    Print Range
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Summary Cards */}
           {workers.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -669,7 +646,6 @@ export default function FactoryAttendance() {
               <CardTitle className="text-base flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" />
                 Workers — {formatDate(selectedDate)}
-                {shift && <Badge variant="secondary">{shift}</Badge>}
               </CardTitle>
               {workers.length > 0 && (
                 <span className="text-sm text-muted-foreground">
