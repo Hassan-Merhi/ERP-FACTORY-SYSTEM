@@ -107,7 +107,7 @@ vi.mock("@/contexts/DateFormatContext", () => ({
   useDateFormat: () => ({ formatDisplayDate: (value: string) => `D:${value}` }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: harness.toast }) }));
-vi.mock("@/lib/queryClient", () => ({ apiRequest: harness.apiRequest }));
+vi.mock("@/lib/queryClient", () => ({ apiRequest: harness.apiRequest, queryClient: { invalidateQueries: vi.fn() } }));
 vi.mock("@/lib/excelHelper", () => ({
   utils: {
     book_new: vi.fn(() => ({})),

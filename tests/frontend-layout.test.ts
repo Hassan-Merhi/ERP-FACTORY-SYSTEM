@@ -171,18 +171,10 @@ describe("Factory page shells are present", () => {
   }
 });
 
-// TODO: Full render tests require jsdom + React Testing Library.
-// it.todo("Dashboard renders without crashing [needs jsdom]");
-// it.todo("Accounts page renders account table [needs jsdom]");
-// it.todo("Vouchers page renders form without crashing [needs jsdom]");
-// it.todo("POS page renders on mobile viewport without removing table [needs jsdom]");
-// it.todo("InventoryHub renders with mocked API [needs jsdom]");
-// it.todo("StockHub renders with mocked API [needs jsdom]");
-// it.todo("SalesReport renders with empty data [needs jsdom]");
-// it.todo("Settings page renders without crashing [needs jsdom]");
-// it.todo("FactoryWorkersHub renders worker table shell [needs jsdom]");
-// it.todo("FactoryContainersHub renders container list shell [needs jsdom]");
-// it.todo("UsersPermissionsHub renders without crashing [needs jsdom]");
-// it.todo("FactoryRoutes renders with mocked user/access props [needs jsdom]");
-// it.todo("Protected route shows loading UI when access data is pending [needs jsdom]");
-// it.todo("Protected route redirects to /tracking when unauthorized [needs jsdom]");
+// Render coverage for these shells lives in the jsdom suite:
+//   tests/ui/renders.test.tsx                  Dashboard, Accounts, POS, StockHub, InventoryHub,
+//                                              SalesReport, Settings, FactoryWorkersHub
+//   tests/ui/layout-and-whatsapp-renders.test.tsx  Vouchers, POS at phone width,
+//                                              FactoryContainersHub, UsersPermissionsHub
+//   tests/ui/route-guards-render.test.tsx      ErpRoutes / FactoryRoutes guards, access-pending
+//                                              loading state and /tracking redirects
