@@ -17,6 +17,7 @@ import { factoryApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import * as XLSX from "xlsx-js-style";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 interface CustomerInfo {
   id: number;
@@ -88,6 +89,21 @@ export default function FactoryCustomerStatement() {
   useEscapeToParent("/factory/customers");
   const params = useParams<{ id: string }>();
   const customerId = params.id;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+  });
+  const hiddenTabs = myAccess?.hiddenCostFields ?? [];
+  const showStatementTab = !hiddenTabs.includes("hide_tab_customer_statement");
+  const showPriceListTab = !hiddenTabs.includes("hide_tab_customer_pricelist");
+  const visibleCustomerTabs = [
+    showStatementTab ? "statement" : null,
+    showPriceListTab ? "pricelist" : null,
+  ].filter((value): value is "statement" | "pricelist" => value !== null);
+  const [requestedCustomerTab, setRequestedCustomerTab] = useState<"statement" | "pricelist">("statement");
+  const activeCustomerTab = visibleCustomerTabs.includes(requestedCustomerTab)
+    ? requestedCustomerTab
+    : visibleCustomerTabs[0];
 
   const [draftNote, setDraftNote] = useState<string | null>(null);
   const [rowNotes, setRowNotes] = useState<Record<number | string, string>>({});
@@ -420,26 +436,35 @@ export default function FactoryCustomerStatement() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="statement" className="flex-1">
-        <TabsList className="mb-4">
-          <TabsTrigger value="statement" data-testid="tab-statement">
-            Statement
-          </TabsTrigger>
-          <TabsTrigger value="pricelist" data-testid="tab-pricelist">
-            Price List
-            {(priceListQuery.data?.length ?? 0) > 0 && (
-              <Badge
-                variant="secondary"
-                className="ml-2 text-[10px] no-default-hover-elevate no-default-active-elevate"
-              >
-                {priceListQuery.data!.length}
-              </Badge>
+      {activeCustomerTab ? (
+        <Tabs
+          value={activeCustomerTab}
+          onValueChange={(value) => setRequestedCustomerTab(value as "statement" | "pricelist")}
+          className="flex-1"
+        >
+          <TabsList className="mb-4">
+            {showStatementTab && (
+              <TabsTrigger value="statement" data-testid="tab-statement">
+                Statement
+              </TabsTrigger>
             )}
-          </TabsTrigger>
-        </TabsList>
+            {showPriceListTab && (
+              <TabsTrigger value="pricelist" data-testid="tab-pricelist">
+                Price List
+                {(priceListQuery.data?.length ?? 0) > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 text-[10px] no-default-hover-elevate no-default-active-elevate"
+                  >
+                    {priceListQuery.data!.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
 
         {/* ─── Statement Tab ─── */}
-        <TabsContent value="statement">
+        {showStatementTab && <TabsContent value="statement">
           {/* Filters */}
           <div className="flex flex-wrap items-end gap-3 mb-4">
             <div className="flex flex-col gap-1">
@@ -679,10 +704,10 @@ export default function FactoryCustomerStatement() {
               {saveNoteMutation.isPending ? "Saving…" : "Save Note"}
             </Button>
           </div>
-        </TabsContent>
+        </TabsContent>}
 
         {/* ─── Price List Tab ─── */}
-        <TabsContent value="pricelist">
+        {showPriceListTab && <TabsContent value="pricelist">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <p className="text-sm font-semibold">Customer Price List</p>
@@ -853,8 +878,13 @@ export default function FactoryCustomerStatement() {
             <span className="font-mono">price</span> (or <span className="font-mono">price_per_bale</span>). Prices are
             also auto-saved when you create a proforma with prices set.
           </p>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">
+          No Customer Profile tabs are available for this user.
+        </div>
+      )}
     </div>
   );
 }
