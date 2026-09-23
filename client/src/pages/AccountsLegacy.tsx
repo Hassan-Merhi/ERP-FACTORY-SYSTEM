@@ -117,7 +117,7 @@ export default function Accounts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history" />
-        <div className="flex gap-2">
+        {showViewAccounts && <div className="flex gap-2">
           {(model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
             <Button
               variant="outline"
@@ -134,10 +134,10 @@ export default function Accounts() {
           >
             <Plus className="w-4 h-4 mr-2" /> Create
           </Button>
-        </div>
+        </div>}
       </div>
 
-      <AccountDialogs
+      {showViewAccounts && <AccountDialogs
         bankToEdit={model.bankToEdit}
         setBankToEdit={model.setBankToEdit}
         bankForm={model.bankForm}
@@ -168,7 +168,7 @@ export default function Accounts() {
         filteredWaChats={model.filteredWaChats}
         saveWaRuleMutation={model.saveWaRuleMutation}
         waChatsLoading={model.waChatsLoading}
-      />
+      />}
 
       {activeAccountTab ? (
       <Tabs
@@ -283,9 +283,9 @@ export default function Accounts() {
       )}
 
       {/* ── Edit Account Dialog ─────────────────────────────────────────── */}
-      <EditAccountDialog model={model} />
+      {showViewAccounts && <EditAccountDialog model={model} />}
 
-      <AccountsConfirmDialogs model={model} />
+      {showViewAccounts && <AccountsConfirmDialogs model={model} />}
     </div>
   );
 }
