@@ -1,6 +1,6 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { factoryApiRequest } from "@/lib/factoryApi";
@@ -67,12 +67,6 @@ interface AttendanceWhatsappSettings {
   attendanceWhatsappGroupId?: string | null;
 }
 
-interface WhatsappChat {
-  id: string;
-  name: string;
-  type: string;
-}
-
 export default function FactoryAttendance() {
   const { toast } = useToast();
   const [mode, setMode] = useState<ViewMode>(getInitialMode);
@@ -93,9 +87,6 @@ export default function FactoryAttendance() {
   const [rangePrintDialog, setRangePrintDialog] = useState<"excel" | "print" | null>(null);
   const [attendanceMap, setAttendanceMap] = useState<Record<number, AttendanceStatus>>({});
   const [notesMap, setNotesMap] = useState<Record<number, string>>({});
-  const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
-  const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
-  const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
   const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
@@ -117,18 +108,6 @@ export default function FactoryAttendance() {
     staleTime: 30_000,
   });
 
-  const { data: attendanceWaChats = [], isLoading: attendanceWaChatsLoading } = useQuery<WhatsappChat[]>({
-    queryKey: ["/api/whatsapp/chats"],
-    queryFn: async () => {
-      const res = await factoryApiRequest("GET", "/api/whatsapp/chats");
-      if (!res.ok) throw new Error("Failed to load WhatsApp groups");
-      return res.json();
-    },
-    enabled: attendanceWaPickerOpen,
-    staleTime: 60_000,
-    retry: false,
-  });
-
   useEffect(() => {
     if (!data) return;
     const newMap: Record<number, AttendanceStatus> = {};
@@ -144,42 +123,7 @@ export default function FactoryAttendance() {
     setNotesMap(newNotes);
   }, [data]);
 
-  useEffect(() => {
-    if (attendanceWhatsappSettings) {
-      setAttendanceWaGroupId(attendanceWhatsappSettings.attendanceWhatsappGroupId ?? "");
-    }
-  }, [attendanceWhatsappSettings]);
-
-  const filteredAttendanceWaChats = useMemo(() => {
-    const needle = attendanceWaSearch.trim().toLowerCase();
-    return attendanceWaChats.filter((chat) => {
-      const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
-      const matches = !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
-      return isGroup && matches;
-    });
-  }, [attendanceWaChats, attendanceWaSearch]);
-
-  const saveAttendanceWaGroupMutation = useMutation({
-    mutationFn: async (chatId: string) => {
-      const res = await factoryApiRequest("PUT", "/api/factory/settings?scope=attendance", {
-        attendanceWhatsappGroupId: chatId,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Failed to save Attendance WhatsApp group");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings?scope=attendance"] });
-      setAttendanceWaPickerOpen(false);
-      setAttendanceWaSearch("");
-      toast({ title: "Attendance WhatsApp group updated" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Failed to save WhatsApp group", description: err.message, variant: "destructive" });
-    },
-  });
+  const attendanceWaGroupId = attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "";
 
   const sendWhatsappImageMutation = useMutation({
     mutationFn: async () => {
@@ -413,15 +357,6 @@ export default function FactoryAttendance() {
                   <Button
                     variant="outline"
                     size="default"
-                    onClick={() => setAttendanceWaPickerOpen((open) => !open)}
-                    data-testid="button-change-attendance-whatsapp-group"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-1" />
-                    {attendanceWaGroupId ? "Change WhatsApp Group" : "Set WhatsApp Group"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="default"
                     onClick={() => sendWhatsappImageMutation.mutate()}
                     disabled={
                       !attendanceWaGroupId ||
@@ -498,81 +433,6 @@ export default function FactoryAttendance() {
               </div>
             </CardContent>
           </Card>
-
-          {attendanceWaPickerOpen && (
-            <Card>
-              <CardContent className="pt-4 space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">Attendance WhatsApp Group</p>
-                  <p className="text-xs text-muted-foreground">
-                    This group is used only for attendance images sent from Payroll & Benefits.
-                  </p>
-                </div>
-                <Input
-                  value={attendanceWaSearch}
-                  onChange={(event) => setAttendanceWaSearch(event.target.value)}
-                  placeholder="Search WhatsApp groups..."
-                  data-testid="input-attendance-wa-search"
-                />
-                <div className="max-h-48 overflow-y-auto rounded-md border text-sm">
-                  {attendanceWaChatsLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-5 text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading WhatsApp groups...
-                    </div>
-                  ) : filteredAttendanceWaChats.length === 0 ? (
-                    <p className="py-5 text-center text-muted-foreground">No WhatsApp groups found.</p>
-                  ) : (
-                    filteredAttendanceWaChats.map((chat) => (
-                      <button
-                        key={chat.id}
-                        type="button"
-                        onClick={() => setAttendanceWaGroupId(chat.id)}
-                        className={`w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60 ${
-                          attendanceWaGroupId === chat.id ? "bg-primary/10 text-primary" : ""
-                        }`}
-                        data-testid={`option-attendance-wa-chat-${chat.id}`}
-                      >
-                        <div className="font-medium">{chat.name || chat.id}</div>
-                        <div className="text-xs text-muted-foreground">{chat.id}</div>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {attendanceWaGroupId
-                      ? `Selected group: ${attendanceWaGroupId}`
-                      : "No Attendance WhatsApp group selected."}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setAttendanceWaGroupId(attendanceWhatsappSettings?.attendanceWhatsappGroupId ?? "");
-                        setAttendanceWaPickerOpen(false);
-                        setAttendanceWaSearch("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => saveAttendanceWaGroupMutation.mutate(attendanceWaGroupId)}
-                      disabled={!attendanceWaGroupId || saveAttendanceWaGroupMutation.isPending}
-                      data-testid="button-save-attendance-wa-group"
-                    >
-                      {saveAttendanceWaGroupMutation.isPending && (
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                      )}
-                      Save Group
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Range Export Card */}
           <Card>
