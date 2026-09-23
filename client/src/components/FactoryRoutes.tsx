@@ -5,7 +5,7 @@
  *
  * Props received from AuthenticatedApp:
  *   user              — auth user object (for role-gated routes)
- *   myAccess          — factory access data (pageKeys, hiddenCostFields)
+ *   myAccess          — factory access data used while resolving the fallback route
  *   factoryDefaultPage — computed landing page for this user
  */
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
@@ -116,7 +116,6 @@ interface FactoryRoutesProps {
     | {
         fullAccess?: boolean;
         pageKeys?: string[];
-        hiddenCostFields?: string[];
       }
     | undefined;
   factoryDefaultPage: string;
@@ -292,15 +291,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
       </Route>
       <Route path="/factory/financial-snapshot" component={FactoryFinancialSnapshot} />
       <Route path="/factory/production-comparison" component={ProductionComparison} />
-      <Route path="/factory/production-report">
-        {() =>
-          myAccess?.hiddenCostFields?.includes("hide_tab_production_analytics") ? (
-            <Redirect to={factoryDefaultPage} />
-          ) : (
-            <DailyProductionReport />
-          )
-        }
-      </Route>
+      <Route path="/factory/production-report" component={DailyProductionReport} />
       <Route path="/factory/rental/warehouses" component={FactoryRentalWarehouses} />
       <Route path="/factory/rental/shops" component={FactoryRentalShops} />
       <Route path="/factory/rental/payments" component={FactoryRentalPayments} />
