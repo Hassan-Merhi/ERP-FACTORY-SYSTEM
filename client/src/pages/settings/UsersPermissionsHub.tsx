@@ -6,7 +6,7 @@ interface UsersPermissionsHubProps {
   appMode?: string;
 }
 
-export function UsersPermissionsHub({ userRole: _userRole, appMode: _appMode }: UsersPermissionsHubProps) {
+export function UsersPermissionsHub({ userRole: _userRole, appMode }: UsersPermissionsHubProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -17,7 +17,7 @@ export function UsersPermissionsHub({ userRole: _userRole, appMode: _appMode }: 
         <p className="text-muted-foreground text-sm mt-1">Manage users and role assignments.</p>
       </div>
 
-      <UsersSection />
+      <UsersSection appMode={appMode} />
     </div>
   );
 }

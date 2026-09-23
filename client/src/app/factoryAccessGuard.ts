@@ -27,11 +27,18 @@ export interface MyAccess {
  * for hub pages.
  */
 export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
+  ["/factory/finance", "factory/payroll-hub"],
+  ["/factory/pressing", "factory/stock-entry"],
+  ["/factory/finalize", "factory/stock-entry"],
+  ["/factory/raw-stock", "factory/raw-materials"],
+  ["/factory/bale-products", "factory/bales-hub"],
   ["/factory/sales/invoices", "factory/invoicing"],
   ["/factory/sales/new", "factory/invoicing"],
   ["/factory/sales/pending-invoices", "factory/invoicing"],
+  ["/factory/sales/proformas", "factory/invoicing"],
   ["/factory/invoices", "factory/invoicing"],
-  ["/factory/sales/loading/", "factory/sales/loadings"],
+  ["/factory/sales/loading/", "factory/invoicing"],
+  ["/factory/sales/loadings", "factory/invoicing"],
   ["/factory/bale-product-history", "factory/bales-hub"],
   ["/factory/reprint-labels", "factory/bales-hub"],
   ["/factory/bales-history", "factory/bales-hub"],
@@ -40,17 +47,26 @@ export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
   ["/factory/worker-payroll", "factory/payroll-hub"],
   ["/factory/workers", "factory/payroll-hub"],
   ["/factory/employees", "factory/payroll-hub"],
+  ["/factory/insurance", "factory/payroll-hub"],
   ["/factory/containers/new", "factory/containers-hub"],
   ["/factory/containers", "factory/containers-hub"],
   ["/factory/stock-otw", "factory/containers-hub"],
+  ["/factory/stock-allocation-v3", "factory/stock-allocation-v5"],
+  ["/factory/stock-allocation", "factory/stock-allocation-v5"],
   ["/factory/customers", "factory/parties"],
   ["/factory/suppliers", "factory/parties"],
   ["/factory/net-position-details", "factory/intelligence/financial-hub"],
   ["/factory/net-position", "factory/intelligence/financial-hub"],
   ["/factory/net-profit-analytics", "factory/intelligence/financial-hub"],
+  ["/factory/intelligence/profitability", "factory/intelligence/financial-hub"],
+  ["/factory/intelligence/cashflow", "factory/intelligence/financial-hub"],
   ["/factory/supplier-report", "factory/intelligence/supplier-hub"],
   ["/factory/supplier-statement", "factory/intelligence/supplier-hub"],
+  ["/factory/intelligence/supplier-scores", "factory/intelligence/supplier-hub"],
   ["/factory/production-summary", "factory/intelligence/production-hub"],
+  ["/factory/intelligence/mix-optimizer", "factory/intelligence/production-hub"],
+  ["/factory/intelligence/waste", "factory/intelligence/production-hub"],
+  ["/factory/bale-ledger", "factory/production-report"],
   ["/factory/ledger-monthly", "factory/accounts"],
   ["/factory/ledger-vouchers", "factory/accounts"],
   ["/factory/voucher-detail", "factory/vouchers"],
@@ -60,31 +76,34 @@ export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
 
 /**
  * Compute the right landing page for this factory user.
- * For restricted users (fullAccess:false) walks the sidebar nav in order and
- * returns the first accessible page. Falls back to production-report for
- * admins / while myAccess is still loading.
+ * For restricted users (fullAccess:false) walks the complete manageable Factory
+ * page registry and returns the first accessible page. Falls back to My Settings
+ * when the stored allow-list contains only stale/unknown keys.
  */
 export function computeFactoryDefaultPage(myAccess: MyAccess | undefined): string {
   if (!myAccess || myAccess.fullAccess) return "/factory/production-report";
-  for (const section of FACTORY_NAV_SECTIONS) {
-    for (const item of section.items) {
-      const key = item.url.replace(/^\//, "");
-      if (myAccess.pageKeys.includes(key)) return item.url;
-      // Accept old pre-hub-merge keys that now redirect to this hub
-      const legacyKeys = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === key).map(([prefix]) =>
-        prefix.replace(/^\//, "")
-      );
-      if (legacyKeys.some((lk) => myAccess.pageKeys.includes(lk))) return item.url;
-    }
+
+  const nonLandingKeys = new Set(["factory/settings", "factory/intelligence/settings"]);
+  for (const page of FACTORY_NAV_PAGES) {
+    if (nonLandingKeys.has(page.key)) continue;
+    const url = "/" + page.key;
+    if (myAccess.pageKeys.includes(page.key)) return url;
+
+    // Accept old pre-hub-merge keys that now resolve to this canonical page.
+    const legacyKeys = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === page.key).map(([prefix]) =>
+      prefix.replace(/^\//, "")
+    );
+    if (legacyKeys.some((key) => myAccess.pageKeys.includes(key))) return url;
   }
-  if (myAccess.pageKeys.includes("factory/daybook")) return "/factory/daybook";
-  return "/factory/production-report";
+
+  // A stale/unknown allow-list must never loop back into a denied Factory page.
+  return "/my-settings";
 }
 
 /**
  * Resolve the pageKey for the given path.
- * Uses FACTORY_NAV_PAGES as the canonical list so that pages only in the
- * manual section (Dashboard, Daybook, Chat) are covered too.
+ * Uses FACTORY_NAV_PAGES as the canonical list so sidebar, pinned, and
+ * explicitly registered Factory pages are all guarded consistently.
  */
 export function resolvePageKey(path: string): string | null {
   // 1. Direct match against every known page (exact or sub-path)
@@ -124,13 +143,17 @@ export function computeFactoryGuardRedirect(params: {
   const requiredKey = resolvePageKey(currentLocation);
   const VIEWABLE_BY_ALL = new Set(["factory/sheets-sacks"]);
 
-  // 1. Per-user page restriction
-  if (isRestrictedUser && requiredKey && !VIEWABLE_BY_ALL.has(requiredKey)) {
-    const hasDirectAccess = myAccess.pageKeys.includes(requiredKey);
-    const hasLegacyAccess = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === requiredKey).some(([prefix]) =>
-      myAccess.pageKeys.includes(prefix.replace(/^\//, ""))
-    );
-    if (!hasDirectAccess && !hasLegacyAccess) return factoryDefaultPage;
+  // 1. Per-user page restriction. Restricted Factory users are default-deny:
+  // an unregistered route must never become a bypass around the page allow-list.
+  if (isRestrictedUser) {
+    if (!requiredKey) return factoryDefaultPage;
+    if (!VIEWABLE_BY_ALL.has(requiredKey)) {
+      const hasDirectAccess = myAccess.pageKeys.includes(requiredKey);
+      const hasLegacyAccess = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === requiredKey).some(([prefix]) =>
+        myAccess.pageKeys.includes(prefix.replace(/^\//, ""))
+      );
+      if (!hasDirectAccess && !hasLegacyAccess) return factoryDefaultPage;
+    }
   }
 
   // 2. Feature-flag restriction
