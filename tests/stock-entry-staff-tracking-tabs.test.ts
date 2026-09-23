@@ -49,7 +49,7 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(editor).toContain("input-production-target-");
   });
 
-  it("keeps repeating daily category/target defaults separate from day-specific edits", () => {
+  it("keeps Daily Defaults separate from day-specific Edit Targets overrides", () => {
     const production = src("client/src/pages/factory/FactoryProductionTargets.tsx");
     const defaultsEditor = src(
       "client/src/pages/factory/productiontargets/ProductionTargetDefaultsDialog.tsx"
@@ -65,7 +65,10 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(defaultsEditor).toContain("effectiveFrom");
     expect(defaultsEditor).toContain("input-production-default-category-");
     expect(defaultsEditor).toContain("category: (draftDefaults");
+    expect(defaultsEditor).toContain("The new category grouping takes effect after Save + refetch");
     expect(dayEditor).toContain("/api/factory/staff-tracking/bulk");
+    expect(dayEditor).toContain("originalById.get(row.personId)?.category");
+    expect(dayEditor).toContain("Re-group only after the edit is saved");
     expect(dayEditor).toContain("categoryOverrideState");
     expect(dayEditor).toContain("categoryOverridden");
     expect(dayEditor).toContain("targetOverrideState");
@@ -80,6 +83,8 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(route).toContain("categoryOverridden");
     expect(route).toContain("defaultTargetBales");
     expect(route).toContain("targetBalesOverridden");
+    expect(route).toContain("savedRow?.categoryOverridden === true");
+    expect(route).toContain("savedRow?.targetBalesOverridden === true");
     expect(startup).toContain("factory_worker_production_target_defaults");
     expect(startup).toContain("ADD COLUMN IF NOT EXISTS category varchar(150)");
     expect(startup).toContain("category_overridden boolean NOT NULL DEFAULT true");
