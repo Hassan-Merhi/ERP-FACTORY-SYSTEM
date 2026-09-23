@@ -7,6 +7,8 @@
  * under ./accountslegacy. The account table, statement view and the existing
  * AccountDialogs bundle are unchanged.
  */
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Layers, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +23,7 @@ import { AccountSearchResults } from "./accountslegacy/AccountSearchResults";
 import { FindVoucherTab } from "./accountslegacy/FindVoucherTab";
 import { EditAccountDialog } from "./accountslegacy/EditAccountDialog";
 import { AccountsConfirmDialogs } from "./accountslegacy/AccountsConfirmDialogs";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 import {
   projectGoldenCoastFreshStartAccounts,
   projectGoldenCoastFreshStartStatement,
@@ -30,6 +33,22 @@ import {
 export default function Accounts() {
   const model = useAccountsLegacyModel();
   const { selectedAccount, selectedAccountIsLedger } = model;
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60000,
+    enabled: model.appMode === "factory",
+  });
+  const hiddenTabs = model.appMode === "factory" ? (myAccess?.hiddenCostFields ?? []) : [];
+  const showViewAccounts = !hiddenTabs.includes("hide_tab_accounts_view");
+  const showFindVoucher = !hiddenTabs.includes("hide_tab_accounts_find_voucher");
+  const visibleAccountTabs = [
+    showViewAccounts ? "view" : null,
+    showFindVoucher ? "find" : null,
+  ].filter((value): value is "view" | "find" => value !== null);
+  const [requestedAccountTab, setRequestedAccountTab] = useState<"view" | "find">("view");
+  const activeAccountTab = visibleAccountTabs.includes(requestedAccountTab)
+    ? requestedAccountTab
+    : visibleAccountTabs[0];
 
   const freshStartAccount = model.allAccounts.find(
     (account) => account.subType === "gc_partner_capital" && account.active !== false
@@ -151,13 +170,18 @@ export default function Accounts() {
         waChatsLoading={model.waChatsLoading}
       />
 
-      <Tabs defaultValue="view" className="space-y-6">
+      {activeAccountTab ? (
+      <Tabs
+        value={activeAccountTab}
+        onValueChange={(value) => setRequestedAccountTab(value as "view" | "find")}
+        className="space-y-6"
+      >
         <TabsList>
-          <TabsTrigger value="view">View Accounts</TabsTrigger>
-          <TabsTrigger value="find">Find Voucher</TabsTrigger>
+          {showViewAccounts && <TabsTrigger value="view">View Accounts</TabsTrigger>}
+          {showFindVoucher && <TabsTrigger value="find">Find Voucher</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="view" className="space-y-4">
+        {showViewAccounts && <TabsContent value="view" className="space-y-4">
           {!selectedAccount ? (
             <div className="space-y-4">
               {/* Search — command-palette style */}
@@ -244,12 +268,19 @@ export default function Accounts() {
               brokerStatementLoading={false}
             />
           )}
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="find">
-          <FindVoucherTab model={model} />
-        </TabsContent>
+        {showFindVoucher && (
+          <TabsContent value="find">
+            <FindVoucherTab model={model} />
+          </TabsContent>
+        )}
       </Tabs>
+      ) : (
+        <div className="rounded-md border p-6 text-sm text-muted-foreground">
+          No Accounts tabs are available for this user.
+        </div>
+      )}
 
       {/* ── Edit Account Dialog ─────────────────────────────────────────── */}
       <EditAccountDialog model={model} />
