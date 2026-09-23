@@ -43,6 +43,17 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).not.toContain("ledgerAccountEntries");
   });
 
+  it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {
+    const source = read("server/routes/customers/customerBalanceQuery.ts");
+
+    expect(source).toContain("netBalanceSql");
+    expect(source).toContain("historicalBaseBalanceSql");
+    expect(source).toContain(".groupBy(voucherEntries.ledgerAccountId)");
+    expect(source).toContain(".groupBy(voucherEntries.customerId)");
+    expect(source).not.toContain("for (const entry of ledgerEntries)");
+    expect(source).not.toContain("for (const entry of customerEntries)");
+  });
+
   it("keeps bale-scan success-path lookups bounded", () => {
     const source = read("server/routes/factory/customer-orders/bale-scanning/scan.ts");
 
