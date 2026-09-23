@@ -35,6 +35,7 @@ import {
   ChevronDown,
   Loader2,
   MessageCircle,
+  Search,
 } from "lucide-react";
 
 import type {
@@ -90,6 +91,8 @@ export default function FactoryAttendance() {
   const [attendanceWaPickerOpen, setAttendanceWaPickerOpen] = useState(false);
   const [attendanceWaGroupId, setAttendanceWaGroupId] = useState("");
   const [attendanceWaSearch, setAttendanceWaSearch] = useState("");
+  const [workerSearch, setWorkerSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "other">("all");
   const attendanceReportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery<{ workers: WorkerRow[]; attendance: AttendanceRecord[] }>({
@@ -351,23 +354,41 @@ export default function FactoryAttendance() {
     .filter((worker) => attendanceMap[worker.id] === "Absent")
     .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: "base", numeric: true }));
   const attendancePct = counts.total > 0 ? Math.round((counts.present / counts.total) * 100) : 0;
+  const workerSearchNeedle = workerSearch.trim().toLowerCase();
+  const visibleWorkers = workers.filter((worker) => {
+    const status = attendanceMap[worker.id] ?? "Present";
+    const matchesSearch =
+      !workerSearchNeedle ||
+      worker.fullName.toLowerCase().includes(workerSearchNeedle) ||
+      (worker.employeeCode ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.position ?? "").toLowerCase().includes(workerSearchNeedle) ||
+      (worker.department ?? "").toLowerCase().includes(workerSearchNeedle);
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "present" && status === "Present") ||
+      (statusFilter === "absent" && status === "Absent") ||
+      (statusFilter === "other" && status !== "Present" && status !== "Absent");
+    return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="space-y-4 p-1">
+    <div className="space-y-5 pb-6">
       {mode === "perWorker" ? (
         <PerWorkerView />
       ) : (
         <>
           {/* Attendance controls + range tools */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.9fr)] xl:gap-0">
-                <div className="space-y-3 xl:pr-5">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <Card className="overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm">
+            <CardContent className="p-4 sm:p-5">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(520px,0.9fr)] xl:gap-0">
+                <div className="space-y-4 xl:pr-6">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <CalendarDays className="h-4 w-4" />
+                    </div>
                     <div>
-                      <p className="text-sm font-semibold">Attendance</p>
-                      <p className="text-xs text-muted-foreground">Choose the date and manage today&apos;s register.</p>
+                      <p className="text-sm font-semibold">Attendance Register</p>
+                      <p className="text-xs text-muted-foreground">Pick a date, update statuses, then save once.</p>
                     </div>
                   </div>
 
@@ -475,12 +496,14 @@ export default function FactoryAttendance() {
                   </div>
                 </div>
 
-                <div className="space-y-3 border-t pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-                  <div className="flex items-center gap-2">
-                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                <div className="space-y-4 border-t pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <FileDown className="h-4 w-4" />
+                    </div>
                     <div>
-                      <p className="text-sm font-semibold">Range Export</p>
-                      <p className="text-xs text-muted-foreground">Export or print attendance for a date range.</p>
+                      <p className="text-sm font-semibold">Reports & Export</p>
+                      <p className="text-xs text-muted-foreground">Choose a range and export Excel or print.</p>
                     </div>
                   </div>
 
@@ -608,7 +631,7 @@ export default function FactoryAttendance() {
 
           {/* Summary Cards */}
           {workers.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <SummaryCard
                 icon={<Users className="h-4 w-4" />}
                 label="Total"
@@ -641,74 +664,150 @@ export default function FactoryAttendance() {
           )}
 
           {/* Attendance Table */}
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Workers — {formatDate(selectedDate)}
-              </CardTitle>
+          <Card className="overflow-hidden rounded-2xl border-border/60 bg-card/80 shadow-sm">
+            <CardHeader className="space-y-4 border-b bg-muted/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <span className="truncate">Workers — {formatDate(selectedDate)}</span>
+                  </CardTitle>
+                  <p className="mt-1 pl-10 text-xs text-muted-foreground">
+                    Update only the workers you need; unsaved changes stay on this screen until you save.
+                  </p>
+                </div>
+                {workers.length > 0 && (
+                  <div className="flex shrink-0 items-center gap-2 text-xs">
+                    <span className="rounded-full border bg-background px-2.5 py-1 font-medium text-muted-foreground">
+                      {workers.length} worker{workers.length !== 1 ? "s" : ""}
+                    </span>
+                    <span className="rounded-full border border-green-500/20 bg-green-500/10 px-2.5 py-1 font-semibold text-green-600 dark:text-green-400">
+                      {attendancePct}% present
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {workers.length > 0 && (
-                <span className="text-sm text-muted-foreground">
-                  {workers.length} worker{workers.length !== 1 ? "s" : ""}
-                </span>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative w-full sm:max-w-sm">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={workerSearch}
+                      onChange={(event) => setWorkerSearch(event.target.value)}
+                      placeholder="Search worker, code, position…"
+                      className="h-9 bg-background pl-9"
+                      data-testid="input-attendance-worker-search"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                    >
+                      <SelectTrigger className="h-9 w-[150px] bg-background" data-testid="select-attendance-status-filter">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="present">Present</SelectItem>
+                        <SelectItem value="absent">Absent</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      Showing {visibleWorkers.length} of {workers.length}
+                    </span>
+                  </div>
+                </div>
               )}
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
-                <div className="p-4 space-y-2">
+                <div className="space-y-2 p-4">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 w-full rounded-md" />
+                    <Skeleton key={i} className="h-12 w-full rounded-lg" />
                   ))}
                 </div>
               ) : workers.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12 text-sm">
-                  No active workers found for this company.
+                <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium">No active workers found</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Add or activate workers to start taking attendance.</p>
+                </div>
+              ) : visibleWorkers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
+                  <Search className="mb-3 h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm font-medium">No workers match these filters</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      setWorkerSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
                 </div>
               ) : (
                 <>
                   {/* Desktop table */}
-                  <div className="hidden sm:block overflow-x-auto">
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-30 bg-muted/50">
-                        <tr className="border-b bg-muted/40">
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-8">#</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-24">Code</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Worker Name</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground w-44">Status</th>
-                          <th className="text-left px-4 py-2 font-medium text-muted-foreground">Notes</th>
+                      <thead className="sticky top-0 z-30 bg-muted/80 backdrop-blur">
+                        <tr className="border-b">
+                          <th className="w-12 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">#</th>
+                          <th className="w-28 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Code</th>
+                          <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Worker</th>
+                          <th className="w-48 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
+                          <th className="min-w-[240px] px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {workers.map((worker, idx) => {
+                        {visibleWorkers.map((worker) => {
                           const status = attendanceMap[worker.id] ?? "Present";
+                          const originalIndex = workers.findIndex((item) => item.id === worker.id);
                           return (
                             <tr
                               key={worker.id}
                               data-testid={`row-worker-${worker.id}`}
-                              className="border-b last:border-0 hover-elevate"
+                              className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/25"
                             >
-                              <td className="px-4 py-2 text-muted-foreground">{idx + 1}</td>
+                              <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{originalIndex + 1}</td>
                               <td
-                                className="px-4 py-2 font-mono text-xs text-muted-foreground"
+                                className="px-4 py-3 font-mono text-xs text-muted-foreground"
                                 data-testid={`text-worker-code-${worker.id}`}
                               >
                                 {worker.employeeCode ?? "—"}
                               </td>
-                              <td
-                                className="px-4 py-2 font-medium"
-                                dir="auto"
-                                data-testid={`text-worker-name-${worker.id}`}
-                              >
-                                {worker.fullName}
+                              <td className="px-4 py-3">
+                                <div
+                                  className="font-medium leading-tight"
+                                  dir="auto"
+                                  data-testid={`text-worker-name-${worker.id}`}
+                                >
+                                  {worker.fullName}
+                                </div>
+                                {(worker.position || worker.department) && (
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {worker.position || worker.department}
+                                  </div>
+                                )}
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-3">
                                 <Select
                                   value={status}
                                   onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}
                                 >
                                   <SelectTrigger
                                     data-testid={`select-status-${worker.id}`}
-                                    className={`h-8 text-xs font-medium ${STATUS_COLORS[status] ?? ""}`}
+                                    className={`h-9 rounded-lg border-transparent text-xs font-semibold shadow-none ${STATUS_COLORS[status] ?? ""}`}
                                   >
                                     <SelectValue />
                                   </SelectTrigger>
@@ -721,13 +820,13 @@ export default function FactoryAttendance() {
                                   </SelectContent>
                                 </Select>
                               </td>
-                              <td className="px-4 py-2">
+                              <td className="px-4 py-3">
                                 <Input
                                   data-testid={`input-notes-${worker.id}`}
-                                  placeholder="Optional notes"
+                                  placeholder="Add a note…"
                                   value={notesMap[worker.id] ?? ""}
                                   onChange={(e) => setNotes(worker.id, e.target.value)}
-                                  className="h-8 text-xs"
+                                  className="h-9 border-transparent bg-muted/35 text-xs shadow-none transition-colors hover:bg-muted/50 focus-visible:border-input focus-visible:bg-background"
                                   dir="auto"
                                 />
                               </td>
@@ -739,58 +838,66 @@ export default function FactoryAttendance() {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="sm:hidden space-y-2 p-3">
-                    {workers.map((worker, idx) => {
+                  <div className="space-y-2.5 p-3 md:hidden">
+                    {visibleWorkers.map((worker) => {
                       const status = attendanceMap[worker.id] ?? "Present";
+                      const originalIndex = workers.findIndex((item) => item.id === worker.id);
                       return (
                         <div
                           key={worker.id}
                           data-testid={`card-worker-${worker.id}`}
-                          className="border rounded-md p-3 space-y-2"
+                          className="rounded-xl border border-border/60 bg-background/60 p-3 shadow-sm"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p
-                                className="font-medium text-sm"
-                                dir="auto"
-                                data-testid={`text-worker-name-mobile-${worker.id}`}
-                              >
-                                {worker.fullName}
-                              </p>
-                              {worker.employeeCode && (
-                                <span
-                                  className="text-xs font-mono text-muted-foreground"
-                                  data-testid={`text-worker-code-mobile-${worker.id}`}
-                                >
-                                  {worker.employeeCode}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-muted px-1.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                                  {originalIndex + 1}
                                 </span>
-                              )}
+                                <p
+                                  className="truncate text-sm font-semibold"
+                                  dir="auto"
+                                  data-testid={`text-worker-name-mobile-${worker.id}`}
+                                >
+                                  {worker.fullName}
+                                </p>
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-8 text-[11px] text-muted-foreground">
+                                {worker.employeeCode && (
+                                  <span className="font-mono" data-testid={`text-worker-code-mobile-${worker.id}`}>
+                                    {worker.employeeCode}
+                                  </span>
+                                )}
+                                {(worker.position || worker.department) && <span>{worker.position || worker.department}</span>}
+                              </div>
                             </div>
-                            <span className="text-xs text-muted-foreground shrink-0">{idx + 1}</span>
                           </div>
-                          <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
-                            <SelectTrigger
-                              data-testid={`select-status-mobile-${worker.id}`}
-                              className={`h-9 text-sm font-medium ${STATUS_COLORS[status] ?? ""}`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STATUS_OPTIONS.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {s}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            data-testid={`input-notes-mobile-${worker.id}`}
-                            placeholder="Notes (optional)"
-                            value={notesMap[worker.id] ?? ""}
-                            onChange={(e) => setNotes(worker.id, e.target.value)}
-                            className="h-8 text-xs"
-                            dir="auto"
-                          />
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)]">
+                            <Select value={status} onValueChange={(v) => setStatus(worker.id, v as AttendanceStatus)}>
+                              <SelectTrigger
+                                data-testid={`select-status-mobile-${worker.id}`}
+                                className={`h-9 rounded-lg border-transparent text-sm font-semibold shadow-none ${STATUS_COLORS[status] ?? ""}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUS_OPTIONS.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {s}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              data-testid={`input-notes-mobile-${worker.id}`}
+                              placeholder="Notes (optional)"
+                              value={notesMap[worker.id] ?? ""}
+                              onChange={(e) => setNotes(worker.id, e.target.value)}
+                              className="h-9 bg-muted/35 text-xs"
+                              dir="auto"
+                            />
+                          </div>
                         </div>
                       );
                     })}
