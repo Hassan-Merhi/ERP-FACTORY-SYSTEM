@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Truck, Users } from "lucide-react";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 import { canAccessErpFeature, type ErpFeatureAccess } from "@/app/erpAccess";
+import { RestrictedTabsState } from "@/components/RestrictedTabsState";
 
 const Suppliers = lazy(() => import("@/pages/Suppliers"));
 const Customers = lazy(() => import("@/pages/Customers"));
@@ -27,7 +28,7 @@ export default function PartiesHub({ access }: { access?: ErpFeatureAccess }) {
   });
 
   if (visibleTabs.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">No Parties tabs are available for this user.</div>;
+    return <RestrictedTabsState />;
   }
 
   return (
