@@ -27,9 +27,15 @@ export interface MyAccess {
  * for hub pages.
  */
 export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
+  ["/factory/finance", "factory/payroll-hub"],
+  ["/factory/pressing", "factory/stock-entry"],
+  ["/factory/finalize", "factory/stock-entry"],
+  ["/factory/raw-stock", "factory/raw-materials"],
+  ["/factory/bale-products", "factory/bales-hub"],
   ["/factory/sales/invoices", "factory/invoicing"],
   ["/factory/sales/new", "factory/invoicing"],
   ["/factory/sales/pending-invoices", "factory/invoicing"],
+  ["/factory/sales/proformas", "factory/invoicing"],
   ["/factory/invoices", "factory/invoicing"],
   ["/factory/sales/loading/", "factory/invoicing"],
   ["/factory/sales/loadings", "factory/invoicing"],
@@ -45,14 +51,22 @@ export const SUBPAGE_PARENT: [prefix: string, parentKey: string][] = [
   ["/factory/containers/new", "factory/containers-hub"],
   ["/factory/containers", "factory/containers-hub"],
   ["/factory/stock-otw", "factory/containers-hub"],
+  ["/factory/stock-allocation-v3", "factory/stock-allocation-v5"],
+  ["/factory/stock-allocation", "factory/stock-allocation-v5"],
   ["/factory/customers", "factory/parties"],
   ["/factory/suppliers", "factory/parties"],
   ["/factory/net-position-details", "factory/intelligence/financial-hub"],
   ["/factory/net-position", "factory/intelligence/financial-hub"],
   ["/factory/net-profit-analytics", "factory/intelligence/financial-hub"],
+  ["/factory/intelligence/profitability", "factory/intelligence/financial-hub"],
+  ["/factory/intelligence/cashflow", "factory/intelligence/financial-hub"],
   ["/factory/supplier-report", "factory/intelligence/supplier-hub"],
   ["/factory/supplier-statement", "factory/intelligence/supplier-hub"],
+  ["/factory/intelligence/supplier-scores", "factory/intelligence/supplier-hub"],
   ["/factory/production-summary", "factory/intelligence/production-hub"],
+  ["/factory/intelligence/mix-optimizer", "factory/intelligence/production-hub"],
+  ["/factory/intelligence/waste", "factory/intelligence/production-hub"],
+  ["/factory/bale-ledger", "factory/production-report"],
   ["/factory/ledger-monthly", "factory/accounts"],
   ["/factory/ledger-vouchers", "factory/accounts"],
   ["/factory/voucher-detail", "factory/vouchers"],
@@ -129,13 +143,17 @@ export function computeFactoryGuardRedirect(params: {
   const requiredKey = resolvePageKey(currentLocation);
   const VIEWABLE_BY_ALL = new Set(["factory/sheets-sacks"]);
 
-  // 1. Per-user page restriction
-  if (isRestrictedUser && requiredKey && !VIEWABLE_BY_ALL.has(requiredKey)) {
-    const hasDirectAccess = myAccess.pageKeys.includes(requiredKey);
-    const hasLegacyAccess = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === requiredKey).some(([prefix]) =>
-      myAccess.pageKeys.includes(prefix.replace(/^\//, ""))
-    );
-    if (!hasDirectAccess && !hasLegacyAccess) return factoryDefaultPage;
+  // 1. Per-user page restriction. Restricted Factory users are default-deny:
+  // an unregistered route must never become a bypass around the page allow-list.
+  if (isRestrictedUser) {
+    if (!requiredKey) return factoryDefaultPage;
+    if (!VIEWABLE_BY_ALL.has(requiredKey)) {
+      const hasDirectAccess = myAccess.pageKeys.includes(requiredKey);
+      const hasLegacyAccess = SUBPAGE_PARENT.filter(([, parentKey]) => parentKey === requiredKey).some(([prefix]) =>
+        myAccess.pageKeys.includes(prefix.replace(/^\//, ""))
+      );
+      if (!hasDirectAccess && !hasLegacyAccess) return factoryDefaultPage;
+    }
   }
 
   // 2. Feature-flag restriction
