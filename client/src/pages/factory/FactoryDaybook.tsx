@@ -27,6 +27,7 @@ import type { FactoryMyAccess } from "@shared/apiTypes";
 
 export default function FactoryDaybook() {
   const model = useFactoryDaybookModel();
+  const { activeDaybookTab, setActiveDaybookTab } = model;
   const { data: myAccess } = useQuery<FactoryMyAccess>({
     queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60000,
@@ -38,13 +39,13 @@ export default function FactoryDaybook() {
     showTransactions ? "transactions" : null,
     showActivity ? "activity" : null,
   ].filter((value): value is "transactions" | "activity" => value !== null);
-  const effectiveTab = visibleTabs.includes(model.activeDaybookTab) ? model.activeDaybookTab : visibleTabs[0];
+  const effectiveTab = visibleTabs.includes(activeDaybookTab) ? activeDaybookTab : visibleTabs[0];
 
   useEffect(() => {
-    if (effectiveTab && model.activeDaybookTab !== effectiveTab) {
-      model.setActiveDaybookTab(effectiveTab);
+    if (effectiveTab && activeDaybookTab !== effectiveTab) {
+      setActiveDaybookTab(effectiveTab);
     }
-  }, [effectiveTab, model.activeDaybookTab, model.setActiveDaybookTab]);
+  }, [activeDaybookTab, effectiveTab, setActiveDaybookTab]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +86,7 @@ export default function FactoryDaybook() {
       ) : (
         <Tabs
           value={effectiveTab}
-          onValueChange={(value) => model.setActiveDaybookTab(value as "transactions" | "activity")}
+          onValueChange={(value) => setActiveDaybookTab(value as "transactions" | "activity")}
         >
           <TabsList className="w-fit">
             {showTransactions && <TabsTrigger value="transactions">Transactions</TabsTrigger>}
