@@ -101,28 +101,20 @@ export function ProductionTargetDefaultsDialog({
 
   const changedRecords = useMemo(
     () =>
-      rows.flatMap((row) => {
-        const draft = draftDefaults[row.personId];
-        if (!draft) return [];
-
-        const savedDefault = defaultsById.get(row.personId);
-        const originalCategory = savedDefault?.category ?? row.defaultCategory ?? row.category ?? "";
-        const originalTarget = savedDefault?.targetBales ?? row.defaultTargetBales ?? null;
-        const categoryChanged = draft.category.trim() !== originalCategory.trim();
-        const targetChanged = draft.targetBales !== originalTarget;
-
-        if (!categoryChanged && !targetChanged) return [];
-
-        return [
-          {
-            workerId: row.personId,
-            category: draft.category.trim(),
-            targetBales: draft.targetBales,
-            categoryChanged,
-            targetChanged,
-          },
-        ];
-      }),
+      rows
+        .filter((row) => {
+          const draft = draftDefaults[row.personId];
+          if (!draft) return false;
+          const savedDefault = defaultsById.get(row.personId);
+          const originalCategory = savedDefault?.category ?? row.defaultCategory ?? row.category ?? "";
+          const originalTarget = savedDefault?.targetBales ?? row.defaultTargetBales ?? null;
+          return draft.category.trim() !== originalCategory.trim() || draft.targetBales !== originalTarget;
+        })
+        .map((row) => ({
+          workerId: row.personId,
+          category: (draftDefaults[row.personId]?.category ?? "").trim(),
+          targetBales: draftDefaults[row.personId]?.targetBales ?? null,
+        })),
     [rows, draftDefaults, defaultsById]
   );
 
