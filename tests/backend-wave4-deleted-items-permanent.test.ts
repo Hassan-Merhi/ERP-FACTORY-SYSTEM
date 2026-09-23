@@ -104,6 +104,42 @@ describe("deleted items", () => {
     expect(row.rows[0].deleted_at).not.toBeNull();
   });
 
+  it("refuses to permanently delete a live item that was never moved to Deleted Items", async () => {
+    const live = await pool.query<{ id: number }>(
+      `INSERT INTO stock_items (company_id, code, name, uom, stock_group_id, active)
+       VALUES ($1, 'W4DEL-LIVE', 'W4DEL-LIVE name', 'PCS', $2, true) RETURNING id`,
+      [a.companyId, a.stockGroupId]
+    );
+    const id = live.rows[0].id;
+    await pool.query(
+      `INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value)
+       VALUES ($1, $2, $3, '5', '2', '10')`,
+      [a.companyId, a.locationId, id]
+    );
+
+    const response = await agent.delete(`/api/deleted-items/stockItem/${id}/permanent`);
+    expect(response.status, response.text).toBe(404);
+    expect(response.body.message).toContain("not found in Deleted Items");
+    expect(await count(`stock_items WHERE id = $1`, [id])).toBe(1);
+    expect(await count(`inventory WHERE stock_item_id = $1`, [id])).toBe(1);
+  });
+
+  it("refuses to permanently delete a live voucher", async () => {
+    const voucher = await pool.query<{ id: number }>(
+      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+       VALUES ($1, 'W4DEL-V1', 'Journal', CURRENT_DATE, '0') RETURNING id`,
+      [a.companyId]
+    );
+    const id = voucher.rows[0].id;
+    try {
+      const response = await agent.delete(`/api/deleted-items/voucher/${id}/permanent`);
+      expect(response.status, response.text).toBe(404);
+      expect(await count(`vouchers WHERE id = $1`, [id])).toBe(1);
+    } finally {
+      await pool.query(`DELETE FROM vouchers WHERE id = $1`, [id]);
+    }
+  });
+
   it("rejects malformed ids and unknown types", async () => {
     expect((await agent.delete(`/api/deleted-items/stockItem/abc/permanent`)).status).toBeGreaterThanOrEqual(400);
     const unknown = await agent.delete(`/api/deleted-items/notAType/1/permanent`);

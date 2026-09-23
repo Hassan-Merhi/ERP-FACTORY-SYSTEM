@@ -15,11 +15,10 @@ function statusForGenerationError(error: unknown): number {
 }
 
 /**
- * Registered before the legacy factory payroll module.
+ * The only handler for factory payroll generation.
  *
- * This route preserves the existing response shape (an array of payroll rows)
- * while owning generation in one transaction. The older route remains as a
- * compatibility fallback in source but is shadowed by registration order.
+ * This route preserves the legacy response shape (an array of payroll rows)
+ * while owning generation in one transaction.
  */
 export function registerCentralFactoryPayrollGenerationRoute(app: Express, requireAuth: RequestHandler): void {
   app.post("/api/factory/payroll/generate", requireAuth, async (req: Request, res: Response) => {

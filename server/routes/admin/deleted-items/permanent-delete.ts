@@ -47,6 +47,7 @@ import {
   voucherEntries,
   salesItems,
   suppliers,
+  customers,
   locations,
   employees,
   interCompanyTransfers,
@@ -64,7 +65,89 @@ import {
   propertyPayments,
   factoryTransporterTransactions,
 } from "@shared/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
+
+type DeletedItemRow = { id: AnyPgColumn; companyId: AnyPgColumn | null; deletedAt: AnyPgColumn };
+
+// The soft-deleted rows each type lists in Deleted Items (see ./list.ts).
+// Suppliers are global, so they have no company column to scope by.
+const DELETED_ITEM_ROWS: Record<string, DeletedItemRow> = {
+  location: { id: locations.id, companyId: locations.companyId, deletedAt: locations.deletedAt },
+  stockItem: { id: stockItems.id, companyId: stockItems.companyId, deletedAt: stockItems.deletedAt },
+  stockGroup: { id: stockGroups.id, companyId: stockGroups.companyId, deletedAt: stockGroups.deletedAt },
+  ledgerAccount: { id: ledgerAccounts.id, companyId: ledgerAccounts.companyId, deletedAt: ledgerAccounts.deletedAt },
+  employee: { id: employees.id, companyId: employees.companyId, deletedAt: employees.deletedAt },
+  customer: { id: customers.id, companyId: customers.companyId, deletedAt: customers.deletedAt },
+  supplier: { id: suppliers.id, companyId: null, deletedAt: suppliers.deletedAt },
+  bankAccount: { id: bankAccounts.id, companyId: bankAccounts.companyId, deletedAt: bankAccounts.deletedAt },
+  voucher: { id: vouchers.id, companyId: vouchers.companyId, deletedAt: vouchers.deletedAt },
+  factoryCategory: {
+    id: factoryCategories.id,
+    companyId: factoryCategories.companyId,
+    deletedAt: factoryCategories.deletedAt,
+  },
+  factoryBaleProduct: {
+    id: factoryBaleProducts.id,
+    companyId: factoryBaleProducts.companyId,
+    deletedAt: factoryBaleProducts.deletedAt,
+  },
+  factoryContainer: {
+    id: factoryContainers.id,
+    companyId: factoryContainers.companyId,
+    deletedAt: factoryContainers.deletedAt,
+  },
+  factoryRawStock: {
+    id: factoryRawStock.id,
+    companyId: factoryRawStock.companyId,
+    deletedAt: factoryRawStock.deletedAt,
+  },
+  factoryRawMaterialAdjustment: {
+    id: factoryRawMaterialAdjustments.id,
+    companyId: factoryRawMaterialAdjustments.companyId,
+    deletedAt: factoryRawMaterialAdjustments.deletedAt,
+  },
+  factoryMixBatch: {
+    id: factoryMixBatches.id,
+    companyId: factoryMixBatches.companyId,
+    deletedAt: factoryMixBatches.deletedAt,
+  },
+  factoryBale: { id: factoryBales.id, companyId: factoryBales.companyId, deletedAt: factoryBales.deletedAt },
+  customerProforma: {
+    id: customerProformas.id,
+    companyId: customerProformas.companyId,
+    deletedAt: customerProformas.deletedAt,
+  },
+  customerOrder: { id: customerOrders.id, companyId: customerOrders.companyId, deletedAt: customerOrders.deletedAt },
+};
+
+/**
+ * Whether the item is in this company's Deleted Items list. Permanent delete
+ * removes dependent rows by id before the company-scoped delete of the item
+ * itself, so it must only run for an item the user already moved to the bin:
+ * never a live record, and never another company's. Returns null for an
+ * unknown type.
+ */
+async function isInDeletedItems(type: string, itemId: number, companyId: number): Promise<boolean | null> {
+  let condition: SQL;
+  if (type === "orphanedPosSale") {
+    // A live voucher whose location no longer exists or was soft-deleted.
+    condition = sql`EXISTS (
+      SELECT 1 FROM ${vouchers} LEFT JOIN ${locations} ON ${locations.id} = ${vouchers.locationId}
+      WHERE ${vouchers.id} = ${itemId} AND ${vouchers.companyId} = ${companyId}
+        AND ${vouchers.deletedAt} IS NULL AND ${vouchers.locationId} IS NOT NULL
+        AND (${locations.id} IS NULL OR ${locations.deletedAt} IS NOT NULL))`;
+  } else {
+    const row = DELETED_ITEM_ROWS[type];
+    if (!row) return null;
+    const scope = row.companyId ? sql` AND ${row.companyId} = ${companyId}` : sql``;
+    condition = sql`EXISTS (
+      SELECT 1 FROM ${row.id.table} WHERE ${row.id} = ${itemId} AND ${row.deletedAt} IS NOT NULL${scope})`;
+  }
+  const result = await db.execute(sql`SELECT ${condition} AS found`);
+  const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows;
+  return (rows?.[0] as { found?: boolean } | undefined)?.found === true;
+}
 
 export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
   // Permanently delete an item
@@ -79,6 +162,14 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
+      }
+
+      const inDeletedItems = await isInDeletedItems(type, itemId, companyId);
+      if (inDeletedItems === null) {
+        return res.status(400).json({ message: "Invalid item type" });
+      }
+      if (!inDeletedItems) {
+        return res.status(404).json({ message: `${type} not found in Deleted Items` });
       }
 
       switch (type) {
