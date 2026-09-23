@@ -46,7 +46,7 @@ export default function FactoryDaybook() {
         <div>
           <PageHeader title="Factory Daybook" subtitle="All factory transactions in one view" />
         </div>
-        <DropdownMenu>
+        {showTransactions && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
@@ -67,7 +67,7 @@ export default function FactoryDaybook() {
               Detailed Export (with entries)
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
       </div>
 
       {/* Tab selector: Transactions / Edits & Activity */}
