@@ -47,7 +47,7 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
   } = model;
 
   return (
-    <div className="flex-1 flex flex-col gap-4 lg:min-w-[300px]">
+    <div className="min-w-0 flex-1 flex flex-col gap-4">
       <div className="lg:hidden">
         <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
           <Button className="w-full" onClick={() => setMobileSheetOpen(true)} data-testid="button-mobile-add-item">
