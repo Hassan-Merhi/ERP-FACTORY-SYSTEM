@@ -219,16 +219,18 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
                       <span
                         className={`text-base font-bold px-3 py-0.5 rounded-md ${
-                          profitPositive
+                          profitValue > 0
                             ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                            : profitValue < 0
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                              : "bg-muted text-muted-foreground"
                         }`}
                         data-testid="text-profit-value"
                       >
-                        {profitPositive ? "+" : ""}
+                        {profitValue > 0 ? "+" : ""}
                         {fmtMoney(profitValue)}
                       </span>
-                      {profitPositive ? (
+                      {profitValue > 0 ? (
                         <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
                       ) : profitValue === 0 ? (
                         <Minus className="h-4 w-4 text-muted-foreground" />
@@ -582,6 +584,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   qty: r.qty,
                   totalWeightKg: r.totalWeightKg,
                   costPricePerBale: 0,
+                  pricePerBale: r.qty > 0 ? r.totalValue / r.qty : 0,
                   totalValue: r.totalValue,
                 }))
               );
