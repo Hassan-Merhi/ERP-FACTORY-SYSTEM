@@ -56,6 +56,7 @@ interface StockItem {
 interface CombinedRow {
   stockItemId: number | null;
   stockItemName: string;
+  stockItemCode?: string | null;
   stockGroupId: number | null;
   stockGroupName: string;
   otwQty: number;

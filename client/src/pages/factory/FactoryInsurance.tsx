@@ -40,6 +40,7 @@ import type { InsuranceMember } from "./factoryinsurance/types";
 interface LedgerAccountOption {
   id: number;
   name: string;
+  code?: string | null;
 }
 import { MONTHS, YEARS } from "./factoryinsurance/utils";
 import { MemberFormDialog } from "./factoryinsurance/components/MemberFormDialog";
@@ -584,8 +585,9 @@ export default function FactoryInsurance() {
                           {a.name}
                         </div>
                       ))}
-                    {ledgerAccounts.filter((a) => searchAny(ecDrSearch, a.name, a.code)).length ===
-                      0 && <div className="px-3 py-2 text-muted-foreground italic">No accounts found</div>}
+                    {ledgerAccounts.filter((a) => searchAny(ecDrSearch, a.name, a.code)).length === 0 && (
+                      <div className="px-3 py-2 text-muted-foreground italic">No accounts found</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -624,8 +626,9 @@ export default function FactoryInsurance() {
                           {a.name}
                         </div>
                       ))}
-                    {ledgerAccounts.filter((a) => searchAny(ecCrSearch, a.name, a.code)).length ===
-                      0 && <div className="px-3 py-2 text-muted-foreground italic">No accounts found</div>}
+                    {ledgerAccounts.filter((a) => searchAny(ecCrSearch, a.name, a.code)).length === 0 && (
+                      <div className="px-3 py-2 text-muted-foreground italic">No accounts found</div>
+                    )}
                   </div>
                 )}
               </div>
