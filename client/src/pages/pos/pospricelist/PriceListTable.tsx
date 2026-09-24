@@ -220,6 +220,8 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                 <TableHead className="text-xs text-right hidden sm:table-cell w-32">Offloading Cost</TableHead>
               )}
 
+              {isAllMode && <TableHead className="text-xs text-right w-32">Total Qty</TableHead>}
+
               {/* All-mode: one column per visible master */}
               {isAllMode &&
                 model.visibleMasters.map((m) => (
@@ -274,6 +276,15 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                       const total = parseFloat(item.costPrice ?? "0") + parseFloat(item.offloadingCost ?? "0");
                       return total > 0 ? formatAmount(total) : "—";
                     })()}
+                  </TableCell>
+                )}
+
+                {isAllMode && (
+                  <TableCell
+                    className="text-right text-sm text-muted-foreground tabular-nums"
+                    data-testid={`text-total-qty-${item.stockItemId}`}
+                  >
+                    {formatQty(item.totalQuantity ?? "0")}
                   </TableCell>
                 )}
 

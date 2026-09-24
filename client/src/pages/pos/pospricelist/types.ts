@@ -20,6 +20,7 @@ export interface PriceListRow {
   sellingPrice?: string | null;
   hasCustomPrice?: boolean;
   quantity?: string;
+  totalQuantity?: string;
   masterPrices?: Record<number, string>;
   costPrice?: string | null;
   offloadingCost?: string | null;

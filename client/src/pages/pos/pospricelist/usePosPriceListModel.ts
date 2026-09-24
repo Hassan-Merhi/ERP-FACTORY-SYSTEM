@@ -546,6 +546,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         }
 
         if (isAllMode) {
+          row["Total Qty"] = parseFloat(item.totalQuantity ?? "0");
           for (const m of masters) {
             const price = masterPriceFor(item, m.id);
             row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
