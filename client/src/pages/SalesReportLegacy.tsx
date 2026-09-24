@@ -197,7 +197,6 @@ export default function SalesReport() {
 
     // Filter by search term
     if (searchTerm) {
-      const searchLower = (searchTerm || "").toLowerCase();
       const matches =
         (item.stockItemName || "").toLowerCase().includes(searchLower) ||
         (item.locationName && (item.locationName || "").toLowerCase().includes(searchLower));
