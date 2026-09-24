@@ -556,7 +556,7 @@ export default function StockInSalesReportDetail() {
             </div>
             <div className="overflow-hidden rounded-xl border">
               <div className="max-h-[520px] overflow-auto">
-                <Table className="min-w-[900px]">
+                <Table className="min-w-[900px]" mobileLayout="cards">
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableHead>Date</TableHead>
@@ -654,7 +654,7 @@ export default function StockInSalesReportDetail() {
             </div>
             <div className="overflow-hidden rounded-xl border">
               <div className="max-h-[520px] overflow-auto">
-                <Table className="min-w-[1100px]">
+                <Table className="min-w-[1100px]" mobileLayout="cards">
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableHead>Date</TableHead>

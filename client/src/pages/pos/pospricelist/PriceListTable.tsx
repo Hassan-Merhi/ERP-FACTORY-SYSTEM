@@ -240,8 +240,8 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
 
   return (
     <>
-      <div className="rounded-xl border">
-        <Table wrapperClassName="max-h-[calc(100vh-320px)] sm:max-h-[calc(100vh-280px)]">
+      <div className="rounded-xl border max-sm:border-0">
+        <Table wrapperClassName="max-h-[calc(100vh-320px)] sm:max-h-[calc(100vh-280px)]" mobileLayout="cards">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs">Item Name</TableHead>
@@ -280,7 +280,7 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                   model.isItemUnpriced(item) && "bg-amber-50/50 dark:bg-amber-950/20"
                 )}
               >
-                <TableCell>
+                <TableCell data-mobile-cell="title">
                   <button
                     type="button"
                     onClick={() => openItemHistory(item.stockItemId, item.name)}

@@ -2,6 +2,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt, fmtD, parseNum, getRealRowBg, groupBySupplier } from "./helpers";
 import type { EnrichedContainerApi } from "./types";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 export function WorkbookLegend() {
   return (
@@ -56,6 +57,16 @@ function WorkbookDataRow({ r }: { r: EnrichedContainerApi }) {
       <td className="py-0.5 px-2 text-right">{parseNum(r.dutyFee) > 0 ? `$${fmt(parseNum(r.dutyFee), 0)}` : "—"}</td>
       <td className="py-0.5 px-2 max-w-40 truncate text-muted-foreground italic">{r.trackingDescription ?? "—"}</td>
     </tr>
+  );
+}
+
+/** Workbook grid; on ERP phones each container row reads as a card. */
+function WorkbookTable({ children }: { children: React.ReactNode }) {
+  const { tableProps } = useMobileCardTable();
+  return (
+    <table {...tableProps} className="w-full text-xs whitespace-nowrap border-collapse">
+      {children}
+    </table>
   );
 }
 
@@ -164,7 +175,7 @@ export function RealWorkbookBlock({
                   </span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs whitespace-nowrap border-collapse">
+                  <WorkbookTable>
                     <thead>{columnHeaders}</thead>
                     <tbody>
                       <SupplierGroupedRows rows={shopRows} />
@@ -179,7 +190,7 @@ export function RealWorkbookBlock({
                         <td colSpan={1} />
                       </tr>
                     </tbody>
-                  </table>
+                  </WorkbookTable>
                 </div>
               </div>
             );
@@ -195,7 +206,7 @@ export function RealWorkbookBlock({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs whitespace-nowrap border-collapse">
+          <WorkbookTable>
             <thead>{columnHeaders}</thead>
             <tbody>
               {rows.length === 0 ? (
@@ -220,7 +231,7 @@ export function RealWorkbookBlock({
                 </tr>
               )}
             </tbody>
-          </table>
+          </WorkbookTable>
         </div>
       )}
     </div>

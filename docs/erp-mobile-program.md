@@ -12,7 +12,7 @@ phase is certified.
 | 1 | Mobile shell and navigation simplification | Complete | #1681, #1711 |
 | 2 | Standard mobile page header | Complete | #1718 |
 | 3 | Mobile filter sheet | Complete | Phase 3 PR |
-| 4 | Mobile cards instead of desktop tables | Pending | — |
+| 4 | Mobile cards instead of desktop tables | Complete | Phase 4 PR |
 | 5 | Mobile forms and dialogs | Pending | — |
 | 6 | Simplify dense ERP screens | Pending | — |
 | 7 | Mobile actions and touch behaviour | Pending | — |
@@ -55,6 +55,34 @@ Pages that intentionally keep a panel-owned heading instead of a page header:
 | `/agents` | Master/detail ledger tool; the Phase 1 master/detail phone layout is keyed to its root element. |
 | `/chat` | Messaging workspace with a fixed-height conversation layout. |
 | `/spreadsheet` (open workbook) | Full-bleed editor toolbar; the library view uses `PageHeader`. |
+
+### Record tables as phone cards (`client/src/components/ui/mobile-card-table.ts`)
+
+Record tables opt in with `<Table mobileLayout="cards">`. Raw `<table>` markup opts in with
+`useMobileCardTable()` by spreading its `tableProps`. On ERP-mode phones each body row
+becomes a card, and tablet/desktop keep the table.
+
+- Labels come from the column headers. Grouped headers (`rowSpan`/`colSpan`) combine, for
+  example "Inwards · Qty".
+- The first record cell becomes the card title. A checkbox-only cell becomes a leading
+  selector, and an unlabelled cell holding only controls becomes the action row.
+- Unlabelled decoration (row chevrons) is hidden. A cell spanning every column (empty and
+  loading states) fills the card.
+- Pages override the automatic role or label with `data-mobile-cell="title|field|hidden|actions"`
+  and `data-label`.
+- Fields sit two per row, label over value. Cells hidden on phones by `hidden sm:table-cell`
+  are shown again inside cards, where there is room for them.
+- Sticky headers, totals and frozen columns are released inside the card stack. Bounded row
+  rendering is disabled on phones, because cards have variable heights.
+- In Arabic the cards follow the page direction, while numbers keep their LTR isolation.
+
+Matrix tables whose columns must stay side by side keep horizontal scroll. This covers
+company and period comparisons, financial statements and editable grids (Phase 5).
+
+`npm run fixture:erp-mobile-program` seeds the certification company through the
+application API with stock items, customers, suppliers, containers and journal vouchers, so
+that list and card screens render real rows. It is safe to rerun and must never be pointed at
+production.
 
 ### Filters (`client/src/components/ui/erp-mobile-filters.tsx`)
 
@@ -138,4 +166,22 @@ Delivered:
   of a sheet, because its bar holds only two controls.
 - Remaining phone screens with several inline controls are data-entry forms
   (Create, POS import, Settings, test data import), covered by Phase 5.
+
+## Phase 4 — Mobile cards instead of desktop tables
+
+Delivered:
+
+- `Table mobileLayout="cards"` and `useMobileCardTable()` (see Shared contracts), with
+  unit coverage.
+- Cards replace desktop tables on: containers on the way (Tracking, Dashboard, Containers
+  OTW), Ledger vouchers, Price list, Sales report, Stock in & sales report and details,
+  Location vouchers, Location/stock monthly summary, Location summary, Location inventory,
+  Combined stock, stock movement dialogs, All Daybook voucher panels, Daybook voucher
+  entries, Customer invoice detail, Supplier detail, Sales report items, Bale ledger, Payroll
+  advances, Stock report panel, Container detail, Agent statement, Mix batches, Production
+  bales and Batch detail.
+- The Accounts list uses a fixed phone layout, so long names clamp and balances stay visible.
+  Its edit control is visible on touch devices.
+- Fixed: Location/stock monthly summary crashed for items without movements.
+- The certification fixture (`fixture:erp-mobile-program`).
 

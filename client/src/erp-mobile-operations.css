@@ -212,3 +212,176 @@
     display: none !important;
   }
 }
+
+/*
+ * Phone card layout for record tables (`<Table mobileLayout="cards">`). The Table only sets
+ * `data-mobile-cards` on ERP phone layouts, so tablet/desktop tables are untouched. Each body
+ * row becomes a card: the first record cell is the card title, the remaining cells are
+ * label/value lines (labels come from the column headers), and control-only cells form an
+ * action row.
+ */
+[data-table-scroll-region][data-mobile-cards="true"] {
+  max-height: none !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0;
+}
+
+table[data-mobile-cards="true"] {
+  /* Contains the visually hidden header so it cannot extend the document. */
+  position: relative;
+  display: block;
+  min-width: 0 !important;
+  width: 100%;
+}
+
+table[data-mobile-cards="true"] > thead {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+table[data-mobile-cards="true"] > tbody,
+table[data-mobile-cards="true"] > tfoot {
+  display: grid;
+  gap: 0.5rem;
+}
+
+table[data-mobile-cards="true"] > tfoot {
+  margin-top: 0.5rem;
+  border-top: 0;
+  background: transparent;
+}
+
+table[data-mobile-cards="true"] > tbody > tr,
+table[data-mobile-cards="true"] > tfoot > tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.5rem;
+  min-width: 0;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* Zero specificity: row state colours from the page (status, unpriced, totals) still win. */
+:where(table[data-mobile-cards="true"] > tbody > tr) {
+  background-color: hsl(var(--card));
+}
+
+:where(table[data-mobile-cards="true"] > tfoot > tr) {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+table[data-mobile-cards="true"] > tfoot > tr {
+  font-weight: 600;
+}
+
+table[data-mobile-cards="true"] > tbody > tr > td,
+table[data-mobile-cards="true"] > tfoot > tr > td,
+table[data-mobile-cards="true"] > tbody > tr > th,
+table[data-mobile-cards="true"] > tfoot > tr > th {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+  height: auto !important;
+  border: 0 !important;
+  padding: 0.25rem 0 !important;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: start !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+/* Label/value fields sit two per row. */
+table[data-mobile-cards="true"] [data-mobile-cell="field"] {
+  flex: 1 1 calc(50% - 0.25rem);
+  max-width: calc(50% - 0.25rem);
+}
+
+table[data-mobile-cards="true"] td[data-label]:not([data-label=""])::before,
+table[data-mobile-cards="true"] th[data-label]:not([data-label=""])::before {
+  content: attr(data-label);
+  max-width: 100%;
+  color: hsl(var(--muted-foreground));
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="title"] {
+  /* Wide enough that no field shares its row; only a leading select checkbox sits beside it. */
+  display: block;
+  order: -1;
+  flex: 1 1 0;
+  min-width: 60%;
+  padding-bottom: 0.25rem !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="title"]::before,
+table[data-mobile-cards="true"] [data-mobile-cell="select"]::before,
+table[data-mobile-cards="true"] [data-mobile-cell="actions"]::before,
+table[data-mobile-cards="true"] [data-mobile-cell="full"]::before {
+  display: none;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="select"] {
+  order: -2;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="actions"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+  border-top: 1px solid hsl(var(--border)) !important;
+  padding-top: 0.5rem !important;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="full"] {
+  align-items: center;
+  text-align: center !important;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="hidden"],
+table[data-mobile-cards="true"] td[data-mobile-cell="field"]:empty {
+  display: none !important;
+}
+
+/* Bounded-rendering spacer rows have no meaning in the card stack. */
+table[data-mobile-cards="true"] > tbody > tr[aria-hidden="true"] {
+  display: none !important;
+}
+
+/* RTL hardening pins `.tabular-nums` (which every Table carries) to LTR; cards follow the page. */
+html[dir="rtl"] table[data-mobile-cards="true"] {
+  direction: rtl;
+  unicode-bidi: normal;
+  text-align: start;
+}
+
+/* Sticky header/total rows and frozen first columns do not apply to a card stack. */
+table[data-mobile-cards="true"] > tbody,
+table[data-mobile-cards="true"] > tfoot,
+table[data-mobile-cards="true"] > tbody > tr,
+table[data-mobile-cards="true"] > tfoot > tr,
+table[data-mobile-cards="true"] > tbody > tr > *,
+table[data-mobile-cards="true"] > tfoot > tr > * {
+  position: static !important;
+}

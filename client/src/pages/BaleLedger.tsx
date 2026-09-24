@@ -263,7 +263,7 @@ function SectionTable({
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground p-4 pt-0 text-center">No records.</p>
             ) : (
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs py-2 px-3">Product</TableHead>

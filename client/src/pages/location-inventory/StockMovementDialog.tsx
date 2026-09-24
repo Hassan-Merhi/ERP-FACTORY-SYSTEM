@@ -13,6 +13,7 @@ import type {
   StockMovementPeriod,
   StockMovementResponse,
 } from "./locationInventoryTypes";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 interface StockMovementDialogProps {
   stockMovementOpen: boolean;
@@ -41,6 +42,8 @@ export function StockMovementDialog({
   formatAmount,
   navigate,
 }: StockMovementDialogProps) {
+  const mobileCards = useMobileCardTable();
+  const mobileCardsSecondary = useMobileCardTable();
   const toSafeNumber = (value: unknown): number => {
     const parsed = typeof value === "number" ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -182,7 +185,11 @@ export function StockMovementDialog({
                   ))}
                 </div>
               ) : (
-                <table className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth: 1240 }}>
+                <table
+                  {...mobileCards.tableProps}
+                  className="w-full border-separate border-spacing-0 text-sm"
+                  style={{ minWidth: 1240 }}
+                >
                   <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
                     <tr className="bg-muted/95 backdrop-blur">
                       <th
@@ -371,7 +378,11 @@ export function StockMovementDialog({
                 ))}
               </div>
             ) : (
-              <table className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth: 1180 }}>
+              <table
+                {...mobileCardsSecondary.tableProps}
+                className="w-full border-separate border-spacing-0 text-sm"
+                style={{ minWidth: 1180 }}
+              >
                 <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
                   <tr className="bg-muted/95 backdrop-blur">
                     <th

@@ -17,6 +17,7 @@ import type {
   InventoryLocation,
   InventoryLocationOption,
 } from "./locationInventoryTypes";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 type StockCategory = { id: number; name: string; active: boolean };
 
@@ -66,6 +67,7 @@ export function CombinedStockView({
   posUser,
   allStockTableRef,
 }: CombinedStockViewProps) {
+  const mobileCards = useMobileCardTable();
   // Table columns: locations that actually have stock (derived from inventory data)
   const uniqueLocationNames = Array.from(new Map(allInventoryLocations.map((l) => [l.name, l])).values());
 
@@ -234,7 +236,7 @@ export function CombinedStockView({
             className="w-full overflow-auto max-h-[calc(100vh-200px)]"
             ref={allStockTableRef as React.RefObject<HTMLDivElement>}
           >
-            <table className="w-full text-sm border-collapse">
+            <table {...mobileCards.tableProps} className="w-full text-sm border-collapse">
               <thead className="sticky top-0 z-30 bg-muted/50">
                 <tr className="bg-muted/60 border-b">
                   <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap sticky left-0 bg-muted/60 z-10">

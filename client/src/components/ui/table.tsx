@@ -2,6 +2,8 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+import { useMobileCardTable } from "./mobile-card-table";
+
 type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
   wrapperClassName?: string;
   scrollLabel?: string;
@@ -15,6 +17,12 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
    * also disables the sticky header). Defaults to the `max-h-[70vh]` class on the wrapper.
    */
   maxHeight?: string;
+  /**
+   * Phone presentation. `"cards"` restacks each body row as a labelled card on ERP-mode phone
+   * layouts (see `mobile-card-table.ts`); tablet and desktop always render the table. Omit it
+   * (or pass `"scroll"`) for matrix-style tables whose columns must stay side by side.
+   */
+  mobileLayout?: "cards" | "scroll";
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
@@ -27,12 +35,22 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       minimumWidth,
       scrollRef,
       maxHeight,
+      mobileLayout,
       style,
       ...props
     },
     ref
   ) => {
     const descriptionId = React.useId();
+    const { cards, ref: setCardTable } = useMobileCardTable(mobileLayout === "cards");
+    const setTableRef = React.useCallback(
+      (node: HTMLTableElement | null) => {
+        setCardTable(node);
+        if (typeof ref === "function") ref(node);
+        else if (ref) ref.current = node;
+      },
+      [ref, setCardTable]
+    );
     const wrapperRef = React.useRef<HTMLDivElement>(null);
     const [usesParentScroll, setUsesParentScroll] = React.useState(false);
     const setWrapperRef = React.useCallback(
@@ -78,6 +96,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
         tabIndex={0}
         data-horizontal-scroll="true"
         data-table-scroll-region="true"
+        data-mobile-cards={cards ? "true" : undefined}
         className={cn(
           "relative max-w-full touch-pan-x overscroll-x-contain rounded-md border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600",
           // A sticky `thead` sticks to its nearest scrollport, which is this wrapper (declaring
@@ -100,10 +119,11 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
               : "Scroll to view additional rows and columns.")}
         </span>
         <table
-          ref={ref}
+          ref={setTableRef}
           data-responsive-table="true"
+          data-mobile-cards={cards ? "true" : undefined}
           className={cn("w-full min-w-full caption-bottom border-collapse text-sm tabular-nums", className)}
-          style={{ minWidth: minimumWidth, ...style }}
+          style={{ minWidth: cards ? undefined : minimumWidth, ...style }}
           {...props}
         />
       </div>

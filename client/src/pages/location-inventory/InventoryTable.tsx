@@ -2,6 +2,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { StockGroupSummary } from "./locationInventoryTypes";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 interface InventoryItem {
   inventoryId: number | null;
@@ -48,10 +49,11 @@ export function InventoryTable({
   inventory,
   selectedGroup,
 }: InventoryTableProps) {
+  const mobileCards = useMobileCardTable();
   return (
     <Card className="border-none shadow-none bg-transparent">
       <div>
-        <table className="w-full text-sm border-collapse">
+        <table {...mobileCards.tableProps} className="w-full text-sm border-collapse">
           <thead className="sticky top-0 z-10 bg-background">
             <tr className="bg-muted/50 text-muted-foreground h-10">
               <th className="text-left px-3 font-medium">Item</th>

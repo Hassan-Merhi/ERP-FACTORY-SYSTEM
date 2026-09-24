@@ -174,8 +174,8 @@ export default function LedgerVouchers() {
                   const formatBal = (bal: number) =>
                     bal === 0 ? "—" : `${formatAmount(Math.abs(bal))} ${bal >= 0 ? "Cr" : "Dr"}`;
                   return (
-                    <div className="border rounded-lg overflow-x-auto">
-                      <Table>
+                    <div className="border rounded-lg overflow-x-auto max-sm:border-0">
+                      <Table mobileLayout="cards">
                         <TableHeader className="sticky top-0 z-30 bg-background">
                           <TableRow className="bg-muted/50">
                             <TableHead className="w-28">Date</TableHead>

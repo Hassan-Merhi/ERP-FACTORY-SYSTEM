@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 interface LocationData {
   quantity: number;
@@ -54,6 +55,7 @@ const STORAGE_KEY = "locationSummary_selectedLocations";
 const STATE_KEY = "locationSummary_pageState";
 
 export default function LocationSummary() {
+  const mobileCards = useMobileCardTable();
   const [_location, navigate] = useLocation();
 
   // Load saved state from sessionStorage
@@ -226,90 +228,111 @@ export default function LocationSummary() {
     }
   };
 
-  const handleTableKeyDown = useCallback((e: KeyboardEvent) => {
-    if (locationDialogOpen || !summaryData?.stockGroups?.length) return;
+  const handleTableKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (locationDialogOpen || !summaryData?.stockGroups?.length) return;
 
-    const allRows = getAllRows();
-    if (allRows.length === 0) return;
+      const allRows = getAllRows();
+      if (allRows.length === 0) return;
 
-    const currentIndex = selectedRowKey ? allRows.findIndex((r) => r.key === selectedRowKey) : -1;
+      const currentIndex = selectedRowKey ? allRows.findIndex((r) => r.key === selectedRowKey) : -1;
 
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (currentIndex > 0) {
-        interactionMode.current = "keyboard";
-        const newKey = allRows[currentIndex - 1].key;
-        scrollToRowImmediate(newKey);
-        setSelectedRowKey(newKey);
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      interactionMode.current = "keyboard";
-      if (currentIndex === -1) {
-        const newKey = allRows[0].key;
-        scrollToRowImmediate(newKey);
-        setSelectedRowKey(newKey);
-      } else if (currentIndex < allRows.length - 1) {
-        const newKey = allRows[currentIndex + 1].key;
-        scrollToRowImmediate(newKey);
-        setSelectedRowKey(newKey);
-      }
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      setSelectedLocationIndex((prev) => Math.max(0, prev - 1));
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      setSelectedLocationIndex((prev) => Math.min(selectedLocations.length - 1, prev + 1));
-    } else if (e.key === " ") {
-      e.preventDefault();
-      if (selectedRowKey) {
-        setHighlightedRows((prev) => {
-          const next = new Set(prev);
-          if (next.has(selectedRowKey)) {
-            next.delete(selectedRowKey);
-          } else {
-            next.add(selectedRowKey);
-          }
-          return next;
-        });
-      }
-    } else if ((e.altKey || e.metaKey) && e.key.toLowerCase() === "r") {
-      e.preventDefault();
-      if (selectedRowKey) {
-        setHiddenRows((prev) => {
-          const next = new Set(prev);
-          if (next.has(selectedRowKey)) {
-            next.delete(selectedRowKey);
-            toast({ title: "Row unhidden" });
-          } else {
-            next.add(selectedRowKey);
-            toast({ title: "Row hidden (Alt+R)" });
-          }
-          return next;
-        });
-      }
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      // Navigate to LocationMonthlySummary if item row is selected
-      if (selectedRowKey && summaryData) {
-        const row = allRows.find((r) => r.key === selectedRowKey);
-        if (row && row.itemId && selectedLocationIndex >= 0 && selectedLocationIndex < selectedLocations.length) {
-          const locationId = selectedLocations[selectedLocationIndex].id;
-          navigate(`/locations/${locationId}/stock-items/${row.itemId}/history`);
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          interactionMode.current = "keyboard";
+          const newKey = allRows[currentIndex - 1].key;
+          scrollToRowImmediate(newKey);
+          setSelectedRowKey(newKey);
         }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        interactionMode.current = "keyboard";
+        if (currentIndex === -1) {
+          const newKey = allRows[0].key;
+          scrollToRowImmediate(newKey);
+          setSelectedRowKey(newKey);
+        } else if (currentIndex < allRows.length - 1) {
+          const newKey = allRows[currentIndex + 1].key;
+          scrollToRowImmediate(newKey);
+          setSelectedRowKey(newKey);
+        }
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSelectedLocationIndex((prev) => Math.max(0, prev - 1));
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSelectedLocationIndex((prev) => Math.min(selectedLocations.length - 1, prev + 1));
+      } else if (e.key === " ") {
+        e.preventDefault();
+        if (selectedRowKey) {
+          setHighlightedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(selectedRowKey)) {
+              next.delete(selectedRowKey);
+            } else {
+              next.add(selectedRowKey);
+            }
+            return next;
+          });
+        }
+      } else if ((e.altKey || e.metaKey) && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        if (selectedRowKey) {
+          setHiddenRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(selectedRowKey)) {
+              next.delete(selectedRowKey);
+              toast({ title: "Row unhidden" });
+            } else {
+              next.add(selectedRowKey);
+              toast({ title: "Row hidden (Alt+R)" });
+            }
+            return next;
+          });
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        // Navigate to LocationMonthlySummary if item row is selected
+        if (selectedRowKey && summaryData) {
+          const row = allRows.find((r) => r.key === selectedRowKey);
+          if (row && row.itemId && selectedLocationIndex >= 0 && selectedLocationIndex < selectedLocations.length) {
+            const locationId = selectedLocations[selectedLocationIndex].id;
+            navigate(`/locations/${locationId}/stock-items/${row.itemId}/history`);
+          }
+        }
+      } else if (e.key === "Escape") {
+        if (hasAnyOpenDialog()) return;
+        e.preventDefault();
+        window.history.back();
       }
-    } else if (e.key === "Escape") {
-      if (hasAnyOpenDialog()) return;
-      e.preventDefault();
-      window.history.back();
-    }
-  }, [getAllRows, locationDialogOpen, navigate, selectedLocationIndex, selectedLocations, selectedRowKey, summaryData, toast]);
+    },
+    [
+      getAllRows,
+      locationDialogOpen,
+      navigate,
+      selectedLocationIndex,
+      selectedLocations,
+      selectedRowKey,
+      summaryData,
+      toast,
+    ]
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => handleTableKeyDown(e);
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler, { capture: true });
-  }, [selectedRowKey, summaryData, expandedGroups, locationDialogOpen, selectedLocationIndex, selectedLocations, hiddenRows, handleTableKeyDown]);
+  }, [
+    selectedRowKey,
+    summaryData,
+    expandedGroups,
+    locationDialogOpen,
+    selectedLocationIndex,
+    selectedLocations,
+    hiddenRows,
+    handleTableKeyDown,
+  ]);
 
   useEffect(() => {
     if (!tableScrollContainer.current) return;
@@ -448,7 +471,7 @@ export default function LocationSummary() {
       ) : (
         <Card className="overflow-hidden flex flex-col flex-1 w-full m-4 mt-0" style={{ minHeight: 0 }}>
           <div className="overflow-auto flex-1" ref={tableScrollContainer} onPointerMove={handlePointerMove}>
-            <table className="w-full border-collapse" style={{ fontSize: "12px" }}>
+            <table {...mobileCards.tableProps} className="w-full border-collapse" style={{ fontSize: "12px" }}>
               <thead className="sticky top-0 z-20 bg-muted">
                 <tr className="bg-muted">
                   <th

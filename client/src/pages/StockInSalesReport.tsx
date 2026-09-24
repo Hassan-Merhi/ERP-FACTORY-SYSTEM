@@ -575,9 +575,9 @@ function StockInSalesReportSummary() {
               ? "Yearly stock movement and profitability · Click a year for full details"
               : "Monthly stock movement and profitability · Click a month for full details"}
         </p>
-        <div className="overflow-hidden rounded-xl border">
+        <div className="overflow-hidden rounded-xl border max-sm:overflow-visible max-sm:border-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-[900px]">
+            <Table className="min-w-[900px]" mobileLayout="cards">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead>{periodColumnLabel}</TableHead>

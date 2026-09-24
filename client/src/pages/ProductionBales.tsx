@@ -289,7 +289,9 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
         const labelResponse = await apiRequest("POST", "/api/bale-label-prints", { bales: labelData });
 
         if (labelResponse.ok) {
-          const { labelPrints }: {
+          const {
+            labelPrints,
+          }: {
             labelPrints: {
               productionBaleId: number;
               referenceNumber: string | null;
@@ -426,7 +428,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
           </div>
 
           <div className="table-responsive">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead className="w-10">Verified</TableHead>

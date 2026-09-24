@@ -88,7 +88,7 @@ export function SalesVoucherEntries({
         </p>
       )}
       {/* Items table */}
-      <Table>
+      <Table mobileLayout="cards">
         <TableHeader className="sticky top-0 z-30 bg-background">
           <TableRow>
             <TableHead>Item Name</TableHead>

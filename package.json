@@ -20,6 +20,7 @@
     "verify:observability": "node scripts/verify-program1-observability-foundation.mjs",
     "verify:stabilization": "node scripts/verify-memory-stabilization.mjs",
     "verify:mobile-web-routing": "node scripts/verify-mobile-web-routing.mjs",
+    "fixture:erp-mobile-program": "node scripts/prepare-erp-mobile-program-fixture.mjs",
     "verify:erp-mobile-program": "node scripts/verify-erp-mobile-program.mjs",
     "verify:bandwidth": "node scripts/verify-bandwidth-phases-1-2.mjs && node scripts/verify-bandwidth-phase-3-sales-report.mjs && node scripts/verify-wave3-api-payload-bandwidth.mjs",
     "verify:performance-wave5": "node scripts/verify-performance-wave5-certification.mjs",

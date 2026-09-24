@@ -68,7 +68,7 @@ export function SalesReportItemsView({
   return (
     <>
       <div className="hidden md:block">
-        <Table wrapperClassName="max-h-[calc(100vh-320px)]">
+        <Table wrapperClassName="max-h-[calc(100vh-320px)]" mobileLayout="cards">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               <TableHead className="w-6"></TableHead>

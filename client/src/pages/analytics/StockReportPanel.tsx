@@ -212,7 +212,7 @@ export function StockReportPanel({
           </div>
         ) : openingStockData ? (
           <div className="table-responsive">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Stock Group</TableHead>
