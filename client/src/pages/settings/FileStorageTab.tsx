@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -103,7 +104,7 @@ export function FileStorageTab() {
     const match = selectedFolderId === "unfiled" ? f.folderId == null : f.folderId === selectedFolderId;
     if (!match) return false;
     if (!search.trim()) return true;
-    return visibleName(f).toLowerCase().includes(search.toLowerCase());
+    return searchAny(search, visibleName(f));
   });
 
   const _fileCountForFolder = (id: number | null) =>
