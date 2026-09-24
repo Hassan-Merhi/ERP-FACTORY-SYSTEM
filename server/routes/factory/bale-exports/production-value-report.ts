@@ -124,6 +124,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const baleRowsPromise = db
         .select({
           id: factoryBales.id,
+          mixBatchId: factoryBales.mixBatchId,
           articleCode: factoryBales.articleCode,
           productName: factoryBales.productName,
           weightKg: factoryBales.weightKg,
@@ -161,6 +162,33 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise]);
 
+      // Batch linkage follows the bales in the selected production period (and worker filter),
+      // rather than the mix-batch creation date. This lets Production Comparison calculate
+      // batch count/amount for whatever product/category/grade filters are applied client-side.
+      const linkedMixBatchIds = [
+        ...new Set(
+          baleRows
+            .map((row) => row.mixBatchId)
+            .filter((id): id is number => id != null && Number.isFinite(Number(id)))
+        ),
+      ];
+      const linkedBatchRows =
+        linkedMixBatchIds.length > 0
+          ? await db
+              .select({
+                id: factoryMixBatches.id,
+                totalWeightKg: factoryMixBatches.totalWeightKg,
+              })
+              .from(factoryMixBatches)
+              .where(
+                and(
+                  eq(factoryMixBatches.companyId, companyId),
+                  inArray(factoryMixBatches.id, linkedMixBatchIds),
+                  isNull(factoryMixBatches.deletedAt)
+                )
+              )
+          : [];
+
       // ── Helper: detect wipers/garbage by category name ──
       function isWiperOrGarbage(catName: string): boolean {
         const lower = (catName || "").toLowerCase();
@@ -178,6 +206,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalWeightKg: number;
           costPricePerBale: number;
           totalValue: number;
+          // Distinct mix batches that produced this product in the period.
+          mixBatchIds: Set<number>;
           // Distinct workers who finalized bales of this product in the period.
           workers: Map<string, { id: number | null; name: string; qty: number }>;
         }
@@ -239,6 +269,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             existing.qty += 1;
             existing.totalWeightKg += wt;
             existing.totalValue += value;
+            if (bale.mixBatchId != null) existing.mixBatchIds.add(bale.mixBatchId);
           } else {
             productMap.set(code, {
               articleCode: code,
@@ -248,6 +279,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
               totalWeightKg: wt,
               costPricePerBale: price,
               totalValue: value,
+              mixBatchIds: new Set(bale.mixBatchId != null ? [bale.mixBatchId] : []),
               workers: new Map(),
             });
           }
@@ -273,8 +305,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const productRows = [...productMap.values()]
         .sort((a, b) => a.articleCode.localeCompare(b.articleCode))
-        .map(({ workers, ...rest }) => ({
+        .map(({ workers, mixBatchIds, ...rest }) => ({
           ...rest,
+          mixBatchIds: [...mixBatchIds].sort((a, b) => a - b),
           workers: [...workers.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name)),
         }));
       const categoryRows = [...categoryMap.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName));
@@ -581,6 +614,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalValue: hideReportCosts ? 0 : totalProductionValue,
           byProduct: safeProductRows,
           byCategory: safeCategoryRows,
+          linkedBatches: linkedBatchRows.map((row) => ({
+            id: row.id,
+            totalWeightKg: parseFloat(row.totalWeightKg || "0"),
+          })),
         },
         wipersGarbage: {
           totalWipersQty,
