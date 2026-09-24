@@ -520,7 +520,7 @@ export function registerUserManagementRoutes(app: Express) {
   // Recalculate Opening Balance Equity adjustment
   // Self-sufficient: computes rawBalance server-side so no body params are needed.
 
-  app.get("/api/settings/role-permissions", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  app.get("/api/settings/role-permissions", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       // Allow Developer/Admin to query any company via ?companyId=N; others use session
       let companyId = req.session.currentCompanyId;
@@ -539,7 +539,7 @@ export function registerUserManagementRoutes(app: Express) {
   });
 
   // Update role permissions (bulk upsert)
-  app.put("/api/settings/role-permissions", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+  app.put("/api/settings/role-permissions", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
