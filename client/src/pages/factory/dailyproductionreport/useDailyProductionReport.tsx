@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearch } from "wouter";
 import { addDays, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
+import { useCompany } from "@/contexts/CompanyContext";
 
 import type { Preset, ProductionValuationMode, ReportData } from "./types";
 import {
@@ -40,22 +41,35 @@ export function useDailyProductionReport() {
   const [customTo, setCustomTo] = useState(todayStr());
   const [workerPayrollOpen, setWorkerPayrollOpen] = useState(false);
   const [empPayrollOpen, setEmpPayrollOpen] = useState(false);
-  const { prefs, updatePref, isPending: isPreferenceSaving } = useUserPreferences();
+  const { data: authenticatedUser } = useQuery(authenticatedUserQueryOptions());
+  const { selectedCompany } = useCompany();
   const [valuationMode, setValuationModeState] = useState<ProductionValuationMode>("cost");
+  const [valuationLoadedKey, setValuationLoadedKey] = useState<string | null>(null);
+
+  const valuationStorageKey = useMemo(() => {
+    if (!authenticatedUser?.id || !selectedCompany?.id) return null;
+    return `factory:production-overview:valuation:${String(authenticatedUser.id)}:${selectedCompany.id}`;
+  }, [authenticatedUser?.id, selectedCompany?.id]);
 
   useEffect(() => {
-    if (prefs?.productionOverviewValuationMode) {
-      setValuationModeState(prefs.productionOverviewValuationMode);
+    if (!valuationStorageKey) {
+      setValuationLoadedKey(null);
+      return;
     }
-  }, [prefs?.productionOverviewValuationMode]);
+    const saved = window.localStorage.getItem(valuationStorageKey);
+    setValuationModeState(saved === "selling" ? "selling" : "cost");
+    setValuationLoadedKey(valuationStorageKey);
+  }, [valuationStorageKey]);
 
   const setValuationMode = useCallback(
     (mode: ProductionValuationMode) => {
       setValuationModeState(mode);
-      updatePref({ productionOverviewValuationMode: mode });
+      if (valuationStorageKey) window.localStorage.setItem(valuationStorageKey, mode);
     },
-    [updatePref]
+    [valuationStorageKey]
   );
+
+  const valuationReady = valuationStorageKey !== null && valuationLoadedKey === valuationStorageKey;
 
   const { from, to } = useMemo(() => {
     if (preset === "today") return { from: todayStr(), to: todayStr() };
@@ -112,7 +126,7 @@ export function useDailyProductionReport() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: preset === "alltime" || (!!from && !!to),
+    enabled: valuationReady && (preset === "alltime" || (!!from && !!to)),
   });
 
   const { data: attendanceData } = useQuery<{
@@ -236,7 +250,6 @@ export function useDailyProductionReport() {
     profitValue,
     valuationMode,
     setValuationMode,
-    isPreferenceSaving,
   };
 }
 
