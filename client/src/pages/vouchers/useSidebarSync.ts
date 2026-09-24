@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo, useEffect } from "react";
 import type { Account } from "@/components/AccountSidebar";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
