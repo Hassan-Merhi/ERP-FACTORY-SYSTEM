@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { companyQueryKey } from "@/lib/companyQueryScope";
-import { setAppTimezone } from "@/lib/queryClient";
+import { setAppTimezone, setFactoryAccountingModuleAccess } from "@/lib/queryClient";
 import { accessQueryPolicy, liveCountQueryPolicy, stableSettingsQueryPolicy } from "@/lib/queryPolicies";
 import { useToast } from "@/hooks/use-toast";
 
@@ -25,6 +25,7 @@ interface UseAuthenticatedAppDataOptions {
   companyType?: string | null;
   userPresent: boolean;
   isPOS: boolean;
+  userRole?: string;
 }
 
 export function useAuthenticatedAppData({
@@ -32,11 +33,13 @@ export function useAuthenticatedAppData({
   companyType,
   userPresent,
   isPOS,
+  userRole,
 }: UseAuthenticatedAppDataOptions) {
   const { toast } = useToast();
   const prevUnreadRef = useRef<number>(-1);
   const isFactoryCompany = companyType === "factory" || companyType === "factory_v2";
   const factoryBootstrapEnabled = userPresent && !isPOS && !!selectedCompanyId && isFactoryCompany;
+  const privilegedAccountingRole = userRole === "Developer" || userRole === "Admin";
 
   const { data: chatUnread } = useQuery<{ count: number }>({
     queryKey: companyQueryKey("/api/chat/unread-count", selectedCompanyId),
@@ -78,6 +81,38 @@ export function useAuthenticatedAppData({
     retry: 2,
   });
 
+  const {
+    data: myPermissions = [],
+    isFetched: myPermissionsFetched,
+    isError: myPermissionsError,
+  } = useQuery<Array<{ featureKey: string; enabled: boolean }>>({
+    queryKey: companyQueryKey("/api/my-permissions", selectedCompanyId),
+    ...accessQueryPolicy,
+    enabled: factoryBootstrapEnabled && !privilegedAccountingRole,
+  });
+
+  const accountingPermission =
+    privilegedAccountingRole
+      ? true
+      : userRole === "Normal User"
+        ? myPermissions.find((row) => row.featureKey === "mod_accounting")?.enabled === true
+        : myPermissions.find((row) => row.featureKey === "mod_accounting")?.enabled !== false;
+  const accountingPermissionReady =
+    !factoryBootstrapEnabled || privilegedAccountingRole || myPermissionsFetched;
+
+  useEffect(() => {
+    if (!factoryBootstrapEnabled) {
+      setFactoryAccountingModuleAccess(null);
+      return;
+    }
+    if (!accountingPermissionReady) {
+      setFactoryAccountingModuleAccess(null);
+      return;
+    }
+    setFactoryAccountingModuleAccess(accountingPermission);
+    return () => setFactoryAccountingModuleAccess(null);
+  }, [accountingPermission, accountingPermissionReady, factoryBootstrapEnabled]);
+
   const { data: factorySettings } = useQuery<Record<string, unknown>>({
     queryKey: companyQueryKey("/api/factory/settings", selectedCompanyId),
     queryFn: async () => {
@@ -92,8 +127,8 @@ export function useAuthenticatedAppData({
     chatUnread,
     posImportEnabled: companySettings?.posExcelImportEnabled === true,
     myAccess,
-    myAccessLoading,
-    myAccessError,
+    myAccessLoading: myAccessLoading || (factoryBootstrapEnabled && !accountingPermissionReady),
+    myAccessError: myAccessError || myPermissionsError,
     factorySettings,
   };
 }

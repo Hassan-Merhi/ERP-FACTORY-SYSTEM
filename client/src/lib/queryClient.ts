@@ -134,6 +134,23 @@ export async function verifySessionExpired(originalFetch: typeof window.fetch): 
 const AUTH_PATHS = new Set(["/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
 
 let referenceMutationQueryClient: QueryClient | null = null;
+let factoryAccountingModuleAccess: boolean | null = null;
+
+export function setFactoryAccountingModuleAccess(allowed: boolean | null): void {
+  factoryAccountingModuleAccess = allowed;
+}
+
+function isFactoryAccountingRead(pathname: string | null, method: string): boolean {
+  if (method !== "GET" || !pathname) return false;
+  return pathname === "/api/ledger-accounts" || pathname === "/api/bank-accounts";
+}
+
+function emptyJsonArrayResponse(): Response {
+  return new Response("[]", {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 export async function handlePossibleSessionExpiry(
   response: Response,
@@ -214,6 +231,10 @@ if (
       pathname.startsWith("/api/") &&
       pathname !== "/api/csrf-token" &&
       window.location.pathname.startsWith("/factory/");
+    if (isFactoryUiRequest && factoryAccountingModuleAccess === false && isFactoryAccountingRead(pathname, method)) {
+      return emptyJsonArrayResponse();
+    }
+
     if (isFactoryUiRequest) {
       const factoryHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
       factoryHeaders.set("X-App-Mode", "factory");
