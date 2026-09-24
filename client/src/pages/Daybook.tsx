@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLog } from "@/pages/settings/AuditLog";
@@ -487,13 +488,11 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
         if (filters.minAmount && parseFloat(v.totalAmount) < parseFloat(filters.minAmount)) return false;
         if (filters.maxAmount && parseFloat(v.totalAmount) > parseFloat(filters.maxAmount)) return false;
         if (filters.searchQuery) {
-          const s = filters.searchQuery.toLowerCase();
-          return (
-            v.voucherNumber.toLowerCase().includes(s) ||
-            (v.description || "").toLowerCase().includes(s) ||
-            (v as { locationName: { toLowerCase: () => { includes: (arg0: string) => unknown } } }).locationName
-              ?.toLowerCase()
-              .includes(s)
+          return searchAny(
+            filters.searchQuery,
+            v.voucherNumber,
+            v.description,
+            (v as { locationName?: string }).locationName
           );
         }
         return true;
