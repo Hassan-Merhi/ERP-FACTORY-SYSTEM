@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildProformaProgress, proformaCapacityArticles, type ProformaCapacitySnapshot } from "./proformaCapacity";
+import {
+  applyCurrentOrderBalesToCapacity,
+  buildProformaProgress,
+  proformaCapacityArticles,
+  type ProformaCapacitySnapshot,
+} from "./proformaCapacity";
 
 function snapshot(overrides: Partial<ProformaCapacitySnapshot> = {}): ProformaCapacitySnapshot {
   return {
@@ -152,5 +157,66 @@ describe("proformaCapacityArticles", () => {
   it("treats a missing snapshot as no buckets", () => {
     expect(proformaCapacityArticles(null)).toEqual([]);
     expect(proformaCapacityArticles(undefined)).toEqual([]);
+  });
+});
+
+
+describe("applyCurrentOrderBalesToCapacity", () => {
+  it("updates loading-local progress without a capacity refetch", () => {
+    const before = snapshot({
+      currentOrderId: 44,
+      requestedTotalQty: 3,
+      currentOrderLoadedTotalQty: 1,
+      totalConsumedQty: 1,
+      remainingTotalQty: 2,
+      articles: [
+        {
+          articleCode: "A1",
+          normalizedArticleCode: "a1",
+          isOnProforma: true,
+          requestedQty: 2,
+          currentOrderLoadedQty: 1,
+          siblingLoadedQty: 0,
+          totalConsumedQty: 1,
+          remainingQty: 1,
+          excessQty: 0,
+          isFulfilled: false,
+          isOverloaded: false,
+          productName: "Shirts",
+        },
+        {
+          articleCode: "B1",
+          normalizedArticleCode: "b1",
+          isOnProforma: true,
+          requestedQty: 1,
+          currentOrderLoadedQty: 0,
+          siblingLoadedQty: 0,
+          totalConsumedQty: 0,
+          remainingQty: 1,
+          excessQty: 0,
+          isFulfilled: false,
+          isOverloaded: false,
+          productName: "Shoes",
+        },
+      ],
+    });
+
+    const after = applyCurrentOrderBalesToCapacity(before, [
+      { articleCode: "A1" },
+      { articleCode: "a1" },
+      { articleCode: "EXTRA" },
+    ]);
+
+    expect(after?.currentOrderLoadedTotalQty).toBe(2);
+    expect(after?.remainingTotalQty).toBe(1);
+    expect(after?.articles[0]).toMatchObject({
+      currentOrderLoadedQty: 2,
+      remainingQty: 0,
+      isFulfilled: true,
+    });
+    expect(after?.articles[1]).toMatchObject({
+      currentOrderLoadedQty: 0,
+      remainingQty: 1,
+    });
   });
 });
