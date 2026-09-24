@@ -218,13 +218,15 @@ export function PageHeader({
   //  - phones: a lone Back control sits inline before the title (no separate
   //    navigation row) and actions wrap into shared, evenly filled rows below;
   //  - sm and up: navigation keeps its own row above a title/actions row whose
-  //    actions align to the end, matching the established desktop header.
+  //    actions align to the end, matching the established desktop header. The
+  //    actions column shrinks to what the title leaves (at least 12rem) and its
+  //    buttons wrap, so a tablet content area beside the sidebar never clips them.
   const inlineNav = hasNav && !hasCursorNav;
   const titleRow = hasNav ? "sm:row-start-2" : "sm:row-start-1";
   return (
     <header
       ref={headerRef}
-      className="mb-3 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-1 gap-y-2 border-b border-border pb-3 sm:mb-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-4 sm:gap-y-3 sm:pb-4"
+      className="mb-3 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-1 gap-y-2 border-b border-border pb-3 sm:mb-5 sm:grid-cols-[minmax(min(12rem,100%),1fr)_minmax(0,max-content)] sm:gap-x-4 sm:gap-y-3 sm:pb-4"
       data-testid="page-header"
       data-erp-mobile-header="true"
     >
