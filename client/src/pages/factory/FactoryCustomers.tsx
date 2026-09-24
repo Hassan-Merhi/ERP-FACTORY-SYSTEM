@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -187,10 +188,7 @@ export default function FactoryCustomers() {
 
   const filtered = customers.filter((c) => {
     if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      c.legalName.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))
-    );
+    return searchAny(search, c.legalName, c.code, c.phone);
   });
   const zeroBalanceCount = filtered.filter((customer) => Math.abs(customer.balance ?? 0) <= 0.001).length;
   const visibleCustomers = showZeroBalance
