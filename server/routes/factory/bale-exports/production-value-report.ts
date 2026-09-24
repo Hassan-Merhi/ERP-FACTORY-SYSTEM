@@ -239,7 +239,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       >();
 
       let totalSellingValue = 0;
+      let totalProductionCostValue = 0;
       let missingSelectedPriceBales = 0;
+      let missingCostPriceBales = 0;
       let missingSellingPriceBales = 0;
 
       for (const bale of baleRows) {
@@ -274,7 +276,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         } else {
           // Regular bale. Profit always uses selling value, even when the report is viewing cost price.
           totalSellingValue += sellingPrice;
+          totalProductionCostValue += costPrice;
           if (!(price > 0)) missingSelectedPriceBales += 1;
+          if (!(costPrice > 0)) missingCostPriceBales += 1;
           if (!(sellingPrice > 0)) missingSellingPriceBales += 1;
 
           const existing = productMap.get(code);
@@ -463,11 +467,12 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
       const balanceValue = Math.round(balanceWeightKg * allTimeBlendedCpk * 100) / 100;
 
-      // Selected-view status preserves the historical calculation. Profit is always based on
-      // selling value so switching to cost view never turns the profit KPI into a cost variance.
+      // Keep the historical status calculation for existing consumers. The new Overview profit
+      // is catalog gross profit: selling price minus production cost for the exact produced bales.
+      // That makes profit stable when the user switches the display between Selling and Cost.
       const producedMaterialCost = totalBaleWeightKg * allTimeBlendedCpk;
       const statusValue = totalProductionValue - producedMaterialCost;
-      const profitValue = totalSellingValue - producedMaterialCost;
+      const profitValue = totalSellingValue - totalProductionCostValue;
       const profitMarginPct = totalSellingValue > 0 ? (profitValue / totalSellingValue) * 100 : 0;
 
       // ── Kg comparison ──
@@ -666,10 +671,12 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           batchCost: hideReportCosts ? 0 : totalMixCost,
           productionValue: hideReportCosts ? 0 : totalProductionValue,
           statusValue: hideReportCosts ? 0 : statusValue,
+          costValue: hideReportCosts ? 0 : totalProductionCostValue,
           sellingValue: hideReportCosts ? 0 : totalSellingValue,
           profitValue: hideReportCosts ? 0 : profitValue,
           profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
           missingSelectedPriceBales: hideReportCosts ? 0 : missingSelectedPriceBales,
+          missingCostPriceBales: hideReportCosts ? 0 : missingCostPriceBales,
           missingSellingPriceBales: hideReportCosts ? 0 : missingSellingPriceBales,
         },
         kgComparison: {
