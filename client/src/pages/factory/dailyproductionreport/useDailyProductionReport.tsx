@@ -85,9 +85,9 @@ export function useDailyProductionReport() {
   }, [stepDates]);
 
   const { data, isLoading } = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", from, to],
+    queryKey: ["/api/factory/production-value-report", from, to, "production"],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ view: "production" });
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       const qs = params.toString() ? `?${params.toString()}` : "";
