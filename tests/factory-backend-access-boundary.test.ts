@@ -83,6 +83,14 @@ describe("Wave 4 Factory backend access ownership", () => {
     ]);
   });
 
+  it("maps Net Position reads to the admin-or-developer Net Position Details page", () => {
+    for (const path of ["/net-position", "/net-position/payroll-breakdown"]) {
+      expect(resolveFactoryBackendAccessRequirement(req(path))).toEqual({
+        pageKey: "factory/net-position-details",
+      });
+    }
+  });
+
   it("maps raw-stock adjustments and repair children to Raw Materials", () => {
     expect(resolveFactoryBackendAccessRequirement(req("/raw-stock/adjustment", "POST"))).toMatchObject({
       pageKey: "factory/raw-materials",
