@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -142,12 +143,7 @@ export function useBarcodeLookupModel() {
 
   const filteredBaleProducts = (baleProductsList || []).filter((product) => {
     if (!changeProductSearch.trim()) return true;
-    const search = changeProductSearch.toLowerCase();
-    return (
-      product.name.toLowerCase().includes(search) ||
-      (product.articleCode || "").toLowerCase().includes(search) ||
-      product.code.toLowerCase().includes(search)
-    );
+    return searchAny(changeProductSearch, product.name, product.articleCode, product.code);
   });
 
   const deleteBaleMutation = useMutation({
