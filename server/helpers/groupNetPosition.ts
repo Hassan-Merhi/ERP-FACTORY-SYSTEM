@@ -37,9 +37,12 @@ type NetProfitHandler = (
   next?: (error?: unknown) => unknown
 ) => unknown | Promise<unknown>;
 
-const EXCLUDED_COMPANY_TYPES = new Set(["properties", "factory", "factory_v2", "supplier_partner"]);
-const EXCLUDED_COMPANY_TYPE_LIST = ["properties", "factory", "factory_v2", "supplier_partner"];
-const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
+const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partner"]);
+const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
+const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set([
+  "hmd international group lebanon credit",
+  "bank loan",
+]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
