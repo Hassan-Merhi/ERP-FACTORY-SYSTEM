@@ -39,6 +39,7 @@ type NetProfitHandler = (
 
 const EXCLUDED_COMPANY_TYPES = new Set(["properties", "factory", "factory_v2", "supplier_partner"]);
 const EXCLUDED_COMPANY_TYPE_LIST = ["properties", "factory", "factory_v2", "supplier_partner"];
+const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -277,6 +278,7 @@ function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercomp
   const category = normalizeAccountName(row.category);
 
   if (Number.isInteger(id) && exclusions.accountIds.has(id)) return true;
+  if (GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES.has(name)) return true;
   if (exclusions.accountNames.has(name)) return true;
   if (code.startsWith("IC-TO-") || code.startsWith("IC-FROM-")) return true;
   if (name.includes("intercompany") || name.includes("inter-company")) return true;

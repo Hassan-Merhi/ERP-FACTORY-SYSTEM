@@ -232,13 +232,14 @@ describe("Group Net Position", () => {
     harness.erpResponse.mockImplementation((req: any) => {
       if (req.session.currentCompanyId === 1) {
         return {
-          ...baseResponse(200, 0, 200),
+          ...baseResponse(250, 0, 250),
           forUs: {
-            total: 200,
+            total: 250,
             accounts: [
               { id: 10, name: "Cash", code: "CASH", value: 100, category: "Cash" },
               { id: 900, name: "Beta Credit", code: "BETCRD", value: 75, category: "Asset" },
               { id: 901, name: "Inter-Company - Beta", code: "IC-TO-B", value: 25, category: "Asset" },
+              { id: 902, name: "HMD INTERNATIONAL GROUP LEBANON CREDIT", code: "HMDCREDIT", value: 50, category: "Asset" },
             ],
           },
           onUs: { total: 0, accounts: [] },
