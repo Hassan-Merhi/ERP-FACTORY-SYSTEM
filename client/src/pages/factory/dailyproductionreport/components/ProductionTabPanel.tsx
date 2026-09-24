@@ -244,29 +244,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   </div>
                 )}
 
-                {!costsHidden &&
-                  data &&
-                  (data.summary.missingCostPriceBales > 0 || data.summary.missingSellingPriceBales > 0) && (
-                    <div
-                      className="text-xs font-medium text-amber-700 dark:text-amber-400"
-                      data-testid="text-missing-production-prices"
-                    >
-                      Missing prices:{" "}
-                      {[
-                        data.summary.missingCostPriceBales > 0
-                          ? `${data.summary.missingCostPriceBales} cost`
-                          : null,
-                        data.summary.missingSellingPriceBales > 0
-                          ? `${data.summary.missingSellingPriceBales} selling`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                      {data.summary.missingSelectedPriceBales > 0
-                        ? ` — ${valuationMode === "selling" ? "Selling" : "Cost"} valuation and profit are partial.`
-                        : " — Profit is partial."}
-                    </div>
-                  )}
+                {/* Missing-price diagnostics are intentionally not shown in the Production Overview UI. */}
 
                 {/* Row 2 — weight breakdown */}
                 {(() => {
