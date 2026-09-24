@@ -130,9 +130,12 @@ export function TabAgentDuty() {
   const totalAgents = displaySections.reduce((s, c) => s + c.agents.length, 0);
 
   const modeSelector = (
-    <div className="flex items-center gap-2 flex-wrap" data-testid="agent-duty-mode-selector">
-      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <span className="text-xs text-muted-foreground">View:</span>
+    <div
+      className="max-sm:grid max-sm:grid-cols-2 flex items-center gap-2 flex-wrap"
+      data-testid="agent-duty-mode-selector"
+    >
+      <Building2 className="max-sm:hidden h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <span className="max-sm:hidden text-xs text-muted-foreground">View:</span>
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}

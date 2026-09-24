@@ -227,12 +227,15 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
 
       <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={visibleTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="employees">Employees</TabsTrigger>
-            <TabsTrigger value="workers">Workers</TabsTrigger>
-            <TabsTrigger value="advances">Advances + Deductions</TabsTrigger>
-            <TabsTrigger value="run-payroll">Run Payroll</TabsTrigger>
-          </TabsList>
+          {/* Phones scroll the tab row instead of squeezing four labels into equal columns. */}
+          <div className="erp-mobile-scroll-tabs pb-1">
+            <TabsList className="grid grid-cols-4 w-full max-sm:flex max-sm:w-max max-sm:justify-start">
+              <TabsTrigger value="employees">Employees</TabsTrigger>
+              <TabsTrigger value="workers">Workers</TabsTrigger>
+              <TabsTrigger value="advances">Advances + Deductions</TabsTrigger>
+              <TabsTrigger value="run-payroll">Run Payroll</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="employees">
             <EmployeesTab

@@ -114,7 +114,7 @@ export function TabTruckLocation() {
   }
 
   const modeSelector = (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="max-sm:grid max-sm:grid-cols-2 flex items-center gap-2 flex-wrap">
       <span className="text-xs text-muted-foreground">Viewing:</span>
       <Button
         size="sm"
