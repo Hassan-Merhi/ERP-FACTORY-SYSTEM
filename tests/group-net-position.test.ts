@@ -111,7 +111,7 @@ describe("Group Net Position", () => {
     harness.erpResponse.mockImplementation(() => baseResponse());
   });
 
-  it("includes only active ERP-side companies and excludes Supplier Partner, Properties, and Factory modes", async () => {
+  it("includes active ERP, retail, and Properties companies while excluding Supplier Partner and Factory modes", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI", companyType: "erp", active: true },
       { id: 2, code: "PROP", name: "Properties", companyType: "properties", active: true },
@@ -123,10 +123,10 @@ describe("Group Net Position", () => {
 
     const result = await calculateGroupNetPosition("2026-09-10");
 
-    expect(harness.erpResponse).toHaveBeenCalledTimes(1);
-    expect(result.companies.map((company) => company.companyName)).toEqual(["HADI"]);
-    expect(result.excludedCompanyTypes).toEqual(["properties", "factory", "factory_v2", "supplier_partner"]);
-    expect(result.companyCount).toBe(1);
+    expect(harness.erpResponse).toHaveBeenCalledTimes(2);
+    expect(result.companies.map((company) => company.companyName)).toEqual(["HADI", "Properties"]);
+    expect(result.excludedCompanyTypes).toEqual(["factory", "factory_v2", "supplier_partner"]);
+    expect(result.companyCount).toBe(2);
   });
 
   it("uses the live ERP Net Position pipeline for the current date", async () => {
@@ -221,7 +221,7 @@ describe("Group Net Position", () => {
     );
   });
 
-  it("removes legacy ERP intercompany credit accounts from both sides of the group", async () => {
+  it("removes group-only accounts and legacy ERP intercompany credit accounts from both sides of the group", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true, parentCompanyId: null },
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true, parentCompanyId: 1 },
@@ -247,14 +247,17 @@ describe("Group Net Position", () => {
       }
 
       return {
-        ...baseResponse(80, 40, 40),
+        ...baseResponse(80, 90, -10),
         forUs: {
           total: 80,
           accounts: [{ id: 20, name: "Cash", code: "CASH", value: 80, category: "Cash" }],
         },
         onUs: {
-          total: 40,
-          accounts: [{ id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" }],
+          total: 90,
+          accounts: [
+            { id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" },
+            { id: 502, name: "BANK LOAN", code: "BANKLOAN", value: 50, category: "Loans" },
+          ],
         },
       };
     });
@@ -320,13 +323,13 @@ describe("Group Net Position", () => {
     expect(result.intercompany.additionalElimination).toBe(0);
   });
 
-  it("treats Supplier Partner, Factory, and Properties as ineligible for Group Net Position", () => {
+  it("treats Properties as eligible while Supplier Partner and Factory remain ineligible", () => {
     expect(isGroupNetPositionCompany({ active: true, companyType: "erp" } as any)).toBe(true);
     expect(isGroupNetPositionCompany({ active: true, companyType: "retail" } as any)).toBe(true);
     expect(isGroupNetPositionCompany({ active: true, companyType: "supplier_partner" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory_v2" } as any)).toBe(false);
-    expect(isGroupNetPositionCompany({ active: true, companyType: "properties" } as any)).toBe(false);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "properties" } as any)).toBe(true);
     expect(isGroupNetPositionCompany({ active: false, companyType: "erp" } as any)).toBe(false);
   });
 });

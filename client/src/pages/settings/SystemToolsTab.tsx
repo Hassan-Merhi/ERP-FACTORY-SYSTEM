@@ -185,7 +185,7 @@ export function SystemToolsTab({ appMode, currentUser, selectedCompany, companie
             iconBg: "bg-blue-500/10",
             title: "Group Net Position",
             description:
-              "Combine What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.",
+              "Combine What We Have, What We Owe, and Net Position across active ERP and Properties companies. Factory and Supplier Partner companies are excluded.",
             actionLabel: "View Group",
             onAction: () => setGroupNetPositionOpen(true),
             testId: "card-group-net-position",
