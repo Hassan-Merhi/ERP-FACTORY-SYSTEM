@@ -61,9 +61,14 @@ vi.mock("../server/routes/stats/statsMultiCurrencyRoutes", () => ({
 
 vi.mock("../server/routes/stats/statsNetProfitRoutes", () => ({
   registerStatsNetProfitRoutes: (app: any) => {
-    app.get("/api/stats/net-profit", () => undefined, () => undefined, async (req: any, res: any) => {
-      return res.json(harness.erpResponse(req));
-    });
+    app.get(
+      "/api/stats/net-profit",
+      () => undefined,
+      () => undefined,
+      async (req: any, res: any) => {
+        return res.json(harness.erpResponse(req));
+      }
+    );
   },
 }));
 
@@ -130,9 +135,7 @@ describe("Group Net Position", () => {
   });
 
   it("uses the live ERP Net Position pipeline for the current date", async () => {
-    harness.getAllCompanies.mockResolvedValue([
-      { id: 7, code: "BE", name: "Beira", companyType: "erp", active: true },
-    ]);
+    harness.getAllCompanies.mockResolvedValue([{ id: 7, code: "BE", name: "Beira", companyType: "erp", active: true }]);
     harness.erpResponse.mockReturnValue(baseResponse(100, 40));
 
     const result = await calculateGroupNetPosition("2026-09-10", undefined, true);
@@ -142,7 +145,7 @@ describe("Group Net Position", () => {
         session: { currentCompanyId: 7 },
         query: {},
         path: "/api/stats/net-profit",
-      }),
+      })
     );
     expect(result.companies[0]).toMatchObject({
       forUsTotal: 125,
@@ -156,21 +159,17 @@ describe("Group Net Position", () => {
           value: 25,
           category: "Cash / Bank (Current Translation)",
         }),
-      ]),
+      ])
     );
   });
 
   it("keeps older as-of dates on the historical ERP snapshot", async () => {
-    harness.getAllCompanies.mockResolvedValue([
-      { id: 7, code: "BE", name: "Beira", companyType: "erp", active: true },
-    ]);
+    harness.getAllCompanies.mockResolvedValue([{ id: 7, code: "BE", name: "Beira", companyType: "erp", active: true }]);
     harness.erpResponse.mockReturnValue(baseResponse(100, 40));
 
     const result = await calculateGroupNetPosition("2026-09-01", undefined, false);
 
-    expect(harness.erpResponse).toHaveBeenCalledWith(
-      expect.objectContaining({ query: { toDate: "2026-09-01" } }),
-    );
+    expect(harness.erpResponse).toHaveBeenCalledWith(expect.objectContaining({ query: { toDate: "2026-09-01" } }));
     expect(result.companies[0]).toMatchObject({
       forUsTotal: 100,
       onUsTotal: 40,
@@ -239,7 +238,13 @@ describe("Group Net Position", () => {
               { id: 10, name: "Cash", code: "CASH", value: 100, category: "Cash" },
               { id: 900, name: "Beta Credit", code: "BETCRD", value: 75, category: "Asset" },
               { id: 901, name: "Inter-Company - Beta", code: "IC-TO-B", value: 25, category: "Asset" },
-              { id: 902, name: "HMD INTERNATIONAL GROUP LEBANON CREDIT", code: "HMDCREDIT", value: 50, category: "Asset" },
+              {
+                id: 902,
+                name: "HMD INTERNATIONAL GROUP LEBANON CREDIT",
+                code: "HMDCREDIT",
+                value: 50,
+                category: "Asset",
+              },
             ],
           },
           onUs: { total: 0, accounts: [] },
@@ -304,7 +309,7 @@ describe("Group Net Position", () => {
     ]);
 
     harness.erpResponse.mockImplementation((req: any) =>
-      req.session.currentCompanyId === 1 ? baseResponse(100, 40, 60) : baseResponse(80, 30, 40),
+      req.session.currentCompanyId === 1 ? baseResponse(100, 40, 60) : baseResponse(80, 30, 40)
     );
 
     const result = await calculateGroupNetPosition("2026-09-10");
