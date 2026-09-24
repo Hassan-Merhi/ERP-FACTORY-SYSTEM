@@ -8,13 +8,13 @@ describe("Group Net Position Excel", () => {
     const snapshot: GroupNetPositionSnapshot = {
       asOfDate: "2026-09-09",
       companyCount: 2,
-      excludedCompanyTypes: ["properties"],
+      excludedCompanyTypes: ["properties", "factory", "factory_v2", "supplier_partner"],
       totals: {
         forUsTotal: 180,
         onUsTotal: 70,
         sideNetPosition: 110,
-        netAdjustments: -10,
-        netPosition: 100,
+        netAdjustments: 0,
+        netPosition: 110,
       },
       intercompany: {
         mode: "already-excluded",
@@ -39,13 +39,13 @@ describe("Group Net Position Excel", () => {
         {
           companyId: 2,
           companyCode: "B",
-          companyName: "Beta Supplier Partner",
-          companyType: "supplier_partner",
+          companyName: "Beta Retail",
+          companyType: "retail",
           forUsTotal: 80,
           onUsTotal: 30,
           sideNetPosition: 50,
-          netAdjustment: -10,
-          netPosition: 40,
+          netAdjustment: 0,
+          netPosition: 50,
           netPositionLabel: "We Have More",
           forUsLines: [{ label: "Customer A/R", value: 80, category: "Asset", side: "forUs" }],
           onUsLines: [{ label: "Supplier Cash Payable", value: 30, category: "Liability", side: "onUs" }],
@@ -67,7 +67,7 @@ describe("Group Net Position Excel", () => {
     expect(summary.getCell("A2").value).toBe("Companies included");
     expect(summary.getCell("B2").value).toBe(2);
     expect(summary.getCell("A3").value).toBe("Excluded");
-    expect(summary.getCell("B3").value).toBe("Properties");
+    expect(summary.getCell("B3").value).toBe("Properties, Factory, Factory V2, Supplier Partner");
 
     const companySheetNames = workbook.worksheets.slice(3).map((sheet) => sheet.name);
     expect(companySheetNames.some((name) => name.includes("Alpha"))).toBe(true);
