@@ -27,6 +27,7 @@ export const FACTORY_COST_FIELDS = [
   { key: "hide_proforma_price", label: "Price/Bale Column (Proformas)" },
   { key: "hide_invoicing_proforma_col", label: "Proforma Column (Invoices)" },
   { key: "hide_invoicing_totals_usd", label: "Total Amounts (USD)" },
+  { key: "production_comparison_costing", label: "Production Comparison: Costing & Profit" },
 ];
 
 export const FACTORY_TABS = FACTORY_TAB_REGISTRY;
