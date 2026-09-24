@@ -283,7 +283,7 @@ describe("Phase 4 extracted dialogs open from their real triggers", () => {
         renderWithData(<Page />);
 
         const user = userEvent.setup();
-        await user.click(await screen.findByTestId(`button-proforma-menu-${proforma.id}`));
+        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), { button: 0, ctrlKey: false });
         await user.click(await screen.findByTestId(`button-rename-proforma-${proforma.id}`));
 
         const dialog = await screen.findByRole("dialog");
@@ -295,7 +295,7 @@ describe("Phase 4 extracted dialogs open from their real triggers", () => {
         renderWithData(<Page />);
 
         const user = userEvent.setup();
-        await user.click(await screen.findByTestId(`button-proforma-menu-${proforma.id}`));
+        fireEvent.pointerDown(await screen.findByTestId(`button-proforma-menu-${proforma.id}`), { button: 0, ctrlKey: false });
         await user.click(await screen.findByTestId(`button-transfer-proforma-${proforma.id}`));
 
         const dialog = await screen.findByRole("dialog");
@@ -357,7 +357,7 @@ describe("AdvancesView extracted dialogs open from their real triggers", () => {
       // Radix dropdowns open on pointerdown, not click, so userEvent is what
       // actually reveals the triggers that live behind the ⋯ menu.
       const user = userEvent.setup();
-      if (viaMenu) await user.click(await screen.findByTestId("button-advances-actions"));
+      if (viaMenu) fireEvent.pointerDown(await screen.findByTestId("button-advances-actions"), { button: 0, ctrlKey: false });
       await user.click(await screen.findByTestId(testId));
 
       // Several triggers carry the same label as the dialog they open, and some
