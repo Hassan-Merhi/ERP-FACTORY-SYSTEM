@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 /**
  * ledgerRoutesLegacy: LedgerAccountRead endpoints.
  *
@@ -34,8 +35,11 @@ export function registerLedgerAccountReadRoutes(app: Express) {
           conditions.push(eq(ledgerAccounts.accountType, accountType.trim()));
         }
         if (search && typeof search === "string" && search.trim()) {
-          const q = `%${search.trim()}%`;
-          const searchCondition = or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q));
+          const term = search.trim();
+          const searchCondition = or(
+            punctuationInsensitiveSearch(ledgerAccounts.name, term),
+            punctuationInsensitiveSearch(ledgerAccounts.code, term)
+          );
           if (searchCondition) conditions.push(searchCondition);
         }
         if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
