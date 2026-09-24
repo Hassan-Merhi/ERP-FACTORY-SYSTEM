@@ -35,22 +35,16 @@ const VOUCHER_TABS = {
 } as const;
 
 function voucherRequirementsForType(voucherType: unknown): SharedFactoryRequirement[] {
-  const value = String(voucherType ?? "").trim().toLowerCase();
+  const value = String(voucherType ?? "")
+    .trim()
+    .toLowerCase();
   if (value === "payment") return [page(VOUCHERS_PAGE, VOUCHER_TABS.payment)];
   if (value === "receipt") return [page(VOUCHERS_PAGE, VOUCHER_TABS.receipt)];
   if (value === "journal" || value === "contra") return [page(VOUCHERS_PAGE, VOUCHER_TABS.journal)];
   if (value === "stock transfer" || value === "stocktransfer" || value === "transfer") {
-    return [
-      page(VOUCHERS_PAGE, VOUCHER_TABS.transfer),
-      page(VOUCHERS_PAGE, VOUCHER_TABS.transferOrder),
-    ];
+    return [page(VOUCHERS_PAGE, VOUCHER_TABS.transfer), page(VOUCHERS_PAGE, VOUCHER_TABS.transferOrder)];
   }
-  if (
-    value === "stock adjustment" ||
-    value === "production" ||
-    value === "consumption" ||
-    value === "mixed"
-  ) {
+  if (value === "stock adjustment" || value === "production" || value === "consumption" || value === "mixed") {
     return [page(VOUCHERS_PAGE, VOUCHER_TABS.adjustment)];
   }
   if (value === "credit note" || value === "debit note") {
@@ -59,10 +53,7 @@ function voucherRequirementsForType(voucherType: unknown): SharedFactoryRequirem
   return [page(VOUCHERS_PAGE)];
 }
 
-async function existingVoucherRequirements(
-  req: Request,
-  voucherId: number
-): Promise<SharedFactoryRequirement[]> {
+async function existingVoucherRequirements(req: Request, voucherId: number): Promise<SharedFactoryRequirement[]> {
   const state = await getFactoryAccessState(req);
   if (!state) return [page(VOUCHERS_PAGE)];
 
@@ -93,10 +84,7 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
     path.startsWith("/api/bank-accounts/")
   ) {
     if (path.startsWith("/api/accounts/voucher-sidebar")) {
-      return [
-        page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
-        page(VOUCHERS_PAGE),
-      ];
+      return [page(ACCOUNTS_PAGE, "hide_tab_accounts_view"), page(VOUCHERS_PAGE)];
     }
     const accountRequirements = [
       page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
@@ -140,10 +128,7 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
     path.startsWith("/api/stock-transfer-revisions") ||
     path.startsWith("/api/stock-transfer-import")
   ) {
-    return [
-      page(VOUCHERS_PAGE, VOUCHER_TABS.transfer),
-      page(VOUCHERS_PAGE, VOUCHER_TABS.transferOrder),
-    ];
+    return [page(VOUCHERS_PAGE, VOUCHER_TABS.transfer), page(VOUCHERS_PAGE, VOUCHER_TABS.transferOrder)];
   }
 
   if (path.startsWith("/api/voucher-entries") || path.startsWith("/api/voucher-detail")) {
@@ -156,27 +141,18 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
   }
 
   if (path === "/api/vouchers/bulk-delete") {
-    return [
-      page(VOUCHERS_PAGE),
-      page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
-    ];
+    return [page(VOUCHERS_PAGE), page(ACCOUNTS_PAGE, "hide_tab_accounts_view")];
   }
 
   if (path === "/api/vouchers/search" || path.startsWith("/api/vouchers/search/")) {
-    return [
-      page(ACCOUNTS_PAGE, "hide_tab_accounts_find_voucher"),
-      page(VOUCHERS_PAGE),
-    ];
+    return [page(ACCOUNTS_PAGE, "hide_tab_accounts_find_voucher"), page(VOUCHERS_PAGE)];
   }
 
   if (path === "/api/vouchers/payment-receipt" || /^\/api\/vouchers\/\d+\/payment-receipt$/.test(path)) {
     const type = String(req.body?.voucherType ?? "").toLowerCase();
     if (type === "payment") return [page(VOUCHERS_PAGE, VOUCHER_TABS.payment)];
     if (type === "receipt") return [page(VOUCHERS_PAGE, VOUCHER_TABS.receipt)];
-    return [
-      page(VOUCHERS_PAGE, VOUCHER_TABS.payment),
-      page(VOUCHERS_PAGE, VOUCHER_TABS.receipt),
-    ];
+    return [page(VOUCHERS_PAGE, VOUCHER_TABS.payment), page(VOUCHERS_PAGE, VOUCHER_TABS.receipt)];
   }
 
   if (

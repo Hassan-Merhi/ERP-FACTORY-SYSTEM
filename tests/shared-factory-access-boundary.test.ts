@@ -2,11 +2,7 @@ import type { Request } from "express";
 import { describe, expect, it } from "vitest";
 import { resolveSharedFactoryRequirements } from "../server/middleware/sharedFactoryAccessBoundary";
 
-function req(
-  path: string,
-  method = "GET",
-  body: Record<string, unknown> = {}
-): Request {
+function req(path: string, method = "GET", body: Record<string, unknown> = {}): Request {
   return {
     path,
     method,
@@ -57,15 +53,11 @@ describe("Wave 4 shared Factory API ownership", () => {
 
   it("maps payment and receipt writes to their exact Factory tabs", async () => {
     expect(
-      await resolveSharedFactoryRequirements(
-        req("/api/vouchers/payment-receipt", "POST", { voucherType: "Payment" })
-      )
+      await resolveSharedFactoryRequirements(req("/api/vouchers/payment-receipt", "POST", { voucherType: "Payment" }))
     ).toEqual([{ pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_payment" }]);
 
     expect(
-      await resolveSharedFactoryRequirements(
-        req("/api/vouchers/payment-receipt", "POST", { voucherType: "Receipt" })
-      )
+      await resolveSharedFactoryRequirements(req("/api/vouchers/payment-receipt", "POST", { voucherType: "Receipt" }))
     ).toEqual([{ pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_receipt" }]);
   });
 
@@ -94,15 +86,11 @@ describe("Wave 4 shared Factory API ownership", () => {
 
   it("classifies generic voucher creation by voucher type", async () => {
     expect(
-      await resolveSharedFactoryRequirements(
-        req("/api/vouchers", "POST", { voucherType: "Stock Adjustment" })
-      )
+      await resolveSharedFactoryRequirements(req("/api/vouchers", "POST", { voucherType: "Stock Adjustment" }))
     ).toEqual([{ pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_adjustment" }]);
 
     expect(
-      await resolveSharedFactoryRequirements(
-        req("/api/vouchers", "POST", { voucherType: "Stock Transfer" })
-      )
+      await resolveSharedFactoryRequirements(req("/api/vouchers", "POST", { voucherType: "Stock Transfer" }))
     ).toEqual([
       { pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_transfer" },
       { pageKey: "factory/vouchers", tabKey: "hide_tab_vouchers_transferorder" },
