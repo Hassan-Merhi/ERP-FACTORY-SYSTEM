@@ -53,6 +53,17 @@ describe("Wave 4 Factory backend access ownership", () => {
     });
   });
 
+  it("allows the shared bale stock count through either Bale Stock List or Invoicing Loadings", () => {
+    expect(resolveFactoryBackendAccessRequirement(req("/bale-stock-list"))).toEqual({
+      pageKey: "factory/stock-bale-list",
+    });
+
+    expect(resolveFactoryBackendAccessRequirement(req("/bale-stock-count"))?.alternatives).toEqual([
+      { pageKey: "factory/stock-bale-list" },
+      { pageKey: "factory/invoicing", tabs: ["hide_invoicing_loadings_tab"] },
+    ]);
+  });
+
   it("maps all Stock Allocation versions and V5 actions to Stock Allocation", () => {
     for (const path of ["/stock-allocation", "/v2/stock-allocation", "/v3/loads", "/v5/proforma-with-loading"]) {
       expect(resolveFactoryBackendAccessRequirement(req(path))).toMatchObject({
