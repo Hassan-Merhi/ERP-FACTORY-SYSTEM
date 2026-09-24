@@ -7,6 +7,7 @@ import {
 } from "@shared/realtimeInvalidation";
 import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
 import { invalidateBandwidthReadCaches, type BandwidthInvalidationScope } from "@/lib/bandwidthInvalidationPolicy";
+import { getRealtimeClientId } from "@/lib/realtimeClientIdentity";
 
 // Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
@@ -303,7 +304,8 @@ function websocketTarget(): string {
   const capacitorWsUrl: string = (import.meta.env?.VITE_WS_URL as string) || "";
   if (capacitorWsUrl) return capacitorWsUrl;
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws`;
+  const clientId = encodeURIComponent(getRealtimeClientId());
+  return `${protocol}//${window.location.host}/ws?clientId=${clientId}`;
 }
 
 function browserIsOnline(): boolean {
