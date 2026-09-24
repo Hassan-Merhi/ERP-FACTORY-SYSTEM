@@ -66,30 +66,20 @@ async function browserRequest(page, method, url, body) {
 }
 
 async function completeLanguageOnboarding(page) {
-  const dialogSelector = '[data-testid="language-onboarding-dialog"]';
-  const visible = await page
-    .evaluate((selector) => {
-      const dialog = document.querySelector(selector);
-      if (!(dialog instanceof HTMLElement)) return false;
-      const style = window.getComputedStyle(dialog);
-      return style.display !== "none" && style.visibility !== "hidden";
-    }, dialogSelector)
-    .catch(() => false);
-  if (!visible) return;
-
-  await page.click('[data-testid="language-onboarding-en"]');
-  await page.waitForSelector('[data-testid="language-onboarding-continue"]', { visible: true, timeout: timeoutMs });
-  await page.click('[data-testid="language-onboarding-continue"]');
-  await page.waitForFunction(
-    (selector) => {
-      const dialog = document.querySelector(selector);
-      if (!(dialog instanceof HTMLElement)) return true;
-      const style = window.getComputedStyle(dialog);
-      return dialog.dataset.state === "closed" || style.display === "none" || style.visibility === "hidden";
-    },
-    { timeout: timeoutMs },
-    dialogSelector
-  );
+  // The onboarding dialog is lazy-loaded, so on a slow runner it can open after any
+  // visibility check and cover the inventory page, or still be animating when the
+  // test tries to click through it. Record completion the way the dialog does, then
+  // reload so the app starts with the dialog closed.
+  await page.evaluate(async () => {
+    const response = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
+    if (!response.ok) throw new Error(`Current user lookup failed (${response.status})`);
+    const me = await response.json();
+    const id = me?.id ?? me?.user?.id;
+    if (id == null) throw new Error("Current user lookup returned no id");
+    window.localStorage.setItem(`application-language-onboarding:v1:${id}`, "completed");
+  });
+  await page.reload({ waitUntil: "domcontentloaded", timeout: timeoutMs });
+  await page.waitForFunction(() => Boolean(document.getElementById("main-content")), { timeout: timeoutMs });
 }
 
 async function login(page, loginUsername, loginPassword) {
