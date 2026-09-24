@@ -2,29 +2,180 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    { "idx": 0, "version": "7", "when": 1762197527676, "tag": "0000_conscious_william_stryker", "breakpoints": true },
-    { "idx": 1, "version": "7", "when": 1762249325365, "tag": "0001_parallel_guardian", "breakpoints": true },
-    { "idx": 2, "version": "7", "when": 1762274055857, "tag": "0002_married_loa", "breakpoints": true },
-    { "idx": 3, "version": "7", "when": 1784360000000, "tag": "0003_user_security_permissions", "breakpoints": true },
-    { "idx": 4, "version": "7", "when": 1784364000000, "tag": "0004_user_credential_versions", "breakpoints": true },
-    { "idx": 5, "version": "7", "when": 1784368000000, "tag": "0005_raw_stock_repair_permission", "breakpoints": true },
-    { "idx": 6, "version": "7", "when": 1784372000000, "tag": "0006_stored_file_download_permission", "breakpoints": true },
-    { "idx": 7, "version": "7", "when": 1753020000000, "tag": "20260720_002_voucher_entry_currency_fields", "breakpoints": true },
-    { "idx": 8, "version": "7", "when": 1784544000000, "tag": "0007_factory_historical_replay_safety", "breakpoints": true },
-    { "idx": 9, "version": "7", "when": 1753108200000, "tag": "20260720_004_bank_account_opening_balance_currency", "breakpoints": true },
-    { "idx": 10, "version": "7", "when": 1753110000000, "tag": "20260720_005_voucher_entry_currency_normalization_trigger", "breakpoints": true },
-    { "idx": 11, "version": "7", "when": 1753111800000, "tag": "20260720_006_entity_opening_and_asset_currency", "breakpoints": true },
-    { "idx": 12, "version": "7", "when": 1784993400000, "tag": "20260720_003_ledger_account_opening_balance_currency", "breakpoints": true },
-    { "idx": 13, "version": "7", "when": 1785120000000, "tag": "0013_tenant_control_integrity_guards", "breakpoints": true },
-    { "idx": 14, "version": "7", "when": 1785310649000, "tag": "20260729_001_factory_container_jsoncargo_columns", "breakpoints": true },
-    { "idx": 15, "version": "7", "when": 1785500862000, "tag": "20260731_001_factory_bilingual_catalog_snapshots", "breakpoints": true },
-    { "idx": 16, "version": "7", "when": 1786571880000, "tag": "0016_company_scope_rls_readiness", "breakpoints": true },
-    { "idx": 17, "version": "7", "when": 1789377000000, "tag": "0017_retail_variant_inventory", "breakpoints": true },
-    { "idx": 18, "version": "7", "when": 1789380900000, "tag": "0018_retail_pos_stock_movement", "breakpoints": true },
-    { "idx": 19, "version": "7", "when": 1789384800000, "tag": "0019_retail_reporting_audit", "breakpoints": true },
-    { "idx": 20, "version": "7", "when": 1789990664000, "tag": "20260921_001_factory_container_planner_phase2", "breakpoints": true },
-    { "idx": 21, "version": "7", "when": 1790076664000, "tag": "20260922_001_factory_container_planner_phase4", "breakpoints": true },
-    { "idx": 22, "version": "7", "when": 1790080264000, "tag": "20260922_002_factory_container_planner_phase5", "breakpoints": true },
-    { "idx": 23, "version": "7", "when": 1790083864000, "tag": "20260922_003_factory_container_planner_phase6", "breakpoints": true }
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1762197527676,
+      "tag": "0000_conscious_william_stryker",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762249325365,
+      "tag": "0001_parallel_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762274055857,
+      "tag": "0002_married_loa",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784360000000,
+      "tag": "0003_user_security_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784364000000,
+      "tag": "0004_user_credential_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784368000000,
+      "tag": "0005_raw_stock_repair_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784372000000,
+      "tag": "0006_stored_file_download_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1753020000000,
+      "tag": "20260720_002_voucher_entry_currency_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784544000000,
+      "tag": "0007_factory_historical_replay_safety",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1753108200000,
+      "tag": "20260720_004_bank_account_opening_balance_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1753110000000,
+      "tag": "20260720_005_voucher_entry_currency_normalization_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1753111800000,
+      "tag": "20260720_006_entity_opening_and_asset_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784993400000,
+      "tag": "20260720_003_ledger_account_opening_balance_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785120000000,
+      "tag": "0013_tenant_control_integrity_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785310649000,
+      "tag": "20260729_001_factory_container_jsoncargo_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785500862000,
+      "tag": "20260731_001_factory_bilingual_catalog_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786571880000,
+      "tag": "0016_company_scope_rls_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789377000000,
+      "tag": "0017_retail_variant_inventory",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789380900000,
+      "tag": "0018_retail_pos_stock_movement",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789384800000,
+      "tag": "0019_retail_reporting_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789990664000,
+      "tag": "20260921_001_factory_container_planner_phase2",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790076664000,
+      "tag": "20260922_001_factory_container_planner_phase4",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790080264000,
+      "tag": "20260922_002_factory_container_planner_phase5",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790083864000,
+      "tag": "20260922_003_factory_container_planner_phase6",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790237574000,
+      "tag": "20260924_001_user_preferences_production_valuation",
+      "breakpoints": true
+    }
   ]
 }
