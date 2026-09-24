@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import type { Express, Request, Response } from "express";
@@ -529,16 +530,9 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         });
 
         const filtered = search
-          ? enriched.filter((b) => {
-              const s = search.toLowerCase();
-              return (
-                b.referenceNumber?.toLowerCase().includes(s) ||
-                b.productName?.toLowerCase().includes(s) ||
-                b.articleCode?.toLowerCase().includes(s) ||
-                b.categoryName?.toLowerCase().includes(s) ||
-                b.locationName?.toLowerCase().includes(s)
-              );
-            })
+          ? enriched.filter((b) =>
+              searchAny(search, b.referenceNumber, b.productName, b.articleCode, b.categoryName, b.locationName)
+            )
           : enriched;
 
         res.json({ bales: filtered, categories: wasteCategories });
