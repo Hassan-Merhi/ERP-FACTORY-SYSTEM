@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,12 +120,7 @@ export function LocationInventoryDialogs({
                   {allNegativeStock
                     .filter((item) => {
                       if (!negativeSearchTerm) return true;
-                      const s = negativeSearchTerm.toLowerCase();
-                      return (
-                        item.name.toLowerCase().includes(s) ||
-                        item.code.toLowerCase().includes(s) ||
-                        item.locationName.toLowerCase().includes(s)
-                      );
+                      return searchAny(negativeSearchTerm, item.name, item.code, item.locationName);
                     })
                     .map((item) => (
                       <tr
