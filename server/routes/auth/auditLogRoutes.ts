@@ -8,7 +8,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireExportAccess } from "../../lib/permissionMiddleware";
 import { auditLog, companies, factoryUserProfiles, users } from "@shared/schema";
-import { and, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
 
 const moduleLabels: Record<string, string> = {
@@ -159,13 +159,13 @@ export function registerAuthAuditLogRoutes(app: Express) {
         filterConditions.push(lte(auditLog.createdAt, to));
       }
       if (query.search?.trim()) {
-        const value = `%${query.search.trim()}%`;
+        const search = query.search.trim();
         filterConditions.push(
           or(
-            ilike(auditLog.recordIdentifier, value),
-            ilike(auditLog.username, value),
-            ilike(auditLog.tableName, value),
-            ilike(auditLog.action, value)
+            punctuationInsensitiveSearch(auditLog.recordIdentifier, search),
+            punctuationInsensitiveSearch(auditLog.username, search),
+            punctuationInsensitiveSearch(auditLog.tableName, search),
+            punctuationInsensitiveSearch(auditLog.action, search)
           )!
         );
       }
