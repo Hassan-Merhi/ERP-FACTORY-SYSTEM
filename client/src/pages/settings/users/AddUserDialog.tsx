@@ -59,6 +59,10 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
       toast({ title: "Required fields", description: "Username and password are required", variant: "destructive" });
       return;
     }
+    if (form.password.length < 4) {
+      toast({ title: "Password too short", description: "Password must be at least 4 characters", variant: "destructive" });
+      return;
+    }
     requestPasswordConfirmation(() => createMutation.mutate(form), "Create User");
   };
 
@@ -99,7 +103,7 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 4 characters"
                   data-testid="input-add-password"
                 />
               </div>
