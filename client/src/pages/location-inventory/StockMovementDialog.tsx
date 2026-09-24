@@ -459,20 +459,9 @@ export function StockMovementDialog({
                   )}
 
                   {smRowsWithYear.map((m) => {
-                    const fmtQ = (n: number) =>
-                      n === 0 ? (
-                        <span className="text-muted-foreground/35">—</span>
-                      ) : (
-                        <>{n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</>
-                      );
-                    const fmtR = (n: number) =>
-                      n === 0 ? (
-                        <span className="text-muted-foreground/35">—</span>
-                      ) : (
-                        <>{n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
-                      );
-                    const fmtV = (n: number) =>
-                      n === 0 ? <span className="text-muted-foreground/35">—</span> : <>{formatAmount(n)}</>;
+                    const fmtQ = (value: unknown) => fmtN(value, 0);
+                    const fmtR = (value: unknown) => fmtN(value, 2);
+                    const fmtV = (value: unknown) => fmtA(value);
 
                     return (
                       <tr
