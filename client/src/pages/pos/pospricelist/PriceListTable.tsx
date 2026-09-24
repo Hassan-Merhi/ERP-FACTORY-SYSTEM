@@ -7,6 +7,7 @@
  * visible master, and single-location mode keeps the "base" price badge.
  */
 import { AlertCircle, Check, EyeOff, Layers, MapPin, Pencil, Tag, X } from "lucide-react";
+import { useLocation } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -203,24 +204,41 @@ function EmptyState({ model }: { model: PosPriceListModel }) {
 }
 
 function ItemsTable({ model }: { model: PosPriceListModel }) {
-  const { isAllMode, showCostPrice, canEdit, formatAmount, filteredItems, locationPricedList, masters } = model;
+  const {
+    isAllMode,
+    showCostPrice,
+    canEdit,
+    formatAmount,
+    filteredItems,
+    locationPricedList,
+    masters,
+    selectedLocationId,
+  } = model;
+  const [, navigate] = useLocation();
+
+  const openItemHistory = (stockItemId: number) => {
+    if (isAllMode) {
+      navigate(`/stock-items/${stockItemId}/monthly-summary`);
+      return;
+    }
+    if (selectedLocationId) {
+      navigate(`/locations/${selectedLocationId}/stock-items/${stockItemId}/history`);
+    }
+  };
+
   return (
     <>
       <div className="rounded-xl border">
         <Table wrapperClassName="max-h-[calc(100vh-320px)] sm:max-h-[calc(100vh-280px)]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-28 text-xs">Code</TableHead>
               <TableHead className="text-xs">Item Name</TableHead>
-              <TableHead className="text-xs hidden sm:table-cell">Group</TableHead>
               {showCostPrice && (
                 <TableHead className="text-xs text-right hidden sm:table-cell w-32">Cost Price</TableHead>
               )}
               {showCostPrice && (
                 <TableHead className="text-xs text-right hidden sm:table-cell w-32">Offloading Cost</TableHead>
               )}
-
-              {isAllMode && <TableHead className="text-xs text-right w-32">Total Qty</TableHead>}
 
               {/* All-mode: one column per visible master */}
               {isAllMode &&
@@ -229,6 +247,8 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                     {m.name}
                   </TableHead>
                 ))}
+
+              {isAllMode && <TableHead className="text-xs text-right w-32">Total Qty</TableHead>}
 
               {/* Single-location mode: one Selling Price column */}
               {!isAllMode && <TableHead className="text-xs text-right w-48">Selling Price</TableHead>}
@@ -248,15 +268,16 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                   model.isItemUnpriced(item) && "bg-amber-50/50 dark:bg-amber-950/20"
                 )}
               >
-                <TableCell className="font-mono text-sm text-muted-foreground">{item.code || "—"}</TableCell>
                 <TableCell>
-                  <div className="font-medium">{item.name}</div>
-                  {item.stockGroupName && (
-                    <div className="text-xs text-muted-foreground sm:hidden">{item.stockGroupName}</div>
-                  )}
-                </TableCell>
-                <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                  {item.stockGroupName || "—"}
+                  <button
+                    type="button"
+                    onClick={() => openItemHistory(item.stockItemId)}
+                    className="font-medium text-left text-primary hover:underline cursor-pointer"
+                    data-testid={`link-price-history-${item.stockItemId}`}
+                    title="View stock movement history"
+                  >
+                    {item.name}
+                  </button>
                 </TableCell>
 
                 {showCostPrice && (
@@ -279,6 +300,9 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                   </TableCell>
                 )}
 
+                {/* All-mode: editable price per visible master location */}
+                {isAllMode && <MasterPriceCells model={model} item={item} />}
+
                 {isAllMode && (
                   <TableCell
                     className="text-right text-sm text-muted-foreground tabular-nums"
@@ -287,9 +311,6 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                     {formatQty(item.totalQuantity ?? "0")}
                   </TableCell>
                 )}
-
-                {/* All-mode: editable price per visible master location */}
-                {isAllMode && <MasterPriceCells model={model} item={item} />}
 
                 {/* Single-location mode: editable Selling Price */}
                 {!isAllMode && <SingleLocationPriceCell model={model} item={item} />}
