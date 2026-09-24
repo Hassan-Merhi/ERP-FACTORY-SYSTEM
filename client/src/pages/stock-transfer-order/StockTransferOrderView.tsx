@@ -79,7 +79,7 @@ export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTra
   } = model;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       {hasDraft && !editVoucherId && (
         <div
           className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 px-4 py-2 text-sm"
@@ -119,7 +119,7 @@ export function StockTransferOrderView({ model, onSwitchToNormalView }: StockTra
         </Card>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="min-w-0 flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)]">
         <StockTransferOrderMatrix model={model} />
         <StockTransferOrderPanel model={model} />
       </div>
