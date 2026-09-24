@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
 import type { Express } from "express";
 
