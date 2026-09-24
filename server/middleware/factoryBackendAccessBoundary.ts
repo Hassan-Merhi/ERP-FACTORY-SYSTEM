@@ -279,8 +279,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
-  if (hasPrefix(path, "/net-position/payroll-breakdown")) {
-    return requirement("factory/intelligence/financial-hub");
+  if (hasPrefix(path, "/net-position")) {
+    return requirement("factory/net-position-details");
   }
 
   // Admin/configuration mutation surfaces. Operational reads of label assets,
@@ -474,7 +474,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/kpis")) {
     return requirement("factory/intelligence/kpis");
   }
-  if (hasPrefix(path, "/profitability") || hasPrefix(path, "/cashflow") || hasPrefix(path, "/net-position")) {
+  if (hasPrefix(path, "/profitability") || hasPrefix(path, "/cashflow")) {
     return requirement("factory/intelligence/financial-hub");
   }
   if (hasPrefix(path, "/reports/supplier-usage") || hasPrefix(path, "/suppliers/score")) {
