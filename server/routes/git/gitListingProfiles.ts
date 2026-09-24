@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { EnrichedContainer } from "../../lib/gitHelpers";
 
 export interface GitListingQuery extends Record<string, string | string[] | undefined> {
@@ -94,7 +95,7 @@ export function applyGitTableFilters(rows: EnrichedContainer[], query: GitListin
   const selectedTrucks = csv(query.trucks);
   const selectedLocations = csv(query.locations);
   const selectedEtaDates = csv(query.etaDates);
-  const search = String(query.search ?? query.q ?? "").trim().toLowerCase();
+  const search = String(query.search ?? query.q ?? "").trim();
 
   return rows.filter((row) => {
     if (query.company && query.company !== "ALL" && row.companyName !== query.company) return false;
@@ -134,8 +135,8 @@ export function applyGitTableFilters(rows: EnrichedContainer[], query: GitListin
     if (query.notes === "WITHOUT" && !!(row.trackingDescription ?? "").trim()) return false;
 
     if (search) {
-      const values = [row.containerNumber, row.companyName, row.numberPlate, row.transporter, row.agent];
-      if (!values.some((value) => (value ?? "").toLowerCase().includes(search))) return false;
+      if (!searchAny(search, row.containerNumber, row.companyName, row.numberPlate, row.transporter, row.agent))
+        return false;
     }
     return true;
   });
