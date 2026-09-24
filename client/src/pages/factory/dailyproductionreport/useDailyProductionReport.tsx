@@ -208,7 +208,6 @@ export function useDailyProductionReport() {
   const statusValue = data?.summary.statusValue ?? 0;
   const statusPositive = statusValue >= 0;
   const profitValue = data?.summary.profitValue ?? 0;
-  const profitPositive = profitValue > 0;
 
   return {
     activeTab,
@@ -235,7 +234,6 @@ export function useDailyProductionReport() {
     statusValue,
     statusPositive,
     profitValue,
-    profitPositive,
     valuationMode,
     setValuationMode,
     isPreferenceSaving,
