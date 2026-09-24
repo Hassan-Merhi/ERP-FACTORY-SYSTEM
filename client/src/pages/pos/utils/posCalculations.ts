@@ -1,4 +1,5 @@
 import type { InventoryItem } from "../pos-components/posTypes";
+import { normalizeSearchText } from "@shared/searchNormalization";
 
 export interface POSColumn {
   key: "itemName" | "quantity" | "rate" | "amount" | "plBale" | "totalPL" | "delete";
@@ -23,7 +24,7 @@ export function formatDisplayAmount(activeCurrency: string, v: number): string {
 // Keep POS search normalization in one place so the visible picker and keyboard
 // navigation always resolve the exact same item for a highlighted row.
 export function normalize(s: string): string {
-  return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalizeSearchText(s);
 }
 
 export function getFilteredInventory(inventory: InventoryItem[], searchTerm: string): InventoryItem[] {

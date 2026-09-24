@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -46,10 +47,7 @@ export default function SoldContainers() {
   const filteredSales = soldContainers.filter((sale) => {
     if (!searchTerm) return true;
 
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      sale.containerNumber.toLowerCase().includes(searchLower) || sale.customerName.toLowerCase().includes(searchLower)
-    );
+    return searchAny(searchTerm, sale.containerNumber, sale.customerName);
   });
 
   if (isLoading) {

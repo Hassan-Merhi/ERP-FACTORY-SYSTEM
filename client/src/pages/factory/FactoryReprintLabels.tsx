@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -348,7 +349,7 @@ export default function FactoryReprintLabels() {
                 <div className="max-h-52 overflow-y-auto space-y-0.5">
                   {uniqueArticleCodes
                     .filter(
-                      (c) => !articleCodeSearch.trim() || c.toLowerCase().includes(articleCodeSearch.toLowerCase())
+                      (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
                     )
                     .map((code) => (
                       <label
@@ -372,7 +373,7 @@ export default function FactoryReprintLabels() {
                       </label>
                     ))}
                   {uniqueArticleCodes.filter(
-                    (c) => !articleCodeSearch.trim() || c.toLowerCase().includes(articleCodeSearch.toLowerCase())
+                    (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
                   ).length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-2">No article codes found</p>
                   )}

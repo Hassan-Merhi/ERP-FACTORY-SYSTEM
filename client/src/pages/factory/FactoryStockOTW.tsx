@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -181,13 +182,7 @@ export default function FactoryStockOTW() {
       rows = rows.filter((c) => String(c.supplierId ?? "none") === supplierFilter);
     }
     if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter(
-        (c) =>
-          c.containerNumber?.toLowerCase().includes(q) ||
-          c.supplierName?.toLowerCase().includes(q) ||
-          c.origin?.toLowerCase().includes(q)
-      );
+      rows = rows.filter((c) => searchAny(search, c.containerNumber, c.supplierName, c.origin));
     }
     return rows;
   }, [otwContainers, supplierFilter, search]);

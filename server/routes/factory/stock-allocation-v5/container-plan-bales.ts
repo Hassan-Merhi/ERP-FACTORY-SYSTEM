@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request, Response } from "express";
 import { pool } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -310,6 +311,7 @@ export function registerV5ContainerPlanBaleRoutes(app: Express): void {
 
         const articleCode = typeof req.query.articleCode === "string" ? req.query.articleCode.trim() : "";
         const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+        const compactSearch = normalizeSearchText(search);
         const requestedLimit = Number(req.query.limit);
         const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 500) : 100;
 
@@ -326,10 +328,12 @@ export function registerV5ContainerPlanBaleRoutes(app: Express): void {
              AND cpb.id IS NULL
              AND ($2 = '' OR fb.article_code = $2)
              AND ($3 = '' OR UPPER(fb.bale_code) LIKE '%' || UPPER($3) || '%'
-                          OR UPPER(fb.reference_number) LIKE '%' || UPPER($3) || '%')
+                          OR UPPER(fb.reference_number) LIKE '%' || UPPER($3) || '%'
+                          OR regexp_replace(lower(COALESCE(fb.bale_code, '')), '[^[:alnum:]]+', '', 'g') LIKE '%' || $4 || '%'
+                          OR regexp_replace(lower(COALESCE(fb.reference_number, '')), '[^[:alnum:]]+', '', 'g') LIKE '%' || $4 || '%')
            ORDER BY fb.id
-           LIMIT $4`,
-          [companyId, articleCode, search, limit]
+           LIMIT $5`,
+          [companyId, articleCode, search, compactSearch, limit]
         );
 
         return res.json({

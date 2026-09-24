@@ -1,3 +1,4 @@
+import { searchIncludes } from "@shared/searchNormalization";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,7 +189,7 @@ export default function Customers() {
   };
 
   const filteredCustomers = customers.filter((customer) => {
-    const matchesSearch = (customer.legalName || "").toLowerCase().includes((searchQuery || "").toLowerCase());
+    const matchesSearch = searchIncludes(customer.legalName, searchQuery);
     const hasBalance = (customer.balance || 0) !== 0;
     if (!matchesSearch) return false;
     if (hideZero && !hasBalance && !searchQuery) return false;

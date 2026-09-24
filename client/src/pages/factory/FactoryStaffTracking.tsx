@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -220,14 +221,14 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
     },
   });
 
-  const filteredAttendanceWaChats = useMemo(() => {
-    const needle = attendanceWaSearch.trim().toLowerCase();
-    return attendanceWaChats.filter((chat) => {
-      const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
-      const matches = !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
-      return isGroup && matches;
-    });
-  }, [attendanceWaChats, attendanceWaSearch]);
+  const filteredAttendanceWaChats = useMemo(
+    () =>
+      attendanceWaChats.filter((chat) => {
+        const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
+        return isGroup && searchAny(attendanceWaSearch, chat.name, chat.id);
+      }),
+    [attendanceWaChats, attendanceWaSearch]
+  );
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -312,19 +313,12 @@ export function FactoryStaffTracking({ mode }: { mode: TrackingMode }) {
   });
 
   const groupedVisibleRows = useMemo<TrackingCategoryGroup[]>(() => {
-    const needle = search.trim().toLowerCase();
     const groups = new Map<string, TrackingCategoryGroup>();
 
     for (const row of rows) {
       if (mode === "attendance" && row.status !== FACTORY_TRACKING_STATUSES.absent) continue;
 
-      const matchesSearch =
-        !needle ||
-        row.name.toLowerCase().includes(needle) ||
-        row.category.toLowerCase().includes(needle) ||
-        (row.groupName || "").toLowerCase().includes(needle) ||
-        (row.code || "").toLowerCase().includes(needle);
-      if (!matchesSearch) continue;
+      if (!searchAny(search, row.name, row.category, row.groupName, row.code)) continue;
 
       const label = row.groupName?.trim() || (mode === "production" ? row.category.trim() : "");
       const groupKey = label.toLocaleLowerCase();

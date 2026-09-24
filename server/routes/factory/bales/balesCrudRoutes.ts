@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * factoryBalesRoutes: BalesCrud endpoints.
  *
@@ -74,9 +75,20 @@ export function registerBalesCrudRoutes(app: Express) {
 
       // Server-side text search: bale code, article code, product name, reference number.
       if (search && typeof search === "string" && search.trim()) {
-        const q = `%${search.trim()}%`;
+        const raw = search.trim();
+        const q = `%${raw}%`;
+        const compact = `%${normalizeSearchText(raw)}%`;
         conditions.push(
-          sql`(${factoryBales.baleCode} ILIKE ${q} OR ${factoryBales.articleCode} ILIKE ${q} OR ${factoryBales.productName} ILIKE ${q} OR ${factoryBales.referenceNumber} ILIKE ${q})`
+          sql`(
+            ${factoryBales.baleCode} ILIKE ${q}
+            OR ${factoryBales.articleCode} ILIKE ${q}
+            OR ${factoryBales.productName} ILIKE ${q}
+            OR ${factoryBales.referenceNumber} ILIKE ${q}
+            OR regexp_replace(lower(coalesce(${factoryBales.baleCode}::text, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compact}
+            OR regexp_replace(lower(coalesce(${factoryBales.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compact}
+            OR regexp_replace(lower(coalesce(${factoryBales.productName}::text, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compact}
+            OR regexp_replace(lower(coalesce(${factoryBales.referenceNumber}::text, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compact}
+          )`
         );
       }
 

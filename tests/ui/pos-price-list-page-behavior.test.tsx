@@ -6,6 +6,7 @@ const harness = vi.hoisted(() => ({
   toast: vi.fn(),
   apiRequest: vi.fn(),
   invalidateQueries: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 const priceItems = [
@@ -29,7 +30,7 @@ const priceItems = [
     sellingPrice: null,
     baseSellingPrice: null,
     hasCustomPrice: false,
-    quantity: "3",
+    quantity: "0",
     costPrice: "8",
     offloadingCost: "1",
   },
@@ -47,6 +48,7 @@ const mastersData = {
       stockGroupName: "Clothes",
       baseSellingPrice: null,
       masterPrices: { 11: "20", 12: "22" },
+      totalQuantity: "8",
       costPrice: "10",
       offloadingCost: "2",
     },
@@ -57,6 +59,7 @@ const mastersData = {
       stockGroupName: "Clothes",
       baseSellingPrice: null,
       masterPrices: { 11: null, 12: null },
+      totalQuantity: "0",
       costPrice: "8",
       offloadingCost: "1",
     },
@@ -104,6 +107,21 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@/lib/queryClient", () => ({
   queryClient: { invalidateQueries: harness.invalidateQueries },
   apiRequest: harness.apiRequest,
+}));
+vi.mock("wouter", () => ({
+  useLocation: () => ["/sales-tools?tab=pricelist", harness.navigate],
+}));
+vi.mock("@/pages/location-inventory/StockMovementDialog", () => ({
+  StockMovementDialog: ({ stockMovementOpen, stockMovementItem }: any) =>
+    stockMovementOpen ? (
+      <div
+        data-testid="price-stock-movement-dialog"
+        data-location-id={stockMovementItem?.locationId ?? "all"}
+        data-location-name={stockMovementItem?.locationName ?? "All Locations"}
+      >
+        {stockMovementItem?.stockItemName}
+      </div>
+    ) : null,
 }));
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (v: number) => `$${v.toFixed(2)}` }),
@@ -167,8 +185,19 @@ describe("POS price list page behavior", () => {
 
     fireEvent.click(screen.getByTestId("button-location-11"));
     expect(screen.getByTestId("row-price-101")).toHaveTextContent("Blue Shirt");
+    fireEvent.click(screen.getByTestId("link-price-history-101"));
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveTextContent("Blue Shirt");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-id", "11");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-name", "Main");
     expect(screen.getByTestId("row-price-102")).toHaveTextContent("Red Shirt");
     expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 2 of 2 items");
+
+    fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
+    expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-price-101")).toBeInTheDocument();
+    expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 1 of 2 items");
+    fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
+    expect(screen.getByTestId("row-price-102")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("input-price-search"), {
       target: { value: "Blue" },
@@ -207,6 +236,16 @@ describe("POS price list page behavior", () => {
     expect(screen.getByTestId("chip-location-12")).toHaveTextContent("Branch");
     expect(screen.getByTestId("cell-price-101-11")).toHaveTextContent("$20.00");
     expect(screen.getByTestId("cell-price-101-12")).toHaveTextContent("$22.00");
+    expect(screen.getByTestId("text-total-qty-101")).toHaveTextContent("8");
+    expect(screen.getByTestId("row-price-102")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
+    expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("button-hide-zero-qty"));
+    expect(screen.getByTestId("row-price-102")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("link-price-history-101"));
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveTextContent("Blue Shirt");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-id", "all");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-name", "All Locations");
 
     fireEvent.click(screen.getByTestId("chip-location-12"));
     expect(screen.queryByTestId("cell-price-101-12")).not.toBeInTheDocument();
@@ -234,6 +273,7 @@ describe("POS price list page behavior", () => {
     expect(screen.queryByTestId("row-price-102")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-location-all")).not.toBeInTheDocument();
     expect(screen.queryByTestId("button-show-unpriced")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-hide-zero-qty")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("cell-price-101"));
     expect(screen.queryByTestId("input-price-101")).not.toBeInTheDocument();
   });

@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useState, useRef, useMemo, useEffect, 
 import { Input } from "@/components/ui/input";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { searchAny } from "@shared/searchNormalization";
 
 export type CombinedAccount = {
   type: "ledger" | "bank" | "supplier" | "employee" | "fixedAsset" | "customer" | "factorySupplier";
@@ -93,13 +94,10 @@ export const AccountAutocomplete = forwardRef<AccountAutocompleteHandle, Account
       },
     }));
 
-    const filteredAccounts = useMemo(() => {
-      const term = (searchTerm ?? "").toLowerCase();
-
-      return allAccounts.filter(
-        (acc) => (acc?.name ?? "").toLowerCase().includes(term) || (acc?.code ?? "").toLowerCase().includes(term)
-      );
-    }, [allAccounts, searchTerm]);
+    const filteredAccounts = useMemo(
+      () => allAccounts.filter((acc) => searchAny(searchTerm, acc?.name, acc?.code)),
+      [allAccounts, searchTerm]
+    );
 
     useEffect(() => {
       setHighlightedIndex(0);

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
@@ -204,10 +205,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
 
   const filteredItems = useMemo(() => {
     if (searchTerm.length === 0) return itemsWithStock;
-    const term = searchTerm.toLowerCase();
-    return itemsWithStock.filter(
-      (item) => item.name.toLowerCase().includes(term) || item.code.toLowerCase().includes(term)
-    );
+    return itemsWithStock.filter((item) => searchAny(searchTerm, item.name, item.code));
   }, [itemsWithStock, searchTerm]);
 
   useEffect(() => {

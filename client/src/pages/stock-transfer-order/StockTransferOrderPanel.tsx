@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { ArrowRight, Check, GitBranch, Package, Plus, Search, Trash2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,8 +77,7 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
                       .filter(
                         (item) =>
                           mobileSearchTerm.trim() === "" ||
-                          item.name.toLowerCase().includes(mobileSearchTerm.toLowerCase()) ||
-                          item.code.toLowerCase().includes(mobileSearchTerm.toLowerCase())
+                          searchAny(mobileSearchTerm, item.name, item.code)
                       )
                       .map((item) => (
                         <button

@@ -1,3 +1,4 @@
+import { searchIncludes } from "@shared/searchNormalization";
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -103,7 +104,7 @@ export default function POSCustomers() {
   const onSubmit = (data: FormData) => createMutation.mutate(data);
 
   const filteredCustomers = customers.filter((customer) =>
-    (customer.legalName || "").toLowerCase().includes((searchQuery || "").toLowerCase())
+    searchIncludes(customer.legalName, searchQuery)
   );
 
   const totalCustomers = customers.length;

@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * Bale lookup routes.
  *
@@ -57,7 +58,10 @@ export function registerBaleLookupRoutes(app: Express) {
           })
           .from(factoryBaleProducts)
           .where(
-            and(eq(factoryBaleProducts.companyId, companyId), ilike(factoryBaleProducts.articleCode, articleCode))
+            and(
+              eq(factoryBaleProducts.companyId, companyId),
+              sql`regexp_replace(lower(coalesce(${factoryBaleProducts.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(articleCode)}`
+            )
           ),
       ]);
 
@@ -97,14 +101,14 @@ export function registerBaleLookupRoutes(app: Express) {
         directBalesWhereClause = and(
           eq(factoryBales.companyId, companyId),
           or(
-            sql`LOWER(${factoryBales.articleCode}) = LOWER(${articleCode})`,
+            sql`regexp_replace(lower(coalesce(${factoryBales.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(articleCode)}`,
             inArray(factoryBales.productId, factoryProductIds)
           )
         );
       } else {
         directBalesWhereClause = and(
           eq(factoryBales.companyId, companyId),
-          sql`LOWER(${factoryBales.articleCode}) = LOWER(${articleCode})`
+          sql`regexp_replace(lower(coalesce(${factoryBales.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(articleCode)}`
         );
       }
 

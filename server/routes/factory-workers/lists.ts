@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 /**
  * factoryWorkerRoutes: FactoryWorkerList endpoints.
  *
@@ -90,7 +91,7 @@ export function registerFactoryWorkerListRoutes(app: Express, requireAuth: Reque
       }
 
       if (search) {
-        conditions.push(ilike(factoryWorkers.fullName, `%${search}%`));
+        conditions.push(punctuationInsensitiveSearch(factoryWorkers.fullName, String(search)));
       }
       if (position) {
         conditions.push(eq(factoryWorkers.position, position as string));

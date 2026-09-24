@@ -1,9 +1,10 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { inventory, locations, stockGroups, stockItems } from "@shared/schema";
-import { and, asc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 
 function parsePage(value: unknown): number {
   return Math.max(1, Number.parseInt(String(value), 10) || 1);
@@ -35,8 +36,12 @@ export function registerCommonInventoryPerformanceRoutes(app: Express): void {
 
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
-        const query = `%${search}%`;
-        conditions.push(or(ilike(stockItems.name, query), ilike(stockItems.code, query)));
+        conditions.push(
+          or(
+            punctuationInsensitiveSearch(stockItems.name, search),
+            punctuationInsensitiveSearch(stockItems.code, search)
+          )
+        );
       }
 
       if (req.query.stockGroupId && req.query.stockGroupId !== "all") {
@@ -97,8 +102,12 @@ export function registerCommonInventoryPerformanceRoutes(app: Express): void {
       }
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
-        const query = `%${search}%`;
-        conditions.push(or(ilike(stockItems.name, query), ilike(stockItems.code, query)));
+        conditions.push(
+          or(
+            punctuationInsensitiveSearch(stockItems.name, search),
+            punctuationInsensitiveSearch(stockItems.code, search)
+          )
+        );
       }
 
       const where = and(...conditions);

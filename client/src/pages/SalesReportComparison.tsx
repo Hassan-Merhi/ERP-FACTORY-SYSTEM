@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -203,10 +204,7 @@ export default function SalesReportComparison() {
     }
 
     if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter(
-        (r) => r.stockItemName.toLowerCase().includes(q) || r.stockGroupName.toLowerCase().includes(q)
-      );
+      rows = rows.filter((r) => searchAny(search, r.stockItemName, r.stockGroupName));
     }
 
     rows.sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));

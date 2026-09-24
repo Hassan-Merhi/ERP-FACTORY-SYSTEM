@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
@@ -77,7 +78,12 @@ export async function getBaleProductByArticleCode(
   const [product] = await db
     .select()
     .from(schema.baleProducts)
-    .where(and(eq(schema.baleProducts.articleCode, articleCode), eq(schema.baleProducts.companyId, companyId)));
+    .where(
+      and(
+        sql`regexp_replace(lower(coalesce(${schema.baleProducts.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(articleCode)}`,
+        eq(schema.baleProducts.companyId, companyId)
+      )
+    );
   return product;
 }
 
@@ -142,7 +148,7 @@ export async function getBaleLabelPrintByReference(
     .from(schema.baleLabelPrints)
     .where(
       and(
-        sql`LOWER(TRIM(${schema.baleLabelPrints.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`,
+        sql`regexp_replace(lower(coalesce(${schema.baleLabelPrints.referenceNumber}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(referenceNumber)}`,
         eq(schema.baleLabelPrints.companyId, companyId)
       )
     );
@@ -156,6 +162,11 @@ export async function getBaleLabelPrintsByArticle(
   return await db
     .select()
     .from(schema.baleLabelPrints)
-    .where(and(eq(schema.baleLabelPrints.articleCode, articleCode), eq(schema.baleLabelPrints.companyId, companyId)))
+    .where(
+      and(
+        sql`regexp_replace(lower(coalesce(${schema.baleLabelPrints.articleCode}::text, '')), '[^[:alnum:]]+', '', 'g') = ${normalizeSearchText(articleCode)}`,
+        eq(schema.baleLabelPrints.companyId, companyId)
+      )
+    )
     .orderBy(desc(schema.baleLabelPrints.printedAt));
 }

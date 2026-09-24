@@ -53,6 +53,28 @@ describe("Factory per-user page restrictions", () => {
     ).toBe("/factory/accounts");
   });
 
+  it("allows admins to open Factory net position details instead of redirecting to the default production page", () => {
+    expect(resolvePageKey("/factory/net-position-details")).toBe("factory/net-position-details");
+
+    expect(
+      computeFactoryGuardRedirect({
+        isFactoryRoute: true,
+        isAdminOwner: true,
+        userRole: "Admin",
+        myAccess: {
+          fullAccess: true,
+          pageKeys: [],
+          hasErpAccess: true,
+          hasFactoryAccess: true,
+          hiddenCostFields: [],
+        },
+        factorySettings: undefined,
+        factoryDefaultPage: "/factory/production-report",
+        currentLocation: "/factory/net-position-details",
+      })
+    ).toBeNull();
+  });
+
   it("default-denies unregistered Factory routes for restricted users", () => {
     expect(
       computeFactoryGuardRedirect({

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useDeferredValue, useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -66,7 +67,7 @@ function AccountCombobox({
         .filter((a) => a.id !== excludeId)
         .filter(
           (a) =>
-            a.name.toLowerCase().includes(search.toLowerCase()) || a.code.toLowerCase().includes(search.toLowerCase())
+            searchAny(search, a.name, a.code)
         )
         .slice(0, 50),
     [accounts, search, excludeId]
@@ -183,13 +184,8 @@ export default function AccountTransfer() {
 
   const filteredEntries = useMemo(() => {
     if (!searchEntries.trim()) return entries;
-    const q = searchEntries.toLowerCase();
-    return entries.filter(
-      (e) =>
-        e.voucherNumber?.toLowerCase().includes(q) ||
-        e.narration?.toLowerCase().includes(q) ||
-        e.voucherDescription?.toLowerCase().includes(q) ||
-        e.voucherType?.toLowerCase().includes(q)
+    return entries.filter((e) =>
+      searchAny(searchEntries, e.voucherNumber, e.narration, e.voucherDescription, e.voucherType)
     );
   }, [entries, searchEntries]);
 

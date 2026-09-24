@@ -1,3 +1,4 @@
+import { searchIncludes } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -124,7 +125,7 @@ export default function Suppliers() {
 
   const sortedSuppliers = [...suppliers]
     .filter((s) => (hideZeroBalance ? s.balance !== 0 : true))
-    .filter((s) => debouncedSearch.trim() === "" || s.legalName.toLowerCase().includes(debouncedSearch.toLowerCase()))
+    .filter((s) => !debouncedSearch.trim() || searchIncludes(s.legalName, debouncedSearch))
     .sort((a, b) => a.legalName.localeCompare(b.legalName));
 
   const handleSupplierClick = (supplier: SupplierWithStats) => {

@@ -13,6 +13,7 @@
  * goes through the existing /api/stock-transfers endpoint.
  */
 import { db } from "../db";
+import { normalizeSearchText } from "@shared/searchNormalization";
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   locations,
@@ -110,7 +111,7 @@ export async function matchLocationByName(
   rawName: string,
   opts?: { strict?: boolean }
 ): Promise<LocationMatchResult> {
-  const needle = rawName.trim().toLowerCase();
+  const needle = normalizeSearchText(rawName);
   if (!needle) return { matched: null, candidates: [] };
 
   const rows = await db
@@ -119,7 +120,7 @@ export async function matchLocationByName(
     .where(and(eq(locations.companyId, companyId), isNull(locations.deletedAt)));
 
   const exact = rows.filter(
-    (r) => (r.name || "").trim().toLowerCase() === needle || (r.code || "").trim().toLowerCase() === needle
+    (r) => normalizeSearchText(r.name) === needle || normalizeSearchText(r.code) === needle
   );
   if (exact.length === 1) return { matched: exact[0], candidates: [] };
   if (exact.length > 1) return { matched: null, candidates: exact };
@@ -128,15 +129,19 @@ export async function matchLocationByName(
   // substring matching — "Kolwezi" must never silently resolve to "Kolwezi 2".
   // Any lookalikes are surfaced as candidates so the caller can ask the user.
   if (opts?.strict) {
-    const lookalikes = rows.filter(
-      (r) => (r.name || "").toLowerCase().includes(needle) || needle.includes((r.name || "").toLowerCase())
-    );
+    const lookalikes = rows.filter((r) => {
+      const name = normalizeSearchText(r.name);
+      const code = normalizeSearchText(r.code);
+      return name.includes(needle) || needle.includes(name) || code.includes(needle) || needle.includes(code);
+    });
     return { matched: null, candidates: lookalikes };
   }
 
-  const partial = rows.filter(
-    (r) => (r.name || "").toLowerCase().includes(needle) || needle.includes((r.name || "").toLowerCase())
-  );
+  const partial = rows.filter((r) => {
+    const name = normalizeSearchText(r.name);
+    const code = normalizeSearchText(r.code);
+    return name.includes(needle) || needle.includes(name) || code.includes(needle) || needle.includes(code);
+  });
   if (partial.length === 1) return { matched: partial[0], candidates: [] };
   if (partial.length > 1) return { matched: null, candidates: partial };
 

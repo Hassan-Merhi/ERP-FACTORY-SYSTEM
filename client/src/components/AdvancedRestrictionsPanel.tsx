@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * AdvancedRestrictionsPanel
  *
@@ -154,18 +155,12 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
   };
 
   // ── Build filtered catalog ───────────────────────────────────────────────
-  const searchLower = search.toLowerCase();
 
+  const hasSearch = search.trim().length > 0;
   const filteredCatalog = useMemo(() => {
-    if (!searchLower) return PERMISSION_CATALOG;
-    return PERMISSION_CATALOG.filter(
-      (e) =>
-        e.label.toLowerCase().includes(searchLower) ||
-        e.key.toLowerCase().includes(searchLower) ||
-        e.group.toLowerCase().includes(searchLower) ||
-        (e.description?.toLowerCase().includes(searchLower) ?? false)
-    );
-  }, [searchLower]);
+    if (!hasSearch) return PERMISSION_CATALOG;
+    return PERMISSION_CATALOG.filter((e) => searchAny(search, e.label, e.key, e.group, e.description));
+  }, [hasSearch, search]);
 
   // Group filtered catalog by type then group
   const byType = useMemo(() => {
@@ -245,7 +240,7 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
         if (!byType[type]) return null;
         const typeLabel = PERMISSION_TYPE_LABELS[type];
         const sectionKey = `type-${type}`;
-        const isOpen = openSections.has(sectionKey) || !!searchLower;
+        const isOpen = openSections.has(sectionKey) || hasSearch;
         const allGroupNames = Object.keys(byType[type]);
         const allEntriesInType = allGroupNames.flatMap((g) => byType[type][g]);
         const someChecked = allEntriesInType.some((e) => getChecked(e.key));
@@ -362,7 +357,7 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
       })}
 
       {/* Unconfigured section */}
-      {UNCONFIGURED_PERMISSIONS.length > 0 && !searchLower && (
+      {UNCONFIGURED_PERMISSIONS.length > 0 && !hasSearch && (
         <div className="rounded-md border border-dashed px-3 py-2.5 space-y-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5" />

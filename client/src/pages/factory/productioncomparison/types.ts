@@ -16,6 +16,8 @@ export interface ProductRow {
   categoryName: string;
   qty: number;
   totalWeightKg: number;
+  /** Mix batches that produced bales for this product in the period. */
+  mixBatchIds?: number[];
   /** Workers who finalized bales of this product in the period (most bales first). */
   workers?: ProductWorkerRef[];
 }
@@ -33,6 +35,10 @@ export interface ReportData {
     totalBales: number;
     totalWeightKg: number;
     byProduct: ProductRow[];
+    linkedBatches?: Array<{
+      id: number;
+      totalWeightKg: number;
+    }>;
   };
   summary?: {
     batchCost: number;
@@ -53,6 +59,8 @@ export interface MergedRow {
   bQty: number;
   aKg: number;
   bKg: number;
+  aMixBatchIds: number[];
+  bMixBatchIds: number[];
   /** Distinct worker names across both periods, most bales first. */
   workers: string[];
 }

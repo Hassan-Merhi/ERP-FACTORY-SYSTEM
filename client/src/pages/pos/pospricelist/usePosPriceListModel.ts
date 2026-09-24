@@ -48,6 +48,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     null
   );
   const [showUnpriced, setShowUnpriced] = useState(false);
+  const [hideZeroQty, setHideZeroQty] = useState(false);
   const [hiddenUnpricedGroups, setHiddenUnpricedGroups] = useState<Set<string>>(new Set());
   const [hiddenLocations, setHiddenLocations] = useState<Set<number>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -193,6 +194,20 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [showUnpriced, locationPricedList, isItemUnpriced]);
 
+  const itemQty = useCallback(
+    (item: PriceListRow): number => {
+      const rawQty = isAllMode ? item.totalQuantity : item.quantity;
+      const parsed = Number(rawQty ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    },
+    [isAllMode]
+  );
+
+  const zeroQtyCount = useMemo(
+    () => locationPricedList.filter((item) => itemQty(item) === 0).length,
+    [itemQty, locationPricedList]
+  );
+
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     return locationPricedList.filter((item) => {
@@ -205,9 +220,19 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         ? !hiddenUnpricedGroups.has(item.stockGroupName || "(No Group)")
         : groupFilter === "all" || item.stockGroupName === groupFilter;
       const matchesUnpriced = !showUnpriced || isItemUnpriced(item);
-      return matchesSearch && matchesGroup && matchesUnpriced;
+      const matchesQty = !hideZeroQty || itemQty(item) !== 0;
+      return matchesSearch && matchesGroup && matchesUnpriced && matchesQty;
     });
-  }, [search, locationPricedList, showUnpriced, hiddenUnpricedGroups, groupFilter, isItemUnpriced]);
+  }, [
+    search,
+    locationPricedList,
+    showUnpriced,
+    hiddenUnpricedGroups,
+    groupFilter,
+    isItemUnpriced,
+    hideZeroQty,
+    itemQty,
+  ]);
 
   const selectedLocation = locations.find((l) => l.id === selectedLocationId);
 
@@ -546,6 +571,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
         }
 
         if (isAllMode) {
+          row["Total Qty"] = parseFloat(item.totalQuantity ?? "0");
           for (const m of masters) {
             const price = masterPriceFor(item, m.id);
             row[m.name] = price && parseFloat(price) > 0 ? parseFloat(price) : "";
@@ -595,6 +621,7 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setSearch("");
     setGroupFilter("all");
     setShowUnpriced(false);
+    setHideZeroQty(false);
     setHiddenUnpricedGroups(new Set());
   };
 
@@ -655,6 +682,9 @@ export function usePosPriceListModel({ posUser }: POSPriceListProps) {
     setGroupFilter,
     showUnpriced,
     toggleUnpriced,
+    hideZeroQty,
+    setHideZeroQty,
+    zeroQtyCount,
     hiddenUnpricedGroups,
     setHiddenUnpricedGroups,
     toggleHiddenUnpricedGroup,

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -109,14 +110,9 @@ export default function RentalPaymentsLog({
   });
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return payments;
-    return payments.filter(
-      (p) =>
-        (p.tenantName ?? "").toLowerCase().includes(q) ||
-        (p.unitNumber ?? "").toLowerCase().includes(q) ||
-        (p.locationGroup ?? "").toLowerCase().includes(q) ||
-        (p.notes ?? "").toLowerCase().includes(q)
+    if (!search.trim()) return payments;
+    return payments.filter((p) =>
+      searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes)
     );
   }, [payments, search]);
 

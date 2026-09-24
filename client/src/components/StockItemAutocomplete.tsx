@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { searchAny } from "@shared/searchNormalization";
 
 interface StockItem {
   id: number;
@@ -66,7 +67,7 @@ export function StockItemAutocomplete({
 
   const filteredItems =
     searchTerm !== null && searchTerm.length > 0
-      ? sortedItems.filter((item) => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      ? sortedItems.filter((item) => searchAny(searchTerm, item.name, item.code))
       : sortedItems;
 
   useEffect(() => {

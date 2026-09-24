@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Plus, Users } from "lucide-react";
@@ -130,7 +131,7 @@ export default function FactoryProformas() {
               const searchTerm = proformaSearch.trim().toLowerCase();
               const visibleProformas = proformas
                 .filter((p) => p.isActive || showInactive)
-                .filter((p) => !searchTerm || p.name.toLowerCase().includes(searchTerm));
+                .filter((p) => searchAny(searchTerm, p.name, p.code));
               const allExpanded =
                 visibleProformas.length > 0 && visibleProformas.every((p) => expandedProformaIds.has(p.id));
               return (
@@ -179,7 +180,7 @@ export default function FactoryProformas() {
             {proformas
               .filter((p) => p.isActive || showInactive)
               .filter(
-                (p) => !proformaSearch.trim() || p.name.toLowerCase().includes(proformaSearch.trim().toLowerCase())
+                (p) => searchAny(proformaSearch, p.name)
               )
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((proforma) => {

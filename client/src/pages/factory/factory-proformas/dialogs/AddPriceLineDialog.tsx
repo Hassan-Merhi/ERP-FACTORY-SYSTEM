@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * AddPriceLineDialog — extracted from FactoryProformas.tsx during the Phase 4 split.
  *

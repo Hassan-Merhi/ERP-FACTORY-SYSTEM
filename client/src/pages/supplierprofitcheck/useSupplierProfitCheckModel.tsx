@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type PeriodFilterValue } from "@/components/ui/period-filter";
@@ -533,8 +534,7 @@ export function useSupplierProfitCheckModel() {
     () =>
       computedRows.filter((row) => {
         if (search) {
-          const query = search.toLowerCase();
-          if (!row.code.toLowerCase().includes(query) && !row.name.toLowerCase().includes(query)) return false;
+          if (!searchAny(search, row.code, row.name)) return false;
         }
         if (activeStatuses.length > 0) {
           const matchesStatus = activeStatuses.includes(row.computedStatus);

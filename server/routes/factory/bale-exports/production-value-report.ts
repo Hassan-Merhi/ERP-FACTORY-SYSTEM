@@ -35,6 +35,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const currentRole = String(req.session.currentRole ?? req.user?.role ?? "").toLowerCase();
       const isPrivileged = ["admin", "owner", "developer"].includes(currentRole);
       const reportView = String(req.query.view ?? "");
+      const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
       let hideReportCosts = false;
       if (!isPrivileged && req.session.userId) {
         const [profile] = await db
@@ -124,11 +125,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const baleRowsPromise = db
         .select({
           id: factoryBales.id,
+          mixBatchId: factoryBales.mixBatchId,
           articleCode: factoryBales.articleCode,
           productName: factoryBales.productName,
           weightKg: factoryBales.weightKg,
           stockEntryDate: factoryBales.stockEntryDate,
           productionPrice: factoryBaleProducts.productionPrice,
+          sellingPrice: factoryBaleProducts.sellingPrice,
           productId: factoryBales.productId,
           categoryId: factoryBaleProducts.categoryId,
           categoryName: factoryCategories.name,
@@ -161,6 +164,33 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise]);
 
+      // Batch linkage follows the bales in the selected production period (and worker filter),
+      // rather than the mix-batch creation date. This lets Production Comparison calculate
+      // batch count/amount for whatever product/category/grade filters are applied client-side.
+      const linkedMixBatchIds = [
+        ...new Set(
+          baleRows
+            .map((row) => row.mixBatchId)
+            .filter((id): id is number => id != null && Number.isFinite(Number(id)))
+        ),
+      ];
+      const linkedBatchRows =
+        linkedMixBatchIds.length > 0
+          ? await db
+              .select({
+                id: factoryMixBatches.id,
+                totalWeightKg: factoryMixBatches.totalWeightKg,
+              })
+              .from(factoryMixBatches)
+              .where(
+                and(
+                  eq(factoryMixBatches.companyId, companyId),
+                  inArray(factoryMixBatches.id, linkedMixBatchIds),
+                  isNull(factoryMixBatches.deletedAt)
+                )
+              )
+          : [];
+
       // ── Helper: detect wipers/garbage by category name ──
       function isWiperOrGarbage(catName: string): boolean {
         const lower = (catName || "").toLowerCase();
@@ -177,7 +207,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           qty: number;
           totalWeightKg: number;
           costPricePerBale: number;
+          pricePerBale: number;
           totalValue: number;
+          // Distinct mix batches that produced this product in the period.
+          mixBatchIds: Set<number>;
           // Distinct workers who finalized bales of this product in the period.
           workers: Map<string, { id: number | null; name: string; qty: number }>;
         }
@@ -205,13 +238,21 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         }
       >();
 
+      let totalSellingValue = 0;
+      let totalProductionCostValue = 0;
+      let missingSelectedPriceBales = 0;
+      let missingCostPriceBales = 0;
+      let missingSellingPriceBales = 0;
+
       for (const bale of baleRows) {
         const code = bale.articleCode || "UNKNOWN";
         const name = bale.productName || code;
         const catName = bale.categoryName || "Uncategorized";
         const wt = parseFloat(bale.weightKg || "0");
-        const price = parseFloat(bale.productionPrice || "0");
-        const value = price; // price is per bale (not per kg)
+        const costPrice = parseFloat(bale.productionPrice || "0");
+        const sellingPrice = parseFloat(bale.sellingPrice || "0");
+        const price = valuationMode === "selling" ? sellingPrice : costPrice;
+        const value = price; // catalog price is per bale (not per kg)
         // Prefer the live worker record; fall back to the name snapshotted on the bale.
         const workerName = (bale.workerFullName || bale.baleWorkerName || "").trim();
         const workerId = bale.finalizedBy ?? null;
@@ -233,12 +274,19 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             wgMap.set(catName, { subType, qty: 1, totalWeightKg: wt, totalValue: value });
           }
         } else {
-          // Regular bale
+          // Regular bale. Profit always uses selling value, even when the report is viewing cost price.
+          totalSellingValue += sellingPrice;
+          totalProductionCostValue += costPrice;
+          if (!(price > 0)) missingSelectedPriceBales += 1;
+          if (!(costPrice > 0)) missingCostPriceBales += 1;
+          if (!(sellingPrice > 0)) missingSellingPriceBales += 1;
+
           const existing = productMap.get(code);
           if (existing) {
             existing.qty += 1;
             existing.totalWeightKg += wt;
             existing.totalValue += value;
+            if (bale.mixBatchId != null) existing.mixBatchIds.add(bale.mixBatchId);
           } else {
             productMap.set(code, {
               articleCode: code,
@@ -246,8 +294,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
               categoryName: catName,
               qty: 1,
               totalWeightKg: wt,
-              costPricePerBale: price,
+              costPricePerBale: costPrice,
+              pricePerBale: price,
               totalValue: value,
+              mixBatchIds: new Set(bale.mixBatchId != null ? [bale.mixBatchId] : []),
               workers: new Map(),
             });
           }
@@ -273,8 +323,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const productRows = [...productMap.values()]
         .sort((a, b) => a.articleCode.localeCompare(b.articleCode))
-        .map(({ workers, ...rest }) => ({
+        .map(({ workers, mixBatchIds, ...rest }) => ({
           ...rest,
+          mixBatchIds: [...mixBatchIds].sort((a, b) => a - b),
           workers: [...workers.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name)),
         }));
       const categoryRows = [...categoryMap.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName));
@@ -416,8 +467,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
       const balanceValue = Math.round(balanceWeightKg * allTimeBlendedCpk * 100) / 100;
 
-      // ── PRODUCTION PROFIT = Bales value − (Produced kg × balance-on-table blended rate) ──
-      const statusValue = totalProductionValue - totalBaleWeightKg * allTimeBlendedCpk;
+      // Keep the historical status calculation for existing consumers. The new Overview profit
+      // is catalog gross profit: selling price minus production cost for the exact produced bales.
+      // That makes profit stable when the user switches the display between Selling and Cost.
+      const producedMaterialCost = totalBaleWeightKg * allTimeBlendedCpk;
+      const statusValue = totalProductionValue - producedMaterialCost;
+      const profitValue = totalSellingValue - totalProductionCostValue;
+      const profitMarginPct = totalSellingValue > 0 ? (profitValue / totalSellingValue) * 100 : 0;
 
       // ── Kg comparison ──
       const kgDiff = totalBaleWeightKg - totalMixWeightKg;
@@ -542,6 +598,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         ? productRows.map((row) => ({
             ...row,
             costPricePerBale: 0,
+            pricePerBale: 0,
             totalValue: 0,
           }))
         : productRows;
@@ -575,12 +632,17 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         from: from || null,
         to: to || null,
         costsHidden: hideReportCosts,
+        valuationMode,
         production: {
           totalBales,
           totalWeightKg: totalBaleWeightKg,
           totalValue: hideReportCosts ? 0 : totalProductionValue,
           byProduct: safeProductRows,
           byCategory: safeCategoryRows,
+          linkedBatches: linkedBatchRows.map((row) => ({
+            id: row.id,
+            totalWeightKg: parseFloat(row.totalWeightKg || "0"),
+          })),
         },
         wipersGarbage: {
           totalWipersQty,
@@ -609,6 +671,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           batchCost: hideReportCosts ? 0 : totalMixCost,
           productionValue: hideReportCosts ? 0 : totalProductionValue,
           statusValue: hideReportCosts ? 0 : statusValue,
+          costValue: hideReportCosts ? 0 : totalProductionCostValue,
+          sellingValue: hideReportCosts ? 0 : totalSellingValue,
+          profitValue: hideReportCosts ? 0 : profitValue,
+          profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
+          missingSelectedPriceBales: hideReportCosts ? 0 : missingSelectedPriceBales,
+          missingCostPriceBales: hideReportCosts ? 0 : missingCostPriceBales,
+          missingSellingPriceBales: hideReportCosts ? 0 : missingSellingPriceBales,
         },
         kgComparison: {
           producedKg: totalBaleWeightKg,

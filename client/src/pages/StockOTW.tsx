@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -178,14 +179,9 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     if (selectedSupplier.length > 0 && !item.containers.some((c) => selectedSupplier.includes(c.supplierName)))
       return false;
     if (searchTerm === "") return true;
-    const search = searchTerm.toLowerCase();
     return (
-      item.stockItemName.toLowerCase().includes(search) ||
-      (item.gradeName?.toLowerCase().includes(search) ?? false) ||
-      (item.categoryName?.toLowerCase().includes(search) ?? false) ||
-      item.containers.some(
-        (c) => c.containerNumber.toLowerCase().includes(search) || c.supplierName.toLowerCase().includes(search)
-      )
+      searchAny(searchTerm, item.stockItemName, item.gradeName, item.categoryName) ||
+      item.containers.some((c) => searchAny(searchTerm, c.containerNumber, c.supplierName))
     );
   });
 

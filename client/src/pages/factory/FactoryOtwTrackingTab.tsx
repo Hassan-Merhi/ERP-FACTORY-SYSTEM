@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
@@ -93,8 +94,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     if (delayedFilter === "delayed" && calcDelayDays(c) === 0) return false;
     if (delayedFilter === "overdue" && !isOverdue(c)) return false;
     if (search.trim()) {
-      const q = search.toLowerCase();
-      if (!c.containerNumber?.toLowerCase().includes(q) && !c.supplierName?.toLowerCase().includes(q)) return false;
+      if (!searchAny(search, c.containerNumber, c.supplierName)) return false;
     }
     return true;
   });

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 /**
  * Controller hook for the Factory Daybook page.
@@ -227,12 +228,8 @@ export function useFactoryDaybookModel() {
     if (statusFilter === "exclude") result = result.filter((e) => !e.optional);
     else if (statusFilter === "only") result = result.filter((e) => e.optional);
     if (debouncedSearchQuery.trim()) {
-      const q = debouncedSearchQuery.toLowerCase();
-      result = result.filter(
-        (e) =>
-          formatDaybookDescription(e).toLowerCase().includes(q) ||
-          formatTxType(e.txType).toLowerCase().includes(q) ||
-          e.txType.toLowerCase().includes(q)
+      result = result.filter((e) =>
+        searchAny(debouncedSearchQuery, formatDaybookDescription(e), formatTxType(e.txType), e.txType)
       );
     }
     const minAmt = minAmount ? parseFloat(minAmount) : null;

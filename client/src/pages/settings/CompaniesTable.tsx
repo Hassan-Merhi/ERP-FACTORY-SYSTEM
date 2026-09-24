@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ export function CompaniesTable({ companies, onEdit, onDelete }: CompaniesTablePr
   const [search, setSearch] = useState("");
 
   const filtered = companies.filter(
-    (c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase())
+    (c) => searchAny(search, c.name, c.code)
   );
 
   return (

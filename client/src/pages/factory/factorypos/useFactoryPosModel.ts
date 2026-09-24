@@ -27,8 +27,9 @@ import type {
   SavedSale,
 } from "./types";
 import { emptyRow, formatNum } from "./utils";
+import { normalizeSearchText } from "@shared/searchNormalization";
 
-const normSearch = (s: string) => (s || "").toLowerCase().replace(/[\s.\-_]/g, "");
+const normSearch = (s: string) => normalizeSearchText(s);
 
 function matchesSearch(item: InventoryItem, query: string): boolean {
   if (!query) return true;

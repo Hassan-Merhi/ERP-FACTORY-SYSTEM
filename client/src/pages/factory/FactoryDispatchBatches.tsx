@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -265,12 +266,7 @@ export default function FactoryDispatchBatches() {
 
   const filtered = batches.filter((b) => {
     if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      b.batchNumber.toLowerCase().includes(q) ||
-      (b.customerName || "").toLowerCase().includes(q) ||
-      (b.invoiceNumber || "").toLowerCase().includes(q)
-    );
+    return searchAny(search, b.batchNumber, b.customerName, b.invoiceNumber);
   });
 
   return (

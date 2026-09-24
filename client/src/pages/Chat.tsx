@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -335,7 +336,7 @@ export default function Chat() {
 
   const selectedUser = chatUsers.find((u) => u.id === selectedUserId);
   const conversationUsers = chatUsers.filter((u) => u.hasMessages || u.unreadCount > 0 || u.id === selectedUserId);
-  const filteredAllUsers = chatUsers.filter((u) => u.username.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredAllUsers = chatUsers.filter((u) => searchAny(searchQuery, u.username));
 
   const isSending = sendMutation.isPending || isUploading;
 

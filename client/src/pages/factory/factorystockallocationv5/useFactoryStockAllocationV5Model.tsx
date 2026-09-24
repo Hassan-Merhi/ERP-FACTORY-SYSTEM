@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSearch } from "wouter";
@@ -371,10 +372,7 @@ export function useFactoryStockAllocationV5Model() {
         : negativeFilteredRows;
 
     if (!searchQuery.trim()) return categoryFilteredRows;
-    const q = searchQuery.toLowerCase();
-    return categoryFilteredRows.filter(
-      (r) => r.productName.toLowerCase().includes(q) || r.articleCode.toLowerCase().includes(q)
-    );
+    return categoryFilteredRows.filter((r) => searchAny(searchQuery, r.productName, r.articleCode));
   }, [allRows, categoryFilter, searchQuery, showGarbageWipers, showNegativeOnly]);
 
   // Unique sorted category names from all loaded rows (unfiltered) for the dropdown

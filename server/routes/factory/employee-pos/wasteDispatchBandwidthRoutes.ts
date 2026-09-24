@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request } from "express";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../../../auth";
@@ -35,6 +36,7 @@ function getSearch(req: Request): string {
 
 function eligibleWasteBalesSql(companyId: number, search: string) {
   const pattern = `%${search}%`;
+  const compactPattern = `%${normalizeSearchText(search)}%`;
   const searchClause = search
     ? sql`AND (
         fb.reference_number ILIKE ${pattern}
@@ -42,6 +44,11 @@ function eligibleWasteBalesSql(companyId: number, search: string) {
         OR COALESCE(p.article_code, fb.article_code, '') ILIKE ${pattern}
         OR COALESCE(c.name, fb.category, '') ILIKE ${pattern}
         OR COALESCE(l.name, '') ILIKE ${pattern}
+        OR regexp_replace(lower(COALESCE(fb.reference_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactPattern}
+        OR regexp_replace(lower(COALESCE(p.name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactPattern}
+        OR regexp_replace(lower(COALESCE(p.article_code, fb.article_code, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactPattern}
+        OR regexp_replace(lower(COALESCE(c.name, fb.category, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactPattern}
+        OR regexp_replace(lower(COALESCE(l.name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactPattern}
       )`
     : sql``;
 

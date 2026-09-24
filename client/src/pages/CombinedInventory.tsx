@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -283,12 +284,10 @@ export default function CombinedInventory({ headerActions }: CombinedInventoryPr
     return Array.from(map.values()).sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
   }, [containerDetailsQueries, inventoryRows, allStockItems, includeZero]);
 
-  const searchLower = search.trim().toLowerCase();
-
   const filteredAll = useMemo(() => {
-    if (!searchLower) return combinedData;
-    return combinedData.filter((r) => r.stockItemName.toLowerCase().includes(searchLower));
-  }, [combinedData, searchLower]);
+    if (!search.trim()) return combinedData;
+    return combinedData.filter((r) => searchAny(search, r.stockItemName, r.stockItemCode));
+  }, [combinedData, search]);
 
   const stockGroups = useMemo((): StockGroupSummary[] => {
     const groupMap = new Map<string, StockGroupSummary>();

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
@@ -267,11 +268,8 @@ export default function PurchaseOrderEdit() {
   const stockItemsList = useMemo(() => (stockItems || []) as StockItem[], [stockItems]);
   const filteredStockItems = useMemo(() => {
     if (!searchTerm.trim()) return stockItemsList.slice(0, 100);
-    const term = searchTerm.toLowerCase();
     return stockItemsList
-      .filter(
-        (item) => (item.name || "").toLowerCase().includes(term) || (item.code || "").toLowerCase().includes(term)
-      )
+      .filter((item) => searchAny(searchTerm, item.name, item.code))
       .slice(0, 100);
   }, [stockItemsList, searchTerm]);
 
