@@ -428,30 +428,32 @@ export function CountryActivityKPI() {
 
   return (
     <Card className="overflow-hidden">
-      {/* Header row — always visible */}
-      {/* A div, not a <button>: the header contains the day-navigation buttons, and buttons cannot nest. */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        className="w-full flex flex-wrap items-center gap-3 p-4 text-left hover-elevate cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => setExpanded((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
-          e.preventDefault();
-          setExpanded((v) => !v);
-        }}
-        data-testid="button-country-activity-expand"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+      {/* Header row — always visible. The expand toggle and the day navigator are siblings,
+          so no button sits inside another interactive control. */}
+      <div className="w-full flex flex-wrap items-center gap-3 p-4">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setExpanded((v) => !v)}
+          data-testid="button-country-activity-expand"
+        >
+          <span className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
             <Globe className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none">Activity by Company</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Offloaded containers &amp; imports per day</p>
-          </div>
-        </div>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold leading-none">Activity by Company</span>
+            <span className="block text-xs text-muted-foreground mt-0.5">
+              Offloaded containers &amp; imports per day
+            </span>
+          </span>
+
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+        </button>
 
         {/* KPI badges */}
         {isLoading ? (
@@ -470,7 +472,7 @@ export function CountryActivityKPI() {
         )}
 
         {/* Date navigator — moves 1 day at a time */}
-        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             size="icon"
             variant="ghost"
@@ -498,12 +500,6 @@ export function CountryActivityKPI() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
       </div>
 
       {/* Expandable body */}
