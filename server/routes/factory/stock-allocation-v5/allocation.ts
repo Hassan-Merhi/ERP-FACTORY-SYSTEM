@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * factoryStockAllocationV5Routes: V5StockAllocation endpoints.
  *
@@ -459,23 +460,21 @@ export function registerV5StockAllocationRoutes(app: Express) {
       // 11. Apply frontend filters
       let filtered = rows;
       if (productFilter) {
-        const q = String(productFilter).toLowerCase();
-        filtered = filtered.filter(
-          (r) => r.articleCode.toLowerCase().includes(q) || r.productName.toLowerCase().includes(q)
-        );
+        filtered = filtered.filter((r) => searchAny(productFilter, r.articleCode, r.productName));
       }
       if (customerFilter) {
-        const q = String(customerFilter).toLowerCase();
-        filtered = filtered.filter((r) => r.proformaDetails.some((d) => d.customerName.toLowerCase().includes(q)));
+        filtered = filtered.filter((r) =>
+          r.proformaDetails.some((d) => searchAny(customerFilter, d.customerName))
+        );
       }
       if (proformaFilter) {
-        const q = String(proformaFilter).toLowerCase();
-        filtered = filtered.filter((r) => r.proformaDetails.some((d) => d.proformaName.toLowerCase().includes(q)));
+        filtered = filtered.filter((r) =>
+          r.proformaDetails.some((d) => searchAny(proformaFilter, d.proformaName))
+        );
       }
       if (containerFilter) {
-        const q = String(containerFilter).toLowerCase();
         filtered = filtered.filter((r) =>
-          r.proformaDetails.some((d) => d.containers.some((c) => c.containerName.toLowerCase().includes(q)))
+          r.proformaDetails.some((d) => d.containers.some((c) => searchAny(containerFilter, c.containerName)))
         );
       }
       if (statusFilter) {
@@ -497,10 +496,7 @@ export function registerV5StockAllocationRoutes(app: Express) {
 
       // Search param (frontend search box — unified alias alongside productFilter)
       if (search && !productFilter) {
-        const q = String(search).toLowerCase();
-        filtered = filtered.filter(
-          (r) => r.articleCode.toLowerCase().includes(q) || r.productName.toLowerCase().includes(q)
-        );
+        filtered = filtered.filter((r) => searchAny(search, r.articleCode, r.productName));
       }
 
       // Recompute totals over the final filtered set (search may have trimmed rows)

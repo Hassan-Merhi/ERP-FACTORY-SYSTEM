@@ -272,6 +272,17 @@ describe("factory container loading scan behavior", () => {
       ["/api/factory/customer-orders", 77],
       expect.objectContaining({ bales: expect.arrayContaining([expect.objectContaining({ baleReference: "REF-2" })]) })
     );
+    expect(harness.setQueryData).toHaveBeenCalledWith(
+      ["/api/factory/customer-proformas/capacity", 5, 77],
+      expect.any(Function)
+    );
+    expect(
+      harness.invalidateQueries.mock.calls.some(
+        ([options]) =>
+          Array.isArray(options?.queryKey) &&
+          options.queryKey[0] === "/api/factory/customer-proformas/capacity"
+      )
+    ).toBe(false);
     expect(localStorage.getItem("lastScannedBale_77")).toBeNull();
   });
 

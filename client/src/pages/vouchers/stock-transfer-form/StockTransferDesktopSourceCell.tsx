@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { focusScopedTestId } from "@/lib/scopedFocus";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 
@@ -63,11 +64,7 @@ export function StockTransferDesktopSourceCell({ model, index }: { model: StockT
           const filteredLocations = locations
             .filter((location) => {
               if (!transferSourceSearchTerm.trim()) return true;
-              const term = transferSourceSearchTerm.toLowerCase();
-              return (
-                (location.name || "").toLowerCase().includes(term) ||
-                (location.code && location.code.toLowerCase().includes(term))
-              );
+              return searchAny(transferSourceSearchTerm, location.name, location.code);
             })
             .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 

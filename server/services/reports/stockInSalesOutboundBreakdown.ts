@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
 import { and, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -76,9 +77,13 @@ function addItemFilters(
   if (locationCondition) conditions.push(locationCondition);
   if (filters.stockGroupIds.length > 0) conditions.push(inArray(stockItems.stockGroupId, filters.stockGroupIds));
   if (!filters.search) return;
-  const pattern = `%${filters.search}%`;
   conditions.push(
-    or(ilike(stockItems.code, pattern), ilike(stockItems.name, pattern), ilike(stockGroups.name, pattern), ...extra)!
+    or(
+      punctuationInsensitiveSearch(stockItems.code, filters.search),
+      punctuationInsensitiveSearch(stockItems.name, filters.search),
+      punctuationInsensitiveSearch(stockGroups.name, filters.search),
+      ...extra
+    )!
   );
 }
 
@@ -98,7 +103,10 @@ async function loadSalesOut(filters: StockInSalesReportFilters): Promise<Aggrega
     filters,
     filters.locationIds.length > 0 ? inArray(vouchers.locationId, filters.locationIds) : undefined,
     filters.search
-      ? [ilike(vouchers.voucherNumber, `%${filters.search}%`), ilike(vouchers.locationName, `%${filters.search}%`)]
+      ? [
+          punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search),
+          punctuationInsensitiveSearch(vouchers.locationName, filters.search),
+        ]
       : []
   );
   return db
@@ -132,7 +140,7 @@ async function loadSalesNoteAdjustments(filters: StockInSalesReportFilters): Pro
     conditions,
     filters,
     filters.locationIds.length > 0 ? inArray(creditNoteItems.locationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({
@@ -163,7 +171,7 @@ async function loadTransferOut(filters: StockInSalesReportFilters): Promise<Aggr
     conditions,
     filters,
     filters.locationIds.length > 0 ? inArray(stockTransferItems.sourceLocationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({

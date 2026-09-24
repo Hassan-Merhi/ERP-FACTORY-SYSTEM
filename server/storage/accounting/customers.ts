@@ -1,10 +1,11 @@
-import { eq, and, isNull, ilike } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 
 export async function getAllCustomers(companyId: number, search?: string, limit?: number): Promise<schema.Customer[]> {
   const conditions = [eq(schema.customers.companyId, companyId), isNull(schema.customers.deletedAt)];
-  if (search) conditions.push(ilike(schema.customers.legalName, `%${search}%`));
+  if (search) conditions.push(punctuationInsensitiveSearch(schema.customers.legalName, search));
   const query = db
     .select()
     .from(schema.customers)

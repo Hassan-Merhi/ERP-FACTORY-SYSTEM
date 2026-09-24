@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -56,12 +57,8 @@ export default function PosTransferOrders({ posUser }: PosTransferOrdersProps) {
         const destinationMatch = myLocationIds.has(transfer.destinationLocationId);
         if (!sourceMatch && !destinationMatch) return false;
       }
-      const term = search.toLowerCase().trim();
-      if (!term) return true;
-      return (
-        transfer.voucherNumber?.toLowerCase().includes(term) ||
-        transfer.stockItemNames?.some((name) => name.toLowerCase().includes(term))
-      );
+      if (!search.trim()) return true;
+      return searchAny(search, transfer.voucherNumber, ...(transfer.stockItemNames ?? []));
     });
   }, [allTransfers, search, statusFilter, dateFilter, myLocationIds]);
 

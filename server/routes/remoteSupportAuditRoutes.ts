@@ -1,5 +1,6 @@
+import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
 import type { Express } from "express";
-import { and, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { auditLog } from "@shared/schema";
 import { requireAuth } from "../auth";
 import { db } from "../db";
@@ -30,7 +31,6 @@ export function registerRemoteSupportAuditRoutes(app: Express): void {
       const from = safeDate(req.query.from);
       const to = safeDate(req.query.to, true);
       const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 120) : "";
-      const searchPattern = `%${search.replace(/[%_]/g, "\\$&")}%`;
       const conditions = [
         eq(auditLog.companyId, companyId),
         eq(auditLog.tableName, "remote_support_sessions"),
@@ -39,9 +39,9 @@ export function registerRemoteSupportAuditRoutes(app: Express): void {
         ...(search
           ? [
               or(
-                ilike(auditLog.username, searchPattern),
-                ilike(auditLog.action, searchPattern),
-                ilike(auditLog.recordIdentifier, searchPattern)
+                punctuationInsensitiveSearch(auditLog.username, search),
+                punctuationInsensitiveSearch(auditLog.action, search),
+                punctuationInsensitiveSearch(auditLog.recordIdentifier, search)
               )!,
             ]
           : []),

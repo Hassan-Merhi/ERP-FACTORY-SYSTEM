@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -160,15 +161,9 @@ export function useERPRunPayrollModel() {
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return new Set(workers.map((w) => w.id));
-    const q = searchQuery.toLowerCase();
     return new Set(
       workers
-        .filter(
-          (w) =>
-            `${w.firstName} ${w.lastName}`.toLowerCase().includes(q) ||
-            w.code?.toLowerCase().includes(q) ||
-            (w.department || "").toLowerCase().includes(q)
-        )
+        .filter((w) => searchAny(searchQuery, `${w.firstName} ${w.lastName}`, w.code, w.department))
         .map((w) => w.id)
     );
   }, [workers, searchQuery]);

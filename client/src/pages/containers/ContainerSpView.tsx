@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -179,14 +180,9 @@ export function ContainerSpView({
     };
   });
 
-  const spSearch = searchTerm.toLowerCase();
   const allSpItems = [...spNative, ...erpNormalized];
-  const filtered = allSpItems.filter(
-    (c) =>
-      !spSearch ||
-      (c.displayName ?? "").toLowerCase().includes(spSearch) ||
-      (c.subName ?? "").toLowerCase().includes(spSearch) ||
-      (c.supplierName ?? "").toLowerCase().includes(spSearch)
+  const filtered = allSpItems.filter((c) =>
+    searchAny(searchTerm, c.displayName, c.subName, c.supplierName)
   );
 
   return (

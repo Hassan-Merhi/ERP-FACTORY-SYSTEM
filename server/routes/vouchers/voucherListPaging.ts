@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 export interface VoucherListQuery {
   startDate?: string;
   endDate?: string;
@@ -66,7 +67,7 @@ export function parseVoucherListQuery(raw: Record<string, unknown>):
 }
 
 export function filterAndSortVouchers<T extends Record<string, unknown>>(rows: T[], query: VoucherFilterQuery): T[] {
-  const search = query.search?.trim().toLowerCase() ?? "";
+  const search = query.search?.trim() ?? "";
   const minimum = query.minAmount ? Number.parseFloat(query.minAmount) : null;
   const maximum = query.maxAmount ? Number.parseFloat(query.maxAmount) : null;
 
@@ -78,10 +79,7 @@ export function filterAndSortVouchers<T extends Record<string, unknown>>(rows: T
       const total = Number.parseFloat(String(row.totalAmount ?? "0")) || 0;
       if (minimum !== null && Number.isFinite(minimum) && total < minimum) return false;
       if (maximum !== null && Number.isFinite(maximum) && total > maximum) return false;
-      if (search) {
-        const values = [row.voucherNumber, row.description, row.locationName];
-        if (!values.some((value) => String(value ?? "").toLowerCase().includes(search))) return false;
-      }
+      if (search && !searchAny(search, row.voucherNumber, row.description, row.locationName)) return false;
       return true;
     })
     .sort((a, b) => {

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -58,14 +59,8 @@ export function AssignContainersDialog({
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return containers;
-    return containers.filter(
-      (c) =>
-        c.containerNumber.toLowerCase().includes(q) ||
-        (c.origin || "").toLowerCase().includes(q) ||
-        c.status.toLowerCase().includes(q)
-    );
+    if (!search.trim()) return containers;
+    return containers.filter((c) => searchAny(search, c.containerNumber, c.origin, c.status));
   }, [containers, search]);
 
   const toggleAll = () => {

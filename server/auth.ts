@@ -20,6 +20,30 @@ const SESSION_EXPIRY_REASONS = new Set([
   "SESSION_COMPANY_REQUIRED",
 ]);
 
+const OWNER_PROTECTED_DELETE_PREFIXES = [
+  "/api/accounts",
+  "/api/ledger-accounts",
+  "/api/bank-accounts",
+  "/api/account-groups",
+];
+
+function isOwnerProtectedDeleteRequest(method: string, path: string): boolean {
+  const normalizedMethod = method.toUpperCase();
+  const normalizedPath = path.toLowerCase();
+  const isDeleteRequest =
+    normalizedMethod === "DELETE" ||
+    (normalizedMethod !== "GET" && normalizedMethod !== "HEAD" && normalizedPath.includes("/bulk-delete"));
+
+  if (!isDeleteRequest) return false;
+
+  const isVoucherDelete = normalizedPath.includes("/voucher");
+  const isAccountDelete = OWNER_PROTECTED_DELETE_PREFIXES.some(
+    (prefix) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`)
+  );
+
+  return isVoucherDelete || isAccountDelete;
+}
+
 function logDenied(params: {
   userId?: string | null;
   username?: string | null;
@@ -184,27 +208,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Owners are operational users, not administrators. Enforce the no-delete
-    // boundary centrally so a route cannot accidentally grant deletion merely
-    // because it forgot to mount the canDelete middleware.
-    if (role === "Owner") {
-      const method = req.method.toUpperCase();
-      const path = req.path.toLowerCase();
-      const isDeleteRequest =
-        method === "DELETE" ||
-        (method !== "GET" && method !== "HEAD" && path.includes("/bulk-delete"));
-      if (isDeleteRequest) {
-        logDenied({
-          userId: req.session.userId ?? null,
-          username: req.session.username ?? null,
-          role,
-          companyId: req.session.currentCompanyId ?? null,
-          method: req.method,
-          path: req.path,
-          reason: "Owner role cannot delete records",
-        });
-        return res.status(403).json({ message: "Owners cannot delete records" });
-      }
+    // Owners may delete normal operational records (including bales), but
+    // voucher and account deletion remains protected centrally.
+    if (role === "Owner" && isOwnerProtectedDeleteRequest(req.method, req.path)) {
+      logDenied({
+        userId: req.session.userId ?? null,
+        username: req.session.username ?? null,
+        role,
+        companyId: req.session.currentCompanyId ?? null,
+        method: req.method,
+        path: req.path,
+        reason: "Owner role cannot delete vouchers or accounts",
+      });
+      return res.status(403).json({ message: "Owners cannot delete vouchers or accounts" });
     }
 
     if (!authorizeExplicitCompanyScope(req, res)) return;
@@ -293,8 +309,19 @@ export function canDelete(req: Request, res: Response, next: NextFunction) {
   }
 
   if (role === "Owner") {
-    logDenied({ userId, username, role, companyId, method, path, reason: "Owner role cannot delete records" });
-    return res.status(403).json({ message: "Owners cannot delete records" });
+    if (isOwnerProtectedDeleteRequest(method, path)) {
+      logDenied({
+        userId,
+        username,
+        role,
+        companyId,
+        method,
+        path,
+        reason: "Owner role cannot delete vouchers or accounts",
+      });
+      return res.status(403).json({ message: "Owners cannot delete vouchers or accounts" });
+    }
+    return next();
   }
 
   if (role === "POS") {

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,13 +69,8 @@ export function WorkerProfilesTab({
   const filteredWorkers = workerStaff.filter((w) => {
     if (w.active === false) return false;
     if (workerIdsInSelectedGroup !== null && !workerIdsInSelectedGroup.includes(w.id)) return false;
-    const q = workerProfileSearch.toLowerCase();
-    if (!q) return true;
-    return (
-      `${w.firstName} ${w.lastName}`.toLowerCase().includes(q) ||
-      (w.code || "").toLowerCase().includes(q) ||
-      (w.department || "").toLowerCase().includes(q)
-    );
+    if (!workerProfileSearch.trim()) return true;
+    return searchAny(workerProfileSearch, `${w.firstName} ${w.lastName}`, w.code, w.department);
   });
 
   // Group membership lookup: workerId → group name

@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 /**
  * accountRoutes: AccountPayable endpoints.
  *
@@ -67,8 +68,8 @@ export function registerAccountPayableRoutes(app: Express) {
       // Each keyword must appear in description OR voucherNumber (AND across keywords)
       const keywordConditions = keywords.map((kw) =>
         or(
-          ilike(vouchers.voucherNumber, `%${kw}%`),
-          ilike(vouchers.description, `%${kw}%`),
+          punctuationInsensitiveSearch(vouchers.voucherNumber, kw),
+          punctuationInsensitiveSearch(vouchers.description, kw),
           isNumericSearch ? sql`CAST(${vouchers.totalAmount} AS TEXT) LIKE ${"%" + amountQ + "%"}` : sql`false`
         )
       );

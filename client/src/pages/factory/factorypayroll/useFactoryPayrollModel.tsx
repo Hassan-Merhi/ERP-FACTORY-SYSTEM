@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -122,13 +123,8 @@ export function useFactoryPayrollModel() {
 
   const filteredWorkers = useMemo(() => {
     if (!workerSearch.trim()) return allWorkers;
-    const q = workerSearch.toLowerCase();
-    return allWorkers.filter(
-      (worker) =>
-        (worker.fullName || "").toLowerCase().includes(q) ||
-        (worker.employeeCode || "").toLowerCase().includes(q) ||
-        (worker.phone1 || "").toLowerCase().includes(q) ||
-        (worker.position || "").toLowerCase().includes(q)
+    return allWorkers.filter((worker) =>
+      searchAny(workerSearch, worker.fullName, worker.employeeCode, worker.phone1, worker.position)
     );
   }, [allWorkers, workerSearch]);
 

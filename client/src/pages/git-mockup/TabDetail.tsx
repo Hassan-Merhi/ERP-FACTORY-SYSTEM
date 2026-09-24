@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -27,15 +28,8 @@ export function TabDetail() {
 
   const filtered = useMemo(() => {
     if (!search) return allContainers;
-    const q = search.toLowerCase();
-    return allContainers.filter(
-      (r) =>
-        r.containerNumber.toLowerCase().includes(q) ||
-        r.companyName.toLowerCase().includes(q) ||
-        (r.transporter ?? "").toLowerCase().includes(q) ||
-        (r.agent ?? "").toLowerCase().includes(q) ||
-        (r.numberPlate ?? "").toLowerCase().includes(q) ||
-        (r.trackingLocation ?? "").toLowerCase().includes(q)
+    return allContainers.filter((r) =>
+      searchAny(search, r.containerNumber, r.companyName, r.transporter, r.agent, r.numberPlate, r.trackingLocation)
     );
   }, [allContainers, search]);
 

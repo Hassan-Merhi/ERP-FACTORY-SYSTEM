@@ -364,7 +364,6 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     aliases: [
       "/factory/intelligence/profitability",
       "/factory/intelligence/cashflow",
-      "/factory/net-position-details",
       "/factory/net-position",
       "/factory/net-profit-analytics",
     ],
@@ -405,6 +404,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
   },
 
   // System / utility pages
+  {
+    key: "factory/net-position-details",
+    label: "Net Position Details",
+    group: "Finance",
+    route: "/factory/net-position-details",
+    settingsVisible: false,
+    accessLevel: "admin",
+  },
   {
     key: "factory/conflicts",
     label: "Conflicts",

@@ -1,7 +1,8 @@
-import { and, asc, eq, ilike, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import type { CompanyScopedSupplier, InsertCompanyScopedSupplier } from "@shared/schema/supplierCompanyScope";
+import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
 
 export async function getAllSuppliers(
   search?: string,
@@ -13,7 +14,7 @@ export async function getAllSuppliers(
     conditions.push(eq(companyScopedSuppliers.companyId, companyId));
   }
   if (search) {
-    conditions.push(ilike(companyScopedSuppliers.legalName, `%${search}%`));
+    conditions.push(punctuationInsensitiveSearch(companyScopedSuppliers.legalName, search));
   }
   const query = db
     .select()

@@ -81,9 +81,13 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     ALTER TABLE suppliers
       ADD COLUMN IF NOT EXISTS stock_group_id INTEGER;
 
+    -- All Daybook hidden rows are a per-user preference. Production commonly
+    -- runs with RUN_STARTUP_MIGRATIONS=false, so this column must live in the
+    -- unconditional runtime-schema guard as well as the bulk migration list.
     ALTER TABLE user_preferences
       ADD COLUMN IF NOT EXISTS show_chat_widget BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS show_notes_panel BOOLEAN NOT NULL DEFAULT true;
+      ADD COLUMN IF NOT EXISTS show_notes_panel BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS hidden_transaction_journal_voucher_ids INTEGER[] NOT NULL DEFAULT '{}';
 
     ALTER TABLE factory_containers
       ADD COLUMN IF NOT EXISTS otw_note TEXT,

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Trash2, ArrowLeft } from "lucide-react";
@@ -222,13 +223,7 @@ export default function FactoryContainers() {
       if (parseFloat((c as { totalKg: string }).totalKg) > 0) return false;
     } else if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      if (
-        !c.containerNumber?.toLowerCase().includes(q) &&
-        !c.supplierName?.toLowerCase().includes(q) &&
-        !c.origin?.toLowerCase().includes(q)
-      )
-        return false;
+      if (!searchAny(searchQuery, c.containerNumber, c.supplierName, c.origin)) return false;
     }
     return true;
   });

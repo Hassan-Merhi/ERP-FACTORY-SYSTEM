@@ -324,8 +324,16 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // Inventory valuations - finished stock, raw material, stock on the
       // water and material in process - are computed in ./netPositionInventory.
-      const { inventorySellValue, rawMaterialStockValue, stockOtwValue, balanceOnTableValue } =
-        await computeNetPositionInventory({
+      // Only Stock In Hand and Balance on Table switch valuation mode.
+      const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
+      const {
+        inventorySellValue,
+        inventorySellingValue,
+        rawMaterialStockValue,
+        stockOtwValue,
+        balanceOnTableValue,
+        balanceOnTableSellingValue,
+      } = await computeNetPositionInventory({
           companyId,
           asOf,
           round2,
@@ -381,7 +389,12 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // ── 5. Combine and return ────────────────────────────────────────────
       // Rename for clarity — these are the two factory-specific values.
-      const baleInventoryValue = round2(inventorySellValue);
+      const baleInventoryValue = round2(
+        valuationMode === "selling" ? inventorySellingValue : inventorySellValue
+      );
+      const selectedBalanceOnTableValue = round2(
+        valuationMode === "selling" ? balanceOnTableSellingValue : balanceOnTableValue
+      );
 
       // Guard: strip any ledger account whose category could collide with our
       // factory-injected "Inventory" / "Stock" entries.  Accounts with type
@@ -570,7 +583,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         cleanLedgerForUsTotal +
           baleInventoryValue +
           rawMaterialStockValue +
-          balanceOnTableValue +
+          selectedBalanceOnTableValue +
           stockOtwValue +
           totalCustomerDr +
           pendingTotal +
@@ -605,7 +618,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const factoryBalanceOnTableEntry = {
         name: "Balance on Table",
         code: "BALANCE_ON_TABLE",
-        value: balanceOnTableValue,
+        value: selectedBalanceOnTableValue,
         category: "Production",
       };
       const factoryStockOtwEntry = {
@@ -618,7 +631,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const forUsAccounts = [
         factoryInventoryEntry,
         factoryRawMaterialEntry,
-        ...(balanceOnTableValue > 0 ? [factoryBalanceOnTableEntry] : []),
+        ...(selectedBalanceOnTableValue > 0 ? [factoryBalanceOnTableEntry] : []),
         ...(stockOtwValue > 0 ? [factoryStockOtwEntry] : []),
         ...cleanLedgerForUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
         ...customerDrItems
@@ -754,7 +767,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         supplierOverpayments: round2(totalSupplierOverpayments),
         inventoryValue: baleInventoryValue,
         rawMaterialValue: rawMaterialStockValue,
-        balanceOnTableValue: balanceOnTableValue,
+        balanceOnTableValue: selectedBalanceOnTableValue,
+        valuationMode,
         ledgerAssets: cleanLedgerForUsTotal,
         pendingOrders,
         verifiedOrders,

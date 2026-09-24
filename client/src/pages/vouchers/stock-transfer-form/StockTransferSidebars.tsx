@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -183,11 +184,7 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
                 const filteredLocations = locations
                   .filter((location) => {
                     if (!transferSourceSearchTerm.trim()) return true;
-                    const term = transferSourceSearchTerm.toLowerCase();
-                    return (
-                      (location.name || "").toLowerCase().includes(term) ||
-                      (location.code && location.code.toLowerCase().includes(term))
-                    );
+                    return searchAny(transferSourceSearchTerm, location.name, location.code);
                   })
                   .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
                 if (filteredLocations.length === 0)

@@ -1185,7 +1185,7 @@
     },
     "/api/pos/price-list-by-masters": {
       "status": 200,
-      "shape": "{items:[{baseSellingPrice:scalar,code:scalar,costPrice:scalar,masterPrices:{…},name:scalar,offloadingCost:scalar,stockGroupName:scalar,stockItemId:scalar}],masters:[]}"
+      "shape": "{items:[{baseSellingPrice:scalar,code:scalar,costPrice:scalar,masterPrices:{…},name:scalar,offloadingCost:scalar,stockGroupName:scalar,stockItemId:scalar,totalQuantity:scalar}],masters:[]}"
     },
     "/api/pos/shifts/current": {
       "status": 400,

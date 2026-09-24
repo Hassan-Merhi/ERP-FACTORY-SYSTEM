@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -247,13 +248,7 @@ export function SettingsHubPage({ onNavigate, currentUser, appMode }: SettingsHu
 
   const filteredCategories = useMemo(() => {
     if (!search.trim()) return visibleCategories;
-    const q = search.toLowerCase();
-    return visibleCategories.filter(
-      (cat) =>
-        cat.title.toLowerCase().includes(q) ||
-        cat.description.toLowerCase().includes(q) ||
-        cat.keywords.some((kw) => kw.toLowerCase().includes(q))
-    );
+    return visibleCategories.filter((cat) => searchAny(search, cat.title, cat.description, ...cat.keywords));
   }, [search, visibleCategories]);
 
   const hiddenCount = HUB_CATEGORIES.length - visibleCategories.length;

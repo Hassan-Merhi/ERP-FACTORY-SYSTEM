@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
 import { and, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -170,13 +171,12 @@ function addItemFilters(
     conditions.push(inArray(stockItems.stockGroupId, side.stockGroupIds));
   }
   if (filters.search) {
-    const pattern = `%${filters.search}%`;
     conditions.push(
       or(
-        ilike(stockItems.code, pattern),
-        ilike(stockItems.name, pattern),
-        ilike(stockGroups.name, pattern),
-        ilike(locations.name, pattern),
+        punctuationInsensitiveSearch(stockItems.code, filters.search),
+        punctuationInsensitiveSearch(stockItems.name, filters.search),
+        punctuationInsensitiveSearch(stockGroups.name, filters.search),
+        punctuationInsensitiveSearch(locations.name, filters.search),
         ...extraSearchConditions
       )!
     );
@@ -201,7 +201,7 @@ async function loadStockInItemRows(
     filters,
     side,
     eq(containerOffloads.locationId, side.locationId),
-    filters.search ? [ilike(containers.containerNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(containers.containerNumber, filters.search)] : []
   );
 
   return db
@@ -244,7 +244,10 @@ async function loadSalesItemRows(
     side,
     eq(vouchers.locationId, side.locationId),
     filters.search
-      ? [ilike(vouchers.voucherNumber, `%${filters.search}%`), ilike(vouchers.locationName, `%${filters.search}%`)]
+      ? [
+          punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search),
+          punctuationInsensitiveSearch(vouchers.locationName, filters.search),
+        ]
       : []
   );
 
@@ -292,7 +295,7 @@ async function loadNoteItemRows(
     filters,
     side,
     eq(creditNoteItems.locationId, side.locationId),
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
 
   return db

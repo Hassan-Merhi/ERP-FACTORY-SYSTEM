@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -537,20 +538,20 @@ export function useBalesHistoryModel() {
       if (baleDate !== dateFilter) return false;
     }
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      const searchFields = [
+    if (
+      searchTerm &&
+      !searchAny(
+        searchTerm,
         bale.baleCode,
         bale.referenceNumber,
         bale.barcodeValue,
         bale.category,
         product?.name,
         product?.articleCode,
-        batch?.name,
-      ]
-        .filter((s): s is string => typeof s === "string" && s.length > 0)
-        .map((s) => s.toLowerCase());
-      if (!searchFields.some((f) => f.includes(term))) return false;
+        batch?.name
+      )
+    ) {
+      return false;
     }
 
     return true;

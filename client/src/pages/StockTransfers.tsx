@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -119,13 +120,13 @@ export default function StockTransfers({ hideVoucherNotes = false }: StockTransf
 
   const filtered = transfers.filter((t) => {
     if (!debouncedSearch.trim()) return true;
-    const q = debouncedSearch.toLowerCase();
-    return (
-      t.voucherNumber?.toLowerCase().includes(q) ||
-      t.sourceLocationName?.toLowerCase().includes(q) ||
-      t.destinationLocationName?.toLowerCase().includes(q) ||
-      (t.notes ?? "").toLowerCase().includes(q) ||
-      (t.stockItemNames ?? []).some((n) => n.toLowerCase().includes(q))
+    return searchAny(
+      debouncedSearch,
+      t.voucherNumber,
+      t.sourceLocationName,
+      t.destinationLocationName,
+      t.notes,
+      ...(t.stockItemNames ?? [])
     );
   });
 

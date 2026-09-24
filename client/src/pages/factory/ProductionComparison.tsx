@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -18,11 +19,9 @@ import {
   fmtKg,
   fmtMoney,
   fmtNum,
-  fmtPct,
   fmtUsd,
   lastMonthRange,
   lastYearRange,
-  pctChange,
   thisMonthRange,
   thisYearRange,
   todayStr,
@@ -202,6 +201,8 @@ export default function ProductionComparison() {
         bQty: 0,
         aKg: row.totalWeightKg,
         bKg: 0,
+        aMixBatchIds: row.mixBatchIds ?? [],
+        bMixBatchIds: [],
         workers: [],
       });
       tallyWorkers(row);
@@ -211,6 +212,7 @@ export default function ProductionComparison() {
       if (ex) {
         ex.bQty = row.qty;
         ex.bKg = row.totalWeightKg;
+        ex.bMixBatchIds = row.mixBatchIds ?? [];
       } else {
         map.set(row.articleCode, {
           articleCode: row.articleCode,
@@ -221,6 +223,8 @@ export default function ProductionComparison() {
           bQty: row.qty,
           aKg: 0,
           bKg: row.totalWeightKg,
+          aMixBatchIds: [],
+          bMixBatchIds: row.mixBatchIds ?? [],
           workers: [],
         });
       }
@@ -241,13 +245,8 @@ export default function ProductionComparison() {
         .filter((r) => filterGrades.length === 0 || filterGrades.includes(r.grade))
         .filter((r) => {
           if (!filterProduct) return true;
-          const q = filterProduct.toLowerCase();
           const arabicName = arabicNameByArticle.get(r.articleCode.trim().toUpperCase()) ?? "";
-          return (
-            r.articleCode.toLowerCase().includes(q) ||
-            r.productName.toLowerCase().includes(q) ||
-            arabicName.toLowerCase().includes(q)
-          );
+          return searchAny(filterProduct, r.articleCode, r.productName, arabicName);
         })
         .sort((a, b) => (a.productName || a.articleCode).localeCompare(b.productName || b.articleCode)),
     [mergedAll, filterCategories, filterGrades, filterProduct, arabicNameByArticle]
@@ -259,8 +258,41 @@ export default function ProductionComparison() {
   const totalBKg = filtered.reduce((s, r) => s + r.bKg, 0);
   const baleDiff = totalABales - totalBBales;
   const kgDiff = totalAKg - totalBKg;
-  const balePct = pctChange(totalABales, totalBBales);
-  const kgPct = pctChange(totalAKg, totalBKg);
+
+  // ── Batch KPI (follows the same category/grade/product/worker filters as production) ──
+  const linkedBatchMapA = useMemo(
+    () => new Map((qA.data?.production.linkedBatches ?? []).map((batch) => [batch.id, batch.totalWeightKg] as const)),
+    [qA.data]
+  );
+  const linkedBatchMapB = useMemo(
+    () => new Map((qB.data?.production.linkedBatches ?? []).map((batch) => [batch.id, batch.totalWeightKg] as const)),
+    [qB.data]
+  );
+
+  const filteredBatchIdsA = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of filtered) {
+      for (const id of row.aMixBatchIds) {
+        if (linkedBatchMapA.has(id)) ids.add(id);
+      }
+    }
+    return ids;
+  }, [filtered, linkedBatchMapA]);
+
+  const filteredBatchIdsB = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of filtered) {
+      for (const id of row.bMixBatchIds) {
+        if (linkedBatchMapB.has(id)) ids.add(id);
+      }
+    }
+    return ids;
+  }, [filtered, linkedBatchMapB]);
+
+  const totalABatches = filteredBatchIdsA.size;
+  const totalBBatches = filteredBatchIdsB.size;
+  const totalABatchAmount = [...filteredBatchIdsA].reduce((sum, id) => sum + (linkedBatchMapA.get(id) ?? 0), 0);
+  const totalBBatchAmount = [...filteredBatchIdsB].reduce((sum, id) => sum + (linkedBatchMapB.get(id) ?? 0), 0);
 
   // ── Profit ──
   const profitA = costsHidden ? null : (qA.data?.summary?.statusValue ?? null);
@@ -451,7 +483,7 @@ export default function ProductionComparison() {
             />
           </div>
 
-          {/* Row 2: bale diff, kg diff, % change */}
+          {/* Row 2: bale diff, kg diff, batches / batch amount */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <StatCard
               title="Bale Difference"
@@ -470,13 +502,14 @@ export default function ProductionComparison() {
               valueClass={kgDiff > 0 ? "text-emerald-600" : kgDiff < 0 ? "text-red-500" : "text-muted-foreground"}
             />
             <StatCard
-              title="% Change"
-              value={fmtPct(balePct)}
-              sub={`Bales · Kg: ${fmtPct(kgPct)}`}
-              accent={(balePct ?? 0) > 0 ? "green" : (balePct ?? 0) < 0 ? "red" : "neutral"}
-              valueClass={
-                (balePct ?? 0) > 0 ? "text-emerald-600" : (balePct ?? 0) < 0 ? "text-red-500" : "text-muted-foreground"
-              }
+              title={`${labelA} — Batches / Batch Amount`}
+              value={`${fmtNum(totalABatches)} / ${fmtKg(totalABatchAmount)} kg`}
+              extraLine={{
+                label: `${labelB}:`,
+                value: `${fmtNum(totalBBatches)} / ${fmtKg(totalBBatchAmount)} kg`,
+              }}
+              sub="Updates with the selected production filters"
+              icon={<Package className="h-4 w-4" />}
             />
           </div>
 

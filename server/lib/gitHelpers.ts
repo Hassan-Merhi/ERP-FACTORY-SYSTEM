@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * gitHelpers.ts — Shared helpers for GIT (Global In-Transit) read routes.
  *
@@ -362,14 +363,7 @@ export function applyGitFilters(rows: EnrichedContainer[], f: GitFilterQuery): E
 
   const term = f.search || f.q;
   if (term) {
-    const s = term.toLowerCase();
-    out = out.filter(
-      (r) =>
-        r.containerNumber.toLowerCase().includes(s) ||
-        (r.shopName ?? "").toLowerCase().includes(s) ||
-        (r.agent ?? "").toLowerCase().includes(s) ||
-        (r.transporter ?? "").toLowerCase().includes(s)
-    );
+    out = out.filter((r) => searchAny(term, r.containerNumber, r.shopName, r.agent, r.transporter));
   }
 
   if (f.docsReady === "true") {

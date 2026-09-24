@@ -1,5 +1,6 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express, Request } from "express";
-import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { factoryBaleProducts, factoryCategories } from "@shared/schema/factoryTrilingualCatalogTables";
 import { resolveFactoryCategoryName, resolveFactoryProductLanguage } from "@shared/factoryBilingualContract";
 import { requireAuth } from "../../auth";
@@ -35,9 +36,9 @@ export function registerFactoryFrenchCatalogReadRoutes(app: Express): void {
       if (query) {
         filters.push(
           or(
-            ilike(factoryCategories.name, `%${query}%`),
-            ilike(factoryCategories.nameAr, `%${query}%`),
-            ilike(factoryCategories.nameFr, `%${query}%`)
+            punctuationInsensitiveSearch(factoryCategories.name, query),
+            punctuationInsensitiveSearch(factoryCategories.nameAr, query),
+            punctuationInsensitiveSearch(factoryCategories.nameFr, query)
           )!
         );
       }
@@ -69,16 +70,16 @@ export function registerFactoryFrenchCatalogReadRoutes(app: Express): void {
       if (query) {
         filters.push(
           or(
-            ilike(factoryBaleProducts.articleCode, `%${query}%`),
-            ilike(factoryBaleProducts.name, `%${query}%`),
-            ilike(factoryBaleProducts.nameAr, `%${query}%`),
-            ilike(factoryBaleProducts.nameFr, `%${query}%`),
-            ilike(factoryBaleProducts.description, `%${query}%`),
-            ilike(factoryBaleProducts.descriptionAr, `%${query}%`),
-            ilike(factoryBaleProducts.descriptionFr, `%${query}%`),
-            ilike(factoryCategories.name, `%${query}%`),
-            ilike(factoryCategories.nameAr, `%${query}%`),
-            ilike(factoryCategories.nameFr, `%${query}%`)
+            punctuationInsensitiveSearch(factoryBaleProducts.articleCode, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.name, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.nameAr, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.nameFr, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.description, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.descriptionAr, query),
+            punctuationInsensitiveSearch(factoryBaleProducts.descriptionFr, query),
+            punctuationInsensitiveSearch(factoryCategories.name, query),
+            punctuationInsensitiveSearch(factoryCategories.nameAr, query),
+            punctuationInsensitiveSearch(factoryCategories.nameFr, query)
           )!
         );
       }

@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { Container } from "@shared/schema";
@@ -46,12 +47,7 @@ export function useContainerFilters(allContainers: Container[], soldContainers: 
   const filteredOtwContainers = otwContainers.filter((c) => {
     // Search filter
     if (debouncedOtwSearch) {
-      const search = (debouncedOtwSearch || "").toLowerCase();
-      if (!(
-        (c.containerNumber || "").toLowerCase().includes(search) ||
-        (c.shopName?.toLowerCase() || "").includes(search) ||
-        (c.agent?.toLowerCase() || "").includes(search)
-      )) {
+      if (!searchAny(debouncedOtwSearch, c.containerNumber, c.shopName, c.agent)) {
         return false;
       }
     }
@@ -98,15 +94,11 @@ export function useContainerFilters(allContainers: Container[], soldContainers: 
 
   const filteredSoldContainers = soldContainers.filter((sale) => {
     if (!debouncedSoldSearch) return true;
-    const searchLower = (debouncedSoldSearch || "").toLowerCase();
-    return (
-      (sale.containerNumber || "").toLowerCase().includes(searchLower) ||
-      (sale.customerName || "").toLowerCase().includes(searchLower)
-    );
+    return searchAny(debouncedSoldSearch, sale.containerNumber, sale.customerName);
   });
 
   const containers = allContainers.filter((c) => {
-    if (debouncedSearch && !(c.containerNumber || "").toLowerCase().includes((debouncedSearch || "").toLowerCase())) {
+    if (debouncedSearch && !searchAny(debouncedSearch, c.containerNumber)) {
       return false;
     }
     if (statusFilter !== "ALL" && c.status !== statusFilter) {

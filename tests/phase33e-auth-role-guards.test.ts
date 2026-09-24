@@ -149,18 +149,37 @@ describe("Phase 33E delete permissions", () => {
     expect(adminNext).toHaveBeenCalledOnce();
   });
 
-  it("always blocks Owner and POS deletes even if the session flag is set", () => {
-    const owner = responseDouble();
+  it("allows Owner deletes for operational records but blocks voucher/account deletes", () => {
+    const baleNext = vi.fn();
+    const voucher = responseDouble();
+    const account = responseDouble();
+    const bulkAccount = responseDouble();
+
+    canDelete(request({ role: "Owner", path: "/api/bales/123" }), responseDouble(), baleNext);
+    canDelete(request({ role: "Owner", path: "/api/vouchers/456" }), voucher, vi.fn());
+    canDelete(request({ role: "Owner", path: "/api/ledger-accounts/789" }), account, vi.fn());
+    canDelete(
+      request({ role: "Owner", method: "POST", path: "/api/ledger-accounts/bulk-delete" }),
+      bulkAccount,
+      vi.fn()
+    );
+
+    expect(baleNext).toHaveBeenCalledOnce();
+    expect(voucher.statusCode).toBe(403);
+    expect(account.statusCode).toBe(403);
+    expect(bulkAccount.statusCode).toBe(403);
+    expect(voucher.body).toEqual({ message: "Owners cannot delete vouchers or accounts" });
+    expect(account.body).toEqual({ message: "Owners cannot delete vouchers or accounts" });
+  });
+
+  it("always blocks POS deletes even if the session flag is set", () => {
     const pos = responseDouble();
 
-    canDelete(request({ role: "Owner", session: { canDeleteRecords: true } }), owner, vi.fn());
     canDelete(request({ role: "POS", session: { canDeleteRecords: true } }), pos, vi.fn());
 
-    expect(owner.statusCode).toBe(403);
-    expect(owner.body).toEqual({ message: "Owners cannot delete records" });
     expect(pos.statusCode).toBe(403);
     expect(pos.body).toEqual({ message: "POS users cannot delete records" });
-    expect(harness.logger.error).toHaveBeenCalledTimes(2);
+    expect(harness.logger.error).toHaveBeenCalledOnce();
   });
 
   it("allows the explicit delete flag and gives an unflagged Manager a specific denial", () => {

@@ -70,9 +70,8 @@ function addCompanyDetailSheet(workbook: ExcelJS.Workbook, company: GroupNetPosi
   const summaryRows: Array<[string, number]> = [
     ["What We Have", company.forUsTotal],
     ["What We Owe", company.onUsTotal],
+    ["Net Position", company.netPosition],
   ];
-  if (Math.abs(company.netAdjustment) >= 0.01) summaryRows.push(["Net Position Adjustments", company.netAdjustment]);
-  summaryRows.push(["Net Position", company.netPosition]);
 
   for (const [label, value] of summaryRows) {
     const row = ws.addRow([label, "", value]);
@@ -115,11 +114,10 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
     { key: "company", width: 28 },
     { key: "have", width: 18 },
     { key: "owe", width: 18 },
-    { key: "adjustment", width: 18 },
     { key: "net", width: 18 },
   ];
 
-  summary.mergeCells("A1:E1");
+  summary.mergeCells("A1:D1");
   const title = summary.getCell("A1");
   title.value = `Group Net Position — As of ${snapshot.asOfDate}`;
   styleHeader(title);
@@ -127,17 +125,23 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
   summary.getRow(1).height = 30;
 
   summary.addRow(["Companies included", snapshot.companyCount]);
-  summary.addRow(["Excluded", "Properties"]);
+  const excludedLabels: Record<string, string> = {
+    properties: "Properties",
+    factory: "Factory",
+    factory_v2: "Factory V2",
+    supplier_partner: "Supplier Partner",
+  };
+  summary.addRow([
+    "Excluded",
+    snapshot.excludedCompanyTypes.map((type) => excludedLabels[type] ?? type).join(", "),
+  ]);
   summary.addRow([]);
 
   const totalRows: Array<[string, number]> = [
     ["Total What We Have", snapshot.totals.forUsTotal],
     ["Total What We Owe", snapshot.totals.onUsTotal],
+    ["GROUP NET POSITION", snapshot.totals.netPosition],
   ];
-  if (Math.abs(snapshot.totals.netAdjustments) >= 0.01) {
-    totalRows.push(["Net Position Adjustments", snapshot.totals.netAdjustments]);
-  }
-  totalRows.push(["GROUP NET POSITION", snapshot.totals.netPosition]);
 
   for (const [label, value] of totalRows) {
     const row = summary.addRow([label, value]);
@@ -146,35 +150,32 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
   }
 
   summary.addRow([]);
-  const header = summary.addRow(["Company", "What We Have", "What We Owe", "Adjustments", "Net Position"]);
+  const header = summary.addRow(["Company", "What We Have", "What We Owe", "Net Position"]);
   header.eachCell((cell) => styleHeader(cell, COLORS.blue));
   for (const company of snapshot.companies) {
     const row = summary.addRow([
       company.companyName,
       company.forUsTotal,
       company.onUsTotal,
-      company.netAdjustment,
       company.netPosition,
     ]);
     styleAmount(row.getCell(2), company.forUsTotal);
     styleAmount(row.getCell(3), company.onUsTotal);
-    styleAmount(row.getCell(4), company.netAdjustment);
-    styleAmount(row.getCell(5), company.netPosition, true);
+    styleAmount(row.getCell(4), company.netPosition, true);
   }
   const groupRow = summary.addRow([
     "GROUP TOTAL",
     snapshot.totals.forUsTotal,
     snapshot.totals.onUsTotal,
-    snapshot.totals.netAdjustments,
     snapshot.totals.netPosition,
   ]);
   groupRow.eachCell((cell, column) => {
     cell.font = { bold: true };
-    if (column >= 2) styleAmount(cell, Number(cell.value || 0), column === 5);
+    if (column >= 2) styleAmount(cell, Number(cell.value || 0), column === 4);
   });
   summary.addRow([]);
   const note = summary.addRow([snapshot.intercompany.note]);
-  summary.mergeCells(note.number, 1, note.number, 5);
+  summary.mergeCells(note.number, 1, note.number, 4);
   note.getCell(1).font = { italic: true };
   note.getCell(1).alignment = { wrapText: true };
   summary.views = [{ state: "frozen", ySplit: 1 }];

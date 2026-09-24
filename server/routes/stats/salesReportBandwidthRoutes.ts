@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request } from "express";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { pool } from "../../db";
@@ -82,7 +83,7 @@ function readSummaryParams(req: Request): SummaryParams {
     grouping: parseGrouping(req.query.grouping),
     mergeView: req.query.mergeView === "true" || req.query.mergeView === "1",
     profitFilter: parseProfitFilter(req.query.profitFilter),
-    search: typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "",
+    search: typeof req.query.search === "string" ? req.query.search.trim() : "",
     locationIds: parseIdList(req.query.locationIds),
     stockGroupIds: parseIdList(req.query.stockGroupIds),
     stockGroupNames: parseStringArray(req.query.stockGroupNames),
@@ -115,9 +116,15 @@ async function buildSalesSummary(companyIds: number[], params: SummaryParams): P
     conditions.push(`sg.name = ANY(${bind(params.stockGroupNames)}::text[])`);
   }
   if (params.search) {
-    const needle = `%${params.search}%`;
+    const needle = `%${params.search.toLowerCase()}%`;
+    const compactNeedle = `%${normalizeSearchText(params.search)}%`;
     conditions.push(
-      `(LOWER(COALESCE(si.name, '')) LIKE ${bind(needle)} OR LOWER(COALESCE(l.name, v.location_name, '')) LIKE ${bind(needle)})`
+      `(
+        LOWER(COALESCE(si.name, '')) LIKE ${bind(needle)}
+        OR LOWER(COALESCE(l.name, v.location_name, '')) LIKE ${bind(needle)}
+        OR regexp_replace(lower(COALESCE(si.name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${bind(compactNeedle)}
+        OR regexp_replace(lower(COALESCE(l.name, v.location_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${bind(compactNeedle)}
+      )`
     );
   }
 

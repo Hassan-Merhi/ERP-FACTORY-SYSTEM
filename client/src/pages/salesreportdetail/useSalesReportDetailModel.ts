@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
@@ -76,10 +77,7 @@ export function useSalesReportDetailModel() {
     if (isCreditSaleParam === "true" && !item.isCreditSale) return false;
     if (isCreditSaleParam === "false" && item.isCreditSale) return false;
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      const matches =
-        (item.stockItemName || "").toLowerCase().includes(lower) ||
-        (item.locationName || "").toLowerCase().includes(lower);
+      const matches = searchAny(searchTerm, item.stockItemName, item.locationName);
       if (!matches) return false;
     }
     if (plFilter === "all") return true;
@@ -217,10 +215,7 @@ export function useSalesReportDetailModel() {
     if (isCreditSaleParam === "true" && !item.isCreditSale) return false;
     if (isCreditSaleParam === "false" && item.isCreditSale) return false;
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
-      const matches =
-        (item.stockItemName || "").toLowerCase().includes(lower) ||
-        (item.locationName || "").toLowerCase().includes(lower);
+      const matches = searchAny(searchTerm, item.stockItemName, item.locationName);
       if (!matches) return false;
     }
     return true;

@@ -5,9 +5,16 @@ import {
   getHistoricalCurrencyReadiness,
   type HistoricalCurrencyReadiness,
 } from "../services/accounting/historicalCurrencyReadiness";
-import { registerGoldenCoastResidualEquityProjection } from "../routes/stats/goldenCoastResidualEquityProjection";
 import { registerStatsMultiCurrencyRoutes } from "../routes/stats/statsMultiCurrencyRoutes";
 import { registerStatsNetProfitRoutes } from "../routes/stats/statsNetProfitRoutes";
+import {
+  getCompanyRequestRuntimeContext,
+  runWithCompanyRequestRuntimeContext,
+} from "../services/security/companyRequestRuntimeContext";
+import {
+  createTenantDatabaseScope,
+  runWithDatabaseScopeRuntimeContext,
+} from "../services/security/databaseScopeRuntimeContext";
 import type { NetPositionLineItem, NetPositionSnapshot } from "./calculateNetPositionAsOf";
 
 type CompanyRecord = Awaited<ReturnType<typeof storage.getAllCompanies>>[number];
@@ -30,8 +37,12 @@ type NetProfitHandler = (
   next?: (error?: unknown) => unknown
 ) => unknown | Promise<unknown>;
 
-const EXCLUDED_COMPANY_TYPES = new Set(["properties", "factory", "factory_v2"]);
-const EXCLUDED_COMPANY_TYPE_LIST = ["properties", "factory", "factory_v2"];
+const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partner"]);
+const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
+const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set([
+  "hmd international group lebanon credit",
+  "bank loan",
+]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -82,6 +93,46 @@ export function isGroupNetPositionCompany(company: Pick<CompanyRecord, "active" 
   return company.active !== false && !EXCLUDED_COMPANY_TYPES.has(company.companyType || "");
 }
 
+/**
+ * Group Net Position is an intentional cross-company read. The HTTP request itself
+ * is scoped to the company currently selected in the browser, but every company
+ * snapshot below must run under that company's own PostgreSQL RLS scope. Without
+ * re-rooting both AsyncLocalStorage contexts, sister companies can look empty until
+ * the user manually switches into them.
+ */
+async function runWithGroupCompanyScope<T>(
+  companyId: number,
+  allowedCompanyIds: ReadonlySet<number> | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  if (allowedCompanyIds !== undefined && !allowedCompanyIds.has(companyId)) {
+    throw new Error(`Company ${companyId} is outside the authorized Group Net Position scope`);
+  }
+
+  const requestContext = getCompanyRequestRuntimeContext();
+  const authorizedCompanyIds = allowedCompanyIds
+    ? [...allowedCompanyIds].filter((id) => id !== companyId)
+    : requestContext
+      ? [...new Set([requestContext.companyId, ...(requestContext.authorizedCompanyIds ?? [])])].filter(
+          (id) => id !== companyId
+        )
+      : [];
+
+  const databaseScope = createTenantDatabaseScope(companyId, authorizedCompanyIds, "active-company");
+  const runInDatabaseScope = () => runWithDatabaseScopeRuntimeContext(databaseScope, run);
+
+  if (!requestContext) return runInDatabaseScope();
+
+  return runWithCompanyRequestRuntimeContext(
+    {
+      ...requestContext,
+      companyId,
+      authorizedCompanyIds,
+    },
+    runInDatabaseScope
+  );
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
   if (items.length === 0) return [];
   const results = new Array<R>(items.length);
@@ -109,9 +160,9 @@ let capturedNetProfitPipeline: CapturedNetProfitPipeline | null = null;
 /**
  * Group Net Position must use the exact ERP Net Position presentation that users
  * see on the normal Net Position page. That page is backed by /api/stats/net-profit
- * and is post-processed by the current cash/bank translation middleware plus the
- * Golden Coast Supplier Partner projection. Capturing those registered handlers
- * here avoids maintaining a second, drifting balance-sheet implementation.
+ * and is post-processed by the current cash/bank translation middleware. Supplier
+ * Partner companies are excluded before this pipeline is invoked, so their special
+ * presentation rules cannot leak into Group Net Position.
  */
 function getNetProfitPipeline(): CapturedNetProfitPipeline {
   if (capturedNetProfitPipeline) return capturedNetProfitPipeline;
@@ -148,9 +199,9 @@ function getNetProfitPipeline(): CapturedNetProfitPipeline {
     },
   } as unknown as Express;
 
-  // Keep the same order as server/routes/statsRoutes.ts. The response wrappers
-  // intentionally unwind in reverse order.
-  registerGoldenCoastResidualEquityProjection(captureApp);
+  // Keep the ERP response wrappers in the same order as server/routes/statsRoutes.ts.
+  // Supplier Partner projection is deliberately omitted because SP companies are
+  // not eligible for Group Net Position.
   registerStatsMultiCurrencyRoutes(captureApp);
   registerStatsNetProfitRoutes(captureApp);
 
@@ -185,6 +236,62 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+interface GroupIntercompanyExclusions {
+  accountIds: Set<number>;
+  accountNames: Set<string>;
+}
+
+function normalizeAccountName(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * The shared ERP classifier already excludes accountType=Intercompany. Group
+ * Net Position also has to remove the older ERP intercompany accounts that were
+ * intentionally created as Asset/Liability accounts:
+ *   - child-side configured parentCreditAccountId
+ *   - parent-side "[Subsidiary] Credit" receivables created by PO import
+ *   - IC-TO-* / IC-FROM-* transfer accounts
+ */
+async function getGroupIntercompanyExclusions(
+  companyId: number,
+  allCompanies: readonly CompanyRecord[]
+): Promise<GroupIntercompanyExclusions> {
+  const settings = await storage.getCompanySettings(companyId);
+  const accountIds = new Set<number>();
+  const configuredParentCreditId = Number(settings?.parentCreditAccountId);
+  if (Number.isInteger(configuredParentCreditId) && configuredParentCreditId > 0) {
+    accountIds.add(configuredParentCreditId);
+  }
+
+  const accountNames = new Set(
+    allCompanies
+      .filter((company) => Number(company.parentCompanyId) === companyId)
+      .map((company) => normalizeAccountName(`${company.name} Credit`))
+  );
+
+  return { accountIds, accountNames };
+}
+
+function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercompanyExclusions): boolean {
+  const row = asRecord(account);
+  const id = Number(row.id);
+  const code = String(row.code ?? "").trim().toUpperCase();
+  const name = normalizeAccountName(row.name ?? row.label);
+  const category = normalizeAccountName(row.category);
+
+  if (Number.isInteger(id) && exclusions.accountIds.has(id)) return true;
+  if (GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES.has(name)) return true;
+  if (exclusions.accountNames.has(name)) return true;
+  if (code.startsWith("IC-TO-") || code.startsWith("IC-FROM-")) return true;
+  if (name.includes("intercompany") || name.includes("inter-company")) return true;
+  return category === "intercompany";
+}
+
+function accountValue(account: unknown): number {
+  return round2(Number(asRecord(account).value ?? 0) || 0);
+}
+
 function toLineItem(account: unknown, side: "forUs" | "onUs"): NetPositionLineItem {
   const row = asRecord(account);
   return {
@@ -198,7 +305,8 @@ function toLineItem(account: unknown, side: "forUs" | "onUs"): NetPositionLineIt
 async function calculateErpNetPosition(
   companyId: number,
   asOfDate: string,
-  useCurrentSnapshot: boolean
+  useCurrentSnapshot: boolean,
+  allCompanies: readonly CompanyRecord[]
 ): Promise<NetPositionSnapshot> {
   let responseBody: unknown = null;
   let statusCode = 200;
@@ -228,27 +336,47 @@ async function calculateErpNetPosition(
 
   const forUs = asRecord(body.forUs);
   const onUs = asRecord(body.onUs);
-  const forUsTotal = round2(Number(body.forUsTotal ?? forUs.total ?? 0) || 0);
-  const onUsTotal = round2(Number(body.onUsTotal ?? onUs.total ?? 0) || 0);
-  const netPosition = round2(Number(body.netPosition ?? forUsTotal - onUsTotal) || 0);
-  const forUsAccounts = Array.isArray(forUs.accounts) ? forUs.accounts : [];
-  const onUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
+  const rawForUsTotal = round2(Number(body.forUsTotal ?? forUs.total ?? 0) || 0);
+  const rawOnUsTotal = round2(Number(body.onUsTotal ?? onUs.total ?? 0) || 0);
+  const rawForUsAccounts = Array.isArray(forUs.accounts) ? forUs.accounts : [];
+  const rawOnUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
+
+  const exclusions = await getGroupIntercompanyExclusions(companyId, allCompanies);
+  const excludedForUsTotal = round2(
+    rawForUsAccounts
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .reduce((sum, account) => sum + accountValue(account), 0)
+  );
+  const excludedOnUsTotal = round2(
+    rawOnUsAccounts
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .reduce((sum, account) => sum + accountValue(account), 0)
+  );
+  const forUsAccounts = rawForUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
+  const onUsAccounts = rawOnUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
+  const forUsTotal = round2(rawForUsTotal - excludedForUsTotal);
+  const onUsTotal = round2(rawOnUsTotal - excludedOnUsTotal);
+  const netPosition = round2(forUsTotal - onUsTotal);
 
   return {
     forUsTotal,
     onUsTotal,
     netPosition,
-    netPositionLabel: String(
-      body.netPositionLabel ?? (netPosition >= 0 ? "We have more than we owe" : "We owe more than we have")
-    ),
+    netPositionLabel: netPosition >= 0 ? "We have more than we owe" : "We owe more than we have",
     forUsLines: forUsAccounts.map((account) => toLineItem(account, "forUs")),
     onUsLines: onUsAccounts.map((account) => toLineItem(account, "onUs")),
   };
 }
 
-async function assertHistoricalCurrencyReady(companies: CompanyRecord[], asOfDate: string): Promise<void> {
+async function assertHistoricalCurrencyReady(
+  companies: CompanyRecord[],
+  asOfDate: string,
+  allowedCompanyIds?: ReadonlySet<number>
+): Promise<void> {
   await mapWithConcurrency(companies, 3, async (company) => {
-    const readiness = await getHistoricalCurrencyReadiness(company.id, asOfDate);
+    const readiness = await runWithGroupCompanyScope(company.id, allowedCompanyIds, () =>
+      getHistoricalCurrencyReadiness(company.id, asOfDate)
+    );
     if (!readiness.ready) {
       throw new GroupHistoricalCurrencyError(company.id, company.name, readiness);
     }
@@ -260,17 +388,24 @@ export async function calculateGroupNetPosition(
   allowedCompanyIds?: ReadonlySet<number>,
   useCurrentSnapshot = false
 ): Promise<GroupNetPositionSnapshot> {
-  const companies = (await storage.getAllCompanies())
+  const allCompanies = await storage.getAllCompanies();
+  const companies = allCompanies
     .filter(isGroupNetPositionCompany)
     .filter((company) => allowedCompanyIds === undefined || allowedCompanyIds.has(company.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  await assertHistoricalCurrencyReady(companies, asOfDate);
+  await assertHistoricalCurrencyReady(companies, asOfDate, allowedCompanyIds);
 
   const companyPositions = await mapWithConcurrency(companies, 3, async (company) => {
-    const snapshot = await calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot);
+    const snapshot = await runWithGroupCompanyScope(company.id, allowedCompanyIds, () =>
+      calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot, allCompanies)
+    );
+
+    // Group Net Position is intentionally the aggregate ERP balance sheet:
+    // What We Have minus What We Owe. Supplier Partner/equity adjustments are
+    // outside this report and ordinary Intercompany accounts are already omitted
+    // by the shared Net Position classifier.
     const sideNetPosition = round2(snapshot.forUsTotal - snapshot.onUsTotal);
-    const netAdjustment = round2(snapshot.netPosition - sideNetPosition);
 
     return {
       companyId: company.id,
@@ -280,9 +415,9 @@ export async function calculateGroupNetPosition(
       forUsTotal: snapshot.forUsTotal,
       onUsTotal: snapshot.onUsTotal,
       sideNetPosition,
-      netAdjustment,
-      netPosition: snapshot.netPosition,
-      netPositionLabel: snapshot.netPositionLabel,
+      netAdjustment: 0,
+      netPosition: sideNetPosition,
+      netPositionLabel: sideNetPosition >= 0 ? "We have more than we owe" : "We owe more than we have",
       forUsLines: snapshot.forUsLines,
       onUsLines: snapshot.onUsLines,
     } satisfies GroupNetPositionCompany;
@@ -291,8 +426,7 @@ export async function calculateGroupNetPosition(
   const forUsTotal = round2(companyPositions.reduce((sum, company) => sum + company.forUsTotal, 0));
   const onUsTotal = round2(companyPositions.reduce((sum, company) => sum + company.onUsTotal, 0));
   const sideNetPosition = round2(forUsTotal - onUsTotal);
-  const companyNetTotal = round2(companyPositions.reduce((sum, company) => sum + company.netPosition, 0));
-  const netAdjustments = round2(companyNetTotal - sideNetPosition);
+  const netAdjustments = 0;
 
   return {
     asOfDate,
@@ -304,12 +438,12 @@ export async function calculateGroupNetPosition(
       onUsTotal,
       sideNetPosition,
       netAdjustments,
-      netPosition: companyNetTotal,
+      netPosition: sideNetPosition,
     },
     intercompany: {
       mode: "already-excluded",
       additionalElimination: 0,
-      note: "Normal Intercompany ledger accounts are already excluded by the ERP Net Position rules, so no second group-level elimination is applied.",
+      note: "Intercompany accounts are excluded from Group Net Position, including legacy IC transfer accounts and linked parent/subsidiary credit accounts.",
     },
   };
 }

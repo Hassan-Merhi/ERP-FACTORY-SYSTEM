@@ -54,9 +54,16 @@ function replaceAccountValue(accounts: NetPositionAccount[], code: string, value
   if (account) account.value = round2(value);
 }
 
-async function computeHistoricalOperationalValues(companyId: number, asOf: string, currentRawMaterialValue: number) {
+async function computeHistoricalOperationalValues(
+  companyId: number,
+  asOf: string,
+  currentRawMaterialValue: number,
+  valuationMode: "cost" | "selling"
+) {
   const stockResult = await db.execute(sql`
-    SELECT COALESCE(SUM(p.production_price::numeric), 0) AS total
+    SELECT
+      COALESCE(SUM(p.production_price::numeric), 0) AS total_cost,
+      COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling
     FROM factory_bales b
     JOIN factory_bale_products p ON p.id = b.product_id
     WHERE b.company_id = ${companyId}
@@ -67,7 +74,9 @@ async function computeHistoricalOperationalValues(companyId: number, asOf: strin
       AND b.status <> 'PENDING_PRESSING'
   `);
   const stockRow = resultRows(stockResult)[0] ?? {};
-  const inventoryValue = round2(parseFloat(String(stockRow.total ?? "0")) || 0);
+  const inventoryCostValue = round2(parseFloat(String(stockRow.total_cost ?? "0")) || 0);
+  const inventorySellingValue = round2(parseFloat(String(stockRow.total_selling ?? "0")) || 0);
+  const inventoryValue = valuationMode === "selling" ? inventorySellingValue : inventoryCostValue;
 
   const mixResult = await db.execute(sql`
     SELECT
@@ -85,16 +94,26 @@ async function computeHistoricalOperationalValues(companyId: number, asOf: strin
   const blendedCpk = totalMixKg > 0 ? totalMixCost / totalMixKg : 0;
 
   const baleResult = await db.execute(sql`
-    SELECT COALESCE(SUM(weight_kg::numeric), 0) AS total_bale_kg
-    FROM factory_bales
-    WHERE company_id = ${companyId}
-      AND COALESCE(stock_entry_date, pressed_at::date, created_at::date) <= ${asOf}::date
-      AND (deleted_at IS NULL OR deleted_at::date > ${asOf}::date)
-      AND status <> 'PENDING_PRESSING'
+    SELECT
+      COALESCE(SUM(b.weight_kg::numeric), 0) AS total_bale_kg,
+      COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling_value
+    FROM factory_bales b
+    LEFT JOIN factory_bale_products p ON p.id = b.product_id
+    WHERE b.company_id = ${companyId}
+      AND COALESCE(b.stock_entry_date, b.pressed_at::date, b.created_at::date) <= ${asOf}::date
+      AND (b.deleted_at IS NULL OR b.deleted_at::date > ${asOf}::date)
+      AND b.status <> 'PENDING_PRESSING'
   `);
   const baleRow = resultRows(baleResult)[0] ?? {};
   const totalBaleKg = parseFloat(String(baleRow.total_bale_kg ?? "0")) || 0;
-  const balanceOnTableValue = round2(Math.max(totalMixKg - totalBaleKg, 0) * blendedCpk);
+  const totalSellingValue = parseFloat(String(baleRow.total_selling_value ?? "0")) || 0;
+  const botWeightKg = Math.max(totalMixKg - totalBaleKg, 0);
+  const balanceOnTableCostValue = round2(botWeightKg * blendedCpk);
+  const blendedSellingPerKg = totalBaleKg > 0 ? totalSellingValue / totalBaleKg : 0;
+  const balanceOnTableSellingValue =
+    blendedSellingPerKg > 0 ? round2(botWeightKg * blendedSellingPerKg) : balanceOnTableCostValue;
+  const balanceOnTableValue =
+    valuationMode === "selling" ? balanceOnTableSellingValue : balanceOnTableCostValue;
 
   const consumedAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(fms.total_cost::numeric), 0) AS value_after
@@ -163,7 +182,13 @@ export function registerNetPositionHistoricalCorrection(app: Express) {
             return originalJson(body);
           }
 
-          const historical = await computeHistoricalOperationalValues(companyId, asOf, body.rawMaterialValue);
+          const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
+          const historical = await computeHistoricalOperationalValues(
+            companyId,
+            asOf,
+            body.rawMaterialValue,
+            valuationMode
+          );
           replaceAccountValue(body.forUs.accounts, "INVENTORY", historical.inventoryValue);
           replaceAccountValue(body.forUs.accounts, "RAW_MATERIAL", historical.rawMaterialValue);
           replaceAccountValue(body.forUs.accounts, "BALANCE_ON_TABLE", historical.balanceOnTableValue);

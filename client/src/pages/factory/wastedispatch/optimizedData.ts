@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { HistoryBale, WasteBale } from "./optimizedTypes";
 
 export async function readWasteJson<T>(url: string): Promise<T> {

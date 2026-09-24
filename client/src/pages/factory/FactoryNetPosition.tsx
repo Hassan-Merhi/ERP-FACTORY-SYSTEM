@@ -1,6 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,6 +35,8 @@ interface SupplierWithBalance {
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
+  const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
+  const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
 
   const {
     data: rawData,
@@ -42,9 +45,10 @@ export default function FactoryNetPosition() {
     refetch,
     isFetching,
   } = useQuery<NetPositionData>({
-    queryKey: ["/api/factory/net-position", asOf],
+    queryKey: ["/api/factory/net-position", asOf, valuationMode],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/net-position?asOf=${asOf}`, { credentials: "include" });
+      const params = new URLSearchParams({ asOf, valuationMode });
+      const res = await fetch(`/api/factory/net-position?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -190,6 +194,26 @@ export default function FactoryNetPosition() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 border rounded-md p-0.5" data-testid="valuation-mode-toggle">
+            <Button
+              variant={valuationMode === "cost" ? "default" : "ghost"}
+              size="sm"
+              disabled={isSavingValuationMode}
+              onClick={() => updatePref({ factoryNetPositionValuationMode: "cost" })}
+              data-testid="button-valuation-cost"
+            >
+              Cost Price
+            </Button>
+            <Button
+              variant={valuationMode === "selling" ? "default" : "ghost"}
+              size="sm"
+              disabled={isSavingValuationMode}
+              onClick={() => updatePref({ factoryNetPositionValuationMode: "selling" })}
+              data-testid="button-valuation-selling"
+            >
+              Selling Price
+            </Button>
+          </div>
           {/* Date navigation */}
           <div className="flex items-center gap-1 border rounded-md px-1 py-0.5">
             <Button
@@ -241,6 +265,10 @@ export default function FactoryNetPosition() {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="text-xs text-muted-foreground -mt-4" data-testid="text-inventory-valuation-mode">
+        Inventory valued at {valuationMode === "selling" ? "Selling" : "Cost"}
       </div>
 
       {/* Historical mode banner */}

@@ -1,3 +1,5 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, RequestHandler } from "express";
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { companies, voucherEntries, vouchers } from "@shared/schema";
@@ -83,12 +85,16 @@ export function registerCentralGlobalTransactionRoutes(app: Express, requireAuth
       if (search) {
         conditions.push(
           or(
-            ilike(vouchers.voucherNumber, `%${search}%`),
-            ilike(vouchers.description, `%${search}%`),
+            punctuationInsensitiveSearch(vouchers.voucherNumber, String(search)),
+            punctuationInsensitiveSearch(vouchers.description, String(search)),
             sql`EXISTS (
               SELECT 1 FROM voucher_entries ve
               WHERE ve.voucher_id = ${vouchers.id}
-              AND ve.narration ILIKE ${`%${search}%`}
+              AND (
+                ve.narration ILIKE ${`%${search}%`}
+                OR regexp_replace(lower(COALESCE(ve.narration, '')), '[^[:alnum:]]+', '', 'g')
+                  LIKE ${`%${normalizeSearchText(search)}%`}
+              )
             )`
           )
         );

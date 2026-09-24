@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { Express } from "express";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
@@ -334,12 +335,8 @@ export function registerVoucherQueryRoutes(app: Express) {
 
       let filtered = results;
       if (search) {
-        const s = (search as string).toLowerCase();
-        filtered = filtered.filter(
-          (r) =>
-            r.voucherNumber.toLowerCase().includes(s) ||
-            (r.description || "").toLowerCase().includes(s) ||
-            (r.locationName || "").toLowerCase().includes(s)
+        filtered = filtered.filter((r) =>
+          searchAny(search, r.voucherNumber, r.description, r.locationName)
         );
       }
 

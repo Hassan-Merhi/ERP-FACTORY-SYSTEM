@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * Agent Ledger page.
  *
@@ -59,28 +60,13 @@ export default function Agents() {
   const agentIds = useMemo(() => new Set(agentAccountRows.map((a) => a.accountId)), [agentAccountRows]);
 
   const agentAccounts = useMemo(() => {
-    const searchLower = agentSearch.trim().toLowerCase();
-    return allAccounts.filter((a) => {
-      if (!agentIds.has(a.id)) return false;
-      if (searchLower && !a.name.toLowerCase().includes(searchLower) && !a.code.toLowerCase().includes(searchLower))
-        return false;
-      return true;
-    });
+    return allAccounts.filter((a) => agentIds.has(a.id) && searchAny(agentSearch, a.name, a.code));
   }, [allAccounts, agentIds, agentSearch]);
 
   const availableAccounts = useMemo(() => {
-    const searchLower = addSearch.trim().toLowerCase();
-    return allAccounts.filter((a) => {
-      if (agentIds.has(a.id)) return false;
-      if (
-        searchLower &&
-        !a.name.toLowerCase().includes(searchLower) &&
-        !a.code.toLowerCase().includes(searchLower) &&
-        !a.type.toLowerCase().includes(searchLower)
-      )
-        return false;
-      return true;
-    });
+    return allAccounts.filter(
+      (a) => !agentIds.has(a.id) && searchAny(addSearch, a.name, a.code, a.type)
+    );
   }, [allAccounts, agentIds, addSearch]);
 
   const groupedVouchers = groupTransactions(transactions);
