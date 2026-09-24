@@ -295,6 +295,33 @@ export function registerStockPriceListImportRoutes(app: Express) {
         priceMap.get(p.stockItemId)!.set(p.locationId, p.sellingPrice);
       }
 
+      // Sum live stock across every location in the current company.
+      const totalQuantityRows =
+        items.length > 0
+          ? await db
+              .select({
+                stockItemId: inventory.stockItemId,
+                totalQuantity: sql<string>`COALESCE(SUM(CAST(${inventory.quantity} AS numeric)), 0)::text`,
+              })
+              .from(inventory)
+              .innerJoin(locations, eq(inventory.locationId, locations.id))
+              .where(
+                and(
+                  eq(locations.companyId, companyId),
+                  inArray(
+                    inventory.stockItemId,
+                    items.map((i) => i.stockItemId)
+                  )
+                )
+              )
+              .groupBy(inventory.stockItemId)
+          : [];
+
+      const totalQuantityMap = new Map<number, string>();
+      for (const row of totalQuantityRows) {
+        totalQuantityMap.set(row.stockItemId, row.totalQuantity);
+      }
+
       // Attach cost data for privileged users
       const dubaiMap = new Map<number, string>();
       const offloadMap = new Map<number, string>();
@@ -339,9 +366,14 @@ export function registerStockPriceListImportRoutes(app: Express) {
           name: string;
           stockGroupName: string;
           baseSellingPrice: string | null;
+          totalQuantity: string;
           costPrice?: string | null;
           offloadingCost?: string | null;
-        } = { ...item, masterPrices: itemPrices };
+        } = {
+          ...item,
+          masterPrices: itemPrices,
+          totalQuantity: totalQuantityMap.get(item.stockItemId) ?? "0",
+        };
         if (isPrivileged) {
           base.costPrice = dubaiMap.get(item.stockItemId) ?? null;
           base.offloadingCost = offloadMap.get(item.stockItemId) ?? null;
