@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireAuth } from "../../auth";
@@ -80,7 +81,7 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
         const locationIds = parseCsvPositiveIds(req.query.locationId);
         const categoryIds = parseCsvPositiveIds(req.query.categoryId);
         const statuses = parseCsvStrings(req.query.status);
-        const search = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+        const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
         const includeUnassigned = req.query.includeUnassigned !== "false";
         const lite = req.query.lite === "1";
         const { page, limit, offset } = parsePagination(req);
@@ -136,7 +137,14 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
           const placeholders = statuses.map((status) => bind(status)).join(", ");
           conditions.push(`fb.status IN (${placeholders})`);
         }
-        if (search) conditions.push(`LOWER(fb.reference_number) LIKE ${bind(`%${search}%`)}`);
+        if (search) {
+          const rawParam = bind(`%${search.toLowerCase()}%`);
+          const compactParam = bind(`%${normalizeSearchText(search)}%`);
+          conditions.push(`(
+            LOWER(fb.reference_number) LIKE ${rawParam}
+            OR regexp_replace(lower(COALESCE(fb.reference_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+          )`);
+        }
         if (!includeUnassigned) conditions.push(`fb.finalized_by IS NOT NULL`);
 
         const limitParam = bind(limit);
