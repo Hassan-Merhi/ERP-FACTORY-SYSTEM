@@ -102,7 +102,7 @@ export function TabSummary() {
     retry: 1,
   });
 
-  const allContainers: EnrichedContainerApi[] = useMemo(() => (data?.containers ?? []), [data?.containers]);
+  const allContainers: EnrichedContainerApi[] = useMemo(() => data?.containers ?? [], [data?.containers]);
 
   const stats = useMemo(() => {
     const byStatus: Record<string, number> = {};
@@ -122,28 +122,34 @@ export function TabSummary() {
     };
   }, [allContainers]);
 
-  const makeBreakdown = useCallback((keyFn: (r: EnrichedContainerApi) => string) => {
-    const map = new Map<string, { label: string; count: number; cost: number; fee: number; duty: number }>();
-    for (const r of allContainers) {
-      const k = keyFn(r);
-      if (!map.has(k)) map.set(k, { label: k, count: 0, cost: 0, fee: 0, duty: 0 });
-      const e = map.get(k)!;
-      e.count++;
-      e.cost += parseNum(r.grandTotal);
-      e.fee += parseNum(r.transportFee);
-      e.duty += parseNum(r.dutyFee);
-    }
-    return [...map.values()];
-  }, [allContainers]);
+  const makeBreakdown = useCallback(
+    (keyFn: (r: EnrichedContainerApi) => string) => {
+      const map = new Map<string, { label: string; count: number; cost: number; fee: number; duty: number }>();
+      for (const r of allContainers) {
+        const k = keyFn(r);
+        if (!map.has(k)) map.set(k, { label: k, count: 0, cost: 0, fee: 0, duty: 0 });
+        const e = map.get(k)!;
+        e.count++;
+        e.cost += parseNum(r.grandTotal);
+        e.fee += parseNum(r.transportFee);
+        e.duty += parseNum(r.dutyFee);
+      }
+      return [...map.values()];
+    },
+    [allContainers]
+  );
 
   const byCompany = useMemo(() => makeBreakdown((r) => r.companyName), [makeBreakdown]);
   const byTransport = useMemo(() => makeBreakdown((r) => r.transporter ?? "—"), [makeBreakdown]);
   const byAgent = useMemo(() => makeBreakdown((r) => r.agent ?? "—"), [makeBreakdown]);
 
   const modeSelector = (
-    <div className="flex items-center gap-2 flex-wrap" data-testid="summary-mode-selector">
-      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <span className="text-xs text-muted-foreground">View:</span>
+    <div
+      className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 flex-wrap"
+      data-testid="summary-mode-selector"
+    >
+      <Building2 className="max-sm:hidden h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <span className="max-sm:hidden text-xs text-muted-foreground">View:</span>
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}

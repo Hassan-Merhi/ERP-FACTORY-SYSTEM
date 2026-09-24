@@ -22,8 +22,8 @@ export function TabPortReport() {
   const allContainers: EnrichedContainerApi[] = data?.containers ?? [];
 
   const modeSelector = (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="text-xs text-muted-foreground">Viewing:</span>
+    <div className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 mb-3">
+      <span className="max-sm:hidden text-xs text-muted-foreground">Viewing:</span>
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}

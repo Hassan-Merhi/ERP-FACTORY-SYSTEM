@@ -14,7 +14,7 @@ phase is certified.
 | 3 | Mobile filter sheet | Complete | Phase 3 PR |
 | 4 | Mobile cards instead of desktop tables | Complete | Phase 4 PR |
 | 5 | Mobile forms and dialogs | Complete | Phase 5 PR |
-| 6 | Simplify dense ERP screens | Pending | — |
+| 6 | Simplify dense ERP screens | Complete | Phase 6 PR |
 | 7 | Mobile actions and touch behaviour | Pending | — |
 | 8 | Mobile typography and information density | Pending | — |
 | 9 | ERP route-by-route certification | Pending | — |
@@ -208,4 +208,20 @@ Delivered:
   hit areas kept.
 - The voucher entry forms already had a dedicated phone design (tap-to-select rows and a
   sticky totals bar); they were verified unchanged.
+
+## Phase 6 — Simplify dense ERP screens
+
+Delivered:
+
+- Containers on the way (Tracking, Dashboard, Containers OTW), phones:
+  - the company scope is two equal segments;
+  - the summary cards sit in a two-column grid with truncating labels;
+  - the toolbar is a full-width search row, then Filters/Columns, then Track All/Actions.
+
+  The first container card is now visible above the fold.
+- Payroll: the four section tabs scroll horizontally on phones. The labels used to overlap
+  inside equal-width grid columns.
+- GIT tracking tabs (Detail, Truck/Location, Agent/Duty, Summary, Port report, WhatsApp):
+  on phones the company mode selector is a two-column segment without the decorative
+  label, and the Detail search gets its own full-width row.
 

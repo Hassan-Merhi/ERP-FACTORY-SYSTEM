@@ -315,15 +315,15 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
       {!embedded && <PageHeader title="Containers OTW" subtitle="Active container logistics and tracking" />}
 
       <div className="flex-1 overflow-hidden p-4 flex flex-col gap-4">
-        {/* ── Company Mode ── */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* ── Company Mode ── (narrow phones: two equal segments, count underneath) */}
+        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
           <button
             onClick={() => {
               setAllCompanies(false);
               setCompanyFilter("ALL");
             }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
               !allCompanies
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background border-border text-muted-foreground hover-elevate"
@@ -339,7 +339,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
               setCompanyFilter("ALL");
             }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              "flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
               allCompanies
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background border-border text-muted-foreground hover-elevate"
@@ -350,15 +350,15 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
             All Accessible Companies
           </button>
           {data && (
-            <span className="text-xs text-muted-foreground ml-1">
+            <span className="text-xs text-muted-foreground ml-1 max-sm:col-span-2 max-sm:ml-0">
               {data.total} active container{data.total !== 1 ? "s" : ""}
               {data.mode === "single" && data.companyName ? ` — ${data.companyName}` : ""}
             </span>
           )}
         </div>
 
-        {/* ── Summary Cards ── */}
-        <div className="flex flex-wrap gap-2">
+        {/* ── Summary Cards ── (narrow phones: two columns; landscape keeps the wrapping row) */}
+        <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
           <SummaryCard
             label="Active"
             value={data?.summary?.total ?? data?.total ?? filteredContainers.length}
@@ -434,9 +434,9 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           />
         </div>
 
-        {/* ── Search + Filters Toggle ── */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-48">
+        {/* ── Search + Filters Toggle ── (narrow phones: search row, then paired controls) */}
+        <div className="flex items-center gap-2 flex-wrap max-sm:grid max-sm:grid-cols-2">
+          <div className="relative flex-1 min-w-48 max-sm:col-span-2 max-sm:min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search container #, company, truck, transporter, agent…"
@@ -499,6 +499,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           </Popover>
 
           <ContainerBulkActions
+            className="max-sm:col-span-2 max-sm:[&>*]:flex-1"
             isAllowed={isAllowed}
             isBulkPending={isBulkPending}
             allContainersCount={data?.total ?? allContainers.length}

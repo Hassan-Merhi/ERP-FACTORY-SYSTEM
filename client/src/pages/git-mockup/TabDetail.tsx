@@ -24,7 +24,7 @@ export function TabDetail() {
     retry: 1,
   });
 
-  const allContainers: EnrichedContainerApi[] = useMemo(() => (data?.containers ?? []), [data?.containers]);
+  const allContainers: EnrichedContainerApi[] = useMemo(() => data?.containers ?? [], [data?.containers]);
 
   const filtered = useMemo(() => {
     if (!search) return allContainers;
@@ -52,9 +52,12 @@ export function TabDetail() {
   }, [filtered]);
 
   const modeSelector = (
-    <div className="flex items-center gap-2 flex-wrap" data-testid="detail-mode-selector">
-      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <span className="text-xs text-muted-foreground">View:</span>
+    <div
+      className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 flex-wrap"
+      data-testid="detail-mode-selector"
+    >
+      <Building2 className="max-sm:hidden h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <span className="max-sm:hidden text-xs text-muted-foreground">View:</span>
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}
@@ -112,7 +115,7 @@ export function TabDetail() {
       ) : (
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 max-w-sm max-sm:basis-full max-sm:max-w-none">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search container, company, truck, agent…"

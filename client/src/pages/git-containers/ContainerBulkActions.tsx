@@ -1,5 +1,6 @@
 import { CheckCircle2, Loader2, MessageCircle, Upload, Download, ChevronDown, X, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface ContainerBulkActionsProps {
+  className?: string;
   isAllowed: boolean;
   isBulkPending: boolean;
   allContainersCount: number;
@@ -30,9 +32,10 @@ export function ContainerBulkActions({
   onBulkEnable,
   onSendWhatsApp,
   onPrint,
+  className,
 }: ContainerBulkActionsProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn("flex items-center gap-2", className)}>
       {isAllowed && (
         <Button
           variant="outline"

@@ -130,7 +130,7 @@ export function InlineTextCell({
         mono && "font-mono"
       )}
     >
-      {value ? (uppercase ? value.toUpperCase() : value) : <span className="text-muted-foreground/50 text-xs">—</span>}
+      {value ? uppercase ? value.toUpperCase() : value : <span className="text-muted-foreground/50 text-xs">—</span>}
     </span>
   );
 }
@@ -322,12 +322,12 @@ export function SummaryCard({
   accent?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 min-w-0">
+    <div className="flex !flex-nowrap items-center gap-3 rounded-lg border bg-card px-3 py-2.5 min-w-0 sm:px-4 sm:py-3">
       <div className={cn("flex items-center justify-center h-9 w-9 rounded-md shrink-0", accent ?? "bg-muted")}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground font-medium leading-none mb-1 whitespace-nowrap">{label}</p>
+        <p className="text-xs text-muted-foreground font-medium leading-none mb-1 truncate">{label}</p>
         <p className="text-xl font-bold leading-none tracking-tight whitespace-nowrap">{value}</p>
       </div>
     </div>
