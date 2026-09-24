@@ -206,6 +206,148 @@
 }
 
 /*
+ * Checkboxes, radios and switches: the Phase 1 44px button floor turned them into large bordered
+ * tiles. The control keeps its 44px box, which is the touch target, and a ::before draws the
+ * familiar control inside it: a 20px box for checkboxes and radios, a 24px track for switches.
+ * Colours follow Radix `data-state`, so checked, indeterminate and disabled states still read.
+ */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) {
+    position: relative;
+    min-height: 2.75rem !important;
+    min-width: 2.75rem !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
+  }
+
+  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"])::before {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    height: 1.25rem;
+    width: 1.25rem;
+    transform: translate(-50%, -50%);
+    border: 1px solid hsl(var(--primary));
+    border-radius: 0.25rem;
+  }
+
+  [data-erp-route] button[role="radio"]::before {
+    border-radius: 9999px;
+  }
+
+  [data-erp-route] button[role="checkbox"]:is([data-state="checked"], [data-state="indeterminate"])::before {
+    background-color: hsl(var(--primary));
+  }
+
+  [data-erp-route] button[role="switch"]::before {
+    height: 1.5rem;
+    width: 100%;
+    border: 0;
+    border-radius: 9999px;
+    background-color: hsl(var(--input));
+  }
+
+  [data-erp-route] button[role="switch"][data-state="checked"]::before {
+    background-color: hsl(var(--primary));
+  }
+}
+
+/* Page forms: the closing button-only row with a submit action spans the width on phones. */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  #main-content form > div:last-child:has(> button[type="submit"]):not(:has(> :not(button, a))) {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 0.5rem;
+  }
+}
+
+/*
+ * Phone dialogs open as bottom sheets: full width, anchored to the bottom edge above the
+ * home indicator, rounded on top, with the action row pinned while the form scrolls.
+ * Covers every DialogContent/AlertDialogContent in the ERP shell; tablet/desktop keep the
+ * centred modal. Dialogs are portalled outside the shell, and this stylesheet stays loaded
+ * after the user leaves ERP, so the rules key off `html[data-app-shell="erp"]`, which ErpShell
+ * sets only while it is mounted. Action rows are DialogFooter/AlertDialogFooter, plus the button-only row
+ * that closes a dialog form or sits last in the dialog (dialogs that predate DialogFooter).
+ */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  html[data-app-shell="erp"] [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
+  html[data-app-shell="erp"] [role="alertdialog"][data-slot="alert-dialog-content"] {
+    inset: auto 0 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(var(--app-viewport-height, 100dvh) - 0.75rem) !important;
+    transform: none !important;
+    border-width: 1px 0 0 !important;
+    border-radius: 1rem 1rem 0 0 !important;
+    padding-bottom: max(1rem, var(--safe-area-bottom, 0px)) !important;
+  }
+
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]),
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]
+    > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    form
+    > div:last-child:has(> button):not(:has(> :not(button, a))) {
+    position: sticky;
+    bottom: calc(-1 * max(1rem, var(--safe-area-bottom, 0px)));
+    z-index: 2;
+    padding-bottom: max(0.75rem, var(--safe-area-bottom, 0px));
+    background-color: hsl(var(--background));
+    /* Paint the dialog's side padding too, so scrolled content never shows beside the actions. */
+    box-shadow:
+      -1rem 0 0 hsl(var(--background)),
+      1rem 0 0 hsl(var(--background));
+  }
+
+  /* Two actions (Cancel + primary) share one row, primary on the trailing side. */
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]):has(> :nth-child(2):last-child) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Button-only rows stretch their actions across the sheet like DialogFooter does. */
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]
+    > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    form
+    > div:last-child:has(> button):not(:has(> :not(button, a))) {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 0.5rem;
+    margin-top: 0;
+    border-top: 1px solid hsl(var(--border));
+    padding-top: 0.75rem;
+  }
+
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]
+    > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a)))
+    > *,
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    form
+    > div:last-child:has(> button):not(:has(> :not(button, a)))
+    > * {
+    min-height: 2.75rem;
+  }
+}
+
+/*
  * Radix Select renders a visually hidden native <select> (for form autofill) with inline
  * absolute positioning. Without a positioned ancestor it is placed at its static position and
  * can extend the document below the shell, letting the whole page scroll on phones. Pinning

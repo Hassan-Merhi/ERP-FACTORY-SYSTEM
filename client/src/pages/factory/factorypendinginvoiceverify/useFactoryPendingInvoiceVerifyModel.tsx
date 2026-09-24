@@ -456,10 +456,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
 
   const handleExportExcelNoCharges = () => {
     if (!orderId) return;
-    void downloadFromUrl(
-      `/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`,
-      "invoice-no-charges.xlsx"
-    );
+    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-excel?noCharges=1`, "invoice-no-charges.xlsx");
   };
 
   const handleExportPdf = () => {
@@ -469,10 +466,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
 
   const handleExportPdfNoCharges = () => {
     if (!orderId) return;
-    void downloadFromUrl(
-      `/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`,
-      "invoice-no-charges.pdf"
-    );
+    void downloadFromUrl(`/api/factory/customer-orders/${orderId}/export-pdf?noCharges=1`, "invoice-no-charges.pdf");
   };
 
   const handleExportLoadingStatus = () => {
