@@ -256,7 +256,19 @@ export function useStockTransferOrderModel() {
     if (destinationId) setDestinationLocationId(destinationId);
 
     if (existingTransfer.items?.length) {
-      setSelectedLocationIds(locations.map((location) => location.id));
+      // Editing a transfer only needs the source locations that are actually
+      // referenced by its items. Selecting every company location can turn the
+      // inventory matrix into a very large grid and cause severe layout churn
+      // and browser freezes while the edit form hydrates.
+      const sourceLocationIds = Array.from(
+        new Set(
+          existingTransfer.items
+            .map((item) => item.sourceLocationId)
+            .filter((id): id is number => typeof id === "number" && id > 0)
+        )
+      );
+      setSelectedLocationIds(sourceLocationIds);
+
       const preloaded: OrderItem[] = existingTransfer.items.map((item) => {
         const sourceLocation = locations.find((location) => location.id === item.sourceLocationId);
         const stockItem = stockItems.find((candidate) => candidate.id === item.stockItemId);
