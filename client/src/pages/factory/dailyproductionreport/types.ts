@@ -16,10 +16,12 @@ export interface ReportData {
     batchCost: number;
     productionValue: number;
     statusValue: number;
+    costValue: number;
     sellingValue: number;
     profitValue: number;
     profitMarginPct: number;
     missingSelectedPriceBales: number;
+    missingCostPriceBales: number;
     missingSellingPriceBales: number;
   };
   production: {
