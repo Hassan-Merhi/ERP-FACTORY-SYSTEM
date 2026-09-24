@@ -7,6 +7,7 @@
  * visible master, and single-location mode keeps the "base" price badge.
  */
 import { AlertCircle, Check, EyeOff, Layers, MapPin, Pencil, Tag, X } from "lucide-react";
+import { useLocation } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -203,7 +204,28 @@ function EmptyState({ model }: { model: PosPriceListModel }) {
 }
 
 function ItemsTable({ model }: { model: PosPriceListModel }) {
-  const { isAllMode, showCostPrice, canEdit, formatAmount, filteredItems, locationPricedList, masters } = model;
+  const {
+    isAllMode,
+    showCostPrice,
+    canEdit,
+    formatAmount,
+    filteredItems,
+    locationPricedList,
+    masters,
+    selectedLocationId,
+  } = model;
+  const [, navigate] = useLocation();
+
+  const openItemHistory = (stockItemId: number) => {
+    if (isAllMode) {
+      navigate(`/stock-items/${stockItemId}/monthly-summary`);
+      return;
+    }
+    if (selectedLocationId) {
+      navigate(`/locations/${selectedLocationId}/stock-items/${stockItemId}/history`);
+    }
+  };
+
   return (
     <>
       <div className="rounded-xl border">
@@ -250,7 +272,15 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
               >
                 <TableCell className="font-mono text-sm text-muted-foreground">{item.code || "—"}</TableCell>
                 <TableCell>
-                  <div className="font-medium">{item.name}</div>
+                  <button
+                    type="button"
+                    onClick={() => openItemHistory(item.stockItemId)}
+                    className="font-medium text-left text-primary hover:underline cursor-pointer"
+                    data-testid={`link-price-history-${item.stockItemId}`}
+                    title="View stock movement history"
+                  >
+                    {item.name}
+                  </button>
                   {item.stockGroupName && (
                     <div className="text-xs text-muted-foreground sm:hidden">{item.stockGroupName}</div>
                   )}
