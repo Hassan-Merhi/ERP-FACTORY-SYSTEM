@@ -51,9 +51,15 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           )
           .limit(1);
         const hiddenFields = profile?.hiddenCostFields ?? [];
+        const hasAnyProductionCostRestriction =
+          hiddenFields.includes("production_comparison_costing") ||
+          hiddenFields.includes("production_report_costing");
         const viewCostRestricted =
-          (reportView === "production-comparison" && hiddenFields.includes("production_comparison_costing")) ||
-          (reportView === "production" && hiddenFields.includes("production_report_costing"));
+          reportView === "production-comparison"
+            ? hiddenFields.includes("production_comparison_costing")
+            : reportView === "production"
+              ? hiddenFields.includes("production_report_costing")
+              : hasAnyProductionCostRestriction;
         hideReportCosts = Boolean(profile?.hideAllCosts || viewCostRestricted);
       }
 
