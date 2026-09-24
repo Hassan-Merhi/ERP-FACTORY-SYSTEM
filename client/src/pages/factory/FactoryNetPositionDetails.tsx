@@ -21,6 +21,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 
 interface AccountItem {
   id?: number;
@@ -551,11 +552,14 @@ export default function FactoryNetPositionDetails() {
   const { formatAmount } = useCurrencyContext();
   const [asOf, setAsOf] = useState<string>(todayStr);
   const isToday = asOf === todayStr();
+  const { prefs, updatePref, isPending: isSavingValuationMode } = useUserPreferences();
+  const valuationMode = prefs?.factoryNetPositionValuationMode === "selling" ? "selling" : "cost";
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<FactoryNetPositionData>({
-    queryKey: ["/api/factory/net-position", asOf],
+    queryKey: ["/api/factory/net-position", asOf, valuationMode],
     queryFn: async () => {
-      const res = await fetch(`/api/factory/net-position?asOf=${asOf}`, { credentials: "include" });
+      const params = new URLSearchParams({ asOf, valuationMode });
+      const res = await fetch(`/api/factory/net-position?${params.toString()}`, { credentials: "include" });
       if (!res.ok) {
         const text = await res.text();
         // Attach the parsed code so the retry handler can inspect it
@@ -638,6 +642,26 @@ export default function FactoryNetPositionDetails() {
           />
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 border rounded-md p-0.5" data-testid="valuation-mode-toggle">
+            <Button
+              variant={valuationMode === "cost" ? "default" : "ghost"}
+              size="sm"
+              disabled={isSavingValuationMode}
+              onClick={() => updatePref({ factoryNetPositionValuationMode: "cost" })}
+              data-testid="button-valuation-cost"
+            >
+              Cost Price
+            </Button>
+            <Button
+              variant={valuationMode === "selling" ? "default" : "ghost"}
+              size="sm"
+              disabled={isSavingValuationMode}
+              onClick={() => updatePref({ factoryNetPositionValuationMode: "selling" })}
+              data-testid="button-valuation-selling"
+            >
+              Selling Price
+            </Button>
+          </div>
           {/* Date navigation */}
           <div className="flex items-center gap-1 border rounded-md px-1 py-0.5">
             <Button
@@ -689,6 +713,10 @@ export default function FactoryNetPositionDetails() {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="text-xs text-muted-foreground -mt-2" data-testid="text-inventory-valuation-mode">
+        Inventory valued at {valuationMode === "selling" ? "Selling" : "Cost"}
       </div>
 
       <Card data-testid="card-formula">
