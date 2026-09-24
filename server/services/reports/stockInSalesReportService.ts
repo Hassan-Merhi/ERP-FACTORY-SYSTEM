@@ -459,10 +459,7 @@ function mergeAggregateRows(
 function historicalRowMatchesFilters(row: HistoricalInventoryRow, filters: StockInSalesReportFilters): boolean {
   if (filters.stockGroupIds.length > 0 && !filters.stockGroupIds.includes(Number(row.stockGroupId))) return false;
   if (!filters.search) return true;
-  const needle = filters.search.toLocaleLowerCase();
-  return [row.stockItemCode, row.stockItemName, row.stockGroupName, row.stockGroupCode]
-    .filter((value) => value !== null && value !== undefined)
-    .some((value) => String(value).toLocaleLowerCase().includes(needle));
+  return searchAny(filters.search, row.stockItemCode, row.stockItemName, row.stockGroupName, row.stockGroupCode);
 }
 
 async function getOpeningBalance(filters: StockInSalesReportFilters, asOfDate: string): Promise<InventoryBalance> {
