@@ -27,6 +27,18 @@ describe("Wave 4 shared Factory API ownership", () => {
     );
   });
 
+  it("allows Invoicing to read ledger and bank pickers without granting account writes", async () => {
+    expect(await resolveSharedFactoryRequirements(req("/api/ledger-accounts?profile=picker"))).toEqual(
+      expect.arrayContaining([{ pageKey: "factory/invoicing" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/bank-accounts"))).toEqual(
+      expect.arrayContaining([{ pageKey: "factory/invoicing" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/ledger-accounts", "POST"))).not.toEqual(
+      expect.arrayContaining([{ pageKey: "factory/invoicing" }])
+    );
+  });
+
   it("keeps voucher search tied to Find Voucher or Vouchers", async () => {
     expect(await resolveSharedFactoryRequirements(req("/api/vouchers/search"))).toEqual([
       { pageKey: "factory/accounts", tabKey: "hide_tab_accounts_find_voucher" },
