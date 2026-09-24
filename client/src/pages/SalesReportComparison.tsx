@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -269,83 +270,177 @@ export default function SalesReportComparison() {
         />
 
         {/* Controls */}
-        <div className="flex flex-wrap items-center gap-2" data-erp-filter-bar="sales-report-comparison">
-          <div className="flex items-center gap-1">
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-36 h-9 text-sm"
-              data-testid="input-start-date"
-            />
-            <span className="text-muted-foreground text-sm">–</span>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-36 h-9 text-sm"
-              data-testid="input-end-date"
-            />
-          </div>
+        <ErpMobileFilters
+          label="Company comparison filters"
+          primary={
+            <div className="flex min-w-0 items-center gap-1">
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-9 min-w-0 flex-1 text-sm"
+                data-testid="input-start-date"
+              />
+              <span className="text-muted-foreground text-sm">–</span>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-9 min-w-0 flex-1 text-sm"
+                data-testid="input-end-date"
+              />
+            </div>
+          }
+          quick={
+            <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2" data-testid="button-company-select">
+                  <Building2 className="h-4 w-4" />
+                  {selectedCodes.length === 0 ? "Select Companies" : `${selectedCodes.length} Selected`}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="end">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-2 pb-2">
+                  Select 2 or more companies
+                </p>
+                <div className="space-y-1">
+                  {allCompanies.map((c) => (
+                    <div
+                      key={c.code}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate"
+                      onClick={() => toggleCompany(c.code)}
+                      data-testid={`option-company-${c.code}`}
+                    >
+                      <Checkbox checked={selectedCodes.includes(c.code)} className="h-4 w-4" />
+                      <span className="text-sm">{c.name}</span>
+                      <span className="text-xs text-muted-foreground ml-auto">{c.code}</span>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          }
+          activeCount={[stockGroupFilter !== "all", viewFilter !== "all"].filter(Boolean).length}
+          onClear={() => {
+            setStockGroupFilter("all");
+            setViewFilter("all");
+          }}
+          data-testid="sales-comparison-filters"
+        >
+          {(layout) =>
+            layout === "sheet" ? (
+              <div className="grid gap-3">
+                <Select value={stockGroupFilter} onValueChange={setStockGroupFilter} data-testid="select-stock-group">
+                  <SelectTrigger className="w-44 h-9">
+                    <SelectValue placeholder="All Groups" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Groups</SelectItem>
+                    {stockGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.name}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-          <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="button-company-select">
-                <Building2 className="h-4 w-4" />
-                {selectedCodes.length === 0 ? "Select Companies" : `${selectedCodes.length} Selected`}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-2" align="end">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-2 pb-2">
-                Select 2 or more companies
-              </p>
-              <div className="space-y-1">
-                {allCompanies.map((c) => (
-                  <div
-                    key={c.code}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate"
-                    onClick={() => toggleCompany(c.code)}
-                    data-testid={`option-company-${c.code}`}
-                  >
-                    <Checkbox checked={selectedCodes.includes(c.code)} className="h-4 w-4" />
-                    <span className="text-sm">{c.name}</span>
-                    <span className="text-xs text-muted-foreground ml-auto">{c.code}</span>
-                  </div>
-                ))}
+                <div className="flex rounded-md border overflow-hidden">
+                  {(["all", "gaining", "losing"] as ViewFilter[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setViewFilter(v)}
+                      className={`px-3 h-9 text-sm capitalize transition-colors ${
+                        viewFilter === v ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
+                      }`}
+                      data-testid={`filter-${v}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </PopoverContent>
-          </Popover>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2" data-erp-filter-bar="sales-report-comparison">
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-36 h-9 text-sm"
+                    data-testid="input-start-date"
+                  />
+                  <span className="text-muted-foreground text-sm">–</span>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-36 h-9 text-sm"
+                    data-testid="input-end-date"
+                  />
+                </div>
 
-          <Select value={stockGroupFilter} onValueChange={setStockGroupFilter} data-testid="select-stock-group">
-            <SelectTrigger className="w-44 h-9">
-              <SelectValue placeholder="All Groups" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Groups</SelectItem>
-              {stockGroups.map((g) => (
-                <SelectItem key={g.id} value={g.name}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="gap-2" data-testid="button-company-select">
+                      <Building2 className="h-4 w-4" />
+                      {selectedCodes.length === 0 ? "Select Companies" : `${selectedCodes.length} Selected`}
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="end">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-2 pb-2">
+                      Select 2 or more companies
+                    </p>
+                    <div className="space-y-1">
+                      {allCompanies.map((c) => (
+                        <div
+                          key={c.code}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate"
+                          onClick={() => toggleCompany(c.code)}
+                          data-testid={`option-company-${c.code}`}
+                        >
+                          <Checkbox checked={selectedCodes.includes(c.code)} className="h-4 w-4" />
+                          <span className="text-sm">{c.name}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">{c.code}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-          <div className="flex rounded-md border overflow-hidden">
-            {(["all", "gaining", "losing"] as ViewFilter[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewFilter(v)}
-                className={`px-3 h-9 text-sm capitalize transition-colors ${
-                  viewFilter === v ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
-                }`}
-                data-testid={`filter-${v}`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
+                <Select value={stockGroupFilter} onValueChange={setStockGroupFilter} data-testid="select-stock-group">
+                  <SelectTrigger className="w-44 h-9">
+                    <SelectValue placeholder="All Groups" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Groups</SelectItem>
+                    {stockGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.name}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex rounded-md border overflow-hidden">
+                  {(["all", "gaining", "losing"] as ViewFilter[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setViewFilter(v)}
+                      className={`px-3 h-9 text-sm capitalize transition-colors ${
+                        viewFilter === v ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
+                      }`}
+                      data-testid={`filter-${v}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+        </ErpMobileFilters>
       </div>
 
       <div className="flex-1 overflow-auto pt-3 sm:p-6">

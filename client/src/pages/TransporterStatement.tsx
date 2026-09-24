@@ -8,6 +8,7 @@ import { useDateFormat } from "@/contexts/DateFormatContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -329,6 +330,38 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
 
   const closingBal = statement ? parseFloat(statement.closingBalance) : 0;
 
+  const transporterControl = (
+    <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[220px]">
+      <Label className="text-xs text-muted-foreground">Transporter Account</Label>
+      {loadingTransporters ? (
+        <Skeleton className="h-9 w-[220px]" />
+      ) : (
+        <Select value={selectedAccountId} onValueChange={setSelectedAccountId} data-testid="select-transporter">
+          <SelectTrigger className="w-full sm:w-[220px]" data-testid="trigger-transporter">
+            <SelectValue placeholder="Select transporter…" />
+          </SelectTrigger>
+          <SelectContent>
+            {transporters.length === 0 && (
+              <SelectItem value="__none__" disabled>
+                No active OTW transporters with matching accounts
+              </SelectItem>
+            )}
+            {transporters.map((t) => (
+              <SelectItem key={t.id} value={String(t.id)} data-testid={`option-transporter-${t.id}`}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+  const customPeriodCount = Number(dateFrom !== monthAgo()) + Number(dateTo !== today());
+  const resetPeriod = () => {
+    setDateFrom(monthAgo());
+    setDateTo(today());
+  };
+
   return (
     <>
       {/* ── Print stylesheet ─────────────────────────────────────────────── */}
@@ -404,52 +437,41 @@ export default function TransporterStatement({ embedded }: { embedded?: boolean 
 
         {/* ── Toolbar (hidden when printing) ──────────── */}
         <div className="flex flex-wrap items-end gap-3 mb-4 shrink-0 print:hidden">
-          <div className="flex w-full flex-col gap-1 sm:w-auto sm:min-w-[220px]">
-            <Label className="text-xs text-muted-foreground">Transporter Account</Label>
-            {loadingTransporters ? (
-              <Skeleton className="h-9 w-[220px]" />
-            ) : (
-              <Select value={selectedAccountId} onValueChange={setSelectedAccountId} data-testid="select-transporter">
-                <SelectTrigger className="w-full sm:w-[220px]" data-testid="trigger-transporter">
-                  <SelectValue placeholder="Select transporter…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {transporters.length === 0 && (
-                    <SelectItem value="__none__" disabled>
-                      No active OTW transporters with matching accounts
-                    </SelectItem>
-                  )}
-                  {transporters.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)} data-testid={`option-transporter-${t.id}`}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <ErpMobileFilters
+            label="Transporter statement filters"
+            primary={transporterControl}
+            activeCount={customPeriodCount}
+            onClear={resetPeriod}
+            className="w-full"
+            data-testid="transporter-statement-filters"
+          >
+            {(layout) => (
+              <>
+                {layout === "inline" && transporterControl}
+                <div className="flex w-full flex-col gap-1 sm:w-auto">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full sm:w-[140px]"
+                    data-testid="input-date-from"
+                  />
+                </div>
+
+                <div className="flex w-full flex-col gap-1 sm:w-auto">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full sm:w-[140px]"
+                    data-testid="input-date-to"
+                  />
+                </div>
+              </>
             )}
-          </div>
-
-          <div className="flex w-full flex-col gap-1 sm:w-auto">
-            <Label className="text-xs text-muted-foreground">From</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full sm:w-[140px]"
-              data-testid="input-date-from"
-            />
-          </div>
-
-          <div className="flex w-full flex-col gap-1 sm:w-auto">
-            <Label className="text-xs text-muted-foreground">To</Label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-full sm:w-[140px]"
-              data-testid="input-date-to"
-            />
-          </div>
+          </ErpMobileFilters>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
             {selectedAccountId && (

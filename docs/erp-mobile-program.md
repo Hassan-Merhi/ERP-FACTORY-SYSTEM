@@ -11,7 +11,7 @@ phase is certified.
 | --- | --- | --- | --- |
 | 1 | Mobile shell and navigation simplification | Complete | #1681, #1711 |
 | 2 | Standard mobile page header | Complete | #1718 |
-| 3 | Mobile filter sheet | Pending | — |
+| 3 | Mobile filter sheet | Complete | Phase 3 PR |
 | 4 | Mobile cards instead of desktop tables | Pending | — |
 | 5 | Mobile forms and dialogs | Pending | — |
 | 6 | Simplify dense ERP screens | Pending | — |
@@ -55,6 +55,27 @@ Pages that intentionally keep a panel-owned heading instead of a page header:
 | `/agents` | Master/detail ledger tool; the Phase 1 master/detail phone layout is keyed to its root element. |
 | `/chat` | Messaging workspace with a fixed-height conversation layout. |
 | `/spreadsheet` (open workbook) | Full-bleed editor toolbar; the library view uses `PageHeader`. |
+
+### Filters (`client/src/components/ui/erp-mobile-filters.tsx`)
+
+Filter-heavy ERP screens wrap their filter bar in `ErpMobileFilters`.
+`useErpPhoneLayout()` (`client/src/hooks/use-erp-phone-layout.ts`) selects the
+phone model: portrait phones under `sm`, and short coarse-pointer landscape
+phones, matching `erp-mobile-operations.css`.
+
+- **Tablet and desktop:** the page's own filter bar renders unchanged
+  (`children("inline")`), with no extra context requirements.
+- **Phones:** a `role="search"` row shows the `primary` control (for example the
+  period) on its own row, the `quick` controls (usually search), and a
+  **Filters** trigger with the active-filter count. The remaining filters open in
+  a bottom sheet (`children("sheet")`) with **Clear filters** and **Apply**.
+- Controls keep their live bindings to page state, so query parameters, API
+  requests, date handling and permissions are unchanged. **Apply** just returns
+  to the results.
+- `ErpFilterSheet` is exported for pages that already own a Filters toggle
+  (GIT containers).
+- Sheet strings use `mobileFilters.*` translation keys. Sheet titles are
+  translated through `sharedInterfaceTranslations`.
 
 ## Verification
 
@@ -103,3 +124,18 @@ Delivered:
 - The Tracking hub tabs scroll horizontally instead of overflowing on phones.
 - The Import Stock Items Back control now targets `/create` (it pointed at the
   unrouted `/accounting-create`).
+
+## Phase 3 — Mobile filter sheet
+
+Delivered:
+
+- `ErpMobileFilters` / `ErpFilterSheet` and `useErpPhoneLayout` (see Shared
+  contracts), with unit coverage.
+- Phone filter sheets on Daybook, All Daybook (transaction journal), GIT
+  containers (Tracking), Transporter statement, Stock items, Sales report, Sales
+  report comparison, Stock in & sales report, Net profit report and Optional
+  vouchers. Stock in & sales comparison uses a two-column phone grid instead
+  of a sheet, because its bar holds only two controls.
+- Remaining phone screens with several inline controls are data-entry forms
+  (Create, POS import, Settings, test data import), covered by Phase 5.
+

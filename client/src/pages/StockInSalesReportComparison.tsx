@@ -381,10 +381,10 @@ export default function StockInSalesReportComparison() {
         </Button>
       </PageHeader>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+      <div className="grid grid-cols-2 items-center gap-2 rounded-xl border bg-card p-2 sm:flex sm:flex-wrap sm:p-3 [&>*]:min-w-0">
         <PeriodFilter value={period} onChange={setPeriod} data-testid="period-filter-stock-in-sales-comparison" />
         <Select value={grouping} onValueChange={(value) => setGrouping(value as GroupingType)}>
-          <SelectTrigger className="w-32" data-testid="select-stock-in-sales-comparison-grouping">
+          <SelectTrigger className="w-full sm:w-32" data-testid="select-stock-in-sales-comparison-grouping">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -393,7 +393,7 @@ export default function StockInSalesReportComparison() {
             <SelectItem value="yearly">Yearly</SelectItem>
           </SelectContent>
         </Select>
-        <div className="relative min-w-52 flex-1 sm:max-w-sm">
+        <div className="relative col-span-2 min-w-0 flex-1 sm:min-w-52 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
