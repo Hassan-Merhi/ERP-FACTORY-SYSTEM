@@ -44,17 +44,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             hideAllCosts: factoryUserProfiles.hideAllCosts,
           })
           .from(factoryUserProfiles)
-          .where(
-            and(
-              eq(factoryUserProfiles.companyId, companyId),
-              eq(factoryUserProfiles.userId, req.session.userId)
-            )
-          )
+          .where(and(eq(factoryUserProfiles.companyId, companyId), eq(factoryUserProfiles.userId, req.session.userId)))
           .limit(1);
         const hiddenFields = profile?.hiddenCostFields ?? [];
         const hasAnyProductionCostRestriction =
-          hiddenFields.includes("production_comparison_costing") ||
-          hiddenFields.includes("production_report_costing");
+          hiddenFields.includes("production_comparison_costing") || hiddenFields.includes("production_report_costing");
         const viewCostRestricted =
           reportView === "production-comparison"
             ? hiddenFields.includes("production_comparison_costing")
@@ -169,9 +163,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // batch count/amount for whatever product/category/grade filters are applied client-side.
       const linkedMixBatchIds = [
         ...new Set(
-          baleRows
-            .map((row) => row.mixBatchId)
-            .filter((id): id is number => id != null && Number.isFinite(Number(id)))
+          baleRows.map((row) => row.mixBatchId).filter((id): id is number => id != null && Number.isFinite(Number(id)))
         ),
       ];
       const linkedBatchRows =
