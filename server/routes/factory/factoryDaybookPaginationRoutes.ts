@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { and, eq, inArray, or } from "drizzle-orm";
@@ -237,7 +238,15 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
       const outerConditions = [`dedup_rank = 1`];
       if (search) {
         const param = bind(`%${search}%`);
-        outerConditions.push(`(description ILIKE ${param} OR "txType" ILIKE ${param})`);
+        const compactParam = bind(`%${normalizeSearchText(search)}%`);
+        outerConditions.push(
+          `(
+            description ILIKE ${param}
+            OR "txType" ILIKE ${param}
+            OR regexp_replace(lower(COALESCE(description, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+            OR regexp_replace(lower(COALESCE("txType", '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+          )`
+        );
       }
       if (optionalStatus === "exclude") outerConditions.push(`optional = false`);
       else if (optionalStatus === "only") outerConditions.push(`optional = true`);
