@@ -246,14 +246,25 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
 
                 {!costsHidden &&
                   data &&
-                  (data.summary.missingSelectedPriceBales > 0 || data.summary.missingSellingPriceBales > 0) && (
+                  (data.summary.missingCostPriceBales > 0 || data.summary.missingSellingPriceBales > 0) && (
                     <div
                       className="text-xs font-medium text-amber-700 dark:text-amber-400"
                       data-testid="text-missing-production-prices"
                     >
-                      {valuationMode === "selling"
-                        ? `${data.summary.missingSellingPriceBales} bale${data.summary.missingSellingPriceBales === 1 ? "" : "s"} missing selling price — valuation and profit are partial.`
-                        : `${data.summary.missingSelectedPriceBales > 0 ? `${data.summary.missingSelectedPriceBales} bale${data.summary.missingSelectedPriceBales === 1 ? "" : "s"} missing cost price` : ""}${data.summary.missingSelectedPriceBales > 0 && data.summary.missingSellingPriceBales > 0 ? " · " : ""}${data.summary.missingSellingPriceBales > 0 ? `${data.summary.missingSellingPriceBales} bale${data.summary.missingSellingPriceBales === 1 ? "" : "s"} missing selling price — profit is partial.` : ""}`}
+                      Missing prices:{" "}
+                      {[
+                        data.summary.missingCostPriceBales > 0
+                          ? `${data.summary.missingCostPriceBales} cost`
+                          : null,
+                        data.summary.missingSellingPriceBales > 0
+                          ? `${data.summary.missingSellingPriceBales} selling`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {data.summary.missingSelectedPriceBales > 0
+                        ? ` — ${valuationMode === "selling" ? "Selling" : "Cost"} valuation and profit are partial.`
+                        : " — Profit is partial."}
                     </div>
                   )}
 
