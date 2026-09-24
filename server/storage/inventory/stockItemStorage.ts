@@ -1,6 +1,7 @@
-import { eq, and, or, isNull, asc, ilike } from "drizzle-orm";
+import { eq, and, or, isNull, asc } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 
 // ---------------------------------------------------------------------------
 // Stock Items
@@ -101,7 +102,10 @@ export async function searchStockItems(
       and(
         eq(schema.stockItems.companyId, companyId),
         isNull(schema.stockItems.deletedAt),
-        or(ilike(schema.stockItems.name, `%${query}%`), ilike(schema.stockItems.code, `%${query}%`))
+        or(
+          punctuationInsensitiveSearch(schema.stockItems.name, query),
+          punctuationInsensitiveSearch(schema.stockItems.code, query)
+        )
       )
     )
     .orderBy(asc(schema.stockItems.name))
