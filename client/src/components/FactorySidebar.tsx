@@ -162,7 +162,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
 } {
   const { selectedCompany } = useCompany();
   const isDeveloper = user?.role === "Developer";
-  const isAdmin = user?.role === "Admin" || user?.role === "Owner" || isDeveloper;
+  const isAdmin = user?.role === "Admin" || isDeveloper;
 
   const { data: settings } = useQuery({
     queryKey: companyQueryKey("/api/factory/settings", selectedCompany?.id),
@@ -369,7 +369,7 @@ export function FactorySidebar({
               </Badge>
             </a>
           )}
-          {!["Admin", "Owner", "Developer"].includes(user?.role ?? "") && (
+          {!["Admin", "Developer"].includes(user?.role ?? "") && (
             <SidebarFlatLink
               href="/my-settings"
               icon={KeyRound}

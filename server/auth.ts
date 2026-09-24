@@ -184,6 +184,29 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // Owners are operational users, not administrators. Enforce the no-delete
+    // boundary centrally so a route cannot accidentally grant deletion merely
+    // because it forgot to mount the canDelete middleware.
+    if (role === "Owner") {
+      const method = req.method.toUpperCase();
+      const path = req.path.toLowerCase();
+      const isDeleteRequest =
+        method === "DELETE" ||
+        (method !== "GET" && method !== "HEAD" && path.includes("/bulk-delete"));
+      if (isDeleteRequest) {
+        logDenied({
+          userId: req.session.userId ?? null,
+          username: req.session.username ?? null,
+          role,
+          companyId: req.session.currentCompanyId ?? null,
+          method: req.method,
+          path: req.path,
+          reason: "Owner role cannot delete records",
+        });
+        return res.status(403).json({ message: "Owners cannot delete records" });
+      }
+    }
+
     if (!authorizeExplicitCompanyScope(req, res)) return;
 
     req.user = {

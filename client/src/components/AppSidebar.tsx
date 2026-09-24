@@ -65,7 +65,7 @@ const defaultPinnedItems: NavItem[] = [
   { title: "Vouchers", url: "/vouchers", icon: Receipt },
 ];
 
-const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Owner", "Developer"]);
+const SETTINGS_HIDDEN_ROLES = new Set(["Admin", "Developer"]);
 
 export const ERP_NAV_SECTIONS: NavSection[] = [
   {
@@ -184,6 +184,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     if (item.url === "/spreadsheet") return isDeveloper;
     if (item.url === "/live-sheets") return isDeveloper;
     if (item.url === "/chat") return isDeveloper;
+    if (item.url === "/analytics" && isOwner) return false;
     if (item.url === "/settings" && isOwner) return false;
 
     if (isDeveloper || isAdmin || myErpPages?.fullAccess) return true;

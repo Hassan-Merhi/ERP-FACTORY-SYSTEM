@@ -462,6 +462,9 @@ export function CommandPalette({
   const [internalOpen, setInternalOpen] = useState(false);
   const appMode = useAppMode();
   const [, setLocation] = useLocation();
+  const effectiveRole = user?.currentRole ?? user?.role ?? "";
+  const isOwner = effectiveRole === "Owner";
+  const canSeeAdminCommands = effectiveRole === "Admin" || effectiveRole === "Developer";
 
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
@@ -514,8 +517,11 @@ export function CommandPalette({
 
   const propertiesPages = useMemo(
     () =>
-      buildEntries(PROPERTIES_NAV_SECTIONS, [...PROPERTIES_EXTRAS, ...(isAdminOwner ? PROPERTIES_ADMIN_EXTRAS : [])]),
-    [isAdminOwner]
+      buildEntries(PROPERTIES_NAV_SECTIONS, [
+        ...PROPERTIES_EXTRAS,
+        ...(canSeeAdminCommands ? PROPERTIES_ADMIN_EXTRAS : []),
+      ]).filter((page) => !isOwner || page.path !== "/properties/analytics"),
+    [canSeeAdminCommands, isOwner]
   );
 
   const showErp = !isPOS && hasErpAccess;
@@ -523,7 +529,7 @@ export function CommandPalette({
   const showProperties = !isPOS && hasPropertiesAccess;
   // Global admin routes (e.g. /settings, /deleted-items) only work in ERP/Factory shells.
   // In properties-only mode, suppress them since the properties shell redirects away.
-  const showAdmin = !isPOS && isAdminOwner && (showErp || showFactory);
+  const showAdmin = !isPOS && canSeeAdminCommands && (showErp || showFactory);
   // Entries whose page lives only in ErpRoutes are dropped outside the ERP
   // shell: under a factory company the guard redirects the unprefixed path away,
   // so offering them means offering a command that goes somewhere else.
