@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt, fmtD, parseNum, getRealRowBg, groupBySupplier } from "./helpers";
@@ -83,8 +84,8 @@ function SupplierGroupedRows({ rows }: { rows: EnrichedContainerApi[] }) {
   return (
     <>
       {groups.map(({ name, rows: sRows }) => (
-        <>
-          <tr key={`sup-${name}`} className="bg-muted/40 border-t border-border">
+        <Fragment key={`sup-${name}`}>
+          <tr className="bg-muted/40 border-t border-border">
             <td
               colSpan={WORKBOOK_COLS}
               className="py-0.5 px-2 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
@@ -95,7 +96,7 @@ function SupplierGroupedRows({ rows }: { rows: EnrichedContainerApi[] }) {
           {sRows.map((r) => (
             <WorkbookDataRow key={r.id} r={r} />
           ))}
-        </>
+        </Fragment>
       ))}
     </>
   );

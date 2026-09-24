@@ -454,7 +454,7 @@ export default function ChatbotSettings() {
                 <p className="text-center text-muted-foreground py-8">No users found.</p>
               ) : (
                 <div className="table-responsive">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Username</TableHead>
@@ -694,7 +694,7 @@ export default function ChatbotSettings() {
                 </div>
               ) : (
                 <div className="table-responsive">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead>File</TableHead>
