@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 /**
  * Controller hook for the legacy Accounts Overview page.
@@ -387,8 +388,7 @@ export function useAccountsLegacyModel() {
 
   const filteredWaChats = useMemo(() => {
     if (!waChatSearch.trim()) return waChatsRaw;
-    const s = waChatSearch.toLowerCase();
-    return waChatsRaw.filter((c) => c.name.toLowerCase().includes(s));
+    return waChatsRaw.filter((c) => searchAny(waChatSearch, c.name));
   }, [waChatsRaw, waChatSearch]);
 
   const openWaRuleDialog = () => {
@@ -579,10 +579,7 @@ export function useAccountsLegacyModel() {
   }, [vouchersWithBalance, broughtForwardBalance]);
 
   const filteredAccounts = useMemo(() => {
-    const searchLower = searchTerm.toLowerCase();
-    return allAccounts.filter(
-      (a) => a.name.toLowerCase().includes(searchLower) || a.code.toLowerCase().includes(searchLower)
-    );
+    return allAccounts.filter((a) => searchAny(searchTerm, a.name, a.code));
   }, [allAccounts, searchTerm]);
 
   // Handlers
