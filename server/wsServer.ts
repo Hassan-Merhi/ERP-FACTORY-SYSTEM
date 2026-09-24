@@ -53,6 +53,7 @@ type SessionUpgradeRequest = IncomingMessage & {
 
 const socketCompanies = new WeakMap<WebSocket, readonly number[] | null>();
 const socketUsers = new WeakMap<WebSocket, string | null>();
+const socketRealtimeClientIds = new WeakMap<WebSocket, string | null>();
 const socketRemoteContexts = new WeakMap<WebSocket, ScreenFeedSocketContext>();
 
 function cleanSessionText(value: unknown, max = 160): string {
@@ -217,6 +218,12 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
     const connectionId = `websocket-${randomUUID()}`;
     socketCompanies.set(ws, null);
     socketUsers.set(ws, null);
+    try {
+      const clientId = new URL(request.url || "/ws", "http://localhost").searchParams.get("clientId");
+      socketRealtimeClientIds.set(ws, clientId ? cleanSessionText(clientId, 128) || null : null);
+    } catch {
+      socketRealtimeClientIds.set(ws, null);
+    }
 
     if (resolveSession) {
       void resolveSession(request)
@@ -287,6 +294,7 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
           socketRemoteContexts.delete(ws);
           socketCompanies.delete(ws);
           socketUsers.delete(ws);
+          socketRealtimeClientIds.delete(ws);
         });
       }
     );
@@ -296,11 +304,19 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
 export interface BroadcastOptions {
   companyId?: number | null;
   userIds?: readonly string[];
+  /** Skip only the browser tab that already applied this write locally. */
+  excludeRealtimeClientId?: string | null;
 }
 
 function shouldDeliver(client: WebSocket, options: BroadcastOptions): boolean {
   if (!shouldDeliverBroadcastToCompanies(socketCompanies.get(client), options.companyId)) return false;
   if (!shouldDeliverBroadcastToUser(socketUsers.get(client), options.userIds)) return false;
+  if (
+    options.excludeRealtimeClientId &&
+    socketRealtimeClientIds.get(client) === options.excludeRealtimeClientId
+  ) {
+    return false;
+  }
   return true;
 }
 

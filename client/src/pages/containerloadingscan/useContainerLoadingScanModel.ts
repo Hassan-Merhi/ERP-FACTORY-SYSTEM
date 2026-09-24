@@ -21,6 +21,7 @@ import {
 } from "../factory/factorycontainerloadingscan/scanFeedback";
 import type { AddLoadingBaleInput, Customer, Location, OrderBale, OrderDetail, Proforma } from "./types";
 import {
+  applyCurrentOrderBalesToCapacity,
   buildProformaProgress,
   normalizeProformaArticleCode,
   proformaCapacityArticles,
@@ -227,10 +228,10 @@ export function useContainerLoadingScanModel() {
       }
       queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], data);
       if (capacityProformaId) {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
-          refetchType: "active",
-        });
+        queryClient.setQueryData<ProformaCapacitySnapshot>(
+          ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
+          (current) => applyCurrentOrderBalesToCapacity(current, data.bales) ?? current
+        );
       }
       setScanCode("");
       scannerRef.current?.focus();
