@@ -1,5 +1,6 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express, Request, Response } from "express";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   companies,
@@ -293,7 +294,7 @@ export function registerRetailPosRoutes(app: Express): void {
       await ensureCompanyLocation(companyId, locationId);
       const search = String(req.query.search ?? "").trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
-      const pattern = `%${search.replace(/[%_]/g, "\\$&")}%`;
+      const pattern = `%${search.replace(/[%_]/g, "\\      const pattern = `%${search.replace(/[%_]/g, "\\$&")}%`;")}%`;
 
       const rows = await db
         .select({
@@ -328,12 +329,12 @@ export function registerRetailPosRoutes(app: Express): void {
             eq(retailProducts.active, true),
             search
               ? or(
-                  ilike(retailProducts.name, pattern),
-                  ilike(retailProducts.code, pattern),
-                  ilike(retailProductVariants.sku, pattern),
-                  ilike(retailProductVariants.barcode, pattern),
-                  ilike(retailProductVariants.size, pattern),
-                  ilike(retailBrands.name, pattern)
+                  punctuationInsensitiveSearch(retailProducts.name, search),
+                  punctuationInsensitiveSearch(retailProducts.code, search),
+                  punctuationInsensitiveSearch(retailProductVariants.sku, search),
+                  punctuationInsensitiveSearch(retailProductVariants.barcode, search),
+                  punctuationInsensitiveSearch(retailProductVariants.size, search),
+                  punctuationInsensitiveSearch(retailBrands.name, search)
                 )
               : undefined
           )
