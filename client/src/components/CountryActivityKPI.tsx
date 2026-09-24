@@ -357,7 +357,7 @@ function CompanyRow({ company }: { company: CompanyActivity }) {
         {expanded ? (
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <ChevronRight data-directional-icon="true" className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         )}
 
         <span className="font-medium flex-1 truncate">{company.name}</span>
@@ -451,7 +451,7 @@ export function CountryActivityKPI() {
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            <ChevronRight data-directional-icon="true" className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
         </button>
 
@@ -481,7 +481,7 @@ export function CountryActivityKPI() {
             data-testid="button-activity-prev"
             title="Previous day"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft data-directional-icon="true" className="h-4 w-4" />
           </Button>
 
           <span className="text-xs text-muted-foreground whitespace-nowrap min-w-[120px] text-center select-none">
@@ -497,7 +497,7 @@ export function CountryActivityKPI() {
             data-testid="button-activity-next"
             title="Next day"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight data-directional-icon="true" className="h-4 w-4" />
           </Button>
         </div>
       </div>

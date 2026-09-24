@@ -265,6 +265,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
           <div className="space-y-4 py-3 sm:px-6 sm:py-4">
             {/* ── Breadcrumb ──────────────────────────────────────────────── */}
             <LocationInventoryBreadcrumb
+              compactPhoneRoot={!posUser}
               selectedLocationLocal={selectedLocationLocal}
               selectedGroup={selectedGroup}
               viewAllItems={viewAllItems}
