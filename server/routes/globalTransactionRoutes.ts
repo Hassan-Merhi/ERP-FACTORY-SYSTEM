@@ -26,7 +26,7 @@ import {
   fixedAssets,
   factorySuppliers,
 } from "../../shared/schema";
-import { eq, and, gte, lte, inArray, or, ilike, asc, desc, sql, count, isNull, type SQL } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, or, asc, desc, sql, count, isNull, type SQL } from "drizzle-orm";
 import {
   assertCompaniesAccess,
   assertCompanyAccess,

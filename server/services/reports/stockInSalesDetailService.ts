@@ -1,6 +1,6 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
-import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "../../db";
 import {
@@ -14,10 +14,7 @@ import {
   stockItems,
   vouchers,
 } from "@shared/schema";
-import {
-  getStockInSalesReport,
-  type StockInSalesReportMetrics,
-} from "./stockInSalesReportService";
+import { getStockInSalesReport, type StockInSalesReportMetrics } from "./stockInSalesReportService";
 
 export interface StockInSalesDetailFilters {
   companyId: number;
@@ -85,10 +82,7 @@ interface PaginationResult<T> {
 export interface StockInSalesDetailResult {
   generatedAt: string;
   period: { startDate: string; endDate: string };
-  filters: Omit<
-    StockInSalesDetailFilters,
-    "companyId" | "stockInPage" | "stockOutPage" | "limit" | "exportAll"
-  >;
+  filters: Omit<StockInSalesDetailFilters, "companyId" | "stockInPage" | "stockOutPage" | "limit" | "exportAll">;
   summary: StockInSalesReportMetrics;
   stockIn: PaginationResult<StockInDetailRow>;
   stockOut: PaginationResult<StockOutDetailRow>;
@@ -146,9 +140,7 @@ function addItemFilters(
   }
 }
 
-async function loadStockIn(
-  filters: StockInSalesDetailFilters
-): Promise<PaginationResult<StockInDetailRow>> {
+async function loadStockIn(filters: StockInSalesDetailFilters): Promise<PaginationResult<StockInDetailRow>> {
   const activityDate = sql<string>`COALESCE(${containers.offloadDate}, DATE(${containerOffloads.offloadedAt}))`;
   const conditions: SQL[] = [
     eq(containers.companyId, filters.companyId),
@@ -243,9 +235,7 @@ async function loadStockIn(
   };
 }
 
-async function loadStockOut(
-  filters: StockInSalesDetailFilters
-): Promise<PaginationResult<StockOutDetailRow>> {
+async function loadStockOut(filters: StockInSalesDetailFilters): Promise<PaginationResult<StockOutDetailRow>> {
   const salesConditions: SQL[] = [
     eq(vouchers.companyId, filters.companyId),
     eq(vouchers.voucherType, "Sales"),
@@ -446,9 +436,7 @@ async function loadStockOut(
   };
 }
 
-export async function getStockInSalesDetail(
-  filters: StockInSalesDetailFilters
-): Promise<StockInSalesDetailResult> {
+export async function getStockInSalesDetail(filters: StockInSalesDetailFilters): Promise<StockInSalesDetailResult> {
   const [summaryReport, stockIn, stockOut] = await Promise.all([
     getStockInSalesReport({
       companyId: filters.companyId,

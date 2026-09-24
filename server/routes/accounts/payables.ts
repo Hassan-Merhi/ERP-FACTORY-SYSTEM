@@ -12,7 +12,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { resolveParentCompanyId, getSupplierBalanceForContext } from "../helpers/supplierBalanceHelpers";
 import { vouchers } from "@shared/schema";
-import { eq, and, or, desc, sql, isNull, ilike } from "drizzle-orm";
+import { eq, and, or, desc, sql, isNull } from "drizzle-orm";
 
 export function registerAccountPayableRoutes(app: Express) {
   // Get payable accounts (creditors - suppliers with positive balance)

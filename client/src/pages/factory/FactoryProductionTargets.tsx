@@ -1,4 +1,3 @@
-import { searchAny } from "@shared/searchNormalization";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -76,9 +75,7 @@ function SummaryGroupTile({
     <Card className="h-full overflow-hidden shadow-none sm:col-span-2 xl:col-span-2">
       <CardContent className="px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </p>
+          <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
           <div className="shrink-0 rounded-lg border bg-muted/30 p-2 text-muted-foreground">{icon}</div>
         </div>
         <div className="mt-3 grid w-full grid-cols-3 gap-2">
@@ -91,7 +88,10 @@ function SummaryGroupTile({
               <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
                 {metric.label}
               </p>
-              <p className="mt-2 text-2xl font-semibold leading-none tabular-nums sm:text-3xl" title={String(metric.value)}>
+              <p
+                className="mt-2 text-2xl font-semibold leading-none tabular-nums sm:text-3xl"
+                title={String(metric.value)}
+              >
                 {metric.value}
               </p>
             </div>
@@ -227,9 +227,7 @@ export default function FactoryProductionTargets() {
     const needle = search.trim().toLowerCase();
     const visibleRows = collapsedRows.filter((row) => {
       const memberMatch = (row.displayMembers ?? []).some(
-        (member) =>
-          member.name.toLowerCase().includes(needle) ||
-          (member.code || "").toLowerCase().includes(needle)
+        (member) => member.name.toLowerCase().includes(needle) || (member.code || "").toLowerCase().includes(needle)
       );
       return (
         !needle ||
@@ -464,9 +462,7 @@ export default function FactoryProductionTargets() {
                         active: row.active,
                       },
                     ];
-                    const isAbsent = members.some(
-                      (member) => member.status === FACTORY_TRACKING_STATUSES.absent
-                    );
+                    const isAbsent = members.some((member) => member.status === FACTORY_TRACKING_STATUSES.absent);
                     return (
                       <TableRow
                         key={row.linkGroupId != null ? `link-${row.linkGroupId}` : `worker-${row.personId}`}
@@ -479,9 +475,7 @@ export default function FactoryProductionTargets() {
                             {members.map((member) => (
                               <div
                                 key={member.personId}
-                                className={`text-base font-semibold leading-6 ${
-                                  !member.active ? "opacity-60" : ""
-                                }`}
+                                className={`text-base font-semibold leading-6 ${!member.active ? "opacity-60" : ""}`}
                               >
                                 {member.name}
                               </div>
