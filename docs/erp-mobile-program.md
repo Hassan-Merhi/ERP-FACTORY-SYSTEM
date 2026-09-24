@@ -13,7 +13,7 @@ phase is certified.
 | 2 | Standard mobile page header | Complete | #1718 |
 | 3 | Mobile filter sheet | Complete | Phase 3 PR |
 | 4 | Mobile cards instead of desktop tables | Complete | Phase 4 PR |
-| 5 | Mobile forms and dialogs | Pending | — |
+| 5 | Mobile forms and dialogs | Complete | Phase 5 PR |
 | 6 | Simplify dense ERP screens | Pending | — |
 | 7 | Mobile actions and touch behaviour | Pending | — |
 | 8 | Mobile typography and information density | Pending | — |
@@ -55,6 +55,19 @@ Pages that intentionally keep a panel-owned heading instead of a page header:
 | `/agents` | Master/detail ledger tool; the Phase 1 master/detail phone layout is keyed to its root element. |
 | `/chat` | Messaging workspace with a fixed-height conversation layout. |
 | `/spreadsheet` (open workbook) | Full-bleed editor toolbar; the library view uses `PageHeader`. |
+
+### Dialogs and forms (`client/src/erp-mobile-operations.css`)
+
+- On ERP phones every `DialogContent` / `AlertDialogContent` opens as a bottom sheet: full
+  width, anchored above the home indicator, rounded on top, and at most the visual viewport
+  high.
+- The action row stays pinned while the form scrolls. Action rows are `DialogFooter` /
+  `AlertDialogFooter`, plus the button-only row that closes a dialog form or sits last in a
+  dialog. A two-action row shows Cancel and the primary action side by side.
+- Page forms stretch their closing submit row across the width.
+- Checkboxes, radios and switches keep their visual size with an invisible 44px touch
+  extension. The Phase 1 44px button floor had turned them into large tiles.
+- Tablet and desktop keep the centred modal and existing form layouts.
 
 ### Record tables as phone cards (`client/src/components/ui/mobile-card-table.ts`)
 
@@ -184,4 +197,15 @@ Delivered:
   Its edit control is visible on touch devices.
 - Fixed: Location/stock monthly summary crashed for items without movements.
 - The certification fixture (`fixture:erp-mobile-program`).
+
+## Phase 5 — Mobile forms and dialogs
+
+Delivered:
+
+- Bottom-sheet dialogs and alert dialogs, with pinned actions, on ERP phones (see Shared
+  contracts). `AlertDialogContent` / `AlertDialogFooter` now expose `data-slot` hooks.
+- Page forms get full-width submit rows. Checkbox/radio/switch sizing is fixed, with 44px
+  hit areas kept.
+- The voucher entry forms already had a dedicated phone design (tap-to-select rows and a
+  sticky totals bar); they were verified unchanged.
 
