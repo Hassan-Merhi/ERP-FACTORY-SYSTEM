@@ -145,7 +145,7 @@ export function TabSummary() {
 
   const modeSelector = (
     <div
-      className="max-sm:grid max-sm:grid-cols-2 flex items-center gap-2 flex-wrap"
+      className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 flex-wrap"
       data-testid="summary-mode-selector"
     >
       <Building2 className="max-sm:hidden h-3.5 w-3.5 text-muted-foreground shrink-0" />

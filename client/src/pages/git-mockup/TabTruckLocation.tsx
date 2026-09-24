@@ -114,8 +114,8 @@ export function TabTruckLocation() {
   }
 
   const modeSelector = (
-    <div className="max-sm:grid max-sm:grid-cols-2 flex items-center gap-2 flex-wrap">
-      <span className="text-xs text-muted-foreground">Viewing:</span>
+    <div className="max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-normal max-sm:[&>button]:py-1.5 flex items-center gap-2 flex-wrap">
+      <span className="max-sm:hidden text-xs text-muted-foreground">Viewing:</span>
       <Button
         size="sm"
         variant={companyMode === "session" ? "default" : "outline"}
