@@ -42,6 +42,7 @@ interface ExportAccount {
   accountId: number;
   type: string;
   name: string;
+  code?: string | null;
   balance?: string | number | null;
   balanceSide?: string | null;
 }

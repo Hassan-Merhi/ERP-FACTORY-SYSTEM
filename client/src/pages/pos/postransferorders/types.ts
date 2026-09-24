@@ -88,6 +88,8 @@ export interface InventoryItem {
   stockItemId?: number;
   name?: string;
   stockItemName?: string;
+  stockItemCode?: string | null;
+  code?: string | null;
   locationId?: number;
   quantity?: string | number;
 }

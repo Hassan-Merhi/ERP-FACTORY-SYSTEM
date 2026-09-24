@@ -25,6 +25,7 @@ export interface ProformaLine {
 }
 
 export interface Proforma {
+  code?: string | null;
   id: number;
   customerId: number;
   companyId: number;
