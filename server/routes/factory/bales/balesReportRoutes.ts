@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * factoryBalesRoutes: BalesReport endpoints.
  *
@@ -98,7 +99,10 @@ export function registerBalesReportRoutes(app: Express) {
             : sql``;
       const statusFilter = status ? sql`AND fb.status = ${status}` : sql``;
       const searchFilter = search
-        ? sql`AND LOWER(fb.reference_number) LIKE ${"%" + search.toLowerCase() + "%"}`
+        ? sql`AND (
+            LOWER(fb.reference_number) LIKE ${"%" + String(search).toLowerCase() + "%"}
+            OR regexp_replace(lower(coalesce(fb.reference_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${"%" + normalizeSearchText(search) + "%"}
+          )`
         : sql``;
       const unassignedFilter = includeUnassigned === "false" ? sql`AND fb.finalized_by IS NOT NULL` : sql``;
       // Privileged users can see deleted bales when searching by ref code;
@@ -260,7 +264,10 @@ export function registerBalesReportRoutes(app: Express) {
       const locationFilter = locationId ? sql`AND fb.erp_location_id = ${parseInt(locationId)}` : sql``;
       const statusFilter = status ? sql`AND fb.status = ${status}` : sql``;
       const searchFilter = search
-        ? sql`AND LOWER(fb.reference_number) LIKE ${"%" + search.toLowerCase() + "%"}`
+        ? sql`AND (
+            LOWER(fb.reference_number) LIKE ${"%" + String(search).toLowerCase() + "%"}
+            OR regexp_replace(lower(coalesce(fb.reference_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${"%" + normalizeSearchText(search) + "%"}
+          )`
         : sql``;
       const unassignedFilter = includeUnassigned === "false" ? sql`AND fb.finalized_by IS NOT NULL` : sql``;
       const deletedFilter = isPrivileged && search ? sql`` : sql`AND fb.status NOT IN ('DELETED', 'REMOVED')`;
