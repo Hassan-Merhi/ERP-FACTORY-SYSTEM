@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   PeriodFilter,
@@ -32,7 +32,7 @@ describe("PeriodFilter interactions", () => {
     const user = userEvent.setup();
     renderFilter();
 
-    await user.click(screen.getByTestId("period-filter-dropdown"));
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
     await user.click(await screen.findByTestId("period-preset-custom"));
 
     expect(await screen.findByTestId("period-custom-range-dialog")).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe("PeriodFilter interactions", () => {
     const user = userEvent.setup();
     renderFilter();
 
-    await user.click(screen.getByTestId("period-filter-dropdown"));
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
     await user.click(await screen.findByTestId("period-preset-custom"));
     expect(await screen.findByTestId("period-custom-range-dialog")).toBeInTheDocument();
 
@@ -56,7 +56,7 @@ describe("PeriodFilter interactions", () => {
     const user = userEvent.setup();
     const onChange = renderFilter();
 
-    await user.click(screen.getByTestId("period-filter-dropdown"));
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
     await user.click(await screen.findByTestId("period-preset-yesterday"));
 
     expect(onChange).toHaveBeenCalledOnce();
@@ -73,7 +73,7 @@ describe("PeriodFilter interactions", () => {
     const user = userEvent.setup();
     renderFilter(undefined, vi.fn(), true);
 
-    await user.click(screen.getByTestId("period-filter-dropdown"));
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
 
     expect(screen.queryByTestId("period-preset-custom")).not.toBeInTheDocument();
     expect(screen.queryByTestId("period-custom-range-dialog")).not.toBeInTheDocument();
@@ -189,7 +189,7 @@ describe("PeriodFilter interactions", () => {
 
     expect(screen.getByText("Custom Range")).toBeInTheDocument();
 
-    await user.click(screen.getByTestId("period-filter-dropdown"));
+    fireEvent.pointerDown(screen.getByTestId("period-filter-dropdown"), { button: 0, ctrlKey: false });
     await user.click(await screen.findByTestId("period-preset-custom"));
 
     expect(await screen.findByTestId("period-custom-range-dialog")).toBeInTheDocument();

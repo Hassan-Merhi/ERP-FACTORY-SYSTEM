@@ -38,7 +38,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
   const { chatUnread, posImportEnabled, myAccess, myAccessLoading, myAccessError, factorySettings } =
     useAuthenticatedAppData({
       selectedCompanyId: selectedCompany?.id,
-      companyType: selectedCompany?.companyType,
+      companyType: selectedCompany?.companyType ?? undefined,
       userPresent: true,
       isPOS,
       userRole: user.role,

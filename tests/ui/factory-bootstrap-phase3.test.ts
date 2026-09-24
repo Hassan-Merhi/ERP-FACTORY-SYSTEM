@@ -116,7 +116,7 @@ describe("Phase 3 factory bootstrap isolation", () => {
     expect(hook).toContain(
       "const factoryBootstrapEnabled = userPresent && !isPOS && !!selectedCompanyId && isFactoryCompany;"
     );
-    expect(hook.match(/enabled: factoryBootstrapEnabled/g)).toHaveLength(2);
+    expect(hook.match(/enabled: factoryBootstrapEnabled/g)).toHaveLength(3);
     expect(app).toContain("companyType: selectedCompany?.companyType");
     expect(app).toContain('routeState.decision.kind === "bootstrap-error"');
     expect(loadingState).toContain("showRecovery");
