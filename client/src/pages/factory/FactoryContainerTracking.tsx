@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -75,12 +76,7 @@ export default function FactoryContainerTracking() {
 
   const filtered = search.trim()
     ? allRows.filter((r) => {
-        const q = search.toLowerCase();
-        return (
-          r.containerNumber?.toLowerCase().includes(q) ||
-          r.customerName?.toLowerCase().includes(q) ||
-          r.invoiceNumber?.toLowerCase().includes(q)
-        );
+        return searchAny(search, r.containerNumber, r.customerName, r.invoiceNumber);
       })
     : allRows;
 
