@@ -134,11 +134,11 @@ export default function ProductionComparison() {
           : "Period B";
 
   const qA = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", rangeA[0], rangeA[1], workerIdsParam],
+    queryKey: ["/api/factory/production-value-report", rangeA[0], rangeA[1], workerIdsParam, "production-comparison"],
     staleTime: 0,
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const params = new URLSearchParams({ from: rangeA[0], to: rangeA[1] });
+      const params = new URLSearchParams({ from: rangeA[0], to: rangeA[1], view: "production-comparison" });
       if (workerIdsParam) params.set("workerIds", workerIdsParam);
       const r = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message ?? "Request failed");
@@ -147,11 +147,11 @@ export default function ProductionComparison() {
   });
 
   const qB = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", rangeB[0], rangeB[1], workerIdsParam],
+    queryKey: ["/api/factory/production-value-report", rangeB[0], rangeB[1], workerIdsParam, "production-comparison"],
     staleTime: 0,
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const params = new URLSearchParams({ from: rangeB[0], to: rangeB[1] });
+      const params = new URLSearchParams({ from: rangeB[0], to: rangeB[1], view: "production-comparison" });
       if (workerIdsParam) params.set("workerIds", workerIdsParam);
       const r = await fetch(`/api/factory/production-value-report?${params}`, { credentials: "include" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message ?? "Request failed");
