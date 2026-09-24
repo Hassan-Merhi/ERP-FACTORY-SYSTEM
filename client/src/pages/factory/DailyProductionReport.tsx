@@ -50,7 +50,7 @@ export default function DailyProductionReport() {
     key: "tab",
     allowedValues: visibleTabs,
     knownValues: OVERVIEW_TABS,
-    defaultValue: visibleTabs[0] ?? "production",
+    defaultValue: visibleTabs.includes("production") ? "production" : visibleTabs[0] ?? "production",
   });
 
   const show = (tab: OverviewTab) => visibleTabs.includes(tab);
