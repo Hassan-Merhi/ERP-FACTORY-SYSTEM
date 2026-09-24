@@ -225,6 +225,8 @@ export function registerOrderCrudRoutes(app: Express) {
         articleCode: b.article_code ?? null,
         baleName: b.bale_name ?? null,
         priceUsed: b.price_used ?? "0",
+        scannedBy: b.scanned_by ?? null,
+        scannedAt: b.scanned_at ?? null,
       }));
 
       const rawChargesRes = await db.execute(

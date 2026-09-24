@@ -21,6 +21,7 @@ import {
 import { getApiRequest } from "@/lib/factoryApi";
 import { getErrorDetails } from "@shared/errorUtils";
 import {
+  applyCurrentOrderBalesToCapacity,
   buildProformaProgress,
   normalizeProformaArticleCode,
   proformaCapacityArticles,
@@ -325,10 +326,10 @@ export function useFactoryContainerLoadingScanModel() {
       }
       queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], data);
       if (capacityProformaId) {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
-          refetchType: "active",
-        });
+        queryClient.setQueryData<ProformaCapacitySnapshot>(
+          ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
+          (current) => applyCurrentOrderBalesToCapacity(current, data.bales) ?? current
+        );
       }
       setScanCode("");
     },

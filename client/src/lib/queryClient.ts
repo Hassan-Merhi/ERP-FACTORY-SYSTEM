@@ -15,6 +15,7 @@ import {
 } from "./queryPolicies";
 import { applyReferenceMutationResponse } from "./referenceMutationCache";
 import { isAbortError } from "./abortError";
+import { getRealtimeClientId } from "./realtimeClientIdentity";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -218,6 +219,18 @@ if (
       factoryHeaders.set("X-App-Mode", "factory");
       factoryHeaders.set("X-Factory-Page", window.location.pathname);
       effectiveInit = { ...init, headers: factoryHeaders };
+      if (effectiveInit.credentials === undefined) effectiveInit.credentials = "include";
+    }
+
+    // Tag same-origin API work with this loaded tab's realtime identity. The
+    // server uses it only for mutation types whose local cache is already
+    // updated, so it can avoid immediately echoing the same work back over WS.
+    if (pathname?.startsWith("/api/") && pathname !== "/api/csrf-token") {
+      const realtimeHeaders = new Headers(
+        effectiveInit?.headers || (input instanceof Request ? input.headers : undefined)
+      );
+      realtimeHeaders.set("X-Realtime-Client-Id", getRealtimeClientId());
+      effectiveInit = { ...effectiveInit, headers: realtimeHeaders };
       if (effectiveInit.credentials === undefined) effectiveInit.credentials = "include";
     }
 
