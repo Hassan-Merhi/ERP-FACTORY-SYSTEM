@@ -187,12 +187,6 @@ function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition;
 
       {open && (
         <CardContent className="pt-0 pb-5 px-4 sm:px-5">
-          {Math.abs(company.netAdjustment) >= 0.01 && (
-            <div className="mb-3 rounded-lg border border-violet-500/20 bg-violet-500/[0.04] px-3 py-2 text-xs flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Net Position adjustment from this company's existing accounting rules</span>
-              <span className="font-mono font-semibold tabular-nums">{formatAmount(company.netAdjustment)}</span>
-            </div>
-          )}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <CompanySide title="What We Have" lines={company.forUsLines} total={company.forUsTotal} side="have" formatAmount={formatAmount} />
             <CompanySide title="What We Owe" lines={company.onUsLines} total={company.onUsTotal} side="owe" formatAmount={formatAmount} />
@@ -238,7 +232,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
               <Badge variant="secondary">ERP only</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Combined What We Have, What We Owe, and Net Position across active ERP companies. Factory and Properties are excluded.
+              Combined What We Have, What We Owe, and Net Position across active ERP companies. Supplier Partner, Factory, and Properties are excluded.
             </p>
           </div>
         </div>
@@ -322,11 +316,6 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                     <p className={`text-2xl font-bold font-mono tabular-nums mt-2 ${data.totals.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                       {formatAmount(data.totals.netPosition)}
                     </p>
-                    {Math.abs(data.totals.netAdjustments) >= 0.01 && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Includes {formatAmount(data.totals.netAdjustments)} in existing Net Position adjustments.
-                      </p>
-                    )}
                   </div>
                   <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                     <Scale className="h-5 w-5" />
@@ -353,7 +342,6 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                     <th className="py-2 pr-4 font-medium">Company</th>
                     <th className="py-2 px-3 text-right font-medium">What We Have</th>
                     <th className="py-2 px-3 text-right font-medium">What We Owe</th>
-                    <th className="py-2 px-3 text-right font-medium">Adjustments</th>
                     <th className="py-2 pl-3 text-right font-medium">Net Position</th>
                   </tr>
                 </thead>
@@ -366,7 +354,6 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                       </td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{formatAmount(company.forUsTotal)}</td>
                       <td className="py-3 px-3 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{formatAmount(company.onUsTotal)}</td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(company.netAdjustment)}</td>
                       <td className={`py-3 pl-3 text-right font-mono tabular-nums font-semibold ${company.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                         {formatAmount(company.netPosition)}
                       </td>
@@ -376,7 +363,6 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                     <td className="py-3 pr-4">GROUP TOTAL</td>
                     <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(data.totals.forUsTotal)}</td>
                     <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(data.totals.onUsTotal)}</td>
-                    <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(data.totals.netAdjustments)}</td>
                     <td className="py-3 pl-3 text-right font-mono tabular-nums">{formatAmount(data.totals.netPosition)}</td>
                   </tr>
                 </tbody>
@@ -395,7 +381,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-semibold">Company Breakdown</h3>
-              <p className="text-sm text-muted-foreground">Every company's What We Have and What We Owe is shown directly from its existing Net Position calculation.</p>
+              <p className="text-sm text-muted-foreground">Each company is loaded from its own Net Position data, regardless of which company is currently selected.</p>
             </div>
             {data.companies.map((company) => (
               <CompanyCard key={company.companyId} company={company} formatAmount={formatAmount} />
