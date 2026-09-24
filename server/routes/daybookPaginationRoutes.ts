@@ -118,8 +118,16 @@ export function registerDaybookPaginationRoutes(app: Express): void {
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
         const param = bind(`%${search}%`);
+        const compactParam = bind(`%${normalizeSearchText(search)}%`);
         voucherConditions.push(
-          `(v.voucher_number ILIKE ${param} OR COALESCE(v.description, '') ILIKE ${param} OR COALESCE(v.location_name, '') ILIKE ${param})`
+          `(
+            v.voucher_number ILIKE ${param}
+            OR COALESCE(v.description, '') ILIKE ${param}
+            OR COALESCE(v.location_name, '') ILIKE ${param}
+            OR regexp_replace(lower(COALESCE(v.voucher_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+            OR regexp_replace(lower(COALESCE(v.description, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+            OR regexp_replace(lower(COALESCE(v.location_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+          )`
         );
       }
 
