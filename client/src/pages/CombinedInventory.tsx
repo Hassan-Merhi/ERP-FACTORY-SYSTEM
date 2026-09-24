@@ -279,11 +279,9 @@ export default function CombinedInventory() {
     return Array.from(map.values()).sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
   }, [containerDetailsQueries, inventoryRows, allStockItems, includeZero]);
 
-  const searchLower = search.trim().toLowerCase();
-
   const filteredAll = useMemo(() => {
     if (!searchLower) return combinedData;
-    return combinedData.filter((r) => r.stockItemName.toLowerCase().includes(searchLower));
+    return combinedData.filter((r) => searchAny(searchTerm, r.stockItemName, r.stockItemCode));
   }, [combinedData, searchLower]);
 
   const stockGroups = useMemo((): StockGroupSummary[] => {
