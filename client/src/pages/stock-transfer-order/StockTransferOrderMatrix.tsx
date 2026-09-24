@@ -28,7 +28,7 @@ export function StockTransferOrderMatrix({ model }: { model: Model }) {
   } = model;
 
   return (
-    <Card className="hidden lg:block lg:flex-[3]">
+    <Card className="hidden min-w-0 max-w-full lg:block">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ export function StockTransferOrderMatrix({ model }: { model: Model }) {
             ref={matrixRef}
             tabIndex={0}
             onKeyDown={handleMatrixKeyDown}
-            className="overflow-auto max-h-[500px] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md border"
+            className="max-h-[500px] max-w-full overflow-auto [scrollbar-gutter:stable] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md border"
           >
             <table className="w-full caption-bottom text-sm border-collapse">
               <thead className="[&_tr]:border-b sticky top-0 z-30">
