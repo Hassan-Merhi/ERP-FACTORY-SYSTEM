@@ -45,7 +45,9 @@ import { ContainerDrawer } from "./git-containers/ContainerDrawer";
 import { ContainerTable } from "./git-containers/ContainerTable";
 import { ContainerBulkActions } from "./git-containers/ContainerBulkActions";
 import { BulkProgressBanner } from "./git-containers/BulkProgressBanner";
-import { FilterBar } from "./git-containers/FilterBar";
+import { FilterBar, countGitContainerFilters } from "./git-containers/FilterBar";
+import { ErpFilterSheet } from "@/components/ui/erp-mobile-filters";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ImportResultBanner } from "./git-containers/ImportResultBanner";
 import { useContainerSummaryStats } from "./git-containers/containerHelpers";
 import { useGITContainersData } from "./git-containers/useGITContainersData";
@@ -72,6 +74,7 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const [sortOrder, setSortOrder] = useState("DEFAULT");
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const isPhoneLayout = useErpPhoneLayout();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerContainer, setDrawerContainer] = useState<EnrichedContainerRow | null>(null);
   const [importResult, setImportResult] = useState<{
@@ -211,6 +214,21 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
     importMutation.mutate(file);
     e.target.value = "";
   }
+
+  const gitFilterCount = countGitContainerFilters({
+    companyFilter,
+    containerFilters,
+    supplierFilters,
+    transporterFilters,
+    agentFilters,
+    truckFilters,
+    locationFilters,
+    docsFilter,
+    delayedFilter,
+    freightFilter,
+    etaFilter,
+    notesFilter,
+  });
 
   function clearFilters() {
     setCompanyFilter("ALL");
@@ -436,7 +454,17 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           >
             <Filter className="h-4 w-4 mr-1" />
             Filters
-            <ChevronDown className={cn("h-3.5 w-3.5 ml-1 transition-transform", showFilters && "rotate-180")} />
+            {gitFilterCount > 0 && (
+              <span
+                className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs leading-none text-primary-foreground"
+                data-testid="otw-filters-active-count"
+              >
+                {gitFilterCount}
+              </span>
+            )}
+            {!isPhoneLayout && (
+              <ChevronDown className={cn("h-3.5 w-3.5 ml-1 transition-transform", showFilters && "rotate-180")} />
+            )}
           </Button>
 
           <Popover>
@@ -491,45 +519,98 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
           setShowProgressBanner={setShowProgressBanner}
         />
 
-        <FilterBar
-          showFilters={showFilters}
-          companyFilter={companyFilter}
-          setCompanyFilter={setCompanyFilter}
-          companies={companies}
-          containerNumbers={containerNumbers}
-          containerFilters={containerFilters}
-          setContainerFilters={setContainerFilters}
-          suppliers={suppliers}
-          supplierFilters={supplierFilters}
-          setSupplierFilters={setSupplierFilters}
-          transporters={transporters}
-          transporterFilters={transporterFilters}
-          setTransporterFilters={setTransporterFilters}
-          agents={agents}
-          agentFilters={agentFilters}
-          setAgentFilters={setAgentFilters}
-          trucks={trucks}
-          truckFilters={truckFilters}
-          setTruckFilters={setTruckFilters}
-          locations={locations}
-          locationFilters={locationFilters}
-          setLocationFilters={setLocationFilters}
-          docsFilter={docsFilter}
-          setDocsFilter={setDocsFilter}
-          delayedFilter={delayedFilter}
-          setDelayedFilter={setDelayedFilter}
-          freightFilter={freightFilter}
-          setFreightFilter={setFreightFilter}
-          etaFilter={etaFilter}
-          setEtaFilter={setEtaFilter}
-          allEtaDates={allEtaDates}
-          hasContainersWithNoEta={hasContainersWithNoEta}
-          notesFilter={notesFilter}
-          setNotesFilter={setNotesFilter}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          clearFilters={clearFilters}
-        />
+        {!isPhoneLayout && (
+          <FilterBar
+            showFilters={showFilters}
+            companyFilter={companyFilter}
+            setCompanyFilter={setCompanyFilter}
+            companies={companies}
+            containerNumbers={containerNumbers}
+            containerFilters={containerFilters}
+            setContainerFilters={setContainerFilters}
+            suppliers={suppliers}
+            supplierFilters={supplierFilters}
+            setSupplierFilters={setSupplierFilters}
+            transporters={transporters}
+            transporterFilters={transporterFilters}
+            setTransporterFilters={setTransporterFilters}
+            agents={agents}
+            agentFilters={agentFilters}
+            setAgentFilters={setAgentFilters}
+            trucks={trucks}
+            truckFilters={truckFilters}
+            setTruckFilters={setTruckFilters}
+            locations={locations}
+            locationFilters={locationFilters}
+            setLocationFilters={setLocationFilters}
+            docsFilter={docsFilter}
+            setDocsFilter={setDocsFilter}
+            delayedFilter={delayedFilter}
+            setDelayedFilter={setDelayedFilter}
+            freightFilter={freightFilter}
+            setFreightFilter={setFreightFilter}
+            etaFilter={etaFilter}
+            setEtaFilter={setEtaFilter}
+            allEtaDates={allEtaDates}
+            hasContainersWithNoEta={hasContainersWithNoEta}
+            notesFilter={notesFilter}
+            setNotesFilter={setNotesFilter}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            clearFilters={clearFilters}
+          />
+        )}
+        {isPhoneLayout && (
+          <ErpFilterSheet
+            open={showFilters}
+            onOpenChange={setShowFilters}
+            label="Container filters"
+            onClear={clearFilters}
+            canClear={gitFilterCount > 0}
+            data-testid="otw-filters"
+          >
+            <FilterBar
+              showFilters
+              variant="sheet"
+              companyFilter={companyFilter}
+              setCompanyFilter={setCompanyFilter}
+              companies={companies}
+              containerNumbers={containerNumbers}
+              containerFilters={containerFilters}
+              setContainerFilters={setContainerFilters}
+              suppliers={suppliers}
+              supplierFilters={supplierFilters}
+              setSupplierFilters={setSupplierFilters}
+              transporters={transporters}
+              transporterFilters={transporterFilters}
+              setTransporterFilters={setTransporterFilters}
+              agents={agents}
+              agentFilters={agentFilters}
+              setAgentFilters={setAgentFilters}
+              trucks={trucks}
+              truckFilters={truckFilters}
+              setTruckFilters={setTruckFilters}
+              locations={locations}
+              locationFilters={locationFilters}
+              setLocationFilters={setLocationFilters}
+              docsFilter={docsFilter}
+              setDocsFilter={setDocsFilter}
+              delayedFilter={delayedFilter}
+              setDelayedFilter={setDelayedFilter}
+              freightFilter={freightFilter}
+              setFreightFilter={setFreightFilter}
+              etaFilter={etaFilter}
+              setEtaFilter={setEtaFilter}
+              allEtaDates={allEtaDates}
+              hasContainersWithNoEta={hasContainersWithNoEta}
+              notesFilter={notesFilter}
+              setNotesFilter={setNotesFilter}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              clearFilters={clearFilters}
+            />
+          </ErpFilterSheet>
+        )}
 
         <ImportResultBanner
           importResult={importResult}

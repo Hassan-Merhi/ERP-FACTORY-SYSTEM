@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,6 +90,81 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
     exportSalesHistory,
     exportToExcel,
   } = stockItems;
+
+  const searchControl = (
+    <div className="relative min-w-0 flex-1 sm:min-w-48">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="Search by name or code..."
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        className="pl-9"
+        data-testid="input-search"
+      />
+    </div>
+  );
+  const selectFilters = (
+    <>
+      <Select
+        value={selectedGroupFilter === null ? "all" : String(selectedGroupFilter)}
+        onValueChange={(value) => setSelectedGroupFilter(value === "all" ? null : parseInt(value))}
+      >
+        <SelectTrigger className="w-40" data-testid="select-stock-group">
+          <SelectValue placeholder="All Groups" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Groups</SelectItem>
+          {stockGroups.map((group) => (
+            <SelectItem key={group.id} value={String(group.id)}>
+              {group.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {stockGrades.length > 0 && (
+        <Select
+          value={selectedGradeFilter === null ? "all" : String(selectedGradeFilter)}
+          onValueChange={(value) => setSelectedGradeFilter(value === "all" ? null : parseInt(value))}
+        >
+          <SelectTrigger className="w-36" data-testid="select-grade-filter">
+            <SelectValue placeholder="All Grades" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Grades</SelectItem>
+            {stockGrades.map((grade) => (
+              <SelectItem key={grade.id} value={String(grade.id)}>
+                {grade.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {stockCategories.length > 0 && (
+        <Select
+          value={selectedCategoryFilter === null ? "all" : String(selectedCategoryFilter)}
+          onValueChange={(value) =>
+            setSelectedCategoryFilter(value === "all" ? null : value === "none" ? "none" : parseInt(value))
+          }
+        >
+          <SelectTrigger className="w-40" data-testid="select-category-filter">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            <SelectItem value="none">No Category</SelectItem>
+            {stockCategories.map((category) => (
+              <SelectItem key={category.id} value={String(category.id)}>
+                {category.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </>
+  );
+  const activeSelectFilterCount = [selectedGroupFilter, selectedGradeFilter, selectedCategoryFilter].filter(
+    (value) => value !== null
+  ).length;
 
   return (
     <div className="flex flex-col gap-4 sm:p-4 md:p-6">
@@ -197,79 +273,31 @@ export function StockItemsView({ stockItems }: { stockItems: StockItemsModel }) 
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or code..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className="pl-9"
-            data-testid="input-search"
-          />
-        </div>
-        <Select
-          value={selectedGroupFilter === null ? "all" : String(selectedGroupFilter)}
-          onValueChange={(value) => setSelectedGroupFilter(value === "all" ? null : parseInt(value))}
-        >
-          <SelectTrigger className="w-40" data-testid="select-stock-group">
-            <SelectValue placeholder="All Groups" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Groups</SelectItem>
-            {stockGroups.map((group) => (
-              <SelectItem key={group.id} value={String(group.id)}>
-                {group.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {stockGrades.length > 0 && (
-          <Select
-            value={selectedGradeFilter === null ? "all" : String(selectedGradeFilter)}
-            onValueChange={(value) => setSelectedGradeFilter(value === "all" ? null : parseInt(value))}
-          >
-            <SelectTrigger className="w-36" data-testid="select-grade-filter">
-              <SelectValue placeholder="All Grades" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Grades</SelectItem>
-              {stockGrades.map((grade) => (
-                <SelectItem key={grade.id} value={String(grade.id)}>
-                  {grade.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {stockCategories.length > 0 && (
-          <Select
-            value={selectedCategoryFilter === null ? "all" : String(selectedCategoryFilter)}
-            onValueChange={(value) =>
-              setSelectedCategoryFilter(value === "all" ? null : value === "none" ? "none" : parseInt(value))
-            }
-          >
-            <SelectTrigger className="w-40" data-testid="select-category-filter">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="none">No Category</SelectItem>
-              {stockCategories.map((category) => (
-                <SelectItem key={category.id} value={String(category.id)}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        {hasActiveFilters && (
-          <Button variant="outline" type="button" onClick={resetFilters} data-testid="button-reset-filters">
-            <X className="mr-2 h-4 w-4" />
-            Reset filters
-          </Button>
-        )}
-      </div>
+      <ErpMobileFilters
+        label="Stock item filters"
+        quick={<div className="flex">{searchControl}</div>}
+        activeCount={activeSelectFilterCount}
+        onClear={resetFilters}
+        canClear={hasActiveFilters}
+        data-testid="stock-items-filters"
+      >
+        {(layout) =>
+          layout === "sheet" ? (
+            selectFilters
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {searchControl}
+              {selectFilters}
+              {hasActiveFilters && (
+                <Button variant="outline" type="button" onClick={resetFilters} data-testid="button-reset-filters">
+                  <X className="mr-2 h-4 w-4" />
+                  Reset filters
+                </Button>
+              )}
+            </div>
+          )
+        }
+      </ErpMobileFilters>
 
       {isLoading ? (
         <div className="space-y-2">

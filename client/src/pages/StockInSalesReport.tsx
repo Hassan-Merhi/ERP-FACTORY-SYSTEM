@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -300,6 +301,10 @@ function StockInSalesReportSummary() {
     }
   };
 
+  const stockInSalesActiveFilterCount = [selectedLocations.length > 0, selectedStockGroups.length > 0].filter(
+    Boolean
+  ).length;
+
   const clearFilters = () => {
     setPeriodFilter(getDefaultPeriodValue("this_year"));
     setSelectedLocations([]);
@@ -479,41 +484,88 @@ function StockInSalesReportSummary() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <PeriodFilter
-          value={periodFilter}
-          onChange={setPeriodFilter}
-          data-testid="period-filter-stock-in-sales-report"
-        />
-        <MultiSelectFilter
-          label="Locations"
-          singularLabel="Location"
-          items={sortedLocations}
-          selectedIds={selectedLocations}
-          onChange={setSelectedLocations}
-          testId="button-stock-in-sales-location-filter"
-        />
-        <MultiSelectFilter
-          label="Groups"
-          singularLabel="Group"
-          items={sortedStockGroups}
-          selectedIds={selectedStockGroups}
-          onChange={setSelectedStockGroups}
-          testId="button-stock-in-sales-group-filter"
-        />
-        <Input
-          placeholder="Search items..."
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          className="h-9 w-48"
-        />
-        <Button variant="ghost" size="sm" onClick={clearFilters}>
-          Clear
-        </Button>
-        {isFetching && !isLoading && (
-          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing" />
-        )}
-      </div>
+      <ErpMobileFilters
+        label="Stock in and sales filters"
+        className="print:hidden"
+        primary={
+          <PeriodFilter
+            value={periodFilter}
+            onChange={setPeriodFilter}
+            data-testid="period-filter-stock-in-sales-report"
+          />
+        }
+        quick={
+          <Input
+            placeholder="Search items..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="w-full"
+          />
+        }
+        activeCount={stockInSalesActiveFilterCount}
+        onClear={clearFilters}
+        canClear={stockInSalesActiveFilterCount > 0 || !!searchTerm || periodFilter.preset !== "this_year"}
+        data-testid="stock-in-sales-filters"
+      >
+        {(layout) =>
+          layout === "sheet" ? (
+            <div className="grid gap-3">
+              <MultiSelectFilter
+                label="Locations"
+                singularLabel="Location"
+                items={sortedLocations}
+                selectedIds={selectedLocations}
+                onChange={setSelectedLocations}
+                testId="button-stock-in-sales-location-filter"
+              />
+              <MultiSelectFilter
+                label="Groups"
+                singularLabel="Group"
+                items={sortedStockGroups}
+                selectedIds={selectedStockGroups}
+                onChange={setSelectedStockGroups}
+                testId="button-stock-in-sales-group-filter"
+              />
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <PeriodFilter
+                value={periodFilter}
+                onChange={setPeriodFilter}
+                data-testid="period-filter-stock-in-sales-report"
+              />
+              <MultiSelectFilter
+                label="Locations"
+                singularLabel="Location"
+                items={sortedLocations}
+                selectedIds={selectedLocations}
+                onChange={setSelectedLocations}
+                testId="button-stock-in-sales-location-filter"
+              />
+              <MultiSelectFilter
+                label="Groups"
+                singularLabel="Group"
+                items={sortedStockGroups}
+                selectedIds={selectedStockGroups}
+                onChange={setSelectedStockGroups}
+                testId="button-stock-in-sales-group-filter"
+              />
+              <Input
+                placeholder="Search items..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="h-9 w-48"
+              />
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear
+              </Button>
+              {isFetching && !isLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing" />
+              )}
+            </div>
+          )
+        }
+      </ErpMobileFilters>
 
       <div>
         <p className="mb-3 text-xs text-muted-foreground">

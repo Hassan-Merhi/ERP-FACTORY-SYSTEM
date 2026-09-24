@@ -2,6 +2,7 @@ import { Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CoreErpFilterGrid } from "@/components/ui/core-erp-mobile";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Input } from "@/components/ui/input";
 import { PeriodFilter, PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,53 +40,86 @@ export function DaybookFilters({
     !!filters.maxAmount ||
     filters.statusFilter !== "all";
 
+  const activeFilterCount = [
+    filters.voucherType !== "all",
+    filters.statusFilter !== "all",
+    !!filters.minAmount,
+    !!filters.maxAmount,
+  ].filter(Boolean).length;
+
+  const searchControl = (
+    <div className="relative w-full min-w-0 lg:col-span-2 xl:col-span-1">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        id="search"
+        placeholder="Voucher # or description..."
+        value={filters.searchQuery}
+        onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
+        data-testid="input-search"
+        className="w-full pl-9"
+      />
+    </div>
+  );
+
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <CoreErpFilterGrid className="gap-2 p-2 sm:p-3" label="Daybook filters">
-        <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+      <ErpMobileFilters
+        label="Daybook filters"
+        primary={<PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />}
+        quick={searchControl}
+        activeCount={activeFilterCount}
+        onClear={onResetFilters}
+        canClear={!!hasActiveFilters || hasActiveNonPeriodFilters}
+        data-testid="daybook-filters"
+      >
+        {(layout) => (
+          <CoreErpFilterGrid
+            className={layout === "sheet" ? "gap-3 border-0 bg-transparent p-0" : "gap-2 p-2 sm:p-3"}
+            label="Daybook filters"
+          >
+            {layout === "inline" && (
+              <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+            )}
 
-        <Select value={filters.voucherType} onValueChange={(value) => setFilters({ ...filters, voucherType: value })}>
-          <SelectTrigger id="voucher-type" data-testid="select-voucher-type" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="Sales">Sales</SelectItem>
-            <SelectItem value="Purchase">Purchase</SelectItem>
-            <SelectItem value="Payment">Payment</SelectItem>
-            <SelectItem value="Receipt">Receipt</SelectItem>
-            <SelectItem value="Journal">Journal</SelectItem>
-            <SelectItem value="Contra">Contra</SelectItem>
-            <SelectItem value="Offload">Offload</SelectItem>
-          </SelectContent>
-        </Select>
+            <Select
+              value={filters.voucherType}
+              onValueChange={(value) => setFilters({ ...filters, voucherType: value })}
+            >
+              <SelectTrigger id="voucher-type" data-testid="select-voucher-type" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="Sales">Sales</SelectItem>
+                <SelectItem value="Purchase">Purchase</SelectItem>
+                <SelectItem value="Payment">Payment</SelectItem>
+                <SelectItem value="Receipt">Receipt</SelectItem>
+                <SelectItem value="Journal">Journal</SelectItem>
+                <SelectItem value="Contra">Contra</SelectItem>
+                <SelectItem value="Offload">Offload</SelectItem>
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={filters.statusFilter}
-          onValueChange={(value) => setFilters({ ...filters, statusFilter: value as "all" | "active" | "optional" })}
-        >
-          <SelectTrigger id="status-filter" data-testid="select-status-filter" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active Only</SelectItem>
-            <SelectItem value="optional">Optional Only</SelectItem>
-          </SelectContent>
-        </Select>
+            <Select
+              value={filters.statusFilter}
+              onValueChange={(value) =>
+                setFilters({ ...filters, statusFilter: value as "all" | "active" | "optional" })
+              }
+            >
+              <SelectTrigger id="status-filter" data-testid="select-status-filter" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="optional">Optional Only</SelectItem>
+              </SelectContent>
+            </Select>
 
-        <div className="relative w-full min-w-0 lg:col-span-2 xl:col-span-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="search"
-            placeholder="Voucher # or description..."
-            value={filters.searchQuery}
-            onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
-            data-testid="input-search"
-            className="w-full pl-9"
-          />
-        </div>
-      </CoreErpFilterGrid>
+            {layout === "inline" && searchControl}
+          </CoreErpFilterGrid>
+        )}
+      </ErpMobileFilters>
 
       {(hasActiveFilters || hasActiveNonPeriodFilters) && (
         <div

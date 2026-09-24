@@ -189,6 +189,17 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "My Settings", ar: "إعداداتي", fr: "Mes paramètres" },
   { en: "Profile", ar: "الملف الشخصي", fr: "Profil" },
   { en: "Notifications", ar: "الإشعارات", fr: "Notifications" },
+  // ERP mobile filter sheets
+  { en: "Daybook filters", ar: "عوامل تصفية دفتر اليومية", fr: "Filtres du journal" },
+  { en: "Stock item filters", ar: "عوامل تصفية أصناف المخزون", fr: "Filtres des articles de stock" },
+  { en: "Transporter statement filters", ar: "عوامل تصفية كشف حساب الناقل", fr: "Filtres du relevé transporteur" },
+  { en: "All Daybook filters", ar: "عوامل تصفية دفتر اليومية الشامل", fr: "Filtres du journal global" },
+  { en: "Sales report filters", ar: "عوامل تصفية تقرير المبيعات", fr: "Filtres du rapport des ventes" },
+  { en: "Company comparison filters", ar: "عوامل تصفية مقارنة الشركات", fr: "Filtres de comparaison des sociétés" },
+  { en: "Net profit filters", ar: "عوامل تصفية صافي الربح", fr: "Filtres du bénéfice net" },
+  { en: "Optional voucher filters", ar: "عوامل تصفية القسائم الاختيارية", fr: "Filtres des bons optionnels" },
+  { en: "Container filters", ar: "عوامل تصفية الحاويات", fr: "Filtres des conteneurs" },
+  { en: "Stock in and sales filters", ar: "عوامل تصفية المخزون الوارد والمبيعات", fr: "Filtres des entrées et ventes" },
 ];
 
 const entryByVisibleText = new Map<string, SharedEntry>();
