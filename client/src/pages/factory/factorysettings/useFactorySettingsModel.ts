@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -377,9 +378,7 @@ export function useFactorySettingsModel() {
 
   const filteredAttendanceWaChats = attendanceWaChats.filter((chat) => {
     const isGroup = chat.id.endsWith("@g.us") || chat.type?.toLowerCase().includes("group");
-    const needle = attendanceWaSearch.trim().toLowerCase();
-    const matches =
-      !needle || chat.name?.toLowerCase().includes(needle) || chat.id.toLowerCase().includes(needle);
+    const matches = searchAny(attendanceWaSearch, chat.name, chat.id);
     return isGroup && matches;
   });
 
