@@ -389,9 +389,10 @@
  * Radix Select renders a visually hidden native <select> (for form autofill) with inline
  * absolute positioning. Without a positioned ancestor it is placed at its static position and
  * can extend the document below the shell, letting the whole page scroll on phones. Pinning
- * it to the viewport keeps it inert for layout.
+ * it to the viewport keeps it inert for layout. Scoped to the ERP shell like the dialog rules,
+ * since Radix portals some selects outside the workspace.
  */
-select[aria-hidden="true"][tabindex="-1"] {
+html[data-app-shell="erp"] select[aria-hidden="true"][tabindex="-1"] {
   position: fixed !important;
   top: 0;
   left: 0;
