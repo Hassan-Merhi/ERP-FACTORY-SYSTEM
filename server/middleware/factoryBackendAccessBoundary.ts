@@ -490,8 +490,18 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/location-inventory")) {
     return requirement("factory/location-inventory");
   }
-  if (hasPrefix(path, "/bale-stock-list") || hasPrefix(path, "/bale-stock-count")) {
+  if (hasPrefix(path, "/bale-stock-list")) {
     return requirement("factory/stock-bale-list");
+  }
+  // The compact stock-count read is shared by the Bale Stock List and the
+  // Container Loading scan. Keep the full bale list protected by its own page,
+  // while allowing loading users to read only the aggregate availability counts
+  // needed by the Invoicing > Loadings workflow.
+  if (hasPrefix(path, "/bale-stock-count")) {
+    return anyOf(
+      requirement("factory/stock-bale-list"),
+      requirement("factory/invoicing", ["hide_invoicing_loadings_tab"])
+    );
   }
   if (hasPrefix(path, "/bales/relabel")) {
     return requirement("factory/bale-relabeling", ["hide_tab_relabeling_main"]);
