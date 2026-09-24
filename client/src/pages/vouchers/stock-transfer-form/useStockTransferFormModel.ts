@@ -194,6 +194,8 @@ export function useStockTransferFormModel({ voucherIdToEdit, isPOS, posUser }: S
       stockTransferToEdit &&
       stockTransferToEdit.items &&
       voucherToEdit &&
+      typeof voucherToEdit.voucherDate === "string" &&
+      voucherToEdit.voucherDate.trim().length > 0 &&
       locations.length > 0 &&
       stockItems.length > 0
     ) {
