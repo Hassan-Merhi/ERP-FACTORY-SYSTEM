@@ -41,7 +41,6 @@ const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partn
 const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
 const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set([
   "hmd international group lebanon credit",
-  "bank loan",
 ]);
 
 export class GroupHistoricalCurrencyError extends Error {
