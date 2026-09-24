@@ -3,6 +3,7 @@ import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { _getCached, _setCached } from "../../services/shared/ttlCache";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import {
   calculateGroupNetPosition,
@@ -66,7 +67,17 @@ export function registerGroupNetPositionRoutes(app: Express) {
       // snapshot as the normal Net Position page so cash/bank current translation
       // and every ERP presentation rule reconcile exactly. Older dates stay historical.
       const useCurrentSnapshot = asOfDate === getClientDate(req);
+      const forceRefresh = String(req.query.refresh || "") === "1";
+      const accessKey = [...allowedCompanyIds].sort((a, b) => a - b).join(",");
+      const cacheKey = `group-net-position:${asOfDate}:${useCurrentSnapshot ? "live" : "historical"}:${accessKey}`;
+      const cached = forceRefresh ? null : _getCached(cacheKey);
+      if (cached) {
+        res.setHeader("Cache-Control", "no-store");
+        return res.json(cached);
+      }
+
       const snapshot = await calculateGroupNetPosition(asOfDate, allowedCompanyIds, useCurrentSnapshot);
+      _setCached(cacheKey, snapshot, 5 * 60 * 1000);
       res.setHeader("Cache-Control", "no-store");
       return res.json(snapshot);
     } catch (error: unknown) {
