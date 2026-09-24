@@ -14,6 +14,7 @@ import { useCursorNav } from "@/contexts/CursorNavContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 interface Transaction {
   date: string;
@@ -79,6 +80,7 @@ interface RangeVouchersData {
 }
 
 export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}) {
+  const mobileCards = useMobileCardTable();
   const { formatDisplayDate } = useDateFormat();
   const { formatAmount } = useCurrencyContext();
   const { registerCursorNav, clearCursorNav } = useCursorNav();
@@ -424,7 +426,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
           </CardTitle>
         </CardHeader>
         <CardContent className="overflow-auto flex-1 p-0" ref={tableScrollContainer}>
-          <table className="w-full text-sm border-collapse">
+          <table {...mobileCards.tableProps} className="w-full text-sm border-collapse">
             <thead className="sticky top-0 z-30">
               <tr className="bg-muted border-b">
                 <th rowSpan={2} className="text-left align-bottom px-4 py-2 border-r bg-muted font-medium w-[100px]">

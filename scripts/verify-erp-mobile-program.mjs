@@ -6,7 +6,7 @@
  * route at each requested viewport and language. For each case it records
  * layout evidence that the mobile program cares about:
  *
- *   - document-level horizontal overflow
+ *   - document-level horizontal or vertical overflow (the shell scrolls inside #main-content)
  *   - visible PageHeader count (duplicate headers) and raw <h1> count
  *   - header title/action collisions and header content leaving the viewport
  *   - visible elements that escape the viewport outside a scroll container
@@ -269,6 +269,8 @@ async function readLayout(page, viewport) {
 
     const root = document.documentElement;
     const overflowWidth = Math.max(root.scrollWidth, document.body?.scrollWidth || 0);
+    // The ERP shell scrolls inside #main-content; the document itself must not scroll.
+    const overflowHeight = root.scrollHeight;
 
     const headers = [...document.querySelectorAll('[data-testid="page-header"]')].filter(visible);
     const rawH1 = main
@@ -351,6 +353,8 @@ async function readLayout(page, viewport) {
       path: `${window.location.pathname}${window.location.search}`,
       horizontalOverflow: overflowWidth > vw + 2,
       overflowWidth,
+      verticalOverflow: overflowHeight > window.innerHeight + 2,
+      overflowHeight,
       headerCount: headers.length,
       rawH1Count: rawH1.length,
       rawH1: rawH1.map((h) => (h.textContent || "").trim().slice(0, 50)),
@@ -371,6 +375,7 @@ function classify(result) {
   const blocking = [];
   const warnings = [];
   if (result.horizontalOverflow) blocking.push(`document horizontal overflow (${result.overflowWidth}px)`);
+  if (result.verticalOverflow) blocking.push(`document vertical overflow (${result.overflowHeight}px)`);
   if (result.headerCount > 1) blocking.push(`${result.headerCount} visible page headers`);
   for (const issue of result.headerIssues) blocking.push(issue);
   for (const escaped of result.escaped) warnings.push(`escapes viewport: ${escaped}`);

@@ -12,6 +12,7 @@ import {
 import { PeriodFilter, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Location, StockItemData, StockMovementSummaryData } from "../../stocktransferorder/types";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 type StockMovementDialogProps = {
   formatAmount: (amount: number) => string;
@@ -50,6 +51,7 @@ export function StockMovementDialog({
   setHistoryDialogOpen,
   setHistoryPeriod,
 }: StockMovementDialogProps) {
+  const mobileCards = useMobileCardTable();
   const typedHistoryData = historyData as StockMovementSummaryData | undefined;
   const monthlyData = typedHistoryData?.monthlyData ?? [];
   const hasMovement = monthlyData.some(
@@ -102,7 +104,7 @@ export function StockMovementDialog({
           ) : !hasMovement ? (
             <div className="text-center py-12 text-muted-foreground text-sm">No stock movement for this period</div>
           ) : (
-            <table className="w-full text-sm border-collapse" style={{ minWidth: "700px" }}>
+            <table {...mobileCards.tableProps} className="w-full text-sm border-collapse" style={{ minWidth: "700px" }}>
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted border-b">
                   <th rowSpan={2} className="text-left align-bottom px-3 py-2 border-r font-semibold w-28">

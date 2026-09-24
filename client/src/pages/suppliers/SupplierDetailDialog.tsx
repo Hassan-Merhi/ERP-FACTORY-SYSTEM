@@ -261,7 +261,7 @@ export function SupplierDetailDialog({
                     <span className="font-mono font-semibold text-sm">{formatAmount(openingEntry.balance)}</span>
                   </div>
                 )}
-                <Table wrapperClassName="max-h-[calc(90vh-390px)]">
+                <Table wrapperClassName="max-h-[calc(90vh-390px)]" mobileLayout="cards">
                   <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
                       <TableHead className="h-9 text-xs font-semibold">Date</TableHead>

@@ -70,7 +70,8 @@ export function AccountTable({
       </div>
 
       <div className="rounded-xl border overflow-hidden">
-        <Table>
+        {/* Fixed layout on phones so long account names truncate instead of pushing balances off-screen. */}
+        <Table className="max-sm:table-fixed">
           <TableBody>
             {parents.map((account) => {
               const kids = childMap.get(account.accountId) || [];
@@ -102,15 +103,17 @@ export function AccountTable({
                         ) : (
                           <span className="w-3.5 shrink-0" />
                         )}
-                        <span className="truncate text-sm">{account.name}</span>
+                        <span className="truncate text-sm max-sm:whitespace-normal max-sm:line-clamp-2 max-sm:break-words">
+                          {account.name}
+                        </span>
                         {account.accountId && !isGroup && (
-                          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                          <span className="text-[10px] text-muted-foreground font-mono shrink-0 max-sm:hidden">
                             #{account.accountId}
                           </span>
                         )}
                         {onEdit && account.type === "ledger" && (
                           <button
-                            className="opacity-0 group-hover/row:opacity-100 transition-opacity ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                            className="opacity-0 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               onEdit(account);
@@ -124,7 +127,7 @@ export function AccountTable({
                       </div>
                     </TableCell>
                     {!hideBalances && (
-                      <TableCell className="text-right py-3">
+                      <TableCell className="text-right py-3 max-sm:w-28">
                         {hasKids ? (
                           <span className="text-muted-foreground text-xs">
                             {kids.length} {kids.length === 1 ? "account" : "accounts"}

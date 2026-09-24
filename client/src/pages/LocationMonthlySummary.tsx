@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import type { AuthMe } from "@shared/apiTypes";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 interface MonthlyData {
   month: number;
@@ -101,6 +102,8 @@ function hasActivity(m: MonthlyData) {
 }
 
 export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe } = {}) {
+  const mobileCards = useMobileCardTable();
+  const mobileCardsSecondary = useMobileCardTable();
   const { formatAmount } = useCurrencyContext();
   const { registerCursorNav, clearCursorNav } = useCursorNav();
   const params = useParams();
@@ -401,7 +404,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
           </CardTitle>
         </CardHeader>
         <CardContent className="overflow-auto flex-1 p-0" ref={tableScrollContainer}>
-          <table className="w-full text-sm border-collapse" style={{ minWidth: "900px" }}>
+          <table {...mobileCards.tableProps} className="w-full text-sm border-collapse" style={{ minWidth: "900px" }}>
             <thead className="sticky top-0 z-30">
               <tr className="bg-muted border-b">
                 <th rowSpan={2} className="text-left align-bottom px-3 py-2 border-r font-semibold w-28">
@@ -720,7 +723,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
                 const avgRate = totalQty > 0 ? totalValue / totalQty : 0;
 
                 return (
-                  <table className="w-full text-sm border-collapse">
+                  <table {...mobileCardsSecondary.tableProps} className="w-full text-sm border-collapse">
                     <thead className="sticky top-0 z-10 bg-muted border-b">
                       <tr>
                         <th className="text-left px-3 py-2 font-medium">Type</th>

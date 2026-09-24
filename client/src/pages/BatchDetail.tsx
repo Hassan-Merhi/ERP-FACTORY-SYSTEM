@@ -347,7 +347,7 @@ export default function BatchDetail({ batchId, onBack, onDeleted }: BatchDetailP
           ) : (
             <>
               <div className="border rounded-md overflow-auto">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Bale Code</TableHead>

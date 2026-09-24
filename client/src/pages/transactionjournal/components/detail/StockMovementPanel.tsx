@@ -78,7 +78,7 @@ export function StockAdjustmentPanel({
     <div>
       <h3 className="font-semibold mb-3">Stock Items</h3>
       <div className="border rounded-md overflow-x-auto">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               <TableHead>Item Name</TableHead>

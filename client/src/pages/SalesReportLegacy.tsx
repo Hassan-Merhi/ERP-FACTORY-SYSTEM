@@ -908,9 +908,9 @@ export default function SalesReport() {
             ` · ${filteredGroupedData.length} row${filteredGroupedData.length !== 1 ? "s" : ""}`}
           {" · "}Click any row to drill in
         </p>
-        <div className="border rounded-xl overflow-hidden">
+        <div className="border rounded-xl overflow-hidden max-sm:overflow-visible max-sm:border-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableHead className="text-xs h-9 font-semibold">Date</TableHead>

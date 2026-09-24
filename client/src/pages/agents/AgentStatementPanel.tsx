@@ -213,7 +213,7 @@ export function AgentStatementPanel({
         </div>
 
         <div className="rounded-xl border overflow-hidden shadow-sm">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-2">
                 <TableHead className="text-xs h-10 font-bold uppercase tracking-wide text-muted-foreground w-[120px]">

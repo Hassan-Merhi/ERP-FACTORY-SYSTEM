@@ -120,7 +120,7 @@ export function ContainerDetailSpView({ model }: { model: Model }) {
           <CardTitle className="text-base">Line Items</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader>
               <TableRow>
                 <TableHead>Article Code</TableHead>

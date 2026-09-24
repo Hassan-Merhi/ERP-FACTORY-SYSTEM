@@ -12,6 +12,7 @@ import {
 } from "./InlineCells";
 import { cn } from "@/lib/utils";
 import { useBoundedTableRows } from "@/hooks/useBoundedTableRows";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 
 interface ContainerTableProps {
   containers: EnrichedContainerRow[];
@@ -24,11 +25,14 @@ interface ContainerTableProps {
 const TRACKING_ROW_HEIGHT = 40;
 
 export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDrawer, printRef }: ContainerTableProps) {
+  const isPhone = useErpPhoneLayout();
   const virtualRows = useBoundedTableRows({
     rowCount: containers.length,
     rowHeight: TRACKING_ROW_HEIGHT,
     minimumRows: 100,
     overscan: 16,
+    // Phone cards have variable heights, so the fixed-height spacer window does not apply.
+    enabled: !isPhone,
   });
   const visibleContainers = React.useMemo(
     () => containers.slice(virtualRows.startIndex, virtualRows.endIndex),
@@ -39,7 +43,7 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
     <div className="rounded-md border bg-card h-full flex flex-col shadow-sm overflow-clip">
       <div ref={virtualRows.scrollRef} className="flex-1 overflow-auto custom-scrollbar relative">
         <div ref={printRef as React.RefObject<HTMLDivElement>}>
-          <Table className="text-xs" wrapperClassName="overflow-visible border-0 rounded-none">
+          <Table className="text-xs" wrapperClassName="overflow-visible border-0 rounded-none" mobileLayout="cards">
             <TableHeader className="sticky top-0 z-[50] bg-teal-800 dark:bg-teal-950">
               <TableRow className="!bg-transparent hover:!bg-transparent border-b border-teal-600 dark:border-teal-700">
                 <TableHead className="w-[40px] font-bold h-9 text-teal-50 text-center">#</TableHead>
@@ -121,7 +125,10 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
                         onClick={() => onOpenDrawer(c)}
                         data-testid={`row-container-${c.id}`}
                       >
-                        <TableCell className="text-center text-muted-foreground font-mono text-[10px] h-10 select-none">
+                        <TableCell
+                          className="text-center text-muted-foreground font-mono text-[10px] h-10 select-none"
+                          data-mobile-cell="hidden"
+                        >
                           {idx + 1}
                         </TableCell>
                         <TableCell className="font-mono font-bold text-[11px] h-10">

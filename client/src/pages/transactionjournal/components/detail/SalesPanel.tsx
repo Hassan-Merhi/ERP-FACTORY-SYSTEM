@@ -62,7 +62,7 @@ export function SalesPanel({
       <div>
         <h3 className="font-semibold mb-3">Items Sold</h3>
         <div className="border rounded-md overflow-x-auto">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader className="sticky top-0 z-30 bg-background">
               <TableRow>
                 <TableHead>Item</TableHead>

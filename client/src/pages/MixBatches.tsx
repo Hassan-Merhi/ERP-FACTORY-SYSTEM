@@ -284,7 +284,7 @@ export default function MixBatches() {
             </div>
           ) : filteredBatches && filteredBatches.length > 0 ? (
             <div>
-              <Table wrapperClassName="overflow-visible">
+              <Table wrapperClassName="overflow-visible" mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Name</TableHead>
@@ -576,7 +576,7 @@ export default function MixBatches() {
                       No unlinked bales found — all pressed bales already have a raw stock source.
                     </div>
                   ) : (
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-10"></TableHead>

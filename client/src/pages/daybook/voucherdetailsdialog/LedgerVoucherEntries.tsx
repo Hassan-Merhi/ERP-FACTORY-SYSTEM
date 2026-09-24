@@ -309,7 +309,7 @@ export function LedgerVoucherEntries(props: LedgerVoucherEntriesProps) {
         </div>
       )}
       <div className="border rounded-md">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               {isStockEntry ? (

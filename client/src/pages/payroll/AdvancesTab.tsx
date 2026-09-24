@@ -480,7 +480,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
             </div>
           ) : (
             <div className="border rounded-md">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Worker</TableHead>
@@ -536,7 +536,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
             </div>
           ) : (
             <div className="border rounded-md">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Worker</TableHead>
