@@ -294,7 +294,6 @@ export function registerRetailPosRoutes(app: Express): void {
       await ensureCompanyLocation(companyId, locationId);
       const search = String(req.query.search ?? "").trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
-      const pattern = `%${search.replace(/[%_]/g, "\\      const pattern = `%${search.replace(/[%_]/g, "\\$&")}%`;")}%`;
 
       const rows = await db
         .select({
