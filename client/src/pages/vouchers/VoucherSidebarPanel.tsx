@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import {
   Plus,
@@ -82,10 +83,7 @@ export function VoucherSidebarPanel({
 
   const filteredSidebarAccounts = useMemo(() => {
     if (!sidebarSearchValue.trim()) return sidebarAccounts;
-    const term = sidebarSearchValue.toLowerCase();
-    return sidebarAccounts.filter(
-      (acc) => acc.name.toLowerCase().includes(term) || (acc.code && acc.code.toLowerCase().includes(term))
-    );
+    return sidebarAccounts.filter((acc) => searchAny(sidebarSearchValue, acc.name, acc.code));
   }, [sidebarAccounts, sidebarSearchValue]);
 
   const isFinancialTab = ["payment", "receipt", "journal"].includes(activeTab);
