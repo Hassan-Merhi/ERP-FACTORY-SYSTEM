@@ -41,8 +41,9 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     data,
     isLoading,
     presets,
-    statusValue,
-    statusPositive,
+    profitValue,
+    valuationMode,
+    setValuationMode,
   } = report;
   const costsHidden = Boolean(data?.costsHidden);
   return (
@@ -107,6 +108,34 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+
+            {data && !costsHidden && (
+              <div
+                className="inline-flex items-center rounded-md border bg-muted/40 p-0.5"
+                data-testid="production-valuation-toggle"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={valuationMode === "selling" ? "default" : "ghost"}
+                  className="h-8 px-3"
+                  onClick={() => setValuationMode("selling")}
+                  data-testid="button-valuation-selling"
+                >
+                  Selling Price
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={valuationMode === "cost" ? "default" : "ghost"}
+                  className="h-8 px-3"
+                  onClick={() => setValuationMode("cost")}
+                  data-testid="button-valuation-cost"
+                >
+                  Cost Price
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Compact pie charts — same row as date picker */}
@@ -163,7 +192,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   <div className="flex flex-wrap items-center gap-6">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Production Value
+                        {valuationMode === "selling" ? "Selling Value" : "Cost Value"}
                       </span>
                       <span
                         className="text-base font-bold text-blue-600 dark:text-blue-400"
@@ -183,28 +212,61 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     </div>
                     <div className="w-px h-5 bg-border" />
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
                       <span
                         className={`text-base font-bold px-3 py-0.5 rounded-md ${
-                          statusPositive
+                          profitValue > 0
                             ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                            : profitValue < 0
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                              : "bg-muted text-muted-foreground"
                         }`}
-                        data-testid="text-status-value"
+                        data-testid="text-profit-value"
                       >
-                        {statusPositive ? "+" : ""}
-                        {fmtMoney(statusValue)}
+                        {profitValue > 0 ? "+" : ""}
+                        {fmtMoney(profitValue)}
                       </span>
-                      {statusPositive ? (
+                      {profitValue > 0 ? (
                         <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      ) : statusValue === 0 ? (
+                      ) : profitValue === 0 ? (
                         <Minus className="h-4 w-4 text-muted-foreground" />
                       ) : (
                         <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
                       )}
                     </div>
+                    <div className="w-px h-5 bg-border" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margin</span>
+                      <span className="text-base font-bold tabular-nums" data-testid="text-profit-margin">
+                        {(data?.summary.profitMarginPct ?? 0).toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
                 )}
+
+                {!costsHidden &&
+                  data &&
+                  (data.summary.missingCostPriceBales > 0 || data.summary.missingSellingPriceBales > 0) && (
+                    <div
+                      className="text-xs font-medium text-amber-700 dark:text-amber-400"
+                      data-testid="text-missing-production-prices"
+                    >
+                      Missing prices:{" "}
+                      {[
+                        data.summary.missingCostPriceBales > 0
+                          ? `${data.summary.missingCostPriceBales} cost`
+                          : null,
+                        data.summary.missingSellingPriceBales > 0
+                          ? `${data.summary.missingSellingPriceBales} selling`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {data.summary.missingSelectedPriceBales > 0
+                        ? ` — ${valuationMode === "selling" ? "Selling" : "Cost"} valuation and profit are partial.`
+                        : " — Profit is partial."}
+                    </div>
+                  )}
 
                 {/* Row 2 — weight breakdown */}
                 {(() => {
@@ -318,7 +380,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   <StatRow label="Weight" value={fmtKg(data?.production.totalWeightKg ?? 0)} />
                   {!costsHidden && (
                     <>
-                      <StatRow label="Value" value={fmtMoney(data?.production.totalValue ?? 0)} />
+                      <StatRow
+                        label={valuationMode === "selling" ? "Selling Value" : "Cost Value"}
+                        value={fmtMoney(data?.production.totalValue ?? 0)}
+                      />
                       {/* Big rate display */}
                       {(() => {
                         const kg = data?.production.totalWeightKg ?? 0;
@@ -327,7 +392,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         return (
                           <div className="flex flex-col items-center justify-center py-3 mt-1 border-t border-blue-200 dark:border-blue-800/40">
                             <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
-                              Rate / kg
+                              {valuationMode === "selling" ? "Selling / kg" : "Cost / kg"}
                             </span>
                             <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums">
                               {fmtRate(rate)}
@@ -384,7 +449,12 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       </span>
                     </span>
                   </div>
-                  {!costsHidden && <StatRow label="Value" value={fmtMoney(data?.wipersGarbage.totalValue ?? 0)} />}
+                  {!costsHidden && (
+                    <StatRow
+                      label={valuationMode === "selling" ? "Selling Value" : "Cost Value"}
+                      value={fmtMoney(data?.wipersGarbage.totalValue ?? 0)}
+                    />
+                  )}
                   <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800/40 flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-400">
                       Total Wiper + Garbage
@@ -443,34 +513,23 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <>
                       <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                      {/* Production Profit = bales produced value − (bales produced kg × balance batch rate) */}
-                      {(() => {
-                        const producedKg = data?.production.totalWeightKg ?? 0;
-                        const batchRate = data?.balanceOnTable.costPerKg ?? 0;
-                        const producedVal = data?.production.totalValue ?? 0;
-                        const profit = producedVal - producedKg * batchRate;
-                        const isPos = profit > 0;
-                        const isNeg = profit < 0;
-                        return (
-                          <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                              Production Profit
-                            </span>
-                            <span
-                              className={`text-sm font-extrabold tabular-nums ${
-                                isPos
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : isNeg
-                                    ? "text-red-500 dark:text-red-400"
-                                    : "text-muted-foreground"
-                              }`}
-                            >
-                              {isPos ? "+" : ""}
-                              {fmtMoney(profit)}
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
+                          Production Profit
+                        </span>
+                        <span
+                          className={`text-sm font-extrabold tabular-nums ${
+                            profitValue > 0
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : profitValue < 0
+                                ? "text-red-500 dark:text-red-400"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          {profitValue > 0 ? "+" : ""}
+                          {fmtMoney(profitValue)}
+                        </span>
+                      </div>
                     </>
                   )}
                 </>
@@ -491,6 +550,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             qty: number;
             totalWeightKg: number;
             costPricePerBale: number;
+            pricePerBale: number;
             totalValue: number;
           }[] = [];
           if (data) {
@@ -511,6 +571,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   qty: r.qty,
                   totalWeightKg: r.totalWeightKg,
                   costPricePerBale: 0,
+                  pricePerBale: r.qty > 0 ? r.totalValue / r.qty : 0,
                   totalValue: r.totalValue,
                 }))
               );
@@ -530,6 +591,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   qty: r.qty,
                   totalWeightKg: r.totalWeightKg,
                   costPricePerBale: 0,
+                  pricePerBale: r.qty > 0 ? r.totalValue / r.qty : 0,
                   totalValue: r.totalValue,
                 }))
               );
@@ -566,6 +628,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   totalWeightKg={mergedTotalWeightKg}
                   totalValue={mergedTotalValue}
                   hideCosts={costsHidden}
+                  valuationMode={valuationMode}
                 />
               )}
             </ExpandableCard>

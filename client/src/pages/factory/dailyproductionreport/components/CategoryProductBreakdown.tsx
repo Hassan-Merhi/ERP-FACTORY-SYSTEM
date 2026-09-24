@@ -17,6 +17,7 @@ export function CategoryProductBreakdown({
   totalWeightKg,
   totalValue,
   hideCosts = false,
+  valuationMode = "cost",
 }: {
   categories: { categoryName: string; qty: number; totalWeightKg: number; totalValue: number }[];
   products: {
@@ -26,12 +27,14 @@ export function CategoryProductBreakdown({
     qty: number;
     totalWeightKg: number;
     costPricePerBale: number;
+    pricePerBale: number;
     totalValue: number;
   }[];
   totalBales: number;
   totalWeightKg: number;
   totalValue: number;
   hideCosts?: boolean;
+  valuationMode?: "cost" | "selling";
 }) {
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
 
@@ -144,7 +147,11 @@ export function CategoryProductBreakdown({
                         <TableHead className="text-xs">Product</TableHead>
                         <TableHead className="text-xs text-right">Qty</TableHead>
                         <TableHead className="text-xs text-right">Weight</TableHead>
-                        {!hideCosts && <TableHead className="text-xs text-right">Cost / Bale</TableHead>}
+                        {!hideCosts && (
+                          <TableHead className="text-xs text-right">
+                            {valuationMode === "selling" ? "Selling / Bale" : "Cost / Bale"}
+                          </TableHead>
+                        )}
                         {!hideCosts && <TableHead className="text-xs text-right">Value</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -161,7 +168,7 @@ export function CategoryProductBreakdown({
                           </TableCell>
                           {!hideCosts && (
                             <TableCell className="text-xs text-right font-mono py-1.5">
-                              {fmtMoney(p.costPricePerBale)}
+                              {fmtMoney(p.pricePerBale)}
                             </TableCell>
                           )}
                           {!hideCosts && (

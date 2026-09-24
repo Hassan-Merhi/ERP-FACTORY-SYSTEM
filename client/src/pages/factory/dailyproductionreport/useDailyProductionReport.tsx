@@ -2,8 +2,10 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearch } from "wouter";
 import { addDays, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
+import { useCompany } from "@/contexts/CompanyContext";
 
-import type { Preset, ReportData } from "./types";
+import type { Preset, ProductionValuationMode, ReportData } from "./types";
 import {
   computeWorkerExpectedSalary,
   lastMonthRange,
@@ -39,6 +41,35 @@ export function useDailyProductionReport() {
   const [customTo, setCustomTo] = useState(todayStr());
   const [workerPayrollOpen, setWorkerPayrollOpen] = useState(false);
   const [empPayrollOpen, setEmpPayrollOpen] = useState(false);
+  const { data: authenticatedUser } = useQuery(authenticatedUserQueryOptions());
+  const { selectedCompany } = useCompany();
+  const [valuationMode, setValuationModeState] = useState<ProductionValuationMode>("cost");
+  const [valuationLoadedKey, setValuationLoadedKey] = useState<string | null>(null);
+
+  const valuationStorageKey = useMemo(() => {
+    if (!authenticatedUser?.id || !selectedCompany?.id) return null;
+    return `factory:production-overview:valuation:${String(authenticatedUser.id)}:${selectedCompany.id}`;
+  }, [authenticatedUser?.id, selectedCompany?.id]);
+
+  useEffect(() => {
+    if (!valuationStorageKey) {
+      setValuationLoadedKey(null);
+      return;
+    }
+    const saved = window.localStorage.getItem(valuationStorageKey);
+    setValuationModeState(saved === "selling" ? "selling" : "cost");
+    setValuationLoadedKey(valuationStorageKey);
+  }, [valuationStorageKey]);
+
+  const setValuationMode = useCallback(
+    (mode: ProductionValuationMode) => {
+      setValuationModeState(mode);
+      if (valuationStorageKey) window.localStorage.setItem(valuationStorageKey, mode);
+    },
+    [valuationStorageKey]
+  );
+
+  const valuationReady = valuationStorageKey !== null && valuationLoadedKey === valuationStorageKey;
 
   const { from, to } = useMemo(() => {
     if (preset === "today") return { from: todayStr(), to: todayStr() };
@@ -85,9 +116,9 @@ export function useDailyProductionReport() {
   }, [stepDates]);
 
   const { data, isLoading } = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", from, to, "production"],
+    queryKey: ["/api/factory/production-value-report", from, to, "production", valuationMode],
     queryFn: async () => {
-      const params = new URLSearchParams({ view: "production" });
+      const params = new URLSearchParams({ view: "production", valuationMode });
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       const qs = params.toString() ? `?${params.toString()}` : "";
@@ -95,7 +126,7 @@ export function useDailyProductionReport() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: preset === "alltime" || (!!from && !!to),
+    enabled: valuationReady && (preset === "alltime" || (!!from && !!to)),
   });
 
   const { data: attendanceData } = useQuery<{
@@ -190,6 +221,7 @@ export function useDailyProductionReport() {
 
   const statusValue = data?.summary.statusValue ?? 0;
   const statusPositive = statusValue >= 0;
+  const profitValue = data?.summary.profitValue ?? 0;
 
   return {
     activeTab,
@@ -215,6 +247,9 @@ export function useDailyProductionReport() {
     presets,
     statusValue,
     statusPositive,
+    profitValue,
+    valuationMode,
+    setValuationMode,
   };
 }
 
