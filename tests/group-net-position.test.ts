@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   getAllCompanies: vi.fn(),
+  getCompanySettings: vi.fn(),
   getHistoricalCurrencyReadiness: vi.fn(),
   erpResponse: vi.fn(),
 }));
@@ -9,6 +10,7 @@ const harness = vi.hoisted(() => ({
 vi.mock("../server/storage", () => ({
   storage: {
     getAllCompanies: harness.getAllCompanies,
+    getCompanySettings: harness.getCompanySettings,
   },
 }));
 
@@ -104,6 +106,7 @@ const baseResponse = (forUsTotal = 100, onUsTotal = 40, netPosition = forUsTotal
 describe("Group Net Position", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.getCompanySettings.mockResolvedValue({});
     harness.getHistoricalCurrencyReadiness.mockResolvedValue(ready);
     harness.erpResponse.mockImplementation(() => baseResponse());
   });
@@ -216,6 +219,59 @@ describe("Group Net Position", () => {
         expect.objectContaining({ companyId: 2, forUsTotal: 80, onUsTotal: 30, netPosition: 50 }),
       ])
     );
+  });
+
+  it("removes legacy ERP intercompany credit accounts from both sides of the group", async () => {
+    harness.getAllCompanies.mockResolvedValue([
+      { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true, parentCompanyId: null },
+      { id: 2, code: "B", name: "Beta", companyType: "erp", active: true, parentCompanyId: 1 },
+    ]);
+    harness.getCompanySettings.mockImplementation(async (companyId: number) =>
+      companyId === 2 ? { parentCreditAccountId: 501 } : {}
+    );
+    harness.erpResponse.mockImplementation((req: any) => {
+      if (req.session.currentCompanyId === 1) {
+        return {
+          ...baseResponse(200, 0, 200),
+          forUs: {
+            total: 200,
+            accounts: [
+              { id: 10, name: "Cash", code: "CASH", value: 100, category: "Cash" },
+              { id: 900, name: "Beta Credit", code: "BETCRD", value: 75, category: "Asset" },
+              { id: 901, name: "Inter-Company - Beta", code: "IC-TO-B", value: 25, category: "Asset" },
+            ],
+          },
+          onUs: { total: 0, accounts: [] },
+        };
+      }
+
+      return {
+        ...baseResponse(80, 40, 40),
+        forUs: {
+          total: 80,
+          accounts: [{ id: 20, name: "Cash", code: "CASH", value: 80, category: "Cash" }],
+        },
+        onUs: {
+          total: 40,
+          accounts: [{ id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" }],
+        },
+      };
+    });
+
+    const result = await calculateGroupNetPosition("2026-09-10");
+    const alpha = result.companies.find((company) => company.companyId === 1)!;
+    const beta = result.companies.find((company) => company.companyId === 2)!;
+
+    expect(alpha.forUsTotal).toBe(100);
+    expect(alpha.forUsLines.map((line) => line.label)).toEqual(["Cash"]);
+    expect(beta.onUsTotal).toBe(0);
+    expect(beta.onUsLines).toEqual([]);
+    expect(result.totals).toMatchObject({
+      forUsTotal: 180,
+      onUsTotal: 0,
+      netPosition: 180,
+      netAdjustments: 0,
+    });
   });
 
   it("blocks the full group snapshot when any included ERP company has unresolved historical FX data", async () => {
