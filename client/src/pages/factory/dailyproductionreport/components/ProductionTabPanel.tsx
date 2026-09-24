@@ -42,7 +42,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     isLoading,
     presets,
     profitValue,
-    profitPositive,
     valuationMode,
     setValuationMode,
     isPreferenceSaving,
