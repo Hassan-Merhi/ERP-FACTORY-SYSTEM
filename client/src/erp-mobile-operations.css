@@ -205,6 +205,18 @@
   }
 }
 
+/*
+ * Radix Select renders a visually hidden native <select> (for form autofill) with inline
+ * absolute positioning. Without a positioned ancestor it is placed at its static position and
+ * can extend the document below the shell, letting the whole page scroll on phones. Pinning
+ * it to the viewport keeps it inert for layout.
+ */
+select[aria-hidden="true"][tabindex="-1"] {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+}
+
 /* Shared page-header navigation and actions are screen controls, not report content. */
 @media print {
   [data-testid="page-header"] > nav,

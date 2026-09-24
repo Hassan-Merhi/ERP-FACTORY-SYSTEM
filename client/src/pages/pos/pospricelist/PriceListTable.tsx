@@ -19,7 +19,11 @@ import { cn } from "@/lib/utils";
 import { getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { StockMovementDialog } from "@/pages/location-inventory/StockMovementDialog";
 import { formatQty } from "./utils";
-import type { StockMovementItem, StockMovementMonth, StockMovementPeriod } from "@/pages/location-inventory/locationInventoryTypes";
+import type {
+  StockMovementItem,
+  StockMovementMonth,
+  StockMovementPeriod,
+} from "@/pages/location-inventory/locationInventoryTypes";
 import type { PriceListRow } from "./types";
 import type { PosPriceListModel } from "./usePosPriceListModel";
 
