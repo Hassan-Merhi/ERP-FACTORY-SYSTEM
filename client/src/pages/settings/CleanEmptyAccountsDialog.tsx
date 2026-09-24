@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -61,7 +62,7 @@ export function CleanEmptyAccountsDialog({ open, onOpenChange, companyId }: Clea
     },
   });
 
-  const filtered = emptyAccounts.filter((a) => a.name.toLowerCase().includes(filter.toLowerCase()));
+  const filtered = emptyAccounts.filter((a) => searchAny(filter, a.name, a.code));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
