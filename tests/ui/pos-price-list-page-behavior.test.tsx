@@ -47,6 +47,7 @@ const mastersData = {
       stockGroupName: "Clothes",
       baseSellingPrice: null,
       masterPrices: { 11: "20", 12: "22" },
+      totalQuantity: "8",
       costPrice: "10",
       offloadingCost: "2",
     },
@@ -57,6 +58,7 @@ const mastersData = {
       stockGroupName: "Clothes",
       baseSellingPrice: null,
       masterPrices: { 11: null, 12: null },
+      totalQuantity: "3",
       costPrice: "8",
       offloadingCost: "1",
     },
@@ -207,6 +209,7 @@ describe("POS price list page behavior", () => {
     expect(screen.getByTestId("chip-location-12")).toHaveTextContent("Branch");
     expect(screen.getByTestId("cell-price-101-11")).toHaveTextContent("$20.00");
     expect(screen.getByTestId("cell-price-101-12")).toHaveTextContent("$22.00");
+    expect(screen.getByTestId("text-total-qty-101")).toHaveTextContent("8");
 
     fireEvent.click(screen.getByTestId("chip-location-12"));
     expect(screen.queryByTestId("cell-price-101-12")).not.toBeInTheDocument();
