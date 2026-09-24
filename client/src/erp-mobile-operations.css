@@ -283,9 +283,10 @@
   }
 }
 
-/* The floating notes button covered page content on phones; the workspace menu opens notes there. */
+/* The floating notes button covered page content on ERP phones; the ERP workspace menu opens
+   notes there. Other shells have no such menu entry, so they keep the button. */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  [data-testid="button-open-user-notes"] {
+  html[data-app-shell="erp"] [data-testid="button-open-user-notes"] {
     display: none !important;
   }
 }
