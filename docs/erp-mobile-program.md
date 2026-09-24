@@ -17,8 +17,8 @@ phase is certified.
 | 6 | Simplify dense ERP screens | Complete | #1797 |
 | 7 | Mobile actions and touch behaviour | Complete | #1798 |
 | 8 | Mobile typography and information density | Complete | #1799 |
-| 9 | ERP route-by-route certification | Complete | Phase 9 PR |
-| 10 | Mobile polish and final certification | Pending | — |
+| 9 | ERP route-by-route certification | Complete | #1800 |
+| 10 | Mobile polish and final certification | Complete | Phase 10 PR |
 
 ## Shared contracts
 
@@ -288,4 +288,20 @@ Certification result: 1,407 cases (67 routes × 7 viewports × English, French a
 0 failures and 0 warnings. The harness checks document overflow, header collisions and
 off-screen header controls, elements escaping the viewport, wide phone tables, filter areas
 that consume the phone screen, touch targets under 24px and console errors.
+
+## Phase 10 — Mobile polish and final certification
+
+Delivered:
+
+- Location inventory: on ERP phones the root-level "Select Location" hint is hidden. It
+  repeated the Locations heading directly below it. POS keeps its layout.
+- Activity by Company: in Arabic, the collapsed chevron and the day navigator arrows mirror
+  (`data-directional-icon`). The subtitle is translated into French and Arabic.
+
+Final certification, on `main` with Phase 10 applied: 1,407 cases (67 routes × 7 viewports ×
+English, French and Arabic), 0 failures and 0 warnings.
+
+Known issues outside this program (unchanged by it, red on `main`): the Repository Audits
+`applicationRoutes.ts` line cap, the CI-only frontend failures in `phase4-split-pages` and
+`period-filter`, Backend / Database Tests, and the github-advanced-security setup step.
 
