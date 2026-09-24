@@ -10,7 +10,6 @@ import { parseId, parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
-import { checkFactoryAdmin } from "../factory/_helpers";
 import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import {
   factoryWorkers,
@@ -20,7 +19,13 @@ import {
   factoryAttendance,
 } from "@shared/schema";
 
-import { computeMonthlyPay, computeMonthlyPayFromAttendance, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import {
+  checkFactoryWorkerContractAccess,
+  computeMonthlyPay,
+  computeMonthlyPayFromAttendance,
+  getFactoryCompanyId,
+  writeDaybookEntry,
+} from "./_helpers";
 import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 
 export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
@@ -60,7 +65,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
   // POST /api/factory/workers/:id/settle-and-end - Settlement calculation + end contract
   app.post("/api/factory/workers/:id/settle-and-end", requireAuth, async (req: Request, res: Response) => {
     try {
-      if (!checkFactoryAdmin(req, res)) return;
+      if (!checkFactoryWorkerContractAccess(req, res)) return;
       const companyId = req.body.companyId || getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
