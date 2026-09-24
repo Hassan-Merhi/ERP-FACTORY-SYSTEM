@@ -91,7 +91,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
   const isDeveloper = currentUser?.role === "Developer";
 
   const { data: ledgerAccounts = [] } = useQuery<{ id: number; name: string; code: string; accountType: string }[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
