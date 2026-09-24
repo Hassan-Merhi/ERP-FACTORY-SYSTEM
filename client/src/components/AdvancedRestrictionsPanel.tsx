@@ -155,7 +155,6 @@ export function AdvancedRestrictionsPanel({ role, companyId, companyName }: Adva
   };
 
   // ── Build filtered catalog ───────────────────────────────────────────────
-  const searchLower = search.toLowerCase();
 
   const filteredCatalog = useMemo(() => {
     if (!searchLower) return PERMISSION_CATALOG;
