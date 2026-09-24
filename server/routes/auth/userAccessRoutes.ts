@@ -244,6 +244,7 @@ export function registerUserAccessRoutes(app: Express) {
         showProfitComparisonOnPOS,
         showChatWidget,
         showNotesPanel,
+        factoryNetPositionValuationMode,
         hiddenTransactionJournalVoucherIds,
       } = req.body;
       if (dateFormat && !["MM/DD/YYYY", "DD/MM/YYYY"].includes(dateFormat)) {
@@ -251,6 +252,12 @@ export function registerUserAccessRoutes(app: Express) {
       }
       if (preferredCurrency && !["USD", "CFA"].includes(preferredCurrency)) {
         return res.status(400).json({ message: "Invalid currency" });
+      }
+      if (
+        factoryNetPositionValuationMode !== undefined &&
+        !["cost", "selling"].includes(factoryNetPositionValuationMode)
+      ) {
+        return res.status(400).json({ message: "Invalid factory net position valuation mode" });
       }
       let normalizedHiddenTransactionJournalVoucherIds: number[] | undefined;
       if (hiddenTransactionJournalVoucherIds !== undefined) {
@@ -274,6 +281,9 @@ export function registerUserAccessRoutes(app: Express) {
       if (showProfitComparisonOnPOS !== undefined) updateFields.showProfitComparisonOnPOS = showProfitComparisonOnPOS;
       if (showChatWidget !== undefined) updateFields.showChatWidget = showChatWidget;
       if (showNotesPanel !== undefined) updateFields.showNotesPanel = showNotesPanel;
+      if (factoryNetPositionValuationMode !== undefined) {
+        updateFields.factoryNetPositionValuationMode = factoryNetPositionValuationMode;
+      }
       if (normalizedHiddenTransactionJournalVoucherIds !== undefined) {
         updateFields.hiddenTransactionJournalVoucherIds = normalizedHiddenTransactionJournalVoucherIds;
       }
@@ -288,6 +298,7 @@ export function registerUserAccessRoutes(app: Express) {
             showProfitComparisonOnPOS: showProfitComparisonOnPOS ?? false,
             showChatWidget: showChatWidget ?? true,
             showNotesPanel: showNotesPanel ?? true,
+            factoryNetPositionValuationMode: factoryNetPositionValuationMode ?? "cost",
             hiddenTransactionJournalVoucherIds: normalizedHiddenTransactionJournalVoucherIds ?? [],
           })
           .returning();

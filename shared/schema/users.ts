@@ -149,6 +149,7 @@ export const userPreferences = pgTable("user_preferences", {
   showProfitComparisonOnPOS: boolean("show_profit_comparison_on_pos").notNull().default(false),
   showChatWidget: boolean("show_chat_widget").notNull().default(true),
   showNotesPanel: boolean("show_notes_panel").notNull().default(true),
+  factoryNetPositionValuationMode: text("factory_net_position_valuation_mode").notNull().default("cost"),
   hiddenTransactionJournalVoucherIds: integer("hidden_transaction_journal_voucher_ids").array().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

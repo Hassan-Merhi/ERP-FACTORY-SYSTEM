@@ -25,10 +25,13 @@ export interface NetPositionInventoryContext {
 }
 
 export interface NetPositionInventory {
+  /** Legacy alias retained for callers/tests; this is the cost valuation. */
   inventorySellValue: number;
+  inventorySellingValue: number;
   rawMaterialStockValue: number;
   stockOtwValue: number;
   balanceOnTableValue: number;
+  balanceOnTableSellingValue: number;
 }
 
 export async function computeNetPositionInventory(ctx: NetPositionInventoryContext): Promise<NetPositionInventory> {
@@ -50,7 +53,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   // "Pending Orders" receivables — leaving them in Stock In Hand as well
   // double-counts them.
   const invResult = await db.execute(sql`
-  SELECT COALESCE(SUM(p.production_price::numeric), 0) AS total
+  SELECT
+    COALESCE(SUM(p.production_price::numeric), 0) AS total_cost,
+    COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling
   FROM   factory_bales   b
   JOIN   factory_bale_products p ON p.id = b.product_id
   WHERE  b.company_id = ${ctx.companyId}
@@ -72,7 +77,8 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     )
 `);
   const invRow = resultRows(invResult)[0] ?? {};
-  const inventorySellValue = ctx.round2(parseFloat(String(invRow?.total ?? "0")));
+  const inventorySellValue = ctx.round2(parseFloat(String(invRow?.total_cost ?? "0")));
+  const inventorySellingValue = ctx.round2(parseFloat(String(invRow?.total_selling ?? "0")));
 
   // ── 3b. Raw material stock value — direct SQL, mirrors /api/factory/raw-stock
   //
@@ -329,6 +335,7 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   const baleSumResult = await db.execute(sql`
   SELECT
     COALESCE(SUM(b.weight_kg::numeric), 0)                                          AS total_kg,
+    COALESCE(SUM(p.selling_price::numeric), 0)                                      AS total_selling_value,
     COALESCE(SUM(CASE WHEN lower(c.name) ~ '(wiper|garbage|rag)'
                       THEN b.weight_kg::numeric ELSE 0 END), 0)                     AS wg_kg
   FROM   factory_bales        b
@@ -339,9 +346,25 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
 `);
   const baleSumRow = resultRows(baleSumResult)[0] ?? {};
   const totalBaleKg = parseFloat(String(baleSumRow.total_kg ?? "0")) || 0;
+  const totalSellingValue = parseFloat(String(baleSumRow.total_selling_value ?? "0")) || 0;
   const _totalWgKg = parseFloat(String(baleSumRow.wg_kg ?? "0")) || 0;
 
-  const botWeightKg = totalMixKg - totalBaleKg;
-  const balanceOnTableValue = ctx.round2(Math.max(botWeightKg, 0) * blendedCpk);
-  return { inventorySellValue, rawMaterialStockValue, stockOtwValue, balanceOnTableValue };
+  const botWeightKg = Math.max(totalMixKg - totalBaleKg, 0);
+  const balanceOnTableValue = ctx.round2(botWeightKg * blendedCpk);
+  // Selling valuation uses the realized configured selling value per kg of produced
+  // bales as the best like-for-like valuation for material still on the table.
+  // If no produced-bale selling basis exists yet, fall back to cost rather than
+  // inventing a markup.
+  const blendedSellingPerKg = totalBaleKg > 0 ? totalSellingValue / totalBaleKg : 0;
+  const balanceOnTableSellingValue =
+    blendedSellingPerKg > 0 ? ctx.round2(botWeightKg * blendedSellingPerKg) : balanceOnTableValue;
+
+  return {
+    inventorySellValue,
+    inventorySellingValue,
+    rawMaterialStockValue,
+    stockOtwValue,
+    balanceOnTableValue,
+    balanceOnTableSellingValue,
+  };
 }
