@@ -97,7 +97,22 @@ function registerWriteInvalidationSignal(app: Express): void {
       const invalidation = classifyRealtimeWrite(url, req.body);
       res.on("finish", () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          broadcast({ type: "invalidate", ...invalidation }, { companyId });
+          const requestPath = url.split("?", 1)[0];
+          // A single loading-bale scan returns a compact patch that the calling
+          // tab applies to its order/capacity cache immediately. Do not make
+          // that exact tab download the same Factory state again via its WS
+          // echo; every other tab/device still receives the invalidation.
+          const suppressOriginEcho =
+            req.method === "POST" && /^\/api\/factory\/customer-orders\/\d+\/bales$/.test(requestPath);
+          const rawRealtimeClientId = req.headers["x-realtime-client-id"];
+          const realtimeClientId =
+            suppressOriginEcho && typeof rawRealtimeClientId === "string"
+              ? rawRealtimeClientId.trim().slice(0, 128)
+              : null;
+          broadcast(
+            { type: "invalidate", ...invalidation },
+            { companyId, excludeRealtimeClientId: realtimeClientId || null }
+          );
         }
       });
     }
