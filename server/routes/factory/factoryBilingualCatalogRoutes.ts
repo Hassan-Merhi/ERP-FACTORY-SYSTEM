@@ -1,6 +1,6 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express, Request } from "express";
-import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
