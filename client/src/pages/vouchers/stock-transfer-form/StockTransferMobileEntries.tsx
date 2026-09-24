@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/formatNumber";
@@ -46,10 +47,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
             ? transferInventory
                 .filter((item) => {
                   if (!transferSearchTerm.trim()) return true;
-                  const term = transferSearchTerm.toLowerCase();
-                  return (
-                    item.stockItemName?.toLowerCase().includes(term) || item.stockItemCode?.toLowerCase().includes(term)
-                  );
+                  return searchAny(transferSearchTerm, item.stockItemName, item.stockItemCode);
                 })
                 .sort((a, b) => (a.stockItemName || "").localeCompare(b.stockItemName || ""))
                 .slice(0, 10)
@@ -59,8 +57,7 @@ export function StockTransferMobileEntries({ model }: { model: StockTransferForm
             ? locations
                 .filter((loc) => {
                   if (!transferSourceSearchTerm.trim()) return true;
-                  const term = transferSourceSearchTerm.toLowerCase();
-                  return (loc.name || "").toLowerCase().includes(term);
+                  return searchAny(transferSourceSearchTerm, loc.name, loc.code);
                 })
                 .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
                 .slice(0, 8)
