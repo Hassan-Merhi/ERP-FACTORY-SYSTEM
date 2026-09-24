@@ -34,8 +34,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const currentRole = String(req.session.currentRole ?? req.user?.role ?? "").toLowerCase();
       const isPrivileged = ["admin", "owner", "developer"].includes(currentRole);
+      const isProductionComparisonRequest = req.query.view === "production-comparison";
       let hideComparisonCosts = false;
-      if (!isPrivileged && req.session.userId) {
+      if (isProductionComparisonRequest && !isPrivileged && req.session.userId) {
         const [profile] = await db
           .select({
             hiddenCostFields: factoryUserProfiles.hiddenCostFields,
