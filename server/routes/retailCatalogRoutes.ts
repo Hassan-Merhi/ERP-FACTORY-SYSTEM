@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { companies } from "@shared/schema";
@@ -107,7 +108,16 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
 
   if (query.search) {
     const token = add(`%${query.search}%`);
-    where.push(`LOWER(CONCAT_WS(' ', p.code, p.name, COALESCE(b.name, ''))) LIKE ${token}`);
+    const compactToken = add(`%${normalizeSearchText(query.search)}%`);
+    where.push(`(
+      LOWER(CONCAT_WS(' ', p.code, p.name, COALESCE(b.name, ''))) LIKE ${token}
+      OR regexp_replace(
+        lower(CONCAT_WS(' ', p.code, p.name, COALESCE(b.name, ''))),
+        '[^[:alnum:]]+',
+        '',
+        'g'
+      ) LIKE ${compactToken}
+    )`);
   }
   if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
   if (query.category) where.push(`LOWER(COALESCE(p.category, '')) = ${add(query.category)}`);
