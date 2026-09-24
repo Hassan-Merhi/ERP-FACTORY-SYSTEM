@@ -7,6 +7,7 @@ import {
 } from "@shared/realtimeInvalidation";
 import { parseRealtimeChatEvent, type RealtimeChatEvent } from "@shared/realtimeChat";
 import { invalidateBandwidthReadCaches, type BandwidthInvalidationScope } from "@/lib/bandwidthInvalidationPolicy";
+import { getRealtimeClientId } from "@/lib/realtimeClientIdentity";
 
 // Heavy analytical queries that are intentionally excluded from automatic WS invalidation.
 // These are expensive to compute, have a manual Refresh button, and should not jump
@@ -334,6 +335,12 @@ function connectSharedSocket(allowOfflineProbe = false): void {
 
   socket.onopen = () => {
     if (sharedSocket !== socket || !managerRunning) return;
+    try {
+      socket.send(JSON.stringify({ type: "realtime:identify", clientId: getRealtimeClientId() }));
+    } catch {
+      // Identification is a bandwidth optimization only; realtime still works
+      // normally if an older/mock transport cannot send this handshake.
+    }
     const shouldCatchUp = hadSuccessfulConnection || firstConnectionDelayed;
     reconnectAttempt = 0;
     firstConnectionDelayed = false;

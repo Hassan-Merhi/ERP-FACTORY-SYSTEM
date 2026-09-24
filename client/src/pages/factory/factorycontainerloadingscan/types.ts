@@ -40,6 +40,8 @@ export interface OrderBale {
   baleName: string;
   weight: string;
   priceUsed: string;
+  scannedBy?: string | null;
+  scannedAt?: string | null;
 }
 
 export interface OrderDetail {

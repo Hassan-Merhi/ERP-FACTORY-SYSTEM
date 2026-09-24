@@ -328,20 +328,22 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
     queryKey: ["/api/auth/me"],
   });
   const canEmptyContainer = ["Admin", "Developer"].includes(currentUser?.currentRole ?? currentUser?.role ?? "");
-  const { data: scanAuditRows = [] } = useQuery<BaleScanAudit[]>({
-    queryKey: ["/api/factory/customer-orders", model.orderId, "scan-audit", bales.length],
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/customer-orders/${model.orderId}/bale-removals?includeScanAudit=1`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      const payload = await res.json();
-      return Array.isArray(payload?.scanAudit) ? payload.scanAudit : [];
-    },
-    enabled: !!model.orderId,
-    staleTime: 0,
-  });
-  const scanAuditByBaleId = useMemo(() => new Map(scanAuditRows.map((entry) => [entry.id, entry])), [scanAuditRows]);
+  // Scan audit fields now ride on the order's bale rows. This avoids a second
+  // growing request after every scan while preserving the exact same UI.
+  const scanAuditByBaleId = useMemo(
+    () =>
+      new Map<number, BaleScanAudit>(
+        bales.map((bale) => [
+          bale.id,
+          {
+            id: bale.id,
+            scannedBy: bale.scannedBy ?? null,
+            scannedAt: bale.scannedAt ?? null,
+          },
+        ])
+      ),
+    [bales]
+  );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
