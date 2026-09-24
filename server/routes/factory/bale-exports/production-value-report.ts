@@ -18,6 +18,7 @@ import {
   factoryMixBatchSources,
   factoryBales,
   factoryWorkers,
+  factoryUserProfiles,
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
@@ -30,6 +31,28 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const currentRole = String(req.session.currentRole ?? req.user?.role ?? "").toLowerCase();
+      const isPrivileged = ["admin", "owner", "developer"].includes(currentRole);
+      let hideComparisonCosts = false;
+      if (!isPrivileged && req.session.userId) {
+        const [profile] = await db
+          .select({
+            hiddenCostFields: factoryUserProfiles.hiddenCostFields,
+            hideAllCosts: factoryUserProfiles.hideAllCosts,
+          })
+          .from(factoryUserProfiles)
+          .where(
+            and(
+              eq(factoryUserProfiles.companyId, companyId),
+              eq(factoryUserProfiles.userId, req.session.userId)
+            )
+          )
+          .limit(1);
+        hideComparisonCosts = Boolean(
+          profile?.hideAllCosts || profile?.hiddenCostFields?.includes("production_comparison_costing")
+        );
+      }
 
       const from = req.query.from as string | undefined;
       const to = req.query.to as string | undefined;
@@ -506,15 +529,49 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         a.date !== b.date ? a.date.localeCompare(b.date) : a.supplierName.localeCompare(b.supplierName)
       );
 
+      const safeProductRows = hideComparisonCosts
+        ? productRows.map((row) => ({
+            ...row,
+            costPricePerBale: 0,
+            totalValue: 0,
+          }))
+        : productRows;
+      const safeCategoryRows = hideComparisonCosts
+        ? categoryRows.map((row) => ({
+            ...row,
+            totalValue: 0,
+          }))
+        : categoryRows;
+      const safeWgRows = hideComparisonCosts
+        ? wgRows.map((row) => ({
+            ...row,
+            totalValue: 0,
+          }))
+        : wgRows;
+      const safeBatchRows = hideComparisonCosts
+        ? correctedBatchRows.map((row) => ({
+            ...row,
+            costPerKg: "0",
+            totalCost: "0",
+          }))
+        : correctedBatchRows;
+      const safeSupplierMixBreakdown = hideComparisonCosts
+        ? supplierMixBreakdown.map((row) => ({
+            ...row,
+            totalCost: 0,
+          }))
+        : supplierMixBreakdown;
+
       res.json({
         from: from || null,
         to: to || null,
+        costsHidden: hideComparisonCosts,
         production: {
           totalBales,
           totalWeightKg: totalBaleWeightKg,
-          totalValue: totalProductionValue,
-          byProduct: productRows,
-          byCategory: categoryRows,
+          totalValue: hideComparisonCosts ? 0 : totalProductionValue,
+          byProduct: safeProductRows,
+          byCategory: safeCategoryRows,
         },
         wipersGarbage: {
           totalWipersQty,
@@ -522,27 +579,27 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalGarbageQty,
           totalGarbageKg,
           totalWeightKg: totalWgWeightKg,
-          totalValue: totalWgValue,
-          rows: wgRows,
+          totalValue: hideComparisonCosts ? 0 : totalWgValue,
+          rows: safeWgRows,
         },
         rawMaterial: {
           totalBatches: correctedBatchRows.length,
           totalWeightKg: totalMixWeightKg,
           onTableKg: periodOnTableKg,
-          totalCost: totalMixCost,
-          blendedCostPerKg,
-          batches: correctedBatchRows,
+          totalCost: hideComparisonCosts ? 0 : totalMixCost,
+          blendedCostPerKg: hideComparisonCosts ? 0 : blendedCostPerKg,
+          batches: safeBatchRows,
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
           // Use all-time blended cost so the card is never affected by the date filter.
-          costPerKg: allTimeBlendedCpk,
-          value: balanceValue,
+          costPerKg: hideComparisonCosts ? 0 : allTimeBlendedCpk,
+          value: hideComparisonCosts ? 0 : balanceValue,
         },
         summary: {
-          batchCost: totalMixCost,
-          productionValue: totalProductionValue,
-          statusValue,
+          batchCost: hideComparisonCosts ? 0 : totalMixCost,
+          productionValue: hideComparisonCosts ? 0 : totalProductionValue,
+          statusValue: hideComparisonCosts ? 0 : statusValue,
         },
         kgComparison: {
           producedKg: totalBaleWeightKg,
@@ -550,7 +607,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           diffKg: kgDiff,
           diffLabel: kgDiff >= 0 ? "more produced than mixed" : "less produced than mixed",
         },
-        supplierMixBreakdown,
+        supplierMixBreakdown: safeSupplierMixBreakdown,
       });
     } catch (error: unknown) {
       logger.error("Error fetching production value report:", { error: error });
