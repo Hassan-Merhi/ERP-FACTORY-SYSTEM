@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
 import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -47,6 +48,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   useWorkspaceWheelScroll(erpContainerRef);
 
   useEffect(() => installErpNavigationHistory(), []);
+  // ERP-only dialog styling must not follow the user into Factory, POS or Properties.
+  useDocumentAppShell("erp");
 
   return (
     <AppModeProvider mode="erp">

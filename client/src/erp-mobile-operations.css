@@ -246,12 +246,14 @@
  * Phone dialogs open as bottom sheets: full width, anchored to the bottom edge above the
  * home indicator, rounded on top, with the action row pinned while the form scrolls.
  * Covers every DialogContent/AlertDialogContent in the ERP shell; tablet/desktop keep the
- * centred modal. Action rows are DialogFooter/AlertDialogFooter, plus the button-only row
+ * centred modal. Dialogs are portalled outside the shell, and this stylesheet stays loaded
+ * after the user leaves ERP, so the rules key off `html[data-app-shell="erp"]`, which ErpShell
+ * sets only while it is mounted. Action rows are DialogFooter/AlertDialogFooter, plus the button-only row
  * that closes a dialog form or sits last in the dialog (dialogs that predate DialogFooter).
  */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
-  html [role="alertdialog"][data-slot="alert-dialog-content"] {
+  html[data-app-shell="erp"] [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
+  html[data-app-shell="erp"] [role="alertdialog"][data-slot="alert-dialog-content"] {
     inset: auto 0 0 0 !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -262,11 +264,13 @@
     padding-bottom: max(1rem, var(--safe-area-bottom, 0px)) !important;
   }
 
-  html
+  html[data-app-shell="erp"]
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]),
-  html [data-slot="dialog-content"] > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
-  html
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]
+    > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
+  html[data-app-shell="erp"]
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a))) {
@@ -282,14 +286,17 @@
   }
 
   /* Two actions (Cancel + primary) share one row, primary on the trailing side. */
-  html :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]):has(> :nth-child(2):last-child) {
+  html[data-app-shell="erp"]
+    :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]):has(> :nth-child(2):last-child) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   /* Button-only rows stretch their actions across the sheet like DialogFooter does. */
-  html [data-slot="dialog-content"] > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
-  html
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]
+    > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
+  html[data-app-shell="erp"]
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a))) {
@@ -302,11 +309,11 @@
     padding-top: 0.75rem;
   }
 
-  html
+  html[data-app-shell="erp"]
     [data-slot="dialog-content"]
     > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a)))
     > *,
-  html
+  html[data-app-shell="erp"]
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a)))
