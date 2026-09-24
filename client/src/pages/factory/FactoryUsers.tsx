@@ -48,6 +48,7 @@ const COST_FIELDS: { key: string; label: string }[] = [
   { key: "bale_history_cost_per_kg", label: "Bale History: Cost/KG" },
   { key: "bale_history_total_cost", label: "Bale History: Total Cost" },
   { key: "bales_list_cost_per_kg", label: "Bales List: Cost/kg" },
+  { key: "production_comparison_costing", label: "Production Comparison: Costing & Profit" },
 ];
 
 // Central source of truth from FactorySidebar — no separate hardcoded list
