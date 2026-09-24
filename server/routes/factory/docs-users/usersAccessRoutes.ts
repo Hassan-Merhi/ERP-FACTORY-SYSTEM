@@ -132,8 +132,8 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         if (!username || !password) {
           return res.status(400).json({ message: "Username and password are required" });
         }
-        if (password.length < 6) {
-          return res.status(400).json({ message: "Password must be at least 6 characters" });
+        if (password.length < 4) {
+          return res.status(400).json({ message: "Password must be at least 4 characters" });
         }
 
         const existing = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
@@ -235,8 +235,8 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         if (!isDeveloper && (password !== undefined || username !== undefined)) {
           return res.status(403).json({ message: "Only Developer can change global user credentials" });
         }
-        if (password !== undefined && password && password.length < 6) {
-          return res.status(400).json({ message: "Password must be at least 6 characters" });
+        if (password !== undefined && password && password.length < 4) {
+          return res.status(400).json({ message: "Password must be at least 4 characters" });
         }
 
         const normalizedPageAccess = Array.isArray(pageAccess) ? normalizeAssignableFactoryPageKeys(pageAccess) : null;

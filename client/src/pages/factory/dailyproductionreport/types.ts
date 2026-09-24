@@ -9,6 +9,7 @@ export type Preset = "today" | "yesterday" | "week" | "month" | "lastmonth" | "y
 export interface ReportData {
   from: string | null;
   to: string | null;
+  costsHidden?: boolean;
   summary: {
     batchCost: number;
     productionValue: number;

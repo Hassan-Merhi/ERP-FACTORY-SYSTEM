@@ -213,14 +213,14 @@ describe("Wave 5 Factory user-profile certification", () => {
     const devPage = resolveFactoryPage("/factory/spreadsheet")!;
 
     expect(factoryPageAllowsRole(adminPage, "Admin")).toBe(true);
-    expect(factoryPageAllowsRole(adminPage, "Owner")).toBe(true);
+    expect(factoryPageAllowsRole(adminPage, "Owner")).toBe(false);
     expect(factoryPageAllowsRole(adminPage, "Developer")).toBe(true);
     expect(factoryPageAllowsRole(devPage, "Admin")).toBe(false);
     expect(factoryPageAllowsRole(devPage, "Owner")).toBe(false);
     expect(factoryPageAllowsRole(devPage, "Developer")).toBe(true);
 
     expect(guardedRedirect(unrestricted, "/factory/settings", "Admin", true)).toBeNull();
-    expect(guardedRedirect(unrestricted, "/factory/settings", "Owner", true)).toBeNull();
+    expect(guardedRedirect(unrestricted, "/factory/settings", "Owner", true)).toBe("/factory/production-report");
     expect(guardedRedirect(unrestricted, "/factory/spreadsheet", "Developer", true)).toBeNull();
   });
 

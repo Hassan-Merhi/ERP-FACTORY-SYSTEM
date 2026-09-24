@@ -309,10 +309,24 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   // Production report detail APIs, including the legacy fallback behind the
-  // pre-router SQL accelerator.
+  // pre-router SQL accelerator. The shared production-value endpoint is used by
+  // multiple Overview surfaces, so bind explicit view requests to their owning
+  // tab/page instead of letting a hidden tab reuse another view's request.
+  if (hasPrefix(path, "/production-value-report")) {
+    const view = String(req.query.view || "");
+    if (view === "production") {
+      return requirement("factory/production-report", ["hide_tab_overview_production"]);
+    }
+    if (view === "production-comparison") {
+      return anyOf(
+        requirement("factory/production-report", ["hide_tab_overview_comparison"]),
+        requirement("factory/production-comparison")
+      );
+    }
+    return requirement("factory/production-report");
+  }
   if (
     hasPrefix(path, "/bale-ledger") ||
-    hasPrefix(path, "/production-value-report") ||
     hasPrefix(path, "/daily-report") ||
     hasPrefix(path, "/weekly-report")
   ) {

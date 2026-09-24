@@ -91,7 +91,7 @@ export function registerLedgerAccountDeleteRoutes(app: Express) {
   app.post(
     "/api/ledger-accounts/bulk-delete",
     requireAuth,
-    requireRole("Admin", "Owner"),
+    requireRole("Admin"),
     requireNonPOS,
     async (req, res) => {
       try {

@@ -66,19 +66,28 @@ export function PropertiesSidebar({
   onLogout: () => void | Promise<void>;
 }) {
   const isAdmin = user?.role === "Admin" || user?.role === "Developer";
+  const isOwner = user?.role === "Owner";
+  const visibleSections = useMemo(
+    () =>
+      PROPERTIES_NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !isOwner || item.url !== "/properties/analytics"),
+      })).filter((section) => section.items.length > 0),
+    [isOwner]
+  );
 
   const { items: pinnedItems, reorder: reorderPinned } = usePinnedOrder(
     "properties-pinned-order",
     PROPERTIES_PINNED_DEFAULTS
   );
 
-  const { openSections, toggleSection } = useOpenSections(PROPERTIES_NAV_SECTIONS, {
+  const { openSections, toggleSection } = useOpenSections(visibleSections, {
     defaultFirstWhenNoneActive: true,
   });
 
   const allNavItems = useMemo(
-    () => [...PROPERTIES_PINNED_DEFAULTS, ...PROPERTIES_NAV_SECTIONS.flatMap((s) => s.items)],
-    []
+    () => [...PROPERTIES_PINNED_DEFAULTS, ...visibleSections.flatMap((s) => s.items)],
+    [visibleSections]
   );
   const { selectedCompany } = useCompany();
   const recentItems = useRecentNav(allNavItems, selectedCompany?.id);
@@ -98,7 +107,7 @@ export function PropertiesSidebar({
         <PinnedNavList items={pinnedItems} color={NAV_COLOR.pinned} onReorder={reorderPinned} testIdFor={testIdFor} />
 
         <div className="space-y-1">
-          {PROPERTIES_NAV_SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <SidebarSectionGroup
               key={section.label}
               section={section}

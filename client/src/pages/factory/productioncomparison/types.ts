@@ -24,10 +24,11 @@ export interface SupplierDayRow {
   date: string;
   supplierName: string;
   totalKg: number;
-  totalCost: number;
+  totalCost?: number;
 }
 
 export interface ReportData {
+  costsHidden?: boolean;
   production: {
     totalBales: number;
     totalWeightKg: number;

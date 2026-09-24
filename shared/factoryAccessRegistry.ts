@@ -555,7 +555,7 @@ export function resolveFactoryPageKey(path: string): string | null {
 export function factoryPageAllowsRole(page: FactoryPageDefinition, role?: string | null): boolean {
   const level = page.accessLevel ?? "user";
   if (level === "developer") return role === "Developer";
-  if (level === "admin") return role === "Admin" || role === "Owner" || role === "Developer";
+  if (level === "admin") return role === "Admin" || role === "Developer";
   return true;
 }
 
