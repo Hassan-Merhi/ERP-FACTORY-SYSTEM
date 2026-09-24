@@ -231,7 +231,7 @@ export function PageHeader({
       {hasNav && (
         <nav
           className={cn(
-            "-ml-2 flex items-center gap-1 sm:col-span-2 sm:col-start-1 sm:row-start-1 sm:flex-wrap",
+            "-ms-2 flex items-center gap-1 sm:col-span-2 sm:col-start-1 sm:row-start-1 sm:flex-wrap",
             inlineNav ? "col-start-1 row-start-1" : "col-span-2 row-start-1 flex-wrap"
           )}
           aria-label="Page navigation"

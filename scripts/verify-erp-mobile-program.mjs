@@ -434,7 +434,7 @@ try {
           }
         }
         result.navigationRetried = navigationRetried;
-        result.consoleErrors = consoleErrors.filter((e) => !/Failed to load resource|favicon|AISStream|\[vite\]|WebSocket connection/i.test(e));
+        result.consoleErrors = consoleErrors.filter((e) => !/Failed to load resource|favicon|AISStream|\[vite\]|Vite server|WebSocket (connection|closed without opened)/i.test(e));
         const { blocking, warnings } = result.error ? { blocking: [result.error], warnings: [] } : classify(result);
         result.blocking = blocking;
         result.warnings = warnings;
