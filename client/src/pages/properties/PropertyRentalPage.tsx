@@ -177,7 +177,7 @@ export default function PropertyRentalPage({
       </Button>
       <Button onClick={() => setCreateUnitOpen(true)} size="sm" data-testid={`button-${testIdPrefix}-add-unit`}>
         <Plus className="h-4 w-4 mr-1" />
-        Add {unitType === "WAREHOUSE" ? "Warehouse" : "Shop"}
+        {unitType === "WAREHOUSE" ? "Add Warehouse" : "Add Shop"}
       </Button>
     </>
   );
@@ -261,7 +261,8 @@ export default function PropertyRentalPage({
               </div>
             </CardContent>
           </Card>
-          <Card>
+          {/* Two metrics share this card; on ERP phones it spans both columns so neither is clipped. */}
+          <Card className={isErp ? "max-sm:col-span-2" : undefined}>
             <CardContent className="p-0 flex h-full">
               <div className="flex-1 px-3 pt-3 pb-3">
                 <p className="text-[10px] text-muted-foreground font-normal tracking-wide">OUTSTANDING</p>
@@ -296,7 +297,9 @@ export default function PropertyRentalPage({
                 <div className="p-8 text-center text-muted-foreground">Loading units…</div>
               ) : grouped.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
-                  No {unitType === "WAREHOUSE" ? "warehouses" : "shops"} yet. Add your first unit above.
+                  {unitType === "WAREHOUSE"
+                    ? "No warehouses yet. Add your first unit above."
+                    : "No shops yet. Add your first unit above."}
                 </div>
               ) : (
                 <table className="w-full text-sm">

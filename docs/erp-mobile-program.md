@@ -16,7 +16,7 @@ phase is certified.
 | 5 | Mobile forms and dialogs | Complete | Phase 5 PR |
 | 6 | Simplify dense ERP screens | Complete | Phase 6 PR |
 | 7 | Mobile actions and touch behaviour | Complete | Phase 7 PR |
-| 8 | Mobile typography and information density | Pending | — |
+| 8 | Mobile typography and information density | Complete | Phase 8 PR |
 | 9 | ERP route-by-route certification | Pending | — |
 | 10 | Mobile polish and final certification | Pending | — |
 
@@ -238,4 +238,18 @@ Delivered:
   `<button>`. The header is a keyboard-accessible `role="button"` with `aria-expanded`.
 - Certification found no touch targets under 24px on any phone route. The Phase 1 44px floor
   holds, and Phase 5 restored checkbox/radio/switch visuals while keeping 44px hit areas.
+
+## Phase 8 — Mobile typography and information density
+
+Delivered:
+
+- Phone type floor: 9–10px utility text (badges, stat labels, Dr/Cr suffixes) renders at
+  11px on ERP phones, and at 12px in Arabic. A rendered survey of every ERP route at 360px
+  found no visible text under 11px afterwards.
+- ERP rentals (warehouses/shops): the two-metric Outstanding/Credit card spans both phone
+  columns instead of clipping Credit. The page title, actions, stat labels and empty state
+  are translated in French and Arabic; the empty state and Add button were split
+  interpolations the literal translator could not match.
+- Earlier phases carry the rest of the density work: compact headers (2), filter sheets (3),
+  two-column card fields (4), bottom-sheet dialogs (5) and dense-screen layouts (6).
 

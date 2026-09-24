@@ -189,6 +189,12 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "My Settings", ar: "إعداداتي", fr: "Mes paramètres" },
   { en: "Profile", ar: "الملف الشخصي", fr: "Profil" },
   { en: "Notifications", ar: "الإشعارات", fr: "Notifications" },
+  // ERP rentals
+  { en: "ERP — Warehouse Rentals", ar: "تأجير المستودعات", fr: "Location d’entrepôts" },
+  { en: "ERP — Shop Rentals", ar: "تأجير المحلات", fr: "Location de boutiques" },
+  { en: "Run Monthly Update", ar: "تشغيل التحديث الشهري", fr: "Lancer la mise à jour mensuelle" },
+  { en: "Add Warehouse", ar: "إضافة مستودع", fr: "Ajouter un entrepôt" },
+  { en: "Add Shop", ar: "إضافة محل", fr: "Ajouter une boutique" },
   // ERP mobile filter sheets
   { en: "Daybook filters", ar: "عوامل تصفية دفتر اليومية", fr: "Filtres du journal" },
   { en: "Stock item filters", ar: "عوامل تصفية أصناف المخزون", fr: "Filtres des articles de stock" },

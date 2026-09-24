@@ -133,4 +133,16 @@ export const propertiesRentalsPhase5TranslationsPart3: readonly Phase5Properties
     ar: "انحراف ذاكرة paid_amount: المخزّن={0}، المُرحّل فعليًا={1} (العقد {2}، {3}-{4})",
     fr: "Dérive du cache paid_amount : cache={0}, COMPTABILISÉ réel={1} (contrat {2}, {3}-{4})",
   },
+  { en: "OUTSTANDING", ar: "المستحق", fr: "IMPAYÉ" },
+  { en: "CREDIT", ar: "رصيد دائن", fr: "CRÉDIT" },
+  {
+    en: "No warehouses yet. Add your first unit above.",
+    ar: "لا توجد مستودعات بعد. أضف أول وحدة أعلاه.",
+    fr: "Aucun entrepôt pour l’instant. Ajoutez votre première unité ci-dessus.",
+  },
+  {
+    en: "No shops yet. Add your first unit above.",
+    ar: "لا توجد محلات بعد. أضف أول وحدة أعلاه.",
+    fr: "Aucune boutique pour l’instant. Ajoutez votre première unité ci-dessus.",
+  },
 ];
