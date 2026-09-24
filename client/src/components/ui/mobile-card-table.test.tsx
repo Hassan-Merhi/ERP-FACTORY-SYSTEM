@@ -76,6 +76,23 @@ describe("labelMobileCardCells", () => {
     expect(table.tBodies[0].rows[1].cells[0].dataset.mobileCell).toBe("full");
   });
 
+  it("skips ordinals and icon-only status cells when choosing the title", () => {
+    const table = buildTable(`
+      <table>
+        <thead><tr><th>#</th><th>Verified</th><th>Reference</th><th>Weight</th></tr></thead>
+        <tbody><tr><td>3</td><td><svg></svg></td><td>BL-0042</td><td>120 kg</td></tr></tbody>
+      </table>`);
+
+    labelMobileCardCells(table);
+    const [ordinal, verified, reference, weight] = Array.from(table.tBodies[0].rows[0].cells);
+
+    expect(ordinal.dataset.mobileCell).toBe("hidden");
+    expect(verified.dataset.mobileCell).toBe("field");
+    expect(verified.dataset.label).toBe("Verified");
+    expect(reference.dataset.mobileCell).toBe("title");
+    expect(weight.dataset.mobileCell).toBe("field");
+  });
+
   it("keeps author-provided labels and roles across relabels", () => {
     const table = buildTable(`
       <table>

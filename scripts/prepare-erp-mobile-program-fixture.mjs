@@ -131,7 +131,7 @@ async function main() {
   await call("POST", "/api/auth/login", { username: USERNAME, password: PASSWORD });
   const companies = await call("GET", "/api/user/companies");
   const company = companies.find((c) => c.companyCode === COMPANY_CODE);
-  if (!company) throw new Error(`Company ${COMPANY_CODE} is not available to ${USERNAME}.`);
+  if (!company) throw new Error(`Company ${COMPANY_CODE} is not available to the certification user.`);
   await call("POST", "/api/auth/set-company", { companyId: company.companyId });
   const companyId = company.companyId;
 

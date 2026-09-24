@@ -7,7 +7,7 @@ import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
  * ERP phone card layout for record tables.
  *
  * On ERP-mode phone layouts a table marked `data-mobile-cards="true"` is restacked by
- * `erp-mobile-operations.css`: each body row becomes a card, the first record cell is its
+ * `erp-mobile-operations.css`: each body row becomes a card, the first cell with text is its
  * title and the other cells become label/value fields. Labels come from the column headers
  * through `labelMobileCardCells`, so pages keep a single table markup for every breakpoint.
  */
@@ -48,6 +48,8 @@ export function mobileCardColumnLabels(table: HTMLTableElement): string[] {
   return labels;
 }
 
+const ORDINAL_LABEL = /^(#|no\.?|n°|s\.?\s?no\.?|sr\.?\s?no\.?)$/i;
+
 function mobileCellRole(cell: HTMLTableCellElement, label: string, span: number, columns: number, titled: boolean) {
   if (columns > 1 && span >= columns) return "full";
   const text = normalise(cell.textContent);
@@ -59,16 +61,19 @@ function mobileCellRole(cell: HTMLTableCellElement, label: string, span: number,
   if (onlyCheckbox) return "select";
   // Unlabelled, textless, control-free cells are decoration (row chevrons, spacers).
   if (!label && !text && controls.length === 0) return "hidden";
-  if (!titled) return "title";
+  // Row ordinals ("#", "No.") repeat the card's position; the card already shows it.
+  if (/^\d+$/.test(text) && ORDINAL_LABEL.test(label)) return "hidden";
+  // The title is the first cell with readable text; icon-only status cells stay labelled fields.
+  if (!titled && text) return "title";
   if (controls.length > 0 && (!label || /^actions?$/i.test(label))) return "actions";
   return "field";
 }
 
 /**
  * Prepares a table for the phone card layout: every body/footer cell gets a `data-label` taken
- * from its column header and a `data-mobile-cell` role — `title` for the first record cell,
+ * from its column header and a `data-mobile-cell` role — `title` for the first cell with text,
  * `select` for a checkbox-only cell, `actions` for an unlabelled cell that only holds controls,
- * `hidden` for unlabelled decoration (row chevrons), and `full` for a cell spanning every
+ * `hidden` for unlabelled decoration (row chevrons) and row ordinals, and `full` for a cell spanning every
  * column (empty and loading states). Author-provided `data-label` / `data-mobile-cell`
  * attributes are kept.
  */
