@@ -19,6 +19,7 @@ export const applicationArabicTranslations = {
   "workspace.controls": "عناصر تحكم مساحة العمل",
   "workspace.controlsDescription": "عناصر تحكم الحساب والعرض والمزامنة واللغة والبحث.",
   "workspace.search": "البحث في مساحة العمل",
+  "workspace.myNotes": "ملاحظاتي",
   "workspace.statusDisplay": "الحالة والعرض",
   "workspace.pendingSync": "المزامنة المعلّقة",
   "workspace.theme": "المظهر",

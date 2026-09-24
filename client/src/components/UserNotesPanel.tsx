@@ -29,8 +29,23 @@ function getSavedPos(): { x: number; y: number } {
   return { x: 20, y: window.innerHeight - 120 };
 }
 
+/** Opens the notes panel from other surfaces (the ERP phone workspace menu). */
+export const USER_NOTES_OPEN_EVENT = "user-notes:open";
+
 export function UserNotesPanel() {
   const [open, setOpen] = useState(false);
+
+  // While mounted (the user has notes enabled), advertise the panel and accept open requests.
+  useEffect(() => {
+    const root = document.documentElement;
+    const openPanel = () => setOpen(true);
+    root.dataset.userNotes = "available";
+    window.addEventListener(USER_NOTES_OPEN_EVENT, openPanel);
+    return () => {
+      delete root.dataset.userNotes;
+      window.removeEventListener(USER_NOTES_OPEN_EVENT, openPanel);
+    };
+  }, []);
   const [draft, setDraft] = useState<string | null>(null);
   const [savedRecently, setSavedRecently] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number }>(getSavedPos);

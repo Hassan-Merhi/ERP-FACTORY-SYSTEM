@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { LogOut, MoreHorizontal, Search, UserRound } from "lucide-react";
+import { LogOut, MoreHorizontal, NotebookPen, Search, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CurrencyToggle } from "@/components/CurrencyToggle";
 import { NotificationsCenter } from "@/components/NotificationsCenter";
@@ -111,6 +111,13 @@ export default function MobileWorkspaceControls({
     onLogout();
   };
 
+  // ERP phones hide the floating notes button, so the workspace menu opens the panel instead.
+  const notesAvailable = simplifyMobileNavigation && open && document.documentElement.dataset.userNotes === "available";
+  const openNotes = () => {
+    setOpen(false);
+    window.dispatchEvent(new Event("user-notes:open"));
+  };
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -165,6 +172,18 @@ export default function MobileWorkspaceControls({
             >
               <Search className="h-4 w-4" aria-hidden="true" />
               {t("workspace.search")}
+            </Button>
+          )}
+
+          {notesAvailable && (
+            <Button
+              variant="outline"
+              onClick={openNotes}
+              data-testid="button-mobile-controls-notes"
+              className="min-h-11 w-full justify-start gap-2"
+            >
+              <NotebookPen className="h-4 w-4" aria-hidden="true" />
+              {t("workspace.myNotes")}
             </Button>
           )}
 
