@@ -81,6 +81,11 @@ export const phase3SharedUiTranslationsPart5: readonly Phase3SharedUiEntry[] = [
   { en: "POs Imported", ar: "أوامر الشراء المستوردة", fr: "Bons de commande importés" },
   { en: "Activity by Company", ar: "النشاط حسب الشركة", fr: "Activité par société" },
   {
+    en: "Offloaded containers & imports per day",
+    ar: "الحاويات المفرغة والواردات يوميًا",
+    fr: "Conteneurs déchargés et importations par jour",
+  },
+  {
     en: "Could not load offload charges.",
     ar: "تعذر تحميل رسوم التفريغ.",
     fr: "Impossible de charger les frais de déchargement.",

@@ -1,7 +1,10 @@
 import { MapPin, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
 
 interface LocationInventoryBreadcrumbProps {
+  /** ERP: drop the root-level hint on phones (POS keeps its established layout). */
+  compactPhoneRoot?: boolean;
   selectedLocationLocal: Location | null;
   selectedGroup: StockGroupSummary | null;
   viewAllItems: boolean;
@@ -10,6 +13,7 @@ interface LocationInventoryBreadcrumbProps {
 }
 
 export function LocationInventoryBreadcrumb({
+  compactPhoneRoot = false,
   selectedLocationLocal,
   selectedGroup,
   viewAllItems,
@@ -17,25 +21,26 @@ export function LocationInventoryBreadcrumb({
   onBackToLocation,
 }: LocationInventoryBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    // Before a location is chosen the trail is only a hint that repeats the "Locations" heading
+    // below it; ERP phones drop it to save a row.
+    <div
+      className={cn(
+        "flex items-center gap-1.5 text-sm text-muted-foreground",
+        compactPhoneRoot && !selectedLocationLocal && "max-sm:hidden"
+      )}
+    >
       <MapPin className="h-3.5 w-3.5 shrink-0" />
       {!selectedLocationLocal ? (
         <span>Select Location</span>
       ) : (
         <>
-          <button
-            className="hover:underline hover:text-foreground transition-colors"
-            onClick={goBackToLocations}
-          >
+          <button className="hover:underline hover:text-foreground transition-colors" onClick={goBackToLocations}>
             Locations
           </button>
           <ChevronRight className="h-3.5 w-3.5" />
           {selectedGroup ? (
             <>
-              <button
-                className="hover:underline hover:text-foreground transition-colors"
-                onClick={onBackToLocation}
-              >
+              <button className="hover:underline hover:text-foreground transition-colors" onClick={onBackToLocation}>
                 {selectedLocationLocal.name}
               </button>
               <ChevronRight className="h-3.5 w-3.5" />
@@ -43,10 +48,7 @@ export function LocationInventoryBreadcrumb({
             </>
           ) : viewAllItems ? (
             <>
-              <button
-                className="hover:underline hover:text-foreground transition-colors"
-                onClick={onBackToLocation}
-              >
+              <button className="hover:underline hover:text-foreground transition-colors" onClick={onBackToLocation}>
                 {selectedLocationLocal.name}
               </button>
               <ChevronRight className="h-3.5 w-3.5" />
