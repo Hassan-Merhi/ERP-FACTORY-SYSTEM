@@ -6,6 +6,7 @@
  * privileged/non-POS gate, All mode still renders one editable column per
  * visible master, and single-location mode keeps the "base" price badge.
  */
+import { useState } from "react";
 import { AlertCircle, Check, EyeOff, Layers, MapPin, Pencil, Tag, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { getDefaultPeriodValue } from "@/components/ui/period-filter";
+import { StockMovementDialog } from "@/pages/location-inventory/StockMovementDialog";
 import { formatQty } from "./utils";
+import type { StockMovementItem, StockMovementMonth, StockMovementPeriod } from "@/pages/location-inventory/locationInventoryTypes";
 import type { PriceListRow } from "./types";
 import type { PosPriceListModel } from "./usePosPriceListModel";
 
@@ -213,17 +217,25 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
     locationPricedList,
     masters,
     selectedLocationId,
+    selectedLocation,
   } = model;
   const [, navigate] = useLocation();
+  const [stockMovementOpen, setStockMovementOpen] = useState(false);
+  const [stockMovementItem, setStockMovementItem] = useState<StockMovementItem | null>(null);
+  const [stockMovementPeriod, setStockMovementPeriod] = useState<StockMovementPeriod>(() =>
+    getDefaultPeriodValue("this_month")
+  );
+  const [drillMonth, setDrillMonth] = useState<StockMovementMonth | null>(null);
 
-  const openItemHistory = (stockItemId: number) => {
-    if (isAllMode) {
-      navigate(`/stock-items/${stockItemId}/monthly-summary`);
-      return;
-    }
-    if (selectedLocationId) {
-      navigate(`/locations/${selectedLocationId}/stock-items/${stockItemId}/history`);
-    }
+  const openItemHistory = (stockItemId: number, stockItemName: string) => {
+    setStockMovementItem({
+      stockItemId,
+      stockItemName,
+      locationId: isAllMode ? null : selectedLocationId,
+      locationName: isAllMode ? null : (selectedLocation?.name ?? null),
+    });
+    setDrillMonth(null);
+    setStockMovementOpen(true);
   };
 
   return (
@@ -271,7 +283,7 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
                 <TableCell>
                   <button
                     type="button"
-                    onClick={() => openItemHistory(item.stockItemId)}
+                    onClick={() => openItemHistory(item.stockItemId, item.name)}
                     className="font-medium text-left text-primary hover:underline cursor-pointer"
                     data-testid={`link-price-history-${item.stockItemId}`}
                     title="View stock movement history"
@@ -337,6 +349,19 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
           </span>
         )}
       </p>
+
+      <StockMovementDialog
+        stockMovementOpen={stockMovementOpen}
+        setStockMovementOpen={setStockMovementOpen}
+        stockMovementItem={stockMovementItem}
+        setStockMovementItem={setStockMovementItem}
+        stockMovementPeriod={stockMovementPeriod}
+        setStockMovementPeriod={setStockMovementPeriod}
+        drillMonth={drillMonth}
+        setDrillMonth={setDrillMonth}
+        formatAmount={formatAmount}
+        navigate={navigate}
+      />
     </>
   );
 }
