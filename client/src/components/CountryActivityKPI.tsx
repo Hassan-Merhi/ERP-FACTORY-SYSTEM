@@ -14,12 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const WINDOW_DAYS = 1;
@@ -86,17 +81,22 @@ function addDays(d: Date, n: number) {
 function formatRange(startStr: string, endStr: string) {
   if (startStr === endStr) {
     const d = new Date(startStr + "T00:00:00");
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
     if (diff === 0) return "Today";
     if (diff === 1) return "Yesterday";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
   const start = new Date(startStr + "T00:00:00");
-  const end   = new Date(endStr   + "T00:00:00");
+  const end = new Date(endStr + "T00:00:00");
   const sameYear = start.getFullYear() === end.getFullYear();
-  const fmtStart = start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: sameYear ? undefined : "numeric" });
-  const fmtEnd   = end.toLocaleDateString("en-US",   { month: "short", day: "numeric", year: "numeric" });
+  const fmtStart = start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+  const fmtEnd = end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   return `${fmtStart} – ${fmtEnd}`;
 }
 
@@ -115,7 +115,11 @@ function isToday(dateStr: string) {
 }
 
 // ── Offload charges dialog ─────────────────────────────────────────────────────
-interface OffloadCharge { label: string; amount: number; accountName: string | null }
+interface OffloadCharge {
+  label: string;
+  amount: number;
+  accountName: string | null;
+}
 interface OffloadChargesData {
   containerNumber: string;
   offloadedAt: string;
@@ -146,8 +150,7 @@ function ContainerChargesDialog({
     staleTime: 60_000,
   });
 
-  const fmt = (n: number) =>
-    n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -159,9 +162,7 @@ function ContainerChargesDialog({
               <span>
                 {data.containerNumber}
                 {data.locationName && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    → {data.locationName}
-                  </span>
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">→ {data.locationName}</span>
                 )}
               </span>
             ) : (
@@ -175,33 +176,22 @@ function ContainerChargesDialog({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-destructive text-center py-4">
-            Could not load offload charges.
-          </p>
+          <p className="text-sm text-destructive text-center py-4">Could not load offload charges.</p>
         ) : !data || data.charges.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No charges recorded for this offload.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-4">No charges recorded for this offload.</p>
         ) : (
           <div className="space-y-1">
             {data.charges.map((c) => (
-              <div
-                key={c.label}
-                className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/40"
-              >
+              <div key={c.label} className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/40">
                 <div>
                   <p className="text-sm font-medium">{c.label}</p>
-                  {c.accountName && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{c.accountName}</p>
-                  )}
+                  {c.accountName && <p className="text-xs text-muted-foreground mt-0.5">{c.accountName}</p>}
                 </div>
                 <span className="text-sm font-semibold tabular-nums">${fmt(c.amount)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between pt-2 px-3 border-t mt-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Total
-              </span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</span>
               <span className="text-sm font-bold tabular-nums">${fmt(data.totalCharges)}</span>
             </div>
           </div>
@@ -246,11 +236,7 @@ function ContainerTags({ containers }: { containers: ContainerEntry[] }) {
         ))}
       </div>
 
-      <ContainerChargesDialog
-        containerId={selectedId}
-        open={selectedId !== null}
-        onClose={() => setSelectedId(null)}
-      />
+      <ContainerChargesDialog containerId={selectedId} open={selectedId !== null} onClose={() => setSelectedId(null)} />
     </>
   );
 }
@@ -292,11 +278,7 @@ function CompanyDayGrid({ days }: { days: DayEntry[] }) {
   const active = days.filter((d) => d.offloads > 0 || d.purchases > 0);
 
   if (active.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground py-2 pl-1">
-        No activity in this period.
-      </p>
-    );
+    return <p className="text-xs text-muted-foreground py-2 pl-1">No activity in this period.</p>;
   }
 
   return (
@@ -372,26 +354,20 @@ function CompanyRow({ company }: { company: CompanyActivity }) {
         onClick={() => setExpanded((v) => !v)}
         data-testid={`button-country-expand-${company.id}`}
       >
-        {expanded
-          ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )}
 
         <span className="font-medium flex-1 truncate">{company.name}</span>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Badge
-            variant="secondary"
-            className="gap-1 text-xs font-mono"
-            data-testid={`badge-offloads-${company.id}`}
-          >
+          <Badge variant="secondary" className="gap-1 text-xs font-mono" data-testid={`badge-offloads-${company.id}`}>
             <Container className="h-2.5 w-2.5" />
             {company.totalOffloads}
           </Badge>
-          <Badge
-            variant="secondary"
-            className="gap-1 text-xs font-mono"
-            data-testid={`badge-purchases-${company.id}`}
-          >
+          <Badge variant="secondary" className="gap-1 text-xs font-mono" data-testid={`badge-purchases-${company.id}`}>
             <ShoppingCart className="h-2.5 w-2.5" />
             {company.totalPurchases}
           </Badge>
@@ -419,20 +395,19 @@ export function CountryActivityKPI() {
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState(false);
 
-  const endDate   = useMemo(() => addDays(today, -offset),              [today, offset]);
+  const endDate = useMemo(() => addDays(today, -offset), [today, offset]);
   const startDate = useMemo(() => addDays(endDate, -(WINDOW_DAYS - 1)), [endDate]);
-  const endStr    = toDateStr(endDate);
-  const startStr  = toDateStr(startDate);
+  const endStr = toDateStr(endDate);
+  const startStr = toDateStr(startDate);
 
   const canGoForward = offset > 0;
 
   const { data, isLoading, isError } = useQuery<ActivityResponse>({
     queryKey: ["/api/stats/country-activity", startStr, endStr],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/stats/country-activity?startDate=${startStr}&endDate=${endStr}`,
-        { credentials: "include" }
-      );
+      const res = await fetch(`/api/stats/country-activity?startDate=${startStr}&endDate=${endStr}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error(`Failed (${res.status})`);
       return res.json();
     },
@@ -444,7 +419,7 @@ export function CountryActivityKPI() {
     if (!data) return { totalOffloads: 0, totalPurchases: 0 };
     return data.companies.reduce(
       (acc, c) => ({
-        totalOffloads:  acc.totalOffloads  + c.totalOffloads,
+        totalOffloads: acc.totalOffloads + c.totalOffloads,
         totalPurchases: acc.totalPurchases + c.totalPurchases,
       }),
       { totalOffloads: 0, totalPurchases: 0 }
@@ -453,23 +428,32 @@ export function CountryActivityKPI() {
 
   return (
     <Card className="overflow-hidden">
-      {/* Header row — always visible */}
-      <button
-        className="w-full flex flex-wrap items-center gap-3 p-4 text-left hover-elevate"
-        onClick={() => setExpanded((v) => !v)}
-        data-testid="button-country-activity-expand"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+      {/* Header row — always visible. The expand toggle and the day navigator are siblings,
+          so no button sits inside another interactive control. */}
+      <div className="w-full flex flex-wrap items-center gap-3 p-4">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left max-sm:basis-full hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setExpanded((v) => !v)}
+          data-testid="button-country-activity-expand"
+        >
+          <span className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
             <Globe className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-none">Activity by Company</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold leading-none">Activity by Company</span>
+            <span className="block text-xs text-muted-foreground mt-0.5">
               Offloaded containers &amp; imports per day
-            </p>
-          </div>
-        </div>
+            </span>
+          </span>
+
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+        </button>
 
         {/* KPI badges */}
         {isLoading ? (
@@ -488,10 +472,7 @@ export function CountryActivityKPI() {
         )}
 
         {/* Date navigator — moves 1 day at a time */}
-        <div
-          className="flex items-center gap-1 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="flex items-center gap-1 shrink-0">
           <Button
             size="icon"
             variant="ghost"
@@ -519,11 +500,7 @@ export function CountryActivityKPI() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-
-        {expanded
-          ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-          : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-      </button>
+      </div>
 
       {/* Expandable body */}
       {expanded && (
@@ -533,13 +510,9 @@ export function CountryActivityKPI() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : isError ? (
-            <p className="text-sm text-destructive text-center py-8">
-              Failed to load activity data — please refresh.
-            </p>
+            <p className="text-sm text-destructive text-center py-8">Failed to load activity data — please refresh.</p>
           ) : !data || data.companies.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No ERP companies found.
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-8">No ERP companies found.</p>
           ) : (
             <div className="px-2 py-1">
               {data.companies.map((c) => (

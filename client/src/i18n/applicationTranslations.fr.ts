@@ -21,6 +21,7 @@ export const applicationFrenchTranslations = {
   "workspace.controlsDescription":
     "Commandes du compte, de l’affichage, de la synchronisation, de la langue et de la recherche.",
   "workspace.search": "Rechercher dans l’espace de travail",
+  "workspace.myNotes": "Mes notes",
   "workspace.statusDisplay": "État et affichage",
   "workspace.pendingSync": "Synchronisation en attente",
   "workspace.theme": "Thème",

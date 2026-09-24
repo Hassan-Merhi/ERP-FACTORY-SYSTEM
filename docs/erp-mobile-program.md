@@ -15,7 +15,7 @@ phase is certified.
 | 4 | Mobile cards instead of desktop tables | Complete | Phase 4 PR |
 | 5 | Mobile forms and dialogs | Complete | Phase 5 PR |
 | 6 | Simplify dense ERP screens | Complete | Phase 6 PR |
-| 7 | Mobile actions and touch behaviour | Pending | — |
+| 7 | Mobile actions and touch behaviour | Complete | Phase 7 PR |
 | 8 | Mobile typography and information density | Pending | — |
 | 9 | ERP route-by-route certification | Pending | — |
 | 10 | Mobile polish and final certification | Pending | — |
@@ -224,4 +224,18 @@ Delivered:
 - GIT tracking tabs (Detail, Truck/Location, Agent/Duty, Summary, Port report, WhatsApp):
   on phones the company mode selector is a two-column segment without the decorative
   label, and the Detail search gets its own full-width row.
+
+## Phase 7 — Mobile actions and touch behaviour
+
+Delivered:
+
+- The floating "My notes" button, which covered page content above the bottom navigation,
+  is hidden on ERP phones. The workspace "⋯" sheet offers **My notes** instead, only while
+  the notes panel is enabled for the user (`user-notes:open` event).
+- Hover-revealed row actions (`opacity-0` + `group-hover`) are visible on every ERP route
+  on touch devices. Phase 1 had covered five routes explicitly.
+- Activity by Company (Financial overview) no longer nests day-navigation buttons inside a
+  `<button>`. The header is a keyboard-accessible `role="button"` with `aria-expanded`.
+- Certification found no touch targets under 24px on any phone route. The Phase 1 44px floor
+  holds, and Phase 5 restored checkbox/radio/switch visuals while keeping 44px hit areas.
 

@@ -268,6 +268,30 @@
 }
 
 /*
+ * Hover-revealed row actions (edit/delete icons with opacity-0 + group-hover) cannot be
+ * discovered without a pointer that hovers. On touch devices they are always visible, on
+ * every ERP route (Phase 1 covered a handful of routes explicitly).
+ */
+@media (hover: none) {
+  [data-erp-route] :is(button, a, div, span)[class*="opacity-0"][class*="group-hover"],
+  [data-erp-route] :is(button, a, div, span)[class*="opacity-0"][class*="group-focus-within"] {
+    opacity: 1 !important;
+  }
+
+  [data-erp-route] :is(button, a, div, span)[class~="invisible"][class*="group-hover:visible"] {
+    visibility: visible !important;
+  }
+}
+
+/* The floating notes button covered page content on ERP phones; the ERP workspace menu opens
+   notes there. Other shells have no such menu entry, so they keep the button. */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  html[data-app-shell="erp"] [data-testid="button-open-user-notes"] {
+    display: none !important;
+  }
+}
+
+/*
  * Phone dialogs open as bottom sheets: full width, anchored to the bottom edge above the
  * home indicator, rounded on top, with the action row pinned while the form scrolls.
  * Covers every DialogContent/AlertDialogContent in the ERP shell; tablet/desktop keep the

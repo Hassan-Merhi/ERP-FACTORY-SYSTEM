@@ -19,6 +19,7 @@ export const applicationEnglishTranslations = {
   "workspace.controls": "Workspace controls",
   "workspace.controlsDescription": "Account, display, synchronization, language, and search controls.",
   "workspace.search": "Search the workspace",
+  "workspace.myNotes": "My notes",
   "workspace.statusDisplay": "Status and display",
   "workspace.pendingSync": "Pending synchronization",
   "workspace.theme": "Theme",
