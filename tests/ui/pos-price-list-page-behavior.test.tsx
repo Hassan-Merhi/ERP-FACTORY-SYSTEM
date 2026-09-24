@@ -111,6 +111,18 @@ vi.mock("@/lib/queryClient", () => ({
 vi.mock("wouter", () => ({
   useLocation: () => ["/sales-tools?tab=pricelist", harness.navigate],
 }));
+vi.mock("@/pages/location-inventory/StockMovementDialog", () => ({
+  StockMovementDialog: ({ stockMovementOpen, stockMovementItem }: any) =>
+    stockMovementOpen ? (
+      <div
+        data-testid="price-stock-movement-dialog"
+        data-location-id={stockMovementItem?.locationId ?? "all"}
+        data-location-name={stockMovementItem?.locationName ?? "All Locations"}
+      >
+        {stockMovementItem?.stockItemName}
+      </div>
+    ) : null,
+}));
 vi.mock("@/contexts/CurrencyContext", () => ({
   useCurrencyContext: () => ({ formatAmount: (v: number) => `$${v.toFixed(2)}` }),
 }));
@@ -174,7 +186,9 @@ describe("POS price list page behavior", () => {
     fireEvent.click(screen.getByTestId("button-location-11"));
     expect(screen.getByTestId("row-price-101")).toHaveTextContent("Blue Shirt");
     fireEvent.click(screen.getByTestId("link-price-history-101"));
-    expect(harness.navigate).toHaveBeenCalledWith("/locations/11/stock-items/101/history");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveTextContent("Blue Shirt");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-id", "11");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-name", "Main");
     expect(screen.getByTestId("row-price-102")).toHaveTextContent("Red Shirt");
     expect(screen.getByTestId("text-item-count")).toHaveTextContent("Showing 2 of 2 items");
 
@@ -217,7 +231,9 @@ describe("POS price list page behavior", () => {
     expect(screen.getByTestId("cell-price-101-12")).toHaveTextContent("$22.00");
     expect(screen.getByTestId("text-total-qty-101")).toHaveTextContent("8");
     fireEvent.click(screen.getByTestId("link-price-history-101"));
-    expect(harness.navigate).toHaveBeenCalledWith("/stock-items/101/monthly-summary");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveTextContent("Blue Shirt");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-id", "all");
+    expect(screen.getByTestId("price-stock-movement-dialog")).toHaveAttribute("data-location-name", "All Locations");
 
     fireEvent.click(screen.getByTestId("chip-location-12"));
     expect(screen.queryByTestId("cell-price-101-12")).not.toBeInTheDocument();
