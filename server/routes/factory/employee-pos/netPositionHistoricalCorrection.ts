@@ -94,11 +94,8 @@ async function computeHistoricalOperationalValues(
   const blendedCpk = totalMixKg > 0 ? totalMixCost / totalMixKg : 0;
 
   const baleResult = await db.execute(sql`
-    SELECT
-      COALESCE(SUM(b.weight_kg::numeric), 0) AS total_bale_kg,
-      COALESCE(SUM(p.selling_price::numeric), 0) AS total_selling_value
+    SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS total_bale_kg
     FROM factory_bales b
-    LEFT JOIN factory_bale_products p ON p.id = b.product_id
     WHERE b.company_id = ${companyId}
       AND COALESCE(b.stock_entry_date, b.pressed_at::date, b.created_at::date) <= ${asOf}::date
       AND (b.deleted_at IS NULL OR b.deleted_at::date > ${asOf}::date)
@@ -106,14 +103,9 @@ async function computeHistoricalOperationalValues(
   `);
   const baleRow = resultRows(baleResult)[0] ?? {};
   const totalBaleKg = parseFloat(String(baleRow.total_bale_kg ?? "0")) || 0;
-  const totalSellingValue = parseFloat(String(baleRow.total_selling_value ?? "0")) || 0;
   const botWeightKg = Math.max(totalMixKg - totalBaleKg, 0);
-  const balanceOnTableCostValue = round2(botWeightKg * blendedCpk);
-  const blendedSellingPerKg = totalBaleKg > 0 ? totalSellingValue / totalBaleKg : 0;
-  const balanceOnTableSellingValue =
-    blendedSellingPerKg > 0 ? round2(botWeightKg * blendedSellingPerKg) : balanceOnTableCostValue;
-  const balanceOnTableValue =
-    valuationMode === "selling" ? balanceOnTableSellingValue : balanceOnTableCostValue;
+  // Balance on Table always uses the original blended raw-material cost basis.
+  const balanceOnTableValue = round2(botWeightKg * blendedCpk);
 
   const consumedAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(fms.total_cost::numeric), 0) AS value_after

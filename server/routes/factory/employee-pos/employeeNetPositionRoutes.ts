@@ -324,7 +324,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // Inventory valuations - finished stock, raw material, stock on the
       // water and material in process - are computed in ./netPositionInventory.
-      // Only Stock In Hand and Balance on Table switch valuation mode.
+      // Only Stock In Hand switches valuation mode; Balance on Table stays on
+      // its original all-time blended raw-material cost basis.
       const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
       const {
         inventorySellValue,
@@ -332,7 +333,6 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         rawMaterialStockValue,
         stockOtwValue,
         balanceOnTableValue,
-        balanceOnTableSellingValue,
       } = await computeNetPositionInventory({
           companyId,
           asOf,
@@ -392,9 +392,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       const baleInventoryValue = round2(
         valuationMode === "selling" ? inventorySellingValue : inventorySellValue
       );
-      const selectedBalanceOnTableValue = round2(
-        valuationMode === "selling" ? balanceOnTableSellingValue : balanceOnTableValue
-      );
+      const selectedBalanceOnTableValue = round2(balanceOnTableValue);
 
       // Guard: strip any ledger account whose category could collide with our
       // factory-injected "Inventory" / "Stock" entries.  Accounts with type

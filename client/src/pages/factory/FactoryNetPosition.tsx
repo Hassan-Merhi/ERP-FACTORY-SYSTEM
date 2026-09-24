@@ -268,7 +268,7 @@ export default function FactoryNetPosition() {
       </div>
 
       <div className="text-xs text-muted-foreground -mt-4" data-testid="text-inventory-valuation-mode">
-        Inventory valued at {valuationMode === "selling" ? "Selling" : "Cost"}
+        Stock in Hand valued at {valuationMode === "selling" ? "Selling" : "Cost"} · Balance on Table stays at Cost
       </div>
 
       {/* Historical mode banner */}

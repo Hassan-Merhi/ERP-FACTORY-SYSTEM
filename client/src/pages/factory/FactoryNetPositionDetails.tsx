@@ -716,7 +716,7 @@ export default function FactoryNetPositionDetails() {
       </div>
 
       <div className="text-xs text-muted-foreground -mt-2" data-testid="text-inventory-valuation-mode">
-        Inventory valued at {valuationMode === "selling" ? "Selling" : "Cost"}
+        Stock in Hand valued at {valuationMode === "selling" ? "Selling" : "Cost"} · Balance on Table stays at Cost
       </div>
 
       <Card data-testid="card-formula">
