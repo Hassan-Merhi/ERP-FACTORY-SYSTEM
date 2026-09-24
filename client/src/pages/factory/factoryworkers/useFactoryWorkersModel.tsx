@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -521,17 +522,18 @@ export function useFactoryWorkersModel() {
 
         // ── Text search ────────────────────────────────────────────────
         if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          const matches =
-            w.fullName?.toLowerCase().includes(q) ||
-            w.employeeCode?.toLowerCase().includes(q) ||
-            w.position?.toLowerCase().includes(q) ||
-            w.department?.toLowerCase().includes(q) ||
-            w.phone1?.toLowerCase().includes(q) ||
-            w.city?.toLowerCase().includes(q) ||
-            w.country?.toLowerCase().includes(q) ||
-            w.salaryType?.toLowerCase().includes(q) ||
-            w.nationality?.toLowerCase().includes(q);
+          const matches = searchAny(
+            searchQuery,
+            w.fullName,
+            w.employeeCode,
+            w.position,
+            w.department,
+            w.phone1,
+            w.city,
+            w.country,
+            w.salaryType,
+            w.nationality
+          );
           if (!matches) return false;
         }
 
