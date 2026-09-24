@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireAuth } from "../../auth";
@@ -135,37 +136,60 @@ export function registerFactoryStockAllocationV5PaginationRoutes(app: Express): 
       const effectiveProductFilter = productFilter || search;
       if (effectiveProductFilter) {
         const param = bind(`%${effectiveProductFilter}%`);
-        filterConditions.push(`(ab.article_code ILIKE ${param} OR ab.product_name ILIKE ${param})`);
+        const compactParam = bind(`%${normalizeSearchText(effectiveProductFilter)}%`);
+        filterConditions.push(`(
+          ab.article_code ILIKE ${param}
+          OR ab.product_name ILIKE ${param}
+          OR regexp_replace(lower(COALESCE(ab.article_code, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+          OR regexp_replace(lower(COALESCE(ab.product_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+        )`);
       }
       if (customerFilter) {
         const param = bind(`%${customerFilter}%`);
+        const compactParam = bind(`%${normalizeSearchText(customerFilter)}%`);
         filterConditions.push(`EXISTS (
             SELECT 1
             FROM active_proformas apf
             JOIN customer_proforma_lines cplf ON cplf.proforma_id = apf.id
             LEFT JOIN customers cf ON cf.id = apf.customer_id
             WHERE cplf.article_code = ab.article_code
-              AND COALESCE(cf.legal_name, '') ILIKE ${param}
+              AND (
+                COALESCE(cf.legal_name, '') ILIKE ${param}
+                OR regexp_replace(lower(COALESCE(cf.legal_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+              )
           )`);
       }
       if (proformaFilter) {
         const param = bind(`%${proformaFilter}%`);
+        const compactParam = bind(`%${normalizeSearchText(proformaFilter)}%`);
         filterConditions.push(`EXISTS (
             SELECT 1
             FROM active_proformas apf
             JOIN customer_proforma_lines cplf ON cplf.proforma_id = apf.id
             WHERE cplf.article_code = ab.article_code
-              AND apf.name ILIKE ${param}
+              AND (
+                apf.name ILIKE ${param}
+                OR regexp_replace(lower(COALESCE(apf.name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactParam}
+              )
           )`);
       }
       if (containerFilter) {
         const param = bind(`%${containerFilter}%`);
+        const compactParam = bind(`%${normalizeSearchText(containerFilter)}%`);
         filterConditions.push(`EXISTS (
             SELECT 1
             FROM active_orders aof
             JOIN customer_proforma_lines cplf ON cplf.proforma_id = aof.proforma_id
             WHERE cplf.article_code = ab.article_code
-              AND COALESCE(aof.container_number, 'Order #' || aof.id::text) ILIKE ${param}
+              AND (
+                COALESCE(aof.container_number, 'Order #' || aof.id::text) ILIKE ${param}
+                OR regexp_replace(
+                  lower(COALESCE(aof.container_number, 'Order #' || aof.id::text)),
+                  '[^[:alnum:]]+',
+                  '',
+                  'g'
+                ) LIKE ${compactParam}
+              )
           )`);
       }
       if (statusFilter) {
