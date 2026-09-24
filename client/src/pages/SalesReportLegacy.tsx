@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useEffect } from "react";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { useLocation } from "wouter";
