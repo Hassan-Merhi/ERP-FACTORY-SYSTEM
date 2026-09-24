@@ -218,12 +218,7 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
     const connectionId = `websocket-${randomUUID()}`;
     socketCompanies.set(ws, null);
     socketUsers.set(ws, null);
-    try {
-      const clientId = new URL(request.url || "/ws", "http://localhost").searchParams.get("clientId");
-      socketRealtimeClientIds.set(ws, clientId ? cleanSessionText(clientId, 128) || null : null);
-    } catch {
-      socketRealtimeClientIds.set(ws, null);
-    }
+    socketRealtimeClientIds.set(ws, null);
 
     if (resolveSession) {
       void resolveSession(request)
@@ -274,6 +269,13 @@ export function setupWS(server: Server, sessionMiddleware?: RequestHandler): voi
               source: "websocket",
             },
             () => {
+              if (!isBinary) {
+                const message = parseJsonMessage(rawDataBuffer(data));
+                if (message?.type === "realtime:identify") {
+                  socketRealtimeClientIds.set(ws, cleanSessionText(message.clientId, 128) || null);
+                  return;
+                }
+              }
               const context = socketRemoteContexts.get(ws);
               if (!context) return;
               void handleAuthenticatedSocketMessage(ws, context, data, isBinary).catch((error) => {

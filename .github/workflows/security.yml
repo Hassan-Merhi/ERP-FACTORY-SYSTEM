@@ -118,13 +118,13 @@ jobs:
           exit "$failed"
 
       - name: Block verified secrets across reachable history
-        uses: trufflesecurity/trufflehog@f51616494fc81ef15427b88c7b03d7f7d75230e6 # v3.97.7
+        uses: trufflesecurity/trufflehog@a5f3de55cc2065ae4dde8fee24076f137fd62fcf # v3.97.8
         with:
           extra_args: --results=verified
 
       - name: Report unknown secret candidates
         continue-on-error: true
-        uses: trufflesecurity/trufflehog@f51616494fc81ef15427b88c7b03d7f7d75230e6 # v3.97.7
+        uses: trufflesecurity/trufflehog@a5f3de55cc2065ae4dde8fee24076f137fd62fcf # v3.97.8
         with:
           extra_args: --results=unknown
 

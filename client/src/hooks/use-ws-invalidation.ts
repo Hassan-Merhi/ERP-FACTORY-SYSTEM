@@ -304,8 +304,7 @@ function websocketTarget(): string {
   const capacitorWsUrl: string = (import.meta.env?.VITE_WS_URL as string) || "";
   if (capacitorWsUrl) return capacitorWsUrl;
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const clientId = encodeURIComponent(getRealtimeClientId());
-  return `${protocol}//${window.location.host}/ws?clientId=${clientId}`;
+  return `${protocol}//${window.location.host}/ws`;
 }
 
 function browserIsOnline(): boolean {
@@ -336,6 +335,12 @@ function connectSharedSocket(allowOfflineProbe = false): void {
 
   socket.onopen = () => {
     if (sharedSocket !== socket || !managerRunning) return;
+    try {
+      socket.send(JSON.stringify({ type: "realtime:identify", clientId: getRealtimeClientId() }));
+    } catch {
+      // Identification is a bandwidth optimization only; realtime still works
+      // normally if an older/mock transport cannot send this handshake.
+    }
     const shouldCatchUp = hadSuccessfulConnection || firstConnectionDelayed;
     reconnectAttempt = 0;
     firstConnectionDelayed = false;
