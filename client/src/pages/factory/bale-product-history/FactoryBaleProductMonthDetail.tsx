@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useParams, useLocation } from "wouter";
@@ -59,8 +60,7 @@ export function FactoryBaleProductMonthDetail() {
     const effectiveStatus = bale.status === "IN_STOCK" && bale.isInLoadingOrder ? "LOADING" : bale.status;
     if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
     if (searchTerm) {
-      const t = searchTerm.toLowerCase();
-      if (!bale.baleCode?.toLowerCase().includes(t) && !bale.referenceNumber?.toLowerCase().includes(t)) return false;
+      if (!searchAny(searchTerm, bale.baleCode, bale.referenceNumber)) return false;
     }
     return true;
   });
