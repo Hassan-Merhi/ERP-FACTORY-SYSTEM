@@ -434,7 +434,7 @@ export function CountryActivityKPI() {
         <button
           type="button"
           aria-expanded={expanded}
-          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 min-w-0 items-center gap-2 rounded-md text-left max-sm:basis-full hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setExpanded((v) => !v)}
           data-testid="button-country-activity-expand"
         >
