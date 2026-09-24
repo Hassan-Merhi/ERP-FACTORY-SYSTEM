@@ -76,7 +76,7 @@ export function groupTransactions(transactions: Transaction[]): GroupedVoucher[]
   });
   return Array.from(map.values()).sort((a, b) => {
     const dc = new Date(a.voucherDate).getTime() - new Date(b.voucherDate).getTime();
-    return dc !== 0 ? dc : a.voucherNumber.localeCompare(b.voucherNumber);
+    return dc !== 0 ? dc : String(a.voucherNumber ?? "").localeCompare(String(b.voucherNumber ?? ""));
   });
 }
 
