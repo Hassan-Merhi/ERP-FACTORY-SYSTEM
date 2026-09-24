@@ -69,11 +69,7 @@ export default function StockQuery() {
 
   const items = isFactory
     ? factoryProducts
-        .filter(
-          (p) =>
-            !debouncedSearch.trim() ||
-            searchAny(debouncedSearch, p.name, p.articleCode, p.code)
-        )
+        .filter((p) => !debouncedSearch.trim() || searchAny(debouncedSearch, p.name, p.articleCode, p.code))
         .map((p) => ({ id: p.id, code: p.articleCode || p.code, name: p.name, active: p.active }))
     : (pagedStockItems?.data ?? []).map((p) => ({ id: p.id, code: p.code, name: p.name, active: p.active }));
 

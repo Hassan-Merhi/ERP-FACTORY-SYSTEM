@@ -111,9 +111,7 @@ export default function RentalPaymentsLog({
 
   const filtered = useMemo(() => {
     if (!search.trim()) return payments;
-    return payments.filter((p) =>
-      searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes)
-    );
+    return payments.filter((p) => searchAny(search, p.tenantName, p.unitNumber, p.locationGroup, p.notes));
   }, [payments, search]);
 
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);

@@ -268,9 +268,7 @@ export default function PurchaseOrderEdit() {
   const stockItemsList = useMemo(() => (stockItems || []) as StockItem[], [stockItems]);
   const filteredStockItems = useMemo(() => {
     if (!searchTerm.trim()) return stockItemsList.slice(0, 100);
-    return stockItemsList
-      .filter((item) => searchAny(searchTerm, item.name, item.code))
-      .slice(0, 100);
+    return stockItemsList.filter((item) => searchAny(searchTerm, item.name, item.code)).slice(0, 100);
   }, [stockItemsList, searchTerm]);
 
   const handleSelectItem = useCallback(
