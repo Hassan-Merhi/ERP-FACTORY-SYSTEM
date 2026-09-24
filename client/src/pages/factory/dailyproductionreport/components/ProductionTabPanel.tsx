@@ -44,6 +44,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     statusValue,
     statusPositive,
   } = report;
+  const costsHidden = Boolean(data?.costsHidden);
   return (
     <>
       {/* ── Production tab ── */}
@@ -158,50 +159,52 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             ) : (
               <div className="flex flex-col gap-2">
                 {/* Row 1 — money summary */}
-                <div className="flex flex-wrap items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Production Value
-                    </span>
-                    <span
-                      className="text-base font-bold text-blue-600 dark:text-blue-400"
-                      data-testid="text-production-value"
-                    >
-                      {fmtMoney(data?.summary.productionValue ?? 0)}
-                    </span>
+                {!costsHidden && (
+                  <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Production Value
+                      </span>
+                      <span
+                        className="text-base font-bold text-blue-600 dark:text-blue-400"
+                        data-testid="text-production-value"
+                      >
+                        {fmtMoney(data?.summary.productionValue ?? 0)}
+                      </span>
+                    </div>
+                    <div className="w-px h-5 bg-border" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Batch Cost
+                      </span>
+                      <span className="text-base font-bold" data-testid="text-batch-cost">
+                        {fmtMoney(data?.summary.batchCost ?? 0)}
+                      </span>
+                    </div>
+                    <div className="w-px h-5 bg-border" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
+                      <span
+                        className={`text-base font-bold px-3 py-0.5 rounded-md ${
+                          statusPositive
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                            : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                        }`}
+                        data-testid="text-status-value"
+                      >
+                        {statusPositive ? "+" : ""}
+                        {fmtMoney(statusValue)}
+                      </span>
+                      {statusPositive ? (
+                        <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      ) : statusValue === 0 ? (
+                        <Minus className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+                      )}
+                    </div>
                   </div>
-                  <div className="w-px h-5 bg-border" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Batch Cost
-                    </span>
-                    <span className="text-base font-bold" data-testid="text-batch-cost">
-                      {fmtMoney(data?.summary.batchCost ?? 0)}
-                    </span>
-                  </div>
-                  <div className="w-px h-5 bg-border" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
-                    <span
-                      className={`text-base font-bold px-3 py-0.5 rounded-md ${
-                        statusPositive
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                          : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                      }`}
-                      data-testid="text-status-value"
-                    >
-                      {statusPositive ? "+" : ""}
-                      {fmtMoney(statusValue)}
-                    </span>
-                    {statusPositive ? (
-                      <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    ) : statusValue === 0 ? (
-                      <Minus className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    )}
-                  </div>
-                </div>
+                )}
 
                 {/* Row 2 — weight breakdown */}
                 {(() => {
@@ -212,7 +215,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   const totalKg = productionsKg - origKg;
                   const isPositive = totalKg >= 0;
                   return (
-                    <div className="flex flex-wrap items-center gap-5 pt-2 border-t border-border">
+                    <div className={costsHidden ? "flex flex-wrap items-center gap-5" : "flex flex-wrap items-center gap-5 pt-2 border-t border-border"}>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-muted-foreground">Productions</span>
                         <span className="text-base font-bold" data-testid="text-weight-productions">
@@ -273,8 +276,12 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               ) : (
                 <>
                   <StatRow label="Weight" value={fmtKg(data?.rawMaterial.totalWeightKg ?? 0)} />
-                  <StatRow label="Batch Rate" value={fmtRate(data?.rawMaterial.blendedCostPerKg ?? 0)} sub="per kg" />
-                  <StatRow label="Value" value={fmtMoney(data?.rawMaterial.totalCost ?? 0)} />
+                  {!costsHidden && (
+                    <>
+                      <StatRow label="Batch Rate" value={fmtRate(data?.rawMaterial.blendedCostPerKg ?? 0)} sub="per kg" />
+                      <StatRow label="Value" value={fmtMoney(data?.rawMaterial.totalCost ?? 0)} />
+                    </>
+                  )}
                 </>
               )}
             </CardContent>
@@ -309,23 +316,27 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <span className="text-sm font-bold">{data?.production.totalBales ?? 0}</span>
                   </div>
                   <StatRow label="Weight" value={fmtKg(data?.production.totalWeightKg ?? 0)} />
-                  <StatRow label="Value" value={fmtMoney(data?.production.totalValue ?? 0)} />
-                  {/* Big rate display */}
-                  {(() => {
-                    const kg = data?.production.totalWeightKg ?? 0;
-                    const val = data?.production.totalValue ?? 0;
-                    const rate = kg > 0 ? val / kg : 0;
-                    return (
-                      <div className="flex flex-col items-center justify-center py-3 mt-1 border-t border-blue-200 dark:border-blue-800/40">
-                        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
-                          Rate / kg
-                        </span>
-                        <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums">
-                          {fmtRate(rate)}
-                        </span>
-                      </div>
-                    );
-                  })()}
+                  {!costsHidden && (
+                    <>
+                      <StatRow label="Value" value={fmtMoney(data?.production.totalValue ?? 0)} />
+                      {/* Big rate display */}
+                      {(() => {
+                        const kg = data?.production.totalWeightKg ?? 0;
+                        const val = data?.production.totalValue ?? 0;
+                        const rate = kg > 0 ? val / kg : 0;
+                        return (
+                          <div className="flex flex-col items-center justify-center py-3 mt-1 border-t border-blue-200 dark:border-blue-800/40">
+                            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+                              Rate / kg
+                            </span>
+                            <span className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums">
+                              {fmtRate(rate)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
                 </>
               )}
             </CardContent>
@@ -373,7 +384,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       </span>
                     </span>
                   </div>
-                  <StatRow label="Value" value={fmtMoney(data?.wipersGarbage.totalValue ?? 0)} />
+                  {!costsHidden && <StatRow label="Value" value={fmtMoney(data?.wipersGarbage.totalValue ?? 0)} />}
                   <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800/40 flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-400">
                       Total Wiper + Garbage
@@ -428,36 +439,40 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
               ) : (
                 <>
                   <StatRow label="Weight" value={fmtKg(data?.balanceOnTable.weightKg ?? 0)} />
-                  <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
-                  <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                  {/* Production Profit = bales produced value − (bales produced kg × balance batch rate) */}
-                  {(() => {
-                    const producedKg = data?.production.totalWeightKg ?? 0;
-                    const batchRate = data?.balanceOnTable.costPerKg ?? 0;
-                    const producedVal = data?.production.totalValue ?? 0;
-                    const profit = producedVal - producedKg * batchRate;
-                    const isPos = profit > 0;
-                    const isNeg = profit < 0;
-                    return (
-                      <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                          Production Profit
-                        </span>
-                        <span
-                          className={`text-sm font-extrabold tabular-nums ${
-                            isPos
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : isNeg
-                                ? "text-red-500 dark:text-red-400"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {isPos ? "+" : ""}
-                          {fmtMoney(profit)}
-                        </span>
-                      </div>
-                    );
-                  })()}
+                  {!costsHidden && (
+                    <>
+                      <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
+                      <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
+                      {/* Production Profit = bales produced value − (bales produced kg × balance batch rate) */}
+                      {(() => {
+                        const producedKg = data?.production.totalWeightKg ?? 0;
+                        const batchRate = data?.balanceOnTable.costPerKg ?? 0;
+                        const producedVal = data?.production.totalValue ?? 0;
+                        const profit = producedVal - producedKg * batchRate;
+                        const isPos = profit > 0;
+                        const isNeg = profit < 0;
+                        return (
+                          <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
+                              Production Profit
+                            </span>
+                            <span
+                              className={`text-sm font-extrabold tabular-nums ${
+                                isPos
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : isNeg
+                                    ? "text-red-500 dark:text-red-400"
+                                    : "text-muted-foreground"
+                              }`}
+                            >
+                              {isPos ? "+" : ""}
+                              {fmtMoney(profit)}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
                 </>
               )}
             </CardContent>
@@ -550,6 +565,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   totalBales={mergedTotalBales}
                   totalWeightKg={mergedTotalWeightKg}
                   totalValue={mergedTotalValue}
+                  hideCosts={costsHidden}
                 />
               )}
             </ExpandableCard>
@@ -584,8 +600,8 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <TableHead>Name</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Weight (kg)</TableHead>
-                    <TableHead className="text-right">Cost / kg</TableHead>
-                    <TableHead className="text-right">Total Cost</TableHead>
+                    {!costsHidden && <TableHead className="text-right">Cost / kg</TableHead>}
+                    {!costsHidden && <TableHead className="text-right">Total Cost</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -599,12 +615,16 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       <TableCell className="text-right font-mono text-sm">
                         {fmtKg(parseFloat(b.totalWeightKg))}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {`${Number(b.costPerKg || 0).toFixed(4)}`}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        {fmtMoney(parseFloat(b.totalCost))}
-                      </TableCell>
+                      {!costsHidden && (
+                        <TableCell className="text-right font-mono text-sm">
+                          {`${Number(b.costPerKg || 0).toFixed(4)}`}
+                        </TableCell>
+                      )}
+                      {!costsHidden && (
+                        <TableCell className="text-right font-mono font-semibold">
+                          {fmtMoney(parseFloat(b.totalCost))}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -616,10 +636,12 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <td className="px-4 py-2 text-right font-mono font-bold">
                       {fmtKg(data?.rawMaterial.totalWeightKg ?? 0)}
                     </td>
-                    <td />
-                    <td className="px-4 py-2 text-right font-mono font-bold">
-                      {fmtMoney(data?.rawMaterial.totalCost ?? 0)}
-                    </td>
+                    {!costsHidden && <td />}
+                    {!costsHidden && (
+                      <td className="px-4 py-2 text-right font-mono font-bold">
+                        {fmtMoney(data?.rawMaterial.totalCost ?? 0)}
+                      </td>
+                    )}
                   </tr>
                 </tfoot>
               </Table>
