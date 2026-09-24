@@ -279,7 +279,7 @@ function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercomp
   if (Number.isInteger(id) && exclusions.accountIds.has(id)) return true;
   if (exclusions.accountNames.has(name)) return true;
   if (code.startsWith("IC-TO-") || code.startsWith("IC-FROM-")) return true;
-  if (name.startsWith("inter-company -") || name.includes(" intercompany")) return true;
+  if (name.includes("intercompany") || name.includes("inter-company")) return true;
   return category === "intercompany";
 }
 
