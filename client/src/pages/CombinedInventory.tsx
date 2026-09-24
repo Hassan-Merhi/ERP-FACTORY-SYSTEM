@@ -280,9 +280,9 @@ export default function CombinedInventory() {
   }, [containerDetailsQueries, inventoryRows, allStockItems, includeZero]);
 
   const filteredAll = useMemo(() => {
-    if (!searchLower) return combinedData;
-    return combinedData.filter((r) => searchAny(searchTerm, r.stockItemName, r.stockItemCode));
-  }, [combinedData, searchLower]);
+    if (!search.trim()) return combinedData;
+    return combinedData.filter((r) => searchAny(search, r.stockItemName, r.stockItemCode));
+  }, [combinedData, search]);
 
   const stockGroups = useMemo((): StockGroupSummary[] => {
     const groupMap = new Map<string, StockGroupSummary>();
