@@ -101,10 +101,15 @@ export function registerCspReportRoute(app: Express): void {
       const { directive, blocked } = readCspReportPayload(req.body as unknown);
       const key = `${directive}|${blocked}`;
       if (shouldLogCspReport(key, Date.now())) {
-        logger.warn("[CSP] policy violation reported", {
+        const detail = {
           directive: directive || "unknown",
           blocked: blocked || "unknown",
-        });
+        };
+        if (resolveCspMode() === "enforce") {
+          logger.warn("[CSP] enforced policy violation reported", detail);
+        } else {
+          logger.info("[CSP] report-only policy observation", detail);
+        }
       }
       // Reports are best-effort telemetry: always acknowledge.
       res.sendStatus(204);
