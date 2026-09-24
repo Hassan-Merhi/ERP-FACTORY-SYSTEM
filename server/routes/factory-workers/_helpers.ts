@@ -14,6 +14,29 @@ export function getFactoryCompanyId(req: import("express").Request): number | un
   return req.session.factoryCompanyId || req.session.currentCompanyId;
 }
 
+
+/**
+ * Contract lifecycle actions are intentionally available to Owners in Factory Mode.
+ * Keep this separate from the shared factory admin gate so Owner access does not
+ * expand to destructive/configuration actions elsewhere.
+ */
+export function checkFactoryWorkerContractAccess(
+  req: import("express").Request,
+  res: import("express").Response
+): boolean {
+  const role = req.session?.currentRole as string | undefined;
+  if (["Admin", "Owner", "Developer"].includes(role || "")) return true;
+
+  const overrideUntil = req.session?.factoryAdminOverrideUntil;
+  if (overrideUntil && Date.now() < overrideUntil) return true;
+
+  res.status(403).json({
+    message: "Admin or Owner authorization required to end a worker contract.",
+    requiresAdminOverride: true,
+  });
+  return false;
+}
+
 export const workerUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
