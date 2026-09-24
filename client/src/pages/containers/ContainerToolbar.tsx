@@ -30,7 +30,7 @@ export function ContainerToolbar({
   const syncLabel = getContainerSyncButtonLabel(language);
 
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex w-full flex-wrap gap-2 [&>*]:flex-auto sm:w-auto sm:[&>*]:flex-none">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">

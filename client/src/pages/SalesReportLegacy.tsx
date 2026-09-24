@@ -348,53 +348,48 @@ export default function SalesReport() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto space-y-6 p-0 sm:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-2">
-        <div>
-          <PageHeader title="Sales Report" />
-          <p className="text-sm text-muted-foreground">
-            Analyze profit and loss from POS transactions
-            {isMultiCompanyMode && " · All Companies"}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/sales-report/comparison")}
-            data-testid="button-compare-companies"
-          >
-            <GitCompare className="w-4 h-4 mr-2" />
-            Compare
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={groupedData.length === 0}
-                data-testid="button-export-dropdown"
-              >
-                <Download className="w-4 h-4" />
-                Export
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Export Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPDF} data-testid="menu-export-pdf">
-                <FileText className="w-4 h-4 mr-2" />
-                Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <PageHeader
+        title="Sales Report"
+        subtitle="Analyze profit and loss from POS transactions"
+        meta={isMultiCompanyMode ? <span>All Companies</span> : undefined}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/sales-report/comparison")}
+          data-testid="button-compare-companies"
+        >
+          <GitCompare className="w-4 h-4 mr-2" />
+          Compare
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={groupedData.length === 0}
+              data-testid="button-export-dropdown"
+            >
+              <Download className="w-4 h-4" />
+              Export
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Export Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPDF} data-testid="menu-export-pdf">
+              <FileText className="w-4 h-4 mr-2" />
+              Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
 
       {/* Summary Pills */}
       <div className="flex flex-wrap gap-2">

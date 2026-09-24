@@ -156,20 +156,22 @@ export default function OptionalVouchers() {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader
-          title="Optional Vouchers"
-          subtitle="Draft vouchers pending edit or finalization"
-          icon={<FileText className="h-5 w-5" />}
-        />
-        {!isLoading && !isError && vouchers.length > 0 && (
-          <Badge variant="secondary" className="text-sm px-3 py-1" data-testid="text-voucher-count">
-            {vouchers.length} draft{vouchers.length !== 1 ? "s" : ""}
-          </Badge>
-        )}
-      </div>
+      <PageHeader
+        title="Optional Vouchers"
+        subtitle="Draft vouchers pending edit or finalization"
+        icon={<FileText className="h-5 w-5" />}
+        meta={
+          !isLoading &&
+          !isError &&
+          vouchers.length > 0 && (
+            <Badge variant="secondary" className="text-xs sm:text-sm px-2 py-0.5" data-testid="text-voucher-count">
+              {vouchers.length} draft{vouchers.length !== 1 ? "s" : ""}
+            </Badge>
+          )
+        }
+      />
 
       {/* ── Filter row ── */}
       <div className="flex flex-wrap gap-2 items-center">

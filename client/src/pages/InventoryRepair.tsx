@@ -146,13 +146,11 @@ export default function InventoryRepair() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      <div>
-        <PageHeader
-          title="Inventory Repair Tool"
-          subtitle="Recalculates expected inventory by replaying all voucher-backed operations and compares with current stock levels."
-        />
-      </div>
+    <div className="max-w-6xl mx-auto space-y-6 sm:p-4 md:p-6">
+      <PageHeader
+        title="Inventory Repair Tool"
+        subtitle="Recalculates expected inventory by replaying all voucher-backed operations and compares with current stock levels."
+      />
 
       <Alert>
         <AlertTriangle className="h-4 w-4" />

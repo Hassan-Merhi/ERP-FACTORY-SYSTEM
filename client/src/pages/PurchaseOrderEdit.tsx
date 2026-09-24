@@ -268,9 +268,7 @@ export default function PurchaseOrderEdit() {
   const stockItemsList = useMemo(() => (stockItems || []) as StockItem[], [stockItems]);
   const filteredStockItems = useMemo(() => {
     if (!searchTerm.trim()) return stockItemsList.slice(0, 100);
-    return stockItemsList
-      .filter((item) => searchAny(searchTerm, item.name, item.code))
-      .slice(0, 100);
+    return stockItemsList.filter((item) => searchAny(searchTerm, item.name, item.code)).slice(0, 100);
   }, [stockItemsList, searchTerm]);
 
   const handleSelectItem = useCallback(
@@ -364,18 +362,16 @@ export default function PurchaseOrderEdit() {
   }
 
   return (
-    <div className="p-3 sm:p-6 space-y-6">
-      <div className="flex items-center gap-2 sm:gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <PageHeader title="Edit Purchase Order" />
-          <p className="text-muted-foreground">
+    <div className="space-y-6 sm:p-6">
+      <PageHeader
+        title="Edit Purchase Order"
+        onBack={handleBack}
+        meta={
+          <span className="break-words">
             {po.supplierName} ({po.supplierCode}) | Container: {po.containerNumber}
-          </p>
-        </div>
-      </div>
+          </span>
+        }
+      />
 
       <div className="flex flex-col sm:flex-row gap-4 relative" ref={containerRef}>
         <Card className={`flex-1 transition-all ${showItemSidebar ? "sm:mr-[340px]" : ""}`}>

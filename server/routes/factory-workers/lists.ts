@@ -10,7 +10,7 @@ import { parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { pool, type Database } from "../../db";
-import { eq, and, sql, ilike, isNotNull } from "drizzle-orm";
+import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { factoryWorkers, factoryPayrolls, factoryWorkerDocuments, factoryWorkerAdvances } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";

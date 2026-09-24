@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -340,14 +341,12 @@ export default function AICommandCenter() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 px-6 py-4 border-b bg-background flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10">
-          <Bot className="h-4.5 w-4.5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-base font-semibold leading-tight">AI Command Center</h1>
-          <p className="text-xs text-muted-foreground">Plan tasks, review drafts, and approve actions</p>
-        </div>
+      <div className="shrink-0 bg-background sm:px-6 sm:pt-4">
+        <PageHeader
+          title="AI Command Center"
+          subtitle="Plan tasks, review drafts, and approve actions"
+          icon={<Bot className="h-5 w-5 text-primary" />}
+        />
       </div>
 
       {/* Body */}

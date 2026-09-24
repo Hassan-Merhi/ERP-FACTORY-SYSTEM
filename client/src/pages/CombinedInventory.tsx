@@ -1,5 +1,5 @@
 import { searchAny } from "@shared/searchNormalization";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Search, ChevronRight, ArrowLeft, List, FolderOpen, Download, Loader2, RefreshCw } from "lucide-react";
+import { Layers, Search, ChevronRight, List, FolderOpen, Download, Loader2, RefreshCw } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -56,6 +56,7 @@ interface StockItem {
 interface CombinedRow {
   stockItemId: number | null;
   stockItemName: string;
+  stockItemCode?: string | null;
   stockGroupId: number | null;
   stockGroupName: string;
   otwQty: number;
@@ -80,7 +81,12 @@ interface StockGroupSummary {
 
 type ViewMode = "groups" | "all";
 
-export default function CombinedInventory() {
+interface CombinedInventoryProps {
+  /** Extra page-level actions supplied by a host page (for example the OTW/Combined toggle). */
+  headerActions?: ReactNode;
+}
+
+export default function CombinedInventory({ headerActions }: CombinedInventoryProps = {}) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("groups");
   const [selectedGroupId, setSelectedGroupId] = useState<number | null | undefined>(undefined);
@@ -382,35 +388,34 @@ export default function CombinedInventory() {
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       {isDrillMode ? (
-        <div className="flex items-center gap-3">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setSelectedGroupId(undefined)}
-            data-testid="button-back-to-groups"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-              <button className="hover:text-foreground transition-colors" onClick={() => setSelectedGroupId(undefined)}>
+        <PageHeader
+          title={drillGroup?.stockGroupName}
+          icon={<FolderOpen className="h-5 w-5" />}
+          onBack={() => setSelectedGroupId(undefined)}
+          meta={
+            <>
+              <button
+                type="button"
+                className="hover:text-foreground transition-colors"
+                onClick={() => setSelectedGroupId(undefined)}
+                data-testid="button-back-to-groups"
+              >
                 Combined Inventory
               </button>
               <ChevronRight className="h-3 w-3" />
               <span className="text-foreground font-medium">{drillGroup?.stockGroupName}</span>
-            </div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-muted-foreground" />
-              {drillGroup?.stockGroupName}
-            </h1>
-          </div>
-        </div>
+            </>
+          }
+        >
+          {headerActions}
+        </PageHeader>
       ) : (
         <PageHeader
           title="Combined Inventory"
           subtitle="In-transit (OTW) + in-hand stock combined per item"
           icon={<Layers className="h-5 w-5" />}
         >
+          {headerActions}
           <Button
             variant="outline"
             size="sm"

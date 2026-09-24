@@ -56,32 +56,28 @@ export default function OffloadItemSearch() {
     "$\u200b" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6">
+    <div className="flex flex-col gap-4 sm:p-4 md:p-6">
       {/* ── Header + Search ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1">
-          <PageHeader
-            title="Offload Item Search"
-            subtitle="Search any item name to see every offloaded container it arrived in"
+      <PageHeader
+        title="Offload Item Search"
+        subtitle="Search any item name to see every offloaded container it arrived in"
+      />
+      <div className="flex w-full gap-2 sm:max-w-xl">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="e.g. MJS MIX CH WINTER BOOTS"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            data-testid="input-item-search"
           />
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="e.g. MJS MIX CH WINTER BOOTS"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              data-testid="input-item-search"
-            />
-          </div>
-          <Button onClick={handleSearch} disabled={!input.trim() || isLoading} data-testid="button-search">
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            <span className="ml-1.5">Search</span>
-          </Button>
-        </div>
+        <Button onClick={handleSearch} disabled={!input.trim() || isLoading} data-testid="button-search">
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          <span className="ml-1.5">Search</span>
+        </Button>
       </div>
 
       {/* ── Stats pill bar ── */}

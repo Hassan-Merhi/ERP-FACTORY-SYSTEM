@@ -229,7 +229,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
 
       <div className="flex-1 overflow-auto">
         {showAllStock ? (
-          <div className="p-6">
+          <div className="py-3 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <Button variant="ghost" size="sm" className="gap-1" onClick={() => setShowAllStock(false)}>
                 <ArrowLeft className="h-4 w-4" /> Back
@@ -262,7 +262,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
             />
           </div>
         ) : (
-          <div className="px-6 py-4 space-y-4">
+          <div className="space-y-4 py-3 sm:px-6 sm:py-4">
             {/* ── Breadcrumb ──────────────────────────────────────────────── */}
             <LocationInventoryBreadcrumb
               selectedLocationLocal={selectedLocationLocal}
@@ -280,7 +280,7 @@ export default function LocationInventory({ posUser }: { posUser?: AuthMe } = {}
             {!selectedLocationLocal && (
               <>
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-xl font-bold">Location Inventory</h2>
+                  <h2 className="text-lg font-semibold sm:text-xl">Locations</h2>
                   {!posUser && (
                     <div className="flex items-center gap-2">
                       <Button

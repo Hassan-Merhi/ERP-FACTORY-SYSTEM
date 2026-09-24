@@ -225,17 +225,14 @@ export default function LiveSheets() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <PageHeader title="Live Sheets" subtitle="Shared Google Sheets — click Open to view or edit the live file" />
-        </div>
+      <PageHeader title="Live Sheets" subtitle="Shared Google Sheets — click Open to view or edit the live file">
         {isAdmin && (
           <Button onClick={openAdd} data-testid="button-add-sheet">
             <Plus className="w-4 h-4 mr-2" />
             Add Sheet
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <div className="space-y-3">
@@ -333,9 +330,10 @@ export default function LiveSheets() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete-sheet"
             >
-              Remove
+              {deleteMutation.isPending ? "Removing..." : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

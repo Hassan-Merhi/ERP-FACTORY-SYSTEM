@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   Coins,
@@ -403,51 +402,36 @@ function StockInSalesReportSummary() {
   const profitTone = summary.costProfit > 0 ? "positive" : summary.costProfit < 0 ? "negative" : "default";
 
   return (
-    <div className="container mx-auto space-y-5 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-0.5 gap-1.5 print:hidden"
-            onClick={() => (window.location.href = "/sales-report")}
-            data-testid="button-back-stock-in-sales"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Button>
-          <div>
-            <PageHeader title="Stock In & Sales Report" />
-            <p className="text-sm text-muted-foreground">
-              Stock and sales overview{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <Button variant="outline" size="sm" onClick={openComparison} data-testid="button-stock-in-sales-compare">
-            <GitCompare className="mr-2 h-4 w-4" /> Compare
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2" disabled={rows.length === 0 || isExporting}>
-                {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportExcel}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> Export Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportCsv}>
-                <FileText className="mr-2 h-4 w-4" /> Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.print()}>
-                <FileText className="mr-2 h-4 w-4" /> Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+    <div className="container mx-auto space-y-5 p-0 sm:p-6">
+      <PageHeader
+        title="Stock In & Sales Report"
+        onBack={() => (window.location.href = "/sales-report")}
+        backButtonTestId="button-back-stock-in-sales"
+        meta={<span>Stock and sales overview{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
+      >
+        <Button variant="outline" size="sm" onClick={openComparison} data-testid="button-stock-in-sales-compare">
+          <GitCompare className="mr-2 h-4 w-4" /> Compare
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2" disabled={rows.length === 0 || isExporting}>
+              {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportExcel}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" /> Export Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportCsv}>
+              <FileText className="mr-2 h-4 w-4" /> Export CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.print()}>
+              <FileText className="mr-2 h-4 w-4" /> Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy={isLoading || isFetching}>
         {isLoading ? (

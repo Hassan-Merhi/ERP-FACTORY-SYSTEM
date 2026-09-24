@@ -62,12 +62,11 @@ export default function SoldContainers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <PageHeader title="Sold Containers" subtitle="View all containers that have been sold to customers" />
-        </div>
-        <HandCoins className="h-8 w-8 text-muted-foreground" />
-      </div>
+      <PageHeader
+        title="Sold Containers"
+        subtitle="View all containers that have been sold to customers"
+        icon={<HandCoins className="h-5 w-5" />}
+      />
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

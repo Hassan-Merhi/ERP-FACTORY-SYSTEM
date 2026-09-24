@@ -6,7 +6,7 @@ export default function ErpRentalShops() {
     <PropertyRentalPage
       unitType="SHOP"
       pageTitle="ERP — Shop Rentals"
-      pageIcon={<Store className="h-7 w-7 text-blue-600" />}
+      pageIcon={<Store className="h-5 w-5 text-blue-600" />}
       testIdPrefix="erp-rental-shops"
       apiBase="/api/erp/rental"
       paymentsLogUrl="/erp/rental/payments"

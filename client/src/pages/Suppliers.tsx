@@ -173,7 +173,7 @@ export default function Suppliers() {
   };
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="space-y-5 py-3 sm:p-6">
       <PageHeader
         title="Suppliers"
         subtitle="Manage supplier accounts and track container shipments"

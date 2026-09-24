@@ -1,7 +1,7 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, RequestHandler } from "express";
-import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { companies, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";

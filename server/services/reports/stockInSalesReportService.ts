@@ -1,7 +1,7 @@
 import { searchAny } from "@shared/searchNormalization";
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
-import { and, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "../../db";
 import { calculateHistoricalLocationInventory } from "../../routes/helpers/inventoryHistoryHelpers";

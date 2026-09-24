@@ -3,6 +3,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -270,23 +271,19 @@ export default function NotificationSettings() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4 space-y-8">
+    <div className="max-w-2xl mx-auto space-y-6 sm:space-y-8 sm:px-4 sm:py-8">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10">
-            <Bell className="h-4 w-4 text-primary" />
-          </div>
-          <h1 className="text-lg font-semibold">Notification Settings</h1>
-        </div>
-        <p className="text-sm text-muted-foreground ml-10.5">
-          Configure which users receive notifications for each system event.
-        </p>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2 ml-10.5">
-          <Shield className="h-3.5 w-3.5" />
-          Admin and Developer only
-        </div>
-      </div>
+      <PageHeader
+        title="Notification Settings"
+        subtitle="Configure which users receive notifications for each system event."
+        icon={<Bell className="h-5 w-5 text-primary" />}
+        meta={
+          <span className="flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Admin and Developer only
+          </span>
+        }
+      />
 
       <Separator />
 

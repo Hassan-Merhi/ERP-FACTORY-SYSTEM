@@ -39,9 +39,7 @@ type NetProfitHandler = (
 
 const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partner"]);
 const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
-const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set([
-  "hmd international group lebanon credit",
-]);
+const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -241,7 +239,10 @@ interface GroupIntercompanyExclusions {
 }
 
 function normalizeAccountName(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 /**
@@ -275,7 +276,9 @@ async function getGroupIntercompanyExclusions(
 function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercompanyExclusions): boolean {
   const row = asRecord(account);
   const id = Number(row.id);
-  const code = String(row.code ?? "").trim().toUpperCase();
+  const code = String(row.code ?? "")
+    .trim()
+    .toUpperCase();
   const name = normalizeAccountName(row.name ?? row.label);
   const category = normalizeAccountName(row.category);
 

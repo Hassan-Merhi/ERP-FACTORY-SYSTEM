@@ -19,7 +19,7 @@ export default function Analytics() {
   return (
     <div className="flex flex-col h-full md:flex-row">
       {/* ── Mobile section selector (shown only on small screens) ── */}
-      <div className="md:hidden border-b bg-muted/30 px-3 py-2 shrink-0">
+      <div className="md:hidden border-b bg-muted/30 py-2 shrink-0">
         <Select value={activeSection} onValueChange={setActiveSection}>
           <SelectTrigger className="w-full" data-testid="select-analytics-section">
             <SelectValue />
@@ -72,15 +72,12 @@ export default function Analytics() {
         ))}
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <PageHeader title="Analytics" subtitle="Comprehensive financial analysis and reporting" />
-          </div>
+      <div className="flex-1 overflow-y-auto space-y-4 pt-3 md:space-y-6 md:p-6">
+        <PageHeader title="Analytics" subtitle="Comprehensive financial analysis and reporting">
           {activeSection !== "containers" && (
             <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="analytics-period-filter" />
           )}
-        </div>
+        </PageHeader>
 
         <BalanceSectionsPanel analytics={analytics} />
         <ExpenseSectionsPanel analytics={analytics} />

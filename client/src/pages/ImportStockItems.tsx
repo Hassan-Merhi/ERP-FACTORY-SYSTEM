@@ -1,6 +1,5 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useRef } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Upload, Download, CheckCircle2, AlertCircle, Barcode, Package, Tag } from "lucide-react";
+import { Upload, Download, CheckCircle2, AlertCircle, Barcode, Package, Tag } from "lucide-react";
 import { utils, writeFile, read, ExcelJS } from "@/lib/excelHelper";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -588,16 +587,13 @@ function BarcodesTab() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function ImportStockItems() {
-  const [_location, navigate] = useLocation();
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/accounting-create")} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <PageHeader title="Import Stock Items" subtitle="Bulk import items or assign barcodes from Excel" />
-      </div>
+      <PageHeader
+        title="Import Stock Items"
+        subtitle="Bulk import items or assign barcodes from Excel"
+        backTarget="/create"
+      />
 
       <Tabs defaultValue="items">
         <TabsList>

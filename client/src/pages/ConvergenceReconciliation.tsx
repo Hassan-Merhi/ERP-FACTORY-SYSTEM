@@ -68,15 +68,13 @@ export default function ConvergenceReconciliation() {
   const inventoryCount = discrepancies.filter((entry) => entry.domain === "inventory").length;
 
   return (
-    <div className="space-y-4 p-4" data-testid="page-convergence-reconciliation">
-      <PageHeader title="Convergence Reconciliation" subtitle="Check documents against the evidence behind them" />
-
-      <div className="flex justify-end">
+    <div className="space-y-4 sm:p-4" data-testid="page-convergence-reconciliation">
+      <PageHeader title="Convergence Reconciliation" subtitle="Check documents against the evidence behind them">
         <Button variant="outline" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh">
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-      </div>
+      </PageHeader>
 
       {rejected && (
         <Card className="border-destructive/40" data-testid="card-evidence-rejected">

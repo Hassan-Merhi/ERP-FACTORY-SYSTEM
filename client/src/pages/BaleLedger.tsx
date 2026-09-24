@@ -110,10 +110,9 @@ function BaleDetailRows({
   const { data, isLoading } = useQuery<{ baleDetails: BaleDetail[] }>({
     queryKey: ["/api/factory/bale-ledger/details", section, productId ?? "null"],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/factory/bale-ledger/details?section=${section}&productId=${productId ?? "null"}`,
-        { credentials: "include" }
-      );
+      const res = await fetch(`/api/factory/bale-ledger/details?section=${section}&productId=${productId ?? "null"}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch bale details");
       return res.json();
     },
@@ -400,26 +399,26 @@ export default function BaleLedger() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-6 py-4 border-b flex-wrap">
-        <div>
-          <PageHeader title="Bale Production Ledger" icon={<Layers className="h-5 w-5" />} />
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Complete lifecycle view — stock in hand, wipers/garbages, sold, and waste
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          data-testid="button-refresh"
-          className="gap-2"
+      <div className="shrink-0 sm:px-6 sm:pt-4">
+        <PageHeader
+          title="Bale Production Ledger"
+          subtitle="Complete lifecycle view — stock in hand, wipers/garbages, sold, and waste"
+          icon={<Layers className="h-5 w-5" />}
         >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+          <Button
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            data-testid="button-refresh"
+            className="gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </PageHeader>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-3">
+      <div className="flex-1 overflow-y-auto space-y-3 sm:p-6">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (

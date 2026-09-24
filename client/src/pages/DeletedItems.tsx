@@ -8,9 +8,10 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -345,20 +346,16 @@ export default function DeletedItems() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+    <div className="space-y-4 sm:p-4 md:space-y-6 md:p-6">
+      <PageHeader
+        title={<span data-testid="title-deleted-items">Deleted Items</span>}
+        subtitle="View and manage deleted records. You can restore items or permanently delete them."
+        icon={<Trash2 className="h-5 w-5" />}
+      />
       <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 flex-wrap">
-            <div>
-              <CardTitle className="flex items-center gap-2" data-testid="title-deleted-items">
-                <Trash2 className="h-5 w-5" />
-                Deleted Items
-              </CardTitle>
-              <CardDescription>
-                View and manage deleted records. You can restore items or permanently delete them.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
+        <CardHeader className="p-3 sm:p-6">
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <span className="text-sm text-muted-foreground">Filter:</span>
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-full sm:w-[180px]" data-testid="select-filter-type">

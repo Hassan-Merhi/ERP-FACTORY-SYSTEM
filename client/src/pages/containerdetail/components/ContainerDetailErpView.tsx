@@ -1,16 +1,15 @@
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
-import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft,
   DollarSign,
   FileText,
   Truck,
@@ -75,158 +74,147 @@ export function ContainerDetailErpView({ model }: { model: Model }) {
   };
 
   return (
-    <div className="space-y-5 p-3 sm:p-0">
+    <div className="space-y-5">
       {/* ── Page header ── */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href={backUrl}>
-            <Button variant="ghost" size="icon" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold truncate" data-testid="text-container-number">
-                Container {container.containerNumber}
-              </h1>
-              <Badge
-                variant={
-                  container.status === "OTW" ? "default" : container.status === "OFFLOADED" ? "secondary" : "outline"
-                }
-                className="shrink-0"
-                data-testid="badge-status"
-              >
-                {container.status}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Imported on {formatDisplayDate(container.importDate)}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* View Offload button — only shown on offloaded containers */}
-          {container.status === "OFFLOADED" && containerData?.offloadId && (
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setLocation(`/offloads/${containerData.offloadId}`)}
-              data-testid="button-view-offload"
+      <PageHeader
+        title={<span data-testid="text-container-number">Container {container.containerNumber}</span>}
+        backTarget={backUrl}
+        meta={
+          <>
+            <Badge
+              variant={
+                container.status === "OTW" ? "default" : container.status === "OFFLOADED" ? "secondary" : "outline"
+              }
+              className="shrink-0"
+              data-testid="badge-status"
             >
-              <ExternalLink className="w-4 h-4" />
-              View Offload
-            </Button>
-          )}
-          {/* Actions dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="button-actions-dropdown">
-                Actions
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {isDeveloper && (
-                <>
-                  <DropdownMenuItem
-                    onClick={() => syncVoucherMutation.mutate()}
-                    disabled={syncVoucherMutation.isPending}
-                    data-testid="button-sync-voucher"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    {syncVoucherMutation.isPending ? "Syncing..." : "Sync Supplier Balance"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem
-                onClick={() => setLocation(`/containers/${containerId}/verification`)}
-                data-testid="button-verify-container"
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                Verify
-              </DropdownMenuItem>
-              {!containerSale && (
-                <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
-                  <HandCoins className="w-4 h-4 mr-2" />
-                  Sell Container
-                </DropdownMenuItem>
-              )}
-              {container.status !== "OFFLOADED" && (
-                <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
-                  <Truck className="w-4 h-4 mr-2" />
-                  Offload Container
-                </DropdownMenuItem>
-              )}
-              {container.status === "OFFLOADED" && (
-                <>
-                  <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Offload
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setPendingDelete(() => () => reverseOffloadMutation.mutate(parseInt(containerId!)))}
-                    disabled={reverseOffloadMutation.isPending}
-                    data-testid="button-reverse-offload"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Reverse Offload
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Export dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
-                <Download className="w-4 h-4" />
-                Export
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={handleExportContainer} data-testid="button-export-excel">
-                <Download className="w-4 h-4 mr-2" />
-                Full Export
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportContainerNoCost} data-testid="button-export-no-cost">
-                <Download className="w-4 h-4 mr-2" />
-                No Cost / Freight Export
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePrint} data-testid="button-export-pdf">
-                <Printer className="w-4 h-4 mr-2" />
-                Export PDF
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setPriceImportPreview(null);
-                  setPriceImportError(null);
-                  setShowPriceImportDialog(true);
-                }}
-                data-testid="button-import-pricing"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import Pricing (Excel)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
+              {container.status}
+            </Badge>
+            <span>Imported on {formatDisplayDate(container.importDate)}</span>
+          </>
+        }
+      >
+        {/* View Offload button — only shown on offloaded containers */}
+        {container.status === "OFFLOADED" && containerData?.offloadId && (
           <Button
-            variant="destructive"
-            onClick={handleDeleteContainer}
-            disabled={deleteContainerMutation.isPending}
+            variant="outline"
             className="gap-2"
-            data-testid="button-delete-container"
+            onClick={() => setLocation(`/offloads/${containerData.offloadId}`)}
+            data-testid="button-view-offload"
           >
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Delete Container</span>
-            <span className="sm:hidden">Delete</span>
+            <ExternalLink className="w-4 h-4" />
+            View Offload
           </Button>
-        </div>
-      </div>
+        )}
+        {/* Actions dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2" data-testid="button-actions-dropdown">
+              Actions
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {isDeveloper && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => syncVoucherMutation.mutate()}
+                  disabled={syncVoucherMutation.isPending}
+                  data-testid="button-sync-voucher"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  {syncVoucherMutation.isPending ? "Syncing..." : "Sync Supplier Balance"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem
+              onClick={() => setLocation(`/containers/${containerId}/verification`)}
+              data-testid="button-verify-container"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Verify
+            </DropdownMenuItem>
+            {!containerSale && (
+              <DropdownMenuItem onClick={() => setShowSellDialog(true)} data-testid="button-sell-container">
+                <HandCoins className="w-4 h-4 mr-2" />
+                Sell Container
+              </DropdownMenuItem>
+            )}
+            {container.status !== "OFFLOADED" && (
+              <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-offload-container">
+                <Truck className="w-4 h-4 mr-2" />
+                Offload Container
+              </DropdownMenuItem>
+            )}
+            {container.status === "OFFLOADED" && (
+              <>
+                <DropdownMenuItem onClick={() => setShowOffloadDialog(true)} data-testid="button-edit-offload">
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit Offload
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setPendingDelete(() => () => reverseOffloadMutation.mutate(parseInt(containerId!)))}
+                  disabled={reverseOffloadMutation.isPending}
+                  data-testid="button-reverse-offload"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Reverse Offload
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Export dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2" data-testid="button-export-dropdown">
+              <Download className="w-4 h-4" />
+              Export
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={handleExportContainer} data-testid="button-export-excel">
+              <Download className="w-4 h-4 mr-2" />
+              Full Export
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportContainerNoCost} data-testid="button-export-no-cost">
+              <Download className="w-4 h-4 mr-2" />
+              No Cost / Freight Export
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handlePrint} data-testid="button-export-pdf">
+              <Printer className="w-4 h-4 mr-2" />
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                setPriceImportPreview(null);
+                setPriceImportError(null);
+                setShowPriceImportDialog(true);
+              }}
+              data-testid="button-import-pricing"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Pricing (Excel)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          variant="destructive"
+          onClick={handleDeleteContainer}
+          disabled={deleteContainerMutation.isPending}
+          className="gap-2"
+          data-testid="button-delete-container"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Delete Container</span>
+          <span className="sm:hidden">Delete</span>
+        </Button>
+      </PageHeader>
 
       {containerSale && (
         <Card className="border-green-500">

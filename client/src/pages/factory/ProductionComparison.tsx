@@ -341,7 +341,7 @@ export default function ProductionComparison() {
             r.supplierName,
             period === "a"
               ? { supplier: r.supplierName, aKg: r.totalKg, aCost: r.totalCost ?? 0, bKg: 0, bCost: 0 }
-              : { supplier: r.supplierName, aKg: 0, aCost: 0, bKg: r.totalKg, bCost: r.totalCost }
+              : { supplier: r.supplierName, aKg: 0, aCost: 0, bKg: r.totalKg, bCost: r.totalCost ?? 0 }
           );
         }
       }
@@ -636,7 +636,10 @@ export default function ProductionComparison() {
                   })}
                   {supplierSummary.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={costsHidden ? 4 : 7} className="text-center text-muted-foreground py-6 text-sm">
+                      <TableCell
+                        colSpan={costsHidden ? 4 : 7}
+                        className="text-center text-muted-foreground py-6 text-sm"
+                      >
                         {hasSupplierFilter ? "No data for selected suppliers." : "No mix batch data."}
                       </TableCell>
                     </TableRow>

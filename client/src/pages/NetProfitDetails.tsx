@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  ArrowLeft,
   Minus,
   AlertCircle,
   ChevronDown,
@@ -36,7 +35,6 @@ import {
   ArrowDownRight,
   Scale,
 } from "lucide-react";
-import { Link } from "wouter";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -416,163 +414,153 @@ export default function NetProfitDetails() {
   const showPartnerEquity = selectedCompany?.companyType === "supplier_partner";
 
   return (
-    <div className="p-4 md:p-6 space-y-5 w-full">
+    <div className="space-y-5 w-full sm:p-4 md:p-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="button-back-settings">
-              <ArrowLeft className="h-5 w-5" />
+      <PageHeader
+        title="Net Position Details"
+        backTarget="/settings"
+        backButtonTestId="button-back-settings"
+        meta={
+          <span>
+            {fromDate && toDate
+              ? `${fromDate} — ${toDate} (balances as of ${toDate})`
+              : toDate
+                ? `Balances as of ${toDate}`
+                : fromDate
+                  ? `From ${fromDate} — present`
+                  : "Current balances — all time"}
+          </span>
+        }
+      >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="default" data-testid="button-actions-menu">
+              <MoreHorizontal className="h-4 w-4 mr-2" />
+              Actions
+              <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
             </Button>
-          </Link>
-          <div>
-            <PageHeader title="Net Position Details" />
-            <p className="text-muted-foreground text-sm">
-              {fromDate && toDate
-                ? `${fromDate} — ${toDate} (balances as of ${toDate})`
-                : toDate
-                  ? `Balances as of ${toDate}`
-                  : fromDate
-                    ? `From ${fromDate} — present`
-                    : "Current balances — all time"}
-            </p>
-          </div>
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem
+              data-testid="button-export-excel"
+              onClick={() => {
+                const url = toDate ? `/api/stats/net-position-excel?toDate=${toDate}` : "/api/stats/net-position-excel";
+                window.open(url, "_blank");
+              }}
+            >
+              <Download className="h-4 w-4 mr-2 shrink-0" />
+              Export (full)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="button-export-monthly-excel"
+              onClick={() => {
+                const today = new Date().toLocaleDateString("en-CA");
+                const start =
+                  fromDate ||
+                  fromInput ||
+                  (() => {
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() - 1);
+                    return d.toLocaleDateString("en-CA");
+                  })();
+                const end = toDate || toInput || today;
+                window.open(`/api/reports/net-position-monthly-excel?startDate=${start}&endDate=${end}`, "_blank");
+              }}
+            >
+              <Download className="h-4 w-4 mr-2 shrink-0" />
+              Monthly Excel
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              data-testid="button-send-whatsapp"
+              disabled={sendWhatsApp.isPending}
+              onClick={() => sendWhatsApp.mutate()}
+            >
+              <MessageSquare className="h-4 w-4 mr-2 shrink-0 text-green-600" />
+              {sendWhatsApp.isPending ? "Sending…" : "Send to WhatsApp"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="button-refresh" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2 shrink-0" />
+              Refresh
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
 
-        {data?.currency && (
-          <Card
-            className={data.currency.totalsProvisional ? "border-amber-500/40 bg-amber-500/5" : "bg-muted/20"}
-            data-testid="net-position-currency-context"
+      <div className="flex items-center gap-2 flex-wrap">
+        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="flex items-center gap-1.5">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">From:</Label>
+          <Input
+            type="date"
+            value={fromInput}
+            max={toInput || todayStr()}
+            onChange={(e) => setFromInput(e.target.value)}
+            onBlur={(e) => commitFrom(e.target.value)}
+            className="w-36 text-sm"
+            data-testid="input-from-date"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">To:</Label>
+          <Input
+            type="date"
+            value={toInput}
+            min={fromInput || undefined}
+            max={todayStr()}
+            onChange={(e) => setToInput(e.target.value)}
+            onBlur={(e) => commitTo(e.target.value)}
+            className="w-36 text-sm"
+            data-testid="input-to-date"
+          />
+        </div>
+        {isFiltered && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={clearDates}
+            data-testid="button-clear-date"
+            title="Clear date filter"
           >
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-sm font-semibold">Currency context</p>
-                <Badge variant={data.currency.totalsProvisional ? "outline" : "secondary"}>
-                  {data.currency.totalsProvisional ? "Provisional" : "Historical rates resolved"}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Native balances remain separate; historical base values use the {data.currency.rateConvention}{" "}
-                convention.
-              </p>
-              {nativeCurrencies.length > 0 && (
-                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs font-mono">
-                  {nativeCurrencies.map((currency) => (
-                    <span key={currency}>
-                      {currency} debit {data.currency?.nativeDebitByCurrency[currency]}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {data.currency.totalsProvisional && (
-                <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
-                  {data.currency.unresolvedLegacyEntryCount} legacy foreign-currency entries remain unresolved and are
-                  excluded from reliable base totals.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+            <X className="h-4 w-4" />
+          </Button>
         )}
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-            <div className="flex items-center gap-1.5">
-              <Label className="text-sm text-muted-foreground whitespace-nowrap">From:</Label>
-              <Input
-                type="date"
-                value={fromInput}
-                max={toInput || todayStr()}
-                onChange={(e) => setFromInput(e.target.value)}
-                onBlur={(e) => commitFrom(e.target.value)}
-                className="w-36 text-sm"
-                data-testid="input-from-date"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Label className="text-sm text-muted-foreground whitespace-nowrap">To:</Label>
-              <Input
-                type="date"
-                value={toInput}
-                min={fromInput || undefined}
-                max={todayStr()}
-                onChange={(e) => setToInput(e.target.value)}
-                onBlur={(e) => commitTo(e.target.value)}
-                className="w-36 text-sm"
-                data-testid="input-to-date"
-              />
-            </div>
-            {isFiltered && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearDates}
-                data-testid="button-clear-date"
-                title="Clear date filter"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="default" data-testid="button-actions-menu">
-                <MoreHorizontal className="h-4 w-4 mr-2" />
-                Actions
-                <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                data-testid="button-export-excel"
-                onClick={() => {
-                  const url = toDate
-                    ? `/api/stats/net-position-excel?toDate=${toDate}`
-                    : "/api/stats/net-position-excel";
-                  window.open(url, "_blank");
-                }}
-              >
-                <Download className="h-4 w-4 mr-2 shrink-0" />
-                Export (full)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                data-testid="button-export-monthly-excel"
-                onClick={() => {
-                  const today = new Date().toLocaleDateString("en-CA");
-                  const start =
-                    fromDate ||
-                    fromInput ||
-                    (() => {
-                      const d = new Date();
-                      d.setFullYear(d.getFullYear() - 1);
-                      return d.toLocaleDateString("en-CA");
-                    })();
-                  const end = toDate || toInput || today;
-                  window.open(`/api/reports/net-position-monthly-excel?startDate=${start}&endDate=${end}`, "_blank");
-                }}
-              >
-                <Download className="h-4 w-4 mr-2 shrink-0" />
-                Monthly Excel
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                data-testid="button-send-whatsapp"
-                disabled={sendWhatsApp.isPending}
-                onClick={() => sendWhatsApp.mutate()}
-              >
-                <MessageSquare className="h-4 w-4 mr-2 shrink-0 text-green-600" />
-                {sendWhatsApp.isPending ? "Sending…" : "Send to WhatsApp"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem data-testid="button-refresh" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4 mr-2 shrink-0" />
-                Refresh
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
+
+      {data?.currency && (
+        <Card
+          className={data.currency.totalsProvisional ? "border-amber-500/40 bg-amber-500/5" : "bg-muted/20"}
+          data-testid="net-position-currency-context"
+        >
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm font-semibold">Currency context</p>
+              <Badge variant={data.currency.totalsProvisional ? "outline" : "secondary"}>
+                {data.currency.totalsProvisional ? "Provisional" : "Historical rates resolved"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Native balances remain separate; historical base values use the {data.currency.rateConvention} convention.
+            </p>
+            {nativeCurrencies.length > 0 && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs font-mono">
+                {nativeCurrencies.map((currency) => (
+                  <span key={currency}>
+                    {currency} debit {data.currency?.nativeDebitByCurrency[currency]}
+                  </span>
+                ))}
+              </div>
+            )}
+            {data.currency.totalsProvisional && (
+              <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
+                {data.currency.unresolvedLegacyEntryCount} legacy foreign-currency entries remain unresolved and are
+                excluded from reliable base totals.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Summary hero ── */}
       <Card data-testid="card-formula" className="overflow-hidden">

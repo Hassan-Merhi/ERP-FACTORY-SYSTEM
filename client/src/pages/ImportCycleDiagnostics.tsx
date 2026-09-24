@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft,
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
-import { Link } from "wouter";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -297,33 +295,28 @@ export default function ImportCycleDiagnostics() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
+    <div className="space-y-5 sm:p-4 md:p-6">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="button-back-settings">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <PageHeader title="Import Cycle Balance" subtitle="Breakdown of what's driving your import cycle balance" />
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="default" data-testid="button-refresh">
-            <RefreshCw className="h-4 w-4 mr-1.5" />
-            Refresh
-          </Button>
-          <Button
-            onClick={() => recalculateMutation.mutate()}
-            disabled={recalculateMutation.isPending}
-            variant="outline"
-            data-testid="button-recalculate-equity"
-          >
-            <RotateCcw className="h-4 w-4 mr-1.5" />
-            {recalculateMutation.isPending ? "Recalculating…" : "Recalculate Equity"}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Import Cycle Balance"
+        subtitle="Breakdown of what's driving your import cycle balance"
+        backTarget="/settings"
+        backButtonTestId="button-back-settings"
+      >
+        <Button onClick={() => refetch()} variant="outline" size="default" data-testid="button-refresh">
+          <RefreshCw className="h-4 w-4 mr-1.5" />
+          Refresh
+        </Button>
+        <Button
+          onClick={() => recalculateMutation.mutate()}
+          disabled={recalculateMutation.isPending}
+          variant="outline"
+          data-testid="button-recalculate-equity"
+        >
+          <RotateCcw className="h-4 w-4 mr-1.5" />
+          {recalculateMutation.isPending ? "Recalculating…" : "Recalculate Equity"}
+        </Button>
+      </PageHeader>
 
       {/* ── Top summary: 3 buckets + net ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

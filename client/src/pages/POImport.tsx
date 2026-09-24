@@ -382,8 +382,7 @@ export default function POImport() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <PageHeader title="PO Import (Excel)" />
+      <PageHeader title="PO Import (Excel)">
         <Button
           variant="outline"
           onClick={() => window.open("/api/po-import/template", "_blank")}
@@ -392,7 +391,7 @@ export default function POImport() {
           <Download className="w-4 h-4 mr-2" />
           Download Template
         </Button>
-      </div>
+      </PageHeader>
 
       <Card>
         <CardHeader>

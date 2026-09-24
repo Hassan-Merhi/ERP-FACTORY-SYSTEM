@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -138,7 +136,7 @@ export default function StockItemVouchers() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-3 sm:p-6 space-y-6">
+      <div className="container mx-auto space-y-6 p-0 sm:p-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
       </div>
@@ -146,28 +144,20 @@ export default function StockItemVouchers() {
   }
 
   return (
-    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 flex-wrap">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/stock-items/${stockItemId}/history`)}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <PageHeader title="Stock Item Vouchers" />
-            {data?.stockItem && (
-              <p className="text-sm text-muted-foreground" data-testid="text-item-name">
-                {data.stockItem.name} ({data.stockItem.code}) - {data.monthName} {data.year}
-              </p>
-            )}
-          </div>
-        </div>
+    <div className="container mx-auto space-y-4 p-0 sm:space-y-6 sm:p-6">
+      <PageHeader
+        title="Stock Item Vouchers"
+        onBack={() => navigate(`/stock-items/${stockItemId}/history`)}
+        meta={
+          data?.stockItem && (
+            <span data-testid="text-item-name">
+              {data.stockItem.name} ({data.stockItem.code}) - {data.monthName} {data.year}
+            </span>
+          )
+        }
+      >
         <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
-      </div>
+      </PageHeader>
 
       <Card>
         <CardHeader className="pb-2">

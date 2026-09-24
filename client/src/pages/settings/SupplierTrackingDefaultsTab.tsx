@@ -123,7 +123,7 @@ export function SupplierTrackingDefaultsTab({ canManage = false }: { canManage?:
       <div>
         <div className="flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold">Supplier Tracking Defaults</h1>
+          <h2 className="text-lg font-semibold sm:text-xl">Supplier Tracking Defaults</h2>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Link each supplier to its normal shop/location and clearing agent. When a new container is created, blank Shop

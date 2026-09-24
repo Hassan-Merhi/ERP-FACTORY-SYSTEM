@@ -95,16 +95,12 @@ export function useTransactionJournalModel() {
   const [showHidden, setShowHidden] = useState(false);
   const hiddenRowsSaveChain = useRef<Promise<void>>(Promise.resolve());
 
+  const preferencesLoaded = Boolean(userPreferences);
+  const storedHiddenVoucherIds = userPreferences?.hiddenTransactionJournalVoucherIds;
   useEffect(() => {
-    if (!userPreferences) return;
-    setHiddenRowIds(
-      new Set(
-        (userPreferences.hiddenTransactionJournalVoucherIds ?? []).filter(
-          (id) => Number.isSafeInteger(id) && id > 0
-        )
-      )
-    );
-  }, [userPreferences?.hiddenTransactionJournalVoucherIds]);
+    if (!preferencesLoaded) return;
+    setHiddenRowIds(new Set((storedHiddenVoucherIds ?? []).filter((id) => Number.isSafeInteger(id) && id > 0)));
+  }, [preferencesLoaded, storedHiddenVoucherIds]);
 
   const persistHiddenRows = useCallback(
     (ids: Set<number>) => {

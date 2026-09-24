@@ -5,8 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { formatNumber } from "@/lib/formatNumber";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useDateFormat } from "@/contexts/DateFormatContext";
-import { ArrowLeft, FileText, Calendar, Hash, User, Building, Package, DollarSign, ArrowRight } from "lucide-react";
+import { FileText, Calendar, Hash, User, Building, Package, DollarSign, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -171,35 +172,26 @@ export default function VoucherDetail() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className={`${voucherTypeColors[data?.voucherType || ""] || "bg-primary"} text-white p-3 sm:p-4`}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              className="text-white hover:bg-white/20 gap-1"
-              data-testid="button-back"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              {fromDaybook && <span className="text-sm font-normal hidden sm:inline">Back to Daybook</span>}
-            </Button>
-            <div>
-              <p className="text-sm opacity-80">Accounting Voucher Alteration (Secondary)</p>
-              <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className="bg-white/20 text-white border-white/40">
-                  {data?.voucherType || "Voucher"}
-                </Badge>
-                <span>No. {data?.voucherNumber || ""}</span>
-              </h1>
-            </div>
-          </div>
-          <div className="text-right">
-            {data?.date && <p className="text-lg font-medium">{formatShortDate(data.date)}</p>}
-          </div>
-        </div>
+      <div className="sm:px-4 sm:pt-4">
+        <PageHeader
+          title={`No. ${data?.voucherNumber || ""}`}
+          subtitle="Accounting Voucher Alteration (Secondary)"
+          onBack={handleBack}
+          meta={
+            <>
+              <Badge
+                className={`${voucherTypeColors[data?.voucherType || ""] || "bg-primary"} border-transparent text-white`}
+                data-testid="badge-voucher-type"
+              >
+                {data?.voucherType || "Voucher"}
+              </Badge>
+              {data?.date && <span className="font-medium text-foreground">{formatShortDate(data.date)}</span>}
+            </>
+          }
+        />
       </div>
 
-      <div className="p-3 sm:p-4 space-y-6">
+      <div className="space-y-6 sm:p-4">
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-32 w-full" />
@@ -330,9 +322,7 @@ export default function VoucherDetail() {
                             <TableCell>
                               <div className="font-medium">{entry.ledgerAccountName}</div>
                               {entry.narration && (
-                                <div className="text-xs text-muted-foreground/80 mt-0.5 italic">
-                                  {entry.narration}
-                                </div>
+                                <div className="text-xs text-muted-foreground/80 mt-0.5 italic">{entry.narration}</div>
                               )}
                             </TableCell>
                             <TableCell className="text-right font-mono">

@@ -7,10 +7,9 @@ import { getApiRequest } from "@/lib/factoryApi";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
-import { ArrowLeft, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -127,30 +126,17 @@ export default function LedgerVouchers() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-primary text-primary-foreground p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(`/ledger-monthly/${accountId}`)}
-              className="text-primary-foreground hover:bg-primary/80"
-              data-testid="button-back"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <p className="text-sm opacity-80">Ledger Vouchers</p>
-              <PageHeader title={data?.account?.name || "Loading..."} />
-            </div>
-          </div>
-          <div className="text-right">
-            <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="ledger-vouchers-period-filter" />
-          </div>
-        </div>
+      <div className="sm:px-4 sm:pt-4">
+        <PageHeader
+          title={data?.account?.name || "Loading..."}
+          onBack={() => navigate(`/ledger-monthly/${accountId}`)}
+          meta={<span>Ledger Vouchers</span>}
+        >
+          <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="ledger-vouchers-period-filter" />
+        </PageHeader>
       </div>
 
-      <div className="p-3 sm:p-4 space-y-6">
+      <div className="space-y-6 sm:p-4">
         {isLoading ? (
           <div className="space-y-4">
             <Skeleton className="h-[400px] w-full" />

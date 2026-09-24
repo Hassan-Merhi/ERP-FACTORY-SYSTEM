@@ -3,17 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useBackToParent } from "@/hooks/use-back-to-parent";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
-import {
-  ArrowLeft,
-  MapPin,
-  Globe,
-  Eye,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Package,
-  DollarSign,
-  ArrowRight,
-} from "lucide-react";
+import { MapPin, Globe, Eye, ArrowDownToLine, ArrowUpFromLine, Package, DollarSign, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
@@ -96,6 +86,20 @@ interface LocationMonthlySummaryData {
   };
 }
 
+function toSafeNumber(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasActivity(m: MonthlyData) {
+  return (
+    toSafeNumber(m.inwardQty) > 0 ||
+    toSafeNumber(m.outwardQty) > 0 ||
+    toSafeNumber(m.openingQty) !== 0 ||
+    toSafeNumber(m.closingQty) !== 0
+  );
+}
+
 export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe } = {}) {
   const { formatAmount } = useCurrencyContext();
   const { registerCursorNav, clearCursorNav } = useCursorNav();
@@ -159,17 +163,6 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
     },
     enabled: stockItemId > 0,
   });
-
-  const toSafeNumber = (value: unknown): number => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const hasActivity = (m: MonthlyData) =>
-    toSafeNumber(m.inwardQty) > 0 ||
-    toSafeNumber(m.outwardQty) > 0 ||
-    toSafeNumber(m.openingQty) !== 0 ||
-    toSafeNumber(m.closingQty) !== 0;
 
   const visibleRows = useMemo(() => {
     if (!data?.monthlyData) return [];
@@ -263,72 +256,66 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
   const uom = data?.stockItem?.uom || "Units";
 
   return (
-    <div className="container mx-auto p-6 space-y-4">
+    <div className="container mx-auto space-y-4 p-0 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <PageHeader title={isAllLocationsMode ? "Item Monthly Summary" : "Stock Movement"} />
-            {data?.stockItem && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-item-location">
-                <span className="font-medium">{data.stockItem.name}</span>
-                <span className="text-muted-foreground/50">({data.stockItem.code})</span>
-                <span>•</span>
-                {isAllLocationsMode ? (
-                  <>
-                    <Globe className="h-3.5 w-3.5" />
-                    <span>All Locations</span>
-                  </>
-                ) : (
-                  <>
-                    <MapPin className="h-3.5 w-3.5" />
-                    <span>{data.location?.name || "Unknown"}</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant={showAllMonths ? "default" : "outline"}
-            size="sm"
-            data-remote-control-safe="true"
-            data-remote-control-action="toggle-view"
-            onClick={() => {
-              setShowAllMonths((v) => {
-                const next = !v;
-                // "Show all months" should genuinely show the full 12-month year, even if
-                // a narrower custom range (e.g. a single month) is currently selected —
-                // otherwise the toggle flips but the table still only has the months that
-                // were already fetched, which looks like the button does nothing.
-                if (next) {
-                  const parsed = periodFilter.fromDate ? new Date(periodFilter.fromDate) : new Date();
-                  const year = Number.isNaN(parsed.getTime()) ? new Date().getFullYear() : parsed.getFullYear();
-                  const fullYear = {
-                    fromDate: `${year}-01-01`,
-                    toDate: `${year}-12-31`,
-                    preset: "custom" as const,
-                  };
-                  if (periodFilter.fromDate !== fullYear.fromDate || periodFilter.toDate !== fullYear.toDate) {
-                    setPeriodFilter(fullYear);
-                  }
+      <PageHeader
+        title={isAllLocationsMode ? "Item Monthly Summary" : "Stock Movement"}
+        onBack={handleBack}
+        meta={
+          data?.stockItem && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="text-item-location">
+              <span className="font-medium">{data.stockItem.name}</span>
+              <span className="text-muted-foreground/50">({data.stockItem.code})</span>
+              <span>•</span>
+              {isAllLocationsMode ? (
+                <>
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>All Locations</span>
+                </>
+              ) : (
+                <>
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>{data.location?.name || "Unknown"}</span>
+                </>
+              )}
+            </div>
+          )
+        }
+      >
+        <Button
+          variant={showAllMonths ? "default" : "outline"}
+          size="sm"
+          data-remote-control-safe="true"
+          data-remote-control-action="toggle-view"
+          onClick={() => {
+            setShowAllMonths((v) => {
+              const next = !v;
+              // "Show all months" should genuinely show the full 12-month year, even if
+              // a narrower custom range (e.g. a single month) is currently selected —
+              // otherwise the toggle flips but the table still only has the months that
+              // were already fetched, which looks like the button does nothing.
+              if (next) {
+                const parsed = periodFilter.fromDate ? new Date(periodFilter.fromDate) : new Date();
+                const year = Number.isNaN(parsed.getTime()) ? new Date().getFullYear() : parsed.getFullYear();
+                const fullYear = {
+                  fromDate: `${year}-01-01`,
+                  toDate: `${year}-12-31`,
+                  preset: "custom" as const,
+                };
+                if (periodFilter.fromDate !== fullYear.fromDate || periodFilter.toDate !== fullYear.toDate) {
+                  setPeriodFilter(fullYear);
                 }
-                return next;
-              });
-            }}
-            data-testid="button-show-all-months"
-          >
-            <Eye className="h-4 w-4 mr-1.5" />
-            {showAllMonths ? "Hide empty months" : "Show all months"}
-          </Button>
-          <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
-        </div>
-      </div>
+              }
+              return next;
+            });
+          }}
+          data-testid="button-show-all-months"
+        >
+          <Eye className="h-4 w-4 mr-1.5" />
+          {showAllMonths ? "Hide empty months" : "Show all months"}
+        </Button>
+        <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter" />
+      </PageHeader>
 
       {/* KPI Summary Cards */}
       {data?.grandTotal && (

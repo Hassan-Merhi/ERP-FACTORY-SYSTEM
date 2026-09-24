@@ -47,7 +47,7 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
   } = model;
 
   return (
-    <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-3">
       <PageHeader
         title={editVoucherId ? "Edit Stock Transfer Order" : "Stock Transfer Order"}
         subtitle={
@@ -55,10 +55,49 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
             ? "Edit and update this stock transfer using the order view"
             : "Build orders by selecting items from multiple source locations"
         }
-      />
+      >
+        {editVoucherId && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (onSwitchToNormalView) {
+                onSwitchToNormalView();
+                return;
+              }
+              navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`);
+            }}
+            data-testid="button-switch-to-normal-view"
+          >
+            <List className="h-4 w-4 mr-2" />
+            Normal View
+          </Button>
+        )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={orderItems.length === 0} data-testid="button-export-order">
+              <FileDown className="h-4 w-4 mr-1" />
+              Export
+              <ChevronDown className="h-4 w-4 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
+              Export without Cost
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
+              Export with Cost
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
+
+      <div
+        className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center"
+        data-testid="stock-transfer-order-settings"
+      >
+        <div className="flex min-w-0 items-center gap-2 min-[420px]:col-span-2 sm:col-span-1">
           <Label className="text-sm whitespace-nowrap">Destination:</Label>
           <Select
             value={destinationLocationId?.toString() || ""}
@@ -150,42 +189,6 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
             Optional
           </Label>
         </div>
-
-        {editVoucherId && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (onSwitchToNormalView) {
-                onSwitchToNormalView();
-                return;
-              }
-              navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`);
-            }}
-            data-testid="button-switch-to-normal-view"
-          >
-            <List className="h-4 w-4 mr-2" />
-            Normal View
-          </Button>
-        )}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={orderItems.length === 0} data-testid="button-export-order">
-              <FileDown className="h-4 w-4 mr-1" />
-              Export
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
-              Export without Cost
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
-              Export with Cost
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
   );

@@ -75,7 +75,13 @@ const FACTORY_VOUCHER_HIDDEN_KEYS: Record<VoucherTab, string> = {
   creditnote: "hide_tab_vouchers_creditnote",
 };
 const ALL_VOUCHER_TABS: readonly VoucherTab[] = [
-  "payment", "receipt", "journal", "transfer", "transferorder", "adjustment", "creditnote",
+  "payment",
+  "receipt",
+  "journal",
+  "transfer",
+  "transferorder",
+  "adjustment",
+  "creditnote",
 ];
 
 interface VouchersProps {
@@ -537,6 +543,8 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
     <div className="space-y-4 md:space-y-5">
       {isPOS ? (
         <PageHeader title="Stock Transfer" subtitle="Transfer stock between locations" />
+      ) : !isFactoryMode ? (
+        <PageHeader title="Vouchers" />
       ) : (
         <div className="flex items-start justify-between gap-3 pb-4 border-b">
           <div>
@@ -743,7 +751,9 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
             </div>
           )}
 
-          {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />}
+          {!isPOS && canShowVoucherTab("journal") && activeTab === "journal" && (
+            <JournalForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} />
+          )}
 
           {(isPOS || (canShowVoucherTab("transfer") && activeTab === "transfer")) && (
             <StockTransferForm voucherIdToEdit={voucherIdToEdit} isPOS={isPOS} posUser={posUser ?? undefined} />

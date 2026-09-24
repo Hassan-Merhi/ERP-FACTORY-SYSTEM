@@ -3,12 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams, useSearch } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Package, Search } from "lucide-react";
+import { Package, Search } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
@@ -127,100 +126,99 @@ export default function OpeningStockDetail() {
   const selectedItem = data?.items.find((i) => i.id === selectedItemId);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/opening-stock")} data-testid="button-back">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <PageHeader title="Stock Group Summary" icon={<Package className="h-5 w-5" />} />
-          <p className="text-muted-foreground text-sm">
+    <div className="space-y-6 sm:p-6">
+      <PageHeader
+        title="Stock Group Summary"
+        icon={<Package className="h-5 w-5" />}
+        onBack={() => navigate("/opening-stock")}
+        meta={
+          <span>
             {data?.stockGroup?.name || groupName} - {selectedCompany?.name}
-          </p>
-        </div>
-      </div>
+          </span>
+        }
+      />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-        {/* Header */}
-        <div className="bg-primary text-primary-foreground min-w-[560px]">
-          <div className="grid grid-cols-7 p-3 font-semibold text-sm">
-            <div className="col-span-1">Particulars</div>
-            <div className="col-span-3 text-center border-l border-primary-foreground/30">Opening Balance</div>
-            <div className="col-span-3 text-center border-l border-primary-foreground/30">Closing Balance</div>
-          </div>
-          <div className="grid grid-cols-7 px-3 pb-2 text-xs">
-            <div></div>
-            <div className="text-right">Quantity</div>
-            <div className="text-right">Rate</div>
-            <div className="text-right">Value</div>
-            <div className="text-right border-l border-primary-foreground/30 pl-2">Quantity</div>
-            <div className="text-right">Rate</div>
-            <div className="text-right">Value</div>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="divide-y">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
+          {/* Header */}
+          <div className="bg-primary text-primary-foreground min-w-[560px]">
+            <div className="grid grid-cols-7 p-3 font-semibold text-sm">
+              <div className="col-span-1">Particulars</div>
+              <div className="col-span-3 text-center border-l border-primary-foreground/30">Opening Balance</div>
+              <div className="col-span-3 text-center border-l border-primary-foreground/30">Closing Balance</div>
             </div>
-          ) : data?.items && data.items.length > 0 ? (
-            <>
-              {data.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-7 p-3 cursor-pointer hover-elevate"
-                  onClick={() => handleItemClick(item.id)}
-                  data-testid={`row-stock-item-${item.id}`}
-                >
-                  <div className="font-medium truncate flex items-center gap-1" title={item.name}>
-                    <Search className="h-3 w-3 text-muted-foreground" />
-                    {item.name}
-                  </div>
-                  {/* Opening Balance */}
-                  <div className="text-right font-mono text-sm">{formatQty(item.opening.quantity, item.uom)}</div>
-                  <div className="text-right font-mono text-sm">{formatNumber(item.opening.rate)}</div>
-                  <div className="text-right font-mono text-sm">
-                    {item.opening.value === 0 ? "" : formatAmount(item.opening.value)}
-                  </div>
-                  {/* Closing Balance */}
-                  <div className="text-right font-mono text-sm border-l pl-2">
-                    {formatQty(item.closing.quantity, item.uom)}
-                  </div>
-                  <div className="text-right font-mono text-sm">{formatNumber(item.closing.rate)}</div>
-                  <div className="text-right font-mono text-sm">
-                    {item.closing.value === 0 ? "" : formatAmount(item.closing.value)}
-                  </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            <div className="p-8 text-center text-muted-foreground">No items in this stock group.</div>
-          )}
-        </div>
+            <div className="grid grid-cols-7 px-3 pb-2 text-xs">
+              <div></div>
+              <div className="text-right">Quantity</div>
+              <div className="text-right">Rate</div>
+              <div className="text-right">Value</div>
+              <div className="text-right border-l border-primary-foreground/30 pl-2">Quantity</div>
+              <div className="text-right">Rate</div>
+              <div className="text-right">Value</div>
+            </div>
+          </div>
 
-        {/* Grand Total */}
-        {data?.grandTotal && (
-          <div className="bg-muted/50 border-t-2 border-primary min-w-[560px]">
-            <div className="grid grid-cols-7 p-3 font-bold">
-              <div>Grand Total</div>
-              {/* Opening Total */}
-              <div className="text-right font-mono">{formatNumber(data.grandTotal.opening.quantity)} BL</div>
-              <div className="text-right font-mono">{formatNumber(openingRate)}</div>
-              <div className="text-right font-mono">{formatAmount(data.grandTotal.opening.value)}</div>
-              {/* Closing Total */}
-              <div className="text-right font-mono border-l pl-2">
-                {formatNumber(data.grandTotal.closing.quantity)} BL
+          {/* Body */}
+          <div className="divide-y">
+            {isLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
               </div>
-              <div className="text-right font-mono">{formatNumber(closingRate)}</div>
-              <div className="text-right font-mono">{formatAmount(data.grandTotal.closing.value)}</div>
-            </div>
+            ) : data?.items && data.items.length > 0 ? (
+              <>
+                {data.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-7 p-3 cursor-pointer hover-elevate"
+                    onClick={() => handleItemClick(item.id)}
+                    data-testid={`row-stock-item-${item.id}`}
+                  >
+                    <div className="font-medium truncate flex items-center gap-1" title={item.name}>
+                      <Search className="h-3 w-3 text-muted-foreground" />
+                      {item.name}
+                    </div>
+                    {/* Opening Balance */}
+                    <div className="text-right font-mono text-sm">{formatQty(item.opening.quantity, item.uom)}</div>
+                    <div className="text-right font-mono text-sm">{formatNumber(item.opening.rate)}</div>
+                    <div className="text-right font-mono text-sm">
+                      {item.opening.value === 0 ? "" : formatAmount(item.opening.value)}
+                    </div>
+                    {/* Closing Balance */}
+                    <div className="text-right font-mono text-sm border-l pl-2">
+                      {formatQty(item.closing.quantity, item.uom)}
+                    </div>
+                    <div className="text-right font-mono text-sm">{formatNumber(item.closing.rate)}</div>
+                    <div className="text-right font-mono text-sm">
+                      {item.closing.value === 0 ? "" : formatAmount(item.closing.value)}
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">No items in this stock group.</div>
+            )}
           </div>
-        )}
+
+          {/* Grand Total */}
+          {data?.grandTotal && (
+            <div className="bg-muted/50 border-t-2 border-primary min-w-[560px]">
+              <div className="grid grid-cols-7 p-3 font-bold">
+                <div>Grand Total</div>
+                {/* Opening Total */}
+                <div className="text-right font-mono">{formatNumber(data.grandTotal.opening.quantity)} BL</div>
+                <div className="text-right font-mono">{formatNumber(openingRate)}</div>
+                <div className="text-right font-mono">{formatAmount(data.grandTotal.opening.value)}</div>
+                {/* Closing Total */}
+                <div className="text-right font-mono border-l pl-2">
+                  {formatNumber(data.grandTotal.closing.quantity)} BL
+                </div>
+                <div className="text-right font-mono">{formatNumber(closingRate)}</div>
+                <div className="text-right font-mono">{formatAmount(data.grandTotal.closing.value)}</div>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 

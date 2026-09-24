@@ -316,10 +316,9 @@ export default function Customers() {
   );
 
   return (
-    <div className="flex flex-col h-full p-6 gap-5">
+    <div className="flex flex-col h-full gap-5 py-3 sm:p-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title="Customers" subtitle="Manage customer accounts and receivables" showBackButton={false} />
+      <PageHeader title="Customers" subtitle="Manage customer accounts and receivables" showBackButton={false}>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-customer">
@@ -334,7 +333,7 @@ export default function Customers() {
             <CustomerForm isEdit={false} />
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
       {/* Stats pills */}
       <div className="flex flex-wrap gap-3">
@@ -360,12 +359,12 @@ export default function Customers() {
             <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
               <TrendingUp className="h-4 w-4 text-blue-500" />
               <span className="text-muted-foreground">Receivable</span>
-                <span className="font-semibold font-mono">{formatHistoricalBaseAmount(totalReceivable)}</span>
+              <span className="font-semibold font-mono">{formatHistoricalBaseAmount(totalReceivable)}</span>
             </div>
             <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-2 text-sm">
               <TrendingDown className="h-4 w-4 text-red-500" />
               <span className="text-muted-foreground">Payable</span>
-                <span className="font-semibold font-mono">{formatHistoricalBaseAmount(totalPayable)}</span>
+              <span className="font-semibold font-mono">{formatHistoricalBaseAmount(totalPayable)}</span>
             </div>
           </>
         )}
@@ -465,13 +464,16 @@ export default function Customers() {
                     </div>
                     {getCustomerCurrencyBalances(customer) &&
                       Object.keys(getCustomerCurrencyBalances(customer)!).length > 0 && (
-                      <div className="mt-1 text-[10px] text-muted-foreground">
-                        Native:{" "}
-                        {Object.entries(getCustomerCurrencyBalances(customer)!)
-                          .map(([currency, value]) => `${currency} ${Math.abs(value.net).toLocaleString(undefined, { maximumFractionDigits: 2 })}`)
-                          .join(" · ")}
-                      </div>
-                    )}
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          Native:{" "}
+                          {Object.entries(getCustomerCurrencyBalances(customer)!)
+                            .map(
+                              ([currency, value]) =>
+                                `${currency} ${Math.abs(value.net).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                            )
+                            .join(" · ")}
+                        </div>
+                      )}
                   </TableCell>
                   <TableCell className="py-3">
                     <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">

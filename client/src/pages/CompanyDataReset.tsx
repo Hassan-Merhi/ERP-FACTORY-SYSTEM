@@ -120,12 +120,10 @@ export default function CompanyDataReset() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div>
-        <PageHeader
-          title="Company Data Reset"
-          subtitle="Clear vouchers and opening balances for selected accounts. Supplier balances are preserved."
-        />
-      </div>
+      <PageHeader
+        title="Company Data Reset"
+        subtitle="Clear vouchers and opening balances for selected accounts. Supplier balances are preserved."
+      />
 
       <Card className="border-destructive/50">
         <CardHeader>

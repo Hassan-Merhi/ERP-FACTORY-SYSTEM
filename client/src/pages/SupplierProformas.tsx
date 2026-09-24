@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ArrowLeft, Plus, Trash2, Upload, Download, FileText, Pencil, Save, X, Star } from "lucide-react";
+import { Plus, Trash2, Upload, Download, FileText, Pencil, Save, X, Star } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "@/lib/excelHelper";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
@@ -339,30 +339,23 @@ export default function SupplierProformas() {
   const totalAmount = lines.reduce((total, line) => total + calculateLineTotal(line.qty, line.pricePerBale), 0);
 
   return (
-    <div className="flex flex-col h-full p-4 lg:p-6 overflow-y-auto">
+    <div className="flex flex-col h-full overflow-y-auto sm:p-4 lg:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileImport} />
 
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <PageHeader title="Supplier Proformas" />
-            <p className="text-muted-foreground text-sm">Manage proformas for supplier #{supplierId}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
-            <Download className="mr-2 h-4 w-4" />
-            Template
-          </Button>
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-proforma">
-            <Plus className="mr-2 h-4 w-4" />
-            New Proforma
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Supplier Proformas"
+        onBack={handleBack}
+        meta={<span>Manage proformas for supplier #{supplierId}</span>}
+      >
+        <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
+          <Download className="mr-2 h-4 w-4" />
+          Template
+        </Button>
+        <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-proforma">
+          <Plus className="mr-2 h-4 w-4" />
+          New Proforma
+        </Button>
+      </PageHeader>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div>

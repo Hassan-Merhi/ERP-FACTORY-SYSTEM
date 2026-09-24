@@ -1,4 +1,3 @@
-import { searchAny } from "@shared/searchNormalization";
 /**
  * Derived state for StockTransferForm.
  *

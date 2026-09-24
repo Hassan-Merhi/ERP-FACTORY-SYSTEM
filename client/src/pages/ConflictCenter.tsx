@@ -190,33 +190,29 @@ export default function ConflictCenter() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <PageHeader title="Conflict Center" icon={<AlertTriangle className="h-5 w-5" />} />
-          <p className="text-sm text-muted-foreground mt-1">
-            Review and resolve sync conflicts between your offline changes and the server.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="btn-refresh-conflicts">
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Refresh
+    <div className="max-w-4xl mx-auto space-y-6 sm:p-6">
+      <PageHeader
+        title="Conflict Center"
+        subtitle="Review and resolve sync conflicts between your offline changes and the server."
+        icon={<AlertTriangle className="h-5 w-5" />}
+      >
+        <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="btn-refresh-conflicts">
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Refresh
+        </Button>
+        {conflicts.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => clearAllMutation.mutate()}
+            disabled={clearAllMutation.isPending}
+            data-testid="btn-dismiss-all-conflicts"
+          >
+            <Trash2 className="h-3 w-3 mr-1" />
+            Dismiss all
           </Button>
-          {conflicts.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => clearAllMutation.mutate()}
-              disabled={clearAllMutation.isPending}
-              data-testid="btn-dismiss-all-conflicts"
-            >
-              <Trash2 className="h-3 w-3 mr-1" />
-              Dismiss all
-            </Button>
-          )}
-        </div>
-      </div>
+        )}
+      </PageHeader>
 
       <Separator />
 

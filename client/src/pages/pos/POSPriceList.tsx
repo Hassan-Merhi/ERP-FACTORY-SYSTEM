@@ -28,11 +28,11 @@ export default function POSPriceList({ posUser }: POSPriceListProps) {
 
       {/* ── Main content ── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* ── Mobile location selector (phones only) ── */}
-        <PriceListMobileLocations model={model} />
-
         {/* ── Title bar ── */}
         <PriceListTitleBar model={model} />
+
+        {/* ── Mobile location selector (phones only) ── */}
+        <PriceListMobileLocations model={model} />
 
         {/* ── Locations visibility strip ── */}
         <PriceListLocationVisibility model={model} />

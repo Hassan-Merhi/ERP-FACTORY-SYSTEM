@@ -13,74 +13,78 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/PageHeader";
 import type { PosPriceListModel } from "./usePosPriceListModel";
 
 export function PriceListTitleBar({ model }: { model: PosPriceListModel }) {
   const { isAllMode, selectedLocation, selectedLocationId, canEdit, masters } = model;
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-      <div className="flex items-center gap-2 min-w-0">
-        <Tag className="w-4 h-4 text-muted-foreground shrink-0" />
-        <h1 className="text-base font-semibold truncate">Price List</h1>
-        {isAllMode ? (
-          <Badge variant="secondary" className="gap-1 shrink-0">
-            <Layers className="w-3 h-3" />
-            All Locations
-          </Badge>
-        ) : selectedLocation ? (
-          <Badge variant="secondary" className="gap-1 shrink-0">
-            <MapPin className="w-3 h-3" />
-            {selectedLocation.name}
-          </Badge>
-        ) : null}
-      </div>
-      {selectedLocationId && (
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          {isAllMode && canEdit && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="button-download-price-template"
-                onClick={model.downloadTemplate}
-                disabled={masters.length === 0}
-                className="gap-1.5 text-muted-foreground"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Template</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="button-upload-price-list"
-                onClick={model.openImportFilePicker}
-                className="gap-1.5 text-muted-foreground"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Upload</span>
-              </Button>
-              <input
-                ref={model.importFileRef}
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={model.handleImportFile}
-                data-testid="input-import-price-file"
-              />
-            </>
-          )}
+    <div className="shrink-0 px-0 pt-3 sm:px-4">
+      <PageHeader
+        title="Price List"
+        icon={<Tag className="h-4 w-4" />}
+        meta={
+          isAllMode ? (
+            <Badge variant="secondary" className="gap-1 shrink-0">
+              <Layers className="w-3 h-3" />
+              All Locations
+            </Badge>
+          ) : selectedLocation ? (
+            <Badge variant="secondary" className="gap-1 shrink-0">
+              <MapPin className="w-3 h-3" />
+              {selectedLocation.name}
+            </Badge>
+          ) : null
+        }
+      >
+        {selectedLocationId && isAllMode && canEdit && (
           <Button
-            variant="ghost"
+            variant="outline"
+            size="sm"
+            data-testid="button-download-price-template"
+            onClick={model.downloadTemplate}
+            disabled={masters.length === 0}
+            className="gap-1.5"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Template
+          </Button>
+        )}
+        {selectedLocationId && isAllMode && canEdit && (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="button-upload-price-list"
+            onClick={model.openImportFilePicker}
+            className="gap-1.5"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Upload
+          </Button>
+        )}
+        {selectedLocationId && (
+          <Button
+            variant="outline"
             size="sm"
             data-testid="button-export-price-list"
             onClick={model.exportToExcel}
             disabled={model.exporting || model.filteredItems.length === 0}
-            className="gap-1.5 text-muted-foreground"
+            className="gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{model.exporting ? "Exporting…" : "Export"}</span>
+            {model.exporting ? "Exporting…" : "Export"}
           </Button>
-        </div>
+        )}
+      </PageHeader>
+      {isAllMode && canEdit && (
+        <input
+          ref={model.importFileRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={model.handleImportFile}
+          data-testid="input-import-price-file"
+        />
       )}
     </div>
   );

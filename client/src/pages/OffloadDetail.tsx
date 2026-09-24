@@ -225,18 +225,17 @@ export default function OffloadDetail() {
       Math.abs(live.transferCharges - storedTransferCharges) >= 0.01);
 
   return (
-    <div className="w-full p-4 sm:p-8 space-y-6">
-      <div className="flex items-start gap-3 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={handleBack} data-testid="button-back-offload">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+    <div className="w-full space-y-6 sm:p-8">
+      <PageHeader
+        title={isLoading ? <Skeleton className="h-7 w-40" /> : offload?.containerNumber}
+        onBack={handleBack}
+        backButtonTestId="button-back-offload"
+        meta={
+          <>
             <Badge variant="outline" className="text-amber-600 border-amber-500 bg-amber-500/10 gap-1">
               <Package className="w-3 h-3" />
               Offload
             </Badge>
-            {isLoading ? <Skeleton className="h-7 w-40" /> : <PageHeader title={offload?.containerNumber} />}
             {offload?.optional && (
               <Badge variant="outline" className="text-red-600 border-red-500 bg-red-500/10 gap-1">
                 <PauseCircle className="w-3 h-3" />
@@ -249,14 +248,15 @@ export default function OffloadDetail() {
                 Vouchers updated since offload
               </Badge>
             )}
-          </div>
-          {offload && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {formatDisplayDate(parseISO(offload.offloadedAt.slice(0, 10)))}
-              {offload.locationName ? ` — ${offload.locationName}` : ""}
-            </p>
-          )}
-        </div>
+            {offload && (
+              <span>
+                {formatDisplayDate(parseISO(offload.offloadedAt.slice(0, 10)))}
+                {offload.locationName ? ` — ${offload.locationName}` : ""}
+              </span>
+            )}
+          </>
+        }
+      >
         {offload && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -300,7 +300,7 @@ export default function OffloadDetail() {
             </AlertDialogContent>
           </AlertDialog>
         )}
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <div className="space-y-3">
