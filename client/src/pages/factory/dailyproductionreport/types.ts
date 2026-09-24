@@ -5,15 +5,22 @@
  */
 
 export type Preset = "today" | "yesterday" | "week" | "month" | "lastmonth" | "year" | "alltime" | "custom";
+export type ProductionValuationMode = "cost" | "selling";
 
 export interface ReportData {
   from: string | null;
   to: string | null;
   costsHidden?: boolean;
+  valuationMode: ProductionValuationMode;
   summary: {
     batchCost: number;
     productionValue: number;
     statusValue: number;
+    sellingValue: number;
+    profitValue: number;
+    profitMarginPct: number;
+    missingSelectedPriceBales: number;
+    missingSellingPriceBales: number;
   };
   production: {
     totalBales: number;
@@ -26,6 +33,7 @@ export interface ReportData {
       qty: number;
       totalWeightKg: number;
       costPricePerBale: number;
+      pricePerBale: number;
       totalValue: number;
     }[];
     byCategory: {
