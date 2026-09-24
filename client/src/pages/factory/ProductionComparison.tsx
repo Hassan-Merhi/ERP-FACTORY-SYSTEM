@@ -161,6 +161,7 @@ export default function ProductionComparison() {
 
   const isLoading = qA.isLoading || qB.isLoading;
   const fetchError = qA.error || qB.error;
+  const costsHidden = Boolean(qA.data?.costsHidden || qB.data?.costsHidden);
 
   const { categories, grades } = useMemo(() => {
     const catSet = new Set<string>();
@@ -262,8 +263,8 @@ export default function ProductionComparison() {
   const kgPct = pctChange(totalAKg, totalBKg);
 
   // ── Profit ──
-  const profitA = qA.data?.summary?.statusValue ?? null;
-  const profitB = qB.data?.summary?.statusValue ?? null;
+  const profitA = costsHidden ? null : (qA.data?.summary?.statusValue ?? null);
+  const profitB = costsHidden ? null : (qB.data?.summary?.statusValue ?? null);
   const profitDiff = profitA != null && profitB != null ? profitA - profitB : null;
 
   // ── Supplier mix breakdown ──
@@ -298,16 +299,16 @@ export default function ProductionComparison() {
         if (ex) {
           if (period === "a") {
             ex.aKg += r.totalKg;
-            ex.aCost += r.totalCost;
+            ex.aCost += r.totalCost ?? 0;
           } else {
             ex.bKg += r.totalKg;
-            ex.bCost += r.totalCost;
+            ex.bCost += r.totalCost ?? 0;
           }
         } else {
           map.set(
             r.supplierName,
             period === "a"
-              ? { supplier: r.supplierName, aKg: r.totalKg, aCost: r.totalCost, bKg: 0, bCost: 0 }
+              ? { supplier: r.supplierName, aKg: r.totalKg, aCost: r.totalCost ?? 0, bKg: 0, bCost: 0 }
               : { supplier: r.supplierName, aKg: 0, aCost: 0, bKg: r.totalKg, bCost: r.totalCost }
           );
         }
@@ -334,9 +335,9 @@ export default function ProductionComparison() {
   }, [supplierBreakdownA, supplierBreakdownB, labelA, labelB]);
 
   const totalSupAKg = supplierBreakdownA.reduce((s, r) => s + r.totalKg, 0);
-  const totalSupACost = supplierBreakdownA.reduce((s, r) => s + r.totalCost, 0);
+  const totalSupACost = supplierBreakdownA.reduce((s, r) => s + (r.totalCost ?? 0), 0);
   const totalSupBKg = supplierBreakdownB.reduce((s, r) => s + r.totalKg, 0);
-  const totalSupBCost = supplierBreakdownB.reduce((s, r) => s + r.totalCost, 0);
+  const totalSupBCost = supplierBreakdownB.reduce((s, r) => s + (r.totalCost ?? 0), 0);
   const totalSupKgDiff = totalSupAKg - totalSupBKg;
   const totalSupCostDiff = totalSupACost - totalSupBCost;
 
@@ -480,7 +481,7 @@ export default function ProductionComparison() {
           </div>
 
           {/* Row 3: Production Profit */}
-          {(profitA != null || profitB != null) && (
+          {!costsHidden && (profitA != null || profitB != null) && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <StatCard
                 title={`${labelA} — Production Profit`}
@@ -540,9 +541,11 @@ export default function ProductionComparison() {
                 <div>
                   <p className="text-sm font-semibold">Raw Material by Supplier</p>
                   <p className="text-xs text-muted-foreground">
-                    Mix batch usage per supplier · {labelA}: {fmtKg(totalSupAKg)} kg / {fmtUsd(totalSupACost)}
+                    Mix batch usage per supplier · {labelA}: {fmtKg(totalSupAKg)} kg
+                    {!costsHidden && <> / {fmtUsd(totalSupACost)}</>}
                     {" · "}
-                    {labelB}: {fmtKg(totalSupBKg)} kg / {fmtUsd(totalSupBCost)}
+                    {labelB}: {fmtKg(totalSupBKg)} kg
+                    {!costsHidden && <> / {fmtUsd(totalSupBCost)}</>}
                   </p>
                 </div>
                 <MultiSelectFilter
@@ -561,11 +564,11 @@ export default function ProductionComparison() {
                   <TableRow>
                     <TableHead>Supplier</TableHead>
                     <TableHead className="text-right">{labelA} — kg</TableHead>
-                    <TableHead className="text-right">{labelA} — cost</TableHead>
+                    {!costsHidden && <TableHead className="text-right">{labelA} — cost</TableHead>}
                     <TableHead className="text-right">{labelB} — kg</TableHead>
-                    <TableHead className="text-right">{labelB} — cost</TableHead>
+                    {!costsHidden && <TableHead className="text-right">{labelB} — cost</TableHead>}
                     <TableHead className="text-right">Kg Diff</TableHead>
-                    <TableHead className="text-right">Cost Diff</TableHead>
+                    {!costsHidden && <TableHead className="text-right">Cost Diff</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -576,25 +579,31 @@ export default function ProductionComparison() {
                       <TableRow key={row.supplier}>
                         <TableCell className="font-medium">{row.supplier}</TableCell>
                         <TableCell className="text-right tabular-nums">{fmtKg(row.aKg)} kg</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">
-                          {fmtUsd(row.aCost)}
-                        </TableCell>
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {fmtUsd(row.aCost)}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right tabular-nums">{fmtKg(row.bKg)} kg</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">
-                          {fmtUsd(row.bCost)}
-                        </TableCell>
+                        {!costsHidden && (
+                          <TableCell className="text-right tabular-nums text-muted-foreground">
+                            {fmtUsd(row.bCost)}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           <DiffCell value={kd} fmt={(n) => `${n > 0 ? "+" : ""}${fmtKg(n)} kg`} />
                         </TableCell>
-                        <TableCell className="text-right">
-                          <DiffCell value={cd} fmt={(n) => `${n > 0 ? "+" : ""}${fmtUsd(Math.abs(n))}`} />
-                        </TableCell>
+                        {!costsHidden && (
+                          <TableCell className="text-right">
+                            <DiffCell value={cd} fmt={(n) => `${n > 0 ? "+" : ""}${fmtUsd(Math.abs(n))}`} />
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
                   {supplierSummary.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-6 text-sm">
+                      <TableCell colSpan={costsHidden ? 4 : 7} className="text-center text-muted-foreground py-6 text-sm">
                         {hasSupplierFilter ? "No data for selected suppliers." : "No mix batch data."}
                       </TableCell>
                     </TableRow>
@@ -607,15 +616,21 @@ export default function ProductionComparison() {
                         Total ({supplierSummary.length} supplier{supplierSummary.length === 1 ? "" : "s"})
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-bold">{fmtKg(totalSupAKg)} kg</TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">{fmtUsd(totalSupACost)}</TableCell>
+                      {!costsHidden && (
+                        <TableCell className="text-right tabular-nums font-bold">{fmtUsd(totalSupACost)}</TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums font-bold">{fmtKg(totalSupBKg)} kg</TableCell>
-                      <TableCell className="text-right tabular-nums font-bold">{fmtUsd(totalSupBCost)}</TableCell>
+                      {!costsHidden && (
+                        <TableCell className="text-right tabular-nums font-bold">{fmtUsd(totalSupBCost)}</TableCell>
+                      )}
                       <TableCell className="text-right font-bold">
                         <DiffCell value={totalSupKgDiff} fmt={(n) => `${n > 0 ? "+" : ""}${fmtKg(n)} kg`} />
                       </TableCell>
-                      <TableCell className="text-right font-bold">
-                        <DiffCell value={totalSupCostDiff} fmt={(n) => `${n > 0 ? "+" : ""}${fmtUsd(Math.abs(n))}`} />
-                      </TableCell>
+                      {!costsHidden && (
+                        <TableCell className="text-right font-bold">
+                          <DiffCell value={totalSupCostDiff} fmt={(n) => `${n > 0 ? "+" : ""}${fmtUsd(Math.abs(n))}`} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   </TableFooter>
                 )}
@@ -636,7 +651,7 @@ export default function ProductionComparison() {
                           <TableHead className="w-[80px]">Period</TableHead>
                           <TableHead>Supplier</TableHead>
                           <TableHead className="text-right">kg Used</TableHead>
-                          <TableHead className="text-right">Cost</TableHead>
+                          {!costsHidden && <TableHead className="text-right">Cost</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -650,9 +665,11 @@ export default function ProductionComparison() {
                             </TableCell>
                             <TableCell className="font-medium text-sm">{r.supplierName}</TableCell>
                             <TableCell className="text-right tabular-nums text-sm">{fmtKg(r.totalKg)} kg</TableCell>
-                            <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                              {fmtUsd(r.totalCost)}
-                            </TableCell>
+                            {!costsHidden && (
+                              <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
+                                {fmtUsd(r.totalCost ?? 0)}
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
