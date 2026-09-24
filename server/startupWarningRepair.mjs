@@ -29,6 +29,12 @@ const SUPPLIER_SYNC_COLUMNS = [
     column: "sub_type",
     ddl: `ALTER TABLE ledger_accounts ADD COLUMN sub_type TEXT`,
   },
+  {
+    table: "user_preferences",
+    column: "factory_net_position_valuation_mode",
+    ddl: `ALTER TABLE user_preferences
+      ADD COLUMN factory_net_position_valuation_mode TEXT NOT NULL DEFAULT 'cost'`,
+  },
 ];
 
 function structuredLog(level, message, detail = {}) {
@@ -66,7 +72,7 @@ async function existingTables(client) {
        FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_name = ANY($1::text[])`,
-    [["exchange_rates", "vouchers", "voucher_entries", "sp_containers", "ledger_accounts"]]
+    [["exchange_rates", "vouchers", "voucher_entries", "sp_containers", "ledger_accounts", "user_preferences"]]
   );
   return new Set(result.rows.map((row) => row.table_name));
 }
