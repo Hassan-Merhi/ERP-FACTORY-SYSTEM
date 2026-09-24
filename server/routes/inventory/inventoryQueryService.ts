@@ -1,4 +1,5 @@
-import { and, asc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { inventory, locations, stockGroups, stockItems } from "@shared/schema";
 
 import { db } from "../../db";
@@ -13,8 +14,12 @@ function buildInventoryConditions(companyId: number, filters: InventoryListFilte
   if (filters.locationId) conditions.push(eq(inventory.locationId, filters.locationId));
   if (filters.stockGroupId) conditions.push(eq(stockItems.stockGroupId, filters.stockGroupId));
   if (filters.search) {
-    const query = `%${filters.search}%`;
-    conditions.push(or(ilike(stockItems.name, query), ilike(stockItems.code, query)));
+    conditions.push(
+      or(
+        punctuationInsensitiveSearch(stockItems.name, filters.search),
+        punctuationInsensitiveSearch(stockItems.code, filters.search)
+      )
+    );
   }
   return and(...conditions);
 }
