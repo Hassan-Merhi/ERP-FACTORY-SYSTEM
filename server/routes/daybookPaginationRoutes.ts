@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../auth";
