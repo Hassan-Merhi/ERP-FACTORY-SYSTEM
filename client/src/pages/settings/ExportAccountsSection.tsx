@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState } from "react";
 import { z } from "zod";
@@ -93,7 +94,7 @@ export function ExportAccountsSection() {
     "factorySupplier",
   ];
 
-  const filtered = allAccounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = allAccounts.filter((a) => searchAny(search, a.name, a.code));
 
   const grouped = filtered.reduce<Record<string, ExportAccount[]>>((acc, account) => {
     const type = account.type || "ledger";
