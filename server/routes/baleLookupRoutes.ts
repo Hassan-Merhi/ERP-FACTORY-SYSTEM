@@ -9,7 +9,7 @@ import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { eq, and, or, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
+import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";

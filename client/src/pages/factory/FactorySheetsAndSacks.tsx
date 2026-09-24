@@ -1,25 +1,45 @@
-import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
-import {useState, useMemo, useEffect} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {queryClient, apiRequest} from "@/lib/queryClient";
-import {useToast} from "@/hooks/use-toast";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Badge} from "@/components/ui/badge";
-import {Card, CardContent} from "@/components/ui/card";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "@/components/ui/alert-dialog";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
-import {PageHeader} from "@/components/PageHeader";
-import {Layers, Plus, Pencil, Trash2, Search, Loader2, Package, ShoppingBag, MinusCircle, PlusCircle, History} from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/PageHeader";
+import {
+  Layers,
+  Plus,
+  Pencil,
+  Trash2,
+  Search,
+  Loader2,
+  Package,
+  ShoppingBag,
+  MinusCircle,
+  PlusCircle,
+  History,
+} from "lucide-react";
 
-import type {SheetsAndSacksItem} from "./factorysheetsandsacks/types";
-import {TYPES, fmt, fmtInt} from "./factorysheetsandsacks/utils";
-import {ItemFormDialog} from "./factorysheetsandsacks/components/ItemFormDialog";
-import {DeductDialog} from "./factorysheetsandsacks/components/DeductDialog";
-import {RestockDialog} from "./factorysheetsandsacks/components/RestockDialog";
-import {MovementLog} from "./factorysheetsandsacks/components/MovementLog";
+import type { SheetsAndSacksItem } from "./factorysheetsandsacks/types";
+import { TYPES, fmt, fmtInt } from "./factorysheetsandsacks/utils";
+import { ItemFormDialog } from "./factorysheetsandsacks/components/ItemFormDialog";
+import { DeductDialog } from "./factorysheetsandsacks/components/DeductDialog";
+import { RestockDialog } from "./factorysheetsandsacks/components/RestockDialog";
+import { MovementLog } from "./factorysheetsandsacks/components/MovementLog";
 export default function FactorySheetsAndSacks() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"stock" | "movements">("stock");
@@ -180,30 +200,34 @@ export default function FactorySheetsAndSacks() {
 
       {/* Tab switcher */}
       {effectiveTab ? (
-      <div className="flex items-center gap-1 border-b">
-        {showStock && <button
-          onClick={() => setActiveTab("stock")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            effectiveTab === "stock"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Layers className="h-4 w-4" />
-          Current Stock
-        </button>}
-        {showMovements && <button
-          onClick={() => setActiveTab("movements")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            effectiveTab === "movements"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <History className="h-4 w-4" />
-          Movement Log
-        </button>}
-      </div>
+        <div className="flex items-center gap-1 border-b">
+          {showStock && (
+            <button
+              onClick={() => setActiveTab("stock")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                effectiveTab === "stock"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Layers className="h-4 w-4" />
+              Current Stock
+            </button>
+          )}
+          {showMovements && (
+            <button
+              onClick={() => setActiveTab("movements")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                effectiveTab === "movements"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <History className="h-4 w-4" />
+              Movement Log
+            </button>
+          )}
+        </div>
       ) : (
         <div className="rounded-md border p-6 text-sm text-muted-foreground">
           No Sheets & Sacks tabs are available for this user.

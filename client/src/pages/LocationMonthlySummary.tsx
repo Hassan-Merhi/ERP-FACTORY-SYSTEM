@@ -86,6 +86,20 @@ interface LocationMonthlySummaryData {
   };
 }
 
+function toSafeNumber(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasActivity(m: MonthlyData) {
+  return (
+    toSafeNumber(m.inwardQty) > 0 ||
+    toSafeNumber(m.outwardQty) > 0 ||
+    toSafeNumber(m.openingQty) !== 0 ||
+    toSafeNumber(m.closingQty) !== 0
+  );
+}
+
 export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe } = {}) {
   const { formatAmount } = useCurrencyContext();
   const { registerCursorNav, clearCursorNav } = useCursorNav();
@@ -149,17 +163,6 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
     },
     enabled: stockItemId > 0,
   });
-
-  const toSafeNumber = (value: unknown): number => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const hasActivity = (m: MonthlyData) =>
-    toSafeNumber(m.inwardQty) > 0 ||
-    toSafeNumber(m.outwardQty) > 0 ||
-    toSafeNumber(m.openingQty) !== 0 ||
-    toSafeNumber(m.closingQty) !== 0;
 
   const visibleRows = useMemo(() => {
     if (!data?.monthlyData) return [];
