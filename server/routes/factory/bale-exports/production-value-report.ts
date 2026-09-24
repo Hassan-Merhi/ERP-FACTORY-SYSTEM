@@ -440,9 +440,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             AND deleted_at        IS NULL
         `),
         db.execute(sql`
-          SELECT
-            COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg,
-            COALESCE(SUM(COALESCE(p.selling_price::numeric, 0)), 0) AS selling_value
+          SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
           FROM   factory_bales        b
           LEFT   JOIN factory_bale_products p ON p.id = b.product_id
           LEFT   JOIN factory_categories    c ON c.id = p.category_id
@@ -455,14 +453,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
       const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
-      const allTimeSellingValue = parseFloat(String(baleAllTimeRow.selling_value ?? "0")) || 0;
 
       const allTimeBlendedCpk = allTimeMixKg > 0 ? allTimeMixCost / allTimeMixKg : 0;
-      const allTimeSellingPerKg = allTimeBaleKg > 0 ? allTimeSellingValue / allTimeBaleKg : 0;
       const blendedCostPerKg = totalMixWeightKg > 0 ? totalMixCost / totalMixWeightKg : 0;
       const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
-      const balanceRatePerKg = valuationMode === "selling" ? allTimeSellingPerKg : allTimeBlendedCpk;
-      const balanceValue = Math.round(balanceWeightKg * balanceRatePerKg * 100) / 100;
+      const balanceValue = Math.round(balanceWeightKg * allTimeBlendedCpk * 100) / 100;
 
       // Production profit must follow the active valuation mode. The selected finished-goods
       // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
@@ -660,11 +655,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Balance on Table is a current-state metric, so its selected valuation rate must
-          // also be all-time/current-state and must not move when the date filter changes.
-          // Cost uses the all-time blended raw-material cost/kg; Selling uses the all-time
-          // average catalog selling value/kg of produced bales.
-          costPerKg: hideReportCosts ? 0 : balanceRatePerKg,
+          // Balance on Table stays on the original all-time blended raw-material cost basis.
+          // The Selling / Cost toggle only changes finished-production valuation.
+          costPerKg: hideReportCosts ? 0 : allTimeBlendedCpk,
           value: hideReportCosts ? 0 : balanceValue,
         },
         summary: {
