@@ -497,7 +497,7 @@ export async function recalculateContainerCosts(
  */
 export function checkFactoryAdmin(req: import("express").Request, res: import("express").Response): boolean {
   const role = req.session?.currentRole as string | undefined;
-  if (["Admin", "Owner", "Developer"].includes(role || "")) return true;
+  if (["Admin", "Developer"].includes(role || "")) return true;
   const overrideUntil = req.session?.factoryAdminOverrideUntil;
   if (overrideUntil && Date.now() < overrideUntil) return true;
   res.status(403).json({
