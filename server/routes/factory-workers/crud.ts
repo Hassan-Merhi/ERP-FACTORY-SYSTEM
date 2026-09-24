@@ -10,7 +10,6 @@ import { parseId, parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
-import { checkFactoryAdmin } from "../factory/_helpers";
 import { eq, and } from "drizzle-orm";
 import {
   factoryWorkers,
@@ -20,7 +19,7 @@ import {
   factoryAttendance,
 } from "@shared/schema";
 
-import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { checkFactoryWorkerContractAccess, getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 
 export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
@@ -242,7 +241,7 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
   // POST /api/factory/workers/:id/end-contract - End contract
   app.post("/api/factory/workers/:id/end-contract", requireAuth, async (req: Request, res: Response) => {
     try {
-      if (!checkFactoryAdmin(req, res)) return;
+      if (!checkFactoryWorkerContractAccess(req, res)) return;
       const companyId = req.body.companyId || getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
