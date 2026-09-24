@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearch } from "wouter";
 import { addDays, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 
-import type { Preset, ReportData } from "./types";
+import type { Preset, ProductionValuationMode, ReportData } from "./types";
 import {
   computeWorkerExpectedSalary,
   lastMonthRange,
@@ -39,6 +40,22 @@ export function useDailyProductionReport() {
   const [customTo, setCustomTo] = useState(todayStr());
   const [workerPayrollOpen, setWorkerPayrollOpen] = useState(false);
   const [empPayrollOpen, setEmpPayrollOpen] = useState(false);
+  const { prefs, updatePref, isPending: isPreferenceSaving } = useUserPreferences();
+  const [valuationMode, setValuationModeState] = useState<ProductionValuationMode>("cost");
+
+  useEffect(() => {
+    if (prefs?.productionOverviewValuationMode) {
+      setValuationModeState(prefs.productionOverviewValuationMode);
+    }
+  }, [prefs?.productionOverviewValuationMode]);
+
+  const setValuationMode = useCallback(
+    (mode: ProductionValuationMode) => {
+      setValuationModeState(mode);
+      updatePref({ productionOverviewValuationMode: mode });
+    },
+    [updatePref]
+  );
 
   const { from, to } = useMemo(() => {
     if (preset === "today") return { from: todayStr(), to: todayStr() };
@@ -85,9 +102,9 @@ export function useDailyProductionReport() {
   }, [stepDates]);
 
   const { data, isLoading } = useQuery<ReportData>({
-    queryKey: ["/api/factory/production-value-report", from, to, "production"],
+    queryKey: ["/api/factory/production-value-report", from, to, "production", valuationMode],
     queryFn: async () => {
-      const params = new URLSearchParams({ view: "production" });
+      const params = new URLSearchParams({ view: "production", valuationMode });
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       const qs = params.toString() ? `?${params.toString()}` : "";
@@ -190,6 +207,8 @@ export function useDailyProductionReport() {
 
   const statusValue = data?.summary.statusValue ?? 0;
   const statusPositive = statusValue >= 0;
+  const profitValue = data?.summary.profitValue ?? 0;
+  const profitPositive = profitValue >= 0;
 
   return {
     activeTab,
@@ -215,6 +234,11 @@ export function useDailyProductionReport() {
     presets,
     statusValue,
     statusPositive,
+    profitValue,
+    profitPositive,
+    valuationMode,
+    setValuationMode,
+    isPreferenceSaving,
   };
 }
 
