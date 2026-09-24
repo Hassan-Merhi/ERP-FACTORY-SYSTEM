@@ -70,6 +70,7 @@ import {
   GroupHistoricalCurrencyError,
   isGroupNetPositionCompany,
 } from "../server/helpers/groupNetPosition";
+import { getDatabaseScopeRuntimeContext } from "../server/services/security/databaseScopeRuntimeContext";
 
 const ready = {
   ready: true,
@@ -107,7 +108,7 @@ describe("Group Net Position", () => {
     harness.erpResponse.mockImplementation(() => baseResponse());
   });
 
-  it("includes only active ERP-side companies and excludes Properties and Factory modes", async () => {
+  it("includes only active ERP-side companies and excludes Supplier Partner, Properties, and Factory modes", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI", companyType: "erp", active: true },
       { id: 2, code: "PROP", name: "Properties", companyType: "properties", active: true },
@@ -119,10 +120,10 @@ describe("Group Net Position", () => {
 
     const result = await calculateGroupNetPosition("2026-09-10");
 
-    expect(harness.erpResponse).toHaveBeenCalledTimes(2);
-    expect(result.companies.map((company) => company.companyName)).toEqual(["GC - LSHI", "HADI"]);
-    expect(result.excludedCompanyTypes).toEqual(["properties", "factory", "factory_v2"]);
-    expect(result.companyCount).toBe(2);
+    expect(harness.erpResponse).toHaveBeenCalledTimes(1);
+    expect(result.companies.map((company) => company.companyName)).toEqual(["HADI"]);
+    expect(result.excludedCompanyTypes).toEqual(["properties", "factory", "factory_v2", "supplier_partner"]);
+    expect(result.companyCount).toBe(1);
   });
 
   it("uses the live ERP Net Position pipeline for the current date", async () => {
@@ -190,6 +191,33 @@ describe("Group Net Position", () => {
     expect(harness.erpResponse.mock.calls[0][0].session.currentCompanyId).toBe(2);
   });
 
+  it("loads every company under that company's own database scope", async () => {
+    harness.getAllCompanies.mockResolvedValue([
+      { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true },
+      { id: 2, code: "B", name: "Beta", companyType: "erp", active: true },
+    ]);
+
+    harness.getHistoricalCurrencyReadiness.mockImplementation(async (companyId: number) => {
+      expect(getDatabaseScopeRuntimeContext()).toMatchObject({ kind: "tenant", companyId });
+      return ready;
+    });
+    harness.erpResponse.mockImplementation((req: any) => {
+      const scope = getDatabaseScopeRuntimeContext();
+      const scopedCompanyId = scope?.kind === "tenant" ? scope.companyId : 0;
+      if (scopedCompanyId !== req.session.currentCompanyId) return baseResponse(0, 0);
+      return req.session.currentCompanyId === 1 ? baseResponse(100, 40) : baseResponse(80, 30);
+    });
+
+    const result = await calculateGroupNetPosition("2026-09-10");
+
+    expect(result.companies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ companyId: 1, forUsTotal: 100, onUsTotal: 40, netPosition: 60 }),
+        expect.objectContaining({ companyId: 2, forUsTotal: 80, onUsTotal: 30, netPosition: 50 }),
+      ])
+    );
+  });
+
   it("blocks the full group snapshot when any included ERP company has unresolved historical FX data", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 8, code: "FX", name: "FX Company", companyType: "erp", active: true },
@@ -209,7 +237,7 @@ describe("Group Net Position", () => {
     expect(harness.erpResponse).not.toHaveBeenCalled();
   });
 
-  it("reconciles group totals to the exact ERP Net Position values returned per company", async () => {
+  it("derives company and group Net Position strictly from What We Have minus What We Owe", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true },
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true },
@@ -224,16 +252,21 @@ describe("Group Net Position", () => {
     expect(result.totals.forUsTotal).toBe(180);
     expect(result.totals.onUsTotal).toBe(70);
     expect(result.totals.sideNetPosition).toBe(110);
-    expect(result.totals.netAdjustments).toBe(-10);
-    expect(result.totals.netPosition).toBe(100);
-    expect(result.companies.find((company) => company.companyId === 2)?.netAdjustment).toBe(-10);
+    expect(result.totals.netAdjustments).toBe(0);
+    expect(result.totals.netPosition).toBe(110);
+    expect(result.companies.find((company) => company.companyId === 2)).toMatchObject({
+      sideNetPosition: 50,
+      netAdjustment: 0,
+      netPosition: 50,
+    });
     expect(result.intercompany.mode).toBe("already-excluded");
     expect(result.intercompany.additionalElimination).toBe(0);
   });
 
-  it("treats Factory and Properties as ineligible for Group Net Position", () => {
+  it("treats Supplier Partner, Factory, and Properties as ineligible for Group Net Position", () => {
     expect(isGroupNetPositionCompany({ active: true, companyType: "erp" } as any)).toBe(true);
-    expect(isGroupNetPositionCompany({ active: true, companyType: "supplier_partner" } as any)).toBe(true);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "retail" } as any)).toBe(true);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "supplier_partner" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory_v2" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "properties" } as any)).toBe(false);
