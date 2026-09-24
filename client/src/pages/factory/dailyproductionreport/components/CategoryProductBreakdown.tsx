@@ -16,6 +16,7 @@ export function CategoryProductBreakdown({
   totalBales,
   totalWeightKg,
   totalValue,
+  hideCosts = false,
 }: {
   categories: { categoryName: string; qty: number; totalWeightKg: number; totalValue: number }[];
   products: {
@@ -30,6 +31,7 @@ export function CategoryProductBreakdown({
   totalBales: number;
   totalWeightKg: number;
   totalValue: number;
+  hideCosts?: boolean;
 }) {
   const [openCats, setOpenCats] = useState<Set<string>>(new Set());
 
@@ -66,7 +68,13 @@ export function CategoryProductBreakdown({
     <div className="overflow-x-auto">
       <div className="space-y-1 min-w-[420px]">
         {/* Header row */}
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 px-2 pb-1 border-b items-center">
+        <div
+          className={
+            hideCosts
+              ? "grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-2 pb-1 border-b items-center"
+              : "grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 px-2 pb-1 border-b items-center"
+          }
+        >
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category</span>
           <Button
             variant="outline"
@@ -83,9 +91,11 @@ export function CategoryProductBreakdown({
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-right w-24">
             Weight
           </span>
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-right w-24">
-            Value
-          </span>
+          {!hideCosts && (
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide text-right w-24">
+              Value
+            </span>
+          )}
         </div>
 
         {categories.map((cat) => {
@@ -98,7 +108,11 @@ export function CategoryProductBreakdown({
             >
               {/* Category row — clickable */}
               <button
-                className="w-full grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-2 py-2 rounded-md hover-elevate text-left items-center"
+                className={
+                  hideCosts
+                    ? "w-full grid grid-cols-[1fr_auto_auto] gap-x-4 px-2 py-2 rounded-md hover-elevate text-left items-center"
+                    : "w-full grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-2 py-2 rounded-md hover-elevate text-left items-center"
+                }
                 onClick={() => toggle(cat.categoryName)}
               >
                 <span className="flex items-center gap-1.5 font-medium text-sm">
@@ -115,7 +129,9 @@ export function CategoryProductBreakdown({
                 </span>
                 <span className="text-sm font-mono text-right w-16">{cat.qty.toLocaleString()}</span>
                 <span className="text-sm font-mono text-right w-24">{fmtKg(cat.totalWeightKg)}</span>
-                <span className="text-sm font-mono font-semibold text-right w-24">{fmtMoney(cat.totalValue)}</span>
+                {!hideCosts && (
+                  <span className="text-sm font-mono font-semibold text-right w-24">{fmtMoney(cat.totalValue)}</span>
+                )}
               </button>
 
               {/* Products sub-table */}
@@ -128,8 +144,8 @@ export function CategoryProductBreakdown({
                         <TableHead className="text-xs">Product</TableHead>
                         <TableHead className="text-xs text-right">Qty</TableHead>
                         <TableHead className="text-xs text-right">Weight</TableHead>
-                        <TableHead className="text-xs text-right">Cost / Bale</TableHead>
-                        <TableHead className="text-xs text-right">Value</TableHead>
+                        {!hideCosts && <TableHead className="text-xs text-right">Cost / Bale</TableHead>}
+                        {!hideCosts && <TableHead className="text-xs text-right">Value</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -143,12 +159,16 @@ export function CategoryProductBreakdown({
                           <TableCell className="text-xs text-right font-mono py-1.5">
                             {fmtKg(p.totalWeightKg)}
                           </TableCell>
-                          <TableCell className="text-xs text-right font-mono py-1.5">
-                            {fmtMoney(p.costPricePerBale)}
-                          </TableCell>
-                          <TableCell className="text-xs text-right font-mono font-semibold py-1.5">
-                            {fmtMoney(p.totalValue)}
-                          </TableCell>
+                          {!hideCosts && (
+                            <TableCell className="text-xs text-right font-mono py-1.5">
+                              {fmtMoney(p.costPricePerBale)}
+                            </TableCell>
+                          )}
+                          {!hideCosts && (
+                            <TableCell className="text-xs text-right font-mono font-semibold py-1.5">
+                              {fmtMoney(p.totalValue)}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -160,11 +180,19 @@ export function CategoryProductBreakdown({
         })}
 
         {/* Totals footer */}
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-2 pt-2 border-t">
+        <div
+          className={
+            hideCosts
+              ? "grid grid-cols-[1fr_auto_auto] gap-x-4 px-2 pt-2 border-t"
+              : "grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-2 pt-2 border-t"
+          }
+        >
           <span className="text-sm font-semibold text-muted-foreground">Totals</span>
           <span className="text-sm font-mono font-bold text-right w-16">{totalBales.toLocaleString()}</span>
           <span className="text-sm font-mono font-bold text-right w-24">{fmtKg(totalWeightKg)}</span>
-          <span className="text-sm font-mono font-bold text-right w-24">{fmtMoney(totalValue)}</span>
+          {!hideCosts && (
+            <span className="text-sm font-mono font-bold text-right w-24">{fmtMoney(totalValue)}</span>
+          )}
         </div>
       </div>
     </div>
