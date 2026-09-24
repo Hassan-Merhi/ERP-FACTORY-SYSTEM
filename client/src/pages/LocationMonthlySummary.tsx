@@ -160,8 +160,16 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
     enabled: stockItemId > 0,
   });
 
+  const toSafeNumber = (value: unknown): number => {
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const hasActivity = (m: MonthlyData) =>
-    m.inwardQty > 0 || m.outwardQty > 0 || m.openingQty !== 0 || m.closingQty !== 0;
+    toSafeNumber(m.inwardQty) > 0 ||
+    toSafeNumber(m.outwardQty) > 0 ||
+    toSafeNumber(m.openingQty) !== 0 ||
+    toSafeNumber(m.closingQty) !== 0;
 
   const visibleRows = useMemo(() => {
     if (!data?.monthlyData) return [];
@@ -178,17 +186,20 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
     [isAllLocationsMode, locationId, navigate, periodFilter.fromDate, stockItemId]
   );
 
-  const fmtQty = (n: number) => {
+  const fmtQty = (value: unknown) => {
+    const n = toSafeNumber(value);
     if (n === 0) return "—";
     return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   };
 
-  const fmtRate = (n: number) => {
+  const fmtRate = (value: unknown) => {
+    const n = toSafeNumber(value);
     if (n === 0) return "—";
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const fmtVal = (n: number) => {
+  const fmtVal = (value: unknown) => {
+    const n = toSafeNumber(value);
     if (n === 0) return "—";
     return formatAmount(n);
   };
