@@ -472,13 +472,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const balanceRatePerKg = valuationMode === "selling" ? allTimeSellingPerKg : allTimeBlendedCpk;
       const balanceValue = Math.round(balanceWeightKg * balanceRatePerKg * 100) / 100;
 
-      // Keep the historical status calculation for existing consumers. The new Overview profit
-      // is catalog gross profit: selling price minus production cost for the exact produced bales.
-      // That makes profit stable when the user switches the display between Selling and Cost.
+      // Production profit must follow the active valuation mode. The selected finished-goods
+      // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
+      // This keeps the KPI, margin and Balance on Table card aligned when the valuation toggle changes.
       const producedMaterialCost = totalBaleWeightKg * allTimeBlendedCpk;
       const statusValue = totalProductionValue - producedMaterialCost;
-      const profitValue = totalSellingValue - totalProductionCostValue;
-      const profitMarginPct = totalSellingValue > 0 ? (profitValue / totalSellingValue) * 100 : 0;
+      const profitValue = statusValue;
+      const profitMarginPct = totalProductionValue > 0 ? (profitValue / totalProductionValue) * 100 : 0;
 
       // ── Kg comparison ──
       const kgDiff = totalBaleWeightKg - totalMixWeightKg;
