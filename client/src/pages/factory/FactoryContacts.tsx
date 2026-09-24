@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -108,14 +109,11 @@ export default function FactoryContacts() {
   });
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return contacts;
+    if (!search.trim()) return contacts;
     return contacts.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.role ?? "").toLowerCase().includes(q) ||
-        (c.notes ?? "").toLowerCase().includes(q) ||
-        c.numbers.some((n) => n.number.includes(q) || n.label.toLowerCase().includes(q))
+        searchAny(search, c.name, c.role, c.notes) ||
+        c.numbers.some((n) => searchAny(search, n.number, n.label))
     );
   }, [contacts, search]);
 

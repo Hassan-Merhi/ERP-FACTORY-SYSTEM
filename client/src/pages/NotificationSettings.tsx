@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -119,7 +120,7 @@ function UserPicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const filtered = users.filter((u) => u.username.toLowerCase().includes(search.toLowerCase()));
+  const filtered = users.filter((u) => searchAny(search, u.username));
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
 import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -133,13 +134,12 @@ function addItemFilters(
     conditions.push(inArray(stockItems.stockGroupId, filters.stockGroupIds));
   }
   if (filters.search) {
-    const pattern = `%${filters.search}%`;
     conditions.push(
       or(
-        ilike(stockItems.code, pattern),
-        ilike(stockItems.name, pattern),
-        ilike(stockGroups.name, pattern),
-        ilike(locations.name, pattern),
+        punctuationInsensitiveSearch(stockItems.code, filters.search),
+        punctuationInsensitiveSearch(stockItems.name, filters.search),
+        punctuationInsensitiveSearch(stockGroups.name, filters.search),
+        punctuationInsensitiveSearch(locations.name, filters.search),
         ...extraSearchConditions
       )!
     );
@@ -163,7 +163,7 @@ async function loadStockIn(
     conditions,
     filters,
     filters.locationIds.length > 0 ? inArray(containerOffloads.locationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(containers.containerNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(containers.containerNumber, filters.search)] : []
   );
 
   const where = and(...conditions);
@@ -260,7 +260,10 @@ async function loadStockOut(
     filters,
     filters.locationIds.length > 0 ? inArray(vouchers.locationId, filters.locationIds) : undefined,
     filters.search
-      ? [ilike(vouchers.voucherNumber, `%${filters.search}%`), ilike(vouchers.locationName, `%${filters.search}%`)]
+      ? [
+          punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search),
+          punctuationInsensitiveSearch(vouchers.locationName, filters.search),
+        ]
       : []
   );
 
@@ -278,7 +281,7 @@ async function loadStockOut(
     noteConditions,
     filters,
     filters.locationIds.length > 0 ? inArray(creditNoteItems.locationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
 
   const salesWhere = and(...salesConditions);

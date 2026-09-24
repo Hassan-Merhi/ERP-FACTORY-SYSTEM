@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { Warehouse, Pencil, MessageCircle, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { InventoryLocation as Location } from "./locationInventoryTypes";
@@ -30,8 +31,7 @@ export function LocationGrid({
 }: LocationGridProps) {
   const filteredLocations = locations.filter((loc) => {
     if (!locationSearchTerm) return true;
-    const s = locationSearchTerm.toLowerCase();
-    return loc.name.toLowerCase().includes(s) || (loc.code && loc.code.toLowerCase().includes(s));
+    return searchAny(locationSearchTerm, loc.name, loc.code);
   });
 
   if (selectedLocationLocal) return null;

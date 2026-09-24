@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useEffect } from "react";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
 import { useLocation } from "wouter";
@@ -195,12 +196,8 @@ export default function SalesReport() {
     const groupKey = !mergeView && isCredit ? `${dateKey}-credit` : dateKey;
 
     // Filter by search term
-    if (searchTerm) {
-      const searchLower = (searchTerm || "").toLowerCase();
-      const matches =
-        (item.stockItemName || "").toLowerCase().includes(searchLower) ||
-        (item.locationName && (item.locationName || "").toLowerCase().includes(searchLower));
-      if (!matches) return acc;
+    if (searchTerm && !searchAny(searchTerm, item.stockItemName, item.locationName)) {
+      return acc;
     }
 
     const existing = acc.find((g) => g.date === groupKey);

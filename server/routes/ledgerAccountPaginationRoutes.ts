@@ -1,9 +1,10 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, asc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { ledgerAccounts } from "@shared/schema";
+import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -75,8 +76,12 @@ export function registerLedgerAccountPaginationRoutes(app: Express): void {
 
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
-        const query = `%${search}%`;
-        conditions.push(or(ilike(ledgerAccounts.name, query), ilike(ledgerAccounts.code, query)));
+        conditions.push(
+          or(
+            punctuationInsensitiveSearch(ledgerAccounts.name, search),
+            punctuationInsensitiveSearch(ledgerAccounts.code, search)
+          )
+        );
       }
 
       const { page, limit, offset } = parsePagination(req);

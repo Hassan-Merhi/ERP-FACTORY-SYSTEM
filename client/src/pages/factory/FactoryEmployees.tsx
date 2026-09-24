@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -230,10 +231,7 @@ export default function FactoryEmployees() {
 
   const filtered = employees
     .filter((e) => {
-      const matchesSearch =
-        !search ||
-        `${e.firstName} ${e.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-        (e.code || "").toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = searchAny(search, `${e.firstName} ${e.lastName}`, e.code);
       const matchesStatus =
         statusFilter === "All" || (statusFilter === "Active" && e.active) || (statusFilter === "Inactive" && !e.active);
       return matchesSearch && matchesStatus;

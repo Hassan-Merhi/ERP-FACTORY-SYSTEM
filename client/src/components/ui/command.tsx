@@ -4,14 +4,23 @@ import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { normalizeSearchText } from "@shared/searchNormalization";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+const normalizedCommandFilter = (value: string, search: string, keywords?: string[]): number => {
+  const needle = normalizeSearchText(search);
+  if (!needle) return 1;
+  const haystack = normalizeSearchText([value, ...(keywords ?? [])].join(" "));
+  return haystack.includes(needle) ? 1 : 0;
+};
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive>
->(({ className, ...props }, ref) => (
+>(({ className, filter = normalizedCommandFilter, ...props }, ref) => (
   <CommandPrimitive
     ref={ref}
+    filter={filter}
     className={cn(
       "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
       className

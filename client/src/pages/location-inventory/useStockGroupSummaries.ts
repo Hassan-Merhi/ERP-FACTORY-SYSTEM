@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo } from "react";
 import type { InventoryItem, StockGroupSummary } from "./locationInventoryTypes";
 
@@ -90,7 +91,7 @@ export function useStockGroupSummaries({
   const filteredStockGroups = useMemo(() => {
     return stockGroups.filter((g) => {
       if (showNegativeStock && !g.items.some((item) => parseFloat(item.quantity || "0") < 0)) return false;
-      if (groupSearchTerm && !g.groupName.toLowerCase().includes(groupSearchTerm.toLowerCase())) return false;
+      if (groupSearchTerm && !searchAny(groupSearchTerm, g.groupName)) return false;
       if (groupCategoryFilter) {
         if (
           !g.items.some((item) => {
@@ -115,11 +116,7 @@ export function useStockGroupSummaries({
           if (!itemCategoryFilter.includes(itemCatId)) return false;
         }
         if (!itemSearchTerm) return true;
-        const s = itemSearchTerm.toLowerCase();
-        return (
-          (item.stockItemName || "").toLowerCase().includes(s) ||
-          (item.stockItemCode || "").toLowerCase().includes(s)
-        );
+        return searchAny(itemSearchTerm, item.stockItemName, item.stockItemCode);
       })
       .sort((a, b) => a.stockItemName.localeCompare(b.stockItemName));
   }, [selectedGroup, itemSearchTerm, itemCategoryFilter, showNegativeStock]);
@@ -130,11 +127,7 @@ export function useStockGroupSummaries({
       .filter((item) => {
         if (showNegativeStock && parseFloat(item.quantity || "0") >= 0) return false;
         if (!itemSearchTerm) return true;
-        const s = itemSearchTerm.toLowerCase();
-        return (
-          (item.stockItemName || "").toLowerCase().includes(s) ||
-          (item.stockItemCode || "").toLowerCase().includes(s)
-        );
+        return searchAny(itemSearchTerm, item.stockItemName, item.stockItemCode);
       })
       .sort(
         (a, b) =>

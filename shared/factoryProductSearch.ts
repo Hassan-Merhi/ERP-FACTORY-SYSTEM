@@ -7,24 +7,9 @@
  * keeps a search for "كيس كريمي" matching a stored "كِيس كريمى".
  */
 
-const ARABIC_DIACRITICS = /[ً-ْٰـ]/g;
-const ARABIC_INDIC_DIGITS = /[٠-٩۰-۹]/g;
+import { normalizeSearchText } from "./searchNormalization";
 
-export function normalizeProductSearchText(value: string | null | undefined): string {
-  if (!value) return "";
-  return value
-    .normalize("NFKC")
-    .replace(ARABIC_DIACRITICS, "")
-    .replace(ARABIC_INDIC_DIGITS, (digit) => String(digit.charCodeAt(0) & 0x0f))
-    .replace(/[آأإٱ]/g, "ا") // alef variants → bare alef
-    .replace(/ى/g, "ي") // alef maksura → yeh
-    .replace(/ة/g, "ه") // teh marbuta → heh
-    .replace(/ؤ/g, "و") // waw hamza → waw
-    .replace(/ئ/g, "ي") // yeh hamza → yeh
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
+export const normalizeProductSearchText = normalizeSearchText;
 
 export interface SearchableFactoryProduct {
   name?: string | null;

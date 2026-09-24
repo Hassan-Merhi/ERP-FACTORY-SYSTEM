@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@/lib/form-resolver";
@@ -311,11 +312,7 @@ export function useJournalFormModel({ voucherIdToEdit, isPOS }: JournalFormProps
   useEffect(() => setLiveAccountSearch(journalAccountSearchTerm), [journalAccountSearchTerm]);
   const filteredJournalAccounts = useMemo(() => {
     if (!journalAccountSearchTerm.trim()) return allAccounts;
-    const term = journalAccountSearchTerm.toLowerCase();
-    return allAccounts.filter(
-      (account) =>
-        (account.name || "").toLowerCase().includes(term) || (account.code || "").toLowerCase().includes(term)
-    );
+    return allAccounts.filter((account) => searchAny(journalAccountSearchTerm, account.name, account.code));
   }, [allAccounts, journalAccountSearchTerm]);
 
   useEffect(() => {

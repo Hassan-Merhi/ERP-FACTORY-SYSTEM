@@ -1,3 +1,5 @@
+import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
+import { normalizeSearchText } from "@shared/searchNormalization";
 import { parseId } from "../lib/parseId";
 import { logger } from "../lib/logger";
 import { requireNonPOS } from "../auth";
@@ -149,13 +151,17 @@ export function registerGlobalTransactionRoutes(app: Express, requireAuth: Reque
       if (search) {
         conditions.push(
           or(
-            ilike(vouchers.voucherNumber, `%${search}%`),
-            ilike(vouchers.description, `%${search}%`),
+            punctuationInsensitiveSearch(vouchers.voucherNumber, String(search)),
+            punctuationInsensitiveSearch(vouchers.description, String(search)),
             // narration search: check if any entry for this voucher matches
             sql`EXISTS (
               SELECT 1 FROM voucher_entries ve
               WHERE ve.voucher_id = ${vouchers.id}
-              AND ve.narration ILIKE ${"%" + search + "%"}
+              AND (
+                ve.narration ILIKE ${"%" + search + "%"}
+                OR regexp_replace(lower(COALESCE(ve.narration, '')), '[^[:alnum:]]+', '', 'g')
+                  LIKE ${"%" + normalizeSearchText(search) + "%"}
+              )
             )`
           )
         );

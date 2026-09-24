@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -71,8 +72,7 @@ export default function StockQuery() {
         .filter(
           (p) =>
             !debouncedSearch.trim() ||
-            p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-            (p.articleCode || p.code).toLowerCase().includes(debouncedSearch.toLowerCase())
+            searchAny(debouncedSearch, p.name, p.articleCode, p.code)
         )
         .map((p) => ({ id: p.id, code: p.articleCode || p.code, name: p.name, active: p.active }))
     : (pagedStockItems?.data ?? []).map((p) => ({ id: p.id, code: p.code, name: p.name, active: p.active }));

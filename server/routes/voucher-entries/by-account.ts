@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 /**
  * voucherEntryRoutes: VoucherEntryByAccount endpoints.
  *
@@ -9,7 +10,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
-import { eq, and, desc, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { parseBoundedPagination, wantsBoundedPagination } from "../../lib/boundedPagination";
 
@@ -42,12 +43,11 @@ export function registerVoucherEntryByAccountRoutes(app: Express) {
       const conditions: SQL[] = [eq(voucherEntries.ledgerAccountId, accountId), eq(vouchers.companyId, companyId)];
       const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 200) : "";
       if (search) {
-        const pattern = `%${search}%`;
         const searchCondition = or(
-          ilike(vouchers.voucherNumber, pattern),
-          ilike(vouchers.voucherType, pattern),
-          ilike(vouchers.description, pattern),
-          ilike(voucherEntries.narration, pattern)
+          punctuationInsensitiveSearch(vouchers.voucherNumber, search),
+          punctuationInsensitiveSearch(vouchers.voucherType, search),
+          punctuationInsensitiveSearch(vouchers.description, search),
+          punctuationInsensitiveSearch(voucherEntries.narration, search)
         );
         if (searchCondition) conditions.push(searchCondition);
       }

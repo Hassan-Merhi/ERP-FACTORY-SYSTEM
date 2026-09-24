@@ -1,5 +1,6 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express, Request } from "express";
-import { and, asc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -62,7 +63,12 @@ async function sendCategories(req: import("express").Request, res: import("expre
   const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const filters = [eq(factoryCategories.companyId, companyId), isNull(factoryCategories.deletedAt)];
   if (query)
-    filters.push(or(ilike(factoryCategories.name, `%${query}%`), ilike(factoryCategories.nameAr, `%${query}%`))!);
+    filters.push(
+      or(
+        punctuationInsensitiveSearch(factoryCategories.name, query),
+        punctuationInsensitiveSearch(factoryCategories.nameAr, query)
+      )!
+    );
 
   const results = await db
     .select()
@@ -79,13 +85,13 @@ async function sendProducts(req: import("express").Request, res: import("express
   if (query) {
     filters.push(
       or(
-        ilike(factoryBaleProducts.articleCode, `%${query}%`),
-        ilike(factoryBaleProducts.name, `%${query}%`),
-        ilike(factoryBaleProducts.nameAr, `%${query}%`),
-        ilike(factoryBaleProducts.description, `%${query}%`),
-        ilike(factoryBaleProducts.descriptionAr, `%${query}%`),
-        ilike(factoryCategories.name, `%${query}%`),
-        ilike(factoryCategories.nameAr, `%${query}%`)
+        punctuationInsensitiveSearch(factoryBaleProducts.articleCode, query),
+        punctuationInsensitiveSearch(factoryBaleProducts.name, query),
+        punctuationInsensitiveSearch(factoryBaleProducts.nameAr, query),
+        punctuationInsensitiveSearch(factoryBaleProducts.description, query),
+        punctuationInsensitiveSearch(factoryBaleProducts.descriptionAr, query),
+        punctuationInsensitiveSearch(factoryCategories.name, query),
+        punctuationInsensitiveSearch(factoryCategories.nameAr, query)
       )!
     );
   }

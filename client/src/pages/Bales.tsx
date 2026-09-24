@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef } from "react";
 import { DeleteConfirmDialog } from "@/components/ConfirmationDialog";
@@ -197,12 +198,8 @@ export default function Bales() {
     createBale.mutate(submitData as InsertBale);
   };
 
-  const filteredBales = bales.filter(
-    (bale) =>
-      (bale.barcode || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-      (bale.category || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-      (bale.grade || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-      (bale.origin || "").toLowerCase().includes((searchTerm || "").toLowerCase())
+  const filteredBales = bales.filter((bale) =>
+    searchAny(searchTerm, bale.barcode, bale.category, bale.grade, bale.origin)
   );
 
   if (!selectedCompany) {

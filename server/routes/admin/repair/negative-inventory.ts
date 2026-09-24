@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 /**
  * adminRepairRoutes: AdminNegativeInventory endpoints.
  *
@@ -57,13 +58,7 @@ export function registerAdminNegativeInventoryRoutes(app: Express) {
       }
 
       if (search) {
-        const s = (search as string).toLowerCase();
-        filtered = filtered.filter(
-          (r) =>
-            r.code.toLowerCase().includes(s) ||
-            r.name.toLowerCase().includes(s) ||
-            r.locationName.toLowerCase().includes(s)
-        );
+        filtered = filtered.filter((r) => searchAny(search, r.code, r.name, r.locationName));
       }
 
       res.json(filtered);

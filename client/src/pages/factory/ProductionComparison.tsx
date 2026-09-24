@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -241,13 +242,8 @@ export default function ProductionComparison() {
         .filter((r) => filterGrades.length === 0 || filterGrades.includes(r.grade))
         .filter((r) => {
           if (!filterProduct) return true;
-          const q = filterProduct.toLowerCase();
           const arabicName = arabicNameByArticle.get(r.articleCode.trim().toUpperCase()) ?? "";
-          return (
-            r.articleCode.toLowerCase().includes(q) ||
-            r.productName.toLowerCase().includes(q) ||
-            arabicName.toLowerCase().includes(q)
-          );
+          return searchAny(filterProduct, r.articleCode, r.productName, arabicName);
         })
         .sort((a, b) => (a.productName || a.articleCode).localeCompare(b.productName || b.articleCode)),
     [mergedAll, filterCategories, filterGrades, filterProduct, arabicNameByArticle]

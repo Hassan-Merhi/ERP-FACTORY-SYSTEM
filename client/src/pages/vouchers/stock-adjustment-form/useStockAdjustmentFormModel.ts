@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -153,9 +154,8 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
 
   const filteredAdjustmentItems = useMemo(() => {
     if (!adjustmentSearchTerm.trim()) return adjustmentItemsWithInventory;
-    const term = adjustmentSearchTerm.toLowerCase();
-    return adjustmentItemsWithInventory.filter(
-      (item) => item.stockItemName?.toLowerCase().includes(term) || item.stockItemCode?.toLowerCase().includes(term)
+    return adjustmentItemsWithInventory.filter((item) =>
+      searchAny(adjustmentSearchTerm, item.stockItemName, item.stockItemCode)
     );
   }, [adjustmentItemsWithInventory, adjustmentSearchTerm]);
 

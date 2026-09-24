@@ -1,3 +1,4 @@
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 /**
  * ledgerRoutesLegacy: LedgerAccountRead endpoints.
  *
@@ -10,7 +11,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, or, asc, isNull, isNotNull, ilike } from "drizzle-orm";
+import { eq, and, or, asc, isNull, isNotNull } from "drizzle-orm";
 
 export function registerLedgerAccountReadRoutes(app: Express) {
   app.get("/api/ledger-accounts", requireAuth, async (req, res) => {
@@ -34,8 +35,11 @@ export function registerLedgerAccountReadRoutes(app: Express) {
           conditions.push(eq(ledgerAccounts.accountType, accountType.trim()));
         }
         if (search && typeof search === "string" && search.trim()) {
-          const q = `%${search.trim()}%`;
-          const searchCondition = or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q));
+          const term = search.trim();
+          const searchCondition = or(
+            punctuationInsensitiveSearch(ledgerAccounts.name, term),
+            punctuationInsensitiveSearch(ledgerAccounts.code, term)
+          );
           if (searchCondition) conditions.push(searchCondition);
         }
         if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
@@ -73,12 +77,14 @@ export function registerLedgerAccountReadRoutes(app: Express) {
           .where(and(...conditions))
           .orderBy(asc(ledgerAccounts.code));
       } else if (search && typeof search === "string" && search.trim()) {
-        // Push search to DB (ILIKE) instead of fetching all accounts and filtering in JS
-        const q = `%${search.trim()}%`;
+        const term = search.trim();
         const searchConds = [
           eq(ledgerAccounts.companyId, effectiveCompanyId),
           isNull(ledgerAccounts.deletedAt),
-          or(ilike(ledgerAccounts.name, q), ilike(ledgerAccounts.code, q)),
+          or(
+            punctuationInsensitiveSearch(ledgerAccounts.name, term),
+            punctuationInsensitiveSearch(ledgerAccounts.code, term)
+          ),
         ];
         if (includeHidden !== "true") searchConds.push(eq(ledgerAccounts.isHidden, false));
         accounts = await db

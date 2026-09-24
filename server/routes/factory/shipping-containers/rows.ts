@@ -1,3 +1,4 @@
+import { normalizeSearchText } from "@shared/searchNormalization";
 /**
  * factoryShippingContainerRoutes: ShippingContainerRow endpoints.
  *
@@ -134,14 +135,22 @@ export function registerShippingContainerRowRoutes(app: Express) {
         clauses.push(`r.order_date <= $${params.length}`);
       }
       if (String(req.query.search || "").trim()) {
-        params.push(`%${String(req.query.search).trim()}%`);
+        const rawSearch = String(req.query.search).trim();
+        params.push(`%${rawSearch}%`);
         const index = params.length;
+        params.push(`%${normalizeSearchText(rawSearch)}%`);
+        const compactIndex = params.length;
         clauses.push(`(
-          COALESCE(co.invoice_number, '') ILIKE $${index}
-          OR COALESCE(c.legal_name, '') ILIKE $${index}
-          OR COALESCE(co.container_number, '') ILIKE $${index}
-          OR COALESCE(co.shipping_company, '') ILIKE $${index}
-          OR COALESCE(co.destination, '') ILIKE $${index}
+          COALESCE(co.invoice_number, '') ILIKE ${index}
+          OR COALESCE(c.legal_name, '') ILIKE ${index}
+          OR COALESCE(co.container_number, '') ILIKE ${index}
+          OR COALESCE(co.shipping_company, '') ILIKE ${index}
+          OR COALESCE(co.destination, '') ILIKE ${index}
+          OR regexp_replace(lower(COALESCE(co.invoice_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          OR regexp_replace(lower(COALESCE(c.legal_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.container_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.shipping_company, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.destination, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
         )`);
       }
       const whereSql = clauses.join(" AND ");

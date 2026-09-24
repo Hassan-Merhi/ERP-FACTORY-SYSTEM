@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo, useEffect } from "react";
 import type { Account } from "@/components/AccountSidebar";
 import type { CombinedAccount } from "@/components/AccountAutocomplete";
@@ -36,23 +37,21 @@ export function useSidebarSync({
   }, [entries]);
 
   const filteredSidebarAccounts = useMemo(() => {
-    const searchLower = sidebarSearchValue.toLowerCase().trim();
+    const hasSearch = sidebarSearchValue.trim().length > 0;
     const matches = sidebarAccounts
       .filter((acc) => {
         if (paymentAccountId > 0 && acc.id === paymentAccountId && acc.type === paymentAccountType) {
           return false;
         }
-        if (acc.type === "employee" && !searchLower) return false;
-        return (
-          (acc.name || "").toLowerCase().includes(searchLower) || (acc.code || "").toLowerCase().includes(searchLower)
-        );
+        if (acc.type === "employee" && !hasSearch) return false;
+        return searchAny(sidebarSearchValue, acc.name, acc.code);
       })
       .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
     // While the user is searching, order stays strictly alphabetical so that the
     // highlighted-on-Enter account is exactly what it has always been. Only the
     // unsearched browse list reorders, where nothing is being matched by typing.
-    if (searchLower || usedAccountKeys.size === 0) return matches;
+    if (hasSearch || usedAccountKeys.size === 0) return matches;
 
     const used: Account[] = [];
     const rest: Account[] = [];

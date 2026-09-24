@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo } from "react";
 import type { CombinedStockRow, InventoryItem } from "./locationInventoryTypes";
 
@@ -88,8 +89,7 @@ export function useCombinedStockRows({
           if (!((row.qtyByLocationName[allStockLocationFilter] || 0) > 0)) return false;
         }
         if (allStockSearchTerm) {
-          const s = allStockSearchTerm.toLowerCase();
-          return row.stockItemName.toLowerCase().includes(s) || row.stockItemCode.toLowerCase().includes(s);
+          return searchAny(allStockSearchTerm, row.stockItemName, row.stockItemCode);
         }
         return true;
       })
