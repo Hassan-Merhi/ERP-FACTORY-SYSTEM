@@ -39,7 +39,7 @@ type NetProfitHandler = (
 
 const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partner"]);
 const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
-const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit", "bank loan"]);
+const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -375,7 +375,7 @@ async function assertHistoricalCurrencyReady(
   asOfDate: string,
   allowedCompanyIds?: ReadonlySet<number>
 ): Promise<void> {
-  await mapWithConcurrency(companies, 3, async (company) => {
+  await mapWithConcurrency(companies, 2, async (company) => {
     const readiness = await runWithGroupCompanyScope(company.id, allowedCompanyIds, () =>
       getHistoricalCurrencyReadiness(company.id, asOfDate)
     );
@@ -398,7 +398,11 @@ export async function calculateGroupNetPosition(
 
   await assertHistoricalCurrencyReady(companies, asOfDate, allowedCompanyIds);
 
-  const companyPositions = await mapWithConcurrency(companies, 3, async (company) => {
+  // Each ERP net-position calculation already runs several DB reads in parallel.
+  // Running multiple companies concurrently can exceed the production pool and
+  // create queue pressure. Serialize company snapshots; the group-level cache
+  // keeps normal navigation fast while explicit Refresh still gets fresh data.
+  const companyPositions = await mapWithConcurrency(companies, 1, async (company) => {
     const snapshot = await runWithGroupCompanyScope(company.id, allowedCompanyIds, () =>
       calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot, allCompanies)
     );

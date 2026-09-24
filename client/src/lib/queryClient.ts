@@ -454,14 +454,11 @@ export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryF
   async ({ queryKey, signal: querySignal }) => {
     // The queryKey is expected to be a single URL string as the first element
     const url = queryKey[0] as string;
-    // Factory accounting pickers must include hidden system accounts such as
-    // Cash and Bank. Other ERP pages retain the normal hidden-account behavior.
-    const requestUrl =
-      typeof window !== "undefined" &&
-      window.location.pathname.startsWith("/factory/") &&
-      url === "/api/ledger-accounts"
-        ? "/api/ledger-accounts?includeHidden=true"
-        : url;
+    // Callers that genuinely need hidden system accounts request
+    // ?includeHidden=true explicitly. Do not globally upgrade every Factory
+    // ledger request: restricted Factory pages may legitimately have no Accounts
+    // access, and the global rewrite caused avoidable 403s.
+    const requestUrl = url;
 
     // Apply a 5-minute hard timeout so queries never hang indefinitely.
     // We race the caller's own signal (query cancellation) against our timeout.

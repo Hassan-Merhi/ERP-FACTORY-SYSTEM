@@ -273,12 +273,12 @@ describe("Group Net Position", () => {
 
     expect(alpha.forUsTotal).toBe(100);
     expect(alpha.forUsLines.map((line) => line.label)).toEqual(["Cash"]);
-    expect(beta.onUsTotal).toBe(0);
-    expect(beta.onUsLines).toEqual([]);
+    expect(beta.onUsTotal).toBe(50);
+    expect(beta.onUsLines.map((line) => line.label)).toEqual(["BANK LOAN"]);
     expect(result.totals).toMatchObject({
       forUsTotal: 180,
-      onUsTotal: 0,
-      netPosition: 180,
+      onUsTotal: 50,
+      netPosition: 130,
       netAdjustments: 0,
     });
   });

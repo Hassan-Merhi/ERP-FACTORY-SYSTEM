@@ -200,6 +200,7 @@ function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition;
 export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
   const { formatHistoricalBaseAmount } = useCurrencyContext();
   const [asOfDate, setAsOfDate] = useState(todayStr());
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
 
   const formatAmount = (amount: number) => {
     if (amount < 0) return `-${formatHistoricalBaseAmount(Math.abs(amount))}`;
@@ -207,12 +208,17 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
   };
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<GroupNetPositionData>({
-    queryKey: ["/api/stats/group-net-position", asOfDate],
+    queryKey: ["/api/stats/group-net-position", asOfDate, refreshGeneration],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/stats/group-net-position?toDate=${encodeURIComponent(asOfDate)}`);
+      const refreshParam = refreshGeneration > 0 ? "&refresh=1" : "";
+      const response = await apiRequest(
+        "GET",
+        `/api/stats/group-net-position?toDate=${encodeURIComponent(asOfDate)}${refreshParam}`
+      );
       if (!response.ok) throw new Error(await response.text());
       return response.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const exportExcel = () => {
@@ -251,7 +257,11 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
               data-testid="input-group-net-position-date"
             />
           </div>
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+          <Button
+            variant="outline"
+            onClick={() => setRefreshGeneration((value) => value + 1)}
+            disabled={isFetching}
+          >
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} /> Refresh
           </Button>
           <Button onClick={exportExcel} disabled={!data}>
