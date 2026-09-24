@@ -245,12 +245,19 @@ export function registerUserAccessRoutes(app: Express) {
         showChatWidget,
         showNotesPanel,
         hiddenTransactionJournalVoucherIds,
+        productionOverviewValuationMode,
       } = req.body;
       if (dateFormat && !["MM/DD/YYYY", "DD/MM/YYYY"].includes(dateFormat)) {
         return res.status(400).json({ message: "Invalid date format" });
       }
       if (preferredCurrency && !["USD", "CFA"].includes(preferredCurrency)) {
         return res.status(400).json({ message: "Invalid currency" });
+      }
+      if (
+        productionOverviewValuationMode !== undefined &&
+        !["cost", "selling"].includes(productionOverviewValuationMode)
+      ) {
+        return res.status(400).json({ message: "Invalid production overview valuation mode" });
       }
       let normalizedHiddenTransactionJournalVoucherIds: number[] | undefined;
       if (hiddenTransactionJournalVoucherIds !== undefined) {
@@ -274,6 +281,9 @@ export function registerUserAccessRoutes(app: Express) {
       if (showProfitComparisonOnPOS !== undefined) updateFields.showProfitComparisonOnPOS = showProfitComparisonOnPOS;
       if (showChatWidget !== undefined) updateFields.showChatWidget = showChatWidget;
       if (showNotesPanel !== undefined) updateFields.showNotesPanel = showNotesPanel;
+      if (productionOverviewValuationMode !== undefined) {
+        updateFields.productionOverviewValuationMode = productionOverviewValuationMode;
+      }
       if (normalizedHiddenTransactionJournalVoucherIds !== undefined) {
         updateFields.hiddenTransactionJournalVoucherIds = normalizedHiddenTransactionJournalVoucherIds;
       }
@@ -288,6 +298,7 @@ export function registerUserAccessRoutes(app: Express) {
             showProfitComparisonOnPOS: showProfitComparisonOnPOS ?? false,
             showChatWidget: showChatWidget ?? true,
             showNotesPanel: showNotesPanel ?? true,
+            productionOverviewValuationMode: productionOverviewValuationMode ?? "cost",
             hiddenTransactionJournalVoucherIds: normalizedHiddenTransactionJournalVoucherIds ?? [],
           })
           .returning();
