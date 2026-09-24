@@ -1,3 +1,4 @@
+import { searchAny } from "@shared/searchNormalization";
 import { useMemo } from "react";
 import { EnrichedContainerRow, EtaFilterValue } from "./gitContainerTypes";
 
@@ -96,14 +97,7 @@ export function useContainerFilters({
         if (notesFilter === "WITH" && !(c.trackingDescription ?? "").trim()) return false;
         if (notesFilter === "WITHOUT" && !!(c.trackingDescription ?? "").trim()) return false;
         if (search) {
-          const q = search.toLowerCase();
-          if (
-            !c.containerNumber.toLowerCase().includes(q) &&
-            !(c.companyName ?? "").toLowerCase().includes(q) &&
-            !(c.numberPlate ?? "").toLowerCase().includes(q) &&
-            !(c.transporter ?? "").toLowerCase().includes(q) &&
-            !(c.agent ?? "").toLowerCase().includes(q)
-          )
+          if (!searchAny(search, c.containerNumber, c.companyName, c.numberPlate, c.transporter, c.agent))
             return false;
         }
         return true;
