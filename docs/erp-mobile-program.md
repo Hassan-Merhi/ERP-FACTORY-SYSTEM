@@ -11,13 +11,13 @@ phase is certified.
 | --- | --- | --- | --- |
 | 1 | Mobile shell and navigation simplification | Complete | #1681, #1711 |
 | 2 | Standard mobile page header | Complete | #1718 |
-| 3 | Mobile filter sheet | Complete | Phase 3 PR |
-| 4 | Mobile cards instead of desktop tables | Complete | Phase 4 PR |
-| 5 | Mobile forms and dialogs | Complete | Phase 5 PR |
-| 6 | Simplify dense ERP screens | Complete | Phase 6 PR |
-| 7 | Mobile actions and touch behaviour | Complete | Phase 7 PR |
-| 8 | Mobile typography and information density | Complete | Phase 8 PR |
-| 9 | ERP route-by-route certification | Pending | — |
+| 3 | Mobile filter sheet | Complete | #1784 |
+| 4 | Mobile cards instead of desktop tables | Complete | #1790 |
+| 5 | Mobile forms and dialogs | Complete | #1793 |
+| 6 | Simplify dense ERP screens | Complete | #1797 |
+| 7 | Mobile actions and touch behaviour | Complete | #1798 |
+| 8 | Mobile typography and information density | Complete | #1799 |
+| 9 | ERP route-by-route certification | Complete | Phase 9 PR |
 | 10 | Mobile polish and final certification | Pending | — |
 
 ## Shared contracts
@@ -204,8 +204,12 @@ Delivered:
 
 - Bottom-sheet dialogs and alert dialogs, with pinned actions, on ERP phones (see Shared
   contracts). `AlertDialogContent` / `AlertDialogFooter` now expose `data-slot` hooks.
-- Page forms get full-width submit rows. Checkbox/radio/switch sizing is fixed, with 44px
-  hit areas kept.
+- Page forms get full-width submit rows. Checkboxes, radios and switches keep a 44px box (the
+  touch target the Mobile Wave 3 gate measures) and draw the familiar 20px box or 24px switch
+  track inside it, instead of Phase 1's large bordered tile.
+- Dialog styling keys off `html[data-app-shell="erp"]`, which `ErpShell` sets only while it is
+  mounted (`useDocumentAppShell`): dialogs portal outside the shell and the stylesheet stays
+  loaded after the user leaves ERP, so Factory, POS and Properties dialogs are unaffected.
 - The voucher entry forms already had a dedicated phone design (tap-to-select rows and a
   sticky totals bar); they were verified unchanged.
 
@@ -213,7 +217,8 @@ Delivered:
 
 Delivered:
 
-- Containers on the way (Tracking, Dashboard, Containers OTW), phones:
+- Containers on the way (Tracking, Dashboard, Containers OTW), narrow portrait phones
+  (`max-sm:`; landscape phones keep the wrapping layout so the table stays reachable):
   - the company scope is two equal segments;
   - the summary cards sit in a two-column grid with truncating labels;
   - the toolbar is a full-width search row, then Filters/Columns, then Track All/Actions.
@@ -223,7 +228,8 @@ Delivered:
   inside equal-width grid columns.
 - GIT tracking tabs (Detail, Truck/Location, Agent/Duty, Summary, Port report, WhatsApp):
   on phones the company mode selector is a two-column segment without the decorative
-  label, and the Detail search gets its own full-width row.
+  label (long labels wrap inside the column), and the Detail search gets its own full-width
+  row.
 
 ## Phase 7 — Mobile actions and touch behaviour
 
@@ -231,11 +237,14 @@ Delivered:
 
 - The floating "My notes" button, which covered page content above the bottom navigation,
   is hidden on ERP phones. The workspace "⋯" sheet offers **My notes** instead, only while
-  the notes panel is enabled for the user (`user-notes:open` event).
+  the notes panel is enabled for the user (`user-notes:open` event). The hide rule is scoped to
+  the ERP shell; other shells keep the button.
 - Hover-revealed row actions (`opacity-0` + `group-hover`) are visible on every ERP route
   on touch devices. Phase 1 had covered five routes explicitly.
 - Activity by Company (Financial overview) no longer nests day-navigation buttons inside a
-  `<button>`. The header is a keyboard-accessible `role="button"` with `aria-expanded`.
+  button. The header is a plain row: a native toggle button (icon, title, chevron,
+  `aria-expanded`) with the KPI badges and day navigator as siblings
+  (`CountryActivityKPI.test.tsx`).
 - Certification found no touch targets under 24px on any phone route. The Phase 1 44px floor
   holds, and Phase 5 restored checkbox/radio/switch visuals while keeping 44px hit areas.
 
@@ -247,9 +256,36 @@ Delivered:
   11px on ERP phones, and at 12px in Arabic. A rendered survey of every ERP route at 360px
   found no visible text under 11px afterwards.
 - ERP rentals (warehouses/shops): the two-metric Outstanding/Credit card spans both phone
-  columns instead of clipping Credit. The page title, actions, stat labels and empty state
+  columns (two of three on landscape phones) instead of clipping Credit. The page title, actions, stat labels and empty state
   are translated in French and Arabic; the empty state and Add button were split
   interpolations the literal translator could not match.
 - Earlier phases carry the rest of the density work: compact headers (2), filter sheets (3),
   two-column card fields (4), bottom-sheet dialogs (5) and dense-screen layouts (6).
+
+## Phase 9 — ERP route-by-route certification
+
+Every ERP route in the certification harness was rendered at 320, 360, 393 and 412px portrait,
+852×393 landscape, 768px tablet and 1440px desktop, in English, French and Arabic, against the
+seeded certification company (`npm run fixture:erp-mobile-program`).
+
+Findings fixed in this phase:
+
+- Tablet (768px): a global `index.css` rule wraps every `.flex.gap-*` container at ≤768px. On
+  column containers that sized children to their max-content width, so page headers and
+  bodies ran past the workspace beside the sidebar (Daybook, Transaction journal, Stock items)
+  and the sidebar footer links wrapped into a second column. ERP column containers (not those
+  that become rows at `sm`/`md`) and explicit `flex-nowrap` rows stay single-line
+  (`[data-erp-shell]`).
+- Page header: the actions column shrinks to what the title leaves (12rem, or half a narrow
+  header) and its buttons wrap, so actions never overlap the title (Price list at 768px).
+- Top bar at 768–1023px: the account chip shows initials only, so the bar fits beside the
+  sidebar.
+- GIT tracking workbook: supplier group rows are keyed (React key warning).
+- AI chatbot settings: the user access and file tables read as cards on phones.
+- Hidden Radix selects are pinned only inside the ERP shell.
+
+Certification result: 1,407 cases (67 routes × 7 viewports × English, French and Arabic),
+0 failures and 0 warnings. The harness checks document overflow, header collisions and
+off-screen header controls, elements escaping the viewport, wide phone tables, filter areas
+that consume the phone screen, touch targets under 24px and console errors.
 
