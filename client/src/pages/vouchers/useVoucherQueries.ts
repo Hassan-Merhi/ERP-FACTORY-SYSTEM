@@ -3,6 +3,7 @@ const PAY_FROM_LEDGER_TYPES = new Set(["Cash", "Bank", "Loans"]);
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { stockItemKeys } from "@/lib/queryKeys";
+import { useAccountingModuleAccess } from "@/hooks/use-accounting-module-access";
 import type {
   BankAccount,
   LedgerAccount,
@@ -47,6 +48,9 @@ export function useVoucherQueries({
     return () => clearTimeout(timer);
   }, [liveAccountSearch]);
 
+  const { canAccessAccounting, accountingAccessReady } = useAccountingModuleAccess(isFactoryCompany);
+  const canLoadAccountingAccounts = !isFactoryCompany || (accountingAccessReady && canAccessAccounting);
+
   const isNormalStockTransfer = activeTab === "transfer";
   const isStockTransferEditor = isNormalStockTransfer || activeTab === "transferorder";
   const loadVoucherAccountData = !isNormalStockTransfer;
@@ -81,7 +85,7 @@ export function useVoucherQueries({
     refetch: refetchBankAccounts,
   } = useQuery<BankAccount[]>({
     queryKey: ["/api/bank-accounts", selectedCompany?.id],
-    enabled: loadVoucherAccountData && !!selectedCompany?.id,
+    enabled: loadVoucherAccountData && !!selectedCompany?.id && canLoadAccountingAccounts,
   });
 
   const {
@@ -94,7 +98,7 @@ export function useVoucherQueries({
     // companyId is embedded in the URL so the server uses the explicit company rather than relying
     // on the session (which may not have updated yet on a company switch).
     queryKey: [`/api/ledger-accounts?includeHidden=true&companyId=${selectedCompany?.id}`, selectedCompany?.id],
-    enabled: loadVoucherAccountData && !!selectedCompany?.id,
+    enabled: loadVoucherAccountData && !!selectedCompany?.id && canLoadAccountingAccounts,
   });
 
   const { data: suppliers = [], isFetched: suppliersFetched } = useQuery<Supplier[]>({
