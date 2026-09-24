@@ -1,3 +1,5 @@
+import { searchAny } from "@shared/searchNormalization";
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import Decimal from "decimal.js";
 import { and, eq, gte, ilike, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
@@ -204,13 +206,12 @@ function addCommonItemFilters(
   if (locationCondition) conditions.push(locationCondition);
   if (filters.stockGroupIds.length > 0) conditions.push(inArray(stockItems.stockGroupId, filters.stockGroupIds));
   if (!filters.search) return;
-  const searchPattern = `%${filters.search}%`;
   conditions.push(
     or(
-      ilike(stockItems.code, searchPattern),
-      ilike(stockItems.name, searchPattern),
-      ilike(stockGroups.name, searchPattern),
-      ilike(locations.name, searchPattern),
+      punctuationInsensitiveSearch(stockItems.code, filters.search),
+      punctuationInsensitiveSearch(stockItems.name, filters.search),
+      punctuationInsensitiveSearch(stockGroups.name, filters.search),
+      punctuationInsensitiveSearch(locations.name, filters.search),
       ...extras
     )!
   );
@@ -219,12 +220,11 @@ function addCommonItemFilters(
 function addTransferItemFilters(conditions: SQL[], filters: StockInSalesReportFilters, extras: SQL[]): void {
   if (filters.stockGroupIds.length > 0) conditions.push(inArray(stockItems.stockGroupId, filters.stockGroupIds));
   if (!filters.search) return;
-  const searchPattern = `%${filters.search}%`;
   conditions.push(
     or(
-      ilike(stockItems.code, searchPattern),
-      ilike(stockItems.name, searchPattern),
-      ilike(stockGroups.name, searchPattern),
+      punctuationInsensitiveSearch(stockItems.code, filters.search),
+      punctuationInsensitiveSearch(stockItems.name, filters.search),
+      punctuationInsensitiveSearch(stockGroups.name, filters.search),
       ...extras
     )!
   );
@@ -245,7 +245,7 @@ async function getStockInRows(filters: StockInSalesReportFilters): Promise<Aggre
     conditions,
     filters,
     filters.locationIds.length > 0 ? inArray(containerOffloads.locationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(containers.containerNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(containers.containerNumber, filters.search)] : []
   );
   return db
     .select({
@@ -279,7 +279,7 @@ async function getTransferInRows(filters: StockInSalesReportFilters): Promise<Ag
   addTransferItemFilters(
     conditions,
     filters,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({
@@ -311,7 +311,7 @@ async function getAdjustmentRows(filters: StockInSalesReportFilters): Promise<Ag
   addTransferItemFilters(
     conditions,
     filters,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({
@@ -345,7 +345,10 @@ async function getSalesRows(filters: StockInSalesReportFilters): Promise<Aggrega
     filters,
     filters.locationIds.length > 0 ? inArray(vouchers.locationId, filters.locationIds) : undefined,
     filters.search
-      ? [ilike(vouchers.voucherNumber, `%${filters.search}%`), ilike(vouchers.locationName, `%${filters.search}%`)]
+      ? [
+          punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search),
+          punctuationInsensitiveSearch(vouchers.locationName, filters.search),
+        ]
       : []
   );
   return db
@@ -382,7 +385,7 @@ async function getTransferOutRows(filters: StockInSalesReportFilters): Promise<A
   addTransferItemFilters(
     conditions,
     filters,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({
@@ -419,7 +422,7 @@ async function getCreditAndDebitNoteRows(filters: StockInSalesReportFilters): Pr
     conditions,
     filters,
     filters.locationIds.length > 0 ? inArray(creditNoteItems.locationId, filters.locationIds) : undefined,
-    filters.search ? [ilike(vouchers.voucherNumber, `%${filters.search}%`)] : []
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
   );
   return db
     .select({
