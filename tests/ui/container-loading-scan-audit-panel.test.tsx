@@ -13,7 +13,17 @@ import { ScannedBalesPanel } from "@/pages/factory/factorycontainerloadingscan/S
 import type { FactoryContainerLoadingScanModel } from "@/pages/factory/factorycontainerloadingscan/useFactoryContainerLoadingScanModel";
 import { translateFactoryContainerLoadingText } from "@/i18n/factoryContainerLoadingTranslations";
 
-const BALES = [
+type TestBale = {
+  id: number;
+  baleReference: string;
+  baleName: string;
+  articleCode: string;
+  weight: string;
+  scannedBy: string | null;
+  scannedAt: string | null;
+};
+
+const BALES: TestBale[] = [
   {
     id: 10,
     baleReference: "REF-10",
@@ -34,7 +44,7 @@ const BALES = [
   },
 ];
 
-function buildModel(bales = BALES): FactoryContainerLoadingScanModel {
+function buildModel(bales: TestBale[] = BALES): FactoryContainerLoadingScanModel {
   return {
     tr: (key: any, params?: Record<string, string | number>) =>
       translateFactoryContainerLoadingText(key, "en", params),
