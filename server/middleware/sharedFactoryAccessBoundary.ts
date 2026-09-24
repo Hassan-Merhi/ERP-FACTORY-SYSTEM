@@ -98,13 +98,29 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
         page(VOUCHERS_PAGE),
       ];
     }
-    return [
+    const accountRequirements = [
       page(ACCOUNTS_PAGE, "hide_tab_accounts_view"),
       page(VOUCHERS_PAGE),
       page("factory/payroll-hub"),
       page("factory/import"),
       page("factory/settings"),
     ];
+
+    // Invoicing needs read-only ledger/bank options for Freight & Charges and
+    // invoice account pickers. Keep mutations excluded so Invoicing access
+    // cannot create/edit/delete accounting records.
+    const isLedgerOrBankRead =
+      ["GET", "HEAD", "OPTIONS"].includes(method) &&
+      (path === "/api/ledger-accounts" ||
+        path.startsWith("/api/ledger-accounts/") ||
+        path === "/api/bank-accounts" ||
+        path.startsWith("/api/bank-accounts/"));
+
+    if (isLedgerOrBankRead) {
+      accountRequirements.push(page("factory/invoicing"));
+    }
+
+    return accountRequirements;
   }
 
   if (path === "/api/daybook" || path.startsWith("/api/daybook/")) {
