@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Loader2,
@@ -35,7 +35,6 @@ import { FactoryStockAllocationV5Dialog5 } from "./factorystockallocationv5/comp
 import { FactoryStockAllocationV5Dialog6 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog6";
 import { FactoryStockAllocationV5Dialog7 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog7";
 import { FactoryStockAllocationV5Dialog8 } from "./factorystockallocationv5/components/FactoryStockAllocationV5Dialog8";
-import { ContainerPlannerPhase1 } from "./factorystockallocationv5/components/ContainerPlannerPhase1";
 
 export default function FactoryStockAllocationV5() {
   const model = useFactoryStockAllocationV5Model();
@@ -115,8 +114,6 @@ export default function FactoryStockAllocationV5() {
     toggleCategory,
     catLabel,
   } = model;
-  const [containerPlannerOpen, setContainerPlannerOpen] = useState(false);
-
   /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="flex h-full min-w-0 flex-col" data-testid="factory-stock-allocation-v5-page">
@@ -136,15 +133,6 @@ export default function FactoryStockAllocationV5() {
         </div>
         <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto sm:items-center">
           <Button
-            variant={containerPlannerOpen ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setContainerPlannerOpen((open) => !open)}
-            data-testid="button-v5-container-planner"
-          >
-            <Container className="h-3.5 w-3.5 mr-1.5" />
-            {containerPlannerOpen ? "Close Planner" : "Container Planner"}
-          </Button>
-          <Button
             variant="outline"
             size="sm"
             onClick={() => setRestoreDialogOpen(true)}
@@ -160,7 +148,6 @@ export default function FactoryStockAllocationV5() {
         </div>
       </div>
 
-      {containerPlannerOpen && <ContainerPlannerPhase1 />}
 
       {/* ── Row 2: Toolbar (search + filters + icon buttons) ──────────────── */}
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2.5 sm:px-4">
