@@ -247,14 +247,17 @@ describe("Group Net Position", () => {
       }
 
       return {
-        ...baseResponse(80, 40, 40),
+        ...baseResponse(80, 90, -10),
         forUs: {
           total: 80,
           accounts: [{ id: 20, name: "Cash", code: "CASH", value: 80, category: "Cash" }],
         },
         onUs: {
-          total: 40,
-          accounts: [{ id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" }],
+          total: 90,
+          accounts: [
+            { id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" },
+            { id: 502, name: "BANK LOAN", code: "BANKLOAN", value: 50, category: "Loans" },
+          ],
         },
       };
     });
