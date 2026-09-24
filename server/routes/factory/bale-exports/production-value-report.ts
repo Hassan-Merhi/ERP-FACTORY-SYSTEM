@@ -34,9 +34,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const currentRole = String(req.session.currentRole ?? req.user?.role ?? "").toLowerCase();
       const isPrivileged = ["admin", "owner", "developer"].includes(currentRole);
-      const isProductionComparisonRequest = req.query.view === "production-comparison";
       let hideComparisonCosts = false;
-      if (isProductionComparisonRequest && !isPrivileged && req.session.userId) {
+      if (!isPrivileged && req.session.userId) {
         const [profile] = await db
           .select({
             hiddenCostFields: factoryUserProfiles.hiddenCostFields,
@@ -532,46 +531,34 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const safeProductRows = hideComparisonCosts
         ? productRows.map((row) => ({
-            articleCode: row.articleCode,
-            productName: row.productName,
-            categoryName: row.categoryName,
-            qty: row.qty,
-            totalWeightKg: row.totalWeightKg,
-            workers: row.workers,
+            ...row,
+            costPricePerBale: 0,
+            totalValue: 0,
           }))
         : productRows;
       const safeCategoryRows = hideComparisonCosts
         ? categoryRows.map((row) => ({
-            categoryName: row.categoryName,
-            qty: row.qty,
-            totalWeightKg: row.totalWeightKg,
+            ...row,
+            totalValue: 0,
           }))
         : categoryRows;
       const safeWgRows = hideComparisonCosts
         ? wgRows.map((row) => ({
-            categoryName: row.categoryName,
-            subType: row.subType,
-            qty: row.qty,
-            totalWeightKg: row.totalWeightKg,
+            ...row,
+            totalValue: 0,
           }))
         : wgRows;
       const safeBatchRows = hideComparisonCosts
         ? correctedBatchRows.map((row) => ({
-            id: row.id,
-            batchCode: row.batchCode,
-            name: row.name,
-            totalWeightKg: row.totalWeightKg,
-            usedKg: row.usedKg,
-            status: row.status,
-            batchDate: row.batchDate,
-            createdAt: row.createdAt,
+            ...row,
+            costPerKg: "0",
+            totalCost: "0",
           }))
         : correctedBatchRows;
       const safeSupplierMixBreakdown = hideComparisonCosts
         ? supplierMixBreakdown.map((row) => ({
-            date: row.date,
-            supplierName: row.supplierName,
-            totalKg: row.totalKg,
+            ...row,
+            totalCost: 0,
           }))
         : supplierMixBreakdown;
 
@@ -582,7 +569,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         production: {
           totalBales,
           totalWeightKg: totalBaleWeightKg,
-          ...(hideComparisonCosts ? {} : { totalValue: totalProductionValue }),
+          totalValue: hideComparisonCosts ? 0 : totalProductionValue,
           byProduct: safeProductRows,
           byCategory: safeCategoryRows,
         },
@@ -592,37 +579,28 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           totalGarbageQty,
           totalGarbageKg,
           totalWeightKg: totalWgWeightKg,
-          ...(hideComparisonCosts ? {} : { totalValue: totalWgValue }),
+          totalValue: hideComparisonCosts ? 0 : totalWgValue,
           rows: safeWgRows,
         },
         rawMaterial: {
           totalBatches: correctedBatchRows.length,
           totalWeightKg: totalMixWeightKg,
           onTableKg: periodOnTableKg,
-          ...(hideComparisonCosts ? {} : { totalCost: totalMixCost, blendedCostPerKg }),
+          totalCost: hideComparisonCosts ? 0 : totalMixCost,
+          blendedCostPerKg: hideComparisonCosts ? 0 : blendedCostPerKg,
           batches: safeBatchRows,
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          ...(
-            hideComparisonCosts
-              ? {}
-              : {
-                  // Use all-time blended cost so the card is never affected by the date filter.
-                  costPerKg: allTimeBlendedCpk,
-                  value: balanceValue,
-                }
-          ),
+          // Use all-time blended cost so the card is never affected by the date filter.
+          costPerKg: hideComparisonCosts ? 0 : allTimeBlendedCpk,
+          value: hideComparisonCosts ? 0 : balanceValue,
         },
-        ...(hideComparisonCosts
-          ? {}
-          : {
-              summary: {
-                batchCost: totalMixCost,
-                productionValue: totalProductionValue,
-                statusValue,
-              },
-            }),
+        summary: {
+          batchCost: hideComparisonCosts ? 0 : totalMixCost,
+          productionValue: hideComparisonCosts ? 0 : totalProductionValue,
+          statusValue: hideComparisonCosts ? 0 : statusValue,
+        },
         kgComparison: {
           producedKg: totalBaleWeightKg,
           mixedKg: totalMixWeightKg,
