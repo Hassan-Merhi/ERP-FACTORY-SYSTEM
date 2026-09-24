@@ -8,7 +8,6 @@ export interface UserPrefs {
   showProfitComparisonOnPOS?: boolean;
   showChatWidget?: boolean;
   showNotesPanel?: boolean;
-  productionOverviewValuationMode?: "cost" | "selling";
 }
 
 export function useUserPreferences() {
