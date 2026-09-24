@@ -232,6 +232,61 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+interface GroupIntercompanyExclusions {
+  accountIds: Set<number>;
+  accountNames: Set<string>;
+}
+
+function normalizeAccountName(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * The shared ERP classifier already excludes accountType=Intercompany. Group
+ * Net Position also has to remove the older ERP intercompany accounts that were
+ * intentionally created as Asset/Liability accounts:
+ *   - child-side configured parentCreditAccountId
+ *   - parent-side "[Subsidiary] Credit" receivables created by PO import
+ *   - IC-TO-* / IC-FROM-* transfer accounts
+ */
+async function getGroupIntercompanyExclusions(
+  companyId: number,
+  allCompanies: readonly CompanyRecord[]
+): Promise<GroupIntercompanyExclusions> {
+  const settings = await storage.getCompanySettings(companyId);
+  const accountIds = new Set<number>();
+  const configuredParentCreditId = Number(settings?.parentCreditAccountId);
+  if (Number.isInteger(configuredParentCreditId) && configuredParentCreditId > 0) {
+    accountIds.add(configuredParentCreditId);
+  }
+
+  const accountNames = new Set(
+    allCompanies
+      .filter((company) => Number(company.parentCompanyId) === companyId)
+      .map((company) => normalizeAccountName(`${company.name} Credit`))
+  );
+
+  return { accountIds, accountNames };
+}
+
+function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercompanyExclusions): boolean {
+  const row = asRecord(account);
+  const id = Number(row.id);
+  const code = String(row.code ?? "").trim().toUpperCase();
+  const name = normalizeAccountName(row.name ?? row.label);
+  const category = normalizeAccountName(row.category);
+
+  if (Number.isInteger(id) && exclusions.accountIds.has(id)) return true;
+  if (exclusions.accountNames.has(name)) return true;
+  if (code.startsWith("IC-TO-") || code.startsWith("IC-FROM-")) return true;
+  if (name.startsWith("inter-company -") || name.includes(" intercompany")) return true;
+  return category === "intercompany";
+}
+
+function accountValue(account: unknown): number {
+  return round2(Number(asRecord(account).value ?? 0) || 0);
+}
+
 function toLineItem(account: unknown, side: "forUs" | "onUs"): NetPositionLineItem {
   const row = asRecord(account);
   return {
@@ -245,7 +300,8 @@ function toLineItem(account: unknown, side: "forUs" | "onUs"): NetPositionLineIt
 async function calculateErpNetPosition(
   companyId: number,
   asOfDate: string,
-  useCurrentSnapshot: boolean
+  useCurrentSnapshot: boolean,
+  allCompanies: readonly CompanyRecord[]
 ): Promise<NetPositionSnapshot> {
   let responseBody: unknown = null;
   let statusCode = 200;
@@ -275,19 +331,33 @@ async function calculateErpNetPosition(
 
   const forUs = asRecord(body.forUs);
   const onUs = asRecord(body.onUs);
-  const forUsTotal = round2(Number(body.forUsTotal ?? forUs.total ?? 0) || 0);
-  const onUsTotal = round2(Number(body.onUsTotal ?? onUs.total ?? 0) || 0);
-  const netPosition = round2(Number(body.netPosition ?? forUsTotal - onUsTotal) || 0);
-  const forUsAccounts = Array.isArray(forUs.accounts) ? forUs.accounts : [];
-  const onUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
+  const rawForUsTotal = round2(Number(body.forUsTotal ?? forUs.total ?? 0) || 0);
+  const rawOnUsTotal = round2(Number(body.onUsTotal ?? onUs.total ?? 0) || 0);
+  const rawForUsAccounts = Array.isArray(forUs.accounts) ? forUs.accounts : [];
+  const rawOnUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
+
+  const exclusions = await getGroupIntercompanyExclusions(companyId, allCompanies);
+  const excludedForUsTotal = round2(
+    rawForUsAccounts
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .reduce((sum, account) => sum + accountValue(account), 0)
+  );
+  const excludedOnUsTotal = round2(
+    rawOnUsAccounts
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .reduce((sum, account) => sum + accountValue(account), 0)
+  );
+  const forUsAccounts = rawForUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
+  const onUsAccounts = rawOnUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
+  const forUsTotal = round2(rawForUsTotal - excludedForUsTotal);
+  const onUsTotal = round2(rawOnUsTotal - excludedOnUsTotal);
+  const netPosition = round2(forUsTotal - onUsTotal);
 
   return {
     forUsTotal,
     onUsTotal,
     netPosition,
-    netPositionLabel: String(
-      body.netPositionLabel ?? (netPosition >= 0 ? "We have more than we owe" : "We owe more than we have")
-    ),
+    netPositionLabel: netPosition >= 0 ? "We have more than we owe" : "We owe more than we have",
     forUsLines: forUsAccounts.map((account) => toLineItem(account, "forUs")),
     onUsLines: onUsAccounts.map((account) => toLineItem(account, "onUs")),
   };
@@ -313,7 +383,8 @@ export async function calculateGroupNetPosition(
   allowedCompanyIds?: ReadonlySet<number>,
   useCurrentSnapshot = false
 ): Promise<GroupNetPositionSnapshot> {
-  const companies = (await storage.getAllCompanies())
+  const allCompanies = await storage.getAllCompanies();
+  const companies = allCompanies
     .filter(isGroupNetPositionCompany)
     .filter((company) => allowedCompanyIds === undefined || allowedCompanyIds.has(company.id))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -322,7 +393,7 @@ export async function calculateGroupNetPosition(
 
   const companyPositions = await mapWithConcurrency(companies, 3, async (company) => {
     const snapshot = await runWithGroupCompanyScope(company.id, allowedCompanyIds, () =>
-      calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot)
+      calculateErpNetPosition(company.id, asOfDate, useCurrentSnapshot, allCompanies)
     );
 
     // Group Net Position is intentionally the aggregate ERP balance sheet:
@@ -367,7 +438,7 @@ export async function calculateGroupNetPosition(
     intercompany: {
       mode: "already-excluded",
       additionalElimination: 0,
-      note: "Intercompany ledger accounts are excluded by the ERP Net Position classifier before each company total is returned, so they are not included in Group Net Position.",
+      note: "Intercompany accounts are excluded from Group Net Position, including legacy IC transfer accounts and linked parent/subsidiary credit accounts.",
     },
   };
 }
