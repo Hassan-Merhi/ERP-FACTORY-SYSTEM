@@ -190,7 +190,11 @@ interface _VouchersProps {
   posUser?: unknown;
 }
 
-export function parseDateLocal(dateStr: string): Date {
+export function parseDateLocal(dateStr: string | null | undefined): Date {
+  if (typeof dateStr !== "string" || dateStr.trim().length === 0) {
+    return new Date();
+  }
+
   const parts = dateStr.split("-");
   if (parts.length === 3) {
     return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
