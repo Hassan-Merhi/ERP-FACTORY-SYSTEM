@@ -108,3 +108,56 @@ export function buildProformaProgress(snapshot: ProformaCapacitySnapshot | null 
       };
     });
 }
+
+
+export interface ProformaCapacityOrderBaleLike {
+  articleCode?: unknown;
+}
+
+/**
+ * Rebuild the current-loading counters from the already-hydrated order cache.
+ * The server's live capacity contract is loading-local when currentOrderId is
+ * present, so a successful one-bale scan can update this snapshot exactly
+ * without another network read. Other tabs/devices still refresh through WS.
+ */
+export function applyCurrentOrderBalesToCapacity(
+  snapshot: ProformaCapacitySnapshot | null | undefined,
+  bales: readonly ProformaCapacityOrderBaleLike[] | null | undefined
+): ProformaCapacitySnapshot | null | undefined {
+  if (!snapshot || !Array.isArray(bales) || snapshot.currentOrderId == null) return snapshot;
+
+  const loadedByArticle = new Map<string, number>();
+  for (const bale of bales) {
+    const normalized = normalizeProformaArticleCode(bale.articleCode);
+    if (!normalized) continue;
+    loadedByArticle.set(normalized, (loadedByArticle.get(normalized) ?? 0) + 1);
+  }
+
+  const articles = proformaCapacityArticles(snapshot).map((article) => {
+    const currentOrderLoadedQty = loadedByArticle.get(article.normalizedArticleCode) ?? 0;
+    const totalConsumedQty = currentOrderLoadedQty;
+    const remainingQty = article.isOnProforma ? Math.max(0, article.requestedQty - totalConsumedQty) : 0;
+    const excessQty = article.isOnProforma ? Math.max(0, totalConsumedQty - article.requestedQty) : 0;
+    return {
+      ...article,
+      currentOrderLoadedQty,
+      siblingLoadedQty: 0,
+      totalConsumedQty,
+      remainingQty,
+      excessQty,
+      isFulfilled: article.isOnProforma && article.requestedQty > 0 && totalConsumedQty >= article.requestedQty,
+      isOverloaded: article.isOnProforma && totalConsumedQty > article.requestedQty,
+    };
+  });
+
+  const onProforma = articles.filter((article) => article.isOnProforma);
+  return {
+    ...snapshot,
+    articles,
+    currentOrderLoadedTotalQty: onProforma.reduce((sum, article) => sum + article.currentOrderLoadedQty, 0),
+    siblingLoadedTotalQty: 0,
+    totalConsumedQty: onProforma.reduce((sum, article) => sum + article.totalConsumedQty, 0),
+    remainingTotalQty: onProforma.reduce((sum, article) => sum + article.remainingQty, 0),
+    excessTotalQty: onProforma.reduce((sum, article) => sum + article.excessQty, 0),
+  };
+}
