@@ -41,6 +41,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       companyType: selectedCompany?.companyType,
       userPresent: true,
       isPOS,
+      userRole: user.role,
     });
 
   if (companyLoading || !selectedCompany) return <AppLoadingState />;
