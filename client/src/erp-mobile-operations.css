@@ -206,29 +206,54 @@
 }
 
 /*
- * Checkboxes, radios and switches are Radix buttons, so the phone 44px button floor above
- * blew them up into large tiles. They keep their visual size; an invisible extension keeps
- * the 44px touch target.
+ * Checkboxes, radios and switches: the Phase 1 44px button floor turned them into large bordered
+ * tiles. The control keeps its 44px box, which is the touch target, and a ::before draws the
+ * familiar control inside it: a 20px box for checkboxes and radios, a 24px track for switches.
+ * Colours follow Radix `data-state`, so checked, indeterminate and disabled states still read.
  */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) {
     position: relative;
-    min-height: 0 !important;
-    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    min-width: 2.75rem !important;
+    border-color: transparent !important;
+    background-color: transparent !important;
   }
 
-  [data-erp-route] button:is([role="checkbox"], [role="radio"]) {
-    height: 1.25rem;
-    width: 1.25rem;
+  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"]) > * {
+    position: relative;
+    z-index: 1;
   }
 
-  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"])::after {
+  [data-erp-route] button:is([role="checkbox"], [role="radio"], [role="switch"])::before {
     content: "";
     position: absolute;
     inset: 50% auto auto 50%;
-    height: 2.75rem;
-    width: 2.75rem;
+    height: 1.25rem;
+    width: 1.25rem;
     transform: translate(-50%, -50%);
+    border: 1px solid hsl(var(--primary));
+    border-radius: 0.25rem;
+  }
+
+  [data-erp-route] button[role="radio"]::before {
+    border-radius: 9999px;
+  }
+
+  [data-erp-route] button[role="checkbox"]:is([data-state="checked"], [data-state="indeterminate"])::before {
+    background-color: hsl(var(--primary));
+  }
+
+  [data-erp-route] button[role="switch"]::before {
+    height: 1.5rem;
+    width: 100%;
+    border: 0;
+    border-radius: 9999px;
+    background-color: hsl(var(--input));
+  }
+
+  [data-erp-route] button[role="switch"][data-state="checked"]::before {
+    background-color: hsl(var(--primary));
   }
 }
 
