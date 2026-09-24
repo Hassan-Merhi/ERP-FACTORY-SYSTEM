@@ -268,6 +268,20 @@
 }
 
 /*
+ * Phone type floor. Desktop-dense micro text (9–10px badges, stat labels, Dr/Cr suffixes)
+ * rises to 11px on ERP phones; Arabic script rises to 12px, where smaller sizes lose legibility.
+ */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-erp-route] :is(.text-\[9px\], .text-\[10px\]) {
+    font-size: 0.6875rem !important;
+  }
+
+  html[dir="rtl"] [data-erp-route] :is(.text-\[9px\], .text-\[10px\], .text-\[11px\]) {
+    font-size: 0.75rem !important;
+  }
+}
+
+/*
  * Hover-revealed row actions (edit/delete icons with opacity-0 + group-hover) cannot be
  * discovered without a pointer that hovers. On touch devices they are always visible, on
  * every ERP route (Phase 1 covered a handful of routes explicitly).
