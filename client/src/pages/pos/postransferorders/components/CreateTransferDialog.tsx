@@ -55,12 +55,11 @@ export function CreateTransferDialog({
   const addedIds = useMemo(() => new Set(items.map((i) => i.stockItemId)), [items]);
 
   const searchMatches = useMemo(() => {
-    const s = itemSearch.toLowerCase().trim();
     return sourceInventory
       .filter((i) => {
         const id = i.stockItemId ?? i.id;
         const name = i.stockItemName ?? i.name ?? "";
-        return id !== undefined && !addedIds.has(id) && name.toLowerCase().includes(s);
+        return id !== undefined && !addedIds.has(id) && searchAny(itemSearch, name, i.stockItemCode, i.code);
       })
       .slice(0, 40);
   }, [itemSearch, sourceInventory, addedIds]);
