@@ -1,5 +1,6 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -101,8 +102,12 @@ export function registerVoucherPaginationRoutes(app: Express): void {
 
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
-        const query = `%${search}%`;
-        conditions.push(or(ilike(vouchers.voucherNumber, query), ilike(vouchers.description, query)));
+        conditions.push(
+          or(
+            punctuationInsensitiveSearch(vouchers.voucherNumber, search),
+            punctuationInsensitiveSearch(vouchers.description, search)
+          )
+        );
       }
 
       const minAmount = Number.parseFloat(String(req.query.minAmount ?? ""));
