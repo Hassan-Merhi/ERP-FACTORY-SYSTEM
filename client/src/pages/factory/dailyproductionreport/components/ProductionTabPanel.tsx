@@ -44,7 +44,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     profitValue,
     valuationMode,
     setValuationMode,
-    isPreferenceSaving,
   } = report;
   const costsHidden = Boolean(data?.costsHidden);
   return (
@@ -121,7 +120,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   variant={valuationMode === "selling" ? "default" : "ghost"}
                   className="h-8 px-3"
                   onClick={() => setValuationMode("selling")}
-                  disabled={isPreferenceSaving}
                   data-testid="button-valuation-selling"
                 >
                   Selling Price
@@ -132,7 +130,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   variant={valuationMode === "cost" ? "default" : "ghost"}
                   className="h-8 px-3"
                   onClick={() => setValuationMode("cost")}
-                  disabled={isPreferenceSaving}
                   data-testid="button-valuation-cost"
                 >
                   Cost Price
