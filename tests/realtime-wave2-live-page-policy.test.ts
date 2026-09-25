@@ -24,12 +24,15 @@ describe("Wave 2 live-page policy", () => {
 
   it("keeps presence heartbeats silent and route invalidation tenant-scoped", () => {
     const applicationRoutes = source("server/routes/applicationRoutes.ts");
+    const writeSignal = source("server/routes/writeInvalidationSignal.ts");
     const realtimePolicy = source("shared/realtimeInvalidation.ts");
     const presenceRoutes = source("server/routes/userPresenceRoutes.ts");
 
     // The write-signal policy lives next to the classifier; the generic
     // middleware must keep delegating the write/no-write decision to it.
-    expect(applicationRoutes.includes("shouldEmitWriteInvalidation(req.method, url)")).toBe(true);
+    expect(applicationRoutes).toContain("registerWriteInvalidationSignal(app);");
+    expect(writeSignal.includes("shouldEmitWriteInvalidation(req.method, url)")).toBe(true);
+    expect(writeSignal).toContain("{ companyId, excludeRealtimeClientId: realtimeClientId || null }");
     expect(realtimePolicy).toContain('path === "/api/user-presence"');
     expect(realtimePolicy).toContain('path.startsWith("/api/user-presence/")');
     expect(presenceRoutes).toContain('if (type === "route_change")');

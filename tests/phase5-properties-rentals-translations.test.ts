@@ -7,8 +7,8 @@ import {
 
 describe("Phase 5 Properties and Rentals translations", () => {
   it("covers every reviewed user-facing phrase exactly once", () => {
-    expect(propertiesRentalsPhase5Translations).toHaveLength(182);
-    expect(new Set(propertiesRentalsPhase5Translations.map((entry) => entry.en)).size).toBe(182);
+    expect(propertiesRentalsPhase5Translations).toHaveLength(186);
+    expect(new Set(propertiesRentalsPhase5Translations.map((entry) => entry.en)).size).toBe(186);
 
     for (const entry of propertiesRentalsPhase5Translations) {
       expect(entry.en.trim()).not.toBe("");
@@ -22,6 +22,17 @@ describe("Phase 5 Properties and Rentals translations", () => {
     expect(translatePhase5PropertiesRentalsText("Monthly Rental Amount *", "fr")).toBe("Montant du loyer mensuel *");
     expect(translatePhase5PropertiesRentalsText("Guarantee applied to rent", "ar")).toBe("تم استخدام الضمان كإيجار");
     expect(translatePhase5PropertiesRentalsText("Payment scheduled", "fr")).toBe("Paiement programmé");
+  });
+
+  it("translates the rentals stat labels and per-unit-type empty states", () => {
+    expect(translatePhase5PropertiesRentalsText("OUTSTANDING", "ar")).toBe("المستحق");
+    expect(translatePhase5PropertiesRentalsText("CREDIT", "fr")).toBe("CRÉDIT");
+    expect(translatePhase5PropertiesRentalsText("No warehouses yet. Add your first unit above.", "ar")).toBe(
+      "لا توجد مستودعات بعد. أضف أول وحدة أعلاه."
+    );
+    expect(translatePhase5PropertiesRentalsText("No shops yet. Add your first unit above.", "fr")).toBe(
+      "Aucune boutique pour l’instant. Ajoutez votre première unité ci-dessus."
+    );
   });
 
   it("preserves dynamic amounts, dates, contract ids and unit references", () => {
