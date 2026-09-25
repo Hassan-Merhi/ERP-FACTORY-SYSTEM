@@ -191,7 +191,11 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
         route: req.body?.route,
       });
       res.setHeader("Cache-Control", "no-store");
-      res.json({ enabled: isRemoteSupportEnabled("remoteControl"), session: serializeSession(session) });
+      if (!session) {
+        res.status(204).end();
+        return;
+      }
+      res.json({ session: serializeSession(session) });
     } catch (error) {
       handleSessionError(error, res);
     }
