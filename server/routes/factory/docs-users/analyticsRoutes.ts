@@ -221,29 +221,22 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
 
       const profitFilter =
         profit === "profitable"
-          ? sql`ar.profit_amount > 0`
+          ? sql`ir.profit_amount > 0`
           : profit === "loss"
-            ? sql`ar.profit_amount < 0`
+            ? sql`ir.profit_amount < 0`
             : profit === "break-even"
-              ? sql`ABS(ar.profit_amount) < 0.005`
+              ? sql`ABS(ir.profit_amount) < 0.005`
               : sql`TRUE`;
 
-      // Aggregate order lines and sold-bale costs once, then paginate in SQL.
-      // The previous implementation ran three correlated bale subqueries for
-      // every item row and loaded the entire result set before slicing it.
-      // On real Factory data that took 26-30s and hit the request timeout.
+      // Build order-level item totals first, then roll them up to one row per
+      // article. Customer totals are kept separately for the Qty hover card.
       const queryResult = await db.execute(sql`
         WITH filtered_orders AS MATERIALIZED (
           SELECT
             co.id AS order_id,
-            co.invoice_number,
             co.order_date,
-            co.status,
             co.customer_id,
-            c.legal_name AS customer_name,
-            co.destination,
-            co.location_id,
-            l.name AS location_name
+            c.legal_name AS customer_name
           FROM customer_orders co
           LEFT JOIN customers c ON c.id = co.customer_id
           LEFT JOIN locations l ON l.id = co.location_id
@@ -252,14 +245,9 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         line_totals AS MATERIALIZED (
           SELECT
             fo.order_id,
-            fo.invoice_number,
             fo.order_date,
-            fo.status,
             fo.customer_id,
             fo.customer_name,
-            fo.destination,
-            fo.location_id,
-            fo.location_name,
             col.article_code,
             MAX(col.bale_name) AS item_name,
             COALESCE(SUM(col.qty), 0)::int AS qty,
@@ -278,14 +266,9 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
           WHERE ${lineFilter}
           GROUP BY
             fo.order_id,
-            fo.invoice_number,
             fo.order_date,
-            fo.status,
             fo.customer_id,
             fo.customer_name,
-            fo.destination,
-            fo.location_id,
-            fo.location_name,
             col.article_code
         ),
         bale_totals AS MATERIALIZED (
@@ -317,53 +300,100 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             ON bt.order_id = lt.order_id
            AND bt.article_code = lt.article_code
         ),
-        filtered_rows AS MATERIALIZED (
-          SELECT ar.*
+        item_rows AS MATERIALIZED (
+          SELECT
+            ar.article_code,
+            MAX(ar.item_name) AS item_name,
+            MAX(ar.category) AS category,
+            MAX(ar.grade) AS grade,
+            MAX(ar.order_date) AS last_order_date,
+            COALESCE(SUM(ar.qty), 0)::int AS qty,
+            COALESCE(SUM(ar.total_weight_kg), 0) AS total_weight_kg,
+            COALESCE(SUM(ar.sales_amount), 0) AS sales_amount,
+            COALESCE(SUM(ar.cost_amount), 0) AS cost_amount,
+            COALESCE(SUM(ar.profit_amount), 0) AS profit_amount
           FROM analytics_rows ar
+          GROUP BY ar.article_code
+        ),
+        filtered_item_rows AS MATERIALIZED (
+          SELECT ir.*
+          FROM item_rows ir
           WHERE ${profitFilter}
+        ),
+        customer_totals AS MATERIALIZED (
+          SELECT
+            ar.article_code,
+            ar.customer_id,
+            ar.customer_name,
+            COALESCE(SUM(ar.qty), 0)::int AS qty,
+            COALESCE(SUM(ar.sales_amount), 0) AS sales_amount,
+            COUNT(DISTINCT ar.order_id)::int AS orders
+          FROM analytics_rows ar
+          JOIN filtered_item_rows fir ON fir.article_code = ar.article_code
+          GROUP BY ar.article_code, ar.customer_id, ar.customer_name
+        ),
+        customer_breakdowns AS MATERIALIZED (
+          SELECT
+            ct.article_code,
+            COUNT(*)::int AS customer_count,
+            jsonb_agg(
+              jsonb_build_object(
+                'customerId', ct.customer_id,
+                'customerName', ct.customer_name,
+                'qty', ct.qty,
+                'salesAmount', ct.sales_amount,
+                'orders', ct.orders
+              )
+              ORDER BY ct.qty DESC, ct.sales_amount DESC, ct.customer_name
+            ) AS customer_breakdown
+          FROM customer_totals ct
+          GROUP BY ct.article_code
         )
         SELECT
           COALESCE((
             SELECT jsonb_build_object(
-              'totalOrders', COUNT(DISTINCT fr.order_id),
-              'uniqueCustomers', COUNT(DISTINCT fr.customer_id),
-              'totalBales', COALESCE(SUM(fr.qty), 0),
-              'totalWeightKg', COALESCE(SUM(fr.total_weight_kg), 0),
-              'totalSales', COALESCE(SUM(fr.sales_amount), 0),
-              'totalCost', COALESCE(SUM(fr.cost_amount), 0),
-              'grossProfit', COALESCE(SUM(fr.profit_amount), 0)
+              'totalOrders', (
+                SELECT COUNT(DISTINCT ar.order_id)
+                FROM analytics_rows ar
+                JOIN filtered_item_rows fir ON fir.article_code = ar.article_code
+              ),
+              'uniqueCustomers', (
+                SELECT COUNT(DISTINCT ar.customer_id)
+                FROM analytics_rows ar
+                JOIN filtered_item_rows fir ON fir.article_code = ar.article_code
+              ),
+              'totalBales', COALESCE(SUM(fir.qty), 0),
+              'totalWeightKg', COALESCE(SUM(fir.total_weight_kg), 0),
+              'totalSales', COALESCE(SUM(fir.sales_amount), 0),
+              'totalCost', COALESCE(SUM(fir.cost_amount), 0),
+              'grossProfit', COALESCE(SUM(fir.profit_amount), 0)
             )
-            FROM filtered_rows fr
+            FROM filtered_item_rows fir
           ), '{}'::jsonb) AS summary,
           COALESCE((
             SELECT jsonb_agg(row_to_json(paged))
             FROM (
               SELECT
-                fr.order_id AS "orderId",
-                fr.invoice_number AS "invoiceNumber",
-                fr.order_date AS "orderDate",
-                fr.status,
-                fr.customer_id AS "customerId",
-                fr.customer_name AS "customerName",
-                fr.destination,
-                fr.location_id AS "locationId",
-                fr.location_name AS "locationName",
-                fr.article_code AS "articleCode",
-                fr.item_name AS "itemName",
-                fr.category,
-                fr.grade,
-                fr.qty,
-                fr.total_weight_kg AS "totalWeightKg",
-                fr.sales_amount AS "salesAmount",
-                fr.cost_amount AS "costAmount",
-                fr.profit_amount AS "profitAmount"
-              FROM filtered_rows fr
-              ORDER BY fr.order_date DESC, fr.order_id DESC, fr.article_code
+                fir.article_code AS "articleCode",
+                fir.item_name AS "itemName",
+                fir.category,
+                fir.grade,
+                fir.last_order_date AS "orderDate",
+                fir.qty,
+                fir.total_weight_kg AS "totalWeightKg",
+                fir.sales_amount AS "salesAmount",
+                fir.cost_amount AS "costAmount",
+                fir.profit_amount AS "profitAmount",
+                COALESCE(cb.customer_count, 0) AS "customerCount",
+                COALESCE(cb.customer_breakdown, '[]'::jsonb) AS "customerBreakdown"
+              FROM filtered_item_rows fir
+              LEFT JOIN customer_breakdowns cb ON cb.article_code = fir.article_code
+              ORDER BY fir.sales_amount DESC, fir.qty DESC, fir.article_code
               LIMIT ${safePageSize}
               OFFSET ${offset}
             ) paged
           ), '[]'::jsonb) AS rows,
-          (SELECT COUNT(*)::int FROM filtered_rows) AS total_rows
+          (SELECT COUNT(*)::int FROM filtered_item_rows) AS total_rows
       `);
 
       type AggregateSummary = {
@@ -375,25 +405,26 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         totalCost?: number | string;
         grossProfit?: number | string;
       };
-      type AggregateRow = {
-        orderId: number;
-        invoiceNumber: string | null;
-        orderDate: string;
-        status: string;
-        customerId: number;
+      type CustomerBreakdown = {
+        customerId: number | null;
         customerName: string | null;
-        destination: string | null;
-        locationId: number | null;
-        locationName: string | null;
+        qty: number | string;
+        salesAmount: number | string;
+        orders: number | string;
+      };
+      type AggregateRow = {
         articleCode: string;
         itemName: string;
         category: string | null;
         grade: string | null;
+        orderDate: string;
         qty: number | string;
         totalWeightKg: number | string;
         salesAmount: number | string;
         costAmount: number | string;
         profitAmount: number | string;
+        customerCount: number | string;
+        customerBreakdown: CustomerBreakdown[] | null;
       };
       type AggregateResult = {
         summary: AggregateSummary | null;
@@ -410,6 +441,13 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         const salesAmount = Number(row.salesAmount || 0);
         const costAmount = Number(row.costAmount || 0);
         const profitAmount = Number(row.profitAmount || 0);
+        const customerBreakdown = (row.customerBreakdown ?? []).map((customerRow) => ({
+          customerId: customerRow.customerId,
+          customerName: customerRow.customerName,
+          qty: Number(customerRow.qty || 0),
+          salesAmount: Number(customerRow.salesAmount || 0),
+          orders: Number(customerRow.orders || 0),
+        }));
         return {
           ...row,
           qty,
@@ -417,6 +455,8 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
           salesAmount,
           costAmount,
           profitAmount,
+          customerCount: Number(row.customerCount || customerBreakdown.length),
+          customerBreakdown,
           profitPct: salesAmount !== 0 ? (profitAmount / salesAmount) * 100 : 0,
           profitPerBale: qty !== 0 ? profitAmount / qty : 0,
           avgSellingPrice: qty !== 0 ? salesAmount / qty : 0,
