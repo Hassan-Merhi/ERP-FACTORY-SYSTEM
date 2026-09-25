@@ -112,6 +112,8 @@ vi.mock("@tanstack/react-query", () => ({
       } catch (error) {
         config.onError?.(error, value);
         return undefined;
+      } finally {
+        config.onSettled?.();
       }
     }),
   }),
@@ -284,6 +286,89 @@ describe("factory container loading scan behavior", () => {
       )
     ).toBe(false);
     expect(localStorage.getItem("lastScannedBale_77")).toBeNull();
+  });
+
+  it("submits only one request when duplicate scanner Enter events arrive in the same render", async () => {
+    let resolveScan!: (value: unknown) => void;
+    harness.apiRequest.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = resolve;
+        }) as Promise<any>
+    );
+
+    render(<FactoryContainerLoadingScan />);
+    const input = await screen.findByTestId("input-scan-code");
+    fireEvent.change(input, { target: { value: "REF-DUP" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      harness.apiRequest.mock.calls.filter(
+        ([method, url]) => method === "POST" && url === "/api/factory/customer-orders/77/bales"
+      )
+    ).toHaveLength(1);
+
+    resolveScan({
+      json: async () => ({
+        ...orderDetail,
+        bales: [
+          ...orderDetail.bales,
+          { id: 12, baleReference: "REF-DUP", baleName: "Shirts", articleCode: "A1", weight: "48" },
+        ],
+      }),
+    });
+  });
+
+  it("arms an overload bypass without automatically replaying the rejected scan", async () => {
+    const overloadError = Object.assign(new Error("Quantity exceeded (2/2). Scan again to bypass."), {
+      status: 400,
+      overloaded: true,
+    });
+    harness.apiRequest
+      .mockRejectedValueOnce(overloadError)
+      .mockResolvedValueOnce({
+        json: async () => ({
+          ...orderDetail,
+          bales: [
+            ...orderDetail.bales,
+            { id: 13, baleReference: "REF-OVER", baleName: "Shirts", articleCode: "A1", weight: "48" },
+          ],
+        }),
+      });
+
+    render(<FactoryContainerLoadingScan />);
+    const input = await screen.findByTestId("input-scan-code");
+    fireEvent.change(input, { target: { value: "REF-OVER" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(
+        harness.apiRequest.mock.calls.filter(
+          ([method, url]) => method === "POST" && url === "/api/factory/customer-orders/77/bales"
+        )
+      ).toHaveLength(1)
+    );
+
+    // The soft 400 only arms confirmation. No client-side retry happens.
+    await Promise.resolve();
+    expect(
+      harness.apiRequest.mock.calls.filter(
+        ([method, url]) => method === "POST" && url === "/api/factory/customer-orders/77/bales"
+      )
+    ).toHaveLength(1);
+
+    fireEvent.change(input, { target: { value: "REF-OVER" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenLastCalledWith("POST", "/api/factory/customer-orders/77/bales", {
+        scanCode: "REF-OVER",
+        locationId: 11,
+        allowBypassProforma: undefined,
+        allowBypassOverload: true,
+      })
+    );
   });
 
   it("passes the explicit proforma bypass flag when Ignore Proforma is enabled", async () => {
