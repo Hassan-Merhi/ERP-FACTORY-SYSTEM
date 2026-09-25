@@ -317,10 +317,12 @@
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   html[data-app-shell="erp"] [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
   html[data-app-shell="erp"] [role="alertdialog"][data-slot="alert-dialog-content"] {
-    inset: auto 0 0 0 !important;
+    /* Lifted above the on-screen keyboard and capped to what the user can see
+       (useVisualViewportMetrics), so the pinned actions stay reachable while typing. */
+    inset: auto 0 var(--erp-keyboard-inset, 0px) 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    max-height: calc(var(--app-viewport-height, 100dvh) - 0.75rem) !important;
+    max-height: calc(var(--erp-visual-viewport-height, var(--app-viewport-height, 100dvh)) - 0.75rem) !important;
     transform: none !important;
     border-width: 1px 0 0 !important;
     border-radius: 1rem 1rem 0 0 !important;
@@ -346,6 +348,24 @@
     box-shadow:
       -1rem 0 0 hsl(var(--background)),
       1rem 0 0 hsl(var(--background));
+  }
+
+  /* Column dialogs with their own scrolling body (header / body / footer) must let that body
+     shrink below its content height, or the footer is pushed out of the capped sheet. */
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]:is(.flex-col, [class*="flex-col"])
+    > :is(
+      [class*="overflow-y-auto"],
+      [class*="overflow-auto"],
+      [data-slot="dialog-body"],
+      [data-radix-scroll-area-viewport]
+    ) {
+    min-height: 0;
+  }
+
+  /* Bottom sheets (filters, page menu, pickers) sit above the keyboard too. */
+  html[data-app-shell="erp"] [data-slot="sheet-content"][data-sheet-side="bottom"] {
+    bottom: var(--erp-keyboard-inset, 0px);
   }
 
   /* Two actions (Cancel + primary) share one row, primary on the trailing side. */
@@ -587,6 +607,12 @@ table[data-mobile-cards="true"] > tfoot > tr > * {
   [data-erp-shell] .flex.flex-col:is(.gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]),
   [data-erp-shell] .flex.flex-nowrap:is(.gap-2, .gap-3, .gap-4) {
     flex-wrap: nowrap;
+  }
+
+  /* The off-canvas sidebar portals outside the shell; the same wrap split its height-capped
+     column into two squeezed columns (pinned pages beside the sections). */
+  [data-slot="sidebar-content"] {
+    flex-wrap: nowrap !important;
   }
 }
 

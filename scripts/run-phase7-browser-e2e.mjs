@@ -626,11 +626,10 @@ try {
         [fixture.companies.erp, fixture.erp.locationId, fixture.erp.stockItemId],
       );
       await openRoute(phonePage, "/tracking");
-      await tapTestId(phonePage, "button-sidebar-toggle");
-      await tapTestId(phonePage, "button-section-inventory");
-      await tapTestId(phonePage, "link-/inventory");
+      // Phones navigate from the bottom navigation (More holds every other page).
+      await tapTestId(phonePage, "mobile-nav-inventory");
       const path = await phonePage.evaluate(() => window.location.pathname);
-      if (path !== "/inventory") throw new Error(`Sidebar navigation landed on ${path}`);
+      if (path !== "/inventory") throw new Error(`Phone navigation landed on ${path}`);
       await tapTestId(phonePage, `card-location-${fixture.erp.locationId}`);
       const expected = `${Number(stock.quantity)}BL`;
       await waitForText(phonePage, "#main-content", expected);

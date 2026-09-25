@@ -305,3 +305,33 @@ Known issues outside this program (unchanged by it, red on `main`): the Reposito
 `applicationRoutes.ts` line cap, the CI-only frontend failures in `phase4-split-pages` and
 `period-filter`, Backend / Database Tests, and the github-advanced-security setup step.
 
+
+## Real-device remediation
+
+A follow-up program for the screens that still felt desktop-first on real phones. Each phase
+lands as its own commit; the status of every reported item is tracked at the end of this
+section.
+
+### R1 — Shared navigation and dialog foundations
+
+- **One phone navigation model.** The bottom navigation keeps its four areas (Tracking,
+  Inventory, Sales, Accounts). **More** now opens the grouped page menu
+  (`ErpMobileNavSheet`): every other page the user may open, under section headings, with a
+  page search that also matches the localised name. It closes after navigation and never
+  repeats a bottom-navigation destination. The header sidebar toggle is hidden on phones (it
+  opened the same pages in a second, desktop-style menu); the header "⋯" keeps account,
+  language, theme and logout. Tablet and desktop keep the sidebar.
+- The off-canvas sidebar (640–767px) no longer splits into two squeezed columns: the global
+  `.flex.gap-*` wrap rule is released for `[data-slot="sidebar-content"]`.
+- **Keyboard-safe dialogs.** `useVisualViewportMetrics` (mounted by `ErpShell`) publishes
+  `--erp-visual-viewport-height` and `--erp-keyboard-inset`. Phone bottom-sheet dialogs and
+  bottom sheets sit above the on-screen keyboard and cap their height to the visible viewport,
+  so the pinned action row stays reachable while typing; the focused field is scrolled back
+  into view when the keyboard opens. Column dialogs with their own scrolling body let that
+  body shrink (`min-height: 0`), so the footer is never pushed out of the sheet.
+- **Bespoke record cards.** `client/src/components/ui/erp-mobile-records.tsx` adds
+  `ErpMobileRecordCard` (title, headline value, two-column fields, collapsible details,
+  actions, tap-to-open), `ErpMobileRecordList`, `ErpMobileRecordGroup`,
+  `ErpMobileSummaryGrid` (two-column KPIs) and `ErpMobileActionsMenu` (compact Actions
+  overflow). They sit on the existing `ResponsiveDataList` primitives and are used where rows do
+  not map onto `<Table mobileLayout="cards">`.
