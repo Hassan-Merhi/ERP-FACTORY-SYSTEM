@@ -15,9 +15,6 @@ import {
   customers,
   containerSales,
   factoryPosSales,
-  customerOrders,
-  customerOrderLines,
-  locations,
 } from "@shared/schema";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
@@ -303,6 +300,9 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
           LEFT JOIN factory_bales fb
             ON fb.id = cob.bale_id
            AND fb.company_id = ${companyId}
+          JOIN line_totals lt
+            ON lt.order_id = cob.order_id
+           AND lt.article_code = COALESCE(cob.article_code, fb.article_code)
           GROUP BY cob.order_id, COALESCE(cob.article_code, fb.article_code)
         ),
         analytics_rows AS MATERIALIZED (
