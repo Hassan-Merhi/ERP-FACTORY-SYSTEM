@@ -186,9 +186,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       const orderFilters = [
         sql`co.company_id = ${companyId}`,
         sql`co.deleted_at IS NULL`,
-        status === "all"
-          ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
-          : sql`co.status = ${status}`,
+        status === "all" ? sql`co.status IN ('VERIFIED', 'FINALIZED')` : sql`co.status = ${status}`,
       ];
       if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
       if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
@@ -203,12 +201,14 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         );
       }
       if (location?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
-        );
+        orderFilters.push(sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`);
       }
 
-      const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
+      const normalizeSearch = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[.\s-]+/g, "")
+          .slice(0, 100);
       const itemSearch = item ? normalizeSearch(item) : "";
       const lineFilter = itemSearch
         ? sql`regexp_replace(
