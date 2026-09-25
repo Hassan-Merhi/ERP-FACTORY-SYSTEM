@@ -1499,6 +1499,7 @@
     "GET /api/reports/stock-in-sales/detail [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/stock-in-sales/movements [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/stock-in-sales/comparison [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
+    "GET /api/reports/item-market-analysis [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/sales [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/stock-movement [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/containers [requireAuth > <anonymous>]",
