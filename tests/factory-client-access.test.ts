@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { canUseFactorySurface } from "../client/src/lib/factoryClientAccess";
+import {
+  canUseFactorySurface,
+  factoryPageOwnsAccountsAllRead,
+  factoryPageOwnsSharedAccountingRead,
+} from "../client/src/lib/factoryClientAccess";
 import type { FactoryMyAccess } from "../shared/apiTypes";
 
 function access(overrides: Partial<FactoryMyAccess> = {}): FactoryMyAccess {
@@ -49,5 +53,19 @@ describe("canUseFactorySurface", () => {
     expect(
       canUseFactorySurface(access(), "factory/stock-entry", ["hide_tab_stockentry_production_targets"])
     ).toBe(true);
+  });
+});
+
+describe("Factory shared accounting ownership", () => {
+  it("allows ledger/bank reads only from backend-owned Factory pages", () => {
+    expect(factoryPageOwnsSharedAccountingRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsSharedAccountingRead("/factory/invoicing?tab=proformas")).toBe(true);
+    expect(factoryPageOwnsSharedAccountingRead("/factory/production-report")).toBe(false);
+  });
+
+  it("keeps /api/accounts/all stricter than ledger/bank picker reads", () => {
+    expect(factoryPageOwnsAccountsAllRead("/factory/accounts")).toBe(true);
+    expect(factoryPageOwnsAccountsAllRead("/factory/invoicing")).toBe(false);
+    expect(factoryPageOwnsAccountsAllRead("/factory/stock-entry")).toBe(false);
   });
 });
