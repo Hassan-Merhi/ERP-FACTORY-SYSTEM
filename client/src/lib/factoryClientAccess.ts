@@ -1,4 +1,5 @@
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { resolveFactoryPageKey } from "@shared/factoryAccessRegistry";
 
 export function canUseFactorySurface(
   access: FactoryMyAccess | undefined,
@@ -12,4 +13,35 @@ export function canUseFactorySurface(
 
   const hidden = new Set(access.hiddenCostFields ?? []);
   return requiredVisibleTabs.every((key) => !hidden.has(key));
+}
+
+const SHARED_ACCOUNTING_READ_OWNERS = new Set([
+  "factory/accounts",
+  "factory/vouchers",
+  "factory/payroll-hub",
+  "factory/import",
+  "factory/settings",
+  "factory/invoicing",
+]);
+
+const ACCOUNTS_ALL_READ_OWNERS = new Set([
+  "factory/accounts",
+  "factory/vouchers",
+  "factory/payroll-hub",
+  "factory/import",
+  "factory/settings",
+]);
+
+function currentFactoryPageKey(path: string): string | null {
+  return resolveFactoryPageKey(path);
+}
+
+export function factoryPageOwnsSharedAccountingRead(path: string): boolean {
+  const pageKey = currentFactoryPageKey(path);
+  return pageKey !== null && SHARED_ACCOUNTING_READ_OWNERS.has(pageKey);
+}
+
+export function factoryPageOwnsAccountsAllRead(path: string): boolean {
+  const pageKey = currentFactoryPageKey(path);
+  return pageKey !== null && ACCOUNTS_ALL_READ_OWNERS.has(pageKey);
 }
