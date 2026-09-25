@@ -25,19 +25,11 @@ function makeResponse(status: number): Response {
  * Returns a minimal fetch mock that answers /api/auth/me with the given status
  * and rejects any other URL (so tests stay focused and explicit).
  */
-function mockAuthMeFetch(
-  authMeStatus: number | "network-error",
-): typeof window.fetch {
+function mockAuthMeFetch(authMeStatus: number | "network-error"): typeof window.fetch {
   return vi.fn(async (input: RequestInfo | URL) => {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : (input as Request).url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
     if (url.includes("/api/auth/me")) {
-      if (authMeStatus === "network-error")
-        throw new TypeError("Failed to fetch");
+      if (authMeStatus === "network-error") throw new TypeError("Failed to fetch");
       return makeResponse(authMeStatus);
     }
     throw new Error(`Unexpected fetch call to ${url}`);
@@ -85,9 +77,7 @@ describe("verifySessionExpired", () => {
   });
 
   it("returns false on network error — never throws", async () => {
-    expect(await verifySessionExpired(mockAuthMeFetch("network-error"))).toBe(
-      false,
-    );
+    expect(await verifySessionExpired(mockAuthMeFetch("network-error"))).toBe(false);
   });
 
   it("deduplicates concurrent calls — fires /api/auth/me exactly once", async () => {
@@ -119,25 +109,15 @@ describe("verifySessionExpired", () => {
 describe("handlePossibleSessionExpiry", () => {
   // ── Scenario 1: business 401, session still valid ─────────────────────────
   it("does NOT redirect when /api/auth/me returns 200", async () => {
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/reports/example",
-      mockAuthMeFetch(200),
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(200));
     expect(redirectTarget).toBeNull();
     expect(_testOnly_isSessionTrafficBlocked()).toBe(false);
   });
 
   // ── Scenario 2: real session expiry ───────────────────────────────────────
   it("redirects to /login when /api/auth/me also returns 401 and quiesces query traffic", async () => {
-    const cancelSpy = vi
-      .spyOn(queryClient, "cancelQueries")
-      .mockResolvedValue(undefined);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/reports/example",
-      mockAuthMeFetch(401),
-    );
+    const cancelSpy = vi.spyOn(queryClient, "cancelQueries").mockResolvedValue(undefined);
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(401));
     expect(redirectTarget).toBe("/login");
     expect(_testOnly_isSessionTrafficBlocked()).toBe(true);
     expect(cancelSpy).toHaveBeenCalledTimes(1);
@@ -152,16 +132,8 @@ describe("handlePossibleSessionExpiry", () => {
 
     const fetch = mockAuthMeFetch(401);
     await Promise.all([
-      handlePossibleSessionExpiry(
-        makeResponse(401),
-        "/api/reports/example",
-        fetch,
-      ),
-      handlePossibleSessionExpiry(
-        makeResponse(401),
-        "/api/reports/other",
-        fetch,
-      ),
+      handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", fetch),
+      handlePossibleSessionExpiry(makeResponse(401), "/api/reports/other", fetch),
       handlePossibleSessionExpiry(makeResponse(401), "/api/inventory", fetch),
     ]);
 
@@ -173,60 +145,36 @@ describe("handlePossibleSessionExpiry", () => {
 
   it("does not re-verify later 401s after expiry was already handled", async () => {
     const firstFetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/reports/example",
-      firstFetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", firstFetch);
     expect((firstFetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
     expect(redirectTarget).toBe("/login");
 
     const laterFetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/notifications/unread-count",
-      laterFetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/notifications/unread-count", laterFetch);
     expect((laterFetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
 
   // ── Scenario 3: temporary server problems ─────────────────────────────────
   it("does NOT redirect when /api/auth/me returns 502", async () => {
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/reports/example",
-      mockAuthMeFetch(502),
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(502));
     expect(redirectTarget).toBeNull();
   });
 
   it("does NOT redirect when /api/auth/me returns 500", async () => {
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/stats/net-profit",
-      mockAuthMeFetch(500),
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/stats/net-profit", mockAuthMeFetch(500));
     expect(redirectTarget).toBeNull();
   });
 
   // ── Scenario 4: network failure during verification ───────────────────────
   it("does NOT redirect on /api/auth/me network error", async () => {
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/factory/bales",
-      mockAuthMeFetch("network-error"),
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/factory/bales", mockAuthMeFetch("network-error"));
     expect(redirectTarget).toBeNull();
   });
 
   // ── Scenario 5: login request 401 (wrong password — no redirect loop) ─────
   it("does NOT verify or redirect for /api/auth/login 401", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/auth/login",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/auth/login", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
@@ -240,22 +188,14 @@ describe("handlePossibleSessionExpiry", () => {
 
   it("does NOT verify or redirect for /api/auth/logout 401", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/auth/logout",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/auth/logout", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
 
   it("does NOT verify or redirect for /api/csrf-token 401", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/api/csrf-token",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/api/csrf-token", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
@@ -263,22 +203,14 @@ describe("handlePossibleSessionExpiry", () => {
   // ── Passthrough: non-401 and non-API ──────────────────────────────────────
   it("is a no-op for 403 responses (permission denial, not session expiry)", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(403),
-      "/api/reports/example",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(403), "/api/reports/example", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
 
   it("is a no-op for non-API paths", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(401),
-      "/some/static/path",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(401), "/some/static/path", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
@@ -293,11 +225,7 @@ describe("handlePossibleSessionExpiry", () => {
   // ── CSRF mismatch (403) is unaffected ─────────────────────────────────────
   it("does not interfere with CSRF_TOKEN_MISMATCH 403 responses", async () => {
     const fetch = mockAuthMeFetch(401);
-    await handlePossibleSessionExpiry(
-      makeResponse(403),
-      "/api/vouchers",
-      fetch,
-    );
+    await handlePossibleSessionExpiry(makeResponse(403), "/api/vouchers", fetch);
     expect(redirectTarget).toBeNull();
     expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
   });
