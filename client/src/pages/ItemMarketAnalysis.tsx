@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
 
@@ -278,7 +278,7 @@ export default function ItemMarketAnalysis() {
         const orderedRows = [...companyRows].sort((left, right) =>
           left.companyName.localeCompare(right.companyName)
         );
-        const firstRow = orderedRows[0];
+        const firstRow = orderedRows[0]!;
         const importCount = orderedRows.reduce((sum, row) => sum + row.importCount, 0);
         const importedQty = orderedRows.reduce((sum, row) => sum + row.importedQty, 0);
         const soldQty = orderedRows.reduce((sum, row) => sum + row.soldQty, 0);
@@ -506,8 +506,8 @@ export default function ItemMarketAnalysis() {
                     : "text-emerald-600 dark:text-emerald-400";
 
                 return (
-                  <>
-                    <TableRow key={group.itemKey} data-testid={`row-item-market-group-${group.itemKey}`}>
+                  <Fragment key={group.itemKey}>
+                    <TableRow data-testid={`row-item-market-group-${group.itemKey}`}>
                       <TableCell>
                         <div className="max-w-[260px] truncate font-medium">{group.name}</div>
                       </TableCell>
@@ -647,7 +647,7 @@ export default function ItemMarketAnalysis() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
 
