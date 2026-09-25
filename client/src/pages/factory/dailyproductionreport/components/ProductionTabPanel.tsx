@@ -46,6 +46,13 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     setValuationMode,
   } = report;
   const costsHidden = Boolean(data?.costsHidden);
+  // Top Profit KPI only: mix-batch value minus current table balance minus
+  // the selected (Cost/Selling) value of produced bales.
+  const selectedBalesValue = data?.production.totalValue ?? 0;
+  const productionProfitValue =
+    (data?.rawMaterial.totalCost ?? 0) - (data?.balanceOnTable.value ?? 0) - selectedBalesValue;
+  const productionProfitMarginPct =
+    selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
   return (
     <>
       {/* ── Production tab ── */}
@@ -215,20 +222,20 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
                       <span
                         className={`text-base font-bold px-3 py-0.5 rounded-md ${
-                          profitValue > 0
+                          productionProfitValue > 0
                             ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            : profitValue < 0
+                            : productionProfitValue < 0
                               ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                               : "bg-muted text-muted-foreground"
                         }`}
                         data-testid="text-profit-value"
                       >
-                        {profitValue > 0 ? "+" : ""}
-                        {fmtMoney(profitValue)}
+                        {productionProfitValue > 0 ? "+" : ""}
+                        {fmtMoney(productionProfitValue)}
                       </span>
-                      {profitValue > 0 ? (
+                      {productionProfitValue > 0 ? (
                         <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      ) : profitValue === 0 ? (
+                      ) : productionProfitValue === 0 ? (
                         <Minus className="h-4 w-4 text-muted-foreground" />
                       ) : (
                         <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -238,7 +245,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margin</span>
                       <span className="text-base font-bold tabular-nums" data-testid="text-profit-margin">
-                        {(data?.summary.profitMarginPct ?? 0).toFixed(1)}%
+                        {productionProfitMarginPct.toFixed(1)}%
                       </span>
                     </div>
                   </div>
