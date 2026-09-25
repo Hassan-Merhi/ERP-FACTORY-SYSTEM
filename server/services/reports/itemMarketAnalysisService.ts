@@ -6,7 +6,6 @@ export interface ItemMarketAnalysisFilters {
   startDate?: string;
   endDate?: string;
   search?: string;
-  country?: string;
   stockGroupId?: number;
 }
 
@@ -34,7 +33,6 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     filters.startDate ?? null,
     filters.endDate ?? null,
     filters.search ?? null,
-    filters.country ?? null,
     filters.stockGroupId ?? null,
   ];
 
@@ -46,7 +44,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       WHERE si.company_id = $1
         AND si.deleted_at IS NULL
         AND ($5::text IS NULL OR si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')
-        AND ($7::int IS NULL OR si.stock_group_id = $7)
+        AND ($6::int IS NULL OR si.stock_group_id = $6)
     ),
     imports AS (
       SELECT pli.stock_item_id,
@@ -73,7 +71,6 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(s.profit::numeric), 0) AS profit
       FROM sales_items s
       JOIN vouchers v ON v.id = s.voucher_id
-      JOIN locations l ON l.id = v.location_id
       WHERE v.company_id = $1
         AND v.voucher_type = 'Sales'
         AND v.deleted_at IS NULL
@@ -81,7 +78,6 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND v.location_id = ANY($2::int[])
         AND ($3::date IS NULL OR v.voucher_date >= $3::date)
         AND ($4::date IS NULL OR v.voucher_date <= $4::date)
-        AND ($6::text IS NULL OR COALESCE(NULLIF(BTRIM(l.country), ''), 'Unknown Country') = $6)
       GROUP BY s.stock_item_id
     )
   `;
@@ -107,63 +103,11 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     params
   );
 
-  const countryResult = await pool.query(
-    `
-    SELECT s.stock_item_id,
-      COALESCE(NULLIF(BTRIM(l.country), ''), 'Unknown Country') AS country,
-      SUM(s.quantity::numeric) AS sold_qty,
-      SUM(s.total_sales::numeric) AS revenue,
-      SUM(s.total_cost::numeric) AS historical_cost,
-      SUM(s.profit::numeric) AS profit
-    FROM sales_items s
-    JOIN vouchers v ON v.id = s.voucher_id
-    JOIN locations l ON l.id = v.location_id
-    JOIN stock_items si ON si.id = s.stock_item_id
-    WHERE v.company_id = $1
-      AND si.company_id = $1
-      AND si.deleted_at IS NULL
-      AND v.voucher_type = 'Sales'
-      AND v.deleted_at IS NULL
-      AND COALESCE(v.optional, false) = false
-      AND v.location_id = ANY($2::int[])
-      AND ($3::date IS NULL OR v.voucher_date >= $3::date)
-      AND ($4::date IS NULL OR v.voucher_date <= $4::date)
-      AND ($5::text IS NULL OR si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')
-      AND ($6::text IS NULL OR COALESCE(NULLIF(BTRIM(l.country), ''), 'Unknown Country') = $6)
-      AND ($7::int IS NULL OR si.stock_group_id = $7)
-    GROUP BY s.stock_item_id, COALESCE(NULLIF(BTRIM(l.country), ''), 'Unknown Country')
-    ORDER BY s.stock_item_id, profit DESC
-    `,
-    params
-  );
-
-  const byItem = new Map<number, Array<Record<string, unknown>>>();
-  for (const raw of countryResult.rows as NumericRow[]) {
-    const soldQty = numberValue(raw.sold_qty);
-    const revenue = numberValue(raw.revenue);
-    const profit = numberValue(raw.profit);
-    const margin = marginPct(profit, revenue);
-    const row = {
-      country: String(raw.country || "Unknown Country"),
-      soldQty,
-      revenue,
-      historicalCost: numberValue(raw.historical_cost),
-      profit,
-      avgSellingPrice: soldQty === 0 ? 0 : Number((revenue / soldQty).toFixed(6)),
-      profitPerUnit: soldQty === 0 ? 0 : Number((profit / soldQty).toFixed(6)),
-      marginPct: margin,
-      status: marketStatus(soldQty, profit, margin),
-    };
-    const id = Number(raw.stock_item_id);
-    byItem.set(id, [...(byItem.get(id) ?? []), row]);
-  }
-
   const rows = (itemResult.rows as NumericRow[]).map((raw) => {
     const soldQty = numberValue(raw.sold_qty);
     const revenue = numberValue(raw.revenue);
     const profit = numberValue(raw.profit);
     const margin = marginPct(profit, revenue);
-    const countries = byItem.get(Number(raw.stock_item_id)) ?? [];
     return {
       stockItemId: Number(raw.stock_item_id),
       code: String(raw.code || ""),
@@ -183,8 +127,6 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       profitPerUnit: soldQty === 0 ? 0 : Number((profit / soldQty).toFixed(6)),
       marginPct: margin,
       marketStatus: marketStatus(soldQty, profit, margin),
-      topProfitCountry: countries.length > 0 ? countries[0] : null,
-      countries,
     };
   });
 
