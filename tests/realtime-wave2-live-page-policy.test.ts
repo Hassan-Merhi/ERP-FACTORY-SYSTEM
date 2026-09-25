@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { HEARTBEAT_INTERVAL } from "../client/src/hooks/use-presence";
+import { shouldEmitWriteInvalidation } from "../shared/realtimeInvalidation";
+
 function source(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
@@ -24,17 +27,15 @@ describe("Wave 2 live-page policy", () => {
 
   it("keeps presence heartbeats silent and route invalidation tenant-scoped", () => {
     const applicationRoutes = source("server/routes/applicationRoutes.ts");
-    const writeSignal = source("server/routes/writeInvalidationSignal.ts");
-    const realtimePolicy = source("shared/realtimeInvalidation.ts");
     const presenceRoutes = source("server/routes/userPresenceRoutes.ts");
 
     // The write-signal policy lives next to the classifier; the generic
-    // middleware must keep delegating the write/no-write decision to it.
-    expect(applicationRoutes).toContain("registerWriteInvalidationSignal(app);");
-    expect(writeSignal.includes("shouldEmitWriteInvalidation(req.method, url)")).toBe(true);
-    expect(writeSignal).toContain("{ companyId, excludeRealtimeClientId: realtimeClientId || null }");
-    expect(realtimePolicy).toContain('path === "/api/user-presence"');
-    expect(realtimePolicy).toContain('path.startsWith("/api/user-presence/")');
+    // middleware must keep delegating the write/no-write decision to it; that
+    // delegation is exercised in server/routes/writeInvalidationSignal.test.ts.
+    expect(applicationRoutes.includes("registerWriteInvalidationSignal(app);")).toBe(true);
+    expect(shouldEmitWriteInvalidation("POST", "/api/user-presence")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/user-presence/route")).toBe(false);
+    expect(shouldEmitWriteInvalidation("POST", "/api/stock-transfers")).toBe(true);
     expect(presenceRoutes).toContain('if (type === "route_change")');
     expect(presenceRoutes).toContain("broadcastPresenceChange(companyId);");
     expect(presenceRoutes).toContain('broadcast({ type: "invalidate", topics: ["presence"] }, { companyId });');
@@ -42,11 +43,10 @@ describe("Wave 2 live-page policy", () => {
   });
 
   it("keeps presence heartbeat and settings fallbacks bounded", () => {
-    const presence = source("client/src/hooks/use-presence.ts");
     const activeUsers = source("client/src/pages/settings/ActiveUsersSection.tsx");
     const watchUser = source("client/src/pages/settings/WatchUserDialog.tsx");
 
-    expect(presence).toContain("const HEARTBEAT_INTERVAL = 90000");
+    expect(HEARTBEAT_INTERVAL).toBe(90_000);
     expect(activeUsers).toContain("refetchInterval: visibleTabInterval(30_000)");
     expect(watchUser).toContain("refetchInterval: visibleTabInterval(30_000)");
   });
