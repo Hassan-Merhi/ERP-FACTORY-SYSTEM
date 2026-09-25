@@ -346,7 +346,7 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month", "location_inventory", LocationVouchers)}
 
       {G("/sales-report", "sales_report", SalesReport)}
-      {G("/stock-in-sales-report", "sales_report", StockInSalesReport)}
+      {G("/stock-in-sales-report", "sales_report", StockInSalesReport)}\n      {G("/item-market-analysis", "sales_report", ItemMarketAnalysis)}
       {G("/sales-report/detail", "sales_report", SalesReportDetail)}
       {G("/sales-report/comparison", "sales_report", SalesReportComparison)}
 
