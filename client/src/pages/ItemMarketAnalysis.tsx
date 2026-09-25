@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PeriodFilter, getDefaultPeriodValue, type PeriodFilterValue } from "@/components/ui/period-filter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +29,9 @@ interface CountryPerformance {
 }
 
 interface MarketRow {
+  companyId: number;
+  companyCode: string;
+  companyName: string;
   stockItemId: number;
   code: string;
   name: string;
@@ -45,14 +50,26 @@ interface MarketRow {
   profitPerUnit: number;
   marginPct: number;
   marketStatus: CountryPerformance["status"];
-  topProfitCountry: CountryPerformance | null;
   countries: CountryPerformance[];
+}
+
+interface MarketCompanySummary {
+  companyId: number;
+  companyCode: string;
+  companyName: string;
+  itemCount: number;
+  importedQty: number;
+  soldQty: number;
+  revenue: number;
+  profit: number;
+  marginPct: number;
 }
 
 interface MarketResponse {
   generatedAt: string;
   countries: string[];
   rows: MarketRow[];
+  companySummaries: MarketCompanySummary[];
   summary: {
     itemCount: number;
     importedQty: number;
@@ -78,9 +95,8 @@ function StatusBadge({ status }: { status: CountryPerformance["status"] }) {
 function formatNativePurchase(value: number | null, currencies: string[]) {
   if (value == null) return "—";
   if (currencies.length !== 1) return "Mixed currencies";
-  const currency = currencies[0] === "UNKNOWN" ? "" : currencies[0];
   const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return currency ? `${currency} ${amount}` : amount;
+  return "$" + amount;
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
@@ -93,14 +109,16 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function ItemMarketAnalysis() {
-  const { selectedCompany } = useCompany();
+  const { selectedCompany, companies } = useCompany();
   const { formatAmount } = useCurrencyContext();
   const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [country, setCountry] = useState("all");
   const [stockGroupId, setStockGroupId] = useState("all");
-  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
+  const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
+  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -110,8 +128,29 @@ export default function ItemMarketAnalysis() {
   useEffect(() => {
     setCountry("all");
     setStockGroupId("all");
-    setExpandedItemId(null);
+    setExpandedItemKey(null);
+    setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
   }, [selectedCompany?.id]);
+
+  const erpCompanies = useMemo(
+    () => companies.filter((company) => company.companyType === "erp" && company.role !== "POS"),
+    [companies]
+  );
+
+  const multiCompany = selectedCompanyIds.length > 1;
+  const singleActiveCompany =
+    selectedCompanyIds.length === 1 && selectedCompanyIds[0] === selectedCompany?.id;
+
+  const toggleCompany = (companyId: number) => {
+    setSelectedCompanyIds((current) => {
+      if (current.includes(companyId)) {
+        return current.length === 1 ? current : current.filter((id) => id !== companyId);
+      }
+      return [...current, companyId];
+    });
+    setStockGroupId("all");
+    setExpandedItemKey(null);
+  };
 
   const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
     queryKey: ["/api/stock-groups", selectedCompany?.id],
@@ -125,13 +164,14 @@ export default function ItemMarketAnalysis() {
     if (period.toDate) params.set("endDate", period.toDate);
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (country !== "all") params.set("country", country);
-    if (stockGroupId !== "all") params.set("stockGroupId", stockGroupId);
+    if (singleActiveCompany && stockGroupId !== "all") params.set("stockGroupId", stockGroupId);
+    if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
     return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, country, stockGroupId]);
+  }, [period, debouncedSearch, country, stockGroupId, singleActiveCompany, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
-    queryKey: [queryUrl, selectedCompany?.id],
-    enabled: selectedCompany?.companyType === "erp",
+    queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
+    enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
     staleTime: 30_000,
   });
 
@@ -146,8 +186,13 @@ export default function ItemMarketAnalysis() {
     );
   }
 
-  const rows = data?.rows ?? [];
+  const rows = [...(data?.rows ?? [])].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.companyName.localeCompare(right.companyName)
+  );
   const summary = data?.summary ?? { itemCount: 0, importedQty: 0, soldQty: 0, revenue: 0, profit: 0, marginPct: 0 };
+  const selectedCompanyNames = erpCompanies.filter((company) => selectedCompanyIds.includes(company.id));
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
@@ -158,7 +203,11 @@ export default function ItemMarketAnalysis() {
         meta={
           <span>
             Imports, sales and historical profit by market
-            {selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
+            {multiCompany
+              ? ` · ${selectedCompanyIds.length} companies selected`
+              : selectedCompanyNames[0]?.name
+                ? ` · ${selectedCompanyNames[0].name}`
+                : ""}
           </span>
         }
       >
@@ -192,6 +241,37 @@ export default function ItemMarketAnalysis() {
             data-testid="input-item-market-search"
           />
         </div>
+        <Popover open={companyPopoverOpen} onOpenChange={setCompanyPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[190px] justify-between" data-testid="button-item-market-companies">
+              <span className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                {selectedCompanyIds.length === 1 ? "1 Company" : `${selectedCompanyIds.length} Companies`}
+              </span>
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-2" align="start">
+            <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Compare ERP companies
+            </div>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {erpCompanies.map((company) => (
+                <button
+                  type="button"
+                  key={company.id}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                  onClick={() => toggleCompany(company.id)}
+                  data-testid={`option-item-market-company-${company.id}`}
+                >
+                  <Checkbox checked={selectedCompanyIds.includes(company.id)} className="h-4 w-4" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{company.name}</span>
+                  <span className="text-xs text-muted-foreground">{company.code}</span>
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <Select value={country} onValueChange={setCountry}>
           <SelectTrigger className="w-[180px]" data-testid="select-item-market-country">
             <SelectValue placeholder="All countries" />
@@ -203,18 +283,53 @@ export default function ItemMarketAnalysis() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={stockGroupId} onValueChange={setStockGroupId}>
-          <SelectTrigger className="w-[190px]" data-testid="select-item-market-group">
-            <SelectValue placeholder="All groups" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stock Groups</SelectItem>
-            {[...stockGroups].sort((a, b) => a.name.localeCompare(b.name)).map((group) => (
-              <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {singleActiveCompany && (
+          <Select value={stockGroupId} onValueChange={setStockGroupId}>
+            <SelectTrigger className="w-[190px]" data-testid="select-item-market-group">
+              <SelectValue placeholder="All groups" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stock Groups</SelectItem>
+              {[...stockGroups].sort((a, b) => a.name.localeCompare(b.name)).map((group) => (
+                <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
+
+      {multiCompany && (data?.companySummaries?.length ?? 0) > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {data!.companySummaries.map((company) => {
+            const companyProfitClass =
+              company.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
+            return (
+              <div key={company.companyId} className="rounded-xl border bg-card p-4">
+                <div className="truncate text-sm font-semibold">{company.companyName}</div>
+                <div className="text-xs text-muted-foreground">{company.companyCode}</div>
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Sold Qty</div>
+                    <div className="font-medium tabular-nums">{formatNumber(company.soldQty)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Revenue</div>
+                    <div className="font-medium tabular-nums">{formatAmount(company.revenue)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Profit</div>
+                    <div className={`font-medium tabular-nums ${companyProfitClass}`}>{formatAmount(company.profit)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Margin</div>
+                    <div className="font-medium tabular-nums">{company.marginPct.toFixed(1)}%</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {isError && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -226,7 +341,9 @@ export default function ItemMarketAnalysis() {
         <div className="flex items-center gap-2 border-b px-4 py-3">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <div className="font-medium">Item performance</div>
-          <div className="ml-auto text-xs text-muted-foreground">Click an item to see its country breakdown</div>
+          <div className="ml-auto text-xs text-muted-foreground">
+            {multiCompany ? "Same item names are grouped together by company" : "Click an item to see its country breakdown"}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <Table>
@@ -234,6 +351,7 @@ export default function ItemMarketAnalysis() {
               <TableRow>
                 <TableHead className="w-8" />
                 <TableHead>Item</TableHead>
+                {multiCompany && <TableHead>Company</TableHead>}
                 <TableHead className="text-right">Imports</TableHead>
                 <TableHead className="text-right">Imported Qty</TableHead>
                 <TableHead className="text-right">Purchase Value</TableHead>
@@ -243,7 +361,6 @@ export default function ItemMarketAnalysis() {
                 <TableHead className="text-right">Revenue</TableHead>
                 <TableHead className="text-right">Profit</TableHead>
                 <TableHead className="text-right">Margin</TableHead>
-                <TableHead>Top Profit Country</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -251,26 +368,32 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={13}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={multiCompany ? 13 : 12}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))}
               {!isLoading && rows.map((row) => {
-                const expanded = expandedItemId === row.stockItemId;
+                const rowKey = `${row.companyId}:${row.stockItemId}`;
+                const expanded = expandedItemKey === rowKey;
                 const mixedCurrency = row.purchaseCurrencies.length > 1;
                 return (
-                  <Fragment key={row.stockItemId}>
+                  <Fragment key={rowKey}>
                     <TableRow
                       className="cursor-pointer"
-                      onClick={() => setExpandedItemId(expanded ? null : row.stockItemId)}
-                      data-testid={`row-item-market-${row.stockItemId}`}
+                      onClick={() => setExpandedItemKey(expanded ? null : rowKey)}
+                      data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}
                     >
                       <TableCell>
                         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{row.code}</div>
-                        <div className="max-w-[260px] truncate text-xs text-muted-foreground">{row.name}</div>
+                        <div className="max-w-[260px] truncate font-medium">{row.name}</div>
                       </TableCell>
+                      {multiCompany && (
+                        <TableCell>
+                          <div className="font-medium">{row.companyName}</div>
+                          <div className="text-xs text-muted-foreground">{row.companyCode}</div>
+                        </TableCell>
+                      )}
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">
@@ -296,12 +419,11 @@ export default function ItemMarketAnalysis() {
                         {formatAmount(row.profit)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                      <TableCell>{row.topProfitCountry?.country ?? "—"}</TableCell>
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={13} className="bg-muted/20 p-0">
+                        <TableCell colSpan={multiCompany ? 13 : 12} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>
@@ -373,7 +495,7 @@ export default function ItemMarketAnalysis() {
               })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={multiCompany ? 13 : 12} className="py-10 text-center text-sm text-muted-foreground">
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
