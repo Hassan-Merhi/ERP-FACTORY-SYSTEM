@@ -425,11 +425,19 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // "Balance on Table" is a CURRENT STATE metric: how much raw material has been mixed into
-      // batches but not yet turned into finished bales.  We use the same formula as the Net
-      // Position page: allTimeMixKg − allTimeBaleKg.  This is more robust than tracking
-      // usedKg per-batch, which breaks when batches are marked COMPLETED prematurely.
-      const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
+      // "Balance on Table" is a CURRENT STATE metric. Value it from the actual material
+      // remaining in each live batch, using that batch's effective rate, rather than applying
+      // one all-time blended rate to the whole balance.
+      //
+      // Effective rate follows the same read/display rules used by Mix Batches:
+      //   A. sourceBatchId -> source row's stored costPerKg
+      //   B. supplierId    -> supplier's current locked rate
+      //   C. no resolvable source -> stored batch costPerKg
+      //
+      // This makes:
+      //   balance value = Σ(remaining kg × effective batch rate)
+      //   balance rate  = balance value ÷ total remaining kg
+      const [mixAllTimeResult, currentBatchRows] = await Promise.all([
         db.execute(sql`
           SELECT
             COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
@@ -439,28 +447,100 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             AND carry_forward_from_id IS NULL
             AND deleted_at        IS NULL
         `),
-        db.execute(sql`
-          SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
-          FROM   factory_bales        b
-          LEFT   JOIN factory_bale_products p ON p.id = b.product_id
-          LEFT   JOIN factory_categories    c ON c.id = p.category_id
-          WHERE  b.company_id = ${companyId}
-            -- Match the production totals above: a REPACKED original is replaced by a
-            -- new bale, so counting both would consume the same 40 kg twice and make
-            -- Balance on Table / total production profit short by that repacked weight.
-            AND  b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
-        `),
+        db
+          .select({
+            id: factoryMixBatches.id,
+            totalWeightKg: factoryMixBatches.totalWeightKg,
+            usedKg: factoryMixBatches.usedKg,
+            costPerKg: factoryMixBatches.costPerKg,
+          })
+          .from(factoryMixBatches)
+          .where(and(eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt))),
       ]);
+
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
       const allTimeMixKg = parseFloat(String(mixAllTimeRow.mix_kg ?? "0")) || 0;
       const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
-      const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
-      const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
-
       const allTimeBlendedCpk = allTimeMixKg > 0 ? allTimeMixCost / allTimeMixKg : 0;
       const blendedCostPerKg = totalMixWeightKg > 0 ? totalMixCost / totalMixWeightKg : 0;
-      const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
-      const balanceValue = Math.round(balanceWeightKg * allTimeBlendedCpk * 100) / 100;
+
+      const remainingBatchRows = currentBatchRows.filter((batch) => {
+        const totalKg = parseFloat(batch.totalWeightKg || "0") || 0;
+        const usedKg = parseFloat(batch.usedKg || "0") || 0;
+        return totalKg - usedKg > 0.000001;
+      });
+      const remainingBatchIds = remainingBatchRows.map((batch) => batch.id);
+      const remainingSourceRows = remainingBatchIds.length
+        ? await db
+            .select({
+              mixBatchId: factoryMixBatchSources.mixBatchId,
+              sourceBatchId: factoryMixBatchSources.sourceBatchId,
+              supplierId: factoryMixBatchSources.supplierId,
+              weightKg: factoryMixBatchSources.weightKg,
+              costPerKg: factoryMixBatchSources.costPerKg,
+            })
+            .from(factoryMixBatchSources)
+            .where(inArray(factoryMixBatchSources.mixBatchId, remainingBatchIds))
+        : [];
+
+      const remainingSupplierIds = [
+        ...new Set(
+          remainingSourceRows
+            .filter((source) => source.supplierId != null)
+            .map((source) => source.supplierId as number)
+        ),
+      ];
+      const remainingSupplierRateMap = remainingSupplierIds.length
+        ? await getLockedSupplierRatesReadOnlyBulk(db, companyId, remainingSupplierIds)
+        : new Map<number, number>();
+
+      const remainingSourcesByBatch = new Map<number, typeof remainingSourceRows>();
+      for (const source of remainingSourceRows) {
+        const existing = remainingSourcesByBatch.get(source.mixBatchId) ?? [];
+        existing.push(source);
+        remainingSourcesByBatch.set(source.mixBatchId, existing);
+      }
+
+      let balanceWeight = new Decimal(0);
+      let balanceCost = new Decimal(0);
+      for (const batch of remainingBatchRows) {
+        const totalKg = new Decimal(batch.totalWeightKg || 0);
+        const usedKg = new Decimal(batch.usedKg || 0);
+        const remainingKg = Decimal.max(0, totalKg.minus(usedKg));
+        if (remainingKg.lte(0)) continue;
+
+        const sources = remainingSourcesByBatch.get(batch.id) ?? [];
+        let sourceWeight = new Decimal(0);
+        let sourceCost = new Decimal(0);
+        for (const source of sources) {
+          const weightKg = new Decimal(source.weightKg || 0);
+          let effectiveRate: Decimal;
+          if (source.sourceBatchId != null) {
+            effectiveRate = new Decimal(source.costPerKg || 0);
+          } else if (source.supplierId != null) {
+            effectiveRate = new Decimal(
+              remainingSupplierRateMap.get(source.supplierId) ?? (parseFloat(source.costPerKg || "0") || 0)
+            );
+          } else {
+            effectiveRate = new Decimal(source.costPerKg || 0);
+          }
+          sourceWeight = sourceWeight.plus(weightKg);
+          sourceCost = sourceCost.plus(weightKg.times(effectiveRate));
+        }
+
+        const effectiveBatchRate = sourceWeight.gt(0)
+          ? sourceCost.dividedBy(sourceWeight)
+          : new Decimal(batch.costPerKg || 0);
+
+        balanceWeight = balanceWeight.plus(remainingKg);
+        balanceCost = balanceCost.plus(remainingKg.times(effectiveBatchRate));
+      }
+
+      const balanceWeightKg = balanceWeight.toNumber();
+      const balanceValue = balanceCost.toDecimalPlaces(2).toNumber();
+      const balanceCostPerKg = balanceWeight.gt(0)
+        ? balanceCost.dividedBy(balanceWeight).toDecimalPlaces(6).toNumber()
+        : 0;
 
       // Production profit must follow the active valuation mode. The selected finished-goods
       // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
@@ -658,9 +738,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Balance on Table stays on the original all-time blended raw-material cost basis.
+          // Weighted average of the actual rates for material still remaining in live batches.
           // The Selling / Cost toggle only changes finished-production valuation.
-          costPerKg: hideReportCosts ? 0 : allTimeBlendedCpk,
+          costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
         },
         summary: {
