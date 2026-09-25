@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
@@ -20,14 +20,8 @@ import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
 
-export function registerAccountListRoutes(app: Express) {
-  app.get("/api/accounts/all", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const companyId = req.session.currentCompanyId;
+export async function serveAccountListForCompany(req: Request, res: Response, companyId: number) {
+  try {
       const analyticsProfile = req.query.profile === "analytics";
 
       // Analytics renders only ledger, bank and fixed-asset balances. Avoid
@@ -455,5 +449,15 @@ export function registerAccountListRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
+  }
+
+export function registerAccountListRoutes(app: Express) {
+  app.get("/api/accounts/all", requireAuth, async (req, res) => {
+    const companyId = req.session.currentCompanyId;
+    if (!companyId) {
+      return res.status(400).json({ message: "No company selected" });
+    }
+
+    return serveAccountListForCompany(req, res, companyId);
   });
 }

@@ -52,6 +52,54 @@ export interface FactoryPosSummary {
   grand?: FactoryPosCustomerSummary;
 }
 
+export interface FactoryCustomerOrderCustomerBreakdown {
+  customerId: number | null;
+  customerName: string | null;
+  qty: number;
+  salesAmount: number;
+  orders: number;
+}
+
+export interface FactoryCustomerOrderItemRow {
+  orderDate: string;
+  articleCode: string;
+  itemName: string;
+  category: string | null;
+  grade: string | null;
+  customerCount: number;
+  customerBreakdown: FactoryCustomerOrderCustomerBreakdown[];
+  qty: number;
+  totalWeightKg: number;
+  salesAmount: number;
+  costAmount: number;
+  profitAmount: number;
+  profitPct: number;
+  profitPerBale: number;
+  avgSellingPrice: number;
+  avgCostPerBale: number;
+}
+
+export interface FactoryCustomerOrderAnalytics {
+  summary: {
+    totalOrders: number;
+    uniqueCustomers: number;
+    totalBales: number;
+    totalWeightKg: number;
+    totalSales: number;
+    totalCost: number;
+    grossProfit: number;
+    marginPct: number;
+    avgProfitPerBale: number;
+  };
+  rows: FactoryCustomerOrderItemRow[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    totalPages: number;
+  };
+}
+
 export interface FactoryContainerSalesData {
   summary: {
     count: number;

@@ -12,6 +12,7 @@ export const ERP_COMPOSITE_ROUTE_FEATURES: Record<string, readonly FeatureKey[]>
   "/parties": ["suppliers", "customers"],
   "/transaction-journal": ["daybook"],
   "/stock-in-sales-report": ["sales_report"],
+  "/item-market-analysis": ["sales_report"],
   "/pos-item-replacement": ["pos"],
   "/supplier-profit-check": ["suppliers"],
 };

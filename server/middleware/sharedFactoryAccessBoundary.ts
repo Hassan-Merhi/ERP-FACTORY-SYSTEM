@@ -108,6 +108,18 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
       accountRequirements.push(page("factory/invoicing"));
     }
 
+    // Agent Ledger resolves pinned agent rows against the shared account catalog
+    // and then reads the selected account's statement. Keep this strictly
+    // read-only so Agent Ledger cannot gain normal account mutation access.
+    const isAgentLedgerRead =
+      ["GET", "HEAD", "OPTIONS"].includes(method) &&
+      (path === "/api/accounts/all" ||
+        /^\/api\/accounts\/[^/]+\/[^/]+\/(?:transactions|pre-period-balance)$/.test(path));
+
+    if (isAgentLedgerRead) {
+      accountRequirements.push(page("factory/agents"));
+    }
+
     return accountRequirements;
   }
 

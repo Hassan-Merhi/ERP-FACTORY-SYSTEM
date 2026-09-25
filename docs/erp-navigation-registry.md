@@ -51,6 +51,7 @@ This registry defines canonical ERP routes, their owning hub or parent page, int
 | Company Transfer | `/company-transfer` | `/accounts` |
 | Sales Report | `/sales-report` | `/tracking` |
 | Stock In & Sales | `/stock-in-sales-report` | `/sales-report` |
+| Item Market Analysis | `/item-market-analysis` | `/sales-report` |
 | Analytics | `/analytics` | `/financial-overview` |
 | Net Profit Report | `/net-profit-report` | `/financial-overview` |
 | Shops | `/erp/rental/shops` | `/tracking` |

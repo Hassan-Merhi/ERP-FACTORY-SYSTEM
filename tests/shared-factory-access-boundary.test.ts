@@ -23,6 +23,24 @@ describe("Wave 4 shared Factory API ownership", () => {
     );
   });
 
+  it("allows Agent Ledger to read only the account catalog and statement endpoints it owns", async () => {
+    expect(await resolveSharedFactoryRequirements(req("/api/accounts/all"))).toEqual(
+      expect.arrayContaining([{ pageKey: "factory/agents" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/accounts/customer/42/transactions"))).toEqual(
+      expect.arrayContaining([{ pageKey: "factory/agents" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/accounts/customer/42/pre-period-balance"))).toEqual(
+      expect.arrayContaining([{ pageKey: "factory/agents" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/accounts/customer/42/transactions", "POST"))).not.toEqual(
+      expect.arrayContaining([{ pageKey: "factory/agents" }])
+    );
+    expect(await resolveSharedFactoryRequirements(req("/api/accounts/voucher-sidebar"))).not.toEqual(
+      expect.arrayContaining([{ pageKey: "factory/agents" }])
+    );
+  });
+
   it("allows Invoicing to read ledger and bank pickers without granting account writes", async () => {
     expect(await resolveSharedFactoryRequirements(req("/api/ledger-accounts?profile=picker"))).toEqual(
       expect.arrayContaining([{ pageKey: "factory/invoicing" }])
