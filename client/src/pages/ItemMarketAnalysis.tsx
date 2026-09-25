@@ -246,6 +246,44 @@ export default function ItemMarketAnalysis() {
     }
   }
 
+  const topProfitCountryByItem = new Map<string, { country: string; profit: number; marginPct: number }>();
+  const countryPerformanceByItem = new Map<
+    string,
+    Map<string, { country: string; profit: number; revenue: number }>
+  >();
+
+  for (const row of rows) {
+    const itemKey = row.name.trim().toLocaleLowerCase();
+    const byCountry =
+      countryPerformanceByItem.get(itemKey) ??
+      new Map<string, { country: string; profit: number; revenue: number }>();
+
+    for (const market of row.countries) {
+      const countryKey = market.country.trim().toLocaleLowerCase();
+      const current = byCountry.get(countryKey);
+      byCountry.set(countryKey, {
+        country: market.country,
+        profit: (current?.profit ?? 0) + market.profit,
+        revenue: (current?.revenue ?? 0) + market.revenue,
+      });
+    }
+
+    countryPerformanceByItem.set(itemKey, byCountry);
+  }
+
+  for (const [itemKey, byCountry] of countryPerformanceByItem) {
+    const values = [...byCountry.values()].sort((left, right) => right.profit - left.profit);
+    if (values.length === 0) continue;
+
+    const knownCountries = values.filter((entry) => entry.country !== "Unknown Country");
+    const best = knownCountries[0] ?? values[0];
+    topProfitCountryByItem.set(itemKey, {
+      country: best.country,
+      profit: best.profit,
+      marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
+    });
+  }
+
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
@@ -402,6 +440,7 @@ export default function ItemMarketAnalysis() {
                 <TableHead className="text-right">Profit</TableHead>
                 <TableHead className="text-right">Margin</TableHead>
                 {multiCompany && <TableHead>Top Profit Company</TableHead>}
+                <TableHead>Top Profit Country</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -409,7 +448,7 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={multiCompany ? 14 : 12}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={multiCompany ? 15 : 13}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))}
               {!isLoading && rows.map((row) => {
@@ -465,11 +504,29 @@ export default function ItemMarketAnalysis() {
                           {topProfitCompanyByItem.get(row.name.trim().toLocaleLowerCase()) ?? "—"}
                         </TableCell>
                       )}
+                      <TableCell>
+                        {(() => {
+                          const topCountry = topProfitCountryByItem.get(row.name.trim().toLocaleLowerCase());
+                          if (!topCountry) return <span className="text-muted-foreground">—</span>;
+                          const countryProfitClass =
+                            topCountry.profit < 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-emerald-600 dark:text-emerald-400";
+                          return (
+                            <div>
+                              <div className="font-medium">{topCountry.country}</div>
+                              <div className={`text-xs tabular-nums ${countryProfitClass}`}>
+                                {formatAmount(topCountry.profit)} · {topCountry.marginPct.toFixed(1)}%
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={multiCompany ? 14 : 12} className="bg-muted/20 p-0">
+                        <TableCell colSpan={multiCompany ? 15 : 13} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>
@@ -541,7 +598,7 @@ export default function ItemMarketAnalysis() {
               })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={multiCompany ? 14 : 12} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={multiCompany ? 15 : 13} className="py-10 text-center text-sm text-muted-foreground">
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
