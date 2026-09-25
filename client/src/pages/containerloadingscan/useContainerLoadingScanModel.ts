@@ -66,6 +66,7 @@ export function useContainerLoadingScanModel() {
   const [pendingBypassOverloadRef, setPendingBypassOverloadRef] = useState<string | null>(null);
   const [showLastScannedPopup, setShowLastScannedPopup] = useState(false);
   const scannerRef = useRef<HTMLInputElement>(null);
+  const scanSubmissionInFlightRef = useRef(false);
 
   const customerId = selectedCustomerId ? parseInt(selectedCustomerId) : null;
 
@@ -83,6 +84,7 @@ export function useContainerLoadingScanModel() {
       setLastScannedRef(null);
       setPendingBypassBaleRef(null);
       setPendingBypassOverloadRef(null);
+      scanSubmissionInFlightRef.current = false;
       return;
     }
 
@@ -270,6 +272,9 @@ export function useContainerLoadingScanModel() {
       setScanCode("");
       scannerRef.current?.focus();
     },
+    onSettled: () => {
+      scanSubmissionInFlightRef.current = false;
+    },
   });
 
   const removeBaleMutation = useMutation({
@@ -358,11 +363,36 @@ export function useContainerLoadingScanModel() {
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter" || !scanCode.trim() || !orderId || !selectedLocationId) return;
       e.preventDefault();
+
+      // Scanner hardware can emit duplicate Enter events before React has time to
+      // render mutation.isPending=true. Lock synchronously so one physical scan
+      // produces exactly one POST until that attempt settles.
+      if (scanSubmissionInFlightRef.current || addBaleMutation.isPending) return;
+
+      // Do not send a stale loading mutation while the order detail is missing or
+      // has already advanced beyond a scannable state. The server remains the
+      // authority; this simply avoids predictable 400/404 requests from stale UI.
+      if (!orderDetail) return;
+      const orderIsScannable =
+        orderDetail.status === "DRAFT" ||
+        orderDetail.status === "LOADING" ||
+        (orderDetail.status === "PENDING_VERIFICATION" && !orderDetail.proformaIdUsed);
+      if (!orderIsScannable) {
+        toast({
+          title: "Loading is no longer scannable",
+          description: "Refresh or reopen the loading before scanning another bale.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const trimmed = scanCode.trim();
       const isBypassProforma = pendingBypassBaleRef !== null && pendingBypassBaleRef === trimmed;
       const isBypassOverload = pendingBypassOverloadRef !== null && pendingBypassOverloadRef === trimmed;
       if (pendingBypassBaleRef !== null && !isBypassProforma) setPendingBypassBaleRef(null);
       if (pendingBypassOverloadRef !== null && !isBypassOverload) setPendingBypassOverloadRef(null);
+
+      scanSubmissionInFlightRef.current = true;
       addBaleMutation.mutate({
         scanCode: trimmed,
         locationId: parseInt(selectedLocationId),
@@ -370,7 +400,16 @@ export function useContainerLoadingScanModel() {
         allowBypassOverload: isBypassOverload || undefined,
       });
     },
-    [scanCode, orderId, selectedLocationId, pendingBypassBaleRef, pendingBypassOverloadRef, addBaleMutation]
+    [
+      scanCode,
+      orderId,
+      selectedLocationId,
+      orderDetail,
+      pendingBypassBaleRef,
+      pendingBypassOverloadRef,
+      addBaleMutation,
+      toast,
+    ]
   );
 
   const toggleGroup = useCallback((articleCode: string) => {
