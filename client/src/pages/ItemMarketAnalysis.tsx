@@ -80,11 +80,6 @@ interface MarketResponse {
   };
 }
 
-interface StockGroupOption {
-  id: number;
-  name: string;
-}
-
 function StatusBadge({ status }: { status: CountryPerformance["status"] }) {
   if (status === "strong") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Strong</Badge>;
   if (status === "losing") return <Badge variant="destructive">Losing</Badge>;
@@ -114,8 +109,7 @@ export default function ItemMarketAnalysis() {
   const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [country, setCountry] = useState("all");
-  const [stockGroupId, setStockGroupId] = useState("all");
+  const [stockGroupName, setStockGroupName] = useState("all");
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
@@ -126,8 +120,7 @@ export default function ItemMarketAnalysis() {
   }, [search]);
 
   useEffect(() => {
-    setCountry("all");
-    setStockGroupId("all");
+    setStockGroupName("all");
     setExpandedItemKey(null);
     setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
   }, [selectedCompany?.id]);
@@ -138,8 +131,6 @@ export default function ItemMarketAnalysis() {
   );
 
   const multiCompany = selectedCompanyIds.length > 1;
-  const singleActiveCompany =
-    selectedCompanyIds.length === 1 && selectedCompanyIds[0] === selectedCompany?.id;
 
   const toggleCompany = (companyId: number) => {
     setSelectedCompanyIds((current) => {
@@ -148,26 +139,18 @@ export default function ItemMarketAnalysis() {
       }
       return [...current, companyId];
     });
-    setStockGroupId("all");
+    setStockGroupName("all");
     setExpandedItemKey(null);
   };
-
-  const { data: stockGroups = [] } = useQuery<StockGroupOption[]>({
-    queryKey: ["/api/stock-groups", selectedCompany?.id],
-    enabled: selectedCompany?.companyType === "erp",
-    staleTime: 5 * 60 * 1000,
-  });
 
   const queryUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (period.fromDate) params.set("startDate", period.fromDate);
     if (period.toDate) params.set("endDate", period.toDate);
     if (debouncedSearch) params.set("search", debouncedSearch);
-    if (country !== "all") params.set("country", country);
-    if (singleActiveCompany && stockGroupId !== "all") params.set("stockGroupId", stockGroupId);
     if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
     return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, country, stockGroupId, singleActiveCompany, selectedCompanyIds]);
+  }, [period, debouncedSearch, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
@@ -186,13 +169,83 @@ export default function ItemMarketAnalysis() {
     );
   }
 
-  const rows = [...(data?.rows ?? [])].sort(
-    (left, right) =>
-      left.name.localeCompare(right.name) ||
-      left.companyName.localeCompare(right.companyName)
+  const rawRows = data?.rows ?? [];
+  const stockGroups = [...new Set(
+    rawRows
+      .map((row) => row.stockGroupName?.trim())
+      .filter((name): name is string => Boolean(name))
+  )].sort((left, right) => left.localeCompare(right));
+
+  const rows = rawRows
+    .filter((row) => stockGroupName === "all" || row.stockGroupName?.trim() === stockGroupName)
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) ||
+        left.companyName.localeCompare(right.companyName)
+    );
+
+  const summaryTotals = rows.reduce(
+    (totals, row) => {
+      totals.importedQty += row.importedQty;
+      totals.soldQty += row.soldQty;
+      totals.revenue += row.revenue;
+      totals.profit += row.profit;
+      return totals;
+    },
+    { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
   );
-  const summary = data?.summary ?? { itemCount: 0, importedQty: 0, soldQty: 0, revenue: 0, profit: 0, marginPct: 0 };
+  const summary = {
+    itemCount: new Set(rows.map((row) => row.name.trim().toLocaleLowerCase())).size,
+    ...summaryTotals,
+    marginPct: summaryTotals.revenue === 0 ? 0 : (summaryTotals.profit / summaryTotals.revenue) * 100,
+  };
+
   const selectedCompanyNames = erpCompanies.filter((company) => selectedCompanyIds.includes(company.id));
+  const companySummaries = selectedCompanyNames.map((company) => {
+    const companyRows = rows.filter((row) => row.companyId === company.id);
+    const totals = companyRows.reduce(
+      (acc, row) => {
+        acc.importedQty += row.importedQty;
+        acc.soldQty += row.soldQty;
+        acc.revenue += row.revenue;
+        acc.profit += row.profit;
+        return acc;
+      },
+      { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
+    );
+    return {
+      companyId: company.id,
+      companyCode: company.code,
+      companyName: company.name,
+      itemCount: companyRows.length,
+      ...totals,
+      marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
+    };
+  });
+
+  const topProfitCompanyByItem = new Map<string, string>();
+  if (multiCompany) {
+    const profitByItem = new Map<string, Map<number, { companyName: string; profit: number }>>();
+    for (const row of rows) {
+      const itemKey = row.name.trim().toLocaleLowerCase();
+      const byCompany = profitByItem.get(itemKey) ?? new Map<number, { companyName: string; profit: number }>();
+      const current = byCompany.get(row.companyId);
+      byCompany.set(row.companyId, {
+        companyName: row.companyName,
+        profit: (current?.profit ?? 0) + row.profit,
+      });
+      profitByItem.set(itemKey, byCompany);
+    }
+
+    for (const [itemKey, byCompany] of profitByItem) {
+      const values = [...byCompany.values()].sort((left, right) => right.profit - left.profit);
+      if (values.length === 0) continue;
+      const topProfit = values[0].profit;
+      const tied = values.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+      topProfitCompanyByItem.set(itemKey, tied.length > 1 ? "Equal" : values[0].companyName);
+    }
+  }
+
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
   return (
@@ -272,35 +325,22 @@ export default function ItemMarketAnalysis() {
             </div>
           </PopoverContent>
         </Popover>
-        <Select value={country} onValueChange={setCountry}>
-          <SelectTrigger className="w-[180px]" data-testid="select-item-market-country">
-            <SelectValue placeholder="All countries" />
+        <Select value={stockGroupName} onValueChange={setStockGroupName}>
+          <SelectTrigger className="w-[190px]" data-testid="select-item-market-group">
+            <SelectValue placeholder="All groups" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Countries</SelectItem>
-            {(data?.countries ?? []).map((value) => (
-              <SelectItem key={value} value={value}>{value}</SelectItem>
+            <SelectItem value="all">All Stock Groups</SelectItem>
+            {stockGroups.map((groupName) => (
+              <SelectItem key={groupName} value={groupName}>{groupName}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {singleActiveCompany && (
-          <Select value={stockGroupId} onValueChange={setStockGroupId}>
-            <SelectTrigger className="w-[190px]" data-testid="select-item-market-group">
-              <SelectValue placeholder="All groups" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stock Groups</SelectItem>
-              {[...stockGroups].sort((a, b) => a.name.localeCompare(b.name)).map((group) => (
-                <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
       </div>
 
-      {multiCompany && (data?.companySummaries?.length ?? 0) > 0 && (
+      {multiCompany && companySummaries.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {data!.companySummaries.map((company) => {
+          {companySummaries.map((company) => {
             const companyProfitClass =
               company.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
             return (
@@ -361,6 +401,7 @@ export default function ItemMarketAnalysis() {
                 <TableHead className="text-right">Revenue</TableHead>
                 <TableHead className="text-right">Profit</TableHead>
                 <TableHead className="text-right">Margin</TableHead>
+                {multiCompany && <TableHead>Top Profit Company</TableHead>}
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -368,7 +409,7 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={multiCompany ? 13 : 12}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={multiCompany ? 14 : 12}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))}
               {!isLoading && rows.map((row) => {
@@ -419,11 +460,16 @@ export default function ItemMarketAnalysis() {
                         {formatAmount(row.profit)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
+                      {multiCompany && (
+                        <TableCell className="font-medium">
+                          {topProfitCompanyByItem.get(row.name.trim().toLocaleLowerCase()) ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={multiCompany ? 13 : 12} className="bg-muted/20 p-0">
+                        <TableCell colSpan={multiCompany ? 14 : 12} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>
@@ -495,7 +541,7 @@ export default function ItemMarketAnalysis() {
               })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={multiCompany ? 13 : 12} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={multiCompany ? 14 : 12} className="py-10 text-center text-sm text-muted-foreground">
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
