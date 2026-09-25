@@ -27,7 +27,12 @@ function makeResponse(status: number): Response {
  */
 function mockAuthMeFetch(authMeStatus: number | "network-error"): typeof window.fetch {
   return vi.fn(async (input: RequestInfo | URL) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as Request).url;
     if (url.includes("/api/auth/me")) {
       if (authMeStatus === "network-error") throw new TypeError("Failed to fetch");
       return makeResponse(authMeStatus);
