@@ -20,6 +20,7 @@ type DateRange = Record<string, string>;
 interface UseAnalyticsReportQueriesProps {
   selectedCompanyId?: number;
   activeSection: string;
+  appMode: string;
   balStartDate: string;
   balEndDate: string;
   dateRange: DateRange;
@@ -35,6 +36,7 @@ interface UseAnalyticsReportQueriesProps {
 export function useAnalyticsReportQueries({
   selectedCompanyId,
   activeSection,
+  appMode,
   balStartDate,
   balEndDate,
   dateRange,
@@ -46,13 +48,16 @@ export function useAnalyticsReportQueries({
   stockMovementUrl,
   openingStockLocationId,
 }: UseAnalyticsReportQueriesProps) {
+  const analyticsAccountsPath =
+    appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
+
   const accountsQuery = useQuery<Account[]>({
-    queryKey: analyticsKeys.accounts(selectedCompanyId, balStartDate, balEndDate),
+    queryKey: [...analyticsKeys.accounts(selectedCompanyId, balStartDate, balEndDate), appMode],
     queryFn: () => {
       const params = new URLSearchParams({ profile: "analytics" });
       if (balStartDate) params.append("startDate", balStartDate);
       if (balEndDate) params.append("endDate", balEndDate);
-      const url = `/api/accounts/all?${params.toString()}`;
+      const url = `${analyticsAccountsPath}?${params.toString()}`;
       return fetchAnalyticsAccounts<Account>(url);
     },
     enabled: !!selectedCompanyId,
