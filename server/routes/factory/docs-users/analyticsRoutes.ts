@@ -238,7 +238,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             co.customer_id,
             c.legal_name AS customer_name
           FROM customer_orders co
-          LEFT JOIN customers c ON c.id = co.customer_id
+          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
           LEFT JOIN locations l ON l.id = co.location_id
           WHERE ${sql.join(orderFilters, sql` AND `)}
         ),
