@@ -1,10 +1,9 @@
 /**
  * A scheduled job does not overtake itself.
  *
- * node-cron fires on the clock, not on completion. The hourly job runs an export
- * that deliberately waits fifteen minutes between retries, and the location
- * report job fires every minute and sends WhatsApp messages over the network —
- * so a run that outlives its own interval is normal operation, not an edge case.
+ * node-cron fires on the clock, not on completion. Scheduled jobs can spend
+ * meaningful time on reports, provider calls, and network I/O, while the location
+ * report job fires every minute — so a run can outlive its own interval.
  * Overlapping runs re-read the same due work and compete for the same
  * connections while reporting durations that mean nothing.
  */
