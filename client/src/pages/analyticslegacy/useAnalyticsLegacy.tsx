@@ -183,7 +183,8 @@ export function useAnalyticsLegacy() {
   // Factory mode must use a factory-namespaced endpoint so account balances
   // follow the server-pinned factoryCompanyId instead of the shared ERP
   // currentCompanyId (which another browser tab can legitimately change).
-  const analyticsAccountsPath = appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
+  const analyticsAccountsPath =
+    appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
 
   // Fetch all accounts (with optional date filter for balance sections).
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
@@ -347,7 +348,7 @@ export function useAnalyticsLegacy() {
   const [factoryOrderCustomerSearch, setFactoryOrderCustomerSearch] = useState("");
   const [factoryOrderDestinationSearch, setFactoryOrderDestinationSearch] = useState("");
   const [factoryOrderLocationSearch, setFactoryOrderLocationSearch] = useState("");
-  const [factoryOrderStatus, setFactoryOrderStatus] = useState("FINALIZED");
+  const [factoryOrderStatus, setFactoryOrderStatus] = useState("all");
   const [factoryOrderProfitFilter, setFactoryOrderProfitFilter] = useState("all");
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
 
@@ -385,10 +386,9 @@ export function useAnalyticsLegacy() {
     if (factoryOrderDestinationSearch.trim()) params.append("destination", factoryOrderDestinationSearch.trim());
     if (factoryOrderLocationSearch.trim()) params.append("location", factoryOrderLocationSearch.trim());
     params.append("status", factoryOrderStatus);
-    params.append("profit", factoryOrderProfitFilter);
     params.append("page", String(factoryOrderPage));
-    params.append("pageSize", "100");
-    return `/api/factory/analytics/customer-order-items?${params.toString()}`;
+    params.append("pageSize", "50");
+    return `/api/factory/analytics/customer-orders?${params.toString()}`;
   };
 
   const {
@@ -396,29 +396,28 @@ export function useAnalyticsLegacy() {
     isLoading: loadingFactoryCustomerOrders,
     isError: factoryCustomerOrderAnalyticsError,
   } = useQuery<FactoryCustomerOrderAnalytics>({
-    queryKey: [
-      "/api/factory/analytics/customer-order-items",
-      selectedCompany?.id,
-      factorySalesStartDate,
-      factorySalesEndDate,
-      factoryOrderItemSearch,
-      factoryOrderCustomerSearch,
-      factoryOrderDestinationSearch,
-      factoryOrderLocationSearch,
-      factoryOrderStatus,
-      factoryOrderProfitFilter,
-      factoryOrderPage,
-    ],
-    queryFn: async () => {
-      const res = await fetch(buildFactoryOrderAnalyticsUrl(), { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch customer order analytics");
-      return res.json();
-    },
-    enabled: !!selectedCompany && appMode === "factory" && activeSection === "sales",
-    retry: 1,
-    refetchOnWindowFocus: false,
-    staleTime: 30_000,
-  });
+      queryKey: [
+        "/api/factory/analytics/customer-orders",
+        selectedCompany?.id,
+        factorySalesStartDate,
+        factorySalesEndDate,
+        factoryOrderItemSearch,
+        factoryOrderCustomerSearch,
+        factoryOrderDestinationSearch,
+        factoryOrderLocationSearch,
+        factoryOrderStatus,
+        factoryOrderPage,
+      ],
+      queryFn: async () => {
+        const res = await fetch(buildFactoryOrderAnalyticsUrl(), { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch customer order analytics");
+        return res.json();
+      },
+      enabled: !!selectedCompany && appMode === "factory" && activeSection === "sales",
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    });
 
   const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
     queryKey: ["/api/factory/analytics/pos-summary", selectedCompany?.id, factorySalesStartDate, factorySalesEndDate],

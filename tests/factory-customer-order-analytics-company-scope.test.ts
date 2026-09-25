@@ -1,5 +1,5 @@
 /**
- * `GET /api/factory/analytics/customer-order-items` builds its order filter,
+ * The Factory customer order analytics routes build their order filter,
  * including `co.company_id`, from interpolated fragments. The customer join must
  * carry the company scope too: a customer id belonging to another company must
  * never contribute its name to this company's analytics, even if an order row
@@ -102,6 +102,16 @@ describe("Factory customer order analytics company scope", () => {
     const names = (response.body.rows as Array<{ customerBreakdown: Array<{ customerName: string | null }> }>).flatMap(
       (row) => row.customerBreakdown.map((entry) => entry.customerName)
     );
+    expect(names).toContain("Own Customer");
+    expect(names).not.toContain("Foreign Customer");
+  });
+
+  it("keeps the customer-grouped invoice view to this company's customers", async () => {
+    harness.session = { factoryCompanyId: companyA };
+    const response = await request(app).get("/api/factory/analytics/customer-orders?status=all");
+    expect(response.status).toBe(200);
+
+    const names = (response.body.rows as Array<{ customerName: string | null }>).map((row) => row.customerName);
     expect(names).toContain("Own Customer");
     expect(names).not.toContain("Foreign Customer");
   });

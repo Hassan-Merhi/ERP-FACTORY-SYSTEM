@@ -1301,7 +1301,7 @@
     },
     "/api/reports/item-market-analysis": {
       "status": 200,
-      "shape": "{countries:[scalar],generatedAt:scalar,rows:[],summary:{importedQty:scalar,itemCount:scalar,marginPct:scalar,profit:scalar,revenue:scalar,soldQty:scalar}}"
+      "shape": "{companySummaries:[{companyCode:scalar,companyId:scalar,companyName:scalar,importedQty:scalar,itemCount:scalar,marginPct:scalar,profit:scalar,revenue:scalar,soldQty:scalar}],generatedAt:scalar,rows:[],summary:{importedQty:scalar,itemCount:scalar,marginPct:scalar,profit:scalar,revenue:scalar,soldQty:scalar}}"
     },
     "/api/reports/stock-in-sales": {
       "status": 200,
