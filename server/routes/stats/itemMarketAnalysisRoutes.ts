@@ -35,7 +35,6 @@ const querySchema = z.object({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
   search: z.string().trim().max(100).optional(),
-  country: z.string().trim().max(100).optional(),
   stockGroupId: z.coerce.number().int().positive().optional(),
   companyIds: z.string().trim().max(500).optional(),
 });
@@ -88,7 +87,6 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
       startDate: first(req.query.startDate),
       endDate: first(req.query.endDate),
       search: first(req.query.search),
-      country: first(req.query.country),
       stockGroupId: first(req.query.stockGroupId),
       companyIds: first(req.query.companyIds),
     });
@@ -168,30 +166,16 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
                 requestedLocationIds: [],
               });
 
-              const [analysis, countriesResult] = await Promise.all([
-                getItemMarketAnalysis({
-                  companyId: company.id,
-                  locationIds,
-                  startDate: parsed.data.startDate,
-                  endDate: parsed.data.endDate,
-                  search: parsed.data.search || undefined,
-                  country: parsed.data.country || undefined,
-                  stockGroupId: companyIds.length === 1 ? parsed.data.stockGroupId : undefined,
-                }),
-                pool.query(
-                  `SELECT DISTINCT COALESCE(NULLIF(BTRIM(country), ''), 'Unknown Country') AS country
-                   FROM locations
-                   WHERE company_id = $1 AND id = ANY($2::int[]) AND deleted_at IS NULL
-                   ORDER BY country`,
-                  [company.id, locationIds]
-                ),
-              ]);
+              const analysis = await getItemMarketAnalysis({
+                companyId: company.id,
+                locationIds,
+                startDate: parsed.data.startDate,
+                endDate: parsed.data.endDate,
+                search: parsed.data.search || undefined,
+                stockGroupId: companyIds.length === 1 ? parsed.data.stockGroupId : undefined,
+              });
 
-              return {
-                company,
-                analysis,
-                countries: countriesResult.rows.map((row) => String(row.country)),
-              };
+              return { company, analysis };
             })
           )
       );
@@ -225,7 +209,6 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
       res.setHeader("Cache-Control", "private, no-store");
       return res.json({
         generatedAt: new Date().toISOString(),
-        countries: [...new Set(sections.flatMap((section) => section.countries))].sort((a, b) => a.localeCompare(b)),
         rows,
         companySummaries,
         summary: {
