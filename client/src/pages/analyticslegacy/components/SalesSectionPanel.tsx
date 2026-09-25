@@ -18,12 +18,21 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     appMode,
     detailsPeriod,
     factoryPosSummary,
+    factoryCustomerOrderAnalytics,
+    factoryOrderCustomerSearch,
+    factoryOrderDestinationSearch,
+    factoryOrderItemSearch,
+    factoryOrderLocationSearch,
+    factoryOrderPage,
+    factoryOrderProfitFilter,
+    factoryOrderStatus,
     factorySalesByCustomer,
     factorySalesEndDate,
     factorySalesStartDate,
     formatAmount,
     formatDisplayDate,
     loadingFactoryPos,
+    loadingFactoryCustomerOrders,
     loadingFactorySales,
     rangeEnd,
     rangeStart,
@@ -32,6 +41,13 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     selectedLocationForDetails,
     selectedPeriod,
     setDetailsPeriod,
+    setFactoryOrderCustomerSearch,
+    setFactoryOrderDestinationSearch,
+    setFactoryOrderItemSearch,
+    setFactoryOrderLocationSearch,
+    setFactoryOrderPage,
+    setFactoryOrderProfitFilter,
+    setFactoryOrderStatus,
     setFactorySalesEndDate,
     setFactorySalesStartDate,
     setRangeEnd,
@@ -70,6 +86,221 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                   </Button>
                 )}
               </div>
+
+              {/* ── Customer orders / item profitability ───────────── */}
+              <Card className="p-4 md:p-6">
+                <div className="flex flex-col gap-1 mb-4">
+                  <h3 className="text-lg font-medium">Customer Order Analytics</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Sold customer orders with item-level sales, historical cost and gross profit
+                  </p>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6 mb-4">
+                  <Input
+                    value={factoryOrderItemSearch}
+                    onChange={(e) => {
+                      setFactoryOrderItemSearch(e.target.value);
+                      setFactoryOrderPage(1);
+                    }}
+                    placeholder="Item / article"
+                    data-testid="input-factory-order-item"
+                  />
+                  <Input
+                    value={factoryOrderCustomerSearch}
+                    onChange={(e) => {
+                      setFactoryOrderCustomerSearch(e.target.value);
+                      setFactoryOrderPage(1);
+                    }}
+                    placeholder="Customer"
+                    data-testid="input-factory-order-customer"
+                  />
+                  <Input
+                    value={factoryOrderDestinationSearch}
+                    onChange={(e) => {
+                      setFactoryOrderDestinationSearch(e.target.value);
+                      setFactoryOrderPage(1);
+                    }}
+                    placeholder="Destination"
+                    data-testid="input-factory-order-destination"
+                  />
+                  <Input
+                    value={factoryOrderLocationSearch}
+                    onChange={(e) => {
+                      setFactoryOrderLocationSearch(e.target.value);
+                      setFactoryOrderPage(1);
+                    }}
+                    placeholder="Location"
+                    data-testid="input-factory-order-location"
+                  />
+                  <Select
+                    value={factoryOrderStatus}
+                    onValueChange={(value) => {
+                      setFactoryOrderStatus(value);
+                      setFactoryOrderPage(1);
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-factory-order-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FINALIZED">Finalized</SelectItem>
+                      <SelectItem value="VERIFIED">Verified</SelectItem>
+                      <SelectItem value="all">Verified + Finalized</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={factoryOrderProfitFilter}
+                    onValueChange={(value) => {
+                      setFactoryOrderProfitFilter(value);
+                      setFactoryOrderPage(1);
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-factory-order-profit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Profit Results</SelectItem>
+                      <SelectItem value="profitable">Profitable</SelectItem>
+                      <SelectItem value="loss">Loss Making</SelectItem>
+                      <SelectItem value="break-even">Break Even</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loadingFactoryCustomerOrders ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-14 w-full" />
+                    ))}
+                  </div>
+                ) : !factoryCustomerOrderAnalytics ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Customer order analytics are unavailable
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Orders</div>
+                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalOrders)}</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Customers</div>
+                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.uniqueCustomers)}</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Bales Sold</div>
+                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalBales)}</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Sales</div>
+                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalSales)}</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Cost</div>
+                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalCost)}</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Gross Profit</div>
+                        <div className={`font-semibold font-mono ${factoryCustomerOrderAnalytics.summary.grossProfit < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                          {formatAmount(factoryCustomerOrderAnalytics.summary.grossProfit)}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Margin</div>
+                        <div className="font-semibold">{factoryCustomerOrderAnalytics.summary.marginPct.toFixed(1)}%</div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Profit / Bale</div>
+                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.avgProfitPerBale)}</div>
+                      </div>
+                    </div>
+
+                    {factoryCustomerOrderAnalytics.rows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        No sold customer order items match these filters
+                      </p>
+                    ) : (
+                      <div className="table-responsive">
+                        <Table>
+                          <TableHeader className="sticky top-0 z-30 bg-background">
+                            <TableRow>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Invoice</TableHead>
+                              <TableHead>Customer</TableHead>
+                              <TableHead>Item</TableHead>
+                              <TableHead className="hidden lg:table-cell">Destination</TableHead>
+                              <TableHead className="hidden xl:table-cell">Location</TableHead>
+                              <TableHead className="text-right">Qty</TableHead>
+                              <TableHead className="text-right hidden lg:table-cell">Avg Sell</TableHead>
+                              <TableHead className="text-right hidden lg:table-cell">Avg Cost</TableHead>
+                              <TableHead className="text-right">Sales</TableHead>
+                              <TableHead className="text-right">Profit</TableHead>
+                              <TableHead className="text-right hidden sm:table-cell">Margin</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {factoryCustomerOrderAnalytics.rows.map((row) => (
+                              <TableRow key={`${row.orderId}-${row.articleCode}`}>
+                                <TableCell className="whitespace-nowrap">{formatDisplayDate(row.orderDate)}</TableCell>
+                                <TableCell className="font-mono text-xs">{row.invoiceNumber || `#${row.orderId}`}</TableCell>
+                                <TableCell className="font-medium">{row.customerName || `Customer #${row.customerId}`}</TableCell>
+                                <TableCell>
+                                  <div className="font-medium">{row.itemName || row.articleCode}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {row.articleCode}
+                                    {row.category ? ` · ${row.category}` : ""}
+                                    {row.grade ? ` · ${row.grade}` : ""}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="hidden lg:table-cell">{row.destination || "—"}</TableCell>
+                                <TableCell className="hidden xl:table-cell">{row.locationName || "—"}</TableCell>
+                                <TableCell className="text-right font-mono">{formatNumber(row.qty)}</TableCell>
+                                <TableCell className="text-right font-mono hidden lg:table-cell">{formatAmount(row.avgSellingPrice)}</TableCell>
+                                <TableCell className="text-right font-mono hidden lg:table-cell">{formatAmount(row.avgCostPerBale)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatAmount(row.salesAmount)}</TableCell>
+                                <TableCell className={`text-right font-mono ${row.profitAmount < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                                  {formatAmount(row.profitAmount)}
+                                </TableCell>
+                                <TableCell className="text-right hidden sm:table-cell">{row.profitPct.toFixed(1)}%</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {factoryCustomerOrderAnalytics.pagination.totalPages > 1 && (
+                      <div className="flex items-center justify-between gap-3 pt-4">
+                        <div className="text-sm text-muted-foreground">
+                          Page {factoryCustomerOrderAnalytics.pagination.page} of {factoryCustomerOrderAnalytics.pagination.totalPages}
+                          {" · "}
+                          {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} item rows
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={factoryCustomerOrderAnalytics.pagination.page <= 1}
+                            onClick={() => setFactoryOrderPage(Math.max(1, factoryOrderPage - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={factoryCustomerOrderAnalytics.pagination.page >= factoryCustomerOrderAnalytics.pagination.totalPages}
+                            onClick={() => setFactoryOrderPage(factoryOrderPage + 1)}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </Card>
 
               {/* ── Factory OS – By Customer ─────────────────────── */}
               <Card className="p-6">
