@@ -582,8 +582,8 @@ export const phase3RemainingTranslationsPart01: readonly Phase3SharedUiEntry[] =
   },
   {
     en: '${result.itemCount ?? 0} items${result.duplicate ? " were already processed" : " sent"}${result.pageCount ?',
-    ar: '${result.itemCount ?? 0} items${result.duplicate ? " were already processed" : " sent"}${result.pageCount ?',
-    fr: '${result.itemCount ?? 0} items${result.duplicate ? " were already processed" : " sent"}${result.pageCount ?',
+    ar: "{{0}} عنصر{{1}}",
+    fr: "{{0}} article(s){{1}}",
   },
   { en: '${result.provider ?? "unknown"} — ${etaLine}', ar: "{{0}} — {{1}}", fr: "{{0}} — {{1}}" },
   {

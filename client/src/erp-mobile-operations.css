@@ -519,6 +519,12 @@ table[data-mobile-cards="true"] > tfoot > tr {
   padding: 0.5rem 0.75rem;
 }
 
+/* Desktop row heights (`h-12` rows) would clip the stacked card. */
+table[data-mobile-cards="true"] > tbody > tr,
+table[data-mobile-cards="true"] > tfoot > tr {
+  height: auto !important;
+}
+
 /* Zero specificity: row state colours from the page (status, unpriced, totals) still win. */
 :where(table[data-mobile-cards="true"] > tbody > tr) {
   background-color: hsl(var(--card));
@@ -601,6 +607,19 @@ table[data-mobile-cards="true"] [data-mobile-cell="actions"] {
   margin-top: 0.25rem;
   border-top: 1px solid hsl(var(--border)) !important;
   padding-top: 0.5rem !important;
+}
+
+/* Row controls drawn as bare icons for dense desktop grids get a touch-sized hit area in cards,
+   and stacked control columns (move up/down) lay out as a row. */
+table[data-mobile-cards="true"] [data-mobile-cell="actions"] :is(button, a[href]) {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  justify-content: center;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="actions"] .flex-col {
+  flex-direction: row;
+  gap: 0.25rem;
 }
 
 table[data-mobile-cards="true"] [data-mobile-cell="full"] {

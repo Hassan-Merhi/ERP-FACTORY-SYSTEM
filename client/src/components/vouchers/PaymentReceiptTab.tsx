@@ -663,7 +663,8 @@ export function PaymentReceiptTab({
               </div>
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
-              <div className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-[backdrop-filter]:bg-card max-sm:py-2"
+              <div
+                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-[backdrop-filter]:bg-card max-sm:py-2"
                 data-voucher-sticky-actions=""
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">

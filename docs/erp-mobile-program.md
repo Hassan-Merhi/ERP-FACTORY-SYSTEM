@@ -397,3 +397,29 @@ section.
   visible viewport (keyboard) and keeps Done clear of the close control.
 - Transfer Order inside the Vouchers page shows a section heading instead of a second page
   header; the standalone `/stock-transfer-order` page keeps its `PageHeader`.
+
+### R4 — GIT tracking and Location Inventory
+
+- **GIT Truck / Location.** Phones get one card per container (container #, supplier, status,
+  truck/plate, location, agent, transporter) under the same shop → supplier grouping as the
+  table. The desktop table and the WhatsApp image template are unchanged.
+- **GIT Agent / Duty.** The agent open-container and in-transit tables opt into the shared card
+  layout (`useMobileCardTable`) inside each agent section, so duty, cleared and remaining
+  amounts, statuses, the prepaid / reorder controls and the account balance stay available
+  without sideways scrolling. The balance cell is labelled "Balance".
+- **GIT Detail.** The default workbook view already used cards; the Flat Table view now reads as
+  cards on phones too (it was 1313px wide).
+- **Shared card fixes.** Card rows ignore desktop row heights (`h-12` rows clipped the Stock Group
+  Items cards to their title), and bare icon controls in a card's action row get a 40px hit
+  area, laid out in a row.
+- **Location → Stock Groups.** On phones: location name with one Actions menu (View All Stock
+  Items, Show/Hide zero stock, Excel/PDF exports — the with-cost PDF only when cost is visible —
+  and the location's rename, WhatsApp and delete actions); a two-column summary (Groups, Items,
+  Qty, and Value only when cost is visible); full-width search and category filter; and one
+  card per stock group (items, qty, and average rate/value when cost is visible) that opens the
+  group, with its PDF export. The movement From/To filter sits on one row.
+- **Stock Group Items / All Items.** Item cards now show the full record (name, code, category,
+  quantity with unit, and rate/value when permitted); the name still opens the item history.
+- **Translation fix.** A generated Arabic/French catalogue entry held an untranslated,
+  truncated source template, so any "N items" text rendered raw template code in Arabic. It now
+  maps to "{{0}} عنصر" / "{{0}} article(s)" (catalogue size unchanged).
