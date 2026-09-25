@@ -82,6 +82,8 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/retailWave1Translations.ts",
   "client/src/i18n/retailWave2Translations.ts",
   "client/src/i18n/retailWave3Translations.ts",
+  "client/src/i18n/wave8ReleaseTranslations.part1.ts",
+  "client/src/i18n/wave8ReleaseTranslations.part2.ts",
   "client/src/i18n/payrollUiTranslations.ts",
 ];
 
@@ -114,6 +116,13 @@ const reviewedTechnicalValues = new Set([
   // Detector false positive: this is a calculation expression embedded in a
   // customer table cell, not user-facing copy.
   "Math.abs(customer.balance ?? 0)",
+  // Detector false positive: the ternary opening of the ErpRoutes route factory, not copy.
+  "allowed ? (",
+  // Interpolated comparison label: the rendered text is the variable, the colon is punctuation.
+  "${labelB}:",
+  // AIS stream fallbacks written only to server logs and metrics, never to an API response.
+  "subscription refresh failed",
+  "AIS update handler failed",
 ]);
 
 function argumentValue(name) {
