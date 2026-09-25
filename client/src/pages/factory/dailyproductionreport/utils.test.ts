@@ -110,9 +110,11 @@ describe("money and weight formatting", () => {
     expect(fmtKg(null)).toBe("0 kg");
   });
 
-  it("keeps three decimals on a rate per kilo", () => {
-    // A rate rounded to cents loses the difference between two suppliers.
-    expect(fmtRate(1.2345)).toBe("$1.235");
+  it("shows a rate per kilo with at most four decimals", () => {
+    // Backend precision stays untouched; this helper is display-only.
+    expect(fmtRate(0.6421298359)).toBe("$0.6421");
+    expect(fmtRate(1.23456)).toBe("$1.2346");
+    expect(fmtRate(1.2)).toBe("$1.200");
   });
 
   it("keeps one decimal on a weight", () => {
