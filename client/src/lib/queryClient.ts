@@ -16,6 +16,7 @@ import {
 import { applyReferenceMutationResponse } from "./referenceMutationCache";
 import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
+import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -145,8 +146,19 @@ function isFactoryAccountingRead(pathname: string | null, method: string): boole
   return pathname === "/api/ledger-accounts" || pathname === "/api/bank-accounts";
 }
 
+function isFactoryAccountsAllRead(pathname: string | null, method: string): boolean {
+  return method === "GET" && pathname === "/api/accounts/all";
+}
+
 function emptyJsonArrayResponse(): Response {
   return new Response("[]", {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function emptyAccountsEnvelopeResponse(): Response {
+  return new Response(JSON.stringify({ accounts: [], asOfDate: null }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -231,8 +243,19 @@ if (
       pathname.startsWith("/api/") &&
       pathname !== "/api/csrf-token" &&
       window.location.pathname.startsWith("/factory/");
-    if (isFactoryUiRequest && factoryAccountingModuleAccess === false && isFactoryAccountingRead(pathname, method)) {
+    if (
+      isFactoryUiRequest &&
+      isFactoryAccountingRead(pathname, method) &&
+      (factoryAccountingModuleAccess === false || !factoryPageOwnsSharedAccountingRead(window.location.pathname))
+    ) {
       return emptyJsonArrayResponse();
+    }
+    if (
+      isFactoryUiRequest &&
+      isFactoryAccountsAllRead(pathname, method) &&
+      (factoryAccountingModuleAccess === false || !factoryPageOwnsAccountsAllRead(window.location.pathname))
+    ) {
+      return emptyAccountsEnvelopeResponse();
     }
 
     if (isFactoryUiRequest) {

@@ -4,6 +4,8 @@ import { addDays, format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 import { useCompany } from "@/contexts/CompanyContext";
+import { canUseFactorySurface } from "@/lib/factoryClientAccess";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import type { Preset, ProductionValuationMode, ReportData } from "./types";
 import {
@@ -42,7 +44,19 @@ export function useDailyProductionReport() {
   const [workerPayrollOpen, setWorkerPayrollOpen] = useState(false);
   const [empPayrollOpen, setEmpPayrollOpen] = useState(false);
   const { data: authenticatedUser } = useQuery(authenticatedUserQueryOptions());
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60_000,
+  });
   const { selectedCompany } = useCompany();
+  const canReadWorkerAttendanceReport = canUseFactorySurface(myAccess, "factory/payroll-hub", [
+    "hide_tab_payrollhub_workers",
+    "hide_tab_workers_report",
+  ]);
+  const canReadWorkerPayrollSummary = canUseFactorySurface(myAccess, "factory/payroll-hub", [
+    "hide_tab_payrollhub_workers",
+    "hide_tab_workers_payroll",
+  ]);
   const [valuationMode, setValuationModeState] = useState<ProductionValuationMode>("cost");
   const [valuationLoadedKey, setValuationLoadedKey] = useState<string | null>(null);
 
@@ -150,7 +164,7 @@ export function useDailyProductionReport() {
       if (!res.ok) throw new Error("Failed to load attendance");
       return res.json();
     },
-    enabled: !!from && !!to,
+    enabled: canReadWorkerAttendanceReport && !!from && !!to,
   });
 
   const payrollDateParam = to || todayStr();
@@ -183,6 +197,7 @@ export function useDailyProductionReport() {
       return res.json();
     },
     staleTime: 60_000,
+    enabled: canReadWorkerPayrollSummary,
   });
 
   const salaryKpi = useMemo(() => {

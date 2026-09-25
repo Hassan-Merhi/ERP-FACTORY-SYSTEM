@@ -98,7 +98,7 @@ export default function ContainerVerification() {
       if (!res.ok) throw new Error("Failed to fetch loaded items");
       return res.json();
     },
-    enabled: !!containerId,
+    enabled: !!containerId && !!containerData?.container,
   });
 
   const addItemMutation = useMutation({
