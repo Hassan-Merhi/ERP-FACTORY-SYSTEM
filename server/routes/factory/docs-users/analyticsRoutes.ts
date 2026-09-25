@@ -17,8 +17,19 @@ import {
   factoryPosSales,
 } from "@shared/schema";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
+import { serveAccountListForCompany } from "../../accounts/all";
 
 export function registerFactoryAnalyticsRoutes(app: Express) {
+  // Keep account balances pinned to the Factory company. Shared ERP account
+  // endpoints intentionally follow currentCompanyId, which may point at a
+  // different company when another browser tab switches ERP context.
+  app.get("/api/factory/analytics/accounts", requireAuth, async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+    return serveAccountListForCompany(req, res, companyId);
+  });
+
   // ── Factory Analytics: Sales by Customer ─────────────────────────────────
   app.get("/api/factory/analytics/sales-by-customer", requireAuth, async (req: Request, res: Response) => {
     try {
