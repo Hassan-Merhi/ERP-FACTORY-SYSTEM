@@ -109,12 +109,8 @@ export function useFactoryPendingInvoiceVerifyModel() {
     queryKey: ["/api/factory/customer-proformas", orderDetail?.customerId, "summary"],
     queryFn: async () => {
       if (!orderDetail?.customerId) return [];
-      const res = await fetch(
-        `/api/factory/customer-proformas?customerId=${orderDetail.customerId}&profile=summary`,
-        {
-          credentials: "include",
-        }
-      );
+      const proformaSummaryUrl = `/api/factory/customer-proformas?customerId=${orderDetail.customerId}&profile=summary`;
+      const res = await fetch(proformaSummaryUrl, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch proformas");
       return res.json();
     },
