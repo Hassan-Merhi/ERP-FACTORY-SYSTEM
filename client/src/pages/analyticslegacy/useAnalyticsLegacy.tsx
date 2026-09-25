@@ -179,17 +179,30 @@ export function useAnalyticsLegacy() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch all accounts (with optional date filter for balance sections)
+  // Factory mode must use a factory-namespaced endpoint so account balances
+  // follow the server-pinned factoryCompanyId instead of the shared ERP
+  // currentCompanyId (which another browser tab can legitimately change).
+  const analyticsAccountsPath =
+    appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
+
+  // Fetch all accounts (with optional date filter for balance sections).
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<Account[]>({
-    queryKey: ["/api/accounts/all", selectedCompany?.id, balStartDate, balEndDate],
+    queryKey: [analyticsAccountsPath, selectedCompany?.id, balStartDate, balEndDate],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ profile: "analytics" });
       if (balStartDate) params.append("startDate", balStartDate);
       if (balEndDate) params.append("endDate", balEndDate);
-      const url = `/api/accounts/all${params.toString() ? `?${params.toString()}` : ""}`;
+      const url = `${analyticsAccountsPath}?${params.toString()}`;
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch accounts");
-      return response.json();
+
+      const payload: unknown = await response.json();
+      if (Array.isArray(payload)) return payload as Account[];
+      if (payload && typeof payload === "object" && "accounts" in payload) {
+        const accountList = (payload as { accounts?: unknown }).accounts;
+        if (Array.isArray(accountList)) return accountList as Account[];
+      }
+      return [];
     },
     enabled: !!selectedCompany,
   });
