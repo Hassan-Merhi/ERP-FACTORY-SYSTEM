@@ -23,6 +23,12 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
+// Isolated precision context for factory batch-rate arithmetic. Decimal.js defaults
+// to 20 significant digits, which is not enough to retain 100 decimal places.
+// 220 significant digits leaves headroom for large totals plus 100 fractional digits
+// without changing Decimal precision globally for the rest of the application.
+const BatchRateDecimal = Decimal.clone({ precision: 220, rounding: Decimal.ROUND_HALF_UP });
+
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
   // 8. Daily Production Value Report
@@ -381,11 +387,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // values does not introduce binary floating-point drift before division.
       const totalMixWeightDecimal = correctedBatchRows.reduce(
         (sum, row) => sum.plus(row.totalWeightKg || 0),
-        new Decimal(0)
+        new BatchRateDecimal(0)
       );
       const totalMixCostDecimal = correctedBatchRows.reduce(
         (sum, row) => sum.plus(row.totalCost || 0),
-        new Decimal(0)
+        new BatchRateDecimal(0)
       );
       const totalMixWeightKg = totalMixWeightDecimal.toNumber();
       const totalMixCost = totalMixCostDecimal.toNumber();
@@ -428,40 +434,48 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
 
-      const allTimeMixKgDecimal = new Decimal(String(mixAllTimeRow.mix_kg ?? "0"));
-      const allTimeMixCostDecimal = new Decimal(String(mixAllTimeRow.mix_cost ?? "0"));
-      const allTimeBaleKgDecimal = new Decimal(String(baleAllTimeRow.bale_kg ?? "0"));
+      const allTimeMixKgDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_kg ?? "0"));
+      const allTimeMixCostDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_cost ?? "0"));
+      const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
 
-      // Batch rates are API/calculation values, not display values. Preserve up to
-      // 10 digits after the decimal point in the backend and let the frontend decide
-      // how many digits to show.
+      // Batch rates are calculation values, not display values. Keep up to 100 digits
+      // after the decimal point in the backend. The frontend still formats these rates
+      // to a maximum of 4 decimal places for display.
       const allTimeBlendedCpkDecimal = allTimeMixKgDecimal.gt(0)
-        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
-        : new Decimal(0);
+        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(100)
+        : new BatchRateDecimal(0);
       const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
-        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
-        : new Decimal(0);
+        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(100)
+        : new BatchRateDecimal(0);
 
-      const allTimeBlendedCpk = allTimeBlendedCpkDecimal.toNumber();
+      // JSON numbers cannot carry 100 decimal digits. Convert the visible rate only
+      // at the response boundary; backend calculations below continue to use Decimal.
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
-      const balanceWeightDecimal = Decimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
+      const balanceWeightDecimal = BatchRateDecimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
       const balanceWeightKg = balanceWeightDecimal.toNumber();
-      // Reuse the exact same 10-decimal backend rate returned for the visible
-      // Original Batches KPI, so the two cards cannot drift apart.
+      // Reuse the exact same 100-decimal backend rate as Original Batches so the
+      // two cards cannot drift apart internally.
       const balanceCostPerKg = blendedCostPerKg;
       const balanceValue = balanceWeightDecimal
         .times(blendedCostPerKgDecimal)
         .toDecimalPlaces(2)
         .toNumber();
 
-      // Production profit must follow the active valuation mode. The selected finished-goods
-      // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
-      // This keeps the KPI, margin and Balance on Table card aligned when the valuation toggle changes.
-      const producedMaterialCost = totalBaleWeightKg * allTimeBlendedCpk;
-      const statusValue = totalProductionValue - producedMaterialCost;
+      // Keep rate-dependent profit arithmetic in high-precision decimal space too.
+      const producedMaterialCostDecimal = new BatchRateDecimal(String(totalBaleWeightKg))
+        .times(allTimeBlendedCpkDecimal);
+      const statusValueDecimal = new BatchRateDecimal(String(totalProductionValue))
+        .minus(producedMaterialCostDecimal);
+      const statusValue = statusValueDecimal.toNumber();
       const profitValue = statusValue;
-      const profitMarginPct = totalProductionValue > 0 ? (profitValue / totalProductionValue) * 100 : 0;
+      const profitMarginPct =
+        totalProductionValue > 0
+          ? statusValueDecimal
+              .dividedBy(new BatchRateDecimal(String(totalProductionValue)))
+              .times(100)
+              .toNumber()
+          : 0;
 
       // ── Kg comparison ──
       const kgDiff = totalBaleWeightKg - totalMixWeightKg;
