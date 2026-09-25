@@ -206,7 +206,21 @@ export default function ProductionRawStock() {
 
   const kpiData = useMemo(() => {
     const rs = rawStock || [];
-    const totalUsed = rs.reduce((sum, r) => sum + parseFloat(r.usedKg || "0"), 0);
+    const originalBatches = (mixBatches || []).filter((batch) => batch.carryForwardFromId == null);
+
+    // Keep the Raw Production "Total Used" KPI on the exact same stored batch basis
+    // as Production Overview -> Original Batches. Raw-stock rows can legitimately omit
+    // historical suppliers that no longer have a current stock/adjustment row, while
+    // mix-batch totals remain the authoritative historical usage/value record.
+    const totalUsed = originalBatches.reduce(
+      (sum, batch) => sum + (parseFloat(batch.totalWeightKg || "0") || 0),
+      0
+    );
+    const totalUsedValue = originalBatches.reduce(
+      (sum, batch) => sum + (parseFloat(batch.totalCost || "0") || 0),
+      0
+    );
+
     return {
       totalReceived: rs.reduce((sum, r) => sum + parseFloat(r.receivedKg || "0"), 0),
       totalReceivedValue: rs.reduce(
@@ -214,11 +228,11 @@ export default function ProductionRawStock() {
         0
       ),
       totalUsed,
-      totalUsedValue: rs.reduce((sum, r) => sum + parseFloat(r.usedValueUsd || "0"), 0),
+      totalUsedValue,
       totalFree: rs.reduce((sum, r) => sum + parseFloat(r.freeKg || "0"), 0),
       totalValue: rs.reduce((sum, r) => sum + parseFloat(r.valueRemainingUsd || r.valueRemaining || "0"), 0),
     };
-  }, [rawStock]);
+  }, [rawStock, mixBatches]);
 
   return (
     <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6" data-testid="production-raw-stock-page">
