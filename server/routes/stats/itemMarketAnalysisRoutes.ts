@@ -28,7 +28,13 @@ const querySchema = z.object({
 });
 
 const first = (value: unknown): string | undefined =>
-  Array.isArray(value) ? (value[0] == null ? undefined : String(value[0])) : typeof value === "string" ? value : undefined;
+  Array.isArray(value)
+    ? value[0] == null
+      ? undefined
+      : String(value[0])
+    : typeof value === "string"
+      ? value
+      : undefined;
 
 export function registerItemMarketAnalysisRoutes(app: Express) {
   const reportPageAccess = requirePageAccess("page_sales_report");
@@ -37,7 +43,9 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
     const companyId = req.session.currentCompanyId;
     const userId = req.session.userId;
     const role = req.session.currentRole;
-    if (!companyId || !userId || !role) return res.status(400).json({ message: "An active company session is required" });
+    if (!companyId || !userId || !role) {
+      return res.status(400).json({ message: "An active company session is required" });
+    }
 
     const parsed = querySchema.safeParse({
       startDate: first(req.query.startDate),
