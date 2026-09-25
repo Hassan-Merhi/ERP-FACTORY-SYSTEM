@@ -39,6 +39,7 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureFactoryContainerPlannerSchema } from "./startup/factoryContainerPlannerSchema";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -258,6 +259,16 @@ let migrationsDone = false;
       } catch (staffTrackingSchemaErr: unknown) {
         logger.error("[startup] ✗ Could not ensure Factory staff tracking schema:", {
           error: getErrorMessage(staffTrackingSchemaErr),
+        });
+      }
+      try {
+        // The Container Planner's registered migrations are never applied by
+        // production's boot path, so ensure its tables here unconditionally.
+        await ensureFactoryContainerPlannerSchema(pool);
+        logger.info("[startup] ✓ Factory container planner schema ensured");
+      } catch (containerPlannerSchemaErr: unknown) {
+        logger.error("[startup] ✗ Could not ensure Factory container planner schema:", {
+          error: getErrorMessage(containerPlannerSchemaErr),
         });
       }
       if (migrationsEnabled) {
