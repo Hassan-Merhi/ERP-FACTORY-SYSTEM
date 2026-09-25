@@ -1,3 +1,4 @@
+import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -251,7 +252,11 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to create credit/debit note", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create credit/debit note",
+        variant: "destructive",
+      });
     },
   });
 
@@ -282,7 +287,11 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     },
     onError: (error: ClientErrorLike) => {
       if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message || "Failed to update credit/debit note", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update credit/debit note",
+        variant: "destructive",
+      });
     },
   });
 
@@ -303,37 +312,40 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
     setEditingVoucherId(null);
   };
 
-  const addItemToCart = useCallback((item: (typeof itemsWithStock)[0]) => {
-    if (!selectedLocationId) {
-      toast({ title: "No location selected", description: "Please select a location first", variant: "destructive" });
-      return;
-    }
-    const qty = parseFloat(itemQuantity);
-    const rate = parseFloat(refundRate) || item.avgRate;
-    if (isNaN(qty) || qty <= 0) {
-      toast({ title: "Invalid quantity", description: "Please enter a valid quantity", variant: "destructive" });
-      return;
-    }
-    const location = locations.find((candidate) => candidate.id === selectedLocationId);
-    if (!location) return;
-    setItems((previous) => [
-      ...previous,
-      {
-        rowKey: nextCreditNoteRowKey(`item-${item.id}-${selectedLocationId}`),
-        stockItemId: item.id,
-        stockItemName: item.name,
-        locationId: selectedLocationId,
-        locationName: location.name,
-        quantity: qty.toString(),
-        refundRate: rate.toFixed(2),
-        inventoryCost: item.avgRate.toFixed(2),
-        uom: item.uom,
-      },
-    ]);
-    setItemQuantity("1");
-    setRefundRate("");
-    searchInputRef.current?.focus();
-  }, [itemQuantity, locations, refundRate, selectedLocationId, toast]);
+  const addItemToCart = useCallback(
+    (item: (typeof itemsWithStock)[0]) => {
+      if (!selectedLocationId) {
+        toast({ title: "No location selected", description: "Please select a location first", variant: "destructive" });
+        return;
+      }
+      const qty = parseFloat(itemQuantity);
+      const rate = parseFloat(refundRate) || item.avgRate;
+      if (isNaN(qty) || qty <= 0) {
+        toast({ title: "Invalid quantity", description: "Please enter a valid quantity", variant: "destructive" });
+        return;
+      }
+      const location = locations.find((candidate) => candidate.id === selectedLocationId);
+      if (!location) return;
+      setItems((previous) => [
+        ...previous,
+        {
+          rowKey: nextCreditNoteRowKey(`item-${item.id}-${selectedLocationId}`),
+          stockItemId: item.id,
+          stockItemName: item.name,
+          locationId: selectedLocationId,
+          locationName: location.name,
+          quantity: qty.toString(),
+          refundRate: rate.toFixed(2),
+          inventoryCost: item.avgRate.toFixed(2),
+          uom: item.uom,
+        },
+      ]);
+      setItemQuantity("1");
+      setRefundRate("");
+      searchInputRef.current?.focus();
+    },
+    [itemQuantity, locations, refundRate, selectedLocationId, toast]
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -364,10 +376,15 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
 
   const removeItem = (index: number) => setItems((previous) => previous.filter((_, itemIndex) => itemIndex !== index));
   const updateItemInventoryCost = (index: number, newCost: string) =>
-    setItems((previous) => previous.map((item, itemIndex) => (itemIndex === index ? { ...item, inventoryCost: newCost } : item)));
+    setItems((previous) =>
+      previous.map((item, itemIndex) => (itemIndex === index ? { ...item, inventoryCost: newCost } : item))
+    );
 
   const totalRefund = items.reduce((sum, item) => sum + parseFloat(item.quantity) * parseFloat(item.refundRate), 0);
-  const totalInventoryValue = items.reduce((sum, item) => sum + parseFloat(item.quantity) * parseFloat(item.inventoryCost), 0);
+  const totalInventoryValue = items.reduce(
+    (sum, item) => sum + parseFloat(item.quantity) * parseFloat(item.inventoryCost),
+    0
+  );
 
   const onSubmit = (values: CreditNoteFormData) => {
     if (items.length === 0) {
@@ -398,7 +415,11 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   const isPending = createCreditNoteMutation.isPending || updateCreditNoteMutation.isPending;
 
   if (editLoading) {
-    return <div className="flex items-center justify-center h-64"><div className="text-muted-foreground">Loading credit note...</div></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading credit note...</div>
+      </div>
+    );
   }
 
   return (
@@ -407,12 +428,33 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
         <CardHeader className="pb-3 flex-shrink-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
-              {isEditMode ? <><Pencil className="h-5 w-5" />Edit {noteType}</> : <><Package className="h-5 w-5" />{noteType === "Credit Note" ? "Credit Note (Customer Return)" : "Debit Note"}</>}
+              {isEditMode ? (
+                <>
+                  <Pencil className="h-5 w-5" />
+                  Edit {noteType}
+                </>
+              ) : (
+                <>
+                  <Package className="h-5 w-5" />
+                  {noteType === "Credit Note" ? "Credit Note (Customer Return)" : "Debit Note"}
+                </>
+              )}
             </CardTitle>
-            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-              {isEditMode && <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">Cancel</Button>}
-              <Button type="button" onClick={form.handleSubmit(onSubmit)} disabled={items.length === 0 || isPending} data-testid="button-create-credit-note">
-                <Plus className="h-4 w-4 mr-1" />{isPending ? "Saving..." : isEditMode ? "Update Note" : "Create Note"}
+            {/* Phones save from the pinned action bar at the bottom of the tab. */}
+            <div className="hidden w-full flex-wrap gap-2 sm:flex sm:w-auto">
+              {isEditMode && (
+                <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">
+                  Cancel
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={form.handleSubmit(onSubmit)}
+                disabled={items.length === 0 || isPending}
+                data-testid="button-create-credit-note"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {isPending ? "Saving..." : isEditMode ? "Update Note" : "Create Note"}
               </Button>
             </div>
           </div>
@@ -421,38 +463,170 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
           <Form {...form}>
             <form className="space-y-4" noValidate>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <FormField control={form.control} name="noteType" render={({ field }) => (
-                  <FormItem><FormLabel>Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}><FormControl><SelectTrigger data-testid="select-note-type"><SelectValue placeholder="Select type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Credit Note">Credit Note</SelectItem><SelectItem value="Debit Note">Debit Note</SelectItem></SelectContent></Select></FormItem>
-                )} />
-                <FormField control={form.control} name="voucherDate" render={({ field }) => (
-                  <FormItem><FormLabel>Date</FormLabel><FormControl><Input type="date" value={field.value || ""} onChange={(event) => field.onChange(event.target.value)} data-testid="input-credit-note-date" /></FormControl></FormItem>
-                )} />
-                <FormField control={form.control} name="cashAccountId" render={() => (
-                  <FormItem className="sm:col-span-2"><FormLabel>{noteType === "Credit Note" ? "Refund From (Cash/Bank)" : "Receive Into"}</FormLabel><FormControl><AccountAutocomplete value={cashAccountId > 0 ? { type: cashAccountType, id: cashAccountId, name: cashAccountName || "" } : null} onChange={(type, id, name) => { form.setValue("cashAccountType", type); form.setValue("cashAccountId", id); form.setValue("cashAccountName", name); }} allAccounts={allAccounts} rowIndex={-1} placeholder="Select cash/bank account..." testId="input-credit-note-account" /></FormControl></FormItem>
-                )} />
+                <FormField
+                  control={form.control}
+                  name="noteType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-note-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Credit Note">Credit Note</SelectItem>
+                          <SelectItem value="Debit Note">Debit Note</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="voucherDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          value={field.value || ""}
+                          onChange={(event) => field.onChange(event.target.value)}
+                          data-testid="input-credit-note-date"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cashAccountId"
+                  render={() => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>{noteType === "Credit Note" ? "Refund From (Cash/Bank)" : "Receive Into"}</FormLabel>
+                      <FormControl>
+                        <AccountAutocomplete
+                          value={
+                            cashAccountId > 0
+                              ? { type: cashAccountType, id: cashAccountId, name: cashAccountName || "" }
+                              : null
+                          }
+                          onChange={(type, id, name) => {
+                            form.setValue("cashAccountType", type);
+                            form.setValue("cashAccountId", id);
+                            form.setValue("cashAccountName", name);
+                          }}
+                          allAccounts={allAccounts}
+                          rowIndex={-1}
+                          placeholder="Select cash/bank account..."
+                          testId="input-credit-note-account"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               </div>
 
               {items.length > 0 && (
-                <Card><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Location</TableHead><TableHead className="text-right">Qty</TableHead><TableHead className="text-right">Refund Rate</TableHead><TableHead className="text-right">Refund Amt</TableHead><TableHead className="text-right">Inv. Cost</TableHead><TableHead className="text-right">Inv. Value</TableHead><TableHead></TableHead></TableRow></TableHeader><TableBody>
-                  {items.map((item, index) => {
-                    const qty = parseFloat(item.quantity);
-                    const refundAmt = qty * parseFloat(item.refundRate);
-                    const invValue = qty * parseFloat(item.inventoryCost);
-                    return (
-                      <TableRow key={item.rowKey} data-testid={`credit-note-item-${index}`}>
-                        <TableCell className="font-medium">{item.stockItemName}</TableCell><TableCell>{item.locationName}</TableCell><TableCell className="text-right font-mono">{formatNumber(qty, 0)} {item.uom}</TableCell><TableCell className="text-right font-mono">{formatNumber(parseFloat(item.refundRate))}</TableCell><TableCell className="text-right font-mono text-primary">{formatNumber(refundAmt)}</TableCell>
-                        <TableCell className="text-right"><Input type="number" step="0.01" value={item.inventoryCost} onChange={(event) => updateItemInventoryCost(index, event.target.value)} className="w-20 h-8 text-right font-mono text-sm" data-testid={`input-inv-cost-${index}`} /></TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">{formatNumber(invValue)}</TableCell><TableCell><Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} data-testid={`button-remove-item-${index}`}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody></Table></CardContent></Card>
+                <Card>
+                  <CardContent className="p-0">
+                    <Table mobileLayout="cards">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Refund Rate</TableHead>
+                          <TableHead className="text-right">Refund Amt</TableHead>
+                          <TableHead className="text-right">Inv. Cost</TableHead>
+                          <TableHead className="text-right">Inv. Value</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, index) => {
+                          const qty = parseFloat(item.quantity);
+                          const refundAmt = qty * parseFloat(item.refundRate);
+                          const invValue = qty * parseFloat(item.inventoryCost);
+                          return (
+                            <TableRow key={item.rowKey} data-testid={`credit-note-item-${index}`}>
+                              <TableCell className="font-medium">{item.stockItemName}</TableCell>
+                              <TableCell>{item.locationName}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatNumber(qty, 0)} {item.uom}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatNumber(parseFloat(item.refundRate))}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-primary">
+                                {formatNumber(refundAmt)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.inventoryCost}
+                                  onChange={(event) => updateItemInventoryCost(index, event.target.value)}
+                                  className="w-20 h-8 text-right font-mono text-sm"
+                                  data-testid={`input-inv-cost-${index}`}
+                                />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">
+                                {formatNumber(invValue)}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeItem(index)}
+                                  data-testid={`button-remove-item-${index}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               )}
 
-              <FormField control={form.control} name="description" render={({ field }) => (
-                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea {...field} placeholder="Enter notes..." className="resize-none" rows={2} data-testid="input-credit-note-description" /></FormControl></FormItem>
-              )} />
-              <div className="flex flex-wrap justify-between items-center pt-4 border-t gap-2"><div className="space-y-1"><div className="text-lg font-semibold">Refund Total: <span className="font-mono text-primary">{formatNumber(totalRefund)}</span></div><div className="text-sm text-muted-foreground">Inventory Value: <span className="font-mono">{formatNumber(totalInventoryValue)}</span>{Math.abs(totalRefund - totalInventoryValue) > 0.01 && <span className="ml-2">(Variance: {formatNumber(totalRefund - totalInventoryValue)})</span>}</div></div></div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Enter notes..."
+                        className="resize-none"
+                        rows={2}
+                        data-testid="input-credit-note-description"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <div className="flex flex-wrap justify-between items-center pt-4 border-t gap-2">
+                <div className="space-y-1">
+                  <div className="text-lg font-semibold">
+                    Refund Total: <span className="font-mono text-primary">{formatNumber(totalRefund)}</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Inventory Value: <span className="font-mono">{formatNumber(totalInventoryValue)}</span>
+                    {Math.abs(totalRefund - totalInventoryValue) > 0.01 && (
+                      <span className="ml-2">(Variance: {formatNumber(totalRefund - totalInventoryValue)})</span>
+                    )}
+                  </div>
+                </div>
+              </div>
             </form>
           </Form>
         </CardContent>
@@ -460,20 +634,119 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
 
       <Card className="w-full lg:w-80 flex flex-col">
         <CardHeader className="pb-3 flex-shrink-0">
-          <div className="flex items-center gap-2 mb-3"><MapPin className="h-4 w-4" /><span className="font-medium text-sm">Location</span></div>
-          <Select value={selectedLocationId?.toString() || ""} onValueChange={(value) => { setSelectedLocationId(parseInt(value)); setSearchTerm(""); setHighlightedIndex(0); }}><SelectTrigger data-testid="select-location"><SelectValue placeholder="Choose location..." /></SelectTrigger><SelectContent>{locations.map((location) => <SelectItem key={location.id} value={location.id.toString()}>{location.name}</SelectItem>)}</SelectContent></Select>
-          <div className="mt-3"><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input ref={searchInputRef} value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search items..." className="pl-8" data-testid="input-search-item" /></div></div>
-          <div className="mt-3 grid grid-cols-2 gap-2"><div><label className="text-xs font-medium text-muted-foreground mb-1 block">Qty</label><Input type="number" step="1" value={itemQuantity} onChange={(event) => setItemQuantity(event.target.value)} placeholder="1" data-testid="input-item-quantity" /></div><div><label className="text-xs font-medium text-muted-foreground mb-1 block">Refund Rate</label><Input type="number" step="0.01" value={refundRate} onChange={(event) => setRefundRate(event.target.value)} placeholder="Auto" data-testid="input-refund-rate" /></div></div>
+          <div className="flex items-center gap-2 mb-3">
+            <MapPin className="h-4 w-4" />
+            <span className="font-medium text-sm">Location</span>
+          </div>
+          <Select
+            value={selectedLocationId?.toString() || ""}
+            onValueChange={(value) => {
+              setSelectedLocationId(parseInt(value));
+              setSearchTerm("");
+              setHighlightedIndex(0);
+            }}
+          >
+            <SelectTrigger data-testid="select-location">
+              <SelectValue placeholder="Choose location..." />
+            </SelectTrigger>
+            <SelectContent>
+              {locations.map((location) => (
+                <SelectItem key={location.id} value={location.id.toString()}>
+                  {location.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="mt-3">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search items..."
+                className="pl-8"
+                data-testid="input-search-item"
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Qty</label>
+              <Input
+                type="number"
+                step="1"
+                value={itemQuantity}
+                onChange={(event) => setItemQuantity(event.target.value)}
+                placeholder="1"
+                data-testid="input-item-quantity"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Refund Rate</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={refundRate}
+                onChange={(event) => setRefundRate(event.target.value)}
+                placeholder="Auto"
+                data-testid="input-refund-rate"
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden p-0">
-          <ScrollArea className="h-full"><div ref={itemListRef} className="p-2 space-y-1">
-            {filteredItems.length === 0 ? <div className="text-center py-4 text-muted-foreground text-sm">{searchTerm ? "No items match your search" : "No stock items found"}</div> : filteredItems.map((item, index) => {
-              const isHighlighted = index === highlightedIndex;
-              return <div key={item.id} data-index={index} className={cn("p-3 rounded-md cursor-pointer border transition-colors", isHighlighted ? "bg-primary/10 border-primary" : "hover:bg-accent border-transparent")} onClick={() => addItemToCart(item)} data-testid={`item-${item.id}`}><div className="flex justify-between items-start"><div className="flex-1 min-w-0"><p className="font-medium truncate text-sm">{item.name}</p><p className="text-xs text-muted-foreground">{item.code}</p></div><Badge variant={item.stockQty > 0 ? "default" : "secondary"} className="ml-2 shrink-0">{formatNumber(item.stockQty, 0)} {item.uom}</Badge></div>{item.avgRate > 0 && <div className="mt-1 text-xs text-muted-foreground">Avg Cost: {formatNumber(item.avgRate)}</div>}</div>;
-            })}
-          </div></ScrollArea>
+        {/* Phones bound the item picker so a long catalogue does not push the voucher away. */}
+        <CardContent className="flex-1 overflow-hidden p-0 max-sm:h-[min(60dvh,28rem)] max-sm:flex-none">
+          <ScrollArea className="h-full">
+            <div ref={itemListRef} className="p-2 space-y-1">
+              {filteredItems.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  {searchTerm ? "No items match your search" : "No stock items found"}
+                </div>
+              ) : (
+                filteredItems.map((item, index) => {
+                  const isHighlighted = index === highlightedIndex;
+                  return (
+                    <div
+                      key={item.id}
+                      data-index={index}
+                      className={cn(
+                        "p-3 rounded-md cursor-pointer border transition-colors",
+                        isHighlighted ? "bg-primary/10 border-primary" : "hover:bg-accent border-transparent"
+                      )}
+                      onClick={() => addItemToCart(item)}
+                      data-testid={`item-${item.id}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-sm">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">{item.code}</p>
+                        </div>
+                        <Badge variant={item.stockQty > 0 ? "default" : "secondary"} className="ml-2 shrink-0">
+                          {formatNumber(item.stockQty, 0)} {item.uom}
+                        </Badge>
+                      </div>
+                      {item.avgRate > 0 && (
+                        <div className="mt-1 text-xs text-muted-foreground">Avg Cost: {formatNumber(item.avgRate)}</div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
+
+      <VoucherPhoneActionBar
+        summary={`${items.length} items · Refund ${formatNumber(totalRefund)}`}
+        saveLabel={isEditMode ? "Update Note" : "Create Note"}
+        saving={isPending}
+        disabled={items.length === 0}
+        onSave={form.handleSubmit(onSubmit)}
+        onCancel={isEditMode ? resetForm : undefined}
+        data-testid="credit-note-phone-actions"
+      />
     </div>
   );
 }

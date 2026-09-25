@@ -650,6 +650,18 @@ table[data-mobile-cards="true"] > tfoot > tr > * {
   [data-slot="sidebar-content"] {
     flex-wrap: nowrap !important;
   }
+
+  /* Sheets and dialogs portal outside the shell too. SheetContent is itself a height-capped
+     `flex flex-col gap-4`, so the wrap split tall sheets (voucher entry pickers, filter sheets)
+     into side-by-side columns with the list pushed off-screen. Columns inside them stay
+     single-line as well. */
+  html[data-app-shell="erp"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
+  html[data-app-shell="erp"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    .flex.flex-col:is(.gap-1, .gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]) {
+    flex-wrap: nowrap;
+  }
 }
 
 /* Tablet widths keep the desktop sidebar, leaving 512–767px for the workspace. The account
@@ -657,5 +669,13 @@ table[data-mobile-cards="true"] > tfoot > tr > * {
 @media (min-width: 768px) and (max-width: 1023px) {
   [data-erp-shell] [data-testid="button-user-menu"] > span:nth-child(2) {
     display: none;
+  }
+}
+
+/* Voucher forms pin their Save bar to the bottom of the workspace on phones. Focus and
+   scroll-into-view (tapping an entry, the keyboard's Next) keep the target above the bar. */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  #main-content:has([data-voucher-sticky-actions]) {
+    scroll-padding-bottom: 10rem;
   }
 }

@@ -1,3 +1,5 @@
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { VoucherPhoneActionBar, useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { searchAny } from "@shared/searchNormalization";
 import { ArrowRight, Check, GitBranch, Package, Plus, Search, Trash2, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +47,9 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
     handleSaveAsRevision,
     isSavingRevision,
   } = model;
+  const isPhone = useErpPhoneLayout();
+  const cancelEdit = useVoucherEditCancel(!!editVoucherId);
+  const processLabel = editVoucherId ? "Update Order" : "Process";
 
   return (
     <div className="min-w-0 flex-1 flex flex-col gap-4">
@@ -75,9 +80,7 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
                   <div className="p-1 space-y-0.5">
                     {stockItems
                       .filter(
-                        (item) =>
-                          mobileSearchTerm.trim() === "" ||
-                          searchAny(mobileSearchTerm, item.name, item.code)
+                        (item) => mobileSearchTerm.trim() === "" || searchAny(mobileSearchTerm, item.name, item.code)
                       )
                       .map((item) => (
                         <button
@@ -250,35 +253,37 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
                   </p>
                 )}
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleValidate}
-                    className="flex-1"
-                    data-testid="button-validate-order"
-                  >
-                    <Check className="h-4 w-4 mr-1" />
-                    Validate
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleProcessOrder}
-                    disabled={isProcessing || !destinationLocationId}
-                    className="flex-1"
-                    data-testid="button-process-order"
-                  >
-                    {isProcessing
-                      ? editVoucherId
-                        ? "Updating..."
-                        : "Processing..."
-                      : editVoucherId
-                        ? "Update Order"
-                        : "Process"}
-                  </Button>
-                </div>
+                {!isPhone && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleValidate}
+                      className="flex-1"
+                      data-testid="button-validate-order"
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Validate
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleProcessOrder}
+                      disabled={isProcessing || !destinationLocationId}
+                      className="flex-1"
+                      data-testid="button-process-order"
+                    >
+                      {isProcessing
+                        ? editVoucherId
+                          ? "Updating..."
+                          : "Processing..."
+                        : editVoucherId
+                          ? "Update Order"
+                          : "Process"}
+                    </Button>
+                  </div>
+                )}
 
-                {editVoucherId && existingTransfer?.id && (
+                {!isPhone && editVoucherId && existingTransfer?.id && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -296,6 +301,38 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
           )}
         </CardContent>
       </Card>
+
+      {orderItems.length > 0 && (
+        <VoucherPhoneActionBar
+          summary={`${orderItems.length} items · ${totalBales} bales`}
+          saveLabel={processLabel}
+          savingLabel={editVoucherId ? "Updating..." : "Processing..."}
+          saving={isProcessing}
+          disabled={!destinationLocationId}
+          onSave={handleProcessOrder}
+          onCancel={cancelEdit}
+          extra={
+            <>
+              <Button variant="outline" onClick={handleValidate} data-testid="button-validate-order">
+                <Check className="h-4 w-4 mr-1" />
+                Validate
+              </Button>
+              {editVoucherId && existingTransfer?.id && (
+                <Button
+                  variant="outline"
+                  onClick={handleSaveAsRevision}
+                  disabled={isSavingRevision || !destinationLocationId}
+                  data-testid="button-save-as-revision"
+                >
+                  <GitBranch className="h-4 w-4 mr-1" />
+                  Revision
+                </Button>
+              )}
+            </>
+          }
+          data-testid="transfer-order-phone-actions"
+        />
+      )}
     </div>
   );
 }

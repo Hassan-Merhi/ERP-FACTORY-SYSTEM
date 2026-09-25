@@ -372,6 +372,7 @@ export function useStockAdjustmentFormModel({ voucherIdToEdit }: StockAdjustment
   };
 
   return {
+    voucherIdToEdit,
     locations,
     stockAdjustmentForm,
     adjustmentFields,

@@ -365,3 +365,35 @@ section.
   and day-grouped activity cards (record, time, user, module, action, concise detail); tapping
   a card opens the existing detail sheet, whose field and entry grids now stack on phones.
   Factory keeps its layout.
+
+### R3 — Voucher entry on phones (all seven types)
+
+- **Voucher type selector.** The phone strip of seven pills showed three types; the rest were
+  off-screen. Phones now get one full-width "Voucher type" control that opens a grouped sheet
+  (Financial / Adjustments) of every type the user may use (`VoucherMobileTabs`, keeping the
+  `tab-mobile-*` ids). Tablet and desktop keep the sidebar nav.
+- **Pinned save bar.** `VoucherPhoneActionBar` sticks to the bottom of the workspace on ERP phones
+  with the running totals, the validation state and Cancel | Save. Save calls each form's
+  existing submit (or submits the enclosing form), so validation and posting are unchanged; the
+  form's own Save row does not render on phones, so there is one Save. Cancel appears in edit
+  mode and returns to where the voucher was opened from (`useVoucherEditCancel`).
+  - Journal: Dr/Cr totals with Balanced / Off by; Save disabled while unbalanced (as on desktop).
+  - Stock Transfer: items · qty · total, Save as Revision in edit mode.
+  - Stock Adjustment: qty · total. The duplicate desktop totals row and the card-in-card padding
+    are gone on phones, which also removes the page's horizontal overflow (378px at 360px).
+  - Transfer Order: items · bales, Validate and Save as Revision, Process / Update Order.
+  - Credit Note: items · refund, Create / Update Note (Cancel resets an edit); the cart table
+    reads as cards and the item picker is bounded on phones.
+  - Payment / Receipt keep their existing pinned action bar, now opaque and more compact on
+    phones, with Cancel in edit mode.
+- **Entry cards.** Journal entries are labelled "Entry N" with Remove beside the label, so the
+  account field gets the full row. Journal and Stock Transfer header fields stack full width.
+- **Portalled sheets no longer split into columns.** The global `.flex.gap-*` phone wrap rule
+  also hit sheets and dialogs portalled outside the shell: the Payment/Receipt entry sheet
+  rendered its account list as an off-screen second column. ERP sheets, dialogs and their
+  column containers stay single-line.
+- While a voucher save bar is on screen, `#main-content` reserves `scroll-padding-bottom`, so a
+  focused field or tapped entry scrolls above the bar. The entry sheet caps its height to the
+  visible viewport (keyboard) and keeps Done clear of the close control.
+- Transfer Order inside the Vouchers page shows a section heading instead of a second page
+  header; the standalone `/stock-transfer-order` page keeps its `PageHeader`.
