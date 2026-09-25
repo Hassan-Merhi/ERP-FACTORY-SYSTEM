@@ -485,9 +485,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
 
       const remainingSupplierIds = [
         ...new Set(
-          remainingSourceRows
-            .filter((source) => source.supplierId != null)
-            .map((source) => source.supplierId as number)
+          remainingSourceRows.filter((source) => source.supplierId != null).map((source) => source.supplierId as number)
         ),
       ];
       const remainingSupplierRateMap = remainingSupplierIds.length

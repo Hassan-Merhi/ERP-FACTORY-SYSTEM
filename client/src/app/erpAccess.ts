@@ -37,9 +37,6 @@ export function canAccessErpFeature(access: ErpFeatureAccess | undefined, key: F
   return !access || access.fullAccess || access.pageKeys.includes(key);
 }
 
-export function canAccessAnyErpFeature(
-  access: ErpFeatureAccess | undefined,
-  keys: readonly FeatureKey[],
-): boolean {
+export function canAccessAnyErpFeature(access: ErpFeatureAccess | undefined, keys: readonly FeatureKey[]): boolean {
   return keys.some((key) => canAccessErpFeature(access, key));
 }

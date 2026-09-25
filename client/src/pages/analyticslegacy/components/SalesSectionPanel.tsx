@@ -192,37 +192,53 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Orders</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalOrders)}</div>
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.totalOrders)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Customers</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.uniqueCustomers)}</div>
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.uniqueCustomers)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Bales Sold</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalBales)}</div>
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.totalBales)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Sales</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalSales)}</div>
+                        <div className="font-semibold font-mono">
+                          {formatAmount(factoryCustomerOrderAnalytics.summary.totalSales)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Cost</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalCost)}</div>
+                        <div className="font-semibold font-mono">
+                          {formatAmount(factoryCustomerOrderAnalytics.summary.totalCost)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Gross Profit</div>
-                        <div className={`font-semibold font-mono ${factoryCustomerOrderAnalytics.summary.grossProfit < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                        <div
+                          className={`font-semibold font-mono ${factoryCustomerOrderAnalytics.summary.grossProfit < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
+                        >
                           {formatAmount(factoryCustomerOrderAnalytics.summary.grossProfit)}
                         </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Margin</div>
-                        <div className="font-semibold">{factoryCustomerOrderAnalytics.summary.marginPct.toFixed(1)}%</div>
+                        <div className="font-semibold">
+                          {factoryCustomerOrderAnalytics.summary.marginPct.toFixed(1)}%
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Profit / Bale</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.avgProfitPerBale)}</div>
+                        <div className="font-semibold font-mono">
+                          {formatAmount(factoryCustomerOrderAnalytics.summary.avgProfitPerBale)}
+                        </div>
                       </div>
                     </div>
 
@@ -275,7 +291,8 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                         <div className="border-b px-4 py-3">
                                           <div className="font-medium">{row.itemName || row.articleCode}</div>
                                           <div className="text-xs text-muted-foreground mt-0.5">
-                                            Customer breakdown · {formatNumber(row.qty)} total qty · {formatAmount(row.salesAmount)}
+                                            Customer breakdown · {formatNumber(row.qty)} total qty ·{" "}
+                                            {formatAmount(row.salesAmount)}
                                           </div>
                                         </div>
                                         <div className="max-h-64 overflow-y-auto">
@@ -292,9 +309,12 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                               </div>
                                               <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                                                 <span>Qty {formatNumber(customerRow.qty)}</span>
-                                                <span className="text-right">{formatAmount(customerRow.salesAmount)}</span>
                                                 <span className="text-right">
-                                                  {formatNumber(customerRow.orders)} {customerRow.orders === 1 ? "order" : "orders"}
+                                                  {formatAmount(customerRow.salesAmount)}
+                                                </span>
+                                                <span className="text-right">
+                                                  {formatNumber(customerRow.orders)}{" "}
+                                                  {customerRow.orders === 1 ? "order" : "orders"}
                                                 </span>
                                               </div>
                                             </div>
@@ -320,7 +340,8 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     {factoryCustomerOrderAnalytics.pagination.totalPages > 1 && (
                       <div className="flex items-center justify-between gap-3 pt-4">
                         <div className="text-sm text-muted-foreground">
-                          Page {factoryCustomerOrderAnalytics.pagination.page} of {factoryCustomerOrderAnalytics.pagination.totalPages}
+                          Page {factoryCustomerOrderAnalytics.pagination.page} of{" "}
+                          {factoryCustomerOrderAnalytics.pagination.totalPages}
                           {" · "}
                           {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} items
                         </div>
@@ -336,7 +357,10 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={factoryCustomerOrderAnalytics.pagination.page >= factoryCustomerOrderAnalytics.pagination.totalPages}
+                            disabled={
+                              factoryCustomerOrderAnalytics.pagination.page >=
+                              factoryCustomerOrderAnalytics.pagination.totalPages
+                            }
                             onClick={() => setFactoryOrderPage(factoryOrderPage + 1)}
                           >
                             Next

@@ -199,7 +199,9 @@ export default function ItemMarketAnalysis() {
           <SelectContent>
             <SelectItem value="all">All Countries</SelectItem>
             {(data?.countries ?? []).map((value) => (
-              <SelectItem key={value} value={value}>{value}</SelectItem>
+              <SelectItem key={value} value={value}>
+                {value}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -209,9 +211,13 @@ export default function ItemMarketAnalysis() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Stock Groups</SelectItem>
-            {[...stockGroups].sort((a, b) => a.name.localeCompare(b.name)).map((group) => (
-              <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>
-            ))}
+            {[...stockGroups]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((group) => (
+                <SelectItem key={group.id} value={String(group.id)}>
+                  {group.name}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
@@ -251,126 +257,131 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={13}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={13}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
                   </TableRow>
                 ))}
-              {!isLoading && rows.map((row) => {
-                const expanded = expandedItemId === row.stockItemId;
-                const mixedCurrency = row.purchaseCurrencies.length > 1;
-                return (
-                  <Fragment key={row.stockItemId}>
-                    <TableRow
-                      className="cursor-pointer"
-                      onClick={() => setExpandedItemId(expanded ? null : row.stockItemId)}
-                      data-testid={`row-item-market-${row.stockItemId}`}
-                    >
-                      <TableCell>
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{row.code}</div>
-                        <div className="max-w-[260px] truncate text-xs text-muted-foreground">{row.name}</div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {mixedCurrency ? (
-                          <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                        ) : (
-                          formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                      <TableCell
-                        className={`text-right font-medium tabular-nums ${
-                          row.profit < 0
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-emerald-600 dark:text-emerald-400"
-                        }`}
+              {!isLoading &&
+                rows.map((row) => {
+                  const expanded = expandedItemId === row.stockItemId;
+                  const mixedCurrency = row.purchaseCurrencies.length > 1;
+                  return (
+                    <Fragment key={row.stockItemId}>
+                      <TableRow
+                        className="cursor-pointer"
+                        onClick={() => setExpandedItemId(expanded ? null : row.stockItemId)}
+                        data-testid={`row-item-market-${row.stockItemId}`}
                       >
-                        {formatAmount(row.profit)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                      <TableCell>{row.topProfitCountry?.country ?? "—"}</TableCell>
-                      <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
-                    </TableRow>
-                    {expanded && (
-                      <TableRow>
-                        <TableCell colSpan={13} className="bg-muted/20 p-0">
-                          <div className="p-4">
-                            <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                              <span>
-                                Purchase currencies:{" "}
-                                {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}
-                              </span>
-                              <span>Historical cost sold: {formatAmount(row.historicalCost)}</span>
-                              <span>Profit/unit: {formatAmount(row.profitPerUnit)}</span>
-                            </div>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Country</TableHead>
-                                  <TableHead className="text-right">Sold Qty</TableHead>
-                                  <TableHead className="text-right">Avg Sell</TableHead>
-                                  <TableHead className="text-right">Historical Cost</TableHead>
-                                  <TableHead className="text-right">Profit/Unit</TableHead>
-                                  <TableHead className="text-right">Total Profit</TableHead>
-                                  <TableHead className="text-right">Margin</TableHead>
-                                  <TableHead>Status</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {row.countries.map((market) => (
-                                  <TableRow key={market.country}>
-                                    <TableCell className="font-medium">{market.country}</TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {formatNumber(market.soldQty)}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {formatAmount(market.avgSellingPrice)}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {formatAmount(market.historicalCost)}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {formatAmount(market.profitPerUnit)}
-                                    </TableCell>
-                                    <TableCell
-                                      className={`text-right font-medium tabular-nums ${
-                                        market.profit < 0
-                                          ? "text-red-600 dark:text-red-400"
-                                          : "text-emerald-600 dark:text-emerald-400"
-                                      }`}
-                                    >
-                                      {formatAmount(market.profit)}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {market.marginPct.toFixed(1)}%
-                                    </TableCell>
-                                    <TableCell><StatusBadge status={market.status} /></TableCell>
-                                  </TableRow>
-                                ))}
-                                {row.countries.length === 0 && (
-                                  <TableRow>
-                                    <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
-                                      No sales by country for this period.
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                          </div>
+                        <TableCell>
+                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{row.code}</div>
+                          <div className="max-w-[260px] truncate text-xs text-muted-foreground">{row.name}</div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {mixedCurrency ? (
+                            <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                          ) : (
+                            formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
+                        <TableCell
+                          className={`text-right font-medium tabular-nums ${
+                            row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                          }`}
+                        >
+                          {formatAmount(row.profit)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
+                        <TableCell>{row.topProfitCountry?.country ?? "—"}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={row.marketStatus} />
                         </TableCell>
                       </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
+                      {expanded && (
+                        <TableRow>
+                          <TableCell colSpan={13} className="bg-muted/20 p-0">
+                            <div className="p-4">
+                              <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                                <span>
+                                  Purchase currencies:{" "}
+                                  {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}
+                                </span>
+                                <span>Historical cost sold: {formatAmount(row.historicalCost)}</span>
+                                <span>Profit/unit: {formatAmount(row.profitPerUnit)}</span>
+                              </div>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Country</TableHead>
+                                    <TableHead className="text-right">Sold Qty</TableHead>
+                                    <TableHead className="text-right">Avg Sell</TableHead>
+                                    <TableHead className="text-right">Historical Cost</TableHead>
+                                    <TableHead className="text-right">Profit/Unit</TableHead>
+                                    <TableHead className="text-right">Total Profit</TableHead>
+                                    <TableHead className="text-right">Margin</TableHead>
+                                    <TableHead>Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {row.countries.map((market) => (
+                                    <TableRow key={market.country}>
+                                      <TableCell className="font-medium">{market.country}</TableCell>
+                                      <TableCell className="text-right tabular-nums">
+                                        {formatNumber(market.soldQty)}
+                                      </TableCell>
+                                      <TableCell className="text-right tabular-nums">
+                                        {formatAmount(market.avgSellingPrice)}
+                                      </TableCell>
+                                      <TableCell className="text-right tabular-nums">
+                                        {formatAmount(market.historicalCost)}
+                                      </TableCell>
+                                      <TableCell className="text-right tabular-nums">
+                                        {formatAmount(market.profitPerUnit)}
+                                      </TableCell>
+                                      <TableCell
+                                        className={`text-right font-medium tabular-nums ${
+                                          market.profit < 0
+                                            ? "text-red-600 dark:text-red-400"
+                                            : "text-emerald-600 dark:text-emerald-400"
+                                        }`}
+                                      >
+                                        {formatAmount(market.profit)}
+                                      </TableCell>
+                                      <TableCell className="text-right tabular-nums">
+                                        {market.marginPct.toFixed(1)}%
+                                      </TableCell>
+                                      <TableCell>
+                                        <StatusBadge status={market.status} />
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                  {row.countries.length === 0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                                        No sales by country for this period.
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
