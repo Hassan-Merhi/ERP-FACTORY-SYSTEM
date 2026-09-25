@@ -389,13 +389,14 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // "Balance on Table" is a CURRENT STATE quantity valued at the exact
-      // blended rate shown by the Original Batches KPI for the active report filter.
+      // "Balance on Table" is a CURRENT STATE quantity. Keep the original quantity
+      // formula based on physical production totals:
       //
-      // This makes:
-      //   balance value = remaining kg × original-batches blended rate
-      //   balance rate  = original-batches blended rate
-      const [mixAllTimeResult, currentBatchRows] = await Promise.all([
+      //   balance weight = all-time mixed kg − all-time produced bale kg
+      //
+      // The valuation rate remains the exact blended rate shown by the Original Batches
+      // KPI for the active report filter.
+      const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
         db.execute(sql`
           SELECT
             COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
@@ -405,37 +406,23 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             AND carry_forward_from_id IS NULL
             AND deleted_at        IS NULL
         `),
-        db
-          .select({
-            id: factoryMixBatches.id,
-            totalWeightKg: factoryMixBatches.totalWeightKg,
-            usedKg: factoryMixBatches.usedKg,
-            costPerKg: factoryMixBatches.costPerKg,
-          })
-          .from(factoryMixBatches)
-          .where(and(eq(factoryMixBatches.companyId, companyId), isNull(factoryMixBatches.deletedAt))),
+        db.execute(sql`
+          SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
+          FROM factory_bales b
+          WHERE b.company_id = ${companyId}
+            AND b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
+        `),
       ]);
 
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
       const allTimeMixKg = parseFloat(String(mixAllTimeRow.mix_kg ?? "0")) || 0;
       const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
+      const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
+      const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
       const allTimeBlendedCpk = allTimeMixKg > 0 ? allTimeMixCost / allTimeMixKg : 0;
       const blendedCostPerKg = totalMixWeightKg > 0 ? totalMixCost / totalMixWeightKg : 0;
 
-      const remainingBatchRows = currentBatchRows.filter((batch) => {
-        const totalKg = parseFloat(batch.totalWeightKg || "0") || 0;
-        const usedKg = parseFloat(batch.usedKg || "0") || 0;
-        return totalKg - usedKg > 0.000001;
-      });
-      // Balance on Table must use the same original-batch blended rate as the
-      // Original Batches valuation. Remaining quantity changes as bales are produced,
-      // but the KPI rate itself must not become a weighted average of only the batches
-      // that happen to still be open.
-      const balanceWeightKg = remainingBatchRows.reduce((sum, batch) => {
-        const totalKg = parseFloat(batch.totalWeightKg || "0") || 0;
-        const usedKg = parseFloat(batch.usedKg || "0") || 0;
-        return sum + Math.max(0, totalKg - usedKg);
-      }, 0);
+      const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
       // Reuse the exact same rate returned for the visible Original Batches KPI,
       // so the two cards cannot drift apart when the report date filter changes.
       const balanceCostPerKg = blendedCostPerKg;
