@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, RefreshCw, Search } from "lucide-react";
 
@@ -420,8 +420,7 @@ export default function ItemMarketAnalysis() {
                 const rowKey = `${row.companyId}:${row.stockItemId}`;
                 const mixedCurrency = row.purchaseCurrencies.length > 1;
                 return (
-                  <Fragment key={rowKey}>
-                    <TableRow data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
+                    <TableRow key={rowKey} data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
                       <TableCell>
                         <div className="max-w-[260px] truncate font-medium">{row.name}</div>
                       </TableCell>
@@ -483,7 +482,6 @@ export default function ItemMarketAnalysis() {
                       )}
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
-                  </Fragment>
                 );
               })}
               {!isLoading && rows.length === 0 && (
