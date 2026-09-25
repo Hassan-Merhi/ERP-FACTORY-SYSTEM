@@ -45,7 +45,6 @@ interface MarketRow {
   profitPerUnit: number;
   marginPct: number;
   marketStatus: CountryPerformance["status"];
-  topProfitCountry: CountryPerformance | null;
   countries: CountryPerformance[];
 }
 
@@ -78,9 +77,8 @@ function StatusBadge({ status }: { status: CountryPerformance["status"] }) {
 function formatNativePurchase(value: number | null, currencies: string[]) {
   if (value == null) return "—";
   if (currencies.length !== 1) return "Mixed currencies";
-  const currency = currencies[0] === "UNKNOWN" ? "" : currencies[0];
   const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return currency ? `${currency} ${amount}` : amount;
+  return `$ ${amount}`;
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
@@ -243,7 +241,6 @@ export default function ItemMarketAnalysis() {
                 <TableHead className="text-right">Revenue</TableHead>
                 <TableHead className="text-right">Profit</TableHead>
                 <TableHead className="text-right">Margin</TableHead>
-                <TableHead>Top Profit Country</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -251,7 +248,7 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={13}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={12}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))}
               {!isLoading && rows.map((row) => {
@@ -268,8 +265,7 @@ export default function ItemMarketAnalysis() {
                         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{row.code}</div>
-                        <div className="max-w-[260px] truncate text-xs text-muted-foreground">{row.name}</div>
+                        <div className="max-w-[260px] truncate font-medium">{row.name}</div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
@@ -296,12 +292,11 @@ export default function ItemMarketAnalysis() {
                         {formatAmount(row.profit)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                      <TableCell>{row.topProfitCountry?.country ?? "—"}</TableCell>
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={13} className="bg-muted/20 p-0">
+                        <TableCell colSpan={12} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>
@@ -373,7 +368,7 @@ export default function ItemMarketAnalysis() {
               })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
