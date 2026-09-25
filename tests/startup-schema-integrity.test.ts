@@ -117,9 +117,19 @@ import { startupMigrations } from "../server/startup-schema";
  * ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS
  * hidden_transaction_journal_voucher_ids, added to 001-core-tables-and-columns
  * next to the other user columns, taking the count from 1366 to 1367.
+ *
+ * Re-pinned for the Wave 5 Factory permission canonicalization, which landed
+ * without re-pinning this file. In 001-core-tables-and-columns it narrows the
+ * guarded factory-page-key-renames-v1 block so it no longer deletes
+ * factory/daybook, factory/create, factory/users or factory/sales/new, and
+ * appends four idempotent statements right after that block: the canonical-key
+ * INSERT, the stale-key DELETE, the deprecated hidden-tab UPDATE and the
+ * 'factory-permission-canonicalization-v2' migrations_log row. That takes the
+ * count from 1367 to 1371. Nothing else moved; the rows these statements leave
+ * are asserted in tests/factory-permission-canonicalization-migration.test.ts.
  */
-const EXPECTED_STATEMENT_COUNT = 1367;
-const EXPECTED_CONTENT_HASH = "4467df3b3766f81da59fbaad586736f581a51dc854f8906eaaf46210443e9503";
+const EXPECTED_STATEMENT_COUNT = 1371;
+const EXPECTED_CONTENT_HASH = "2b91fef354770d28098e7d4fc966a3b01b71f16890f2a9d30055953c58b4f969";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

@@ -12,7 +12,7 @@ import { AlertTriangle, ChevronDown, Package, Scale } from "lucide-react";
 import React from "react";
 import { cn } from "@/lib/utils";
 
-import type { MergedRow, Preset, ProductRow, ReportData, SupplierDayRow } from "./productioncomparison/types";
+import type { MergedRow, Preset, ReportData, SupplierDayRow } from "./productioncomparison/types";
 import {
   deriveGrade,
   fmtDateRange,
@@ -22,6 +22,7 @@ import {
   fmtUsd,
   lastMonthRange,
   lastYearRange,
+  mergeProductionPeriods,
   thisMonthRange,
   thisYearRange,
   todayStr,
@@ -178,65 +179,10 @@ export default function ProductionComparison() {
     [qA.data, qB.data]
   );
 
-  const mergedAll = useMemo<MergedRow[]>(() => {
-    const map = new Map<string, MergedRow>();
-    // Worker names are accumulated across both periods, ordered by bale count.
-    const workerTally = new Map<string, Map<string, number>>();
-    const tallyWorkers = (row: ProductRow) => {
-      let t = workerTally.get(row.articleCode);
-      if (!t) workerTally.set(row.articleCode, (t = new Map()));
-      for (const w of row.workers ?? []) {
-        if (!w?.name) continue;
-        t.set(w.name, (t.get(w.name) ?? 0) + (w.qty ?? 0));
-      }
-    };
-
-    for (const row of qA.data?.production.byProduct ?? []) {
-      map.set(row.articleCode, {
-        articleCode: row.articleCode,
-        productName: row.productName,
-        categoryName: row.categoryName,
-        grade: deriveGrade(row.articleCode),
-        aQty: row.qty,
-        bQty: 0,
-        aKg: row.totalWeightKg,
-        bKg: 0,
-        aMixBatchIds: row.mixBatchIds ?? [],
-        bMixBatchIds: [],
-        workers: [],
-      });
-      tallyWorkers(row);
-    }
-    for (const row of qB.data?.production.byProduct ?? []) {
-      const ex = map.get(row.articleCode);
-      if (ex) {
-        ex.bQty = row.qty;
-        ex.bKg = row.totalWeightKg;
-        ex.bMixBatchIds = row.mixBatchIds ?? [];
-      } else {
-        map.set(row.articleCode, {
-          articleCode: row.articleCode,
-          productName: row.productName,
-          categoryName: row.categoryName,
-          grade: deriveGrade(row.articleCode),
-          aQty: 0,
-          bQty: row.qty,
-          aKg: 0,
-          bKg: row.totalWeightKg,
-          aMixBatchIds: [],
-          bMixBatchIds: row.mixBatchIds ?? [],
-          workers: [],
-        });
-      }
-      tallyWorkers(row);
-    }
-
-    for (const row of map.values()) {
-      const t = workerTally.get(row.articleCode);
-      row.workers = t ? [...t.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n) : [];
-    }
-    return [...map.values()];
-  }, [qA.data, qB.data]);
+  const mergedAll = useMemo<MergedRow[]>(
+    () => mergeProductionPeriods(qA.data?.production.byProduct ?? [], qB.data?.production.byProduct ?? []),
+    [qA.data, qB.data]
+  );
 
   const filtered = useMemo(
     () =>

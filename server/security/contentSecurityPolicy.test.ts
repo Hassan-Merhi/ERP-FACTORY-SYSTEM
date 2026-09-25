@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/logger", () => ({
   logger: {
@@ -65,6 +65,13 @@ describe("contentSecurityPolicy", () => {
     beforeEach(() => {
       vi.clearAllMocks();
       resetCspReportThrottleForTests();
+      // Violations only warn when the policy is enforced; report-only
+      // observations are logged at info (see the report-only case below).
+      vi.stubEnv("CSP_ENFORCE", "true");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
     });
 
     function buildApp() {
@@ -86,7 +93,7 @@ describe("contentSecurityPolicy", () => {
 
       expect(response.text).toBe("");
       expect(logger.warn).toHaveBeenCalledTimes(1);
-      expect(logger.warn).toHaveBeenCalledWith("[CSP] policy violation reported", {
+      expect(logger.warn).toHaveBeenCalledWith("[CSP] enforced policy violation reported", {
         directive: "script-src",
         blocked: "https://evil.example/x.js",
       });
@@ -110,9 +117,25 @@ describe("contentSecurityPolicy", () => {
         })
         .expect(204);
 
-      expect(logger.warn).toHaveBeenCalledWith("[CSP] policy violation reported", {
+      expect(logger.warn).toHaveBeenCalledWith("[CSP] enforced policy violation reported", {
         directive: "connect-src",
         blocked: "https://x.example/p",
+      });
+    });
+
+    it("records report-only observations at info rather than as warnings", async () => {
+      vi.stubEnv("CSP_ENFORCE", "false");
+      vi.stubEnv("NODE_ENV", "production");
+
+      await request(buildApp())
+        .post("/api/csp-report")
+        .send({ "csp-report": { "effective-directive": "font-src", "blocked-uri": "https://fonts.example/f.woff2" } })
+        .expect(204);
+
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith("[CSP] report-only policy observation", {
+        directive: "font-src",
+        blocked: "https://fonts.example/f.woff2",
       });
     });
   });

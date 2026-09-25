@@ -3,8 +3,6 @@ import { createServer, type Server } from "http";
 
 import { requireAuth } from "../auth";
 import { db } from "../db";
-import { broadcast } from "../wsServer";
-import { classifyRealtimeWrite, shouldEmitWriteInvalidation } from "../../shared/realtimeInvalidation";
 import { registerAccountRoutes } from "./accounts";
 import { registerAdminRoutes } from "./adminRoutes";
 import { registerApprovalRoutes } from "./approvalRoutes";
@@ -65,6 +63,7 @@ import { registerVoucherEntryRoutes } from "./voucher-entries";
 import { registerVoucherRoutes } from "./voucherRoutes";
 import { registerWhatsAppFastSendRoutes } from "./whatsappFastSendRoutes";
 import { registerWhatsAppRoutes } from "./whatsappRoutes";
+import { registerWriteInvalidationSignal } from "./writeInvalidationSignal";
 import { registerDispatchBatchRoutes } from "./factory/dispatch-batches";
 import { registerFactoryInvoiceLoadingRoutes } from "./factory/invoice-loading";
 import { registerFactoryInsuranceRoutes } from "./factory/factoryInsuranceRoutes";
@@ -84,41 +83,9 @@ import { registerSalaryAdvanceRoutes } from "./employees/salaryAdvanceRoutes";
 import { registerLegacyHealthRoutes } from "./core/healthRoutes";
 import { registerPermissionBoundaryRoutes } from "./core/permissionBoundaryRoutes";
 import { registerIntercompanyPosConfigRoutes } from "./pos/intercompanyPosConfigRoutes";
-import { resolveActiveCompanyId } from "./helpers/resolveActiveCompanyId";
 import { registerBandwidthPhase3FactoryReads } from "./performance/bandwidthPhase3FactoryReads";
 import { registerApplicationAiLazyRoutes } from "./applicationAiLazyRoutes";
 import { enforceSharedFactoryAccess } from "../middleware/sharedFactoryAccessBoundary";
-
-function registerWriteInvalidationSignal(app: Express): void {
-  app.use((req, res, next) => {
-    const url = req.originalUrl || req.url;
-    if (shouldEmitWriteInvalidation(req.method, url)) {
-      const companyId = resolveActiveCompanyId(req);
-      const invalidation = classifyRealtimeWrite(url, req.body);
-      res.on("finish", () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          const requestPath = url.split("?", 1)[0];
-          // A single loading-bale scan returns a compact patch that the calling
-          // tab applies to its order/capacity cache immediately. Do not make
-          // that exact tab download the same Factory state again via its WS
-          // echo; every other tab/device still receives the invalidation.
-          const suppressOriginEcho =
-            req.method === "POST" && /^\/api\/factory\/customer-orders\/\d+\/bales$/.test(requestPath);
-          const rawRealtimeClientId = req.headers["x-realtime-client-id"];
-          const realtimeClientId =
-            suppressOriginEcho && typeof rawRealtimeClientId === "string"
-              ? rawRealtimeClientId.trim().slice(0, 128)
-              : null;
-          broadcast(
-            { type: "invalidate", ...invalidation },
-            { companyId, excludeRealtimeClientId: realtimeClientId || null }
-          );
-        }
-      });
-    }
-    next();
-  });
-}
 
 export async function registerApplicationRoutes(app: Express): Promise<Server> {
   installRemoteSupportSessionStopAudit();

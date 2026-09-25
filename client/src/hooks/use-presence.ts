@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { markRemoteSupportAuthLost } from "@/components/remote-support-auth-lifecycle";
 
-const HEARTBEAT_INTERVAL = 90000; // 90 seconds (well within the 3-minute presence expiry window)
+export const HEARTBEAT_INTERVAL = 90000; // 90 seconds (well within the 3-minute presence expiry window)
 const ROUTE_DEBOUNCE_MS = 10000; // 10 seconds
 
 type PresenceType = "route_change" | "heartbeat";

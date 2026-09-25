@@ -4,6 +4,8 @@
  * Extracted from ProductionComparison.tsx during the Phase 4 god-file split.
  */
 
+import type { MergedRow, ProductRow } from "./types";
+
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -92,6 +94,71 @@ export function fmtPct(p: number | null) {
   if (p === null) return "N/A";
   const sign = p > 0 ? "+" : "";
   return `${sign}${p.toFixed(1)}%`;
+}
+
+/**
+ * One row per article across both periods: Period A quantities, weights and mix
+ * batches beside Period B's, plus every worker who pressed it in either period,
+ * ordered by bale count.
+ */
+export function mergeProductionPeriods(periodA: ProductRow[], periodB: ProductRow[]): MergedRow[] {
+  const map = new Map<string, MergedRow>();
+  // Worker names are accumulated across both periods, ordered by bale count.
+  const workerTally = new Map<string, Map<string, number>>();
+  const tallyWorkers = (row: ProductRow) => {
+    let t = workerTally.get(row.articleCode);
+    if (!t) workerTally.set(row.articleCode, (t = new Map()));
+    for (const w of row.workers ?? []) {
+      if (!w?.name) continue;
+      t.set(w.name, (t.get(w.name) ?? 0) + (w.qty ?? 0));
+    }
+  };
+
+  for (const row of periodA) {
+    map.set(row.articleCode, {
+      articleCode: row.articleCode,
+      productName: row.productName,
+      categoryName: row.categoryName,
+      grade: deriveGrade(row.articleCode),
+      aQty: row.qty,
+      bQty: 0,
+      aKg: row.totalWeightKg,
+      bKg: 0,
+      aMixBatchIds: row.mixBatchIds ?? [],
+      bMixBatchIds: [],
+      workers: [],
+    });
+    tallyWorkers(row);
+  }
+  for (const row of periodB) {
+    const ex = map.get(row.articleCode);
+    if (ex) {
+      ex.bQty = row.qty;
+      ex.bKg = row.totalWeightKg;
+      ex.bMixBatchIds = row.mixBatchIds ?? [];
+    } else {
+      map.set(row.articleCode, {
+        articleCode: row.articleCode,
+        productName: row.productName,
+        categoryName: row.categoryName,
+        grade: deriveGrade(row.articleCode),
+        aQty: 0,
+        bQty: row.qty,
+        aKg: 0,
+        bKg: row.totalWeightKg,
+        aMixBatchIds: [],
+        bMixBatchIds: row.mixBatchIds ?? [],
+        workers: [],
+      });
+    }
+    tallyWorkers(row);
+  }
+
+  for (const row of map.values()) {
+    const t = workerTally.get(row.articleCode);
+    row.workers = t ? [...t.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n) : [];
+  }
+  return [...map.values()];
 }
 
 // ── MultiSelectFilter ─────────────────────────────────────────────────────────

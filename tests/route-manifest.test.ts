@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import express from "express";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { pool } from "../server/db";
 import { registerRoutes } from "../server/routes";
+import { reclassifyLegacyDeferredRentForProperties } from "../server/services/rental/reclassifyDeferredRentService";
 import {
   ROUTE_MANIFEST_FORMAT_VERSION,
   diffManifestEntries,
@@ -182,6 +184,15 @@ describe("route manifest", () => {
       fs.mkdirSync(path.dirname(MANIFEST_PATH), { recursive: true });
       fs.writeFileSync(MANIFEST_PATH, `${JSON.stringify(actual, null, 2)}\n`, "utf8");
     }
+  });
+
+  // Registering the routes starts the Properties deferred-rent reclassification
+  // in the background, and the pool logs as its connections close. Settle both
+  // before the file ends: a log that lands after teardown fails the whole shard
+  // with EnvironmentTeardownError even though every test passed.
+  afterAll(async () => {
+    await reclassifyLegacyDeferredRentForProperties().catch(() => undefined);
+    await pool.end();
   });
 
   it("has a committed snapshot to compare against", () => {

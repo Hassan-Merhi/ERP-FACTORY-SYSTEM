@@ -14,8 +14,8 @@
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,verifiedOrders,verifiedTotal}",
-      "hash": "c00529935a1b91e0a878d0e099674c917fce5f570d8bf253880a1ffae8f2a0c9"
+      "shape": "{asOf,balanceOnTableValue,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
+      "hash": "a8c8deff20645cb89524a5e55d8c11bdb2b5fe38295ccc9db77811e1433cb270"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,

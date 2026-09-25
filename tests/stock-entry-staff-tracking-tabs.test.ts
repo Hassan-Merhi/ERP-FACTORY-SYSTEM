@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
+import { FACTORY_TABS } from "../client/src/pages/settings/users/UserManagementConstants";
+
 const ROOT = resolve(__dirname, "..");
 const src = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
 
@@ -36,9 +38,10 @@ describe("Stock Entry staff tracking tabs", () => {
   });
 
   it("removes the obsolete Attendance Register visibility setting", () => {
-    const constants = src("client/src/pages/settings/users/UserManagementConstants.tsx");
-    expect(constants).toContain("hide_tab_stockentry_production_targets");
-    expect(constants).not.toContain("hide_tab_stockentry_attendance_register");
+    // The settings screen lists FACTORY_TABS, which is derived from the shared tab registry.
+    const tabKeys = FACTORY_TABS.map((tab) => tab.key);
+    expect(tabKeys.includes("hide_tab_stockentry_production_targets")).toBe(true);
+    expect(tabKeys.includes("hide_tab_stockentry_attendance_register")).toBe(false);
   });
 
   it("enforces the same per-user restrictions on staff-tracking APIs", () => {
