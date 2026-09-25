@@ -4,6 +4,7 @@ import { z } from "zod";
 import { pool } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { logger } from "../../lib/logger";
+import { buildPermissionMap, canAccess } from "../../lib/permissionHelpers";
 import { requirePageAccess } from "../../lib/permissionMiddleware";
 import {
   assertCompaniesAccess,
@@ -144,6 +145,18 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
                   `You do not have report access to ${company.name}`,
                   "COMPANY_REPORT_ACCESS_DENIED"
                 );
+              }
+
+              if (role !== "Developer" && role !== "Admin") {
+                const permissionRows = await storage.getRoleFeaturePermissions(company.id);
+                const permissionMap = buildPermissionMap(permissionRows, role);
+                if (!canAccess(role, "page_sales_report", permissionMap)) {
+                  throw new CompanyAccessError(
+                    403,
+                    `You do not have Sales Report access in ${company.name}`,
+                    "COMPANY_REPORT_ACCESS_DENIED"
+                  );
+                }
               }
 
               const locationIds = await resolveStockInSalesLocationIds({
