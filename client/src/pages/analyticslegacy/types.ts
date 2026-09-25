@@ -52,20 +52,22 @@ export interface FactoryPosSummary {
   grand?: FactoryPosCustomerSummary;
 }
 
-export interface FactoryCustomerOrderItemRow {
-  orderId: number;
-  invoiceNumber: string | null;
-  orderDate: string;
-  status: string;
-  customerId: number;
+export interface FactoryCustomerOrderCustomerBreakdown {
+  customerId: number | null;
   customerName: string | null;
-  destination: string | null;
-  locationId: number | null;
-  locationName: string | null;
+  qty: number;
+  salesAmount: number;
+  orders: number;
+}
+
+export interface FactoryCustomerOrderItemRow {
+  orderDate: string;
   articleCode: string;
   itemName: string;
   category: string | null;
   grade: string | null;
+  customerCount: number;
+  customerBreakdown: FactoryCustomerOrderCustomerBreakdown[];
   qty: number;
   totalWeightKg: number;
   salesAmount: number;

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -234,46 +235,83 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         <Table>
                           <TableHeader className="sticky top-0 z-30 bg-background">
                             <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Invoice</TableHead>
-                              <TableHead>Customer</TableHead>
                               <TableHead>Item</TableHead>
-                              <TableHead className="hidden lg:table-cell">Destination</TableHead>
-                              <TableHead className="hidden xl:table-cell">Location</TableHead>
+                              <TableHead>Customers</TableHead>
                               <TableHead className="text-right">Qty</TableHead>
-                              <TableHead className="text-right hidden lg:table-cell">Avg Sell</TableHead>
-                              <TableHead className="text-right hidden lg:table-cell">Avg Cost</TableHead>
-                              <TableHead className="text-right">Sales</TableHead>
-                              <TableHead className="text-right">Profit</TableHead>
-                              <TableHead className="text-right hidden sm:table-cell">Margin</TableHead>
+                              <TableHead className="text-right">Total Price</TableHead>
+                              <TableHead className="text-right">Last Sold</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {factoryCustomerOrderAnalytics.rows.map((row) => (
-                              <TableRow key={`${row.orderId}-${row.articleCode}`}>
-                                <TableCell className="whitespace-nowrap">{formatDisplayDate(row.orderDate)}</TableCell>
-                                <TableCell className="font-mono text-xs">{row.invoiceNumber || `#${row.orderId}`}</TableCell>
-                                <TableCell className="font-medium">{row.customerName || `Customer #${row.customerId}`}</TableCell>
-                                <TableCell>
-                                  <div className="font-medium">{row.itemName || row.articleCode}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {row.articleCode}
-                                    {row.category ? ` · ${row.category}` : ""}
-                                    {row.grade ? ` · ${row.grade}` : ""}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden lg:table-cell">{row.destination || "—"}</TableCell>
-                                <TableCell className="hidden xl:table-cell">{row.locationName || "—"}</TableCell>
-                                <TableCell className="text-right font-mono">{formatNumber(row.qty)}</TableCell>
-                                <TableCell className="text-right font-mono hidden lg:table-cell">{formatAmount(row.avgSellingPrice)}</TableCell>
-                                <TableCell className="text-right font-mono hidden lg:table-cell">{formatAmount(row.avgCostPerBale)}</TableCell>
-                                <TableCell className="text-right font-mono">{formatAmount(row.salesAmount)}</TableCell>
-                                <TableCell className={`text-right font-mono ${row.profitAmount < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
-                                  {formatAmount(row.profitAmount)}
-                                </TableCell>
-                                <TableCell className="text-right hidden sm:table-cell">{row.profitPct.toFixed(1)}%</TableCell>
-                              </TableRow>
-                            ))}
+                            {factoryCustomerOrderAnalytics.rows.map((row) => {
+                              const onlyCustomer = row.customerBreakdown[0];
+                              return (
+                                <TableRow key={row.articleCode}>
+                                  <TableCell>
+                                    <div className="font-medium">{row.itemName || row.articleCode}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {row.articleCode}
+                                      {row.category ? ` · ${row.category}` : ""}
+                                      {row.grade ? ` · ${row.grade}` : ""}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {row.customerCount === 1
+                                      ? onlyCustomer?.customerName || "1 customer"
+                                      : `${formatNumber(row.customerCount)} customers`}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <HoverCard openDelay={150} closeDelay={100}>
+                                      <HoverCardTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="font-mono font-semibold cursor-help underline decoration-dotted underline-offset-4"
+                                          aria-label={`Show customer quantity breakdown for ${row.itemName || row.articleCode}`}
+                                        >
+                                          {formatNumber(row.qty)}
+                                        </button>
+                                      </HoverCardTrigger>
+                                      <HoverCardContent className="w-80 p-0" align="end">
+                                        <div className="border-b px-4 py-3">
+                                          <div className="font-medium">{row.itemName || row.articleCode}</div>
+                                          <div className="text-xs text-muted-foreground mt-0.5">
+                                            Customer breakdown · {formatNumber(row.qty)} total qty · {formatAmount(row.salesAmount)}
+                                          </div>
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto">
+                                          {row.customerBreakdown.map((customerRow, index) => (
+                                            <div
+                                              key={`${row.articleCode}-${customerRow.customerId ?? "unknown"}-${index}`}
+                                              className="px-4 py-3 border-b last:border-b-0"
+                                            >
+                                              <div className="font-medium text-sm">
+                                                {customerRow.customerName ||
+                                                  (customerRow.customerId
+                                                    ? `Customer #${customerRow.customerId}`
+                                                    : "Unknown customer")}
+                                              </div>
+                                              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                                                <span>Qty {formatNumber(customerRow.qty)}</span>
+                                                <span className="text-right">{formatAmount(customerRow.salesAmount)}</span>
+                                                <span className="text-right">
+                                                  {formatNumber(customerRow.orders)} {customerRow.orders === 1 ? "order" : "orders"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </HoverCardContent>
+                                    </HoverCard>
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono font-semibold">
+                                    {formatAmount(row.salesAmount)}
+                                  </TableCell>
+                                  <TableCell className="text-right whitespace-nowrap">
+                                    {formatDisplayDate(row.orderDate)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
@@ -284,7 +322,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         <div className="text-sm text-muted-foreground">
                           Page {factoryCustomerOrderAnalytics.pagination.page} of {factoryCustomerOrderAnalytics.pagination.totalPages}
                           {" · "}
-                          {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} item rows
+                          {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} items
                         </div>
                         <div className="flex gap-2">
                           <Button
