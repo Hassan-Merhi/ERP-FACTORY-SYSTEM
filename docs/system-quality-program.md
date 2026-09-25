@@ -23,7 +23,7 @@ audit fails instead of allowing the reference to drift.
 | Backend coverage floor (lines) | 65% | `config/coverage-thresholds.json` |
 | Write routes with no test at all | 0 of 359 | `npm run audit:write-routes` |
 | Write routes covered only by the guard sweep | 0 of 359 | `npm run audit:write-routes` |
-| Registered routes | 2,011 | `config/route-manifest.json` |
+| Registered routes | 2,012 | `config/route-manifest.json` |
 | God-file backlog | 0 files, 0 excess lines | `npm run audit:god-files` |
 
 The schema layer remains the type source of truth. New code is not allowed to
