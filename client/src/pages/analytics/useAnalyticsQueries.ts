@@ -47,6 +47,7 @@ export function useAnalyticsQueries({
   const reportQueries = useAnalyticsReportQueries({
     selectedCompanyId,
     activeSection,
+    appMode,
     balStartDate,
     balEndDate,
     dateRange,

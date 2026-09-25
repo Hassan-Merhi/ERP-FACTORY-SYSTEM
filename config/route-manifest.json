@@ -405,6 +405,7 @@
     "GET /api/chat/unread-count [requireAuth > <anonymous>]",
     "GET /api/factory/export-company-data [requireAuth > <anonymous>]",
     "POST /api/factory/import-company-data [requireAuth > <anonymous>]",
+    "GET /api/factory/analytics/accounts [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/sales-by-customer [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/pos-summary [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/container-sales-report [requireAuth > <anonymous>]",
