@@ -8,7 +8,8 @@ import { registerStatsSalesRoutes } from "./stats/statsSalesRoutes";
 import { registerStatsReportsRoutes } from "./stats/statsReportsRoutes";
 import { registerStatsCountryActivityRoutes } from "./stats/statsCountryActivityRoutes";
 import { registerStatsMultiCurrencyRoutes } from "./stats/statsMultiCurrencyRoutes";
-import { registerStockInSalesReportRoutes } from "./stats/stockInSalesReportRoutes";\nimport { registerItemMarketAnalysisRoutes } from "./stats/itemMarketAnalysisRoutes";
+import { registerStockInSalesReportRoutes } from "./stats/stockInSalesReportRoutes";
+import { registerItemMarketAnalysisRoutes } from "./stats/itemMarketAnalysisRoutes";
 import { registerGoldenCoastResidualEquityProjection } from "./stats/goldenCoastResidualEquityProjection";
 
 export function registerStatsRoutes(app: Express) {
@@ -31,6 +32,7 @@ export function registerStatsRoutes(app: Express) {
   registerStatsDataRoutes(app);
   registerStatsSalesRoutes(app);
   registerStockInSalesReportRoutes(app);
+  registerItemMarketAnalysisRoutes(app);
   registerStatsReportsRoutes(app);
   registerStatsCountryActivityRoutes(app);
 }
