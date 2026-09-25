@@ -28,8 +28,8 @@ describe("Phase 3 shared interface translations", () => {
     // completion appends generated backlog parts to the aggregate registry,
     // so freeze the reviewed inventory itself rather than the completed
     // aggregate that intentionally grows during generation.
-    expect(reviewedPhase3SharedUiTranslations).toHaveLength(597);
-    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(597);
+    expect(reviewedPhase3SharedUiTranslations).toHaveLength(598);
+    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(598);
 
     for (const entry of reviewedPhase3SharedUiTranslations) {
       expect(entry.en.trim()).not.toBe("");
@@ -38,6 +38,15 @@ describe("Phase 3 shared interface translations", () => {
     }
 
     expect(phase3SharedUiTranslations.length).toBeGreaterThanOrEqual(reviewedPhase3SharedUiTranslations.length);
+  });
+
+  it("translates the Activity by Company subtitle", () => {
+    expect(translatePhase3SharedUiText("Offloaded containers & imports per day", "ar")).toBe(
+      "الحاويات المفرغة والواردات يوميًا"
+    );
+    expect(translatePhase3SharedUiText("Offloaded containers & imports per day", "fr")).toBe(
+      "Conteneurs déchargés et importations par jour"
+    );
   });
 
   it("translates global navigation, status and offline messages", () => {
