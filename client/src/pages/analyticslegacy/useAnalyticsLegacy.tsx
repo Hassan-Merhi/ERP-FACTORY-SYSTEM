@@ -348,7 +348,7 @@ export function useAnalyticsLegacy() {
   const [factoryOrderCustomerSearch, setFactoryOrderCustomerSearch] = useState("");
   const [factoryOrderDestinationSearch, setFactoryOrderDestinationSearch] = useState("");
   const [factoryOrderLocationSearch, setFactoryOrderLocationSearch] = useState("");
-  const [factoryOrderStatus, setFactoryOrderStatus] = useState("FINALIZED");
+  const [factoryOrderStatus, setFactoryOrderStatus] = useState("all");
   const [factoryOrderProfitFilter, setFactoryOrderProfitFilter] = useState("all");
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
 
@@ -386,10 +386,9 @@ export function useAnalyticsLegacy() {
     if (factoryOrderDestinationSearch.trim()) params.append("destination", factoryOrderDestinationSearch.trim());
     if (factoryOrderLocationSearch.trim()) params.append("location", factoryOrderLocationSearch.trim());
     params.append("status", factoryOrderStatus);
-    params.append("profit", factoryOrderProfitFilter);
     params.append("page", String(factoryOrderPage));
-    params.append("pageSize", "100");
-    return `/api/factory/analytics/customer-order-items?${params.toString()}`;
+    params.append("pageSize", "50");
+    return `/api/factory/analytics/customer-orders?${params.toString()}`;
   };
 
   const {
@@ -398,7 +397,7 @@ export function useAnalyticsLegacy() {
     isError: factoryCustomerOrderAnalyticsError,
   } = useQuery<FactoryCustomerOrderAnalytics>({
       queryKey: [
-        "/api/factory/analytics/customer-order-items",
+        "/api/factory/analytics/customer-orders",
         selectedCompany?.id,
         factorySalesStartDate,
         factorySalesEndDate,
@@ -407,7 +406,6 @@ export function useAnalyticsLegacy() {
         factoryOrderDestinationSearch,
         factoryOrderLocationSearch,
         factoryOrderStatus,
-        factoryOrderProfitFilter,
         factoryOrderPage,
       ],
       queryFn: async () => {
