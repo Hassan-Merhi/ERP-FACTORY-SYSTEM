@@ -7,7 +7,8 @@ import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
-import { inventory, containers, vouchers, suppliers, locations, factoryWorkerAdvances } from "@shared/schema";
+import { inventory, containers, vouchers, locations, factoryWorkerAdvances } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
 import {
   classifyEquityAccounts,
@@ -246,41 +247,40 @@ export function registerStatsNetPositionRoutes(app: Express) {
       }
 
       // ── 5. Supplier balances ──────────────────────────────────────────────
-      if (shouldIncludeSuppliers) {
-        // Only fetch suppliers that appear in this company's entries (avoids full-table scan)
-        const supplierIdsWithBalance = [...supplierBalances.keys()];
-        const allSuppliers =
-          supplierIdsWithBalance.length > 0
-            ? await db
-                .select()
-                .from(suppliers)
-                .where(and(isNull(suppliers.deletedAt), inArray(suppliers.id, supplierIdsWithBalance)))
-                .execute()
-            : [];
-        let supplierLiabilities = 0;
-        let supplierAssets = 0;
-        for (const sup of allSuppliers) {
-          const balance = supplierBalances.get(sup.id);
-          if (balance) {
-            const opening = parseFloat(sup.openingBalance || "0");
-            const netBalance = opening + balance.credit - balance.debit;
-            if (netBalance > 0) {
-              supplierLiabilities += netBalance;
-              onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: netBalance, category: "Supplier" });
-            } else if (netBalance < 0) {
-              supplierAssets += Math.abs(netBalance);
-              forUsAccounts.push({
-                name: sup.legalName,
-                code: sup.code || "",
-                value: Math.abs(netBalance),
-                category: "Supplier Overpayment",
-              });
-            }
-          }
+      // Include every supplier owned by this company, not only suppliers that already
+      // have voucher rows. This keeps opening-balance-only suppliers in Excel and makes
+      // the export reconcile with the live Net Position endpoint.
+      const allSuppliers = await db
+        .select({
+          id: companyScopedSuppliers.id,
+          legalName: companyScopedSuppliers.legalName,
+          code: companyScopedSuppliers.code,
+          openingBalance: companyScopedSuppliers.openingBalance,
+        })
+        .from(companyScopedSuppliers)
+        .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
+        .execute();
+      let supplierLiabilities = 0;
+      let supplierAssets = 0;
+      for (const sup of allSuppliers) {
+        const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
+        const opening = parseFloat(sup.openingBalance || "0");
+        const netBalance = opening + balance.credit - balance.debit;
+        if (netBalance > 0) {
+          supplierLiabilities += netBalance;
+          onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: netBalance, category: "Supplier" });
+        } else if (netBalance < 0) {
+          supplierAssets += Math.abs(netBalance);
+          forUsAccounts.push({
+            name: sup.legalName,
+            code: sup.code || "",
+            value: Math.abs(netBalance),
+            category: "Supplier Overpayment",
+          });
         }
-        if (supplierLiabilities > 0) onUsTotal += supplierLiabilities;
-        if (supplierAssets > 0) forUsTotal += supplierAssets;
       }
+      if (supplierLiabilities > 0) onUsTotal += supplierLiabilities;
+      if (supplierAssets > 0) forUsTotal += supplierAssets;
 
       // ── 6. OTW containers — historical as of toDate ───────────────────────
       // Same logic as the main endpoint: use status='OFFLOADED' (not offloadDate) as the
