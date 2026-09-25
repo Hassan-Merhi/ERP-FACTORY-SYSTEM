@@ -1,3 +1,4 @@
+import { Fragment, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePickerInput } from "@/components/ui/date-picker-input";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -26,7 +26,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     factoryOrderItemSearch,
     factoryOrderLocationSearch,
     factoryOrderPage,
-    factoryOrderProfitFilter,
     factoryOrderStatus,
     factorySalesByCustomer,
     factorySalesEndDate,
@@ -48,7 +47,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     setFactoryOrderItemSearch,
     setFactoryOrderLocationSearch,
     setFactoryOrderPage,
-    setFactoryOrderProfitFilter,
     setFactoryOrderStatus,
     setFactorySalesEndDate,
     setFactorySalesStartDate,
@@ -58,7 +56,19 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     setSelectedPeriod,
     transactions,
     transactionsLoading,
+    navigate,
   } = analytics;
+  const [expandedOrderCustomers, setExpandedOrderCustomers] = useState<Set<string>>(new Set());
+
+  const toggleOrderCustomer = (key: string) => {
+    setExpandedOrderCustomers((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   return (
     <>
       {activeSection === "sales" && (
@@ -89,16 +99,17 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                 )}
               </div>
 
-              {/* ── Customer orders / item profitability ───────────── */}
+              {/* ── Customer orders grouped by customer ─────────────── */}
               <Card className="p-4 md:p-6">
                 <div className="flex flex-col gap-1 mb-4">
                   <h3 className="text-lg font-medium">Customer Order Analytics</h3>
                   <p className="text-sm text-muted-foreground">
-                    Sold customer orders with item-level sales, historical cost and gross profit
+                    Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight
+                    and extra charges.
                   </p>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6 mb-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 mb-4">
                   <Input
                     value={factoryOrderItemSearch}
                     onChange={(e) => {
@@ -146,26 +157,10 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FINALIZED">Finalized</SelectItem>
+                      <SelectItem value="all">Loading + Verified + Finalized</SelectItem>
+                      <SelectItem value="LOADING">Loading</SelectItem>
                       <SelectItem value="VERIFIED">Verified</SelectItem>
-                      <SelectItem value="all">Verified + Finalized</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={factoryOrderProfitFilter}
-                    onValueChange={(value) => {
-                      setFactoryOrderProfitFilter(value);
-                      setFactoryOrderPage(1);
-                    }}
-                  >
-                    <SelectTrigger data-testid="select-factory-order-profit">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Profit Results</SelectItem>
-                      <SelectItem value="profitable">Profitable</SelectItem>
-                      <SelectItem value="loss">Loss Making</SelectItem>
-                      <SelectItem value="break-even">Break Even</SelectItem>
+                      <SelectItem value="FINALIZED">Finalized</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -189,127 +184,146 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                   </p>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 mb-4">
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">Orders</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalOrders)}</div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Customers</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.uniqueCustomers)}</div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Bales Sold</div>
-                        <div className="font-semibold">{formatNumber(factoryCustomerOrderAnalytics.summary.totalBales)}</div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Sales</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalSales)}</div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Cost</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.totalCost)}</div>
-                      </div>
-                      <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Gross Profit</div>
-                        <div className={`font-semibold font-mono ${factoryCustomerOrderAnalytics.summary.grossProfit < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
-                          {formatAmount(factoryCustomerOrderAnalytics.summary.grossProfit)}
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.totalOrders)}
                         </div>
                       </div>
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Margin</div>
-                        <div className="font-semibold">{factoryCustomerOrderAnalytics.summary.marginPct.toFixed(1)}%</div>
+                        <div className="text-xs text-muted-foreground">Customers</div>
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.uniqueCustomers)}
+                        </div>
                       </div>
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Profit / Bale</div>
-                        <div className="font-semibold font-mono">{formatAmount(factoryCustomerOrderAnalytics.summary.avgProfitPerBale)}</div>
+                        <div className="text-xs text-muted-foreground">Bales Sold</div>
+                        <div className="font-semibold">
+                          {formatNumber(factoryCustomerOrderAnalytics.summary.totalBales)}
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Total Weight</div>
+                        <div className="font-semibold font-mono">
+                          {factoryCustomerOrderAnalytics.summary.totalWeightKg.toLocaleString(undefined, {
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          kg
+                        </div>
+                      </div>
+                      <div className="rounded-md border p-3">
+                        <div className="text-xs text-muted-foreground">Invoice Total (No Charges)</div>
+                        <div className="font-semibold font-mono">
+                          {formatAmount(factoryCustomerOrderAnalytics.summary.totalInvoiceAmount)}
+                        </div>
                       </div>
                     </div>
 
                     {factoryCustomerOrderAnalytics.rows.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-8">
-                        No sold customer order items match these filters
+                        No customer invoices match these filters
                       </p>
                     ) : (
                       <div className="table-responsive">
                         <Table>
                           <TableHeader className="sticky top-0 z-30 bg-background">
                             <TableRow>
-                              <TableHead>Item</TableHead>
-                              <TableHead>Customers</TableHead>
-                              <TableHead className="text-right">Qty</TableHead>
-                              <TableHead className="text-right">Total Price</TableHead>
-                              <TableHead className="text-right">Last Sold</TableHead>
+                              <TableHead>Customer / Container</TableHead>
+                              <TableHead className="text-right">Total Weight</TableHead>
+                              <TableHead className="text-right">Total Cost (No Charges)</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Date</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {factoryCustomerOrderAnalytics.rows.map((row) => {
-                              const onlyCustomer = row.customerBreakdown[0];
+                            {factoryCustomerOrderAnalytics.rows.map((customerRow, customerIndex) => {
+                              const customerKey = String(customerRow.customerId ?? `unknown-${customerIndex}`);
+                              const expanded = expandedOrderCustomers.has(customerKey);
                               return (
-                                <TableRow key={row.articleCode}>
-                                  <TableCell>
-                                    <div className="font-medium">{row.itemName || row.articleCode}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {row.articleCode}
-                                      {row.category ? ` · ${row.category}` : ""}
-                                      {row.grade ? ` · ${row.grade}` : ""}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="font-medium">
-                                    {row.customerCount === 1
-                                      ? onlyCustomer?.customerName || "1 customer"
-                                      : `${formatNumber(row.customerCount)} customers`}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <HoverCard openDelay={150} closeDelay={100}>
-                                      <HoverCardTrigger asChild>
-                                        <button
-                                          type="button"
-                                          className="font-mono font-semibold cursor-help underline decoration-dotted underline-offset-4"
-                                          aria-label={`Show customer quantity breakdown for ${row.itemName || row.articleCode}`}
-                                        >
-                                          {formatNumber(row.qty)}
-                                        </button>
-                                      </HoverCardTrigger>
-                                      <HoverCardContent className="w-80 p-0" align="end">
-                                        <div className="border-b px-4 py-3">
-                                          <div className="font-medium">{row.itemName || row.articleCode}</div>
-                                          <div className="text-xs text-muted-foreground mt-0.5">
-                                            Customer breakdown · {formatNumber(row.qty)} total qty · {formatAmount(row.salesAmount)}
+                                <Fragment key={customerKey}>
+                                  <TableRow className="bg-muted/20">
+                                    <TableCell>
+                                      <button
+                                        type="button"
+                                        className="flex w-full items-center gap-2 text-left"
+                                        onClick={() => toggleOrderCustomer(customerKey)}
+                                        aria-expanded={expanded}
+                                        data-testid={`button-expand-customer-${customerRow.customerId ?? customerIndex}`}
+                                      >
+                                        <ChevronRight
+                                          className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+                                        />
+                                        <div>
+                                          <div className="font-semibold">{customerRow.customerName || "Unknown customer"}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {formatNumber(customerRow.invoiceCount)}{" "}
+                                            {customerRow.invoiceCount === 1 ? "invoice" : "invoices"} ·{" "}
+                                            {formatNumber(customerRow.totalBales)} bales
                                           </div>
                                         </div>
-                                        <div className="max-h-64 overflow-y-auto">
-                                          {row.customerBreakdown.map((customerRow, index) => (
-                                            <div
-                                              key={`${row.articleCode}-${customerRow.customerId ?? "unknown"}-${index}`}
-                                              className="px-4 py-3 border-b last:border-b-0"
-                                            >
-                                              <div className="font-medium text-sm">
-                                                {customerRow.customerName ||
-                                                  (customerRow.customerId
-                                                    ? `Customer #${customerRow.customerId}`
-                                                    : "Unknown customer")}
-                                              </div>
-                                              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                                                <span>Qty {formatNumber(customerRow.qty)}</span>
-                                                <span className="text-right">{formatAmount(customerRow.salesAmount)}</span>
-                                                <span className="text-right">
-                                                  {formatNumber(customerRow.orders)} {customerRow.orders === 1 ? "order" : "orders"}
-                                                </span>
-                                              </div>
+                                      </button>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      {customerRow.totalWeightKg.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono font-semibold">
+                                      {formatAmount(customerRow.invoiceTotal)}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                      {formatNumber(customerRow.invoiceCount)} total
+                                    </TableCell>
+                                    <TableCell className="text-right whitespace-nowrap">
+                                      {formatDisplayDate(customerRow.latestOrderDate)}
+                                    </TableCell>
+                                  </TableRow>
+
+                                  {expanded &&
+                                    customerRow.orders.map((order) => {
+                                      const identifier =
+                                        order.containerNumber || order.invoiceNumber || `Order #${order.orderId}`;
+                                      const statusLabel =
+                                        order.status === "FINALIZED"
+                                          ? "Finalized"
+                                          : order.status === "VERIFIED"
+                                            ? "Verified"
+                                            : "Loading";
+                                      return (
+                                        <TableRow key={order.orderId} className="bg-background">
+                                          <TableCell>
+                                            <div className="pl-6">
+                                              <button
+                                                type="button"
+                                                className="font-mono font-semibold text-primary underline underline-offset-4 hover:no-underline"
+                                                onClick={() => navigate(`/factory/sales/invoices/${order.orderId}`)}
+                                                data-testid={`button-open-order-${order.orderId}`}
+                                              >
+                                                {identifier}
+                                              </button>
+                                              {order.containerNumber && order.invoiceNumber && (
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                  Invoice {order.invoiceNumber}
+                                                </div>
+                                              )}
+                                              {!order.containerNumber && (
+                                                <div className="text-xs text-muted-foreground mt-0.5">Invoice</div>
+                                              )}
                                             </div>
-                                          ))}
-                                        </div>
-                                      </HoverCardContent>
-                                    </HoverCard>
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono font-semibold">
-                                    {formatAmount(row.salesAmount)}
-                                  </TableCell>
-                                  <TableCell className="text-right whitespace-nowrap">
-                                    {formatDisplayDate(row.orderDate)}
-                                  </TableCell>
-                                </TableRow>
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono">
+                                            {order.totalWeightKg.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono font-semibold">
+                                            {formatAmount(order.invoiceTotal)}
+                                          </TableCell>
+                                          <TableCell>{statusLabel}</TableCell>
+                                          <TableCell className="text-right whitespace-nowrap">
+                                            {formatDisplayDate(order.orderDate)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                </Fragment>
                               );
                             })}
                           </TableBody>
@@ -320,9 +334,10 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     {factoryCustomerOrderAnalytics.pagination.totalPages > 1 && (
                       <div className="flex items-center justify-between gap-3 pt-4">
                         <div className="text-sm text-muted-foreground">
-                          Page {factoryCustomerOrderAnalytics.pagination.page} of {factoryCustomerOrderAnalytics.pagination.totalPages}
+                          Page {factoryCustomerOrderAnalytics.pagination.page} of{" "}
+                          {factoryCustomerOrderAnalytics.pagination.totalPages}
                           {" · "}
-                          {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} items
+                          {formatNumber(factoryCustomerOrderAnalytics.pagination.totalRows)} customers
                         </div>
                         <div className="flex gap-2">
                           <Button
@@ -336,7 +351,10 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                           <Button
                             variant="outline"
                             size="sm"
-                            disabled={factoryCustomerOrderAnalytics.pagination.page >= factoryCustomerOrderAnalytics.pagination.totalPages}
+                            disabled={
+                              factoryCustomerOrderAnalytics.pagination.page >=
+                              factoryCustomerOrderAnalytics.pagination.totalPages
+                            }
                             onClick={() => setFactoryOrderPage(factoryOrderPage + 1)}
                           >
                             Next
