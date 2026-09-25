@@ -52,31 +52,26 @@ export interface FactoryPosSummary {
   grand?: FactoryPosCustomerSummary;
 }
 
-export interface FactoryCustomerOrderCustomerBreakdown {
-  customerId: number | null;
-  customerName: string | null;
-  qty: number;
-  salesAmount: number;
-  orders: number;
+export interface FactoryCustomerOrderInvoiceRow {
+  orderId: number;
+  invoiceNumber: string | null;
+  containerNumber: string | null;
+  status: string;
+  orderDate: string;
+  totalBales: number;
+  totalWeightKg: number;
+  invoiceTotal: number;
 }
 
-export interface FactoryCustomerOrderItemRow {
-  orderDate: string;
-  articleCode: string;
-  itemName: string;
-  category: string | null;
-  grade: string | null;
-  customerCount: number;
-  customerBreakdown: FactoryCustomerOrderCustomerBreakdown[];
-  qty: number;
+export interface FactoryCustomerOrderCustomerRow {
+  customerId: number | null;
+  customerName: string;
+  invoiceCount: number;
+  totalBales: number;
   totalWeightKg: number;
-  salesAmount: number;
-  costAmount: number;
-  profitAmount: number;
-  profitPct: number;
-  profitPerBale: number;
-  avgSellingPrice: number;
-  avgCostPerBale: number;
+  invoiceTotal: number;
+  latestOrderDate: string;
+  orders: FactoryCustomerOrderInvoiceRow[];
 }
 
 export interface FactoryCustomerOrderAnalytics {
@@ -85,13 +80,9 @@ export interface FactoryCustomerOrderAnalytics {
     uniqueCustomers: number;
     totalBales: number;
     totalWeightKg: number;
-    totalSales: number;
-    totalCost: number;
-    grossProfit: number;
-    marginPct: number;
-    avgProfitPerBale: number;
+    totalInvoiceAmount: number;
   };
-  rows: FactoryCustomerOrderItemRow[];
+  rows: FactoryCustomerOrderCustomerRow[];
   pagination: {
     page: number;
     pageSize: number;
