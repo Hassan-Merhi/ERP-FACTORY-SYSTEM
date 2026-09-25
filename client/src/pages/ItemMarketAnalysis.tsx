@@ -75,6 +75,14 @@ function StatusBadge({ status }: { status: CountryPerformance["status"] }) {
   return <Badge variant="outline">No sales</Badge>;
 }
 
+function formatNativePurchase(value: number | null, currencies: string[]) {
+  if (value == null) return "—";
+  if (currencies.length !== 1) return "Mixed currencies";
+  const currency = currencies[0] === "UNKNOWN" ? "" : currencies[0];
+  const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return currency ? `${currency} ${amount}` : amount;
+}
+
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border bg-card p-4">
@@ -87,7 +95,7 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 export default function ItemMarketAnalysis() {
   const { selectedCompany } = useCompany();
   const { formatAmount } = useCurrencyContext();
-  const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("this_year"));
+  const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [country, setCountry] = useState("all");
@@ -223,6 +231,7 @@ export default function ItemMarketAnalysis() {
                 <TableHead>Item</TableHead>
                 <TableHead className="text-right">Imports</TableHead>
                 <TableHead className="text-right">Imported Qty</TableHead>
+                <TableHead className="text-right">Purchase Value</TableHead>
                 <TableHead className="text-right">Avg Purchase</TableHead>
                 <TableHead className="text-right">Sold Qty</TableHead>
                 <TableHead className="text-right">Avg Sell</TableHead>
@@ -237,7 +246,7 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={12}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={13}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))}
               {!isLoading && rows.map((row) => {
@@ -258,8 +267,9 @@ export default function ItemMarketAnalysis() {
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {mixedCurrency ? <span className="text-xs text-muted-foreground">Mixed currencies</span> : row.weightedPurchaseCost == null ? "—" : formatAmount(row.weightedPurchaseCost)}
+                        {mixedCurrency ? <span className="text-xs text-muted-foreground">Mixed currencies</span> : formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
@@ -272,7 +282,7 @@ export default function ItemMarketAnalysis() {
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={12} className="bg-muted/20 p-0">
+                        <TableCell colSpan={13} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>Purchase currencies: {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}</span>
@@ -319,7 +329,7 @@ export default function ItemMarketAnalysis() {
               })}
               {!isLoading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
