@@ -445,7 +445,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           LEFT   JOIN factory_bale_products p ON p.id = b.product_id
           LEFT   JOIN factory_categories    c ON c.id = p.category_id
           WHERE  b.company_id = ${companyId}
-            AND  b.status NOT IN ('DELETED', 'REMOVED')
+            -- Match the production totals above: a REPACKED original is replaced by a
+            -- new bale, so counting both would consume the same 40 kg twice and make
+            -- Balance on Table / total production profit short by that repacked weight.
+            AND  b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
         `),
       ]);
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};

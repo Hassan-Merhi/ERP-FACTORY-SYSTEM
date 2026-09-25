@@ -46,11 +46,12 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     setValuationMode,
   } = report;
   const costsHidden = Boolean(data?.costsHidden);
-  // Top Profit KPI only: remaining table value plus the selected
-  // (Cost/Selling) value of produced bales, minus the mixed-batch value.
+  // Top Profit KPI only:
+  // selected bales value - (mix-batch value - remaining-on-table value).
+  // The selected bales value follows the active Cost/Selling toggle.
   const selectedBalesValue = data?.production.totalValue ?? 0;
-  const productionProfitValue =
-    (data?.balanceOnTable.value ?? 0) + selectedBalesValue - (data?.rawMaterial.totalCost ?? 0);
+  const consumedMixValue = (data?.rawMaterial.totalCost ?? 0) - (data?.balanceOnTable.value ?? 0);
+  const productionProfitValue = selectedBalesValue - consumedMixValue;
   const productionProfitMarginPct =
     selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
   return (
