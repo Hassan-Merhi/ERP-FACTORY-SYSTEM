@@ -57,7 +57,7 @@ describe("Performance Wave 4 database hotspot guards", () => {
     expect(route).toContain(
       "const [baleRows, mixBatchRows] = await Promise.all([baleRowsPromise, mixBatchRowsPromise])"
     );
-    expect(route).toContain("const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([");
+    expect(route).toContain("const [mixAllTimeResult, currentBatchRows] = await Promise.all([");
   });
 
   it("aggregates bale order-state once instead of repeating correlated EXISTS probes", () => {
