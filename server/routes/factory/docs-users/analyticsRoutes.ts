@@ -19,7 +19,8 @@ import {
   customerOrderLines,
   locations,
 } from "@shared/schema";
-import { eq, and, desc, sql, ne, isNull, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, ne } from "drizzle-orm";
+import { resultRows } from "../../../lib/queryResult";
 import { serveAccountListForCompany } from "../../accounts/all";
 
 export function registerFactoryAnalyticsRoutes(app: Express) {
@@ -174,121 +175,241 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         pageSize = "100",
       } = req.query as Record<string, string>;
 
-      const conditions = [
-        eq(customerOrders.companyId, companyId),
-        isNull(customerOrders.deletedAt),
-      ];
-
-      if (status === "all") {
-        conditions.push(sql`${customerOrders.status} IN ('VERIFIED', 'FINALIZED')`);
-      } else if (status === "VERIFIED" || status === "FINALIZED") {
-        conditions.push(eq(customerOrders.status, status));
-      } else {
+      if (!["FINALIZED", "VERIFIED", "all"].includes(status)) {
         return res.status(400).json({ message: "Invalid status filter" });
       }
+      if (!["all", "profitable", "loss", "break-even"].includes(profit)) {
+        return res.status(400).json({ message: "Invalid profit filter" });
+      }
 
-      if (startDate) conditions.push(gte(customerOrders.orderDate, startDate));
-      if (endDate) conditions.push(lte(customerOrders.orderDate, endDate));
+      const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
+      const safePageSize = Math.min(250, Math.max(25, Number.parseInt(pageSize, 10) || 100));
+      const offset = (safePage - 1) * safePageSize;
+
+      const orderFilters = [
+        sql`co.company_id = ${companyId}`,
+        sql`co.deleted_at IS NULL`,
+        status === "all"
+          ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
+          : sql`co.status = ${status}`,
+      ];
+      if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
+      if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
+      if (customer?.trim()) {
+        orderFilters.push(
+          sql`lower(COALESCE(c.legal_name, '')) LIKE ${`%${customer.trim().toLowerCase().slice(0, 100)}%`}`
+        );
+      }
+      if (destination?.trim()) {
+        orderFilters.push(
+          sql`lower(COALESCE(co.destination, '')) LIKE ${`%${destination.trim().toLowerCase().slice(0, 100)}%`}`
+        );
+      }
+      if (location?.trim()) {
+        orderFilters.push(
+          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
+        );
+      }
 
       const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
       const itemSearch = item ? normalizeSearch(item) : "";
-      if (itemSearch) {
-        conditions.push(sql`
-          regexp_replace(
-            lower(COALESCE(${customerOrderLines.articleCode}, '') || COALESCE(${customerOrderLines.baleName}, '')),
+      const lineFilter = itemSearch
+        ? sql`regexp_replace(
+            lower(COALESCE(col.article_code, '') || COALESCE(col.bale_name, '')),
             '[.\\s-]+',
             '',
             'g'
-          ) LIKE ${`%${itemSearch}%`}
-        `);
-      }
-      if (customer?.trim()) {
-        conditions.push(sql`lower(COALESCE(${customers.legalName}, '')) LIKE ${`%${customer.trim().toLowerCase().slice(0, 100)}%`}`);
-      }
-      if (destination?.trim()) {
-        conditions.push(sql`lower(COALESCE(${customerOrders.destination}, '')) LIKE ${`%${destination.trim().toLowerCase().slice(0, 100)}%`}`);
-      }
-      if (location?.trim()) {
-        conditions.push(sql`lower(COALESCE(${locations.name}, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`);
-      }
+          ) LIKE ${`%${itemSearch}%`}`
+        : sql`TRUE`;
 
-      const rawRows = await db
-        .select({
-          orderId: customerOrders.id,
-          invoiceNumber: customerOrders.invoiceNumber,
-          orderDate: customerOrders.orderDate,
-          status: customerOrders.status,
-          customerId: customerOrders.customerId,
-          customerName: customers.legalName,
-          destination: customerOrders.destination,
-          locationId: customerOrders.locationId,
-          locationName: locations.name,
-          articleCode: customerOrderLines.articleCode,
-          itemName: sql<string>`MAX(${customerOrderLines.baleName})`,
-          category: sql<string | null>`(
-            SELECT MAX(fb.category)
-            FROM factory_bales fb
-            JOIN customer_order_bales cob ON cob.bale_id = fb.id
-            WHERE cob.order_id = ${customerOrders.id}
-              AND COALESCE(cob.article_code, fb.article_code) = ${customerOrderLines.articleCode}
-              AND fb.company_id = ${companyId}
-          )`,
-          grade: sql<string | null>`(
-            SELECT MAX(fb.grade)
-            FROM factory_bales fb
-            JOIN customer_order_bales cob ON cob.bale_id = fb.id
-            WHERE cob.order_id = ${customerOrders.id}
-              AND COALESCE(cob.article_code, fb.article_code) = ${customerOrderLines.articleCode}
-              AND fb.company_id = ${companyId}
-          )`,
-          qty: sql<number>`COALESCE(SUM(${customerOrderLines.qty}), 0)::int`,
-          totalWeightKg: sql<string>`COALESCE(SUM(${customerOrderLines.totalWeight}::numeric), 0)`,
-          salesAmount: sql<string>`
+      const profitFilter =
+        profit === "profitable"
+          ? sql`ar.profit_amount > 0`
+          : profit === "loss"
+            ? sql`ar.profit_amount < 0`
+            : profit === "break-even"
+              ? sql`ABS(ar.profit_amount) < 0.005`
+              : sql`TRUE`;
+
+      // Aggregate order lines and sold-bale costs once, then paginate in SQL.
+      // The previous implementation ran three correlated bale subqueries for
+      // every item row and loaded the entire result set before slicing it.
+      // On real Factory data that took 26-30s and hit the request timeout.
+      const queryResult = await db.execute(sql`
+        WITH filtered_orders AS MATERIALIZED (
+          SELECT
+            co.id AS order_id,
+            co.invoice_number,
+            co.order_date,
+            co.status,
+            co.customer_id,
+            c.legal_name AS customer_name,
+            co.destination,
+            co.location_id,
+            l.name AS location_name
+          FROM customer_orders co
+          LEFT JOIN customers c ON c.id = co.customer_id
+          LEFT JOIN locations l ON l.id = co.location_id
+          WHERE ${sql.join(orderFilters, sql` AND `)}
+        ),
+        line_totals AS MATERIALIZED (
+          SELECT
+            fo.order_id,
+            fo.invoice_number,
+            fo.order_date,
+            fo.status,
+            fo.customer_id,
+            fo.customer_name,
+            fo.destination,
+            fo.location_id,
+            fo.location_name,
+            col.article_code,
+            MAX(col.bale_name) AS item_name,
+            COALESCE(SUM(col.qty), 0)::int AS qty,
+            COALESCE(SUM(col.total_weight::numeric), 0) AS total_weight_kg,
             COALESCE(SUM(
               CASE
-                WHEN ${customerOrderLines.pricingMode} = 'per_kg'
-                  AND COALESCE(${customerOrderLines.pricePerKg}::numeric, 0) > 0
-                THEN COALESCE(${customerOrderLines.pricePerKg}::numeric, 0)
-                     * COALESCE(${customerOrderLines.totalWeight}::numeric, 0)
-                ELSE COALESCE(${customerOrderLines.totalPrice}::numeric, 0)
+                WHEN col.pricing_mode = 'per_kg'
+                  AND COALESCE(col.price_per_kg::numeric, 0) > 0
+                THEN COALESCE(col.price_per_kg::numeric, 0)
+                     * COALESCE(col.total_weight::numeric, 0)
+                ELSE COALESCE(col.total_price::numeric, 0)
               END
-            ), 0)
-          `,
-          costAmount: sql<string>`COALESCE((
-            SELECT SUM(COALESCE(fb.total_cost::numeric, 0))
-            FROM customer_order_bales cob
-            LEFT JOIN factory_bales fb
-              ON fb.id = cob.bale_id
-             AND fb.company_id = ${companyId}
-            WHERE cob.order_id = ${customerOrders.id}
-              AND COALESCE(cob.article_code, fb.article_code) = ${customerOrderLines.articleCode}
-          ), 0)`,
-        })
-        .from(customerOrderLines)
-        .innerJoin(customerOrders, eq(customerOrderLines.orderId, customerOrders.id))
-        .leftJoin(customers, eq(customerOrders.customerId, customers.id))
-        .leftJoin(locations, eq(customerOrders.locationId, locations.id))
-        .where(and(...conditions))
-        .groupBy(
-          customerOrders.id,
-          customerOrders.invoiceNumber,
-          customerOrders.orderDate,
-          customerOrders.status,
-          customerOrders.customerId,
-          customers.legalName,
-          customerOrders.destination,
-          customerOrders.locationId,
-          locations.name,
-          customerOrderLines.articleCode
+            ), 0) AS sales_amount
+          FROM filtered_orders fo
+          JOIN customer_order_lines col ON col.order_id = fo.order_id
+          WHERE ${lineFilter}
+          GROUP BY
+            fo.order_id,
+            fo.invoice_number,
+            fo.order_date,
+            fo.status,
+            fo.customer_id,
+            fo.customer_name,
+            fo.destination,
+            fo.location_id,
+            fo.location_name,
+            col.article_code
+        ),
+        bale_totals AS MATERIALIZED (
+          SELECT
+            cob.order_id,
+            COALESCE(cob.article_code, fb.article_code) AS article_code,
+            MAX(fb.category) AS category,
+            MAX(fb.grade) AS grade,
+            COALESCE(SUM(fb.total_cost::numeric), 0) AS cost_amount
+          FROM customer_order_bales cob
+          JOIN filtered_orders fo ON fo.order_id = cob.order_id
+          LEFT JOIN factory_bales fb
+            ON fb.id = cob.bale_id
+           AND fb.company_id = ${companyId}
+          GROUP BY cob.order_id, COALESCE(cob.article_code, fb.article_code)
+        ),
+        analytics_rows AS MATERIALIZED (
+          SELECT
+            lt.*,
+            bt.category,
+            bt.grade,
+            COALESCE(bt.cost_amount, 0) AS cost_amount,
+            lt.sales_amount - COALESCE(bt.cost_amount, 0) AS profit_amount
+          FROM line_totals lt
+          LEFT JOIN bale_totals bt
+            ON bt.order_id = lt.order_id
+           AND bt.article_code = lt.article_code
+        ),
+        filtered_rows AS MATERIALIZED (
+          SELECT ar.*
+          FROM analytics_rows ar
+          WHERE ${profitFilter}
         )
-        .orderBy(desc(customerOrders.orderDate), desc(customerOrders.id), customerOrderLines.articleCode);
+        SELECT
+          COALESCE((
+            SELECT jsonb_build_object(
+              'totalOrders', COUNT(DISTINCT fr.order_id),
+              'uniqueCustomers', COUNT(DISTINCT fr.customer_id),
+              'totalBales', COALESCE(SUM(fr.qty), 0),
+              'totalWeightKg', COALESCE(SUM(fr.total_weight_kg), 0),
+              'totalSales', COALESCE(SUM(fr.sales_amount), 0),
+              'totalCost', COALESCE(SUM(fr.cost_amount), 0),
+              'grossProfit', COALESCE(SUM(fr.profit_amount), 0)
+            )
+            FROM filtered_rows fr
+          ), '{}'::jsonb) AS summary,
+          COALESCE((
+            SELECT jsonb_agg(row_to_json(paged))
+            FROM (
+              SELECT
+                fr.order_id AS "orderId",
+                fr.invoice_number AS "invoiceNumber",
+                fr.order_date AS "orderDate",
+                fr.status,
+                fr.customer_id AS "customerId",
+                fr.customer_name AS "customerName",
+                fr.destination,
+                fr.location_id AS "locationId",
+                fr.location_name AS "locationName",
+                fr.article_code AS "articleCode",
+                fr.item_name AS "itemName",
+                fr.category,
+                fr.grade,
+                fr.qty,
+                fr.total_weight_kg AS "totalWeightKg",
+                fr.sales_amount AS "salesAmount",
+                fr.cost_amount AS "costAmount",
+                fr.profit_amount AS "profitAmount"
+              FROM filtered_rows fr
+              ORDER BY fr.order_date DESC, fr.order_id DESC, fr.article_code
+              LIMIT ${safePageSize}
+              OFFSET ${offset}
+            ) paged
+          ), '[]'::jsonb) AS rows,
+          (SELECT COUNT(*)::int FROM filtered_rows) AS total_rows
+      `);
 
-      const rows = rawRows.map((row) => {
+      type AggregateSummary = {
+        totalOrders?: number | string;
+        uniqueCustomers?: number | string;
+        totalBales?: number | string;
+        totalWeightKg?: number | string;
+        totalSales?: number | string;
+        totalCost?: number | string;
+        grossProfit?: number | string;
+      };
+      type AggregateRow = {
+        orderId: number;
+        invoiceNumber: string | null;
+        orderDate: string;
+        status: string;
+        customerId: number;
+        customerName: string | null;
+        destination: string | null;
+        locationId: number | null;
+        locationName: string | null;
+        articleCode: string;
+        itemName: string;
+        category: string | null;
+        grade: string | null;
+        qty: number | string;
+        totalWeightKg: number | string;
+        salesAmount: number | string;
+        costAmount: number | string;
+        profitAmount: number | string;
+      };
+      type AggregateResult = {
+        summary: AggregateSummary | null;
+        rows: AggregateRow[] | null;
+        total_rows: number | string;
+      };
+
+      const [aggregate] = resultRows<AggregateResult>(queryResult);
+      const rawSummary = aggregate?.summary ?? {};
+      const totalRows = Number(aggregate?.total_rows ?? 0);
+      const rows = (aggregate?.rows ?? []).map((row) => {
         const qty = Number(row.qty || 0);
         const totalWeightKg = Number(row.totalWeightKg || 0);
         const salesAmount = Number(row.salesAmount || 0);
         const costAmount = Number(row.costAmount || 0);
-        const profitAmount = salesAmount - costAmount;
+        const profitAmount = Number(row.profitAmount || 0);
         return {
           ...row,
           qty,
@@ -303,51 +424,27 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         };
       });
 
-      const profitFilteredRows = rows.filter((row) => {
-        if (profit === "profitable") return row.profitAmount > 0;
-        if (profit === "loss") return row.profitAmount < 0;
-        if (profit === "break-even") return Math.abs(row.profitAmount) < 0.005;
-        return true;
-      });
-
-      const uniqueOrderIds = new Set(profitFilteredRows.map((row) => row.orderId));
-      const uniqueCustomerIds = new Set(profitFilteredRows.map((row) => row.customerId));
-      const summary = profitFilteredRows.reduce(
-        (acc, row) => {
-          acc.totalBales += row.qty;
-          acc.totalWeightKg += row.totalWeightKg;
-          acc.totalSales += row.salesAmount;
-          acc.totalCost += row.costAmount;
-          acc.grossProfit += row.profitAmount;
-          return acc;
-        },
-        {
-          totalOrders: uniqueOrderIds.size,
-          uniqueCustomers: uniqueCustomerIds.size,
-          totalBales: 0,
-          totalWeightKg: 0,
-          totalSales: 0,
-          totalCost: 0,
-          grossProfit: 0,
-          marginPct: 0,
-          avgProfitPerBale: 0,
-        }
-      );
-      summary.marginPct = summary.totalSales !== 0 ? (summary.grossProfit / summary.totalSales) * 100 : 0;
-      summary.avgProfitPerBale = summary.totalBales !== 0 ? summary.grossProfit / summary.totalBales : 0;
-
-      const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
-      const safePageSize = Math.min(250, Math.max(25, Number.parseInt(pageSize, 10) || 100));
-      const totalRows = profitFilteredRows.length;
+      const totalBales = Number(rawSummary.totalBales ?? 0);
+      const totalSales = Number(rawSummary.totalSales ?? 0);
+      const totalCost = Number(rawSummary.totalCost ?? 0);
+      const grossProfit = Number(rawSummary.grossProfit ?? 0);
       const totalPages = Math.max(1, Math.ceil(totalRows / safePageSize));
-      const currentPage = Math.min(safePage, totalPages);
-      const offset = (currentPage - 1) * safePageSize;
 
       res.json({
-        summary,
-        rows: profitFilteredRows.slice(offset, offset + safePageSize),
+        summary: {
+          totalOrders: Number(rawSummary.totalOrders ?? 0),
+          uniqueCustomers: Number(rawSummary.uniqueCustomers ?? 0),
+          totalBales,
+          totalWeightKg: Number(rawSummary.totalWeightKg ?? 0),
+          totalSales,
+          totalCost,
+          grossProfit,
+          marginPct: totalSales !== 0 ? (grossProfit / totalSales) * 100 : 0,
+          avgProfitPerBale: totalBales !== 0 ? grossProfit / totalBales : 0,
+        },
+        rows,
         pagination: {
-          page: currentPage,
+          page: safePage,
           pageSize: safePageSize,
           totalRows,
           totalPages,
