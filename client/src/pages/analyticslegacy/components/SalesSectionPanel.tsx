@@ -19,6 +19,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     detailsPeriod,
     factoryPosSummary,
     factoryCustomerOrderAnalytics,
+    factoryCustomerOrderAnalyticsError,
     factoryOrderCustomerSearch,
     factoryOrderDestinationSearch,
     factoryOrderItemSearch,
@@ -173,6 +174,13 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     {[1, 2, 3, 4].map((i) => (
                       <Skeleton key={i} className="h-14 w-full" />
                     ))}
+                  </div>
+                ) : factoryCustomerOrderAnalyticsError ? (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                    <div className="font-medium text-destructive">Could not load customer order analytics</div>
+                    <div className="mt-1 text-muted-foreground">
+                      Please retry or narrow the date range. The rest of Analytics is still available.
+                    </div>
                   </div>
                 ) : !factoryCustomerOrderAnalytics ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
