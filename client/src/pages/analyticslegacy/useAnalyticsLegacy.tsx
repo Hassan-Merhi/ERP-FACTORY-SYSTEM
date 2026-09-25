@@ -26,6 +26,7 @@ import type {
   Account,
   ContainerData,
   FactoryContainerSalesData,
+  FactoryCustomerOrderAnalytics,
   FactoryPosSummary,
   FactorySalesByCustomer,
   Location,
@@ -343,6 +344,13 @@ export function useAnalyticsLegacy() {
   // ── Factory Analytics Queries ───────────────────────────────────────────
   const [factorySalesStartDate, setFactorySalesStartDate] = useState("");
   const [factorySalesEndDate, setFactorySalesEndDate] = useState("");
+  const [factoryOrderItemSearch, setFactoryOrderItemSearch] = useState("");
+  const [factoryOrderCustomerSearch, setFactoryOrderCustomerSearch] = useState("");
+  const [factoryOrderDestinationSearch, setFactoryOrderDestinationSearch] = useState("");
+  const [factoryOrderLocationSearch, setFactoryOrderLocationSearch] = useState("");
+  const [factoryOrderStatus, setFactoryOrderStatus] = useState("FINALIZED");
+  const [factoryOrderProfitFilter, setFactoryOrderProfitFilter] = useState("all");
+  const [factoryOrderPage, setFactoryOrderPage] = useState(1);
 
   const buildFactorySalesUrl = (base: string) => {
     const params = new URLSearchParams();
@@ -368,6 +376,44 @@ export function useAnalyticsLegacy() {
     },
     enabled: !!selectedCompany && appMode === "factory",
   });
+
+  const buildFactoryOrderAnalyticsUrl = () => {
+    const params = new URLSearchParams();
+    if (factorySalesStartDate) params.append("startDate", factorySalesStartDate);
+    if (factorySalesEndDate) params.append("endDate", factorySalesEndDate);
+    if (factoryOrderItemSearch.trim()) params.append("item", factoryOrderItemSearch.trim());
+    if (factoryOrderCustomerSearch.trim()) params.append("customer", factoryOrderCustomerSearch.trim());
+    if (factoryOrderDestinationSearch.trim()) params.append("destination", factoryOrderDestinationSearch.trim());
+    if (factoryOrderLocationSearch.trim()) params.append("location", factoryOrderLocationSearch.trim());
+    params.append("status", factoryOrderStatus);
+    params.append("profit", factoryOrderProfitFilter);
+    params.append("page", String(factoryOrderPage));
+    params.append("pageSize", "100");
+    return `/api/factory/analytics/customer-order-items?${params.toString()}`;
+  };
+
+  const { data: factoryCustomerOrderAnalytics, isLoading: loadingFactoryCustomerOrders } =
+    useQuery<FactoryCustomerOrderAnalytics>({
+      queryKey: [
+        "/api/factory/analytics/customer-order-items",
+        selectedCompany?.id,
+        factorySalesStartDate,
+        factorySalesEndDate,
+        factoryOrderItemSearch,
+        factoryOrderCustomerSearch,
+        factoryOrderDestinationSearch,
+        factoryOrderLocationSearch,
+        factoryOrderStatus,
+        factoryOrderProfitFilter,
+        factoryOrderPage,
+      ],
+      queryFn: async () => {
+        const res = await fetch(buildFactoryOrderAnalyticsUrl(), { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch customer order analytics");
+        return res.json();
+      },
+      enabled: !!selectedCompany && appMode === "factory" && activeSection === "sales",
+    });
 
   const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
     queryKey: ["/api/factory/analytics/pos-summary", selectedCompany?.id, factorySalesStartDate, factorySalesEndDate],
@@ -669,7 +715,24 @@ export function useAnalyticsLegacy() {
     setFactorySalesStartDate,
     factorySalesEndDate,
     setFactorySalesEndDate,
+    factoryOrderItemSearch,
+    setFactoryOrderItemSearch,
+    factoryOrderCustomerSearch,
+    setFactoryOrderCustomerSearch,
+    factoryOrderDestinationSearch,
+    setFactoryOrderDestinationSearch,
+    factoryOrderLocationSearch,
+    setFactoryOrderLocationSearch,
+    factoryOrderStatus,
+    setFactoryOrderStatus,
+    factoryOrderProfitFilter,
+    setFactoryOrderProfitFilter,
+    factoryOrderPage,
+    setFactoryOrderPage,
     buildFactorySalesUrl,
+    buildFactoryOrderAnalyticsUrl,
+    factoryCustomerOrderAnalytics,
+    loadingFactoryCustomerOrders,
     loadingFactorySales,
     factoryPosSummary,
     loadingFactoryPos,
