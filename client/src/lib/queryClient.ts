@@ -16,7 +16,7 @@ import {
 import { applyReferenceMutationResponse } from "./referenceMutationCache";
 import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
-import { resolveFactoryPageKey } from "@shared/factoryAccessRegistry";
+import { factoryPageOwnsAccountsAllRead, factoryPageOwnsSharedAccountingRead } from "./factoryClientAccess";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -141,28 +141,24 @@ export function setFactoryAccountingModuleAccess(allowed: boolean | null): void 
   factoryAccountingModuleAccess = allowed;
 }
 
-const FACTORY_SHARED_ACCOUNTING_READ_OWNERS = new Set([
-  "factory/accounts",
-  "factory/vouchers",
-  "factory/payroll-hub",
-  "factory/import",
-  "factory/settings",
-  "factory/invoicing",
-]);
-
 function isFactoryAccountingRead(pathname: string | null, method: string): boolean {
   if (method !== "GET" || !pathname) return false;
   return pathname === "/api/ledger-accounts" || pathname === "/api/bank-accounts";
 }
 
-function factoryPageOwnsSharedAccountingRead(pathname: string | null): boolean {
-  if (!pathname || typeof window === "undefined") return true;
-  const currentPageKey = resolveFactoryPageKey(window.location.pathname);
-  return currentPageKey !== null && FACTORY_SHARED_ACCOUNTING_READ_OWNERS.has(currentPageKey);
+function isFactoryAccountsAllRead(pathname: string | null, method: string): boolean {
+  return method === "GET" && pathname === "/api/accounts/all";
 }
 
 function emptyJsonArrayResponse(): Response {
   return new Response("[]", {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function emptyAccountsEnvelopeResponse(): Response {
+  return new Response(JSON.stringify({ accounts: [], asOfDate: null }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -250,9 +246,16 @@ if (
     if (
       isFactoryUiRequest &&
       isFactoryAccountingRead(pathname, method) &&
-      (factoryAccountingModuleAccess === false || !factoryPageOwnsSharedAccountingRead(pathname))
+      (factoryAccountingModuleAccess === false || !factoryPageOwnsSharedAccountingRead(window.location.pathname))
     ) {
       return emptyJsonArrayResponse();
+    }
+    if (
+      isFactoryUiRequest &&
+      isFactoryAccountsAllRead(pathname, method) &&
+      (factoryAccountingModuleAccess === false || !factoryPageOwnsAccountsAllRead(window.location.pathname))
+    ) {
+      return emptyAccountsEnvelopeResponse();
     }
 
     if (isFactoryUiRequest) {
