@@ -105,6 +105,7 @@ export function useFactoryContainerLoadingScanModel() {
   const scannerRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const ignoreProformaRef = useRef(false);
+  const scanSubmissionInFlightRef = useRef(false);
 
   const toggleIgnoreProforma = useCallback(() => {
     const enabled = !ignoreProformaRef.current;
@@ -134,6 +135,7 @@ export function useFactoryContainerLoadingScanModel() {
       setLastScannedRef(null);
       setPendingBypassBaleRef(null);
       setPendingBypassOverloadRef(null);
+      scanSubmissionInFlightRef.current = false;
       return;
     }
 
@@ -368,6 +370,9 @@ export function useFactoryContainerLoadingScanModel() {
         variant: "destructive",
       });
       setScanCode("");
+    },
+    onSettled: () => {
+      scanSubmissionInFlightRef.current = false;
     },
   });
 
@@ -626,11 +631,36 @@ export function useFactoryContainerLoadingScanModel() {
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter" || !scanCode.trim() || !orderId || !selectedLocationId) return;
       e.preventDefault();
+
+      // A hardware scanner can emit duplicate Enter events before React re-renders
+      // with mutation.isPending=true. Lock synchronously so one physical scan maps
+      // to one request and one state transition.
+      if (scanSubmissionInFlightRef.current || addBaleMutation.isPending) return;
+
+      // Avoid predictable stale-order failures. The backend remains authoritative,
+      // but once the loaded order has moved beyond a scannable state the client
+      // should not keep posting bales into it.
+      if (!orderDetail) return;
+      const orderIsScannable =
+        orderDetail.status === "DRAFT" ||
+        orderDetail.status === "LOADING" ||
+        (orderDetail.status === "PENDING_VERIFICATION" && !orderDetail.proformaIdUsed);
+      if (!orderIsScannable) {
+        toast({
+          title: "Loading is no longer scannable",
+          description: "Refresh or reopen the loading before scanning another bale.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const trimmed = scanCode.trim();
       const isBypassProforma = pendingBypassBaleRef !== null && pendingBypassBaleRef === trimmed;
       const isBypassOverload = pendingBypassOverloadRef !== null && pendingBypassOverloadRef === trimmed;
       if (pendingBypassBaleRef !== null && !isBypassProforma) setPendingBypassBaleRef(null);
       if (pendingBypassOverloadRef !== null && !isBypassOverload) setPendingBypassOverloadRef(null);
+
+      scanSubmissionInFlightRef.current = true;
       addBaleMutation.mutate({
         scanCode: trimmed,
         locationId: parseInt(selectedLocationId),
@@ -641,7 +671,16 @@ export function useFactoryContainerLoadingScanModel() {
         allowBypassOverload: isBypassOverload || undefined,
       });
     },
-    [scanCode, orderId, selectedLocationId, pendingBypassBaleRef, pendingBypassOverloadRef, addBaleMutation]
+    [
+      scanCode,
+      orderId,
+      selectedLocationId,
+      orderDetail,
+      pendingBypassBaleRef,
+      pendingBypassOverloadRef,
+      addBaleMutation,
+      toast,
+    ]
   );
 
   const handleImportFile = useCallback(
