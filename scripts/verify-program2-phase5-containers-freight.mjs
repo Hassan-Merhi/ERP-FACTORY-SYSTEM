@@ -9,7 +9,7 @@ const requiredFiles = [
   "server/routes/factory/suppliers/balance/with-balances.ts",
   "server/routes/factory/employee-pos/netPositionSupplierBalances.ts",
   "server/services/factory/currencyConversion.ts",
-  "server/services/factory/postOffloadChargeMutation.ts",
+  "server/services/factory/post-offload-charge/apply.ts",
   "server/services/security/postOffloadLedgerOwnershipGuard.ts",
   "docs/archive/program-2-accounting-convergence.md",
   "docs/archive/program-2-phase-5-containers-freight.md",

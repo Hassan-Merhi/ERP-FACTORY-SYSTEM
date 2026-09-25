@@ -242,7 +242,6 @@ export function SilentProductionDialog({ model }: Props) {
                               placeholder="Search above and click an item"
                               className="w-full"
                               data-testid={`input-silent-prod-item-${index}`}
-                              onClick={() => {}}
                             />
                           </div>
                           <div className="col-span-2">

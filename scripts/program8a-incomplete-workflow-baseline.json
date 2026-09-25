@@ -12,7 +12,7 @@
     {
       "id": "factory-opening-raw-stock-manual-import",
       "classification": "intentional-placeholder",
-      "path": "client/src/pages/factory/FactoryImport.tsx",
+      "path": "client/src/pages/factory/factoryimport/components/OpeningStockImport.tsx",
       "marker": "onManual={() => {}}",
       "userImpact": "Manual entry is not available for opening raw stock; CSV import remains the supported path.",
       "nextOwnerPhase": "8B"
@@ -20,17 +20,9 @@
     {
       "id": "factory-supplier-statement-edit-payment-prop",
       "classification": "dead-prop",
-      "path": "client/src/pages/factory/FactorySuppliers.tsx",
+      "path": "client/src/pages/factory/factory-suppliers/FactorySupplierStatementBranch.tsx",
       "marker": "onEditPayment={() => {}}",
       "userImpact": "No visible action invokes this prop; row-level edit actions remain separate.",
-      "nextOwnerPhase": "8B"
-    },
-    {
-      "id": "accounts-overview-edit-dialogs",
-      "classification": "unreachable-legacy-path",
-      "path": "client/src/pages/Accounts.tsx",
-      "marker": "onBankSubmit={() => {}}",
-      "userImpact": "Overview edit dialogs remain unreachable; Alter Account is the active editing workflow.",
       "nextOwnerPhase": "8B"
     },
     {
@@ -39,6 +31,38 @@
       "path": "server/routes/aiValidationRoutes.ts",
       "marker": "notImplemented(validationType",
       "userImpact": "Unsupported validation types return a structured warning rather than pretending validation succeeded.",
+      "nextOwnerPhase": "8B"
+    },
+    {
+      "id": "ai-validation-unimplemented-types-message",
+      "classification": "structured-server-stub",
+      "path": "server/routes/aiValidationRoutes.ts",
+      "marker": "not yet implemented",
+      "userImpact": "The structured stub tells the user the selected validation type is not available yet; the picker already labels these types \"(soon)\".",
+      "nextOwnerPhase": "8B"
+    },
+    {
+      "id": "ai-validation-unimplemented-types-warning",
+      "classification": "structured-server-stub",
+      "path": "server/routes/aiValidationRoutes.ts",
+      "marker": "coming soon",
+      "userImpact": "Warning text of the same structured stub.",
+      "nextOwnerPhase": "8B"
+    },
+    {
+      "id": "ai-validation-unimplemented-types-message-i18n",
+      "classification": "structured-server-stub",
+      "path": "client/src/i18n/backendMessagesPhase7Translations.part4.ts",
+      "marker": "not yet implemented",
+      "userImpact": "French and Arabic translations of the structured stub message, not a workflow of their own.",
+      "nextOwnerPhase": "8B"
+    },
+    {
+      "id": "ai-validation-unimplemented-types-warning-i18n",
+      "classification": "structured-server-stub",
+      "path": "client/src/i18n/backendMessagesPhase7Translations.part4.ts",
+      "marker": "coming soon",
+      "userImpact": "French and Arabic translations of the structured stub warning.",
       "nextOwnerPhase": "8B"
     },
     {

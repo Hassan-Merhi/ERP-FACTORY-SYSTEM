@@ -57,7 +57,7 @@ const gitRoutes = read("server/routes/git/gitReportRoutes.ts");
 for (const required of [
   "resolveGitCompanyScope",
   "code: scope.code",
-  "session as any)?.currentRole",
+  "req.session?.currentRole ??",
   "buildAgentsForCompany(scope.companyId)",
 ]) {
   if (!gitRoutes.includes(required)) failures.push(`gitReportRoutes missing ${required}`);

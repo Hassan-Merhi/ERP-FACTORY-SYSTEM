@@ -4,7 +4,7 @@ const requiredFiles = [
   "server/services/pos/postSaleAccounting.ts",
   "server/services/pos/createSaleService.ts",
   "server/services/pos/edit/updateSaleService.ts",
-  "server/routes/spMigrationRoutes.ts",
+  "server/routes/sp-migration",
   "server/routes/sp/spMigrationPhase4Routes.ts",
   "docs/archive/program-2-phase-6-supplier-partner.md",
 ];
@@ -13,7 +13,14 @@ const read = (file) => fs.readFileSync(file, "utf8");
 const accounting = read(requiredFiles[0]);
 const createSale = read(requiredFiles[1]);
 const editSale = read(requiredFiles[2]);
-const migration = read(requiredFiles[3]);
+// Split into a directory during the god-file cleanup: assert over every source file in it.
+const readModule = (dir) =>
+  fs
+    .readdirSync(dir, { recursive: true })
+    .filter((file) => String(file).endsWith(".ts") && !String(file).endsWith(".test.ts"))
+    .map((file) => fs.readFileSync(`${dir}/${file}`, "utf8"))
+    .join("\n");
+const migration = readModule(requiredFiles[3]);
 const phase4 = read(requiredFiles[4]);
 const doc = read(requiredFiles[5]);
 const migrationText = migration.toLowerCase();
