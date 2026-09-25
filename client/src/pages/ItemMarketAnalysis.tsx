@@ -466,7 +466,9 @@ export default function ItemMarketAnalysis() {
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <div className="font-medium">Item performance</div>
           <div className="ml-auto text-xs text-muted-foreground">
-            {multiCompany ? "Compare each item by company to decide where to send stock" : "Historical item performance for this company"}
+            {multiCompany
+              ? "Items are matched by code · expand Companies to compare each company"
+              : "Historical item performance for this company"}
           </div>
         </div>
         <div className="overflow-x-auto">
