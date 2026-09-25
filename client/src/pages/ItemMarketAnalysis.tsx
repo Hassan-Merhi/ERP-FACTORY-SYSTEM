@@ -54,7 +54,6 @@ interface MarketCompanySummary {
 
 interface MarketResponse {
   generatedAt: string;
-  countries: string[];
   rows: MarketRow[];
   companySummaries: MarketCompanySummary[];
   summary: {
