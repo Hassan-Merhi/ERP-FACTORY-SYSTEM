@@ -19,7 +19,7 @@ describe("factory customer proforma summary payload", () => {
 
     for (const source of [invoiceDetail, pendingVerify]) {
       expect(source).toContain("profile=summary");
-      expect(source).toContain('showProformaDialog && !!selectedProformaId');
+      expect(source).toContain("showProformaDialog && !!selectedProformaId");
       expect(source).toContain("/api/factory/customer-proformas/${selectedProformaId}");
     }
   });
