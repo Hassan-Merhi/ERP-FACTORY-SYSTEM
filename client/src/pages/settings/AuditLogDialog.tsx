@@ -160,7 +160,7 @@ function StructuredValue({ field, value, depth = 0 }: { field: string; value: Au
         {entries.map(([nestedField, nestedValue]) => (
           <div
             key={nestedField}
-            className="grid grid-cols-[minmax(100px,150px)_minmax(0,1fr)] gap-3 px-2.5 py-2 text-xs min-w-0"
+            className="grid grid-cols-[minmax(100px,150px)_minmax(0,1fr)] gap-3 px-2.5 py-2 text-xs min-w-0 max-sm:grid-cols-1 max-sm:gap-1"
           >
             <span className="text-muted-foreground break-words">
               {BUSINESS_FIELD_LABELS[nestedField] || fieldLabel(nestedField)}
@@ -183,7 +183,7 @@ function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string 
     <div className="space-y-1.5">
       {label && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
       <div className="rounded-md border overflow-hidden">
-        <div className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 bg-muted/40 text-[11px] font-medium text-muted-foreground">
+        <div className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 bg-muted/40 text-[11px] font-medium text-muted-foreground max-sm:hidden">
           <span>Account</span>
           <span className="text-right">Debit</span>
           <span className="text-right">Credit</span>
@@ -192,12 +192,23 @@ function EntryTable({ entries, label }: { entries: AuditEntry[]; label?: string 
         {entries.map((entry, index) => (
           <div
             key={`${entry.account || "account"}-${index}`}
-            className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 border-t text-xs items-start"
+            // Phones stack each entry: account, then Debit/Credit side by side, then narration.
+            className="grid grid-cols-[minmax(130px,1fr)_90px_90px_minmax(120px,1fr)] gap-2 px-3 py-2 border-t text-xs items-start max-sm:grid-cols-2 max-sm:gap-1"
           >
-            <span className="font-medium break-words">{String(entry.account ?? "Unknown account")}</span>
-            <span className="text-right tabular-nums">{fmtEntryAmount(entry.debit)}</span>
-            <span className="text-right tabular-nums">{fmtEntryAmount(entry.credit)}</span>
-            <span className="text-muted-foreground break-words whitespace-pre-wrap">{String(entry.narration ?? "—")}</span>
+            <span className="font-medium break-words max-sm:col-span-2">
+              {String(entry.account ?? "Unknown account")}
+            </span>
+            <span className="text-right tabular-nums max-sm:text-start">
+              <span className="text-muted-foreground sm:hidden">Debit </span>
+              {fmtEntryAmount(entry.debit)}
+            </span>
+            <span className="text-right tabular-nums max-sm:text-start">
+              <span className="text-muted-foreground sm:hidden">Credit </span>
+              {fmtEntryAmount(entry.credit)}
+            </span>
+            <span className="text-muted-foreground break-words whitespace-pre-wrap max-sm:col-span-2">
+              {String(entry.narration ?? "—")}
+            </span>
           </div>
         ))}
       </div>
@@ -289,7 +300,7 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
     return (
       <div
         key={field}
-        className="grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)] gap-3 text-sm py-2.5 items-start min-w-0"
+        className="grid grid-cols-[minmax(120px,180px)_minmax(0,1fr)] gap-3 text-sm py-2.5 items-start min-w-0 max-sm:grid-cols-1 max-sm:gap-1"
       >
         <span className="text-muted-foreground break-words">{label}</span>
         <div className="min-w-0">
@@ -338,15 +349,14 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-[minmax(110px,160px)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm rounded-md border p-3 bg-muted/30 min-w-0">
+        <div className="grid grid-cols-[minmax(110px,160px)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm rounded-md border p-3 bg-muted/30 min-w-0 max-sm:grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] max-sm:gap-x-3">
           <span className="text-muted-foreground">User</span>
           <span className="font-medium break-words">{String(log.username ?? "Unknown")}</span>
           <span className="text-muted-foreground">Date & Time</span>
           <span>{fmtDate(String(log.createdAt ?? ""))}</span>
           <span className="text-muted-foreground">Company</span>
           <span className="font-medium break-words">
-            {String(log.companyName ?? "") ||
-              (log.companyId ? `Company #${String(log.companyId)}` : "Unknown company")}
+            {String(log.companyName ?? "") || (log.companyId ? `Company #${String(log.companyId)}` : "Unknown company")}
             {log.companyCode ? ` (${String(log.companyCode)})` : ""}
           </span>
           <span className="text-muted-foreground">Action</span>

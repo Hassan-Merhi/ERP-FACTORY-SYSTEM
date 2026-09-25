@@ -363,9 +363,45 @@
     min-height: 0;
   }
 
+  /* Tables inside a phone sheet do not cap their own height (Table's default 70vh region): the
+     sheet is the one scroll container, so entry lists never scroll inside it. */
+  html[data-app-shell="erp"] :is([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-table-scroll-region] {
+    max-height: none !important;
+  }
+
   /* Bottom sheets (filters, page menu, pickers) sit above the keyboard too. */
   html[data-app-shell="erp"] [data-slot="sheet-content"][data-sheet-side="bottom"] {
     bottom: var(--erp-keyboard-inset, 0px);
+  }
+
+  /* Long dialogs keep their title and Close in view: the header sticks to the top of the sheet's
+     scroll area, and the close control (normally absolute) becomes a sticky first item that
+     overlaps the header row. */
+  html[data-app-shell="erp"] [data-slot="dialog-content"] > [data-slot="dialog-header"] {
+    position: sticky;
+    top: -1rem;
+    z-index: 3;
+    margin-top: -1rem;
+    padding-top: 1rem;
+    padding-bottom: 0.5rem;
+    background-color: hsl(var(--background));
+    box-shadow:
+      -1rem 0 0 hsl(var(--background)),
+      1rem 0 0 hsl(var(--background));
+  }
+
+  html[data-app-shell="erp"] [data-slot="dialog-content"] > [data-slot="dialog-close"] {
+    position: sticky !important;
+    inset: auto !important;
+    top: 0 !important;
+    z-index: 4;
+    order: -1;
+    justify-self: end;
+    align-self: flex-end;
+    margin-bottom: calc(-2.75rem - 1rem);
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    background-color: hsl(var(--background));
   }
 
   /* Two actions (Cancel + primary) share one row, primary on the trailing side. */

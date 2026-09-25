@@ -52,7 +52,7 @@ Pages that intentionally keep a panel-owned heading instead of a page header:
 
 | Route | Reason |
 | --- | --- |
-| `/agents` | Master/detail ledger tool; the Phase 1 master/detail phone layout is keyed to its root element. |
+| `/agents` | Master/detail ledger tool with a panel-owned heading. On phones it shows the agent list and the statement as separate screens (R2). |
 | `/chat` | Messaging workspace with a fixed-height conversation layout. |
 | `/spreadsheet` (open workbook) | Full-bleed editor toolbar; the library view uses `PageHeader`. |
 
@@ -335,3 +335,33 @@ section.
   `ErpMobileSummaryGrid` (two-column KPIs) and `ErpMobileActionsMenu` (compact Actions
   overflow). They sit on the existing `ResponsiveDataList` primitives and are used where rows do
   not map onto `<Table mobileLayout="cards">`.
+
+### R2 — Accounting and ledger phone workflows
+
+- **Accounts statement.** Below `md` the statement table was hidden (`hidden md:block`) with no
+  phone replacement, so a phone showed the KPIs and no transactions. `AccountStatementCards`
+  renders the opening balance, one card per transaction (tap opens the voucher, as on desktop)
+  and the period totals, paging long statements 100 cards at a time. On ERP phones the account
+  header is compact (Back to accounts, name, closing balance) and WhatsApp, Excel, PDF
+  (EN/FR/AR), Show Deleted and Delete Selected move into one Actions menu; KPIs use the
+  two-column `ErpMobileSummaryGrid`. The page actions and tabs step aside while a statement is
+  open. Figures come from the same props as the desktop table.
+- **Agent Ledger.** Phones no longer stack a height-capped `w-72` list above the statement.
+  State 1 is the full-width list (title, Add Account, search, agents); tapping an agent opens
+  state 2, the statement with Back to agents, balance, period, KPIs, card rows and an Actions
+  menu (Excel, Print). Desktop keeps the master/detail layout.
+- **View Voucher (Daybook and All Daybook).** Every ERP phone dialog now pins its header and
+  Close control while the body scrolls. Tables inside phone dialogs and sheets no longer cap
+  their own height (Table's default `max-h-[70vh]` region), so there is a single scroll
+  container. Daybook entry cards drop the empty Debit/Credit side and the duplicated narration.
+  All Daybook's Close/Edit row is a `DialogFooter` (pinned), its ledger entries show Dr/Cr, and
+  its item tables become cards.
+- **Edit Voucher.** Daybook and All Daybook share `voucherEditPath`, so Edit opens the same
+  editor from both (All Daybook used to land on the Daybook list via an ignored `voucherId`
+  parameter). The editor itself is the voucher form covered by R3. Daybook's
+  `VoucherEditDialog` is never opened by the page; it is unchanged.
+- **Edits & Activity** (Daybook tab, and the Settings activity section that reuses it). Phones
+  get the shared filter model (search visible, action/module/date filters in the filter sheet)
+  and day-grouped activity cards (record, time, user, module, action, concise detail); tapping
+  a card opens the existing detail sheet, whose field and entry grids now stack on phones.
+  Factory keeps its layout.

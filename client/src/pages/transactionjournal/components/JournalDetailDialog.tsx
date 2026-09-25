@@ -9,9 +9,17 @@
 import { Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmtDate } from "../utils";
+import { voucherEditPath } from "@/pages/daybook/voucherEditRoute";
 import { VoucherTypeBadge } from "./VoucherTypeBadge";
 import { createDetailFormatters } from "./detail/panelTypes";
 import { PaymentReceiptPanel } from "./detail/PaymentReceiptPanel";
@@ -131,28 +139,35 @@ export function JournalDetailDialog({ model }: { model: TransactionJournalModel 
             ) : (
               <DetailPanels model={model} />
             )}
-
-            {/* Footer actions */}
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => model.setDrawerOpen(false)} data-testid="button-detail-close">
-                Close
-              </Button>
-              <Button
-                variant="default"
-                onClick={() => {
-                  model.setDrawerOpen(false);
-                  model.openInCompany(detailData.voucher.companyId, `/daybook?voucherId=${detailData.voucher.id}`);
-                }}
-                data-testid="button-detail-edit"
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            </div>
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-8">Could not load voucher details.</div>
         )}
+        {/* Footer actions: a DialogFooter, so the phone sheet keeps them pinned while entries scroll
+            (the same View Voucher behaviour as Daybook). */}
+        <DialogFooter className="gap-2 pt-2 border-t">
+          <Button variant="outline" onClick={() => model.setDrawerOpen(false)} data-testid="button-detail-close">
+            Close
+          </Button>
+          {detailData && !detailLoading && (
+            <Button
+              variant="default"
+              onClick={() => {
+                model.setDrawerOpen(false);
+                // Same destination as Daybook's Edit; the Daybook remains the fallback for types
+                // without an editor, where it explains that editing is not supported.
+                model.openInCompany(
+                  detailData.voucher.companyId,
+                  voucherEditPath(detailData.voucher) ?? `/daybook?voucherId=${detailData.voucher.id}`
+                );
+              }}
+              data-testid="button-detail-edit"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

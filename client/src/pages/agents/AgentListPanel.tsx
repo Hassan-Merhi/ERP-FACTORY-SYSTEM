@@ -21,6 +21,8 @@ interface AgentListPanelProps {
   onRemove: (accountId: string) => void;
   formatAmount: (value: number) => string;
   onOpenAddDialog: () => void;
+  /** Phone layout: the list is the whole screen; tapping an agent opens the statement. */
+  phone?: boolean;
 }
 
 export function AgentListPanel({
@@ -34,11 +36,19 @@ export function AgentListPanel({
   onRemove,
   formatAmount,
   onOpenAddDialog,
+  phone = false,
 }: AgentListPanelProps) {
   return (
-    <div className="w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20">
+    <div
+      className={
+        phone
+          ? "flex w-full min-w-0 flex-col rounded-xl border bg-muted/20"
+          : "w-72 shrink-0 border-r flex flex-col h-full overflow-hidden bg-muted/20"
+      }
+      data-testid="agent-list-panel"
+    >
       {/* Panel header */}
-      <div className="px-4 pt-4 pb-3 border-b space-y-3 bg-background">
+      <div className={`px-4 pt-4 pb-3 border-b space-y-3 bg-background ${phone ? "rounded-t-xl" : ""}`}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -49,14 +59,14 @@ export function AgentListPanel({
           <Button
             size="sm"
             variant="outline"
-            className="h-7 px-2 text-xs gap-1"
+            className={phone ? "gap-1" : "h-7 px-2 text-xs gap-1"}
             onClick={() => {
               onOpenAddDialog();
             }}
             data-testid="button-add-agent"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add
+            {phone ? "Add Account" : "Add"}
           </Button>
         </div>
         <div className="relative">
@@ -65,14 +75,14 @@ export function AgentListPanel({
             placeholder="Search agents..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-8 h-8 text-sm bg-muted/50 border-transparent focus:border-border focus:bg-background"
+            className={`pl-8 ${phone ? "" : "h-8"} text-sm bg-muted/50 border-transparent focus:border-border focus:bg-background`}
             data-testid="input-agent-search"
           />
         </div>
       </div>
 
       {/* Agent list */}
-      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+      <div className={phone ? "py-2 px-2 space-y-1" : "flex-1 overflow-y-auto py-2 px-2 space-y-0.5"}>
         {loading ? (
           <div className="p-2 space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (

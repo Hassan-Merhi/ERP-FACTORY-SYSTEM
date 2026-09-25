@@ -67,6 +67,7 @@ import { DaybookFilters } from "./daybook/DaybookFilters";
 import { DaybookTable } from "./daybook/DaybookTable";
 import { VoucherDetailsDialog } from "./daybook/VoucherDetailsDialog";
 import { VoucherEditDialog } from "./daybook/VoucherEditDialog";
+import { voucherEditPath } from "./daybook/voucherEditRoute";
 import { usePaginatedDaybookVouchers } from "./daybook/usePaginatedDaybookVouchers";
 import { VOUCHER_TYPE_ORDER } from "./daybook/constants";
 import { useDaybookFilterState } from "./daybook/useDaybookFilterState";
@@ -543,42 +544,20 @@ export default function Daybook({ user }: { user?: DaybookUser | null } = {}) {
     setViewDialogOpen(true);
   };
   const handleEdit = (v: Voucher) => {
-    if (v.voucherType === "Sales" || v.voucherType === "POS") {
-      navigate(`/pos/edit/${v.id}`);
-      return;
-    }
     // Purchase lock icon → navigate directly to the container page for that PO
     if (v.voucherType === "Purchase") {
+      const fallback = voucherEditPath(v, vouchersBase)!;
       fetch(`/api/vouchers/${v.id}/view-entries`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           const po = data && !Array.isArray(data) ? data.purchaseOrder : null;
-          if (po?.containerId) {
-            navigate(`/containers/${po.containerId}`);
-          } else {
-            navigate(`${vouchersBase}?edit=${v.id}&tab=purchase&from=daybook`);
-          }
+          navigate(po?.containerId ? `/containers/${po.containerId}` : fallback);
         })
-        .catch(() => navigate(`${vouchersBase}?edit=${v.id}&tab=purchase&from=daybook`));
+        .catch(() => navigate(fallback));
       return;
     }
-    const map: Record<string, string> = {
-      PurchaseOrder: "purchase-order",
-      Payment: "payment",
-      Receipt: "receipt",
-      Journal: "journal",
-      Contra: "contra",
-      StockTransfer: "transferorder",
-      "Stock Transfer": "transferorder",
-      Transfer: "transfer",
-      "Credit Note": "credit-note",
-      "Debit Note": "credit-note",
-      Production: "adjustment",
-      Consumption: "adjustment",
-      Mixed: "adjustment",
-    };
-    const tab = map[v.voucherType];
-    if (tab) navigate(`${vouchersBase}?edit=${v.id}&tab=${tab}&from=daybook`);
+    const path = voucherEditPath(v, vouchersBase);
+    if (path) navigate(path);
     else toast({ title: "Info", description: `Editing ${v.voucherType} not supported.`, variant: "destructive" });
   };
 

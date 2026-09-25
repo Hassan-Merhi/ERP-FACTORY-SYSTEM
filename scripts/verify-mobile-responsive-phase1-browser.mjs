@@ -267,7 +267,8 @@ async function readState(page, route, workspace) {
 
     if (currentRoute.endsWith("/agents") || currentRoute === "/agents") {
       const anchor = document.querySelector('[data-testid="button-add-agent"]');
-      const pane = anchor?.closest(".w-72");
+      // Phones render the agent list as its own full-width screen (agents-phone-layout).
+      const pane = anchor?.closest('.w-72, [data-testid="agent-list-panel"]');
       const layout = pane?.parentElement;
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
