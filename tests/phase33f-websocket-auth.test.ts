@@ -1,3 +1,5 @@
+import express from "express";
+import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
@@ -62,7 +64,7 @@ vi.mock("ws", () => {
 });
 
 import { WebSocket } from "ws";
-import { broadcast, setupWS } from "../server/wsServer";
+import { broadcast, registerWebSocketHttpFallback, setupWS } from "../server/wsServer";
 
 async function flush() {
   await Promise.resolve();
@@ -74,6 +76,17 @@ describe("Phase 33F websocket auth and broadcast scoping", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.server = null;
+  });
+
+  it("returns 426 for plain HTTP requests to the websocket endpoint", async () => {
+    const app = express();
+    registerWebSocketHttpFallback(app);
+
+    const response = await request(app).get("/ws");
+
+    expect(response.status).toBe(426);
+    expect(response.headers.upgrade).toBe("websocket");
+    expect(response.text).toBe("");
   });
 
   it("marks an authenticated socket ready only after session company/user scope resolves", async () => {
