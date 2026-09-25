@@ -7,6 +7,7 @@ export interface ItemMarketAnalysisFilters {
   endDate?: string;
   search?: string;
   stockGroupId?: number;
+  stockGroupName?: string;
 }
 
 type NumericRow = Record<string, string | number | null | string[]>;
@@ -34,6 +35,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     filters.endDate ?? null,
     filters.search ?? null,
     filters.stockGroupId ?? null,
+    filters.stockGroupName ?? null,
   ];
 
   const commonCtes = `
@@ -45,6 +47,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND si.deleted_at IS NULL
         AND ($5::text IS NULL OR si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')
         AND ($6::int IS NULL OR si.stock_group_id = $6)
+        AND ($7::text IS NULL OR BTRIM(sg.name) = BTRIM($7))
     ),
     imports AS (
       SELECT pli.stock_item_id,
@@ -55,6 +58,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
         SUM(pli.quantity::numeric * pli.rate::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
       FROM po_line_items pli
+      JOIN eligible_items e ON e.id = pli.stock_item_id
       JOIN purchase_orders po ON po.id = pli.po_id
       JOIN containers c ON c.id = po.container_id
       WHERE po.company_id = $1
@@ -70,6 +74,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(s.total_cost::numeric), 0) AS historical_cost,
         COALESCE(SUM(s.profit::numeric), 0) AS profit
       FROM sales_items s
+      JOIN eligible_items e ON e.id = s.stock_item_id
       JOIN vouchers v ON v.id = s.voucher_id
       WHERE v.company_id = $1
         AND v.voucher_type = 'Sales'
