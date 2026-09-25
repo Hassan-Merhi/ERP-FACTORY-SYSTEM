@@ -389,8 +389,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // "Balance on Table" is a CURRENT STATE quantity valued at the same
-      // all-time blended rate used by the Original Batches pool.
+      // "Balance on Table" is a CURRENT STATE quantity valued at the exact
+      // blended rate shown by the Original Batches KPI for the active report filter.
       //
       // This makes:
       //   balance value = remaining kg × original-batches blended rate
@@ -436,7 +436,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         const usedKg = parseFloat(batch.usedKg || "0") || 0;
         return sum + Math.max(0, totalKg - usedKg);
       }, 0);
-      const balanceCostPerKg = allTimeBlendedCpk;
+      // Reuse the exact same rate returned for the visible Original Batches KPI,
+      // so the two cards cannot drift apart when the report date filter changes.
+      const balanceCostPerKg = blendedCostPerKg;
       const balanceValue = Math.round(balanceWeightKg * balanceCostPerKg * 100) / 100;
 
       // Production profit must follow the active valuation mode. The selected finished-goods
