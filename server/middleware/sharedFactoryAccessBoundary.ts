@@ -114,7 +114,7 @@ export async function resolveSharedFactoryRequirements(req: Request): Promise<Sh
     const isAgentLedgerRead =
       ["GET", "HEAD", "OPTIONS"].includes(method) &&
       (path === "/api/accounts/all" ||
-        /^\\/api\\/accounts\\/[^/]+\\/[^/]+\\/(?:transactions|pre-period-balance)$/.test(path));
+        /^\/api\/accounts\/[^/]+\/[^/]+\/(?:transactions|pre-period-balance)$/.test(path));
 
     if (isAgentLedgerRead) {
       accountRequirements.push(page("factory/agents"));
