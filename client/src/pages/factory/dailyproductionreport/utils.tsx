@@ -63,7 +63,7 @@ export function fmtRate(n: number | null | undefined) {
   if (n == null || isNaN(n)) return "$0.000";
   // Backend keeps up to 10 decimal places for calculations; the UI intentionally
   // shows at most 4 without mutating the underlying value.
-  return `${n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 4 })}`;
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 4 });
 }
 
 export function fmtKg(n: number | null | undefined) {
