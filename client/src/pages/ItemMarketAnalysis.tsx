@@ -155,7 +155,12 @@ export default function ItemMarketAnalysis() {
       <PageHeader
         title="Item Market Analysis"
         onBack={() => window.history.back()}
-        meta={<span>Imports, sales and historical profit by market{selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}</span>}
+        meta={
+          <span>
+            Imports, sales and historical profit by market
+            {selectedCompany?.name ? ` · ${selectedCompany.name}` : ""}
+          </span>
+        }
       >
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
@@ -259,7 +264,9 @@ export default function ItemMarketAnalysis() {
                       onClick={() => setExpandedItemId(expanded ? null : row.stockItemId)}
                       data-testid={`row-item-market-${row.stockItemId}`}
                     >
-                      <TableCell>{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
+                      <TableCell>
+                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{row.code}</div>
                         <div className="max-w-[260px] truncate text-xs text-muted-foreground">{row.name}</div>
@@ -267,13 +274,25 @@ export default function ItemMarketAnalysis() {
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {mixedCurrency ? <span className="text-xs text-muted-foreground">Mixed currencies</span> : formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)}
+                        {mixedCurrency ? (
+                          <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                        ) : (
+                          formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
+                        )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      <TableCell
+                        className={`text-right font-medium tabular-nums ${
+                          row.profit < 0
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
                         {formatAmount(row.profit)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
@@ -285,7 +304,9 @@ export default function ItemMarketAnalysis() {
                         <TableCell colSpan={13} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                              <span>Purchase currencies: {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}</span>
+                              <span>
+                                Purchase currencies: {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}
+                              </span>
                               <span>Historical cost sold: {formatAmount(row.historicalCost)}</span>
                               <span>Profit/unit: {formatAmount(row.profitPerUnit)}</span>
                             </div>
@@ -306,17 +327,39 @@ export default function ItemMarketAnalysis() {
                                 {row.countries.map((market) => (
                                   <TableRow key={market.country}>
                                     <TableCell className="font-medium">{market.country}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{formatNumber(market.soldQty)}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{formatAmount(market.avgSellingPrice)}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{formatAmount(market.historicalCost)}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{formatAmount(market.profitPerUnit)}</TableCell>
-                                    <TableCell className={`text-right font-medium tabular-nums ${market.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>{formatAmount(market.profit)}</TableCell>
-                                    <TableCell className="text-right tabular-nums">{market.marginPct.toFixed(1)}%</TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {formatNumber(market.soldQty)}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {formatAmount(market.avgSellingPrice)}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {formatAmount(market.historicalCost)}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {formatAmount(market.profitPerUnit)}
+                                    </TableCell>
+                                    <TableCell
+                                      className={`text-right font-medium tabular-nums ${
+                                        market.profit < 0
+                                          ? "text-red-600 dark:text-red-400"
+                                          : "text-emerald-600 dark:text-emerald-400"
+                                      }`}
+                                    >
+                                      {formatAmount(market.profit)}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {market.marginPct.toFixed(1)}%
+                                    </TableCell>
                                     <TableCell><StatusBadge status={market.status} /></TableCell>
                                   </TableRow>
                                 ))}
                                 {row.countries.length === 0 && (
-                                  <TableRow><TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">No sales by country for this period.</TableCell></TableRow>
+                                  <TableRow>
+                                    <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                                      No sales by country for this period.
+                                    </TableCell>
+                                  </TableRow>
                                 )}
                               </TableBody>
                             </Table>
