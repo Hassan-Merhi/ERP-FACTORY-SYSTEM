@@ -392,8 +392,11 @@ export function useAnalyticsLegacy() {
     return `/api/factory/analytics/customer-order-items?${params.toString()}`;
   };
 
-  const { data: factoryCustomerOrderAnalytics, isLoading: loadingFactoryCustomerOrders } =
-    useQuery<FactoryCustomerOrderAnalytics>({
+  const {
+    data: factoryCustomerOrderAnalytics,
+    isLoading: loadingFactoryCustomerOrders,
+    isError: factoryCustomerOrderAnalyticsError,
+  } = useQuery<FactoryCustomerOrderAnalytics>({
       queryKey: [
         "/api/factory/analytics/customer-order-items",
         selectedCompany?.id,
@@ -413,6 +416,9 @@ export function useAnalyticsLegacy() {
         return res.json();
       },
       enabled: !!selectedCompany && appMode === "factory" && activeSection === "sales",
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
     });
 
   const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
@@ -732,6 +738,7 @@ export function useAnalyticsLegacy() {
     buildFactorySalesUrl,
     buildFactoryOrderAnalyticsUrl,
     factoryCustomerOrderAnalytics,
+    factoryCustomerOrderAnalyticsError,
     loadingFactoryCustomerOrders,
     loadingFactorySales,
     factoryPosSummary,
