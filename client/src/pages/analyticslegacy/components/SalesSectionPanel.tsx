@@ -316,7 +316,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         </Table>
                       </div>
                     )}
-                    )}
 
                     {factoryCustomerOrderAnalytics.pagination.totalPages > 1 && (
                       <div className="flex items-center justify-between gap-3 pt-4">
