@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
 
@@ -244,9 +244,8 @@ export default function ItemMarketAnalysis() {
                 const expanded = expandedItemId === row.stockItemId;
                 const mixedCurrency = row.purchaseCurrencies.length > 1;
                 return (
-                  <>
+                  <Fragment key={row.stockItemId}>
                     <TableRow
-                      key={row.stockItemId}
                       className="cursor-pointer"
                       onClick={() => setExpandedItemId(expanded ? null : row.stockItemId)}
                       data-testid={`row-item-market-${row.stockItemId}`}
@@ -272,7 +271,7 @@ export default function ItemMarketAnalysis() {
                       <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
                     </TableRow>
                     {expanded && (
-                      <TableRow key={`${row.stockItemId}-countries`}>
+                      <TableRow>
                         <TableCell colSpan={12} className="bg-muted/20 p-0">
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
@@ -315,7 +314,7 @@ export default function ItemMarketAnalysis() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
               {!isLoading && rows.length === 0 && (
