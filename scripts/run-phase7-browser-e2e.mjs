@@ -531,6 +531,8 @@ try {
       await tapTestId(phonePage, `card-pos-location-${fixture.erp.locationId}`);
       await typeTestId(phonePage, "input-mobile-product-search", "Phase 7");
       await tapTestId(phonePage, `button-mobile-select-item-${fixture.erp.stockItemId}`);
+      // Phones set quantity and price in the item sheet before the line enters the cart.
+      await tapTestId(phonePage, "button-pos-sheet-add");
       // Clear and retype the quantity the way a cashier does; the line must stay put.
       await replaceTestIdValue(phonePage, "input-mobile-qty-0", "3");
       await waitForText(phonePage, "[data-pos-mobile-page]", "Qty 3");

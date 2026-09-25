@@ -39,6 +39,7 @@ export const retailWave1Translations: readonly Phase3SharedUiEntry[] = [
   { en: "Add size", ar: "إضافة مقاس", fr: "Ajouter une taille" },
   { en: "Size *", ar: "المقاس *", fr: "Taille *" },
   { en: "Selling price", ar: "سعر البيع", fr: "Prix de vente" },
+  { en: "Last sold", ar: "آخر سعر بيع", fr: "Dernier prix de vente" },
   { en: "Low stock", ar: "مخزون منخفض", fr: "Stock faible" },
   { en: "Stock by location", ar: "المخزون حسب الموقع", fr: "Stock par emplacement" },
   { en: "Import Retail Products", ar: "استيراد منتجات التجزئة", fr: "Importer les produits de détail" },

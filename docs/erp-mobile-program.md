@@ -423,3 +423,20 @@ section.
 - **Translation fix.** A generated Arabic/French catalogue entry held an untranslated,
   truncated source template, so any "N items" text rendered raw template code in Arabic. It now
   maps to "{{0}} عنصر" / "{{0}} article(s)" (catalogue size unchanged).
+
+### R5 — POS phone item sheet
+
+- On phones (the POS mobile layout, used by the ERP and POS shells alike), tapping a search
+  result opens `PosMobileItemSheet` instead of adding a line at once. The sheet shows the item
+  name and code, available stock, the configured price and the last price it sold at, a
+  quantity stepper, the selling price and the line total; **Add Item** puts the line in the
+  cart, clears the search and returns focus to it so the next item can be scanned or typed.
+  Nothing is posted until Checkout; cart cards keep quantity, price and delete editing.
+- No second pricing path: `resolvePosItemRate` (last sold price, else configured price, then
+  CFA conversion) is the one resolver for the grid and the sheet, and the sheet adds through
+  the existing `selectItem`, which now accepts `{ quantity, rate }` overrides. A typed price
+  converts back to USD exactly as editing the Rate cell does. Row placement for a repeated item
+  is unchanged (a new line, as in the grid).
+- The stock rule runs before the sheet opens (`ensureItemSellable`): an item that may not be
+  sold (no stock, no negative-stock permission) shows the existing zero-stock alert instead.
+- Desktop and tablet POS (the grid and inventory picker) are unchanged.
