@@ -23,11 +23,10 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
-// Isolated precision context for factory batch-rate arithmetic. Decimal.js defaults
-// to 20 significant digits, which is not enough to retain 100 decimal places.
-// 220 significant digits leaves headroom for large totals plus 100 fractional digits
-// without changing Decimal precision globally for the rest of the application.
-const BatchRateDecimal = Decimal.clone({ precision: 220, rounding: Decimal.ROUND_HALF_UP });
+// Isolated precision context for factory batch-rate arithmetic. Keep enough
+// significant-digit headroom for large totals while rounding persisted/report
+// batch-rate calculations to 10 decimal places.
+const BatchRateDecimal = Decimal.clone({ precision: 80, rounding: Decimal.ROUND_HALF_UP });
 
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -438,23 +437,23 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const allTimeMixCostDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_cost ?? "0"));
       const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
 
-      // Batch rates are calculation values, not display values. Keep up to 100 digits
+      // Batch rates are calculation values, not display values. Keep up to 10 digits
       // after the decimal point in the backend. The frontend still formats these rates
       // to a maximum of 4 decimal places for display.
       const allTimeBlendedCpkDecimal = allTimeMixKgDecimal.gt(0)
-        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(100)
+        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
         : new BatchRateDecimal(0);
       const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
-        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(100)
+        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
         : new BatchRateDecimal(0);
 
-      // JSON numbers cannot carry 100 decimal digits. Convert the visible rate only
-      // at the response boundary; backend calculations below continue to use Decimal.
+      // Convert the visible rate to a JSON number only at the response boundary;
+      // backend calculations below continue to use Decimal.
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
       const balanceWeightDecimal = BatchRateDecimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
       const balanceWeightKg = balanceWeightDecimal.toNumber();
-      // Reuse the exact same 100-decimal backend rate as Original Batches so the
+      // Reuse the exact same 10-decimal backend rate as Original Batches so the
       // two cards cannot drift apart internally.
       const balanceCostPerKg = blendedCostPerKg;
       const balanceValue = balanceWeightDecimal
