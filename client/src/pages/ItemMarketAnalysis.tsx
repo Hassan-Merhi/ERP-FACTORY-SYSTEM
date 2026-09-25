@@ -305,7 +305,8 @@ export default function ItemMarketAnalysis() {
                           <div className="p-4">
                             <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                               <span>
-                                Purchase currencies: {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}
+                                Purchase currencies:{" "}
+                                {row.purchaseCurrencies.length ? row.purchaseCurrencies.join(", ") : "—"}
                               </span>
                               <span>Historical cost sold: {formatAmount(row.historicalCost)}</span>
                               <span>Profit/unit: {formatAmount(row.profitPerUnit)}</span>
