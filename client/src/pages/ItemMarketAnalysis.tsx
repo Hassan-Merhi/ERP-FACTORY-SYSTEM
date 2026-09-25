@@ -96,7 +96,7 @@ function formatNativePurchase(value: number | null, currencies: string[]) {
   if (value == null) return "—";
   if (currencies.length !== 1) return "Mixed currencies";
   const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return `${amount}`;
+  return "$" + amount;
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
@@ -186,14 +186,10 @@ export default function ItemMarketAnalysis() {
     );
   }
 
-  const rows = useMemo(
-    () =>
-      [...(data?.rows ?? [])].sort(
-        (left, right) =>
-          left.name.localeCompare(right.name) ||
-          left.companyName.localeCompare(right.companyName)
-      ),
-    [data?.rows]
+  const rows = [...(data?.rows ?? [])].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.companyName.localeCompare(right.companyName)
   );
   const summary = data?.summary ?? { itemCount: 0, importedQty: 0, soldQty: 0, revenue: 0, profit: 0, marginPct: 0 };
   const selectedCompanyNames = erpCompanies.filter((company) => selectedCompanyIds.includes(company.id));
