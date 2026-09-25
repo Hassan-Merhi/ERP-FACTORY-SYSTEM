@@ -9,6 +9,8 @@ import {
   handlePossibleSessionExpiry,
   _testOnly_resetSessionExpired,
   _testOnly_setRedirectFn,
+  _testOnly_isSessionTrafficBlocked,
+  queryClient,
 } from "@/lib/queryClient";
 
 // ---------------------------------------------------------------------------
@@ -111,12 +113,16 @@ describe("handlePossibleSessionExpiry", () => {
   it("does NOT redirect when /api/auth/me returns 200", async () => {
     await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(200));
     expect(redirectTarget).toBeNull();
+    expect(_testOnly_isSessionTrafficBlocked()).toBe(false);
   });
 
   // ── Scenario 2: real session expiry ───────────────────────────────────────
-  it("redirects to /login when /api/auth/me also returns 401", async () => {
+  it("redirects to /login when /api/auth/me also returns 401 and quiesces query traffic", async () => {
+    const cancelSpy = vi.spyOn(queryClient, "cancelQueries").mockResolvedValue(undefined);
     await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(401));
     expect(redirectTarget).toBe("/login");
+    expect(_testOnly_isSessionTrafficBlocked()).toBe(true);
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
   });
 
   it("redirects only once when multiple requests return 401 simultaneously", async () => {
