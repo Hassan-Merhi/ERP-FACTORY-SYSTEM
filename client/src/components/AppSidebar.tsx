@@ -101,7 +101,8 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     color: NAV_COLOR.analytics,
     items: [
       { title: "Sales Report", url: "/sales-report", icon: PieChart },
-      { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },\n      { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
+      { title: "Stock In & Sales", url: "/stock-in-sales-report", icon: BarChart3 },
+      { title: "Item Market Analysis", url: "/item-market-analysis", icon: BarChart3 },
       { title: "Analytics", url: "/analytics", icon: BarChart3 },
     ],
   },
