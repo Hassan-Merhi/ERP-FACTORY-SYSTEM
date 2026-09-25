@@ -10,12 +10,6 @@ import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
 import Decimal from "decimal.js";
-
-// Isolated precision context for factory batch-rate arithmetic. Decimal.js defaults
-// to 20 significant digits, which is not enough to retain 100 decimal places.
-// 220 significant digits leaves headroom for large totals plus 100 fractional digits
-// without changing Decimal precision globally for the rest of the application.
-const BatchRateDecimal = Decimal.clone({ precision: 220, rounding: Decimal.ROUND_HALF_UP });
 import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   factoryCategories,
@@ -28,6 +22,12 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+
+// Isolated precision context for factory batch-rate arithmetic. Decimal.js defaults
+// to 20 significant digits, which is not enough to retain 100 decimal places.
+// 220 significant digits leaves headroom for large totals plus 100 fractional digits
+// without changing Decimal precision globally for the rest of the application.
+const BatchRateDecimal = Decimal.clone({ precision: 220, rounding: Decimal.ROUND_HALF_UP });
 
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -448,9 +448,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(100)
         : new BatchRateDecimal(0);
 
-      // JSON numbers cannot carry 100 decimal digits. Convert only at the response
-      // boundary; backend calculations below continue to use the Decimal instances.
-      const allTimeBlendedCpk = allTimeBlendedCpkDecimal.toNumber();
+      // JSON numbers cannot carry 100 decimal digits. Convert the visible rate only
+      // at the response boundary; backend calculations below continue to use Decimal.
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
       const balanceWeightDecimal = BatchRateDecimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
@@ -468,7 +467,6 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         .times(allTimeBlendedCpkDecimal);
       const statusValueDecimal = new BatchRateDecimal(String(totalProductionValue))
         .minus(producedMaterialCostDecimal);
-      const producedMaterialCost = producedMaterialCostDecimal.toNumber();
       const statusValue = statusValueDecimal.toNumber();
       const profitValue = statusValue;
       const profitMarginPct =
