@@ -16,6 +16,7 @@ import {
 import { applyReferenceMutationResponse } from "./referenceMutationCache";
 import { isAbortError } from "./abortError";
 import { getRealtimeClientId } from "./realtimeClientIdentity";
+import { resolveFactoryPageKey } from "@shared/factoryAccessRegistry";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -140,9 +141,24 @@ export function setFactoryAccountingModuleAccess(allowed: boolean | null): void 
   factoryAccountingModuleAccess = allowed;
 }
 
+const FACTORY_SHARED_ACCOUNTING_READ_OWNERS = new Set([
+  "factory/accounts",
+  "factory/vouchers",
+  "factory/payroll-hub",
+  "factory/import",
+  "factory/settings",
+  "factory/invoicing",
+]);
+
 function isFactoryAccountingRead(pathname: string | null, method: string): boolean {
   if (method !== "GET" || !pathname) return false;
   return pathname === "/api/ledger-accounts" || pathname === "/api/bank-accounts";
+}
+
+function factoryPageOwnsSharedAccountingRead(pathname: string | null): boolean {
+  if (!pathname || typeof window === "undefined") return true;
+  const currentPageKey = resolveFactoryPageKey(window.location.pathname);
+  return currentPageKey !== null && FACTORY_SHARED_ACCOUNTING_READ_OWNERS.has(currentPageKey);
 }
 
 function emptyJsonArrayResponse(): Response {
@@ -231,7 +247,11 @@ if (
       pathname.startsWith("/api/") &&
       pathname !== "/api/csrf-token" &&
       window.location.pathname.startsWith("/factory/");
-    if (isFactoryUiRequest && factoryAccountingModuleAccess === false && isFactoryAccountingRead(pathname, method)) {
+    if (
+      isFactoryUiRequest &&
+      isFactoryAccountingRead(pathname, method) &&
+      (factoryAccountingModuleAccess === false || !factoryPageOwnsSharedAccountingRead(pathname))
+    ) {
       return emptyJsonArrayResponse();
     }
 
