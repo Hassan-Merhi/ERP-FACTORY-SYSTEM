@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
+import Decimal from "decimal.js";
 import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   factoryCategories,
@@ -376,8 +377,18 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // landed-cost corrections already cascade into these stored batch fields.
       const correctedBatchRows = mixBatchRows;
 
-      const totalMixWeightKg = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
-      const totalMixCost = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalCost || "0"), 0);
+      // Keep batch-rate arithmetic in decimal space so summing many stored DECIMAL
+      // values does not introduce binary floating-point drift before division.
+      const totalMixWeightDecimal = correctedBatchRows.reduce(
+        (sum, row) => sum.plus(row.totalWeightKg || 0),
+        new Decimal(0)
+      );
+      const totalMixCostDecimal = correctedBatchRows.reduce(
+        (sum, row) => sum.plus(row.totalCost || 0),
+        new Decimal(0)
+      );
+      const totalMixWeightKg = totalMixWeightDecimal.toNumber();
+      const totalMixCost = totalMixCostDecimal.toNumber();
 
       // Material from period batches that is still on the pressing table (not yet turned into bales).
       // Only ACTIVE batches have meaningful on-table material; COMPLETED batches set usedKg = totalWeightKg
@@ -415,18 +426,34 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       ]);
 
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
-      const allTimeMixKg = parseFloat(String(mixAllTimeRow.mix_kg ?? "0")) || 0;
-      const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
-      const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
-      const allTimeBlendedCpk = allTimeMixKg > 0 ? allTimeMixCost / allTimeMixKg : 0;
-      const blendedCostPerKg = totalMixWeightKg > 0 ? totalMixCost / totalMixWeightKg : 0;
 
-      const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
-      // Reuse the exact same rate returned for the visible Original Batches KPI,
-      // so the two cards cannot drift apart when the report date filter changes.
+      const allTimeMixKgDecimal = new Decimal(String(mixAllTimeRow.mix_kg ?? "0"));
+      const allTimeMixCostDecimal = new Decimal(String(mixAllTimeRow.mix_cost ?? "0"));
+      const allTimeBaleKgDecimal = new Decimal(String(baleAllTimeRow.bale_kg ?? "0"));
+
+      // Batch rates are API/calculation values, not display values. Preserve up to
+      // 10 digits after the decimal point in the backend and let the frontend decide
+      // how many digits to show.
+      const allTimeBlendedCpkDecimal = allTimeMixKgDecimal.gt(0)
+        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
+        : new Decimal(0);
+      const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
+        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
+        : new Decimal(0);
+
+      const allTimeBlendedCpk = allTimeBlendedCpkDecimal.toNumber();
+      const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
+
+      const balanceWeightDecimal = Decimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
+      const balanceWeightKg = balanceWeightDecimal.toNumber();
+      // Reuse the exact same 10-decimal backend rate returned for the visible
+      // Original Batches KPI, so the two cards cannot drift apart.
       const balanceCostPerKg = blendedCostPerKg;
-      const balanceValue = Math.round(balanceWeightKg * balanceCostPerKg * 100) / 100;
+      const balanceValue = balanceWeightDecimal
+        .times(blendedCostPerKgDecimal)
+        .toDecimalPlaces(2)
+        .toNumber();
 
       // Production profit must follow the active valuation mode. The selected finished-goods
       // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
