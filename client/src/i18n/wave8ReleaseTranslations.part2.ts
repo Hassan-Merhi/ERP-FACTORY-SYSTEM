@@ -542,4 +542,205 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "نموذج مخزون المواقع",
     fr: "Maquette du stock par emplacement",
   },
+  // Main after ccf632e: Item Market Analysis and Factory customer order analytics.
+  {
+    en: "Item Market Analysis",
+    ar: "تحليل سوق الأصناف",
+    fr: "Analyse du marché des articles",
+  },
+  {
+    en: "Search item code or name",
+    ar: "ابحث برمز الصنف أو اسمه",
+    fr: "Rechercher par code ou nom d’article",
+  },
+  {
+    en: "All countries",
+    ar: "جميع الدول",
+    fr: "Tous les pays",
+  },
+  {
+    en: "Strong",
+    ar: "قوي",
+    fr: "Fort",
+  },
+  {
+    en: "Watch",
+    ar: "مراقبة",
+    fr: "À surveiller",
+  },
+  {
+    en: "No sales",
+    ar: "لا مبيعات",
+    fr: "Aucune vente",
+  },
+  {
+    en: "Historical Profit",
+    ar: "الربح التاريخي",
+    fr: "Bénéfice historique",
+  },
+  {
+    en: "All Countries",
+    ar: "جميع الدول",
+    fr: "Tous les pays",
+  },
+  {
+    en: "All Stock Groups",
+    ar: "جميع مجموعات المخزون",
+    fr: "Tous les groupes de stock",
+  },
+  {
+    en: "Item performance",
+    ar: "أداء الأصناف",
+    fr: "Performance des articles",
+  },
+  {
+    en: "Click an item to see its country breakdown",
+    ar: "انقر على صنف لعرض توزيعه حسب الدولة",
+    fr: "Cliquez sur un article pour voir sa répartition par pays",
+  },
+  {
+    en: "Imported Qty",
+    ar: "الكمية المستوردة",
+    fr: "Qté importée",
+  },
+  {
+    en: "Purchase Value",
+    ar: "قيمة الشراء",
+    fr: "Valeur d’achat",
+  },
+  {
+    en: "Avg Purchase",
+    ar: "متوسط الشراء",
+    fr: "Achat moyen",
+  },
+  {
+    en: "Top Profit Country",
+    ar: "الدولة الأعلى ربحًا",
+    fr: "Pays le plus rentable",
+  },
+  {
+    en: "Mixed currencies",
+    ar: "عملات مختلطة",
+    fr: "Devises mixtes",
+  },
+  {
+    en: "Historical Cost",
+    ar: "التكلفة التاريخية",
+    fr: "Coût historique",
+  },
+  {
+    en: "Profit/Unit",
+    ar: "الربح/الوحدة",
+    fr: "Bénéfice/unité",
+  },
+  {
+    en: "Item Market Analysis is available for ERP companies only.",
+    ar: "تحليل سوق الأصناف متاح لشركات ERP فقط.",
+    fr: "L’analyse du marché des articles est disponible uniquement pour les sociétés ERP.",
+  },
+  {
+    en: "No sales by country for this period.",
+    ar: "لا توجد مبيعات حسب الدولة لهذه الفترة.",
+    fr: "Aucune vente par pays pour cette période.",
+  },
+  {
+    en: "No imported or sold items match these filters.",
+    ar: "لا توجد أصناف مستوردة أو مباعة تطابق هذه الفلاتر.",
+    fr: "Aucun article importé ou vendu ne correspond à ces filtres.",
+  },
+  {
+    en: "Item / article",
+    ar: "الصنف / المادة",
+    fr: "Article / référence",
+  },
+  {
+    en: "Customer Order Analytics",
+    ar: "تحليلات طلبات العملاء",
+    fr: "Analyses des commandes clients",
+  },
+  {
+    en: "Verified + Finalized",
+    ar: "متحقق منه + مُعتمد",
+    fr: "Vérifiée + finalisée",
+  },
+  {
+    en: "All Profit Results",
+    ar: "جميع نتائج الربح",
+    fr: "Tous les résultats de bénéfice",
+  },
+  {
+    en: "Profitable",
+    ar: "مربح",
+    fr: "Rentable",
+  },
+  {
+    en: "Loss Making",
+    ar: "خاسر",
+    fr: "Déficitaire",
+  },
+  {
+    en: "Could not load customer order analytics",
+    ar: "تعذر تحميل تحليلات طلبات العملاء",
+    fr: "Impossible de charger les analyses des commandes clients",
+  },
+  {
+    en: "Last Sold",
+    ar: "آخر بيع",
+    fr: "Dernière vente",
+  },
+  {
+    en: "Sold customer orders with item-level sales, historical cost and gross profit",
+    ar: "طلبات العملاء المباعة مع المبيعات على مستوى الصنف والتكلفة التاريخية وإجمالي الربح",
+    fr: "Commandes clients vendues avec ventes par article, coût historique et bénéfice brut",
+  },
+  {
+    en: "Please retry or narrow the date range. The rest of Analytics is still available.",
+    ar: "يرجى إعادة المحاولة أو تضييق نطاق التاريخ. بقية التحليلات لا تزال متاحة.",
+    fr: "Veuillez réessayer ou réduire la plage de dates. Le reste des analyses reste disponible.",
+  },
+  {
+    en: "Customer order analytics are unavailable",
+    ar: "تحليلات طلبات العملاء غير متاحة",
+    fr: "Les analyses des commandes clients sont indisponibles",
+  },
+  {
+    en: "No sold customer order items match these filters",
+    ar: "لا توجد أصناف مباعة من طلبات العملاء تطابق هذه الفلاتر",
+    fr: "Aucun article de commande client vendu ne correspond à ces filtres",
+  },
+  {
+    en: "Failed to fetch customer order analytics",
+    ar: "فشل جلب تحليلات طلبات العملاء",
+    fr: "Échec de la récupération des analyses des commandes clients",
+  },
+  {
+    en: "Invalid status filter",
+    ar: "فلتر الحالة غير صالح",
+    fr: "Filtre de statut non valide",
+  },
+  {
+    en: "Invalid profit filter",
+    ar: "فلتر الربح غير صالح",
+    fr: "Filtre de bénéfice non valide",
+  },
+  {
+    en: "An active company session is required",
+    ar: "يلزم وجود جلسة شركة نشطة",
+    fr: "Une session de société active est requise",
+  },
+  {
+    en: "Invalid item market analysis filters",
+    ar: "فلاتر تحليل سوق الأصناف غير صالحة",
+    fr: "Filtres d’analyse du marché des articles non valides",
+  },
+  {
+    en: "Item Market Analysis is available for ERP companies only",
+    ar: "تحليل سوق الأصناف متاح لشركات ERP فقط",
+    fr: "L’analyse du marché des articles est disponible uniquement pour les sociétés ERP",
+  },
+  {
+    en: "Failed to generate item market analysis",
+    ar: "فشل إنشاء تحليل سوق الأصناف",
+    fr: "Échec de la génération de l’analyse du marché des articles",
+  },
 ];
