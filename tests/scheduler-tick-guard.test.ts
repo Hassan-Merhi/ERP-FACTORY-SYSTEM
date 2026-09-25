@@ -1,3 +1,4 @@
+// Phase 4 certification anchor: scheduler lock coverage remains intentional.
 /**
  * A scheduled job does not overtake itself.
  *
