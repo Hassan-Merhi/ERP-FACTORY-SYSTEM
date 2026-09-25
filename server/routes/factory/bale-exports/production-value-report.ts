@@ -519,7 +519,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             effectiveRate = new Decimal(source.costPerKg || 0);
           } else if (source.supplierId != null) {
             effectiveRate = new Decimal(
-              remainingSupplierRateMap.get(source.supplierId) ?? parseFloat(source.costPerKg || "0") || 0
+              remainingSupplierRateMap.get(source.supplierId) ?? (parseFloat(source.costPerKg || "0") || 0)
             );
           } else {
             effectiveRate = new Decimal(source.costPerKg || 0);
