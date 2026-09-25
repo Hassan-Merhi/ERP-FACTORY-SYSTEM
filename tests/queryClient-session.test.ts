@@ -28,9 +28,11 @@ function makeResponse(status: number): Response {
 function mockAuthMeFetch(authMeStatus: number | "network-error"): typeof window.fetch {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url =
-      typeof input === "string" ? input
-      : input instanceof URL ? input.href
-      : (input as Request).url;
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as Request).url;
     if (url.includes("/api/auth/me")) {
       if (authMeStatus === "network-error") throw new TypeError("Failed to fetch");
       return makeResponse(authMeStatus);
@@ -48,7 +50,9 @@ let redirectTarget: string | null = null;
 beforeEach(() => {
   redirectTarget = null;
   _testOnly_resetSessionExpired();
-  _testOnly_setRedirectFn((href) => { redirectTarget = href; });
+  _testOnly_setRedirectFn((href) => {
+    redirectTarget = href;
+  });
 });
 
 afterEach(() => {
@@ -108,7 +112,6 @@ describe("verifySessionExpired", () => {
 // ---------------------------------------------------------------------------
 
 describe("handlePossibleSessionExpiry", () => {
-
   // ── Scenario 1: business 401, session still valid ─────────────────────────
   it("does NOT redirect when /api/auth/me returns 200", async () => {
     await handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", mockAuthMeFetch(200));
@@ -127,13 +130,16 @@ describe("handlePossibleSessionExpiry", () => {
 
   it("redirects only once when multiple requests return 401 simultaneously", async () => {
     let redirectCount = 0;
-    _testOnly_setRedirectFn((href) => { redirectTarget = href; redirectCount++; });
+    _testOnly_setRedirectFn((href) => {
+      redirectTarget = href;
+      redirectCount++;
+    });
 
     const fetch = mockAuthMeFetch(401);
     await Promise.all([
       handlePossibleSessionExpiry(makeResponse(401), "/api/reports/example", fetch),
-      handlePossibleSessionExpiry(makeResponse(401), "/api/reports/other",   fetch),
-      handlePossibleSessionExpiry(makeResponse(401), "/api/inventory",        fetch),
+      handlePossibleSessionExpiry(makeResponse(401), "/api/reports/other", fetch),
+      handlePossibleSessionExpiry(makeResponse(401), "/api/inventory", fetch),
     ]);
 
     expect(redirectTarget).toBe("/login");
