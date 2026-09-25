@@ -9,7 +9,6 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db, pool } from "../../../db";
 import { requireAuth } from "../../../auth";
-import Decimal from "decimal.js";
 import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   factoryCategories,
@@ -390,12 +389,12 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // "Balance on Table" is a CURRENT STATE quantity valued at each originating
-      // mix batch's stored historical rate.
+      // "Balance on Table" is a CURRENT STATE quantity valued at the exact
+      // blended rate shown by the Original Batches KPI for the active report filter.
       //
       // This makes:
-      //   balance value = Σ(remaining kg × original batch rate)
-      //   balance rate  = balance value ÷ total remaining kg
+      //   balance value = remaining kg × original-batches blended rate
+      //   balance rate  = original-batches blended rate
       const [mixAllTimeResult, currentBatchRows] = await Promise.all([
         db.execute(sql`
           SELECT
@@ -428,27 +427,19 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         const usedKg = parseFloat(batch.usedKg || "0") || 0;
         return totalKg - usedKg > 0.000001;
       });
-      // Keep every leftover kilogram on the exact cost/kg stored on its originating
-      // mix batch. Producing bales reduces only the remaining quantity; it must never
-      // cause the batch rate to be re-priced from a supplier's later/current rate.
-      let balanceWeight = new Decimal(0);
-      let balanceCost = new Decimal(0);
-      for (const batch of remainingBatchRows) {
-        const totalKg = new Decimal(batch.totalWeightKg || 0);
-        const usedKg = new Decimal(batch.usedKg || 0);
-        const remainingKg = Decimal.max(0, totalKg.minus(usedKg));
-        if (remainingKg.lte(0)) continue;
-
-        const originalBatchRate = new Decimal(batch.costPerKg || 0);
-        balanceWeight = balanceWeight.plus(remainingKg);
-        balanceCost = balanceCost.plus(remainingKg.times(originalBatchRate));
-      }
-
-      const balanceWeightKg = balanceWeight.toNumber();
-      const balanceValue = balanceCost.toDecimalPlaces(2).toNumber();
-      const balanceCostPerKg = balanceWeight.gt(0)
-        ? balanceCost.dividedBy(balanceWeight).toDecimalPlaces(6).toNumber()
-        : 0;
+      // Balance on Table must use the same original-batch blended rate as the
+      // Original Batches valuation. Remaining quantity changes as bales are produced,
+      // but the KPI rate itself must not become a weighted average of only the batches
+      // that happen to still be open.
+      const balanceWeightKg = remainingBatchRows.reduce((sum, batch) => {
+        const totalKg = parseFloat(batch.totalWeightKg || "0") || 0;
+        const usedKg = parseFloat(batch.usedKg || "0") || 0;
+        return sum + Math.max(0, totalKg - usedKg);
+      }, 0);
+      // Reuse the exact same rate returned for the visible Original Batches KPI,
+      // so the two cards cannot drift apart when the report date filter changes.
+      const balanceCostPerKg = blendedCostPerKg;
+      const balanceValue = Math.round(balanceWeightKg * balanceCostPerKg * 100) / 100;
 
       // Production profit must follow the active valuation mode. The selected finished-goods
       // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
@@ -646,7 +637,7 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Weighted average of the original stored batch rates for material still remaining.
+          // Must match the Original Batches blended rate; only the remaining quantity changes.
           // The Selling / Cost toggle only changes finished-production valuation.
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
