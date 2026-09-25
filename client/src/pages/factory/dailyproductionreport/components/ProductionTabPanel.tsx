@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import type { AuthMe } from "@shared/apiTypes";
 import type { Preset } from "../types";
 import { GRADE_COLORS, GRADE_ORDER, classifyByGrade, fmtKg, fmtMoney, fmtRate } from "../utils";
 import { StatRow } from "./StatRow";
@@ -45,7 +47,11 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     valuationMode,
     setValuationMode,
   } = report;
+  const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
+  const effectiveRole = currentUser?.currentRole ?? currentUser?.role ?? "";
+  const isOwner = effectiveRole === "Owner";
   const costsHidden = Boolean(data?.costsHidden);
+  const showMoneySummary = !costsHidden && (!isOwner || valuationMode === "cost");
   // Top Profit KPI only:
   // selected bales value - (mix-batch value - remaining-on-table value).
   // The selected bales value follows the active Cost/Selling toggle.
@@ -196,59 +202,65 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             ) : (
               <div className="flex flex-col gap-2">
                 {/* Row 1 — money summary */}
-                {!costsHidden && (
+                {showMoneySummary && (
                   <div className="flex flex-wrap items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {valuationMode === "selling" ? "Selling Value" : "Cost Value"}
-                      </span>
-                      <span
-                        className="text-base font-bold text-blue-600 dark:text-blue-400"
-                        data-testid="text-production-value"
-                      >
-                        {fmtMoney(data?.summary.productionValue ?? 0)}
-                      </span>
-                    </div>
-                    <div className="w-px h-5 bg-border" />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Batch Cost
-                      </span>
-                      <span className="text-base font-bold" data-testid="text-batch-cost">
-                        {fmtMoney(data?.summary.batchCost ?? 0)}
-                      </span>
-                    </div>
-                    <div className="w-px h-5 bg-border" />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
-                      <span
-                        className={`text-base font-bold px-3 py-0.5 rounded-md ${
-                          productionProfitValue > 0
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            : productionProfitValue < 0
-                              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                              : "bg-muted text-muted-foreground"
-                        }`}
-                        data-testid="text-profit-value"
-                      >
-                        {productionProfitValue > 0 ? "+" : ""}
-                        {fmtMoney(productionProfitValue)}
-                      </span>
-                      {productionProfitValue > 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      ) : productionProfitValue === 0 ? (
-                        <Minus className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      )}
-                    </div>
-                    <div className="w-px h-5 bg-border" />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margin</span>
-                      <span className="text-base font-bold tabular-nums" data-testid="text-profit-margin">
-                        {productionProfitMarginPct.toFixed(1)}%
-                      </span>
-                    </div>
+                    {(!isOwner || valuationMode === "cost") && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {valuationMode === "selling" ? "Selling Value" : "Cost Value"}
+                        </span>
+                        <span
+                          className="text-base font-bold text-blue-600 dark:text-blue-400"
+                          data-testid="text-production-value"
+                        >
+                          {fmtMoney(data?.summary.productionValue ?? 0)}
+                        </span>
+                      </div>
+                    )}
+                    {!isOwner && (
+                      <>
+                        <div className="w-px h-5 bg-border" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Batch Cost
+                          </span>
+                          <span className="text-base font-bold" data-testid="text-batch-cost">
+                            {fmtMoney(data?.summary.batchCost ?? 0)}
+                          </span>
+                        </div>
+                        <div className="w-px h-5 bg-border" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
+                          <span
+                            className={`text-base font-bold px-3 py-0.5 rounded-md ${
+                              productionProfitValue > 0
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                : productionProfitValue < 0
+                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                                  : "bg-muted text-muted-foreground"
+                            }`}
+                            data-testid="text-profit-value"
+                          >
+                            {productionProfitValue > 0 ? "+" : ""}
+                            {fmtMoney(productionProfitValue)}
+                          </span>
+                          {productionProfitValue > 0 ? (
+                            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          ) : productionProfitValue === 0 ? (
+                            <Minus className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          )}
+                        </div>
+                        <div className="w-px h-5 bg-border" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margin</span>
+                          <span className="text-base font-bold tabular-nums" data-testid="text-profit-margin">
+                            {productionProfitMarginPct.toFixed(1)}%
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -263,7 +275,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   const totalKg = productionsKg - origKg;
                   const isPositive = totalKg >= 0;
                   return (
-                    <div className={costsHidden ? "flex flex-wrap items-center gap-5" : "flex flex-wrap items-center gap-5 pt-2 border-t border-border"}>
+                    <div className={showMoneySummary ? "flex flex-wrap items-center gap-5 pt-2 border-t border-border" : "flex flex-wrap items-center gap-5"}>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-muted-foreground">Productions</span>
                         <span className="text-base font-bold" data-testid="text-weight-productions">
@@ -364,7 +376,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <span className="text-sm font-bold">{data?.production.totalBales ?? 0}</span>
                   </div>
                   <StatRow label="Weight" value={fmtKg(data?.production.totalWeightKg ?? 0)} />
-                  {!costsHidden && (
+                  {!costsHidden && (!isOwner || valuationMode === "cost") && (
                     <>
                       <StatRow
                         label={valuationMode === "selling" ? "Selling Value" : "Cost Value"}
@@ -499,23 +511,25 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <>
                       <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                      <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                          Production Profit
-                        </span>
-                        <span
-                          className={`text-sm font-extrabold tabular-nums ${
-                            profitValue > 0
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : profitValue < 0
-                                ? "text-red-500 dark:text-red-400"
-                                : "text-muted-foreground"
-                          }`}
-                        >
-                          {profitValue > 0 ? "+" : ""}
-                          {fmtMoney(profitValue)}
-                        </span>
-                      </div>
+                      {!isOwner && (
+                        <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
+                            Production Profit
+                          </span>
+                          <span
+                            className={`text-sm font-extrabold tabular-nums ${
+                              profitValue > 0
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : profitValue < 0
+                                  ? "text-red-500 dark:text-red-400"
+                                  : "text-muted-foreground"
+                            }`}
+                          >
+                            {profitValue > 0 ? "+" : ""}
+                            {fmtMoney(profitValue)}
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
                 </>
