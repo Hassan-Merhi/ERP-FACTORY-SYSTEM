@@ -295,7 +295,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                               <button
                                                 type="button"
                                                 className="font-mono font-semibold text-primary underline underline-offset-4 hover:no-underline"
-                                                onClick={() => navigate(`/factory/sales/invoices/${order.orderId}`)}
+                                                onClick={() => navigate(`/factory/sales/invoices/${order.orderId}?view=no-charges&from=analytics`)}
                                                 data-testid={`button-open-order-${order.orderId}`}
                                               >
                                                 {identifier}
