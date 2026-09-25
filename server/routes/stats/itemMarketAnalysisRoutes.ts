@@ -212,7 +212,9 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
         rows,
         companySummaries,
         summary: {
-          itemCount: new Set(rows.map((row) => row.name.trim().toLocaleLowerCase())).size,
+          itemCount: new Set(
+            rows.map((row) => row.code.trim().toLocaleUpperCase() || `ID:${row.companyId}:${row.stockItemId}`)
+          ).size,
           ...totals,
           marginPct: marginPct(totals.profit, totals.revenue),
         },
