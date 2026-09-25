@@ -123,6 +123,8 @@ const reviewedTechnicalValues = new Set([
   // AIS stream fallbacks written only to server logs and metrics, never to an API response.
   "subscription refresh failed",
   "AIS update handler failed",
+  // Detector false positive: a tie-tolerance comparison in ItemMarketAnalysis, not copy.
+  "Math.abs(entry.profit - topProfit)",
 ]);
 
 function argumentValue(name) {

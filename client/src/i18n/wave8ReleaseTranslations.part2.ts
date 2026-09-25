@@ -743,4 +743,90 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "فشل إنشاء تحليل سوق الأصناف",
     fr: "Échec de la génération de l’analyse du marché des articles",
   },
+  // Main after c9e2873: company comparison and customer invoice analytics.
+  {
+    en: "Top Profit Company",
+    ar: "الشركة الأعلى ربحًا",
+    fr: "Société la plus rentable",
+  },
+  {
+    en: "Equal",
+    ar: "متساوٍ",
+    fr: "Égalité",
+  },
+  {
+    en: "Compare ERP companies",
+    ar: "قارن شركات ERP",
+    fr: "Comparer les sociétés ERP",
+  },
+  {
+    en: "No import or sales activity for this item code in the selected period.",
+    ar: "لا يوجد نشاط استيراد أو مبيعات لرمز الصنف هذا في الفترة المحددة.",
+    fr: "Aucune activité d’importation ou de vente pour ce code article sur la période sélectionnée.",
+  },
+  {
+    en: "Loading + Verified + Finalized",
+    ar: "قيد التحميل + متحقق منه + مُعتمد",
+    fr: "En chargement + vérifiée + finalisée",
+  },
+  {
+    en: "Invoice Total (No Charges)",
+    ar: "إجمالي الفاتورة (بدون رسوم)",
+    fr: "Total de la facture (hors frais)",
+  },
+  {
+    en: "Customer / Container",
+    ar: "العميل / الحاوية",
+    fr: "Client / conteneur",
+  },
+  {
+    en: "Total Cost (No Charges)",
+    ar: "إجمالي التكلفة (بدون رسوم)",
+    fr: "Coût total (hors frais)",
+  },
+  {
+    en: "Sale",
+    ar: "بيع",
+    fr: "Vente",
+  },
+  {
+    en: "Loading sale details…",
+    ar: "جارٍ تحميل تفاصيل البيع…",
+    fr: "Chargement des détails de la vente…",
+  },
+  {
+    en: "No sale items found.",
+    ar: "لم يتم العثور على أصناف بيع.",
+    fr: "Aucun article de vente trouvé.",
+  },
+  {
+    en: "No customer invoices match these filters",
+    ar: "لا توجد فواتير عملاء تطابق هذه الفلاتر",
+    fr: "Aucune facture client ne correspond à ces filtres",
+  },
+  {
+    en: "No POS sales found for this customer in the selected date range.",
+    ar: "لم يتم العثور على مبيعات نقطة بيع لهذا العميل في نطاق التاريخ المحدد.",
+    fr: "Aucune vente au point de vente trouvée pour ce client dans la plage de dates sélectionnée.",
+  },
+  {
+    en: "Failed to load POS sales",
+    ar: "فشل تحميل مبيعات نقطة البيع",
+    fr: "Échec du chargement des ventes au point de vente",
+  },
+  {
+    en: "Failed to load POS sale details",
+    ar: "فشل تحميل تفاصيل بيع نقطة البيع",
+    fr: "Échec du chargement des détails de la vente au point de vente",
+  },
+  {
+    en: "One or more selected companies could not be found",
+    ar: "تعذر العثور على شركة أو أكثر من الشركات المحددة",
+    fr: "Une ou plusieurs des sociétés sélectionnées sont introuvables",
+  },
+  {
+    en: "Item Market Analysis can only compare ERP companies",
+    ar: "لا يمكن لتحليل سوق الأصناف مقارنة سوى شركات ERP",
+    fr: "L’analyse du marché des articles ne peut comparer que des sociétés ERP",
+  },
 ];
