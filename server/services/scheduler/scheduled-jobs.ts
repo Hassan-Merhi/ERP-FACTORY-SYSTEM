@@ -35,21 +35,11 @@ async function checkAndRunScheduledDailyExport(): Promise<void> {
       return;
     }
 
-    logger.info(`[DailyExport] Hourly check: time matches (${configuredHour}:00 ${tz}) — starting export.`);
+    logger.info(`[DailyExport] Scheduled check: time matches (${configuredHour}:00 ${tz}) — starting export attempt.`);
     const { runDailyExport } = await import("./daily-export");
-    const MAX_ATTEMPTS = 4;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const ok = await runDailyExport();
-      if (ok) {
-        if (attempt > 1) logger.info(`[DailyExport] Succeeded on retry attempt ${attempt}.`);
-        break;
-      }
-      if (attempt < MAX_ATTEMPTS) {
-        logger.info(`[DailyExport] Attempt ${attempt}/${MAX_ATTEMPTS} failed — retrying in 15 minutes...`);
-        await new Promise<void>((res) => setTimeout(res, 15 * 60 * 1000));
-      } else {
-        logger.error(`[DailyExport] All ${MAX_ATTEMPTS} attempts failed.`);
-      }
+    const ok = await runDailyExport();
+    if (!ok) {
+      logger.warn("[DailyExport] Attempt failed; the next 15-minute scheduler tick will retry within this hour.");
     }
   } catch (err: unknown) {
     logger.error("[DailyExport] checkAndRunScheduledDailyExport error:", { error: getErrorMessage(err) || err });
@@ -134,7 +124,18 @@ export function startScheduler() {
     timezone: "America/New_York",
   });
 
-  // Every hour: check stock report, net position export, AND the configurable daily export.
+  // The configurable daily export gets four independent chances during its
+  // configured hour (at :00, :15, :30, :45). Keeping retries on scheduler ticks
+  // avoids sleeping inside the hourly composite job and blocking the next hour.
+  cron.schedule(
+    "*/15 * * * *",
+    createSchedulerTick("scheduledDailyExport", checkAndRunScheduledDailyExport, { quiet: true }),
+    {
+      timezone: "America/New_York",
+    }
+  );
+
+  // Every hour: check stock report, net position export, and container WhatsApp.
   // Individual modules are loaded only when this tick executes instead of at process startup.
   cron.schedule(
     "0 * * * *",
@@ -142,7 +143,6 @@ export function startScheduler() {
       const stockReport = await import("./stock-report");
       await stockReport.checkAndRunStockReport();
       await stockReport.checkAndRunNetPositionExport();
-      await checkAndRunScheduledDailyExport();
       const { checkAndRunContainersWhatsApp } = await import("./maintenance");
       await checkAndRunContainersWhatsApp();
     }),
@@ -221,7 +221,8 @@ export function startScheduler() {
     jobs: [
       "monthlyNetPositionWhatsApp(1st 07:00 EST)",
       "dailyRentalAccrual(daily 06:00 ET)",
-      "hourlyChecks(stock/export/containers)",
+      "scheduledDailyExport(every 15m; active only in configured hour)",
+      "hourlyChecks(stock/net-position/containers)",
       "convergenceReconciliation(daily 03:30 ET)",
       "overdueCustomers(daily 09:00 EST)",
       "softDeletePurge(daily 02:00 EST)",

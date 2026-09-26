@@ -17,7 +17,7 @@ import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
 import { blockViewOnlyWrites } from "./auth";
-import { setupWS } from "./wsServer";
+import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
 import { requestLogger } from "./middleware/requestLogger";
@@ -183,6 +183,10 @@ let migrationsDone = false;
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
   setupWS(server, sessionMiddleware);
+  // Valid upgrades are handled by the server's upgrade event; plain HTTP GET
+  // requests to /ws get a cheap, explicit 426 instead of falling into the SPA.
+  registerWebSocketHttpFallback(app);
+
   if (process.env.ENABLE_SCHEDULERS !== "false") {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");

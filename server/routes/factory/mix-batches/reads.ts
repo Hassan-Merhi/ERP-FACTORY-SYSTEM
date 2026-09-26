@@ -10,7 +10,7 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
+import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
