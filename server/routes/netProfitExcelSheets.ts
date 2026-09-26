@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { LedgerAccount } from "@shared/schema";
+import { isInventoryValuationOnlyAccount } from "../lib/inventoryPnlAccounts";
 /**
  * Statistics and ExcelJS sheet rendering for the net-profit workbook.
  *
@@ -92,6 +93,7 @@ export function computeStats(
     (acc) =>
       acc.code !== "PURCHASES" &&
       !acc.code?.startsWith("PURCHASES") &&
+      !isInventoryValuationOnlyAccount(acc) &&
       (acc.accountType === "Direct Expense" ||
         (acc.accountType === "Expense" && acc.subType === "Direct Expense") ||
         ctx.importChargesIds.has(acc.id))
@@ -111,8 +113,7 @@ export function computeStats(
     (acc) =>
       (acc.accountType === "Indirect Expense" ||
         (acc.accountType === "Expense" && acc.subType === "Indirect Expense")) &&
-      acc.code !== "PRODUCTION_ADJUSTMENT" &&
-      acc.code !== "CONSUMPTION_EXPENSE" &&
+      !isInventoryValuationOnlyAccount(acc) &&
       acc.code !== "PURCHASES" &&
       !acc.code?.startsWith("PURCHASES")
   );
