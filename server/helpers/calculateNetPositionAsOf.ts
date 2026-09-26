@@ -14,6 +14,7 @@ import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../
 import { calculateHistoricalLocationInventory } from "../routes/_helpers";
 import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { computeEmployeeNetPositionWithManagedAdvances } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 
@@ -360,8 +361,8 @@ export async function calculateNetPositionAsOf(
   if (shouldIncludeSuppliers) {
     const allSuppliers = await db
       .select()
-      .from(suppliers)
-      .where(and(eq(suppliers.companyId, companyId), isNull(suppliers.deletedAt)))
+      .from(companyScopedSuppliers)
+      .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
       .execute();
     let supplierTotal = 0;
     for (const sup of allSuppliers) {
