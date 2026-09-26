@@ -242,7 +242,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
               END
             ), 0) AS invoice_total
           FROM customer_orders co
-          LEFT JOIN customers c ON c.id = co.customer_id
+          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = ${companyId}
           LEFT JOIN locations l ON l.id = co.location_id
           LEFT JOIN customer_order_lines col ON col.order_id = co.id
           WHERE ${sql.join(orderFilters, sql` AND `)}
