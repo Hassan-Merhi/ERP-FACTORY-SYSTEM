@@ -104,6 +104,17 @@ describe("Phase 28 scheduler lifecycle", () => {
     expect(schedulersEnabled({ ENABLE_SCHEDULERS: "false" } as NodeJS.ProcessEnv)).toBe(false);
   });
 
+  it("registers daily-export retries independently from the hourly composite job", () => {
+    process.env.ENABLE_SCHEDULERS = "true";
+    const scheduleSpy = vi.spyOn(cron, "schedule").mockImplementation((() => ({ stop: vi.fn() })) as any);
+
+    startScheduler();
+
+    const schedules = scheduleSpy.mock.calls.map(([expression]) => expression);
+    expect(schedules).toContain("*/15 * * * *");
+    expect(schedules).toContain("0 * * * *");
+  });
+
   it("registers no cron jobs when ENABLE_SCHEDULERS=false even if startScheduler is called directly", () => {
     process.env.ENABLE_SCHEDULERS = "false";
     const scheduleSpy = vi.spyOn(cron, "schedule");
