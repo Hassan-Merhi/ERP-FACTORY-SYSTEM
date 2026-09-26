@@ -3,8 +3,9 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { containers, suppliers, employees, salaryAdvances, exchangeRates } from "@shared/schema";
-import { eq, and, or, desc, inArray, sql, isNull, lte } from "drizzle-orm";
+import { containers, employees, salaryAdvances, exchangeRates } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { eq, and, or, desc, sql, isNull, lte } from "drizzle-orm";
 import {
   classifyEquityAccounts,
   classifyNetPositionAccounts,
@@ -53,7 +54,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const {
         companyRecord,
         companyAccounts,
-        parentCompanyId,
         hasMigratedEntries: _hasMigratedEntries,
         companyBaseCurrency,
         accountBalances,
@@ -69,10 +69,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // explicitly linked through companies.parent_company_id. Standalone companies
       // must show their own supplier balances even when a global parent company exists.
       const shouldIncludeSuppliers = companyRecord?.parentCompanyId == null;
-      // Supplier master opening balances are global historical data and belong only to
-      // the explicitly configured parent company, never to a standalone sibling company.
-      const shouldIncludeSupplierOpening = parentCompanyId !== null && companyId === parentCompanyId;
-
       // Build excluded-from-expenses set (needed for the P&L expense pass below)
       const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
       const excludedFromExpenses = new Set<number>();
@@ -409,65 +405,58 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
 
-      // Add Suppliers for parent and standalone companies. Linked children settle through parent.
-      if (shouldIncludeSuppliers) {
-        // Only fetch suppliers that appear in this company's entries (avoids full-table scan)
-        const supplierIdsWithBalance = [...supplierBalances.keys()];
-        // Select only the columns we actually use to avoid schema-mismatch 500s when new
-        // columns exist in the Drizzle schema but haven't been migrated to production yet.
-        const allSuppliers =
-          supplierIdsWithBalance.length > 0
-            ? await db
-                .select({
-                  id: suppliers.id,
-                  legalName: suppliers.legalName,
-                  code: suppliers.code,
-                  openingBalance: suppliers.openingBalance,
-                })
-                .from(suppliers)
-                .where(and(isNull(suppliers.deletedAt), inArray(suppliers.id, supplierIdsWithBalance)))
-                .execute()
-            : [];
-        let supplierLiabilities = 0;
-        let supplierAssets = 0;
+      // Supplier master rows are company-owned. Load the full company-scoped set so
+      // an opening-balance-only supplier is still included even when it has no voucher activity.
+      // The company_id index keeps this bounded to the current company rather than scanning
+      // unrelated suppliers.
+      const allSuppliers = await db
+        .select({
+          id: companyScopedSuppliers.id,
+          legalName: companyScopedSuppliers.legalName,
+          code: companyScopedSuppliers.code,
+          openingBalance: companyScopedSuppliers.openingBalance,
+        })
+        .from(companyScopedSuppliers)
+        .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
+        .execute();
+      let supplierLiabilities = 0;
+      let supplierAssets = 0;
 
-        for (const sup of allSuppliers) {
-          const balance = supplierBalances.get(sup.id);
-          if (balance) {
-            const opening = shouldIncludeSupplierOpening ? parseFloat(sup.openingBalance || "0") : 0;
-            // Suppliers: Credit = we owe them, Debit = we paid them
-            // Net positive = we owe them (liability), Net negative = they owe us (asset)
-            const netBalance = opening + balance.credit - balance.debit;
-            if (netBalance > 0) {
-              supplierLiabilities += netBalance;
-              const displayVal = netBalance;
-              onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: displayVal, category: "Supplier" });
-            } else if (netBalance < 0) {
-              supplierAssets += Math.abs(netBalance);
-              const displayVal = Math.abs(netBalance);
-              forUsAccounts.push({
-                name: sup.legalName,
-                code: sup.code || "",
-                value: displayVal,
-                category: "Supplier Overpayment",
-              });
-            }
-          }
+      for (const sup of allSuppliers) {
+        const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
+        const opening = parseFloat(sup.openingBalance || "0");
+        // Suppliers: Credit = we owe them, Debit = we paid them.
+        // Net positive = we owe them (liability), Net negative = they owe us (asset).
+        const netBalance = opening + balance.credit - balance.debit;
+        if (netBalance > 0) {
+          supplierLiabilities += netBalance;
+          onUsAccounts.push({
+            name: sup.legalName,
+            code: sup.code || "",
+            value: netBalance,
+            category: "Supplier",
+          });
+        } else if (netBalance < 0) {
+          supplierAssets += Math.abs(netBalance);
+          forUsAccounts.push({
+            name: sup.legalName,
+            code: sup.code || "",
+            value: Math.abs(netBalance),
+            category: "Supplier Overpayment",
+          });
         }
+      }
 
-        // For CFA companies, supplier balances are in CFA → convert to USD
-        // Guard: supplier balances come from voucher entries via COALESCE.
-        // Only convert pre-migration amounts; after migration the COALESCE already returns USD.
-        const supplierLiabilitiesDisplay = supplierLiabilities;
-        const supplierAssetsDisplay = supplierAssets;
-        if (supplierLiabilitiesDisplay > 0) {
-          onUsTotal += supplierLiabilitiesDisplay;
-          categoryTotals["liability_Suppliers"] = supplierLiabilitiesDisplay;
-        }
-        if (supplierAssetsDisplay > 0) {
-          forUsTotal += supplierAssetsDisplay;
-          categoryTotals["asset_Supplier Overpayment"] = supplierAssetsDisplay;
-        }
+      // Supplier balances are already in the report's base-value convention.
+      const supplierLiabilitiesDisplay = supplierLiabilities;
+      const supplierAssetsDisplay = supplierAssets;
+      if (supplierLiabilitiesDisplay > 0) {
+        onUsTotal += supplierLiabilitiesDisplay;
+        categoryTotals["liability_Suppliers"] = supplierLiabilitiesDisplay;
+      }
+      if (supplierAssetsDisplay > 0) {
+        forUsTotal += supplierAssetsDisplay;
+        categoryTotals["asset_Supplier Overpayment"] = supplierAssetsDisplay;
       }
 
       // Stock OTW — historical as of toDate (containers that were in transit on that date).
