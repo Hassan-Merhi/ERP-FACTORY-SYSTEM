@@ -11,9 +11,7 @@ import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
-import { eq, and, desc, inArray, isNull } from "drizzle-orm";
-import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
-import Decimal from "decimal.js";
+import { eq, and, desc, isNull } from "drizzle-orm";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
@@ -54,92 +52,26 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
 
       const results = await db.select().from(factoryMixBatches).where(where).orderBy(desc(factoryMixBatches.createdAt));
 
-      // ── Display-blend calculation (read-only, no DB writes) ──
-      const batchIds = results.map((b) => b.id);
-      type MixBatchSourceRow = {
-        mixBatchId: number;
-        sourceBatchId: number | null;
-        supplierId: number | null;
-        weightKg: string;
-        costPerKg: string;
-      };
-      let sourceRows: MixBatchSourceRow[] = [];
-      if (batchIds.length > 0) {
-        // Only read the fields needed to compute list display totals. The old
-        // select() materialized every source column even though none of the
-        // source records themselves are returned by this endpoint.
-        sourceRows = await db
-          .select({
-            mixBatchId: factoryMixBatchSources.mixBatchId,
-            sourceBatchId: factoryMixBatchSources.sourceBatchId,
-            supplierId: factoryMixBatchSources.supplierId,
-            weightKg: factoryMixBatchSources.weightKg,
-            costPerKg: factoryMixBatchSources.costPerKg,
-          })
-          .from(factoryMixBatchSources)
-          .where(inArray(factoryMixBatchSources.mixBatchId, batchIds));
-      }
-
-      const uniqueSupplierIds = [
-        ...new Set(sourceRows.filter((s) => s.supplierId != null).map((s) => Number(s.supplierId))),
-      ].filter((id) => Number.isInteger(id) && id > 0);
-
-      // Phase 3: persisted supplier locked rates are loaded in one query rather
-      // than one query per supplier. Legacy NULL-rate suppliers still use the
-      // same stable historical derivation as before, read-only and concurrently.
-      const supplierRateMap = await getLockedSupplierRatesReadOnlyBulk(db, Number(companyId), uniqueSupplierIds);
-
-      const sourcesByBatch = new Map();
-      for (const src of sourceRows) {
-        if (!sourcesByBatch.has(src.mixBatchId)) sourcesByBatch.set(src.mixBatchId, []);
-        sourcesByBatch.get(src.mixBatchId)!.push(src);
-      }
-
+      // Mix-batch list is a historical ledger view. Use the persisted batch
+      // valuation exactly as Production Overview does; never re-price old batches
+      // from the supplier's current locked rate. Current supplier rates can change
+      // after later offloads/corrections and some legacy suppliers have no current
+      // stock rate at all, which previously made valid historical batches display
+      // as $0.0000/kg here even though their stored batch valuation was correct.
       const enriched = results.map((b) => {
         const total = parseFloat(b.totalWeightKg) || 0;
         const used = parseFloat(b.usedKg) || 0;
 
-        // Compute display totals using the same source rules as EditMixBatchDialog:
-        //   A. sourceBatchId exists → use source row's stored costPerKg
-        //   B. supplierId exists (incl. FIFO rows with containerId+supplierId) → current locked rate
-        //   C. neither → fall back to source row's stored costPerKg
-        const sources = sourcesByBatch.get(b.id) || [];
-        let displayTotalWeightKg = new Decimal(0);
-        let displayTotalCost = new Decimal(0);
-        for (const src of sources) {
-          const w = new Decimal(src.weightKg || 0);
-          let effectiveCostPerKg: Decimal;
-          if (src.sourceBatchId != null) {
-            effectiveCostPerKg = new Decimal(src.costPerKg || 0);
-          } else if (src.supplierId != null) {
-            effectiveCostPerKg = new Decimal(supplierRateMap.get(Number(src.supplierId)) || 0);
-          } else {
-            effectiveCostPerKg = new Decimal(src.costPerKg || 0);
-          }
-          displayTotalWeightKg = displayTotalWeightKg.plus(w);
-          displayTotalCost = displayTotalCost.plus(w.times(effectiveCostPerKg));
-        }
-
-        let displayCostPerKg: Decimal;
-        if (displayTotalWeightKg.gt(0)) {
-          displayCostPerKg = displayTotalCost.dividedBy(displayTotalWeightKg);
-        } else {
-          // No source rows → fall back to stored batch values
-          displayTotalWeightKg = new Decimal(b.totalWeightKg || 0);
-          displayTotalCost = new Decimal(b.totalCost || 0);
-          displayCostPerKg = new Decimal(b.costPerKg || 0);
-        }
-
         return {
           ...b,
           remainingKg: (total - used).toFixed(3),
-          displayTotalWeightKg: displayTotalWeightKg.toFixed(3),
-          displayTotalCost: displayTotalCost.toFixed(6),
-          displayCostPerKg: displayCostPerKg.toFixed(6),
+          displayTotalWeightKg: (parseFloat(b.totalWeightKg || "0") || 0).toFixed(3),
+          displayTotalCost: (parseFloat(b.totalCost || "0") || 0).toFixed(6),
+          displayCostPerKg: (parseFloat(b.costPerKg || "0") || 0).toFixed(6),
         };
       });
 
-      res.set("X-ERP-Payload-Profile", "mix-batches-bulk-locked-rates");
+      res.set("X-ERP-Payload-Profile", "mix-batches-historical-stored-costs");
       res.set("Cache-Control", "private, max-age=10");
       res.json(enriched);
     } catch (error: unknown) {
