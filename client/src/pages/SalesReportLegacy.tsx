@@ -38,7 +38,7 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { ErrorState } from "@/components/ui/page-state";
 
-import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";
+import type { DailySummary, GroupingType, ProfitFilter, SalesCogsReconciliation, SalesReportItem } from "./salesreportlegacy/types";
 import { useSalesReportDateKeyboard } from "./salesreportlegacy/useSalesReportDateKeyboard";
 import { exportSalesReportExcel } from "./salesreportlegacy/exportExcel";
 import {
@@ -140,6 +140,22 @@ export default function SalesReport() {
   const isLoading = isMultiCompanyMode ? isLoadingMulti : isLoadingSingle;
   const isError = isMultiCompanyMode ? isErrorMulti : isErrorSingle;
   const refetchReport = isMultiCompanyMode ? refetchMulti : refetchSingle;
+  const isAllTimeReconciliationView =
+    !isMultiCompanyMode &&
+    !periodFilter.fromDate &&
+    !periodFilter.toDate &&
+    selectedLocations.length === 0 &&
+    selectedStockGroups.length === 0 &&
+    !searchTerm &&
+    profitFilter === "all";
+
+  const { data: cogsReconciliation } = useQuery<SalesCogsReconciliation>({
+    queryKey: ["/api/sales-report/cogs-reconciliation"],
+    enabled: isAllTimeReconciliationView,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
 
   // Build set of stockItemIds that belong to selected groups (for client-side group filtering)
   const selectedGroupItemIds = useMemo(() => {
@@ -463,6 +479,41 @@ export default function SalesReport() {
                 {formatAmount(Math.abs(totals.costProfit))}
               </span>
             </div>
+            {isAllTimeReconciliationView && cogsReconciliation && (
+              <>
+                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
+                  {cogsReconciliation.reconciliation >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                  )}
+                  <span className="text-muted-foreground text-xs">COGS Reconciliation</span>
+                  <span
+                    className={`font-semibold font-mono text-sm ${cogsReconciliation.reconciliation >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                    data-testid="text-cogs-reconciliation"
+                  >
+                    {cogsReconciliation.reconciliation < 0 ? "-" : "+"}
+                    {formatAmount(Math.abs(cogsReconciliation.reconciliation))}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
+                  {cogsReconciliation.adjustedCostProfit >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                  )}
+                  <span className="text-muted-foreground text-xs">Adjusted Cost Profit</span>
+                  <span
+                    className={`font-semibold font-mono text-sm ${cogsReconciliation.adjustedCostProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                    data-testid="text-adjusted-cost-profit"
+                    title={cogsReconciliation.formula}
+                  >
+                    {cogsReconciliation.adjustedCostProfit < 0 ? "-" : ""}
+                    {formatAmount(Math.abs(cogsReconciliation.adjustedCostProfit))}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
               <span className="text-muted-foreground text-xs">Hassan's Price</span>
               <span className="font-semibold font-mono text-sm" data-testid="text-configured-cost">
