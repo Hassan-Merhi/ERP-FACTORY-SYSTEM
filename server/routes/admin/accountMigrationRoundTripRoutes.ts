@@ -163,7 +163,7 @@ async function getOrCreateMigrationClearingAccount(
       subType: MIGRATION_CLEARING_SUBTYPE,
       openingBalance: "0",
       active: true,
-      isHidden: false,
+      isHidden: true,
     })
     .returning();
   if (!created) throw new AccountMigrationRoundTripConflict("Could not create account-migration clearing account.");
