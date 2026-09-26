@@ -55,6 +55,7 @@ interface MarketCompanySummary {
 interface MarketResponse {
   generatedAt: string;
   rows: MarketRow[];
+  stockGroups: string[];
   companySummaries: MarketCompanySummary[];
   summary: {
     itemCount: number;
@@ -110,6 +111,7 @@ export default function ItemMarketAnalysis() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
+  const [visibleItemCount, setVisibleItemCount] = useState(100);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -145,15 +147,23 @@ export default function ItemMarketAnalysis() {
     if (period.fromDate) params.set("startDate", period.fromDate);
     if (period.toDate) params.set("endDate", period.toDate);
     if (debouncedSearch) params.set("search", debouncedSearch);
+    if (stockGroupName !== "all") params.set("stockGroupName", stockGroupName);
     if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
     return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, selectedCompanyIds]);
+  }, [period, debouncedSearch, stockGroupName, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
     enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    setVisibleItemCount(100);
+    setExpandedItemCode(null);
+  }, [queryUrl]);
 
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
@@ -167,42 +177,20 @@ export default function ItemMarketAnalysis() {
   }
 
   const rawRows = data?.rows ?? [];
-  const stockGroups = [...new Set(
-    rawRows
-      .map((row) => row.stockGroupName?.trim())
-      .filter((name): name is string => Boolean(name))
-  )].sort((left, right) => left.localeCompare(right));
+  const stockGroups = data?.stockGroups ?? [];
 
-  const rows = rawRows
-    .filter((row) => stockGroupName === "all" || row.stockGroupName?.trim() === stockGroupName)
-    .sort(
-      (left, right) =>
-        normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
-        left.companyName.localeCompare(right.companyName)
-    );
-
-  const summaryTotals = rows.reduce(
-    (totals, row) => {
-      totals.importedQty += row.importedQty;
-      totals.soldQty += row.soldQty;
-      totals.revenue += row.revenue;
-      totals.profit += row.profit;
-      return totals;
-    },
-    { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
+  const rows = useMemo(
+    () =>
+      [...rawRows].sort(
+        (left, right) =>
+          normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
+          left.companyName.localeCompare(right.companyName)
+      ),
+    [rawRows]
   );
-  const summary = {
-    itemCount: new Set(
-      rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
-    ).size,
-    ...summaryTotals,
-    marginPct: summaryTotals.revenue === 0 ? 0 : (summaryTotals.profit / summaryTotals.revenue) * 100,
-  };
 
-  const selectedCompanyNames = erpCompanies.filter((company) => selectedCompanyIds.includes(company.id));
-  const companySummaries = selectedCompanyNames.map((company) => {
-    const companyRows = rows.filter((row) => row.companyId === company.id);
-    const totals = companyRows.reduce(
+  const summary = useMemo(() => {
+    const totals = rows.reduce(
       (acc, row) => {
         acc.importedQty += row.importedQty;
         acc.soldQty += row.soldQty;
@@ -212,60 +200,96 @@ export default function ItemMarketAnalysis() {
       },
       { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
     );
+
     return {
-      companyId: company.id,
-      companyCode: company.code,
-      companyName: company.name,
-      itemCount: companyRows.length,
+      itemCount: new Set(
+        rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
+      ).size,
       ...totals,
       marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
     };
-  });
+  }, [rows]);
 
-  const topProfitCompanyByItem = new Map<
-    string,
-    { companyName: string; profit: number; marginPct: number } | null
-  >();
+  const selectedCompanyNames = useMemo(
+    () => erpCompanies.filter((company) => selectedCompanyIds.includes(company.id)),
+    [erpCompanies, selectedCompanyIds]
+  );
 
-  const profitByCode = new Map<
-    string,
-    Map<number, { companyName: string; profit: number; revenue: number }>
-  >();
+  const companySummaries = useMemo(
+    () =>
+      selectedCompanyNames.map((company) => {
+        const companyRows = rows.filter((row) => row.companyId === company.id);
+        const totals = companyRows.reduce(
+          (acc, row) => {
+            acc.importedQty += row.importedQty;
+            acc.soldQty += row.soldQty;
+            acc.revenue += row.revenue;
+            acc.profit += row.profit;
+            return acc;
+          },
+          { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
+        );
+        return {
+          companyId: company.id,
+          companyCode: company.code,
+          companyName: company.name,
+          itemCount: companyRows.length,
+          ...totals,
+          marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
+        };
+      }),
+    [rows, selectedCompanyNames]
+  );
 
-  for (const row of rows) {
-    const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-    const byCompany =
-      profitByCode.get(itemKey) ??
-      new Map<number, { companyName: string; profit: number; revenue: number }>();
-    const current = byCompany.get(row.companyId);
-    byCompany.set(row.companyId, {
-      companyName: row.companyName,
-      profit: (current?.profit ?? 0) + row.profit,
-      revenue: (current?.revenue ?? 0) + row.revenue,
-    });
-    profitByCode.set(itemKey, byCompany);
-  }
+  const topProfitCompanyByItem = useMemo(() => {
+    const topProfitCompanyByItem = new Map<
+      string,
+      { companyName: string; profit: number; marginPct: number } | null
+    >();
 
-  for (const [itemKey, byCompany] of profitByCode) {
-    const values = [...byCompany.values()].sort((left, right) => right.profit - left.profit);
-    if (values.length === 0) continue;
-    const topProfit = values[0].profit;
-    const tied = values.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+    const profitByCode = new Map<
+      string,
+      Map<number, { companyName: string; profit: number; revenue: number }>
+    >();
 
-    if (tied.length > 1) {
-      topProfitCompanyByItem.set(itemKey, null);
-      continue;
+    for (const row of rows) {
+      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+      const byCompany =
+        profitByCode.get(itemKey) ??
+        new Map<number, { companyName: string; profit: number; revenue: number }>();
+      const current = byCompany.get(row.companyId);
+      byCompany.set(row.companyId, {
+        companyName: row.companyName,
+        profit: (current?.profit ?? 0) + row.profit,
+        revenue: (current?.revenue ?? 0) + row.revenue,
+      });
+      profitByCode.set(itemKey, byCompany);
     }
 
-    const best = values[0];
-    topProfitCompanyByItem.set(itemKey, {
-      companyName: best.companyName,
-      profit: best.profit,
-      marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
-    });
-  }
+    for (const [itemKey, byCompany] of profitByCode) {
+      const values = [...byCompany.values()].sort((left, right) => right.profit - left.profit);
+      if (values.length === 0) continue;
+      const topProfit = values[0].profit;
+      const tied = values.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
 
-  const groupedRows = (() => {
+      if (tied.length > 1) {
+        topProfitCompanyByItem.set(itemKey, null);
+        continue;
+      }
+
+      const best = values[0];
+      topProfitCompanyByItem.set(itemKey, {
+        companyName: best.companyName,
+        profit: best.profit,
+        marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
+      });
+    }
+
+
+    return topProfitCompanyByItem;
+  }, [rows]);
+
+  const groupedRows = useMemo(() => {
     const grouped = new Map<string, MarketRow[]>();
 
     for (const row of rows) {
@@ -322,7 +346,12 @@ export default function ItemMarketAnalysis() {
           left.name.localeCompare(right.name) ||
           left.itemKey.localeCompare(right.itemKey)
       );
-  })();
+  }, [rows]);
+
+  const visibleGroupedRows = groupedRows.slice(0, visibleItemCount);
+  const visibleRows = rows.slice(0, visibleItemCount);
+  const totalVisibleSourceCount = multiCompany ? groupedRows.length : rows.length;
+  const displayedCount = multiCompany ? visibleGroupedRows.length : visibleRows.length;
 
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
@@ -498,7 +527,7 @@ export default function ItemMarketAnalysis() {
                   </TableRow>
                 ))}
 
-              {!isLoading && multiCompany && groupedRows.map((group) => {
+              {!isLoading && multiCompany && visibleGroupedRows.map((group) => {
                 const expanded = expandedItemCode === group.itemKey;
                 const mixedCurrency = group.purchaseCurrencies.length > 1;
                 const topCompany = topProfitCompanyByItem.get(group.itemKey);
@@ -653,7 +682,7 @@ export default function ItemMarketAnalysis() {
                 );
               })}
 
-              {!isLoading && !multiCompany && rows.map((row) => {
+              {!isLoading && !multiCompany && visibleRows.map((row) => {
                 const rowKey = `${row.companyId}:${row.stockItemId}`;
                 const mixedCurrency = row.purchaseCurrencies.length > 1;
                 return (
@@ -701,6 +730,23 @@ export default function ItemMarketAnalysis() {
             </TableBody>
           </Table>
         </div>
+        {!isLoading && totalVisibleSourceCount > 0 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <div className="text-xs text-muted-foreground">
+              Showing {formatNumber(displayedCount)} of {formatNumber(totalVisibleSourceCount)} items
+            </div>
+            {displayedCount < totalVisibleSourceCount && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setVisibleItemCount((count) => count + 100)}
+                data-testid="button-item-market-show-more"
+              >
+                Show 100 more
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
