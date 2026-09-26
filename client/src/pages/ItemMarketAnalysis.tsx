@@ -73,8 +73,19 @@ function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
   return <Badge variant="outline">No sales</Badge>;
 }
 
+type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
+
+const PROFIT_EPSILON = 0.005;
+
 function normalizeItemCode(code: string) {
   return code.trim().toLocaleUpperCase();
+}
+
+function matchesProfitDirection(profit: number, filter: ProfitDirectionFilter) {
+  if (filter === "gaining") return profit > PROFIT_EPSILON;
+  if (filter === "losing") return profit < -PROFIT_EPSILON;
+  if (filter === "none") return Math.abs(profit) <= PROFIT_EPSILON;
+  return true;
 }
 
 function getMarketStatus(soldQty: number, profit: number, marginPct: number): MarketRow["marketStatus"] {
@@ -107,6 +118,7 @@ export default function ItemMarketAnalysis() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [stockGroupName, setStockGroupName] = useState("all");
+  const [profitDirection, setProfitDirection] = useState<ProfitDirectionFilter>("all");
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
@@ -119,6 +131,7 @@ export default function ItemMarketAnalysis() {
 
   useEffect(() => {
     setStockGroupName("all");
+    setProfitDirection("all");
     setExpandedItemCode(null);
     setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
   }, [selectedCompany?.id]);
@@ -161,7 +174,7 @@ export default function ItemMarketAnalysis() {
   useEffect(() => {
     setVisibleRowCount(250);
     setExpandedItemCode(null);
-  }, [queryUrl, stockGroupName, multiCompany]);
+  }, [queryUrl, stockGroupName, profitDirection, multiCompany]);
 
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
@@ -181,13 +194,30 @@ export default function ItemMarketAnalysis() {
       .filter((name): name is string => Boolean(name))
   )].sort((left, right) => left.localeCompare(right));
 
-  const rows = rawRows
+  const baseRows = rawRows
     .filter((row) => stockGroupName === "all" || row.stockGroupName?.trim() === stockGroupName)
     .sort(
       (left, right) =>
         normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
         left.companyName.localeCompare(right.companyName)
     );
+
+  // In multi-company mode, filter by the combined profit for the item code so
+  // expanding a kept item still shows every selected company's contribution.
+  const combinedProfitByItemKey = new Map<string, number>();
+  if (multiCompany && profitDirection !== "all") {
+    for (const row of baseRows) {
+      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+      combinedProfitByItemKey.set(itemKey, (combinedProfitByItemKey.get(itemKey) ?? 0) + row.profit);
+    }
+  }
+
+  const rows = baseRows.filter((row) => {
+    if (profitDirection === "all") return true;
+    if (!multiCompany) return matchesProfitDirection(row.profit, profitDirection);
+    const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+    return matchesProfitDirection(combinedProfitByItemKey.get(itemKey) ?? 0, profitDirection);
+  });
 
   const summaryTotals = rows.reduce(
     (totals, row) => {
@@ -445,6 +475,23 @@ export default function ItemMarketAnalysis() {
             ))}
           </SelectContent>
         </Select>
+        <Select
+          value={profitDirection}
+          onValueChange={(value) => {
+            setProfitDirection(value as ProfitDirectionFilter);
+            setExpandedItemCode(null);
+          }}
+        >
+          <SelectTrigger className="w-[150px]" data-testid="select-item-market-profit-direction">
+            <SelectValue placeholder="All Profit" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Profit</SelectItem>
+            <SelectItem value="gaining">Gaining</SelectItem>
+            <SelectItem value="losing">Losing</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {multiCompany && companySummaries.length > 0 && (
@@ -455,7 +502,6 @@ export default function ItemMarketAnalysis() {
             return (
               <div key={company.companyId} className="rounded-xl border bg-card p-4">
                 <div className="truncate text-sm font-semibold">{company.companyName}</div>
-                <div className="text-xs text-muted-foreground">{company.companyCode}</div>
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                   <div>
                     <div className="text-muted-foreground">Sold Qty</div>
@@ -621,7 +667,6 @@ export default function ItemMarketAnalysis() {
                                         <TableRow key={company.id}>
                                           <TableCell>
                                             <div className="font-medium">{company.name}</div>
-                                            <div className="text-xs text-muted-foreground">{company.code}</div>
                                           </TableCell>
                                           <TableCell colSpan={10} className="text-center text-xs text-muted-foreground">
                                             No import or sales activity for this item code in the selected period.
@@ -635,7 +680,6 @@ export default function ItemMarketAnalysis() {
                                       <TableRow key={company.id}>
                                         <TableCell>
                                           <div className="font-medium">{row.companyName}</div>
-                                          <div className="text-xs text-muted-foreground">{row.companyCode}</div>
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                                         <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
