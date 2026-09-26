@@ -32,6 +32,7 @@ export function registerGoldenCoastSystemAccountPresentation(app: Express): void
     const shouldFilter =
       path === "/api/ledger-accounts" ||
       path === "/api/accounts/all" ||
+      path === "/api/factory/analytics/accounts" ||
       path === "/api/accounts/all-ledger" ||
       path === "/api/accounts/voucher-sidebar";
 

@@ -19,6 +19,7 @@ import { vouchers, voucherEntries, customerBalances, customerOrders } from "@sha
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
+import { isSystemOnlyLedgerAccount } from "../../lib/systemOnlyLedgerAccounts";
 
 export async function serveAccountListForCompany(req: Request, res: Response, companyId: number) {
   try {
@@ -36,7 +37,9 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       analyticsProfile ? Promise.resolve([]) : storage.getAllSuppliers(),
       storage.getAllCustomers(companyId),
     ]);
-    const ledgers = ledgersAll.filter((a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? ""));
+    const ledgers = ledgersAll.filter(
+      (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a)
+    );
     const isFactoryCompany = currentCompany?.companyType === "factory";
     const isPropertiesCompany = currentCompany?.companyType === "properties";
     // getAllSuppliers() is not company-scoped, so foreign tenants' rows have to
