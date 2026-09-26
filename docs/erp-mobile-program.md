@@ -493,3 +493,15 @@ A probe without fixture data (for example no POS items) is reported as `skipped`
 reason, never as passed. `ERP_MOBILE_POS_QUERY` and `ERP_MOBILE_POS_LOCATION_ID` point the POS
 probe at fixture items. The report's `workflows` array and the `workflowFailures` summary join
 the route results; any workflow failure fails the run.
+
+Certification result on the `PHASE7-ERP` fixture (EN, FR, AR):
+
+- Route sweep at 320, 360, 393, 412, phone landscape, 768 and 1440: 1,449 route cases with no
+  blocking failure after the landscape fixes (landscape and tablet re-run: 414 cases, 0 failures).
+  The only remaining warning is the POS location picker's legacy `<h1>` title (pre-existing).
+- Workflow probes: 210 runs (14 probes × 5 phone viewports × 3 languages), 0 failures, 0 skipped.
+- Found and fixed by this pass: the account row edit pencil catching row taps; All Daybook's
+  desktop table and a pinned sidebar in phone landscape; hover-only Daybook row actions on touch
+  screens; the voucher entries header painting over the Payment/Receipt Save footer.
+- Outside the fourteen items: `/convergence-reconciliation` (a developer tool) still shows a
+  500px table on portrait phones.
