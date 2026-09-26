@@ -232,7 +232,9 @@ export default function ItemMarketAnalysis() {
 
   const topProfitCompanyByItem = new Map<
     string,
-    { companyName: string; profit: number; marginPct: number } | null
+    | { kind: "winner"; companyName: string; profit: number; marginPct: number }
+    | { kind: "equal" }
+    | { kind: "none" }
   >();
 
   const profitByCode = new Map<
@@ -255,18 +257,29 @@ export default function ItemMarketAnalysis() {
   }
 
   for (const [itemKey, byCompany] of profitByCode) {
-    const values = [...byCompany.values()].sort((left, right) => right.profit - left.profit);
-    if (values.length === 0) continue;
-    const topProfit = values[0].profit;
-    const tied = values.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+    // "Top Profit Company" should only identify a market that actually made
+    // positive profit. A company with no sales (profit = 0) must never beat a
+    // company that sold the item at a loss, and if nobody made money we show None.
+    const profitableValues = [...byCompany.values()]
+      .filter((entry) => entry.revenue > 0 && entry.profit > 0)
+      .sort((left, right) => right.profit - left.profit);
 
-    if (tied.length > 1) {
-      topProfitCompanyByItem.set(itemKey, null);
+    if (profitableValues.length === 0) {
+      topProfitCompanyByItem.set(itemKey, { kind: "none" });
       continue;
     }
 
-    const best = values[0];
+    const topProfit = profitableValues[0].profit;
+    const tied = profitableValues.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+
+    if (tied.length > 1) {
+      topProfitCompanyByItem.set(itemKey, { kind: "equal" });
+      continue;
+    }
+
+    const best = profitableValues[0];
     topProfitCompanyByItem.set(itemKey, {
+      kind: "winner",
       companyName: best.companyName,
       profit: best.profit,
       marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
@@ -514,10 +527,7 @@ export default function ItemMarketAnalysis() {
                 const expanded = expandedItemCode === group.itemKey;
                 const mixedCurrency = group.purchaseCurrencies.length > 1;
                 const topCompany = topProfitCompanyByItem.get(group.itemKey);
-                const topProfitClass =
-                  topCompany && topCompany.profit < 0
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-emerald-600 dark:text-emerald-400";
+                const topProfitClass = "text-emerald-600 dark:text-emerald-400";
 
                 return (
                   <Fragment key={group.itemKey}>
@@ -563,9 +573,9 @@ export default function ItemMarketAnalysis() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{group.marginPct.toFixed(1)}%</TableCell>
                       <TableCell>
-                        {topCompany === null ? (
+                        {topCompany?.kind === "equal" ? (
                           <span className="font-medium">Equal</span>
-                        ) : topCompany ? (
+                        ) : topCompany?.kind === "winner" ? (
                           <div>
                             <div className="font-medium">{topCompany.companyName}</div>
                             <div className={`text-xs tabular-nums ${topProfitClass}`}>
@@ -573,7 +583,7 @@ export default function ItemMarketAnalysis() {
                             </div>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">None</span>
                         )}
                       </TableCell>
                       <TableCell><StatusBadge status={group.marketStatus} /></TableCell>
