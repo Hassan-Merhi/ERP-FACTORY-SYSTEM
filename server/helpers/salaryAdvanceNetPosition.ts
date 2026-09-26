@@ -55,7 +55,11 @@ function postedAdvanceSql(baseColumns: boolean, historical: boolean): string {
         salary_advance_id,
         COALESCE(SUM(deduction_amount::numeric), 0) AS deduction_total
       FROM salary_advance_deductions
-      WHERE payroll_month <= $2
+      WHERE payroll_month < $2
+         OR (
+           payroll_month = $2
+           AND $3::date = (date_trunc('month', $3::date) + interval '1 month - 1 day')::date
+         )
       GROUP BY salary_advance_id
     ),
     posted AS (
@@ -96,7 +100,10 @@ function postedAdvanceSql(baseColumns: boolean, historical: boolean): string {
  *
  * For current snapshots, remaining_balance is authoritative.
  * For historical snapshots, reconstruct remaining balance from the original
- * advance less deductions through the requested payroll month.
+ * advance. Because legacy deductions store only YYYY-MM (no exact deduction
+ * date), deductions in the snapshot's own month become effective at month-end;
+ * earlier-month deductions are always included. This avoids applying a later
+ * monthly deduction to an earlier day in the same month.
  */
 export async function loadSalaryAdvanceNetPositionAdjustments(
   companyId: number,
