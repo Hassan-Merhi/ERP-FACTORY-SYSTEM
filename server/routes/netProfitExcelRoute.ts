@@ -19,6 +19,7 @@ import {
   exchangeRates,
 } from "@shared/schema";
 import { eq, and, desc, inArray, sql, isNull, gte, lte } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import {
   computeBalancesFromEntries,
   computeStats,
@@ -397,8 +398,8 @@ export function registerNetProfitExcelRoute(app: Express) {
       if (xlsxShouldIncludeSuppliers) {
         const xlsxAllSuppliers = await db
           .select()
-          .from(suppliers)
-          .where(and(eq(suppliers.companyId, companyId), isNull(suppliers.deletedAt)))
+          .from(companyScopedSuppliers)
+          .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
           .execute();
         for (const sup of xlsxAllSuppliers) {
           const balance = xlsxSupplierBals.get(sup.id) || { debit: 0, credit: 0 };
