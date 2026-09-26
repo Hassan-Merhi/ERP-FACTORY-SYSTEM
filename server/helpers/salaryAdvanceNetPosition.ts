@@ -46,6 +46,7 @@ function postedAdvanceSql(baseColumns: boolean, historical: boolean): string {
       FROM salary_advances sa
       LEFT JOIN posted p ON p.salary_advance_id = sa.id
       WHERE sa.company_id = $1
+        AND (sa.is_opening_balance = true OR p.salary_advance_id IS NOT NULL)
     `;
   }
 
@@ -92,6 +93,7 @@ function postedAdvanceSql(baseColumns: boolean, historical: boolean): string {
     LEFT JOIN deduction_totals d ON d.salary_advance_id = sa.id
     WHERE sa.company_id = $1
       ${advanceDateClause}
+      AND (sa.is_opening_balance = true OR p.salary_advance_id IS NOT NULL)
   `;
 }
 
