@@ -11,7 +11,7 @@ import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { inventory, stockItems, stockItemLocationPrices } from "@shared/schema";
-import { eq, and, or, inArray, sql } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 
 export function registerStockItemBulkRoutes(app: Express) {
   // Bulk delete stock items
