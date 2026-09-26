@@ -13,7 +13,6 @@ import {
   vouchers,
   voucherEntries,
   salesItems,
-  suppliers,
   locations,
   employees,
   exchangeRates,
