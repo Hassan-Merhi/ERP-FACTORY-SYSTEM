@@ -782,9 +782,9 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         // by the monthly summary so both views show identical quantity/value.
         const closingHistory = await calculateHistoricalLocationInventory(locationId, companyId, monthEndStr);
         const closingHistoryRow = closingHistory.find((row) => row.stockItemId === stockItemId);
-        const finalClosingQty = Math.round(
-          (closingHistoryRow ? parseFloat(closingHistoryRow.quantity) || 0 : expectedClosingQty) * 1000
-        ) / 1000;
+        const finalClosingQty =
+          Math.round((closingHistoryRow ? parseFloat(closingHistoryRow.quantity) || 0 : expectedClosingQty) * 1000) /
+          1000;
         const finalClosingValue = closingHistoryRow
           ? parseFloat(closingHistoryRow.totalValue) || 0
           : expectedClosingValue;
