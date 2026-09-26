@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ErpMobileRecordCard, ErpMobileRecordGroup, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
 import type { Unit } from "../types";
 import { fmtMoneyCurrency } from "../utils";
+import { NoteCell } from "./NoteCell";
 
 interface RentalUnitCardsProps {
   grouped: Array<[string, Unit[]]>;
@@ -139,12 +140,25 @@ function RentalUnitCard({
                 value: (unit.scheduledAmount ?? 0) > 0 ? fmtMoneyCurrency(unit.scheduledAmount, currency) : "—",
                 numeric: true,
               },
-              ...(contract.notes ? [{ label: "Note", value: contract.notes, wide: true }] : []),
             ]
           : []
       }
       onOpen={onOpen}
       openLabel={`Open unit ${unit.unitNumber}`}
+      // The contract note stays editable in place, as in the table's Note column.
+      children={
+        contract ? (
+          <div className="min-w-0 rounded-md border border-dashed px-2.5 py-2 [&>div]:max-w-none">
+            <div
+              className="mb-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+              data-i18n-ui=""
+            >
+              Note
+            </div>
+            <NoteCell contractId={contract.id} note={contract.notes} testId={`unit-${unit.id}`} />
+          </div>
+        ) : undefined
+      }
       selected={selected}
       actions={
         selectable || !unit.isShared ? (

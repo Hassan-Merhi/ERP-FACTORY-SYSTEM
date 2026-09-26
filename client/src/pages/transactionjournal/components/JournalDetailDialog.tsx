@@ -154,12 +154,17 @@ export function JournalDetailDialog({ model }: { model: TransactionJournalModel 
               variant="default"
               onClick={() => {
                 model.setDrawerOpen(false);
-                // Same destination as Daybook's Edit; the Daybook remains the fallback for types
-                // without an editor, where it explains that editing is not supported.
-                model.openInCompany(
-                  detailData.voucher.companyId,
-                  voucherEditPath(detailData.voucher) ?? `/daybook?voucherId=${detailData.voucher.id}`
-                );
+                const { voucher } = detailData;
+                // Same destination as Daybook's Edit: a purchase opens its container (the purchase
+                // order is edited there, as the purchase panel links). The Daybook remains the
+                // fallback for purchases without a container and for types without an editor.
+                const destination =
+                  voucher.voucherType === "Purchase"
+                    ? model.viewPurchaseOrder?.containerId
+                      ? `/containers/${model.viewPurchaseOrder.containerId}`
+                      : `/daybook?voucherId=${voucher.id}`
+                    : (voucherEditPath(voucher) ?? `/daybook?voucherId=${voucher.id}`);
+                model.openInCompany(voucher.companyId, destination);
               }}
               data-testid="button-detail-edit"
             >

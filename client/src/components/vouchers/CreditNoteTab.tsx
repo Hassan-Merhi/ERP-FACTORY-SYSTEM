@@ -1,4 +1,5 @@
 import { VoucherPhoneActionBar } from "@/pages/vouchers/VoucherPhoneActionBar";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { searchAny } from "@shared/searchNormalization";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -104,6 +105,8 @@ interface CreditNoteTabProps {
 
 export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps) {
   const { toast } = useToast();
+  // Same predicate as the phone save bar, so exactly one save action shows (phone landscape too).
+  const isPhoneLayout = useErpPhoneLayout();
   const { formatDisplayDate: _formatDisplayDate } = useDateFormat();
   const [items, setItems] = useState<CreditNoteItem[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<number>(0);
@@ -441,7 +444,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
               )}
             </CardTitle>
             {/* Phones save from the pinned action bar at the bottom of the tab. */}
-            <div className="hidden w-full flex-wrap gap-2 sm:flex sm:w-auto">
+            <div className={cn("w-full flex-wrap gap-2 sm:w-auto", isPhoneLayout ? "hidden" : "flex")}>
               {isEditMode && (
                 <Button type="button" variant="outline" onClick={resetForm} data-testid="button-cancel-edit">
                   Cancel

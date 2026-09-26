@@ -10,6 +10,8 @@ const harness = vi.hoisted(() => ({
   refetch: vi.fn(),
   queryError: null as Error | null,
   hiddenJournalVoucherIds: [] as number[],
+  detail: null as unknown,
+  viewEntries: [] as unknown,
 }));
 
 const journalData = {
@@ -79,9 +81,9 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (queryKey?.[0] === "/api/global/transactions/voucher-types") return { data: ["Payment", "Receipt"] };
     if (queryKey?.[0] === "/api/global/transactions" && queryKey?.[2] === "detail")
-      return { data: null, isLoading: false };
+      return { data: harness.detail, isLoading: false };
     if (queryKey?.[0] === "/api/global/transactions" && queryKey?.[2] === "view-entries")
-      return { data: [], isLoading: false };
+      return { data: harness.viewEntries, isLoading: false };
     return { data: undefined, isLoading: false, isFetching: false, refetch: harness.refetch };
   },
 }));
@@ -167,6 +169,8 @@ describe("transaction journal page behavior", () => {
     vi.clearAllMocks();
     harness.queryError = null;
     harness.hiddenJournalVoucherIds = [];
+    harness.detail = null;
+    harness.viewEntries = [];
     sessionStorage.clear();
   });
 
@@ -255,6 +259,24 @@ describe("transaction journal page behavior", () => {
 
     await waitFor(() => expect(harness.selectCompany).toHaveBeenCalledWith(expect.objectContaining({ id: 5 })));
     await waitFor(() => expect(harness.setLocation).toHaveBeenCalledWith("/daybook?voucherId=102"), { timeout: 1000 });
+  });
+
+  it("edits a purchase from the voucher detail through its container, not a voucher tab", async () => {
+    harness.detail = {
+      voucher: { ...journalData.vouchers[0], voucherType: "Purchase", voucherNumber: "PUR-101" },
+      entries: [],
+    };
+    harness.viewEntries = {
+      entries: [],
+      items: [],
+      purchaseOrder: { id: 9, poNumber: "PO-9", supplierId: 3, supplierName: "Supplier", containerId: 77 },
+    };
+    render(<TransactionJournal />);
+    fireEvent.click(screen.getByTestId("button-preview-voucher-101"));
+    fireEvent.click(await screen.findByTestId("button-detail-edit"));
+
+    await waitFor(() => expect(harness.selectCompany).toHaveBeenCalledWith(expect.objectContaining({ id: 4 })));
+    await waitFor(() => expect(harness.setLocation).toHaveBeenCalledWith("/containers/77"), { timeout: 1000 });
   });
 
   it("navigates the journal date with keyboard shortcuts and refreshes explicitly", () => {
