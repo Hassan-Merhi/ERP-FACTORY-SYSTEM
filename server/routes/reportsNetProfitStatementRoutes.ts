@@ -265,7 +265,8 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
       const indirectExpenseAccounts = companyAccounts.filter(
         (acc) =>
-          acc.accountType === "Indirect Expense" &&
+          (acc.accountType === "Indirect Expense" ||
+            (acc.accountType === "Expense" && acc.subType === "Indirect Expense")) &&
           acc.code !== "PRODUCTION_ADJUSTMENT" &&
           acc.code !== "CONSUMPTION_EXPENSE" &&
           acc.code !== "PURCHASES" &&
