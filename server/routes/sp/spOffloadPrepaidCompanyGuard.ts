@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { firstRow } from "../../lib/queryResult";
 import { requireSpCompany } from "./spHelpers";
 
 type OffloadChargeLine = {
@@ -51,20 +50,22 @@ export function registerSpOffloadPrepaidCompanyGuard(app: Express) {
           if (!prepaidIds.includes(prepaidId)) prepaidIds.push(prepaidId);
         }
 
-        for (const prepaidId of prepaidIds) {
-          const rows = await db.execute(sql`
+        if (prepaidIds.length > 0) {
+          const rows = await db.execute<{ id: number }>(sql`
             SELECT id
             FROM sp_prepaid_charges
-            WHERE id = ${prepaidId}
-              AND company_id = ${companyId}
-            LIMIT 1
+            WHERE company_id = ${companyId}
+              AND id IN (${sql.join(
+                prepaidIds.map((prepaidId) => sql`${prepaidId}`),
+                sql`, `
+              )})
           `);
-          const row = firstRow(rows) ??
-            (rows as unknown as { [key: string]: Record<string, unknown> | undefined })[0];
+          const matchedIds = new Set(rows.rows.map((row) => Number(row.id)));
 
-          if (!row) {
+          const missingPrepaidId = prepaidIds.find((prepaidId) => !matchedIds.has(prepaidId));
+          if (missingPrepaidId !== undefined) {
             return res.status(400).json({
-              message: `Prepaid charge #${prepaidId} not found for this company`,
+              message: `Prepaid charge #${missingPrepaidId} not found for this company`,
             });
           }
         }
