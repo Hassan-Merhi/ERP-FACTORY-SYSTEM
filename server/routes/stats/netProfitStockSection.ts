@@ -30,9 +30,7 @@ export async function computeStockInHand(companyId: number, toDate: string | nul
       for (const items of allHistorical) {
         for (const item of items) {
           const quantity = toInventoryDecimal(item.quantity);
-          if (quantity.isPositive()) {
-            stockOnFloor = stockOnFloor.plus(multiplyInventoryValues(quantity, item.averageRate));
-          }
+          stockOnFloor = stockOnFloor.plus(multiplyInventoryValues(quantity, item.averageRate));
         }
       }
     } else {
