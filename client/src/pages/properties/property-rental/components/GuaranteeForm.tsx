@@ -237,7 +237,7 @@ function GuaranteeForm({
               data-testid={`input-${testIdPrefix}-guarantee-date`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>{tenantPays ? "Cash account (paid from)" : "Account (where deposit is held)"}</Label>
             <AccountSearchSelect
               accounts={cashAccounts}
@@ -247,7 +247,7 @@ function GuaranteeForm({
               testId={`select-${testIdPrefix}-guarantee-cash`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>Notes</Label>
             <Textarea
               rows={2}
@@ -296,7 +296,7 @@ function GuaranteeForm({
               data-testid={`input-${testIdPrefix}-guarantee-move-date`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>{tenantPays ? "Cash account (received into)" : "Target Cash Account"}</Label>
             <AccountSearchSelect
               accounts={cashAccounts}
@@ -306,7 +306,7 @@ function GuaranteeForm({
               testId={`select-${testIdPrefix}-guarantee-move-cash`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>Notes</Label>
             <Textarea
               rows={2}
@@ -396,7 +396,7 @@ function GuaranteeForm({
               data-testid={`input-${testIdPrefix}-guarantee-rent-date`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>Notes (optional)</Label>
             <Textarea
               rows={2}

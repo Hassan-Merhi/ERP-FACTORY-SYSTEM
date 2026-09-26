@@ -327,7 +327,7 @@ export function FileStorageTab() {
         <h2 className="text-2xl font-semibold">File Storage</h2>
       </div>
 
-      <div className="flex gap-4 min-h-[600px]">
+      <div className="flex flex-col gap-4 sm:min-h-[600px] sm:flex-row">
         {/* ── Left: Folder List ────────────────────────────────────────────── */}
         <FolderList
           selectedFolderId={selectedFolderId}
@@ -349,13 +349,13 @@ export function FileStorageTab() {
               {currentFolderName}
               <span className="text-muted-foreground font-normal text-xs">({folderFiles.length} files)</span>
             </div>
-            <div className="relative">
+            <div className="relative max-sm:min-w-0 max-sm:flex-1 max-sm:basis-full">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search files..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 w-44 h-8 text-sm"
+                className="pl-8 w-full sm:w-44 h-8 text-sm"
                 data-testid="input-file-search"
               />
             </div>
@@ -406,7 +406,7 @@ export function FileStorageTab() {
                 </p>
               </div>
             ) : (
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8"></TableHead>

@@ -440,3 +440,28 @@ section.
 - The stock rule runs before the sheet opens (`ensureItemSellable`): an item that may not be
   sold (no stock, no negative-stock permission) shows the existing zero-stock alert instead.
 - Desktop and tablet POS (the grid and inventory picker) are unchanged.
+
+### R6 — Profit Check, Payroll, Rentals and Settings
+
+- **Profit Check**: on phones each item is an `ErpMobileRecordCard` with the editable Selling
+  Price (or group sell), Dubai Price and Qty to Order inputs, plus Landing Cost and Cost Profit;
+  the remaining columns (Extra/Bale, Inv. Avg Cost, Hassan price and profit, stock, sales) sit
+  behind "More details". The card reuses the table's input components and honours the column
+  visibility settings, so hidden-cost columns stay hidden. The setup row and search stack.
+- **Payroll**: employee rows become labelled cards below `sm`, worker cards wrap long names and
+  move actions to a footer row, and the Advances, Run Payroll preview, history and pay tables
+  use the card layout. Dialogs scroll inside themselves with a sticky header; the sticky header
+  rule now skips `p-0` dialogs that lay out their own header.
+- **Rentals (shops and warehouses)**: ERP phones show a summary grid and one card per unit,
+  grouped by location (tenant, outstanding or credit, monthly rent, next billing, guarantee,
+  start; scheduled amount and note under "More details"). Tapping a card opens the existing
+  unit dialog; the card footer holds "Select for payment" and delete. Add Shop stays primary and
+  Payments Log, Run Monthly Update and Select all move to the Actions menu. In the unit dialog
+  the six tabs wrap to two rows, the statement and payment lists use cards, and the payment,
+  guarantee, contract and bulk-payment forms stack to one column.
+- **Settings**: sub-tabs wrap on phones instead of scrolling sideways, File Storage stacks the
+  folder list above the files (folder actions visible without hover, files as cards), Login
+  History uses cards and the user sheet and Add User dialog stack their fields.
+- Shared fix: in a `grid-cols-1 sm:grid-cols-2` form, a bare `col-span-2` row created an
+  implicit second column that squeezed every field on phones. Such rows now span the single
+  column (ERP phones), and the rental forms use `sm:col-span-2`.

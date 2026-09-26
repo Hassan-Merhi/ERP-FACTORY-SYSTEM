@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import type { Contract, LedgerRow, Payment } from "../types";
 import { MONTH_NAMES, billingDayLabel, fmtMoney, fmtMoneyCurrency } from "../utils";
 import { useApiBase } from "../shared";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import type { AuthMe } from "@shared/apiTypes";
 
 export // ──────────────────────────────────────────────────────────
@@ -41,6 +42,10 @@ function LedgerView({
   readOnly?: boolean;
 }) {
   const apiBase = useApiBase();
+  // ERP phones: the month ledger and payment lists render as cards inside the unit dialog.
+  const ledgerCards = useMobileCardTable();
+  const paymentCards = useMobileCardTable();
+  const scheduledCards = useMobileCardTable();
   const { toast } = useToast();
   const [draftNote, setDraftNote] = useState(contract.statementNote ?? "");
   const noteChanged = draftNote !== (contract.statementNote ?? "");
@@ -305,7 +310,7 @@ function LedgerView({
         </div>
       </div>
       <div className="border rounded-md overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" {...ledgerCards.tableProps}>
           <thead className="bg-muted/50 text-xs uppercase">
             <tr>
               <th className="text-left px-3 py-2">Month</th>
@@ -385,7 +390,12 @@ function LedgerView({
                       ? `${fmtMoneyCurrency(showAsCreditRow ? paid : credit, contract.currency)} CR`
                       : fmtMoneyCurrency(outstanding, contract.currency)}
                   </td>
-                  <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.notes || ""}</td>
+                  <td
+                    className="px-3 py-1.5 text-xs text-muted-foreground"
+                    data-mobile-cell={r.notes ? undefined : "hidden"}
+                  >
+                    {r.notes || ""}
+                  </td>
                 </tr>
               );
             })}
@@ -404,7 +414,7 @@ function LedgerView({
                   ? `${fmtMoneyCurrency(Math.abs(balance), contract.currency)} CR`
                   : fmtMoneyCurrency(balance, contract.currency)}
               </td>
-              <td></td>
+              <td data-mobile-cell="hidden"></td>
             </tr>
           </tbody>
         </table>
@@ -415,7 +425,7 @@ function LedgerView({
           <summary className="text-sm font-semibold cursor-pointer" data-testid="summary-rent-payment-history">
             Rent Payment History ({postedPayments.length})
           </summary>
-          <table className="w-full text-xs mt-2">
+          <table className="w-full text-xs mt-2" {...paymentCards.tableProps}>
             <thead>
               <tr className="text-muted-foreground">
                 <th className="text-left px-2 py-1">Date</th>
@@ -432,7 +442,9 @@ function LedgerView({
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
                   <td className="px-2 py-1 text-right tabular-nums">${fmtMoney(p.amount)}</td>
-                  <td className="px-2 py-1 text-muted-foreground">{p.notes || ""}</td>
+                  <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
+                    {p.notes || ""}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -454,7 +466,7 @@ function LedgerView({
             These payments are recorded but <strong>not yet posted</strong> — the cash entry will be created on the
             payment date.
           </p>
-          <table className="w-full text-xs">
+          <table className="w-full text-xs" {...scheduledCards.tableProps}>
             <thead>
               <tr className="text-muted-foreground">
                 <th className="text-left px-2 py-1">Due Date</th>
@@ -475,7 +487,9 @@ function LedgerView({
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
                   <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
-                  <td className="px-2 py-1 text-muted-foreground">{p.notes || ""}</td>
+                  <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
+                    {p.notes || ""}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -519,7 +533,9 @@ function LedgerView({
                     {MONTH_NAMES[p.forMonth]} {p.forYear}
                   </td>
                   <td className="px-2 py-1 text-right tabular-nums font-medium">${fmtMoney(p.amount)}</td>
-                  <td className="px-2 py-1 text-muted-foreground">{p.notes || ""}</td>
+                  <td className="px-2 py-1 text-muted-foreground" data-mobile-cell={p.notes ? undefined : "hidden"}>
+                    {p.notes || ""}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -60,7 +60,11 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
       return;
     }
     if (form.password.length < 4) {
-      toast({ title: "Password too short", description: "Password must be at least 4 characters", variant: "destructive" });
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 4 characters",
+        variant: "destructive",
+      });
       return;
     }
     requestPasswordConfirmation(() => createMutation.mutate(form), "Create User");
@@ -122,7 +126,7 @@ export function AddUserDialog({ open, onOpenChange }: AddUserDialogProps) {
 
             <div className="space-y-2 pt-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">App Access</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <p className="text-sm font-medium">ERP</p>

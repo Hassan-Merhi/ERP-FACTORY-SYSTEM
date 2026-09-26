@@ -45,7 +45,7 @@ export function FolderList({
     allFiles.filter((f) => (id === null ? f.folderId == null : f.folderId === id)).length;
 
   return (
-    <div className="w-52 shrink-0 flex flex-col gap-1">
+    <div className="w-full sm:w-52 shrink-0 flex flex-col gap-1">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1 mb-1">Folders</p>
 
       {/* Unfiled */}
@@ -82,7 +82,7 @@ export function FolderList({
                 {fileCountForFolder(folder.id)}
               </Badge>
             </button>
-            <div className="invisible group-hover:visible flex items-center gap-0.5 shrink-0">
+            <div className="invisible group-hover:visible [@media(hover:none)]:visible flex items-center gap-0.5 shrink-0">
               <Button
                 size="icon"
                 variant="ghost"
