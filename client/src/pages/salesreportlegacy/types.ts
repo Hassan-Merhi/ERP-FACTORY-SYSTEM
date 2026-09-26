@@ -54,3 +54,19 @@ export type GroupingType = "daily" | "monthly" | "yearly";
 export type ProfitFilter = "all" | "positive" | "negative";
 
 // Format number with commas, remove .00 if whole - handles string inputs
+
+export interface SalesCogsReconciliation {
+  openingStock: number;
+  stockReceived: number;
+  noteInventoryNet: number;
+  stockAdjustmentNet: number;
+  closingStock: number;
+  totalSales: number;
+  storedCogs: number;
+  reconciledCogs: number;
+  reconciliation: number;
+  storedCostProfit: number;
+  adjustedCostProfit: number;
+  formula: string;
+}
+
