@@ -17,9 +17,7 @@ function parseRows(rows: AdvanceRow[]): ManagedEmployeeAdvance[] {
 }
 
 function postedAdvanceSql(baseColumns: boolean, historical: boolean): string {
-  const postedDebit = baseColumns
-    ? "COALESCE(ve.base_debit_amount, ve.debit_amount)"
-    : "ve.debit_amount";
+  const postedDebit = baseColumns ? "COALESCE(ve.base_debit_amount, ve.debit_amount)" : "ve.debit_amount";
   const advanceDateClause = historical ? "AND sa.advance_date <= $3" : "";
   const voucherDateClause = historical ? "AND v.voucher_date <= $3" : "";
 
