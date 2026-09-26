@@ -153,247 +153,6 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
     }
   });
 
-  // ── Factory Analytics: Customer orders grouped by customer ──────────────
-  app.get("/api/factory/analytics/customer-orders", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const {
-        startDate,
-        endDate,
-        item,
-        customer,
-        destination,
-        location,
-        status = "all",
-        page = "1",
-        pageSize = "50",
-      } = req.query as Record<string, string>;
-
-      if (!["LOADING", "VERIFIED", "FINALIZED", "all"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status filter" });
-      }
-
-      const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
-      const safePageSize = Math.min(100, Math.max(10, Number.parseInt(pageSize, 10) || 50));
-      const offset = (safePage - 1) * safePageSize;
-
-      const orderFilters = [
-        sql`co.company_id = ${companyId}`,
-        sql`co.deleted_at IS NULL`,
-        status === "all"
-          ? sql`co.status IN ('LOADING', 'VERIFIED', 'FINALIZED')`
-          : sql`co.status = ${status}`,
-      ];
-      if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
-      if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
-      if (customer?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(c.legal_name, '')) LIKE ${`%${customer.trim().toLowerCase().slice(0, 100)}%`}`
-        );
-      }
-      if (destination?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(co.destination, '')) LIKE ${`%${destination.trim().toLowerCase().slice(0, 100)}%`}`
-        );
-      }
-      if (location?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
-        );
-      }
-
-      const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
-      const itemSearch = item ? normalizeSearch(item) : "";
-      if (itemSearch) {
-        orderFilters.push(sql`EXISTS (
-          SELECT 1
-          FROM customer_order_lines col_filter
-          WHERE col_filter.order_id = co.id
-            AND regexp_replace(
-              lower(COALESCE(col_filter.article_code, '') || COALESCE(col_filter.bale_name, '')),
-              '[.\\s-]+',
-              '',
-              'g'
-            ) LIKE ${`%${itemSearch}%`}
-        )`);
-      }
-
-      const queryResult = await db.execute(sql`
-        WITH filtered_orders AS MATERIALIZED (
-          SELECT
-            co.id AS order_id,
-            co.order_date,
-            co.customer_id,
-            COALESCE(c.legal_name, 'Unknown customer') AS customer_name,
-            co.invoice_number,
-            co.container_number,
-            co.status,
-            COALESCE(SUM(col.qty), 0)::int AS total_bales,
-            COALESCE(SUM(col.total_weight::numeric), 0) AS total_weight_kg,
-            COALESCE(SUM(
-              CASE
-                WHEN col.pricing_mode = 'per_kg'
-                  AND COALESCE(col.price_per_kg::numeric, 0) > 0
-                THEN COALESCE(col.price_per_kg::numeric, 0)
-                     * COALESCE(col.total_weight::numeric, 0)
-                ELSE COALESCE(col.total_price::numeric, 0)
-              END
-            ), 0) AS invoice_total
-          FROM customer_orders co
-          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = ${companyId}
-          LEFT JOIN locations l ON l.id = co.location_id
-          LEFT JOIN customer_order_lines col ON col.order_id = co.id
-          WHERE ${sql.join(orderFilters, sql` AND `)}
-          GROUP BY
-            co.id,
-            co.order_date,
-            co.customer_id,
-            c.legal_name,
-            co.invoice_number,
-            co.container_number,
-            co.status
-        ),
-        customer_rows AS MATERIALIZED (
-          SELECT
-            fo.customer_id,
-            MAX(fo.customer_name) AS customer_name,
-            COUNT(*)::int AS invoice_count,
-            COALESCE(SUM(fo.total_bales), 0)::int AS total_bales,
-            COALESCE(SUM(fo.total_weight_kg), 0) AS total_weight_kg,
-            COALESCE(SUM(fo.invoice_total), 0) AS invoice_total,
-            MAX(fo.order_date) AS latest_order_date
-          FROM filtered_orders fo
-          GROUP BY fo.customer_id
-        ),
-        paged_customers AS MATERIALIZED (
-          SELECT *
-          FROM customer_rows
-          ORDER BY invoice_total DESC, latest_order_date DESC, customer_name
-          LIMIT ${safePageSize}
-          OFFSET ${offset}
-        )
-        SELECT
-          jsonb_build_object(
-            'totalOrders', (SELECT COUNT(*)::int FROM filtered_orders),
-            'uniqueCustomers', (SELECT COUNT(*)::int FROM customer_rows),
-            'totalBales', COALESCE((SELECT SUM(total_bales) FROM filtered_orders), 0),
-            'totalWeightKg', COALESCE((SELECT SUM(total_weight_kg) FROM filtered_orders), 0),
-            'totalInvoiceAmount', COALESCE((SELECT SUM(invoice_total) FROM filtered_orders), 0)
-          ) AS summary,
-          COALESCE((
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'customerId', pc.customer_id,
-                'customerName', pc.customer_name,
-                'invoiceCount', pc.invoice_count,
-                'totalBales', pc.total_bales,
-                'totalWeightKg', pc.total_weight_kg,
-                'invoiceTotal', pc.invoice_total,
-                'latestOrderDate', pc.latest_order_date,
-                'orders', COALESCE((
-                  SELECT jsonb_agg(
-                    jsonb_build_object(
-                      'orderId', fo.order_id,
-                      'invoiceNumber', fo.invoice_number,
-                      'containerNumber', fo.container_number,
-                      'status', fo.status,
-                      'orderDate', fo.order_date,
-                      'totalBales', fo.total_bales,
-                      'totalWeightKg', fo.total_weight_kg,
-                      'invoiceTotal', fo.invoice_total
-                    )
-                    ORDER BY fo.order_date DESC, fo.order_id DESC
-                  )
-                  FROM filtered_orders fo
-                  WHERE fo.customer_id IS NOT DISTINCT FROM pc.customer_id
-                ), '[]'::jsonb)
-              )
-              ORDER BY pc.invoice_total DESC, pc.latest_order_date DESC, pc.customer_name
-            )
-            FROM paged_customers pc
-          ), '[]'::jsonb) AS rows,
-          (SELECT COUNT(*)::int FROM customer_rows) AS total_rows
-      `);
-
-      type CustomerOrderSummary = {
-        totalOrders?: number | string;
-        uniqueCustomers?: number | string;
-        totalBales?: number | string;
-        totalWeightKg?: number | string;
-        totalInvoiceAmount?: number | string;
-      };
-      type CustomerOrderInvoice = {
-        orderId: number | string;
-        invoiceNumber: string | null;
-        containerNumber: string | null;
-        status: string;
-        orderDate: string;
-        totalBales: number | string;
-        totalWeightKg: number | string;
-        invoiceTotal: number | string;
-      };
-      type CustomerOrderCustomer = {
-        customerId: number | null;
-        customerName: string;
-        invoiceCount: number | string;
-        totalBales: number | string;
-        totalWeightKg: number | string;
-        invoiceTotal: number | string;
-        latestOrderDate: string;
-        orders: CustomerOrderInvoice[] | null;
-      };
-      type CustomerOrderAggregate = {
-        summary: CustomerOrderSummary | null;
-        rows: CustomerOrderCustomer[] | null;
-        total_rows: number | string;
-      };
-
-      const [aggregate] = resultRows<CustomerOrderAggregate>(queryResult);
-      const rawSummary = aggregate?.summary ?? {};
-      const totalRows = Number(aggregate?.total_rows ?? 0);
-      const rows = (aggregate?.rows ?? []).map((customerRow) => ({
-        customerId: customerRow.customerId,
-        customerName: customerRow.customerName,
-        invoiceCount: Number(customerRow.invoiceCount || 0),
-        totalBales: Number(customerRow.totalBales || 0),
-        totalWeightKg: Number(customerRow.totalWeightKg || 0),
-        invoiceTotal: Number(customerRow.invoiceTotal || 0),
-        latestOrderDate: customerRow.latestOrderDate,
-        orders: (customerRow.orders ?? []).map((order) => ({
-          orderId: Number(order.orderId),
-          invoiceNumber: order.invoiceNumber,
-          containerNumber: order.containerNumber,
-          status: order.status,
-          orderDate: order.orderDate,
-          totalBales: Number(order.totalBales || 0),
-          totalWeightKg: Number(order.totalWeightKg || 0),
-          invoiceTotal: Number(order.invoiceTotal || 0),
-        })),
-      }));
-
-      res.json({
-        summary: {
-          totalOrders: Number(rawSummary.totalOrders ?? 0),
-          uniqueCustomers: Number(rawSummary.uniqueCustomers ?? 0),
-          totalBales: Number(rawSummary.totalBales ?? 0),
-          totalWeightKg: Number(rawSummary.totalWeightKg ?? 0),
-          totalInvoiceAmount: Number(rawSummary.totalInvoiceAmount ?? 0),
-        },
-        rows,
-        pagination: {
-          page: safePage,
-          pageSize: safePageSize,
-          totalRows,
-          totalPages: Math.max(1, Math.ceil(totalRows / safePageSize)),
-        },
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
   // ── Factory Analytics: Customer order item profitability ────────────────
   app.get("/api/factory/analytics/customer-order-items", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -427,9 +186,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       const orderFilters = [
         sql`co.company_id = ${companyId}`,
         sql`co.deleted_at IS NULL`,
-        status === "all"
-          ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
-          : sql`co.status = ${status}`,
+        status === "all" ? sql`co.status IN ('VERIFIED', 'FINALIZED')` : sql`co.status = ${status}`,
       ];
       if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
       if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
@@ -444,12 +201,14 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         );
       }
       if (location?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
-        );
+        orderFilters.push(sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`);
       }
 
-      const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
+      const normalizeSearch = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[.\s-]+/g, "")
+          .slice(0, 100);
       const itemSearch = item ? normalizeSearch(item) : "";
       const lineFilter = itemSearch
         ? sql`regexp_replace(
