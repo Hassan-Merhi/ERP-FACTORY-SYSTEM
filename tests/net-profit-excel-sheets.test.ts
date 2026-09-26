@@ -151,11 +151,23 @@ describe("net profit statistics", () => {
     expect(stats.directExpDetails.map((row) => row.id)).toEqual([1, 2, 3]);
   });
 
-  it("keeps the stock adjustment accounts out of indirect expenses", () => {
+  it("keeps inventory valuation and return accounts out of indirect expenses", () => {
     const ctx = context([
       account({ id: 1, code: "RENT", name: "Rent", accountType: "Indirect Expense" }),
       account({ id: 2, code: "PRODUCTION_ADJUSTMENT", name: "Production", accountType: "Indirect Expense" }),
       account({ id: 3, code: "CONSUMPTION_EXPENSE", name: "Consumption", accountType: "Indirect Expense" }),
+      account({
+        id: 4,
+        code: "STOCK_ADJUSTMENT",
+        name: "Stock Adjustment (Production/Consumption)",
+        accountType: "Indirect Expense",
+      }),
+      account({
+        id: 5,
+        code: "INVENTORY",
+        name: "Credit Note - Customer Return",
+        accountType: "Indirect Expense",
+      }),
     ]);
 
     const stats = computeStats(
@@ -164,14 +176,16 @@ describe("net profit statistics", () => {
         [1, 120, 0],
         [2, 5000, 0],
         [3, 4000, 0],
+        [4, 57.16, 212.16],
+        [5, 112.09, 0],
       ]),
       0,
       0,
       0
     );
 
-    // Stock adjustments are already reflected in opening and closing stock;
-    // counting them again here would double the cost of goods sold.
+    // These movements are already represented by stock/COGS. Counting them as
+    // operating expenses would double-count inventory valuation changes.
     expect(stats.indirectExpTotal).toBe(120);
     expect(stats.indirectExpDetails.map((row) => row.id)).toEqual([1]);
   });
