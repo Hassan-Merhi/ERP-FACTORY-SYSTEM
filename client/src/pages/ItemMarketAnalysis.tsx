@@ -158,6 +158,11 @@ export default function ItemMarketAnalysis() {
     refetchOnWindowFocus: false,
   });
 
+  useEffect(() => {
+    setVisibleRowCount(250);
+    setExpandedItemCode(null);
+  }, [queryUrl, stockGroupName, multiCompany]);
+
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
       <div className="container mx-auto p-4 sm:p-6">
@@ -330,11 +335,6 @@ export default function ItemMarketAnalysis() {
   const visibleRows = rows.slice(0, visibleRowCount);
   const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
   const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
-
-  useEffect(() => {
-    setVisibleRowCount(250);
-    setExpandedItemCode(null);
-  }, [queryUrl, stockGroupName, multiCompany]);
 
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
