@@ -1,0 +1,44 @@
+name: Prettier Diagnostic
+
+on:
+  push:
+    branches:
+      - fix/erp-net-position-employee-advance-assets
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download repository source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Show exact Prettier diff
+        run: |
+          set -euo pipefail
+          targets=(
+            server/routes/stats/statsNetProfitRoutes.ts
+            tests/employee-net-position-helper.test.ts
+          )
+          for target in "${targets[@]}"; do
+            cp "$target" "/tmp/$(basename "$target").before"
+          done
+          node node_modules/prettier/bin/prettier.cjs --write "${targets[@]}"
+          for target in "${targets[@]}"; do
+            echo "__PRETTIER_DIFF_START__ $target"
+            diff -u "/tmp/$(basename "$target").before" "$target" || true
+            echo "__PRETTIER_DIFF_END__ $target"
+          done
