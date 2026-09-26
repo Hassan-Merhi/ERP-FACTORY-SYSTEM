@@ -66,6 +66,19 @@ export function CompaniesTab() {
     onSuccess: () => {
       toast({ title: "Success", description: editingCompany ? "Company updated." : "Company created." });
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+
+      // Supplier visibility for PO Import depends on companies.parentCompanyId.
+      // A cached empty supplier list can otherwise survive for the normal
+      // 30-minute reference-data stale window after creating/editing a company.
+      // Remove both the strict and inherited supplier caches so the next picker
+      // request is guaranteed to use the relationship just saved.
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const first = query.queryKey[0];
+          return typeof first === "string" && first.startsWith("/api/suppliers");
+        },
+      });
+
       setIsCompanyDialogOpen(false);
       setEditingCompany(null);
       companyForm.reset({
