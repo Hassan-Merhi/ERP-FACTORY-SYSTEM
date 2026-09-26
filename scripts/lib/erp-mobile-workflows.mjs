@@ -11,6 +11,9 @@
 
 const VOUCHER_TYPES = ["payment", "receipt", "journal", "transfer", "transferorder", "adjustment", "creditnote"];
 
+/** Voucher types whose save action only exists once the voucher has a line (desktop too). */
+const EMPTY_UNTIL_LINES = new Set(["transferorder"]);
+
 class SkipWorkflow extends Error {}
 
 function createContext(page, { baseUrl, timeoutMs, settle }) {
@@ -186,7 +189,16 @@ export const ERP_MOBILE_WORKFLOWS = [
     async run(ctx) {
       await ctx.goto("/pos");
       const search = '[data-testid="input-mobile-product-search"]';
-      if (!(await ctx.exists(search, { timeout: 10000 }))) ctx.skip("POS phone layout not available (POS not set up)");
+      if (!(await ctx.exists(search, { timeout: 6000 }))) {
+        // Users with several POS locations pick one first.
+        await ctx.tap(
+          process.env.ERP_MOBILE_POS_LOCATION_ID
+            ? `[data-testid="card-pos-location-${process.env.ERP_MOBILE_POS_LOCATION_ID}"]`
+            : '[data-testid^="card-pos-location-"]',
+          { timeout: 2000 }
+        );
+        if (!(await ctx.exists(search, { timeout: 8000 }))) ctx.skip("POS phone layout not available (POS not set up)");
+      }
       await ctx.type(search, process.env.ERP_MOBILE_POS_QUERY || "a");
       if (!(await ctx.tap('[data-testid^="button-mobile-select-item-"]'))) ctx.skip("no sellable POS items in fixture");
       if (!(await ctx.exists('[data-testid="sheet-pos-mobile-item"]'))) {
@@ -209,7 +221,8 @@ export const ERP_MOBILE_WORKFLOWS = [
     async run(ctx) {
       await ctx.goto("/accounts");
       await ctx.assertPhoneLayout("account list");
-      if (!(await ctx.tap('[data-testid^="row-account-"]'))) ctx.skip("no accounts in fixture");
+      // Tap the account name, where a thumb lands on the row.
+      if (!(await ctx.tap('[data-testid^="row-account-"] td:first-child span.truncate'))) ctx.skip("no accounts in fixture");
       await ctx.require('[data-testid="account-statement-cards"]', "statement did not render phone cards", { timeout: 10000 });
       await ctx.assertPhoneLayout("account statement");
     },
@@ -272,6 +285,7 @@ export const ERP_MOBILE_WORKFLOWS = [
     title: "Edits & Activity",
     async run(ctx) {
       await ctx.goto("/daybook");
+      await ctx.exists('#main-content [role="tab"]', { timeout: 8000 });
       const tabs = await ctx.page.$$('#main-content [role="tab"]');
       if (tabs.length < 2) ctx.skip("daybook tabs not available");
       await tabs[1].click();
@@ -318,7 +332,11 @@ export const ERP_MOBILE_WORKFLOWS = [
             return r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= vh + 2;
           });
         });
-        if (!reachable) ctx.fail(`voucher ${type}: no Save action reachable at the end of the form`);
+        if (!reachable && EMPTY_UNTIL_LINES.has(type)) {
+          ctx.note(`${type}: no lines yet, Process appears with the first item (as on desktop)`);
+        } else if (!reachable) {
+          ctx.fail(`voucher ${type}: no Save action reachable at the end of the form`);
+        }
       }
     },
   },
