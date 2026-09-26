@@ -273,6 +273,10 @@ async function readState(page, route, workspace) {
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
       state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      // Agents follows the ERP phone model (useErpPhoneLayout): short touch landscape is a phone too.
+      state.phoneLayout = window.matchMedia(
+        "(max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px)",
+      ).matches;
     } else if (currentRoute === "/account-groups") {
       const anchor = document.querySelector('[data-testid="button-create-group"]');
       const pane = anchor?.closest(".w-72");
@@ -295,7 +299,8 @@ async function readState(page, route, workspace) {
 function assertState(state, viewport, route, workspace) {
   const failures = [];
   const label = `${viewport.name} ${route}`;
-  const shouldStack = viewport.width <= 767;
+  // Agents switches to its phone layout with the ERP phone model, which includes phone landscape.
+  const shouldStack = viewport.width <= 767 || (route.endsWith("/agents") && state.phoneLayout === true);
 
   if (!state.main) failures.push(`${label}: main content is not visible`);
   if (state.actualPath.startsWith("/login")) failures.push(`${label}: authenticated session returned to login`);
