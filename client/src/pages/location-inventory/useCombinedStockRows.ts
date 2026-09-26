@@ -62,8 +62,10 @@ export function useCombinedStockRows({
       row.qtyByLocationName[locName] = (row.qtyByLocationName[locName] || 0) + qty;
       row.totalQty += qty;
       const avgRate = parseFloat(item.averageRate || "0");
-      row.weightedCostSum += qty * avgRate;
-      row.totalValue += parseFloat(item.totalValue || "0");
+      const signedValue = qty * avgRate;
+      row.weightedCostSum += signedValue;
+      // Match Net Position: negative stock must reduce stock value, not add to it.
+      row.totalValue += signedValue;
     });
     return [...itemMap.values()].map((row) => ({
       ...row,
@@ -86,7 +88,7 @@ export function useCombinedStockRows({
           if (!allStockCategoryFilter.includes(rowCatId)) return false;
         }
         if (allStockLocationFilter) {
-          if (!((row.qtyByLocationName[allStockLocationFilter] || 0) > 0)) return false;
+          if ((row.qtyByLocationName[allStockLocationFilter] || 0) === 0) return false;
         }
         if (allStockSearchTerm) {
           return searchAny(allStockSearchTerm, row.stockItemName, row.stockItemCode);
