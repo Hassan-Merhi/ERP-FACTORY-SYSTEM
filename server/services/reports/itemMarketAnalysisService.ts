@@ -82,27 +82,19 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND ($4::date IS NULL OR v.voucher_date <= $4::date)
       GROUP BY s.stock_item_id
     ),
-    note_adjustments AS (
+    credit_note_adjustments AS (
       SELECT cni.stock_item_id,
+        COALESCE(SUM(-cni.quantity::numeric), 0) AS sold_qty,
+        COALESCE(SUM(-cni.total_value::numeric), 0) AS revenue,
+        COALESCE(SUM(-(cni.quantity::numeric * cni.inventory_cost::numeric)), 0) AS historical_cost,
         COALESCE(SUM(
-          (CASE WHEN v.voucher_type = 'Credit Note' THEN -1 ELSE 1 END) * cni.quantity::numeric
-        ), 0) AS sold_qty,
-        COALESCE(SUM(
-          (CASE WHEN v.voucher_type = 'Credit Note' THEN -1 ELSE 1 END) * cni.total_value::numeric
-        ), 0) AS revenue,
-        COALESCE(SUM(
-          (CASE WHEN v.voucher_type = 'Credit Note' THEN -1 ELSE 1 END) *
-          (cni.quantity::numeric * cni.inventory_cost::numeric)
-        ), 0) AS historical_cost,
-        COALESCE(SUM(
-          (CASE WHEN v.voucher_type = 'Credit Note' THEN -1 ELSE 1 END) *
-          (cni.total_value::numeric - (cni.quantity::numeric * cni.inventory_cost::numeric))
+          -(cni.total_value::numeric - (cni.quantity::numeric * cni.inventory_cost::numeric))
         ), 0) AS profit
       FROM eligible_items e
       JOIN credit_note_items cni ON cni.stock_item_id = e.id
       JOIN vouchers v ON v.id = cni.voucher_id
       WHERE v.company_id = $1
-        AND v.voucher_type IN ('Credit Note', 'Debit Note')
+        AND v.voucher_type = 'Credit Note'
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional, false) = false
         AND cni.location_id = ANY($2::int[])
@@ -119,7 +111,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       FROM (
         SELECT stock_item_id, sold_qty, revenue, historical_cost, profit FROM sales_base
         UNION ALL
-        SELECT stock_item_id, sold_qty, revenue, historical_cost, profit FROM note_adjustments
+        SELECT stock_item_id, sold_qty, revenue, historical_cost, profit FROM credit_note_adjustments
       ) activity
       GROUP BY activity.stock_item_id
     )
