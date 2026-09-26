@@ -1,5 +1,5 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -440,7 +440,7 @@ export default function PropertyRentalPage({
                         const unitNumBg = `rgba(${p.r},${p.g},${p.b},0.18)`;
                         const unitNumColor = p.headerBg;
                         return (
-                          <>
+                          <Fragment key={group}>
                             <tr key={`grp-${group}`} className="border-t">
                               <td
                                 colSpan={12}
@@ -595,7 +595,7 @@ export default function PropertyRentalPage({
                                 </td>
                               </tr>
                             ))}
-                          </>
+                          </Fragment>
                         );
                       })}
                     </tbody>

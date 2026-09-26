@@ -14,6 +14,10 @@ const VOUCHER_TYPES = ["payment", "receipt", "journal", "transfer", "transferord
 /** Voucher types whose save action only exists once the voucher has a line (desktop too). */
 const EMPTY_UNTIL_LINES = new Set(["transferorder"]);
 
+/** Save / process controls of the voucher forms (phone save bar, payment footer, desktop rows). */
+const SAVE_CONTROLS =
+  '[data-voucher-sticky-actions] button[data-testid$="-save"], [data-testid="button-save-voucher"], #main-content [data-testid^="button-save"], #main-content [data-testid^="button-process"]';
+
 class SkipWorkflow extends Error {}
 
 function createContext(page, { baseUrl, timeoutMs, settle }) {
@@ -249,12 +253,16 @@ export const ERP_MOBILE_WORKFLOWS = [
           ctx.fail("sidebar toggle is missing in landscape");
           return;
         }
-        if (!(await ctx.tap('[data-sidebar="sidebar"] a[href="/payroll"], [data-slot="sheet-content"] a[href="/payroll"]'))) {
-          ctx.fail("sidebar does not offer Payroll in landscape");
+        // Payroll sits in a collapsed group there; Daybook is a top-level link.
+        if (!(await ctx.tap('[data-sidebar="sidebar"] a[href="/daybook"]'))) {
+          ctx.fail("sidebar does not offer Daybook in landscape");
           return;
         }
         const landscapePath = await ctx.page.evaluate(() => window.location.pathname);
-        if (landscapePath !== "/payroll") ctx.fail(`sidebar link navigated to ${landscapePath}`);
+        if (landscapePath !== "/daybook") ctx.fail(`sidebar link navigated to ${landscapePath}`);
+        if (await ctx.exists('[data-sidebar="sidebar"][data-mobile="true"]', { timeout: 500 })) {
+          ctx.fail("sidebar stayed open after navigation");
+        }
         return;
       }
       if (!(await ctx.tap('[data-testid="mobile-nav-more"]'))) {
@@ -293,7 +301,15 @@ export const ERP_MOBILE_WORKFLOWS = [
     async run(ctx) {
       await ctx.goto("/daybook");
       await ctx.assertPhoneLayout("daybook");
-      if (!(await ctx.tap('[data-testid^="row-voucher-mobile-"] .cursor-pointer'))) ctx.skip("no vouchers on the fixture date");
+      // Portrait phones list vouchers as tappable rows; phone landscape shows the list table,
+      // whose View button opens the same voucher dialog.
+      const opened =
+        (await ctx.tap('[data-testid^="row-voucher-mobile-"] .cursor-pointer', { timeout: 4000 })) ||
+        (await ctx.tap(
+          '[data-testid^="button-view-"]:not([data-testid*="offload"]):not([data-testid*="mobile"]):not([data-testid$="-detailed"]):not([data-testid$="-condensed"])',
+          { timeout: 2000 }
+        ));
+      if (!opened) ctx.skip("no vouchers on the fixture date");
       if (!(await ctx.exists('[role="dialog"]'))) {
         ctx.fail("tapping a voucher did not open it");
         return;
@@ -347,22 +363,30 @@ export const ERP_MOBILE_WORKFLOWS = [
           continue;
         }
         await ctx.assertPhoneLayout(`voucher ${type}`);
-        const reachable = await ctx.page.evaluate(() => {
-          const main = document.getElementById("main-content");
-          main?.scrollTo({ top: main.scrollHeight });
+        // The save control can be scrolled into view and is not covered (bottom nav, sticky bars).
+        await ctx.exists(SAVE_CONTROLS, { timeout: EMPTY_UNTIL_LINES.has(type) ? 1500 : 5000 });
+        const save = await ctx.page.evaluate((saveControls) => {
           const vh = window.innerHeight;
-          const candidates = [
-            ...document.querySelectorAll('[data-voucher-sticky-actions] button, #main-content form button[type="submit"]'),
-          ];
-          return candidates.some((b) => {
-            const r = b.getBoundingClientRect();
-            return r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= vh + 2;
-          });
-        });
+          const seen = [];
+          for (const button of document.querySelectorAll(saveControls)) {
+            if (button.getBoundingClientRect().height === 0) continue;
+            button.scrollIntoView({ block: "nearest" });
+            const r = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            // A disabled button ignores pointer events, so the hit lands on its container; an
+            // overlay covering it (bottom nav, another sticky bar) is never an ancestor.
+            const uncovered = Boolean(hit && (hit === button || button.contains(hit) || hit.contains(button)));
+            if (r.top >= 0 && r.bottom <= vh + 2 && uncovered) return { ok: true };
+            const testId = button.getAttribute("data-testid");
+            seen.push(`${testId} at ${Math.round(r.top)}-${Math.round(r.bottom)}/${vh}${uncovered ? "" : ` under ${hit?.tagName.toLowerCase()}`}`);
+          }
+          return { ok: false, detail: seen.join(", ") || "none rendered" };
+        }, SAVE_CONTROLS);
+        const reachable = save.ok;
         if (!reachable && EMPTY_UNTIL_LINES.has(type)) {
           ctx.note(`${type}: no lines yet, Process appears with the first item (as on desktop)`);
         } else if (!reachable) {
-          ctx.fail(`voucher ${type}: no Save action reachable at the end of the form`);
+          ctx.fail(`voucher ${type}: no reachable, uncovered Save action (${save.detail})`);
         }
       }
     },
