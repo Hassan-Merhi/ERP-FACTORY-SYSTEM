@@ -222,6 +222,8 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
       return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
     if (vchType === "pos") return txn.voucherId ? `/pos/edit/${txn.voucherId}` : null;
     if (vchType === "stock transfer") return txn.voucherId ? `/vouchers/${txn.voucherId}/edit` : null;
+    if (vchType === "credit note" || vchType === "debit note")
+      return txn.voucherId ? `/vouchers?tab=creditnote&edit=${txn.voucherId}` : null;
     if (vchType === "po offload") return txn.poId ? `/purchase-orders/${txn.poId}` : null;
     return null;
   };
@@ -297,6 +299,8 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
       return "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
     if (t === "production") return "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300";
     if (t === "consumption") return "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300";
+    if (t === "credit note" || t === "debit note")
+      return "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/40 dark:text-fuchsia-300";
     if (t === "sales") return "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
     return "bg-muted text-muted-foreground";
   };

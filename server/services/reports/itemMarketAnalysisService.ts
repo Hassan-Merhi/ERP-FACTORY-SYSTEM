@@ -69,7 +69,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(s.quantity::numeric), 0) AS sold_qty,
         COALESCE(SUM(s.total_sales::numeric), 0) AS revenue,
         COALESCE(SUM(s.total_cost::numeric), 0) AS historical_cost,
-        COALESCE(SUM(s.profit::numeric), 0) AS profit
+        COALESCE(SUM(s.total_sales::numeric - s.total_cost::numeric), 0) AS profit
       FROM eligible_items e
       JOIN sales_items s ON s.stock_item_id = e.id
       JOIN vouchers v ON v.id = s.voucher_id
