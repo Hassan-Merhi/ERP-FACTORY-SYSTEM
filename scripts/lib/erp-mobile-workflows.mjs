@@ -223,7 +223,17 @@ export const ERP_MOBILE_WORKFLOWS = [
       await ctx.assertPhoneLayout("account list");
       // Tap the account name, where a thumb lands on the row.
       if (!(await ctx.tap('[data-testid^="row-account-"] td:first-child span.truncate'))) ctx.skip("no accounts in fixture");
-      await ctx.require('[data-testid="account-statement-cards"]', "statement did not render phone cards", { timeout: 10000 });
+      // Portrait phones use statement cards; phone landscape is wider than md and keeps the
+      // statement table, which must then fit (checked below).
+      if (ctx.viewportWidth < 768) {
+        await ctx.require('[data-testid="account-statement-cards"]', "statement did not render phone cards", {
+          timeout: 10000,
+        });
+      } else {
+        await ctx.require('[data-testid="account-statement-cards"], #main-content table', "statement did not open", {
+          timeout: 10000,
+        });
+      }
       await ctx.assertPhoneLayout("account statement");
     },
   },
@@ -233,6 +243,20 @@ export const ERP_MOBILE_WORKFLOWS = [
     title: "Mobile navigation: More opens the page menu",
     async run(ctx) {
       await ctx.goto("/tracking");
+      if (ctx.viewportWidth >= 640) {
+        // Phone landscape (sm and up) navigates through the sidebar, not the bottom bar.
+        if (!(await ctx.tap('[data-testid="button-sidebar-toggle"]'))) {
+          ctx.fail("sidebar toggle is missing in landscape");
+          return;
+        }
+        if (!(await ctx.tap('[data-sidebar="sidebar"] a[href="/payroll"], [data-slot="sheet-content"] a[href="/payroll"]'))) {
+          ctx.fail("sidebar does not offer Payroll in landscape");
+          return;
+        }
+        const landscapePath = await ctx.page.evaluate(() => window.location.pathname);
+        if (landscapePath !== "/payroll") ctx.fail(`sidebar link navigated to ${landscapePath}`);
+        return;
+      }
       if (!(await ctx.tap('[data-testid="mobile-nav-more"]'))) {
         ctx.fail("bottom navigation More is missing");
         return;
@@ -308,13 +332,16 @@ export const ERP_MOBILE_WORKFLOWS = [
     title: "All seven voucher types reach Save on a phone",
     async run(ctx) {
       await ctx.goto("/vouchers");
-      if (!(await ctx.exists('[data-testid="button-voucher-type-select"]'))) {
+      // Portrait uses the type selector sheet; phone landscape (sm and up) shows the type tabs.
+      const selector = await ctx.exists('[data-testid="button-voucher-type-select"]');
+      if (!selector && ctx.viewportWidth < 640) {
         ctx.fail("voucher type selector is missing on phone");
         return;
       }
       for (const type of VOUCHER_TYPES) {
-        await ctx.tap('[data-testid="button-voucher-type-select"]');
-        if (!(await ctx.tap(`[data-testid="tab-mobile-${type}"]`, { timeout: 3000 }))) {
+        if (selector) await ctx.tap('[data-testid="button-voucher-type-select"]');
+        const typeControl = selector ? `[data-testid="tab-mobile-${type}"]` : `[data-testid="tab-${type}"]`;
+        if (!(await ctx.tap(typeControl, { timeout: 3000 }))) {
           ctx.note(`${type}: not offered to this user`);
           await ctx.closeOverlays();
           continue;
@@ -396,8 +423,29 @@ export const ERP_MOBILE_WORKFLOWS = [
     async run(ctx) {
       await ctx.goto("/settings");
       const trigger = '#main-content [role="combobox"]';
-      if (!(await ctx.exists(trigger))) {
-        ctx.fail("settings section selector is missing on phone");
+      const checkSection = async (name) => {
+        await new Promise((resolve) => setTimeout(resolve, 1300));
+        await ctx.assertPhoneLayout(`settings ${name}`);
+        const cut = await ctx.page.evaluate(() =>
+          [...document.querySelectorAll('#main-content [role="tablist"]')].some((t) => t.scrollWidth > t.clientWidth + 2)
+        );
+        if (cut) ctx.fail(`settings ${name}: sub-tabs cut off`);
+      };
+      if (!(await ctx.exists(trigger, { timeout: 3000 }))) {
+        if (ctx.viewportWidth < 640) {
+          ctx.fail("settings section selector is missing on phone");
+          return;
+        }
+        // Phone landscape (sm and up) shows the section side navigation.
+        const count = await ctx.page.$$eval("#main-content nav button", (els) => els.length);
+        if (!count) ctx.fail("settings has no section navigation in landscape");
+        for (let index = 0; index < count; index += 1) {
+          const buttons = await ctx.page.$$("#main-content nav button");
+          if (!buttons[index]) break;
+          const name = await buttons[index].evaluate((el) => el.textContent.trim());
+          await buttons[index].click();
+          await checkSection(name);
+        }
         return;
       }
       await ctx.tap(trigger);
@@ -408,23 +456,19 @@ export const ERP_MOBILE_WORKFLOWS = [
         const options = await ctx.page.$$('[role="option"]');
         if (!options[index]) break;
         await options[index].click();
-        await new Promise((resolve) => setTimeout(resolve, 1300));
-        await ctx.assertPhoneLayout(`settings ${sections[index]}`);
-        const cut = await ctx.page.evaluate(() =>
-          [...document.querySelectorAll('#main-content [role="tablist"]')].some((t) => t.scrollWidth > t.clientWidth + 2)
-        );
-        if (cut) ctx.fail(`settings ${sections[index]}: sub-tabs cut off`);
+        await checkSection(sections[index]);
       }
     },
   },
 ];
 
 /** Runs every workflow (or the ids in `only`) on the current page and viewport. */
-export async function runErpMobileWorkflows(page, { baseUrl, timeoutMs, settle, only }) {
+export async function runErpMobileWorkflows(page, { baseUrl, timeoutMs, settle, only, viewportWidth }) {
   const results = [];
   for (const workflow of ERP_MOBILE_WORKFLOWS) {
     if (only && !only.has(workflow.id)) continue;
     const ctx = createContext(page, { baseUrl, timeoutMs, settle });
+    ctx.viewportWidth = viewportWidth ?? (await page.evaluate(() => window.innerWidth));
     let status = "pass";
     let reason = "";
     try {

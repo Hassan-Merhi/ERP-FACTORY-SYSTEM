@@ -270,9 +270,10 @@
 
 /*
  * Settings sections carry up to six sub-tabs; in a sideways scroller most of them sit off-screen
- * with nothing hinting they exist. On phones they wrap so every sub-tab is visible.
+ * with nothing hinting they exist. On phones (and phone landscape) they wrap so every sub-tab
+ * is visible.
  */
-@media (max-width: 639px) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   html[data-app-shell="erp"] [data-erp-route="/settings"] [data-responsive-tabs="true"] {
     flex-wrap: wrap !important;
     overflow: visible;

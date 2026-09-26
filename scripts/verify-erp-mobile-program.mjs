@@ -480,6 +480,7 @@ try {
           timeoutMs: TIMEOUT_MS,
           settle,
           only: WORKFLOW_IDS,
+          viewportWidth: viewport.width,
         });
         for (const result of results) {
           report.workflows.push({ language, viewport: viewport.name, ...result });
