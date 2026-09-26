@@ -53,7 +53,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(pli.line_total::numeric), 0) AS purchase_value,
         COUNT(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN'))::int AS currency_count,
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
-        SUM(pli.quantity::numeric * pli.rate::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
+        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
       FROM eligible_items e
       JOIN po_line_items pli ON pli.stock_item_id = e.id
       JOIN purchase_orders po ON po.id = pli.po_id
