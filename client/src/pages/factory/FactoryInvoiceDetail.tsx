@@ -113,6 +113,10 @@ export default function FactoryInvoiceDetail() {
     handleExportLoadingStatus,
   } = model;
 
+  const viewWithoutCharges =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "no-charges";
+  const backTarget = viewWithoutCharges ? "/factory/analytics" : "/factory/invoicing?tab=invoices";
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full p-6 space-y-4">
@@ -133,7 +137,7 @@ export default function FactoryInvoiceDetail() {
         <Button
           variant="outline"
           className="mt-4"
-          onClick={() => navigate("/factory/invoicing?tab=invoices")}
+          onClick={() => navigate(backTarget)}
           data-testid="button-back-to-list"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -165,7 +169,7 @@ export default function FactoryInvoiceDetail() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/factory/invoicing?tab=invoices")}
+          onClick={() => navigate(backTarget)}
           data-testid="button-back"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -582,7 +586,7 @@ export default function FactoryInvoiceDetail() {
         </Table>
       </Card>
 
-      {isAdmin && (freightCharges.length > 0 || otherCharges.length > 0 || isFinalized) && (
+      {isAdmin && !viewWithoutCharges && (freightCharges.length > 0 || otherCharges.length > 0 || isFinalized) && (
         <Card className={`p-4 mb-6${hideExportSelling ? " print:hidden" : ""}`}>
           <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
             <h3 className="font-semibold" data-testid="text-charges-header">
@@ -844,28 +848,36 @@ export default function FactoryInvoiceDetail() {
 
       <Card className="p-4">
         <div className="space-y-2">
-          {isAdmin && (
-            <>
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <span>Subtotal (Bales)</span>
-                <span className="font-mono" data-testid="text-subtotal">
+          {isAdmin &&
+            (viewWithoutCharges ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold">Invoice Total (No Charges)</span>
+                <span className="font-mono font-bold text-lg" data-testid="text-no-charges-total">
                   {subtotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <span>Total Charges</span>
-                <span className="font-mono" data-testid="text-total-charges">
-                  {totalCharges.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="border-t pt-2 flex items-center justify-between gap-2">
-                <span className="font-semibold">Grand Total</span>
-                <span className="font-mono font-bold text-lg" data-testid="text-grand-total">
-                  {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span>Subtotal (Bales)</span>
+                  <span className="font-mono" data-testid="text-subtotal">
+                    {subtotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span>Total Charges</span>
+                  <span className="font-mono" data-testid="text-total-charges">
+                    {totalCharges.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="border-t pt-2 flex items-center justify-between gap-2">
+                  <span className="font-semibold">Grand Total</span>
+                  <span className="font-mono font-bold text-lg" data-testid="text-grand-total">
+                    {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </>
+            ))}
           <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>Total Bales Qty</span>
             <span data-testid="text-total-bales-qty">{totalBalesQty}</span>

@@ -52,6 +52,45 @@ export interface FactoryPosSummary {
   grand?: FactoryPosCustomerSummary;
 }
 
+export interface FactoryCustomerOrderInvoiceRow {
+  orderId: number;
+  invoiceNumber: string | null;
+  containerNumber: string | null;
+  status: string;
+  orderDate: string;
+  totalBales: number;
+  totalWeightKg: number;
+  invoiceTotal: number;
+}
+
+export interface FactoryCustomerOrderCustomerRow {
+  customerId: number | null;
+  customerName: string;
+  invoiceCount: number;
+  totalBales: number;
+  totalWeightKg: number;
+  invoiceTotal: number;
+  latestOrderDate: string;
+  orders: FactoryCustomerOrderInvoiceRow[];
+}
+
+export interface FactoryCustomerOrderAnalytics {
+  summary: {
+    totalOrders: number;
+    uniqueCustomers: number;
+    totalBales: number;
+    totalWeightKg: number;
+    totalInvoiceAmount: number;
+  };
+  rows: FactoryCustomerOrderCustomerRow[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    totalPages: number;
+  };
+}
+
 export interface FactoryContainerSalesData {
   summary: {
     count: number;

@@ -23,6 +23,11 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
+// Isolated precision context for factory batch-rate arithmetic. Keep enough
+// significant-digit headroom for large totals while rounding persisted/report
+// batch-rate calculations to 10 decimal places.
+const BatchRateDecimal = Decimal.clone({ precision: 80, rounding: Decimal.ROUND_HALF_UP });
+
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
   // 8. Daily Production Value Report
@@ -372,48 +377,23 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         reportSourcesByBatch.get(src.mixBatchId)!.push(src);
       }
 
-      // Build corrected batch objects for the report (read-only; no DB writes)
-      const correctedBatchRows = mixBatchRows.map((b) => {
-        const sources = reportSourcesByBatch.get(b.id) || [];
-        let displayWeightKg = new Decimal(0);
-        let displayCost = new Decimal(0);
+      // Original Batches are historical batch valuations. Keep the stored batch cost/rate
+      // instead of re-pricing old batches from today's supplier locked rates. Intentional
+      // landed-cost corrections already cascade into these stored batch fields.
+      const correctedBatchRows = mixBatchRows;
 
-        for (const src of sources) {
-          const w = new Decimal(src.weightKg || 0);
-          let effectiveCpk: Decimal;
-          if (src.sourceBatchId != null) {
-            // A. Existing-batch source — use stored costPerKg from source row
-            effectiveCpk = new Decimal(src.costPerKg || 0);
-          } else if (src.supplierId != null) {
-            // B. Supplier source (with or without containerId) — use current locked rate
-            effectiveCpk = new Decimal(reportSupplierRateMap.get(src.supplierId) || 0);
-          } else {
-            // C. Safe fallback
-            effectiveCpk = new Decimal(src.costPerKg || 0);
-          }
-          displayWeightKg = displayWeightKg.plus(w);
-          displayCost = displayCost.plus(w.times(effectiveCpk));
-        }
-
-        let displayCostPerKg: Decimal;
-        if (displayWeightKg.gt(0)) {
-          displayCostPerKg = displayCost.dividedBy(displayWeightKg);
-        } else {
-          // No source rows — fall back to stored batch values. Only cost and
-          // cost/kg are read past this branch; the weight is not projected out.
-          displayCost = new Decimal(b.totalCost || 0);
-          displayCostPerKg = new Decimal(b.costPerKg || 0);
-        }
-
-        return {
-          ...b,
-          costPerKg: displayCostPerKg.toDecimalPlaces(6).toString(),
-          totalCost: displayCost.toDecimalPlaces(6).toString(),
-        };
-      });
-
-      const totalMixWeightKg = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalWeightKg || "0"), 0);
-      const totalMixCost = correctedBatchRows.reduce((s: number, r) => s + parseFloat(r.totalCost || "0"), 0);
+      // Keep batch-rate arithmetic in decimal space so summing many stored DECIMAL
+      // values does not introduce binary floating-point drift before division.
+      const totalMixWeightDecimal = correctedBatchRows.reduce(
+        (sum, row) => sum.plus(row.totalWeightKg || 0),
+        new BatchRateDecimal(0)
+      );
+      const totalMixCostDecimal = correctedBatchRows.reduce(
+        (sum, row) => sum.plus(row.totalCost || 0),
+        new BatchRateDecimal(0)
+      );
+      const totalMixWeightKg = totalMixWeightDecimal.toNumber();
+      const totalMixCost = totalMixCostDecimal.toNumber();
 
       // Material from period batches that is still on the pressing table (not yet turned into bales).
       // Only ACTIVE batches have meaningful on-table material; COMPLETED batches set usedKg = totalWeightKg
@@ -425,10 +405,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // "Balance on Table" is a CURRENT STATE metric: how much raw material has been mixed into
-      // batches but not yet turned into finished bales.  We use the same formula as the Net
-      // Position page: allTimeMixKg − allTimeBaleKg.  This is more robust than tracking
-      // usedKg per-batch, which breaks when batches are marked COMPLETED prematurely.
+      // "Balance on Table" is a CURRENT STATE quantity. Keep the original quantity
+      // formula based on physical production totals:
+      //
+      //   balance weight = all-time mixed kg − all-time produced bale kg
+      //
+      // The valuation rate remains the exact blended rate shown by the Original Batches
+      // KPI for the active report filter.
       const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
         db.execute(sql`
           SELECT
@@ -441,31 +424,57 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         `),
         db.execute(sql`
           SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
-          FROM   factory_bales        b
-          LEFT   JOIN factory_bale_products p ON p.id = b.product_id
-          LEFT   JOIN factory_categories    c ON c.id = p.category_id
-          WHERE  b.company_id = ${companyId}
-            AND  b.status NOT IN ('DELETED', 'REMOVED')
+          FROM factory_bales b
+          WHERE b.company_id = ${companyId}
+            AND b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
         `),
       ]);
+
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
-      const allTimeMixKg = parseFloat(String(mixAllTimeRow.mix_kg ?? "0")) || 0;
-      const allTimeMixCost = parseFloat(String(mixAllTimeRow.mix_cost ?? "0")) || 0;
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
-      const allTimeBaleKg = parseFloat(String(baleAllTimeRow.bale_kg ?? "0")) || 0;
 
-      const allTimeBlendedCpk = allTimeMixKg > 0 ? allTimeMixCost / allTimeMixKg : 0;
-      const blendedCostPerKg = totalMixWeightKg > 0 ? totalMixCost / totalMixWeightKg : 0;
-      const balanceWeightKg = Math.max(0, allTimeMixKg - allTimeBaleKg);
-      const balanceValue = Math.round(balanceWeightKg * allTimeBlendedCpk * 100) / 100;
+      const allTimeMixKgDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_kg ?? "0"));
+      const allTimeMixCostDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_cost ?? "0"));
+      const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
 
-      // Production profit must follow the active valuation mode. The selected finished-goods
-      // value (Selling or Cost) is compared against the raw-material cost of the produced weight.
-      // This keeps the KPI, margin and Balance on Table card aligned when the valuation toggle changes.
-      const producedMaterialCost = totalBaleWeightKg * allTimeBlendedCpk;
-      const statusValue = totalProductionValue - producedMaterialCost;
+      // Batch rates are calculation values, not display values. Keep up to 10 digits
+      // after the decimal point in the backend. The frontend still formats these rates
+      // to a maximum of 4 decimal places for display.
+      const allTimeBlendedCpkDecimal = allTimeMixKgDecimal.gt(0)
+        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
+        : new BatchRateDecimal(0);
+      const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
+        ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
+        : new BatchRateDecimal(0);
+
+      // Convert the visible rate to a JSON number only at the response boundary;
+      // backend calculations below continue to use Decimal.
+      const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
+
+      const balanceWeightDecimal = BatchRateDecimal.max(0, allTimeMixKgDecimal.minus(allTimeBaleKgDecimal));
+      const balanceWeightKg = balanceWeightDecimal.toNumber();
+      // Reuse the exact same 10-decimal backend rate as Original Batches so the
+      // two cards cannot drift apart internally.
+      const balanceCostPerKg = blendedCostPerKg;
+      const balanceValue = balanceWeightDecimal
+        .times(blendedCostPerKgDecimal)
+        .toDecimalPlaces(2)
+        .toNumber();
+
+      // Keep rate-dependent profit arithmetic in high-precision decimal space too.
+      const producedMaterialCostDecimal = new BatchRateDecimal(String(totalBaleWeightKg))
+        .times(allTimeBlendedCpkDecimal);
+      const statusValueDecimal = new BatchRateDecimal(String(totalProductionValue))
+        .minus(producedMaterialCostDecimal);
+      const statusValue = statusValueDecimal.toNumber();
       const profitValue = statusValue;
-      const profitMarginPct = totalProductionValue > 0 ? (profitValue / totalProductionValue) * 100 : 0;
+      const profitMarginPct =
+        totalProductionValue > 0
+          ? statusValueDecimal
+              .dividedBy(new BatchRateDecimal(String(totalProductionValue)))
+              .times(100)
+              .toNumber()
+          : 0;
 
       // ── Kg comparison ──
       const kgDiff = totalBaleWeightKg - totalMixWeightKg;
@@ -655,9 +664,9 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Balance on Table stays on the original all-time blended raw-material cost basis.
+          // Must match the Original Batches blended rate; only the remaining quantity changes.
           // The Selling / Cost toggle only changes finished-production valuation.
-          costPerKg: hideReportCosts ? 0 : allTimeBlendedCpk,
+          costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
         },
         summary: {
