@@ -8,6 +8,7 @@ const TARGETS = [
   "tests/employee-net-position-helper.test.ts",
 ];
 
+// Diagnostic-only: removed before final PR.
 describe("temporary prettier diagnostic", () => {
   it("prints exact formatted target files", async () => {
     for (const path of TARGETS) {
