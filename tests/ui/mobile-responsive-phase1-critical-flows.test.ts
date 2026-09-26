@@ -59,12 +59,9 @@ describe("Mobile repair Phase 1 critical flows", () => {
 
     expect(agentList).toContain('data-testid="button-add-agent"');
     expect(agentStatement).toContain('data-testid="text-agent-account-name"');
-    // Desktop keeps the fixed master pane; ERP phones show the list and the statement as separate
-    // screens (agents-phone-layout) instead of stacking them.
+    // Desktop keeps the fixed master pane; the ERP phone screens are covered by the rendered
+    // phase-1 smoke and the agent-ledger workflow probe.
     expect(agentList).toContain('"w-72 shrink-0');
-    expect(agentList).toContain('data-testid="agent-list-panel"');
-    expect(source("client/src/pages/Agents.tsx")).toContain('data-testid="agents-phone-layout"');
-    expect(agentStatement).toContain('data-testid="button-back-to-agents"');
 
     expect(groups).toContain('data-testid="button-create-group"');
     expect(groups).toContain('className="w-72 border-r flex flex-col shrink-0"');
