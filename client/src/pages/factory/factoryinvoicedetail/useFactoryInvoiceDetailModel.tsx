@@ -151,19 +151,34 @@ export function useFactoryInvoiceDetailModel() {
   const { data: me } = useQuery<{ role: string }>({ queryKey: ["/api/auth/me"] });
   const isDeveloper = me?.role === "Developer";
 
-  const { data: proformas = [] } = useQuery<
-    { id: number; name: string; lines: { articleCode: string; pricePerBale: string }[] }[]
-  >({
-    queryKey: ["/api/factory/customer-proformas", order?.customerId],
+  type ProformaPriceLine = { articleCode: string; pricePerBale: string };
+  type ProformaSummary = { id: number; name: string; lineCount: number; lines?: ProformaPriceLine[] };
+
+  const { data: proformas = [] } = useQuery<ProformaSummary[]>({
+    queryKey: ["/api/factory/customer-proformas", order?.customerId, "summary"],
     queryFn: async () => {
       if (!order?.customerId) return [];
-      const res = await fetch(`/api/factory/customer-proformas?customerId=${order.customerId}`, {
+      const res = await fetch(`/api/factory/customer-proformas?customerId=${order.customerId}&profile=summary`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch proformas");
       return res.json();
     },
-    enabled: !!order?.customerId,
+    enabled: !!order?.customerId && showProformaDialog,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: selectedProforma } = useQuery<ProformaSummary>({
+    queryKey: ["/api/factory/customer-proformas", selectedProformaId, "detail"],
+    queryFn: async () => {
+      const res = await fetch(`/api/factory/customer-proformas/${selectedProformaId}`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(res.statusText || String(res.status));
+      return res.json();
+    },
+    enabled: showProformaDialog && !!selectedProformaId,
+    staleTime: 60_000,
   });
 
   interface DispatchBatchSummary {
@@ -567,6 +582,7 @@ export function useFactoryInvoiceDetailModel() {
     updateChargeAmountMutation,
     isDeveloper,
     proformas,
+    selectedProforma,
     dispatchBatch,
     hideExportSelling,
     isAdmin,
