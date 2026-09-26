@@ -12,7 +12,7 @@ describe("ERP Net Position supplier opening balances", () => {
 
     for (const source of [live, excel]) {
       expect(source).toContain("companyScopedSuppliers.companyId, companyId");
-      expect(source).toContain('supplierBalances.get(sup.id) || { debit: 0, credit: 0 }');
+      expect(source).toContain("supplierBalances.get(sup.id) || { debit: 0, credit: 0 }");
       expect(source).toContain('parseFloat(sup.openingBalance || "0")');
       expect(source).not.toContain("supplierIdsWithBalance");
     }
@@ -22,8 +22,8 @@ describe("ERP Net Position supplier opening balances", () => {
     const live = read("server/routes/stats/statsNetProfitRoutes.ts");
     const excel = read("server/routes/stats/statsNetPositionRoutes.ts");
 
-    expect(live).toContain('from(companyScopedSuppliers)');
-    expect(excel).toContain('from(companyScopedSuppliers)');
+    expect(live).toContain("from(companyScopedSuppliers)");
+    expect(excel).toContain("from(companyScopedSuppliers)");
     expect(live).toContain("eq(companyScopedSuppliers.companyId, companyId)");
     expect(excel).toContain("eq(companyScopedSuppliers.companyId, companyId)");
   });
