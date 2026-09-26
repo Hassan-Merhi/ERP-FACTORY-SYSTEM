@@ -109,7 +109,8 @@ export function computeStats(
   // Indirect Expenses
   const indirectExpAccounts = ctx.companyAccounts.filter(
     (acc) =>
-      acc.accountType === "Indirect Expense" &&
+      (acc.accountType === "Indirect Expense" ||
+        (acc.accountType === "Expense" && acc.subType === "Indirect Expense")) &&
       acc.code !== "PRODUCTION_ADJUSTMENT" &&
       acc.code !== "CONSUMPTION_EXPENSE" &&
       acc.code !== "PURCHASES" &&

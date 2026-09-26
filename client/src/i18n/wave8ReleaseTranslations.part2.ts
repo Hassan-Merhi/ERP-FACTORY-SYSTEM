@@ -829,4 +829,9 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "لا يمكن لتحليل سوق الأصناف مقارنة سوى شركات ERP",
     fr: "L’analyse du marché des articles ne peut comparer que des sociétés ERP",
   },
+  {
+    en: "Load 250 more",
+    ar: "تحميل 250 إضافية",
+    fr: "Charger 250 de plus",
+  },
 ];

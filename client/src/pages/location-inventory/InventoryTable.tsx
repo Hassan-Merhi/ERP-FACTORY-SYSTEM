@@ -173,7 +173,7 @@ export function InventoryTable({
                           {formatAmount(parseFloat(item.averageRate || "0"))}
                         </td>
                         <td className="px-3 text-right font-mono font-semibold">
-                          {formatAmount(parseFloat(item.totalValue || "0"))}
+                          {formatAmount(closingQty * parseFloat(item.averageRate || "0"))}
                         </td>
                       </>
                     )}
@@ -228,7 +228,10 @@ export function InventoryTable({
                     <td className="px-3"></td>
                     <td className="px-3 text-right font-mono font-bold">
                       {formatAmount(
-                        filteredStockItems.reduce((sum, item) => sum + parseFloat(item.totalValue || "0"), 0)
+                        filteredStockItems.reduce(
+                          (sum, item) => sum + parseFloat(item.quantity || "0") * parseFloat(item.averageRate || "0"),
+                          0
+                        )
                       )}
                     </td>
                   </>

@@ -39,17 +39,13 @@ export function useStockGroupSummaries({
 }: UseStockGroupSummariesParams) {
   const openingInventoryMap = useMemo(() => {
     const map = new Map<number, number>();
-    openingInventoryData.forEach((item: InventoryItem) =>
-      map.set(item.stockItemId, parseFloat(item.quantity || "0"))
-    );
+    openingInventoryData.forEach((item: InventoryItem) => map.set(item.stockItemId, parseFloat(item.quantity || "0")));
     return map;
   }, [openingInventoryData]);
 
   const showMovement = !!(fromDate && asOfDate);
   const activeInventoryData = showMovement ? closingInventoryData : inventoryData;
-  const activeInventoryLoading = showMovement
-    ? closingInventoryLoading || openingInventoryLoading
-    : inventoryLoading;
+  const activeInventoryLoading = showMovement ? closingInventoryLoading || openingInventoryLoading : inventoryLoading;
 
   // All items (respecting zero filter)
   const inventory: InventoryItem[] = showZeroStock
@@ -77,7 +73,10 @@ export function useStockGroupSummaries({
       }
       const qty = parseFloat(item.quantity || "0");
       group.totalQuantity += qty;
-      group.totalValue += parseFloat(item.totalValue || "0");
+      // Match Net Position valuation: quantity × average rate preserves the sign
+      // of negative inventory instead of treating its stored total value as positive.
+      const avgRate = parseFloat(item.averageRate || "0");
+      group.totalValue += qty * avgRate;
       group.itemCount += 1;
       group.items.push(item);
     });
