@@ -206,8 +206,29 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Optional voucher filters", ar: "عوامل تصفية القسائم الاختيارية", fr: "Filtres des bons optionnels" },
   { en: "Container filters", ar: "عوامل تصفية الحاويات", fr: "Filtres des conteneurs" },
   { en: "Stock in and sales filters", ar: "عوامل تصفية المخزون الوارد والمبيعات", fr: "Filtres des entrées et ventes" },
+  // ERP phone remediation (page menu, statements, stock groups, POS item sheet, voucher selector)
+  { en: "IC Requests", ar: "طلبات بين الشركات", fr: "Demandes intersociétés" },
+  { en: "Period debit", ar: "مدين الفترة", fr: "Débit de la période" },
+  { en: "Period credit", ar: "دائن الفترة", fr: "Crédit de la période" },
+  { en: "Back to accounts", ar: "العودة إلى الحسابات", fr: "Retour aux comptes" },
+  { en: "WhatsApp rule", ar: "قاعدة واتساب", fr: "Règle WhatsApp" },
+  { en: "PDF (English)", ar: "PDF (الإنجليزية)", fr: "PDF (anglais)" },
+  { en: "PDF (Français)", ar: "PDF (الفرنسية)", fr: "PDF (français)" },
+  { en: "PDF (العربية)", ar: "PDF (العربية)", fr: "PDF (arabe)" },
+  { en: "Truck / Plate", ar: "الشاحنة / اللوحة", fr: "Camion / Plaque" },
+  { en: "Movement from", ar: "الحركة من", fr: "Mouvements du" },
+  { en: "Movement to", ar: "الحركة إلى", fr: "Mouvements au" },
+  {
+    en: "Including zero-stock items.",
+    ar: "بما في ذلك الأصناف ذات المخزون الصفري.",
+    fr: "Articles à stock nul inclus.",
+  },
+  { en: "Edit / Rename location", ar: "تعديل / إعادة تسمية الموقع", fr: "Modifier / renommer l’emplacement" },
+  { en: "Decrease quantity", ar: "إنقاص الكمية", fr: "Diminuer la quantité" },
+  { en: "Increase quantity", ar: "زيادة الكمية", fr: "Augmenter la quantité" },
+  { en: "Choose the voucher to enter.", ar: "اختر نوع السند المراد إدخاله.", fr: "Choisissez la pièce à saisir." },
+  { en: "Voucher type", ar: "نوع السند", fr: "Type de pièce" },
 ];
-
 const entryByVisibleText = new Map<string, SharedEntry>();
 
 // Canonical English labels must win over translated aliases that use the same

@@ -56,6 +56,7 @@ export function AccountStatementCards({
   };
 
   const rendered = vouchersWithBalance.slice(0, visibleCount);
+  const remaining = vouchersWithBalance.length - visibleCount;
 
   return (
     <div className="space-y-2 md:hidden print:hidden" data-testid="account-statement-cards">
@@ -128,7 +129,7 @@ export function AccountStatementCards({
         })}
       </ErpMobileRecordList>
 
-      {vouchersWithBalance.length > visibleCount && (
+      {remaining > 0 && (
         <Button
           type="button"
           variant="outline"
@@ -136,7 +137,7 @@ export function AccountStatementCards({
           onClick={() => setVisibleCount((count) => count + CARD_PAGE_SIZE)}
           data-testid="button-statement-show-more"
         >
-          Show more ({vouchersWithBalance.length - visibleCount} remaining)
+          Show more ({remaining} remaining)
         </Button>
       )}
 
