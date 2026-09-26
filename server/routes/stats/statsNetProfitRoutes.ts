@@ -219,7 +219,15 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       for (const acc of companyAccounts) {
         const netBalance = getAccountNetBalance(acc, accountBalances);
-        const isAnyExpenseType = expenseTypesArr.includes(acc.accountType || "");
+        // Expense accounts are stored in two legacy-compatible forms:
+        //   accountType = "Indirect Expense" / "Direct Expense"
+        //   accountType = "Expense" + subType = "Indirect Expense" / "Direct Expense"
+        // Normalize both forms so every report classifies the same account the same way.
+        const normalizedExpenseType =
+          acc.accountType === "Expense" && ["Direct Expense", "Indirect Expense"].includes(acc.subType || "")
+            ? acc.subType
+            : acc.accountType;
+        const isAnyExpenseType = expenseTypesArr.includes(normalizedExpenseType || "");
         const isIncomeAccount = acc.accountType === "Income";
 
         if (isIncomeAccount) {
@@ -246,7 +254,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
             });
           }
         } else if (isAnyExpenseType && !excludedFromExpenses.has(acc.id)) {
-          const category = acc.accountType || "Expense";
+          const category = normalizedExpenseType || "Expense";
           if (netBalance > 0) {
             expensesTotal += netBalance;
             categoryTotals[`exp_${category}`] = (categoryTotals[`exp_${category}`] || 0) + netBalance;
