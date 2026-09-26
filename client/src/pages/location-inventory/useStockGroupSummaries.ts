@@ -77,7 +77,10 @@ export function useStockGroupSummaries({
       }
       const qty = parseFloat(item.quantity || "0");
       group.totalQuantity += qty;
-      group.totalValue += parseFloat(item.totalValue || "0");
+      // Match Net Position valuation: quantity × average rate preserves the sign
+      // of negative inventory instead of treating its stored total value as positive.
+      const avgRate = parseFloat(item.averageRate || "0");
+      group.totalValue += qty * avgRate;
       group.itemCount += 1;
       group.items.push(item);
     });
