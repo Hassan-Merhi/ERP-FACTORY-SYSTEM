@@ -23,6 +23,7 @@ import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
 import { computeEmployeeNetPositionWithManagedAdvances } from "../../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
+import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -84,8 +85,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         if (
           acc.code === "PURCHASES" ||
           acc.code?.startsWith("PURCHASES_") ||
-          acc.code === "PRODUCTION_ADJUSTMENT" ||
-          acc.code === "CONSUMPTION_EXPENSE"
+          isInventoryValuationOnlyAccount(acc)
         ) {
           excludedFromExpenses.add(acc.id);
         }
