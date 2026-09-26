@@ -37,7 +37,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
   ];
 
   const commonCtes = `
-    WITH eligible_items AS (
+    WITH eligible_items AS MATERIALIZED (
       SELECT si.id, si.code, si.name, si.stock_group_id, sg.name AS stock_group_name
       FROM stock_items si
       LEFT JOIN stock_groups sg ON sg.id = si.stock_group_id
@@ -54,7 +54,8 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COUNT(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN'))::int AS currency_count,
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
         SUM(pli.quantity::numeric * pli.rate::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
-      FROM po_line_items pli
+      FROM eligible_items e
+      JOIN po_line_items pli ON pli.stock_item_id = e.id
       JOIN purchase_orders po ON po.id = pli.po_id
       JOIN containers c ON c.id = po.container_id
       WHERE po.company_id = $1
@@ -69,7 +70,8 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(s.total_sales::numeric), 0) AS revenue,
         COALESCE(SUM(s.total_cost::numeric), 0) AS historical_cost,
         COALESCE(SUM(s.profit::numeric), 0) AS profit
-      FROM sales_items s
+      FROM eligible_items e
+      JOIN sales_items s ON s.stock_item_id = e.id
       JOIN vouchers v ON v.id = s.voucher_id
       WHERE v.company_id = $1
         AND v.voucher_type = 'Sales'

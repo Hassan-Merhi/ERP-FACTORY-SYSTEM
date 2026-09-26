@@ -110,6 +110,7 @@ export default function ItemMarketAnalysis() {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
+  const [visibleRowCount, setVisibleRowCount] = useState(250);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -152,8 +153,15 @@ export default function ItemMarketAnalysis() {
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
     enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    setVisibleRowCount(250);
+    setExpandedItemCode(null);
+  }, [queryUrl, stockGroupName, multiCompany]);
 
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
@@ -323,6 +331,10 @@ export default function ItemMarketAnalysis() {
           left.itemKey.localeCompare(right.itemKey)
       );
   })();
+
+  const visibleRows = rows.slice(0, visibleRowCount);
+  const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
+  const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
 
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
@@ -498,7 +510,7 @@ export default function ItemMarketAnalysis() {
                   </TableRow>
                 ))}
 
-              {!isLoading && multiCompany && groupedRows.map((group) => {
+              {!isLoading && multiCompany && visibleGroupedRows.map((group) => {
                 const expanded = expandedItemCode === group.itemKey;
                 const mixedCurrency = group.purchaseCurrencies.length > 1;
                 const topCompany = topProfitCompanyByItem.get(group.itemKey);
@@ -653,7 +665,7 @@ export default function ItemMarketAnalysis() {
                 );
               })}
 
-              {!isLoading && !multiCompany && rows.map((row) => {
+              {!isLoading && !multiCompany && visibleRows.map((row) => {
                 const rowKey = `${row.companyId}:${row.stockItemId}`;
                 const mixedCurrency = row.purchaseCurrencies.length > 1;
                 return (
@@ -701,6 +713,16 @@ export default function ItemMarketAnalysis() {
             </TableBody>
           </Table>
         </div>
+        {!isLoading && visibleRowCount < totalVisibleSourceRows && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <div className="text-xs text-muted-foreground">
+              Showing {formatNumber(Math.min(visibleRowCount, totalVisibleSourceRows))} of {formatNumber(totalVisibleSourceRows)} items
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setVisibleRowCount((count) => count + 250)}>
+              Load 250 more
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
