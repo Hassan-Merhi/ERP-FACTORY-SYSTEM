@@ -38,7 +38,8 @@ import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { ErrorState } from "@/components/ui/page-state";
 
-import type { DailySummary, GroupingType, ProfitFilter, SalesCogsReconciliation, SalesReportItem } from "./salesreportlegacy/types";
+import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";
+import type { SalesCogsReconciliation } from "./salesreportlegacy/types";
 import { useSalesReportDateKeyboard } from "./salesreportlegacy/useSalesReportDateKeyboard";
 import { exportSalesReportExcel } from "./salesreportlegacy/exportExcel";
 import {
