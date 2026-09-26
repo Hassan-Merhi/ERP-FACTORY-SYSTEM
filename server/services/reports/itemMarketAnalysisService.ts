@@ -53,7 +53,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COALESCE(SUM(pli.line_total::numeric), 0) AS purchase_value,
         COUNT(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN'))::int AS currency_count,
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
-        SUM(pli.quantity::numeric * pli.rate::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
+        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
       FROM eligible_items e
       JOIN po_line_items pli ON pli.stock_item_id = e.id
       JOIN purchase_orders po ON po.id = pli.po_id
@@ -64,7 +64,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND ($4::date IS NULL OR c.offload_date <= $4::date)
       GROUP BY pli.stock_item_id
     ),
-    sales AS (
+    sales_base AS (
       SELECT s.stock_item_id,
         COALESCE(SUM(s.quantity::numeric), 0) AS sold_qty,
         COALESCE(SUM(s.total_sales::numeric), 0) AS revenue,
@@ -81,6 +81,39 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND ($3::date IS NULL OR v.voucher_date >= $3::date)
         AND ($4::date IS NULL OR v.voucher_date <= $4::date)
       GROUP BY s.stock_item_id
+    ),
+    credit_note_adjustments AS (
+      SELECT cni.stock_item_id,
+        COALESCE(SUM(-cni.quantity::numeric), 0) AS sold_qty,
+        COALESCE(SUM(-cni.total_value::numeric), 0) AS revenue,
+        COALESCE(SUM(-(cni.quantity::numeric * cni.inventory_cost::numeric)), 0) AS historical_cost,
+        COALESCE(SUM(
+          -(cni.total_value::numeric - (cni.quantity::numeric * cni.inventory_cost::numeric))
+        ), 0) AS profit
+      FROM eligible_items e
+      JOIN credit_note_items cni ON cni.stock_item_id = e.id
+      JOIN vouchers v ON v.id = cni.voucher_id
+      WHERE v.company_id = $1
+        AND v.voucher_type = 'Credit Note'
+        AND v.deleted_at IS NULL
+        AND COALESCE(v.optional, false) = false
+        AND cni.location_id = ANY($2::int[])
+        AND ($3::date IS NULL OR v.voucher_date >= $3::date)
+        AND ($4::date IS NULL OR v.voucher_date <= $4::date)
+      GROUP BY cni.stock_item_id
+    ),
+    sales AS (
+      SELECT activity.stock_item_id,
+        COALESCE(SUM(activity.sold_qty), 0) AS sold_qty,
+        COALESCE(SUM(activity.revenue), 0) AS revenue,
+        COALESCE(SUM(activity.historical_cost), 0) AS historical_cost,
+        COALESCE(SUM(activity.profit), 0) AS profit
+      FROM (
+        SELECT stock_item_id, sold_qty, revenue, historical_cost, profit FROM sales_base
+        UNION ALL
+        SELECT stock_item_id, sold_qty, revenue, historical_cost, profit FROM credit_note_adjustments
+      ) activity
+      GROUP BY activity.stock_item_id
     )
   `;
 
