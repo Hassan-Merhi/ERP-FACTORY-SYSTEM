@@ -420,11 +420,15 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Credit balance on Payroll Payable means we owe payroll; debit balance means
       // payroll has been overpaid/prepaid. If the control ledger is absent/zero, fall
       // back to legacy employee-linked balances for backward compatibility.
-      const hasPayrollLedgerBalance = Math.abs(payrollLedgerSignedBalance) >= 0.005;
-      const workerLiabilitiesDisplay = hasPayrollLedgerBalance
-        ? Math.max(0, -payrollLedgerSignedBalance)
-        : legacyWorkerLiabilities;
-      const payrollOverpaymentDisplay = hasPayrollLedgerBalance ? Math.max(0, payrollLedgerSignedBalance) : 0;
+      const payrollLedgerLiability = Math.max(0, -payrollLedgerSignedBalance);
+      const payrollLedgerOverpayment = Math.max(0, payrollLedgerSignedBalance);
+
+      // Employee-linked salary deposits are a separate live ERP posting path
+      // (ledger_account_id = NULL, employee_id = X). They must be combined with
+      // the Payroll Payable control ledger rather than used only as a fallback;
+      // otherwise any non-zero control balance hides outstanding employee payables.
+      const workerLiabilitiesDisplay = round2(payrollLedgerLiability + legacyWorkerLiabilities);
+      const payrollOverpaymentDisplay = round2(payrollLedgerOverpayment);
 
       // rawSalaryAdvances comes from the salary_advances table (not voucher entries).
       // Its currency follows the company base currency for CFA companies.
