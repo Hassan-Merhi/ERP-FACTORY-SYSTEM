@@ -3,7 +3,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { containers, employees, salaryAdvances, exchangeRates } from "@shared/schema";
+import { containers, employees, exchangeRates } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, or, desc, sql, isNull, lte } from "drizzle-orm";
 import {
@@ -21,6 +21,9 @@ import { getNetPositionCurrencySummary } from "../../services/accounting/netPosi
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
+import { computeEmployeeNetPositionWithManagedAdvances } from "../../helpers/employeeNetPosition";
+import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
+import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -79,12 +82,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
       for (const acc of companyAccounts) {
-        if (
-          acc.code === "PURCHASES" ||
-          acc.code?.startsWith("PURCHASES_") ||
-          acc.code === "PRODUCTION_ADJUSTMENT" ||
-          acc.code === "CONSUMPTION_EXPENSE"
-        ) {
+        if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES_") || isInventoryValuationOnlyAccount(acc)) {
           excludedFromExpenses.add(acc.id);
         }
       }
@@ -361,19 +359,20 @@ export function registerStatsNetProfitRoutes(app: Express) {
           id: employees.id,
           companyId: employees.companyId,
           openingBalance: employees.openingBalance,
+          openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
         })
         .from(employees)
         .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
         .execute();
 
-      let legacyWorkerLiabilities = 0;
-      for (const emp of companyEmployees) {
-        const opening = parseFloat(emp.openingBalance || "0");
-        const signedOpening = opening * -1;
-        const balance = employeeBalances.get(emp.id) || { debit: 0, credit: 0 };
-        const netBalance = signedOpening + balance.debit - balance.credit;
-        if (netBalance < 0) legacyWorkerLiabilities += Math.abs(netBalance);
-      }
+      const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
+      const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
+        companyEmployees,
+        employeeBalances,
+        managedSalaryAdvances
+      );
+      const legacyWorkerLiabilities = employeePosition.liabilities;
+      const employeeLinkedAdvanceAssets = employeePosition.advances;
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
@@ -395,24 +394,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
 
-      // Authoritative ERP worker advances = SUM(salaryAdvances.remainingBalance)
-      // WHERE fullyPaid = false AND companyId = X — exactly what Payroll → Advances shows.
-      // Wrapped in try-catch: if salary_advances is missing remaining_balance / fully_paid
-      // (pre-migration production schema), fall back to 0 rather than crashing the whole
-      // net-profit response with a 500 / column-not-found error.
-      let rawSalaryAdvances = 0;
-      try {
-        const [saRow] = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(${salaryAdvances.remainingBalance} AS numeric)), 0)` })
-          .from(salaryAdvances)
-          .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false)));
-        rawSalaryAdvances = round2(parseFloat(saRow?.total || "0"));
-      } catch (saErr: unknown) {
-        // Fallback: column may be absent on old production schemas. Dashboard still loads.
-        logger.warn("[/api/stats/net-profit] salary_advances query skipped (schema gap):", {
-          error: getErrorMessage(saErr),
-        });
-      }
       // For CFA companies, worker balances come from voucher entries.
       // Guard: only convert if ALL entries are pre-migration (hasMigratedEntries=false).
       // After migration COALESCE already returns USD-base values; re-dividing by CFA rate
@@ -430,9 +411,10 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const workerLiabilitiesDisplay = round2(payrollLedgerLiability + legacyWorkerLiabilities);
       const payrollOverpaymentDisplay = round2(payrollLedgerOverpayment);
 
-      // rawSalaryAdvances comes from the salary_advances table (not voucher entries).
-      // Its currency follows the company base currency for CFA companies.
-      const workerAdvancesDisplay = rawSalaryAdvances;
+      // Managed salary advances are reconciled above by replacing their
+      // original employee debit with remaining_balance. Direct employee debits
+      // (for example a payroll withdrawal/advance) remain in the subledger.
+      const workerAdvancesDisplay = round2(employeeLinkedAdvanceAssets);
       if (workerLiabilitiesDisplay > 0) {
         onUsTotal = round2(onUsTotal + workerLiabilitiesDisplay);
         categoryTotals["liability_Payroll"] = round2(

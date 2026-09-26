@@ -834,4 +834,19 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "تحميل 250 إضافية",
     fr: "Charger 250 de plus",
   },
+  {
+    en: "All Profit",
+    ar: "كل الأرباح",
+    fr: "Tous les bénéfices",
+  },
+  {
+    en: "COGS Reconciliation",
+    ar: "تسوية تكلفة البضاعة المباعة",
+    fr: "Rapprochement du coût des ventes",
+  },
+  {
+    en: "Adjusted Cost Profit",
+    ar: "الربح بالتكلفة المعدّلة",
+    fr: "Bénéfice au coût ajusté",
+  },
 ];

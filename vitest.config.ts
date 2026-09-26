@@ -5,7 +5,9 @@ import path from "path";
 
 // Floors live in config/coverage-thresholds.json so the vitest configs and
 // scripts/audit-coverage-ratchet.mjs cannot disagree about what the gate is.
-const { backend } = JSON.parse(readFileSync(path.resolve(__dirname, "config/coverage-thresholds.json"), "utf8"));
+const { backend } = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, "config/coverage-thresholds.json"), "utf8")
+);
 
 // The API smoke sweep is deliberately a separate signal during an ordinary
 // backend run, but it is real authenticated behavior across the read surface.
@@ -72,8 +74,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@shared": path.resolve(__dirname, "shared"),
-      "@": path.resolve(__dirname, "client/src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@": path.resolve(import.meta.dirname, "client/src"),
     },
   },
 });

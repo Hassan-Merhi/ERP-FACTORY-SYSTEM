@@ -4,7 +4,7 @@ import {
   SALES_DETAIL_SUFFIX,
   SALES_REPORT_SUFFIX,
   transformSalesReportBandwidthSource,
-} from "./viteSalesReportBandwidthPlugin";
+} from "./viteSalesReportBandwidthPlugin.ts";
 
 const ORPHANED_RECORDS_SUFFIX = "/client/src/pages/OrphanedRecords.tsx";
 const DATA_TOOLS_SUFFIX = "/client/src/pages/settings/datatoolstab/useDataToolsModel.ts";

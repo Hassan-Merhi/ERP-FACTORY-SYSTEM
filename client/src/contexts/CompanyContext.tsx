@@ -16,8 +16,6 @@ import type { CompanyType, UserCompanyAssignment } from "@/contracts/sessionCont
 const PREFETCH_KEYS = [
   "/api/suppliers",
   "/api/customers",
-  "/api/ledger-accounts",
-  "/api/bank-accounts",
   "/api/locations",
   "/api/employees",
   "/api/fixed-assets",
@@ -26,6 +24,9 @@ const PREFETCH_KEYS = [
   "/api/stock-grades",
 ] as const;
 
+// Ledger and bank accounts are intentionally not global reference prefetches.
+// In Factory mode those shared endpoints are owned by accounting pages only;
+// the pages that need them already query them explicitly when mounted.
 function prefetchReferenceData(companyId: number, role?: string) {
   if (role === "POS") return;
   for (const url of PREFETCH_KEYS) {
