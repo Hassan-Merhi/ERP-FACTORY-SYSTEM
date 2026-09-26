@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { Suspense, lazy, useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
@@ -11,7 +11,6 @@ import { DailyRateModal } from "@/components/DailyRateModal";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
 import { ErpMobileBottomNav } from "@/components/ErpMobileBottomNav";
-import { ErpMobileNavSheet } from "@/components/ErpMobileNavSheet";
 import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -37,9 +36,17 @@ function CompanyDailyRateModal() {
   return <DailyRateModal companyId={selectedCompany.id} />;
 }
 
+// The page menu searches localized page names through the interface translator, which stays out
+// of the startup bundle; the menu loads on the first More tap.
+const ErpMobileNavSheet = lazy(() =>
+  import("@/components/ErpMobileNavSheet").then((module) => ({ default: module.ErpMobileNavSheet }))
+);
+
 export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog }: ErpShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Stays mounted after the first open so the menu keeps its close animation.
+  const [mobileNavLoaded, setMobileNavLoaded] = useState(false);
   const [currentLocation] = useLocation();
   const { t } = useApplicationLanguage();
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
@@ -92,8 +99,19 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   </div>
                 </WorkspaceRouteBoundary>
               </main>
-              <ErpMobileBottomNav user={user} onMore={() => setMobileNavOpen(true)} moreOpen={mobileNavOpen} />
-              <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
+              <ErpMobileBottomNav
+                user={user}
+                onMore={() => {
+                  setMobileNavLoaded(true);
+                  setMobileNavOpen(true);
+                }}
+                moreOpen={mobileNavOpen}
+              />
+              {mobileNavLoaded && (
+                <Suspense fallback={null}>
+                  <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
+                </Suspense>
+              )}
             </div>
           </div>
         </SidebarProvider>
