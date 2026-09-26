@@ -107,7 +107,7 @@ export function PurchasePanel({
         <div>
           <h3 className="font-semibold mb-3">Line Items</h3>
           <div className="border rounded-md overflow-x-auto">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Item</TableHead>
@@ -226,7 +226,15 @@ export function LedgerEntriesPanel({
                       <p className="text-xs text-muted-foreground">Balance: {fmt(parseFloat(bal))}</p>
                     )}
                   </TableCell>
-                  <TableCell className="text-right text-sm font-mono py-2">{fmt(amount)}</TableCell>
+                  <TableCell className="text-right text-sm font-mono py-2">
+                    {fmt(amount)}
+                    {/* Side of the entry, as the Daybook view shows it. */}
+                    {amount > 0 && (
+                      <span className="ml-1 text-[11px] font-sans text-muted-foreground">
+                        {parseFloat(e.debitAmount || "0") >= parseFloat(e.creditAmount || "0") ? "Dr" : "Cr"}
+                      </span>
+                    )}
+                  </TableCell>
                 </TableRow>
               );
             })}

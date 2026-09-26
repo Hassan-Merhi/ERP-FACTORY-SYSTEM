@@ -126,7 +126,7 @@ export function StartContractForm({
             data-testid={`input-${testIdPrefix}-guarantee-period`}
           />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Label>Notes</Label>
           <Textarea
             rows={2}
@@ -136,7 +136,7 @@ export function StartContractForm({
           />
         </div>
         {unitType === "WAREHOUSE" && (
-          <div className="col-span-2 flex items-center gap-3 rounded-md border p-3 bg-violet-50 dark:bg-violet-950/20">
+          <div className="sm:col-span-2 flex items-center gap-3 rounded-md border p-3 bg-violet-50 dark:bg-violet-950/20">
             <Switch
               id={`switch-${testIdPrefix}-internal`}
               checked={isInternal}

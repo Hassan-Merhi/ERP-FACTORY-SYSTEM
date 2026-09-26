@@ -8,6 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAppMode } from "@/contexts/AppModeContext";
+import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
+import { ErpMobileRecordCard, ErpMobileRecordGroup, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { apiRequest } from "@/lib/queryClient";
 import {
   actionBadgeVariant,
@@ -98,6 +102,9 @@ export function AuditLog({
   const [selectedLog, setSelectedLog] = useState<SettingsAuditLogRow | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ERP phones read activity as day-grouped cards; the six-column table needs a desktop width.
+  const appMode = useAppMode();
+  const erpPhone = useErpPhoneLayout() && appMode === "erp";
 
   const handleSearchChange = useCallback((value: string) => {
     setFilterSearch(value);
@@ -230,89 +237,143 @@ export function AuditLog({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search user, module, action, record…"
-            value={filterSearch}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            className="pl-9 h-8 text-sm"
-            disabled={activityLoading}
-          />
-        </div>
+      {(() => {
+        // One set of filter controls: an inline toolbar on tablet/desktop (and Factory), and the
+        // shared filter sheet on ERP phones, where search stays visible beside the Filters button.
+        const inline = !erpPhone;
+        const searchControl = (
+          <div className={inline ? "relative flex-1 min-w-[180px]" : "relative"}>
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search user, module, action, record…"
+              value={filterSearch}
+              onChange={(event) => handleSearchChange(event.target.value)}
+              className={inline ? "pl-9 h-8 text-sm" : "pl-9 text-sm"}
+              disabled={activityLoading}
+              data-testid="input-activity-search"
+            />
+          </div>
+        );
+        // The phone sheet labels the date fields; the inline toolbar keeps its compact inputs.
+        const dateField = (label: string, input: React.ReactNode) =>
+          inline ? (
+            input
+          ) : (
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              {label}
+              {input}
+            </label>
+          );
+        const filterControls = (
+          <>
+            <Select value={filterAction} onValueChange={setFilterAction} disabled={activityLoading}>
+              <SelectTrigger className={inline ? "h-8 w-44 text-sm" : "text-sm"}>
+                <SelectValue placeholder="Action" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTION_FILTER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select value={filterAction} onValueChange={setFilterAction} disabled={activityLoading}>
-          <SelectTrigger className="h-8 w-44 text-sm">
-            <SelectValue placeholder="Action" />
-          </SelectTrigger>
-          <SelectContent>
-            {ACTION_FILTER_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <Select
+              value={filterModule || "all"}
+              onValueChange={(value) => setFilterModule(value === "all" ? "" : value)}
+              disabled={activityLoading}
+            >
+              <SelectTrigger className={inline ? "h-8 w-36 text-sm" : "text-sm"}>
+                <SelectValue placeholder="Module" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All modules</SelectItem>
+                {knownModules.map((moduleName) => (
+                  <SelectItem key={moduleName} value={moduleName}>
+                    {tableShortName(moduleName)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-        <Select
-          value={filterModule || "all"}
-          onValueChange={(value) => setFilterModule(value === "all" ? "" : value)}
-          disabled={activityLoading}
-        >
-          <SelectTrigger className="h-8 w-36 text-sm">
-            <SelectValue placeholder="Module" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All modules</SelectItem>
-            {knownModules.map((moduleName) => (
-              <SelectItem key={moduleName} value={moduleName}>
-                {tableShortName(moduleName)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            {dateField(
+              "From date",
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(event) => setFilterDateFrom(event.target.value)}
+                className={inline ? "h-8 w-36 text-sm" : "text-sm"}
+                title="From date"
+                aria-label="From date"
+                disabled={activityLoading}
+              />
+            )}
+            {dateField(
+              "To date",
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={(event) => setFilterDateTo(event.target.value)}
+                className={inline ? "h-8 w-36 text-sm" : "text-sm"}
+                title="To date"
+                aria-label="To date"
+                disabled={activityLoading}
+              />
+            )}
+          </>
+        );
 
-        <Input
-          type="date"
-          value={filterDateFrom}
-          onChange={(event) => setFilterDateFrom(event.target.value)}
-          className="h-8 w-36 text-sm"
-          title="From date"
-          disabled={activityLoading}
-        />
-        <Input
-          type="date"
-          value={filterDateTo}
-          onChange={(event) => setFilterDateTo(event.target.value)}
-          className="h-8 w-36 text-sm"
-          title="To date"
-          disabled={activityLoading}
-        />
+        if (inline) {
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              {searchControl}
+              {filterControls}
 
-        {isDirty && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-muted-foreground"
-            onClick={handleReset}
-            disabled={activityLoading}
+              {isDirty && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-muted-foreground"
+                  onClick={handleReset}
+                  disabled={activityLoading}
+                >
+                  <X className="h-3 w-3 mr-1" /> Reset
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => refetch()}
+                disabled={activityLoading || isFetching}
+                title="Refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          );
+        }
+
+        const activeFilterCount =
+          (filterAction !== defaultActions ? 1 : 0) +
+          (filterModule ? 1 : 0) +
+          (filterDateFrom ? 1 : 0) +
+          (filterDateTo ? 1 : 0);
+        return (
+          <ErpMobileFilters
+            label="Activity filters"
+            quick={searchControl}
+            activeCount={activeFilterCount}
+            onClear={handleReset}
+            canClear={isDirty}
+            data-testid="activity-filters"
           >
-            <X className="h-3 w-3 mr-1" /> Reset
-          </Button>
-        )}
-
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => refetch()}
-          disabled={activityLoading || isFetching}
-          title="Refresh"
-        >
-          <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
+            {filterControls}
+          </ErpMobileFilters>
+        );
+      })()}
 
       {selectedCompany && (
         <p className="text-xs text-muted-foreground">
@@ -357,6 +418,47 @@ export function AuditLog({
         <div className="text-center py-12 text-muted-foreground border rounded-md bg-muted/20">
           <p className="text-sm font-medium">No activity found for {selectedCompany?.name || "this company"}</p>
           <p className="text-xs mt-1">Try adjusting the filters or date range.</p>
+        </div>
+      ) : erpPhone ? (
+        <div className="space-y-3" data-testid="activity-cards">
+          {groupedDays.map(({ dateKey, dateLabel, logs }) => (
+            <ErpMobileRecordGroup key={`day-${dateKey}`} label={dateLabel} meta={logs.length}>
+              <ErpMobileRecordList>
+                {logs.map((log) => {
+                  const detail = log.changeSummary || getDetailsSentence(log);
+                  const time = new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <ErpMobileRecordCard
+                      key={log.id}
+                      data-testid={`activity-card-${log.id}`}
+                      title={getRecordLabel(log)}
+                      subtitle={
+                        <>
+                          <span className="font-mono tabular-nums">{time}</span>
+                          {" · "}
+                          {log.username || (log.userId ? `User #${String(log.userId).slice(0, 8)}` : "Unknown")}
+                          {" · "}
+                          {log.moduleLabel || tableShortName(log.tableName)}
+                        </>
+                      }
+                      badges={
+                        <Badge variant={actionBadgeVariant(log.action)} className="text-[11px] leading-tight">
+                          {actionLabel(log.action)}
+                        </Badge>
+                      }
+                      fields={
+                        detail
+                          ? [{ label: "Details", value: <span className="line-clamp-2">{detail}</span>, wide: true }]
+                          : []
+                      }
+                      onOpen={() => setSelectedLog(log)}
+                      openLabel={`Open activity: ${actionLabel(log.action)} ${getRecordLabel(log)}`}
+                    />
+                  );
+                })}
+              </ErpMobileRecordList>
+            </ErpMobileRecordGroup>
+          ))}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">

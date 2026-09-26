@@ -379,7 +379,7 @@ export function DaybookTable({
             <TableCell className="text-right font-mono font-medium">{formatAmount(Number(o.itemsTotal))}</TableCell>
           )}
           <TableCell className="text-right">
-            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
               <Button
                 variant="ghost"
                 size="icon"
@@ -479,7 +479,7 @@ export function DaybookTable({
             {isDvPendingSync ? (
               <span className="text-xs text-amber-600 dark:text-amber-400 italic">Pending sync</span>
             ) : (
-              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-150">
                 <Button
                   variant="ghost"
                   size="icon"

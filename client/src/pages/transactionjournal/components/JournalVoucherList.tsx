@@ -72,7 +72,8 @@ function DesktopTable({ model }: { model: TransactionJournalModel }) {
   return (
     <div className="hidden md:block">
       <div className="table-responsive">
-        <Table>
+        {/* Phone landscape is wider than md; the rows restack as cards there too. */}
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[110px]">Date</TableHead>

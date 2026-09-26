@@ -91,7 +91,7 @@ interface PosHandlersParams {
 export function usePosHandlers(params: PosHandlersParams) {
   const focusCell = makeFocusCell(params.inputRefs);
 
-  const { selectItem, updateRow } = usePosRowCalculations({
+  const { selectItem, updateRow, ensureItemSellable, resolveItemRate } = usePosRowCalculations({
     rows: params.rows,
     activeRow: params.activeRow,
     setRows: params.setRows,
@@ -183,6 +183,8 @@ export function usePosHandlers(params: PosHandlersParams) {
     handleNewSale,
     selectItem,
     updateRow,
+    ensureItemSellable,
+    resolveItemRate,
     handleLoadDraft,
     handleExportInventory,
     handleSummaryExport,

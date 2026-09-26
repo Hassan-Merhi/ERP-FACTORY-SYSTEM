@@ -75,7 +75,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
         render={({ field }) => {
           const destinationId = Number(field.value);
           return (
-            <FormItem className="flex items-center gap-2 space-y-0">
+            <FormItem className="flex items-center gap-2 space-y-0 max-sm:w-full max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
               <FormLabel className="text-sm text-muted-foreground whitespace-nowrap">To:</FormLabel>
               <Select
                 value={Number.isInteger(destinationId) && destinationId > 0 ? String(destinationId) : ""}
@@ -109,7 +109,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
         control={stockTransferForm.control}
         name="voucherDate"
         render={({ field }) => (
-          <FormItem className="flex items-center gap-2 space-y-0">
+          <FormItem className="flex items-center gap-2 space-y-0 max-sm:w-full max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
             <FormLabel className="text-sm text-muted-foreground whitespace-nowrap">Date:</FormLabel>
             <FormControl>
               <Input
@@ -129,7 +129,7 @@ export function StockTransferHeader({ model }: { model: StockTransferFormModel }
           </FormItem>
         )}
       />
-      <div className="flex-1" />
+      <div className="flex-1 max-sm:hidden" />
       {!isPOS && voucherIdToEdit && (
         <Button
           type="button"

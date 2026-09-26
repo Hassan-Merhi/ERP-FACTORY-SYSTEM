@@ -192,7 +192,10 @@ export function WorkersTable({
                     </button>
                     <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                       <span className="truncate">{worker.code || "No code"}</span>
-                      <Badge variant={worker.active === false ? "secondary" : "outline"} className="h-5 px-1.5 text-[10px]">
+                      <Badge
+                        variant={worker.active === false ? "secondary" : "outline"}
+                        className="h-5 px-1.5 text-[10px]"
+                      >
                         {worker.active === false ? "Inactive" : "Active"}
                       </Badge>
                     </div>
@@ -201,11 +204,21 @@ export function WorkersTable({
 
                 <p className="font-mono text-sm font-medium">{formatAmount(monthlySalary)}</p>
 
-                <p className={cn("font-mono text-sm", advanceInfo.total > 0 ? "text-destructive" : "text-muted-foreground")}>
+                <p
+                  className={cn(
+                    "font-mono text-sm",
+                    advanceInfo.total > 0 ? "text-destructive" : "text-muted-foreground"
+                  )}
+                >
                   {advanceInfo.total > 0 ? formatAmount(advanceInfo.total) : "—"}
                 </p>
 
-                <p className={cn("font-mono text-sm", deductionInfo.total > 0 ? "text-amber-500" : "text-muted-foreground")}>
+                <p
+                  className={cn(
+                    "font-mono text-sm",
+                    deductionInfo.total > 0 ? "text-amber-500" : "text-muted-foreground"
+                  )}
+                >
                   {deductionInfo.total > 0 ? formatAmount(deductionInfo.total) : "—"}
                 </p>
 
@@ -240,7 +253,11 @@ export function WorkersTable({
           const avatarColor = getEmpAvatarColor(`${worker.firstName}${worker.lastName}`);
 
           return (
-            <div key={worker.id} className={cn("space-y-4 p-4", isSelected && "bg-primary/[0.04]")} data-testid={`card-worker-mobile-${worker.id}`}>
+            <div
+              key={worker.id}
+              className={cn("space-y-4 p-4", isSelected && "bg-primary/[0.04]")}
+              data-testid={`card-worker-mobile-${worker.id}`}
+            >
               <div className="flex items-start gap-3">
                 <Checkbox
                   checked={isSelected}
@@ -255,18 +272,20 @@ export function WorkersTable({
                   <button
                     type="button"
                     onClick={() => setStatementEmployee(worker)}
-                    className="block max-w-full truncate text-left font-semibold hover:underline"
+                    className="block max-w-full break-words text-left font-semibold hover:underline"
                   >
                     {[worker.firstName, worker.lastName].filter(Boolean).join(" ")}
                   </button>
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{worker.code || "No code"}</span>
-                    <Badge variant={worker.active === false ? "secondary" : "outline"} className="h-5 px-1.5 text-[10px]">
+                    <Badge
+                      variant={worker.active === false ? "secondary" : "outline"}
+                      className="h-5 px-1.5 text-[10px]"
+                    >
                       {worker.active === false ? "Inactive" : "Active"}
                     </Badge>
                   </div>
                 </div>
-                {renderActions(worker)}
               </div>
 
               <div className="grid grid-cols-3 gap-3 rounded-xl bg-muted/20 p-3">
@@ -276,13 +295,23 @@ export function WorkersTable({
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Advances</p>
-                  <p className={cn("mt-1 font-mono text-sm", advanceInfo.total > 0 ? "text-destructive" : "text-muted-foreground")}>
+                  <p
+                    className={cn(
+                      "mt-1 font-mono text-sm",
+                      advanceInfo.total > 0 ? "text-destructive" : "text-muted-foreground"
+                    )}
+                  >
                     {advanceInfo.total > 0 ? formatAmount(advanceInfo.total) : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Deductions</p>
-                  <p className={cn("mt-1 font-mono text-sm", deductionInfo.total > 0 ? "text-amber-500" : "text-muted-foreground")}>
+                  <p
+                    className={cn(
+                      "mt-1 font-mono text-sm",
+                      deductionInfo.total > 0 ? "text-amber-500" : "text-muted-foreground"
+                    )}
+                  >
                     {deductionInfo.total > 0 ? formatAmount(deductionInfo.total) : "—"}
                   </p>
                 </div>
@@ -305,6 +334,9 @@ export function WorkersTable({
                   {hasNegativePayment && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
                 </div>
               </div>
+
+              {/* Row actions get their own footer so the worker's name is never squeezed. */}
+              <div className="border-t pt-3">{renderActions(worker)}</div>
             </div>
           );
         })}

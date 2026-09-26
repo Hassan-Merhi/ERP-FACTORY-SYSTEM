@@ -6,6 +6,7 @@ import { cva, VariantProps } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,10 @@ function SidebarProvider({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const isMobile = useIsMobile();
+  // Phone landscape (a short touch screen, e.g. 852x393) is wider than the mobile breakpoint but
+  // too small for a pinned sidebar, so it slides over like on a portrait phone.
+  const isPhoneLayout = useErpPhoneLayout();
+  const isMobile = useIsMobile() || isPhoneLayout;
   const [openMobile, setOpenMobile] = React.useState(false);
 
   // This is the internal state of the sidebar.

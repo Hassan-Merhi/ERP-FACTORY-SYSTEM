@@ -357,7 +357,7 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
               </div>
 
               <div className="border rounded-md overflow-x-auto">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Worker</TableHead>
@@ -468,7 +468,7 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                 </Button>
               </div>
               <div className="border rounded-md overflow-x-auto">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
@@ -637,7 +637,7 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
 
               {/* Worker breakdown */}
               <div className="border rounded-md overflow-hidden max-h-56 overflow-y-auto">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs">Worker</TableHead>

@@ -156,7 +156,7 @@ export default function ConvergenceReconciliation() {
                   Every document checked agrees with its evidence.
                 </p>
               ) : (
-                <Table data-testid="table-discrepancies">
+                <Table mobileLayout="cards" data-testid="table-discrepancies">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Domain</TableHead>
@@ -174,8 +174,12 @@ export default function ConvergenceReconciliation() {
                             {entry.domain === "accounting" ? "Accounting" : "Inventory"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{entry.identity}</TableCell>
-                        <TableCell className="font-mono text-xs">{entry.code}</TableCell>
+                        <TableCell className="font-mono text-xs [[data-mobile-cards=true]_&]:break-all">
+                          {entry.identity}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs [[data-mobile-cards=true]_&]:break-all">
+                          {entry.code}
+                        </TableCell>
                         <TableCell className="text-right font-mono text-xs">{entry.expected}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{entry.actual}</TableCell>
                       </TableRow>

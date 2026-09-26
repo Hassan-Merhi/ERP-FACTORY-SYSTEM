@@ -13,13 +13,13 @@ export function SupplierProfitCheckFilters({ model }: { model: ProfitModel }) {
   if (!model.loaded) return null;
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      <div className="relative">
+      <div className="relative max-sm:w-full">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
         <Input
           placeholder="Search code / name"
           value={model.search}
           onChange={(event) => model.setSearch(event.target.value)}
-          className="pl-8 w-48 rounded-lg"
+          className="pl-8 w-48 rounded-lg max-sm:w-full"
           data-testid="input-search"
         />
       </div>

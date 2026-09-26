@@ -257,6 +257,30 @@
   }
 }
 
+/*
+ * A single-column phone grid (`grid-cols-1 sm:grid-cols-2`) whose full-width rows use a bare
+ * `col-span-2` gains an implicit auto-sized second column, squeezing every field beside it.
+ * Below `sm` those rows span the one explicit column instead.
+ */
+@media (max-width: 639px) {
+  html[data-app-shell="erp"] .grid-cols-1 > .col-span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Settings sections carry up to six sub-tabs; in a sideways scroller most of them sit off-screen
+ * with nothing hinting they exist. On phones (and phone landscape) they wrap so every sub-tab
+ * is visible.
+ */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  html[data-app-shell="erp"] [data-erp-route="/settings"] [data-responsive-tabs="true"] {
+    flex-wrap: wrap !important;
+    overflow: visible;
+    border-radius: 1rem;
+  }
+}
+
 /* Page forms: the closing button-only row with a submit action spans the width on phones. */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   #main-content form > div:last-child:has(> button[type="submit"]):not(:has(> :not(button, a))) {
@@ -317,10 +341,12 @@
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   html[data-app-shell="erp"] [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
   html[data-app-shell="erp"] [role="alertdialog"][data-slot="alert-dialog-content"] {
-    inset: auto 0 0 0 !important;
+    /* Lifted above the on-screen keyboard and capped to what the user can see
+       (useVisualViewportMetrics), so the pinned actions stay reachable while typing. */
+    inset: auto 0 var(--erp-keyboard-inset, 0px) 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    max-height: calc(var(--app-viewport-height, 100dvh) - 0.75rem) !important;
+    max-height: calc(var(--erp-visual-viewport-height, var(--app-viewport-height, 100dvh)) - 0.75rem) !important;
     transform: none !important;
     border-width: 1px 0 0 !important;
     border-radius: 1rem 1rem 0 0 !important;
@@ -346,6 +372,61 @@
     box-shadow:
       -1rem 0 0 hsl(var(--background)),
       1rem 0 0 hsl(var(--background));
+  }
+
+  /* Column dialogs with their own scrolling body (header / body / footer) must let that body
+     shrink below its content height, or the footer is pushed out of the capped sheet. */
+  html[data-app-shell="erp"]
+    [data-slot="dialog-content"]:is(.flex-col, [class*="flex-col"])
+    > :is(
+      [class*="overflow-y-auto"],
+      [class*="overflow-auto"],
+      [data-slot="dialog-body"],
+      [data-radix-scroll-area-viewport]
+    ) {
+    min-height: 0;
+  }
+
+  /* Tables inside a phone sheet do not cap their own height (Table's default 70vh region): the
+     sheet is the one scroll container, so entry lists never scroll inside it. */
+  html[data-app-shell="erp"] :is([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-table-scroll-region] {
+    max-height: none !important;
+  }
+
+  /* Bottom sheets (filters, page menu, pickers) sit above the keyboard too. */
+  html[data-app-shell="erp"] [data-slot="sheet-content"][data-sheet-side="bottom"] {
+    bottom: var(--erp-keyboard-inset, 0px);
+  }
+
+  /* Long dialogs keep their title and Close in view: the header sticks to the top of the sheet's
+     scroll area, and the close control (normally absolute) becomes a sticky first item that
+     overlaps the header row. */
+  /* Dialogs that manage their own padding (p-0 frames with header/body/footer) are left alone. */
+  html[data-app-shell="erp"] [data-slot="dialog-content"]:not([class~="p-0"]) > [data-slot="dialog-header"] {
+    position: sticky;
+    top: -1rem;
+    z-index: 3;
+    margin-top: -1rem;
+    padding-top: 1rem;
+    padding-bottom: 0.5rem;
+    background-color: hsl(var(--background));
+    box-shadow:
+      -1rem 0 0 hsl(var(--background)),
+      1rem 0 0 hsl(var(--background));
+  }
+
+  html[data-app-shell="erp"] [data-slot="dialog-content"] > [data-slot="dialog-close"] {
+    position: sticky !important;
+    inset: auto !important;
+    top: 0 !important;
+    z-index: 4;
+    order: -1;
+    justify-self: end;
+    align-self: flex-end;
+    margin-bottom: calc(-2.75rem - 1rem);
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    background-color: hsl(var(--background));
   }
 
   /* Two actions (Cancel + primary) share one row, primary on the trailing side. */
@@ -463,6 +544,12 @@ table[data-mobile-cards="true"] > tfoot > tr {
   padding: 0.5rem 0.75rem;
 }
 
+/* Desktop row heights (`h-12` rows) would clip the stacked card. */
+table[data-mobile-cards="true"] > tbody > tr,
+table[data-mobile-cards="true"] > tfoot > tr {
+  height: auto !important;
+}
+
 /* Zero specificity: row state colours from the page (status, unpriced, totals) still win. */
 :where(table[data-mobile-cards="true"] > tbody > tr) {
   background-color: hsl(var(--card));
@@ -547,6 +634,19 @@ table[data-mobile-cards="true"] [data-mobile-cell="actions"] {
   padding-top: 0.5rem !important;
 }
 
+/* Row controls drawn as bare icons for dense desktop grids get a touch-sized hit area in cards,
+   and stacked control columns (move up/down) lay out as a row. */
+table[data-mobile-cards="true"] [data-mobile-cell="actions"] :is(button, a[href]) {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  justify-content: center;
+}
+
+table[data-mobile-cards="true"] [data-mobile-cell="actions"] .flex-col {
+  flex-direction: row;
+  gap: 0.25rem;
+}
+
 table[data-mobile-cards="true"] [data-mobile-cell="full"] {
   align-items: center;
   text-align: center !important;
@@ -588,6 +688,24 @@ table[data-mobile-cards="true"] > tfoot > tr > * {
   [data-erp-shell] .flex.flex-nowrap:is(.gap-2, .gap-3, .gap-4) {
     flex-wrap: nowrap;
   }
+
+  /* The off-canvas sidebar portals outside the shell; the same wrap split its height-capped
+     column into two squeezed columns (pinned pages beside the sections). */
+  [data-slot="sidebar-content"] {
+    flex-wrap: nowrap !important;
+  }
+
+  /* Sheets and dialogs portal outside the shell too. SheetContent is itself a height-capped
+     `flex flex-col gap-4`, so the wrap split tall sheets (voucher entry pickers, filter sheets)
+     into side-by-side columns with the list pushed off-screen. Columns inside them stay
+     single-line as well. */
+  html[data-app-shell="erp"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
+  html[data-app-shell="erp"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    .flex.flex-col:is(.gap-1, .gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]) {
+    flex-wrap: nowrap;
+  }
 }
 
 /* Tablet widths keep the desktop sidebar, leaving 512–767px for the workspace. The account
@@ -595,5 +713,13 @@ table[data-mobile-cards="true"] > tfoot > tr > * {
 @media (min-width: 768px) and (max-width: 1023px) {
   [data-erp-shell] [data-testid="button-user-menu"] > span:nth-child(2) {
     display: none;
+  }
+}
+
+/* Voucher forms pin their Save bar to the bottom of the workspace on phones. Focus and
+   scroll-into-view (tapping an entry, the keyboard's Next) keep the target above the bar. */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  #main-content:has([data-voucher-sticky-actions]) {
+    scroll-padding-bottom: 10rem;
   }
 }

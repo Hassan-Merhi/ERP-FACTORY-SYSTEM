@@ -156,7 +156,7 @@ function EndContractForm({
                   data-testid={`input-${testIdPrefix}-refund-amount`}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <Label>{tenantPays ? "Cash account (received back into)" : "Cash account (paid out from)"}</Label>
                 <AccountSearchSelect
                   accounts={cashAccounts}
@@ -171,7 +171,7 @@ function EndContractForm({
                   </p>
                 )}
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <Label>Notes (optional)</Label>
                 <Textarea
                   rows={2}
@@ -181,7 +181,7 @@ function EndContractForm({
                   data-testid={`input-${testIdPrefix}-refund-notes`}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <p className="text-xs text-muted-foreground">
                   {tenantPays
                     ? "Posts: Dr Cash / Cr Security Deposits Paid — clears the asset and brings cash in."

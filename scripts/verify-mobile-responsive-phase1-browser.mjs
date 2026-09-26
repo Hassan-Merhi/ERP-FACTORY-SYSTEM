@@ -186,9 +186,23 @@ async function verifyErpMoreSheet(page, viewport, route) {
   await page.keyboard.press("Escape");
   await settle(page);
 
+  // The bottom navigation's More opens the grouped page menu (the phone replacement for the sidebar).
   await page.click('[data-testid="mobile-nav-more"]');
-  await page.waitForSelector('[data-testid="button-mobile-controls-search"]', { visible: true, timeout: TIMEOUT_MS });
-  assertMoreState(await readMoreState(), "bottom-nav More");
+  await page.waitForSelector('[data-testid="erp-mobile-nav-sheet"]', { visible: true, timeout: TIMEOUT_MS });
+  const pageMenu = await page.evaluate(() => {
+    const sheet = document.querySelector('[data-testid="erp-mobile-nav-sheet"]');
+    const links = sheet ? [...sheet.querySelectorAll('a[href]')] : [];
+    const rect = sheet?.getBoundingClientRect();
+    return {
+      links: links.length,
+      search: Boolean(sheet?.querySelector('[data-testid="erp-mobile-nav-search"]')),
+      withinViewport: rect ? rect.left >= -1 && rect.right <= window.innerWidth + 1 : false,
+    };
+  });
+  const menuLabel = `${viewport.name} ${route} bottom-nav More`;
+  if (pageMenu.links === 0) failures.push(`${menuLabel}: page menu lists no pages`);
+  if (!pageMenu.search) failures.push(`${menuLabel}: page menu has no page search`);
+  if (!pageMenu.withinViewport) failures.push(`${menuLabel}: page menu leaves the viewport`);
   await page.keyboard.press("Escape");
   await settle(page);
 
@@ -253,11 +267,16 @@ async function readState(page, route, workspace) {
 
     if (currentRoute.endsWith("/agents") || currentRoute === "/agents") {
       const anchor = document.querySelector('[data-testid="button-add-agent"]');
-      const pane = anchor?.closest(".w-72");
+      // Phones render the agent list as its own full-width screen (agents-phone-layout).
+      const pane = anchor?.closest('.w-72, [data-testid="agent-list-panel"]');
       const layout = pane?.parentElement;
       state.anchorVisible = Boolean(visibleRect(anchor));
       state.paneWidth = visibleRect(pane)?.width ?? null;
       state.flexDirection = layout instanceof HTMLElement ? window.getComputedStyle(layout).flexDirection : null;
+      // Agents follows the ERP phone model (useErpPhoneLayout): short touch landscape is a phone too.
+      state.phoneLayout = window.matchMedia(
+        "(max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px)",
+      ).matches;
     } else if (currentRoute === "/account-groups") {
       const anchor = document.querySelector('[data-testid="button-create-group"]');
       const pane = anchor?.closest(".w-72");
@@ -280,7 +299,8 @@ async function readState(page, route, workspace) {
 function assertState(state, viewport, route, workspace) {
   const failures = [];
   const label = `${viewport.name} ${route}`;
-  const shouldStack = viewport.width <= 767;
+  // Agents switches to its phone layout with the ERP phone model, which includes phone landscape.
+  const shouldStack = viewport.width <= 767 || (route.endsWith("/agents") && state.phoneLayout === true);
 
   if (!state.main) failures.push(`${label}: main content is not visible`);
   if (state.actualPath.startsWith("/login")) failures.push(`${label}: authenticated session returned to login`);
@@ -307,7 +327,8 @@ function assertState(state, viewport, route, workspace) {
   }
 
   if (workspace === "erp" && viewport.width <= 639) {
-    if (!state.mobileShell?.menuVisible) failures.push(`${label}: compact ERP header menu is not visible`);
+    // Pages open from the bottom navigation's More menu; a header sidebar toggle would duplicate it.
+    if (state.mobileShell?.menuVisible) failures.push(`${label}: duplicate sidebar toggle is visible in the compact ERP header`);
     if (!state.mobileShell?.companyVisible) failures.push(`${label}: current company is not visible in the compact ERP header`);
     if (!state.mobileShell?.companyText) failures.push(`${label}: current company label is empty in the compact ERP header`);
     if (!state.mobileShell?.moreVisible) failures.push(`${label}: compact ERP header More control is not visible`);

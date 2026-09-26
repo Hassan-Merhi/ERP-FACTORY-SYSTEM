@@ -76,7 +76,7 @@ export function JournalFormView({ model }: { model: Model }) {
                     control={journalForm.control}
                     name="voucherDate"
                     render={({ field }) => (
-                      <FormItem className="flex items-center gap-2 space-y-0">
+                      <FormItem className="flex items-center gap-2 space-y-0 max-sm:w-full">
                         <FormLabel className="text-sm text-muted-foreground shrink-0">Date</FormLabel>
                         <FormControl>
                           <Input
@@ -93,7 +93,7 @@ export function JournalFormView({ model }: { model: Model }) {
                                 event.target.value ? new Date(event.target.value + "T00:00:00") : new Date()
                               )
                             }
-                            className="w-[180px]"
+                            className="w-[180px] max-sm:w-full max-sm:flex-1"
                             data-testid="input-journal-date"
                           />
                         </FormControl>
@@ -102,11 +102,11 @@ export function JournalFormView({ model }: { model: Model }) {
                     )}
                   />
 
-                  <div className="shrink-0 flex items-center gap-1.5">
+                  <div className="shrink-0 flex items-center gap-1.5 max-sm:w-full">
                     <span className="text-xs text-muted-foreground whitespace-nowrap">Eff.</span>
                     <Input
                       type="date"
-                      className="w-36"
+                      className="w-36 max-sm:w-full max-sm:flex-1"
                       value={journalEffectiveDate}
                       onChange={(event) => setJournalEffectiveDate(event.target.value)}
                       data-testid="input-journal-effective-date"

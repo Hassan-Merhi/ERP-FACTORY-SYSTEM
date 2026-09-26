@@ -51,7 +51,7 @@ for (const token of ['data-workspace-route={routePath}', 'data-erp-route={routeP
 }
 
 for (const [name, source, tokens] of [
-  ["Agents (list panel)", agentsList, ['data-testid="button-add-agent"', 'className="w-72 shrink-0']],
+  ["Agents (list panel)", agentsList, ['data-testid="button-add-agent"', '"w-72 shrink-0']],
   ["Agents (statement panel)", agentsStatement, ['data-testid="text-agent-account-name"']],
   ["Account Groups", accountGroups, ['data-testid="button-create-group"', 'className="w-72 border-r flex flex-col shrink-0"']],
   ["Chat", chat, ['data-testid="chat-page"', 'className="w-64 shrink-0 flex flex-col"']],

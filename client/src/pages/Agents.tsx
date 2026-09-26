@@ -16,6 +16,7 @@ import { BookOpen } from "lucide-react";
 import { PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
 import { useDateJump } from "@/hooks/use-date-jump";
 import { useEscapeBack } from "@/hooks/use-escape-back";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import {
   groupTransactions,
   computeOpeningBalance,
@@ -44,6 +45,7 @@ export default function Agents() {
   const [addSearch, setAddSearch] = useState("");
 
   useEscapeBack(selectedAccount ? () => setSelectedAccount(null) : null);
+  const isPhone = useErpPhoneLayout();
 
   const {
     allAccounts,
@@ -64,9 +66,7 @@ export default function Agents() {
   }, [allAccounts, agentIds, agentSearch]);
 
   const availableAccounts = useMemo(() => {
-    return allAccounts.filter(
-      (a) => !agentIds.has(a.id) && searchAny(addSearch, a.name, a.code, a.type)
-    );
+    return allAccounts.filter((a) => !agentIds.has(a.id) && searchAny(addSearch, a.name, a.code, a.type));
   }, [allAccounts, agentIds, addSearch]);
 
   const groupedVouchers = groupTransactions(transactions);
@@ -111,24 +111,70 @@ export default function Agents() {
     addMutation.mutate(account);
   };
 
+  const listPanel = (
+    <AgentListPanel
+      agentAccounts={agentAccounts}
+      hasAnyAgents={agentIds.size > 0}
+      loading={agentsLoading || accountsLoading}
+      search={agentSearch}
+      onSearchChange={setAgentSearch}
+      selectedAccountId={selectedAccount?.id ?? null}
+      onSelect={setSelectedAccount}
+      onRemove={(accountId) => removeMutation.mutate(accountId)}
+      formatAmount={formatAmount}
+      onOpenAddDialog={() => {
+        setAddSearch("");
+        setAddDialogOpen(true);
+      }}
+      phone={isPhone}
+    />
+  );
+  const statementPanel = selectedAccount ? (
+    <AgentStatementPanel
+      companyName={selectedCompany?.name}
+      selectedAccount={selectedAccount}
+      periodFilter={periodFilter}
+      onPeriodChange={handlePeriodChange}
+      transactionsLoading={transactionsLoading}
+      vouchersWithBalance={vouchersWithBalance}
+      openingBalance={openingBalance}
+      periodDebit={periodDebit}
+      periodCredit={periodCredit}
+      closingBalance={closingBalance}
+      onExportExcel={handleExportExcel}
+      onClearAccount={() => setSelectedAccount(null)}
+      formatAmount={formatAmount}
+      formatDisplayDate={formatDisplayDate}
+      phone={isPhone}
+    />
+  ) : null;
+  const addDialog = (
+    <AddAgentDialog
+      open={addDialogOpen}
+      onOpenChange={setAddDialogOpen}
+      search={addSearch}
+      onSearchChange={setAddSearch}
+      availableAccounts={availableAccounts}
+      loading={accountsLoading}
+      formatAmount={formatAmount}
+      onAdd={handleAddAgent}
+    />
+  );
+
+  // Phones show one screen at a time: the agent list, then the selected agent's statement.
+  if (isPhone) {
+    return (
+      <div className="flex min-w-0 flex-col gap-3" data-testid="agents-phone-layout">
+        {statementPanel ?? listPanel}
+        {addDialog}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full">
       {/* ── Left panel — agent list ─────────────────────────────────────── */}
-      <AgentListPanel
-        agentAccounts={agentAccounts}
-        hasAnyAgents={agentIds.size > 0}
-        loading={agentsLoading || accountsLoading}
-        search={agentSearch}
-        onSearchChange={setAgentSearch}
-        selectedAccountId={selectedAccount?.id ?? null}
-        onSelect={setSelectedAccount}
-        onRemove={(accountId) => removeMutation.mutate(accountId)}
-        formatAmount={formatAmount}
-        onOpenAddDialog={() => {
-          setAddSearch("");
-          setAddDialogOpen(true);
-        }}
-      />
+      {listPanel}
 
       {/* ── Right panel — statement ─────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto bg-background">
@@ -147,36 +193,12 @@ export default function Agents() {
             </div>
           </div>
         ) : (
-          <AgentStatementPanel
-            companyName={selectedCompany?.name}
-            selectedAccount={selectedAccount}
-            periodFilter={periodFilter}
-            onPeriodChange={handlePeriodChange}
-            transactionsLoading={transactionsLoading}
-            vouchersWithBalance={vouchersWithBalance}
-            openingBalance={openingBalance}
-            periodDebit={periodDebit}
-            periodCredit={periodCredit}
-            closingBalance={closingBalance}
-            onExportExcel={handleExportExcel}
-            onClearAccount={() => setSelectedAccount(null)}
-            formatAmount={formatAmount}
-            formatDisplayDate={formatDisplayDate}
-          />
+          statementPanel
         )}
       </div>
 
       {/* ── Add account dialog ──────────────────────────────────────────── */}
-      <AddAgentDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        search={addSearch}
-        onSearchChange={setAddSearch}
-        availableAccounts={availableAccounts}
-        loading={accountsLoading}
-        formatAmount={formatAmount}
-        onAdd={handleAddAgent}
-      />
+      {addDialog}
     </div>
   );
 }

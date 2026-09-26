@@ -11,6 +11,8 @@ interface ErpMobileBottomNavProps {
     role?: string | null;
   };
   onMore: () => void;
+  /** True while the More page menu is open. */
+  moreOpen?: boolean;
 }
 
 interface MobileSection {
@@ -107,18 +109,27 @@ const mobileSections: MobileSection[] = [
   },
 ];
 
-export function ErpMobileBottomNav({ user, onMore }: ErpMobileBottomNavProps) {
-  const [currentLocation, navigate] = useLocation();
+function useVisibleMobileSections(user: ErpMobileBottomNavProps["user"]) {
   const { isItemVisible } = useErpVisibleSections(user);
-  const { t } = useApplicationLanguage();
-  const currentPath = currentLocation.split("?")[0] || "/";
-
-  const visibleSections = mobileSections.flatMap((section) => {
+  return mobileSections.flatMap((section) => {
     const destination = section.destinations.find((candidate) =>
       isItemVisible({ title: candidate.title, url: candidate.href, icon: section.icon })
     );
     return destination ? [{ ...section, href: destination.href }] : [];
   });
+}
+
+/** Pages the bottom navigation opens directly; the More page menu leaves them out. */
+export function useErpPrimaryDestinations(user: ErpMobileBottomNavProps["user"]): string[] {
+  return useVisibleMobileSections(user).map((section) => section.href);
+}
+
+export function ErpMobileBottomNav({ user, onMore, moreOpen = false }: ErpMobileBottomNavProps) {
+  const [currentLocation, navigate] = useLocation();
+  const { t } = useApplicationLanguage();
+  const currentPath = currentLocation.split("?")[0] || "/";
+
+  const visibleSections = useVisibleMobileSections(user);
   const hasPrimaryMatch = visibleSections.some((section) => section.isActive(currentPath));
 
   return (
@@ -156,9 +167,11 @@ export function ErpMobileBottomNav({ user, onMore }: ErpMobileBottomNavProps) {
           type="button"
           onClick={onMore}
           aria-label={t("mobileNav.more")}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
           data-testid="mobile-nav-more"
           className={`${mobileNavButtonClassName} ${
-            hasPrimaryMatch
+            hasPrimaryMatch && !moreOpen
               ? "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               : "bg-primary/10 text-primary"
           }`}

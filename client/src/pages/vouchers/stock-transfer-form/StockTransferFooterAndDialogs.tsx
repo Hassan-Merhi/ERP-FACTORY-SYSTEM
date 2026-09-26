@@ -27,6 +27,8 @@ import { queryClient } from "@/lib/queryClient";
 import { ApproveRevisionDialog } from "./dialogs/ApproveRevisionDialog";
 import { ImportTransferExcelDialog } from "./dialogs/ImportTransferExcelDialog";
 import { SaveAsRevisionDialog } from "./dialogs/SaveAsRevisionDialog";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
 import type { StockTransferFormModel } from "./useStockTransferFormModel";
 
 export function StockTransferFooterAndDialogs({ model }: { model: StockTransferFormModel }) {
@@ -82,7 +84,14 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
     setImportConfirmDialogOpen,
     importTotalItemsCount,
     handleConfirmedImport,
+    isPOS,
+    formatAmount,
+    transferTotal,
   } = model;
+  const isPhone = useErpPhoneLayout();
+  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
+  const filledEntries = transferEntries.filter((entry) => entry.stockItemId > 0).length;
+  const totalQuantity = Math.floor(transferEntries.reduce((sum, entry) => sum + parseFloat(entry.quantity || "0"), 0));
 
   return (
     <>
@@ -91,12 +100,12 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
           control={stockTransferForm.control}
           name="notes"
           render={({ field }) => (
-            <FormItem className="flex-1">
+            <FormItem className="flex-1 max-sm:basis-full">
               <FormControl>
                 <Textarea
                   {...field}
                   placeholder="Notes (optional)"
-                  className="resize-none h-9"
+                  className="resize-none h-9 max-sm:h-20"
                   data-testid="input-transfer-notes"
                 />
               </FormControl>
@@ -141,16 +150,18 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          type="submit"
-          disabled={
-            stockTransferMutation.isPending || transferEntries.filter((entry) => entry.stockItemId > 0).length === 0
-          }
-          data-testid="button-save-transfer-voucher"
-        >
-          {stockTransferMutation.isPending ? "Saving..." : "Save Transfer"}
-        </Button>
-        {voucherIdToEdit && stockTransferToEdit?.id && (
+        {!isPhone && (
+          <Button
+            type="submit"
+            disabled={
+              stockTransferMutation.isPending || transferEntries.filter((entry) => entry.stockItemId > 0).length === 0
+            }
+            data-testid="button-save-transfer-voucher"
+          >
+            {stockTransferMutation.isPending ? "Saving..." : "Save Transfer"}
+          </Button>
+        )}
+        {!isPhone && voucherIdToEdit && stockTransferToEdit?.id && (
           <Button
             type="button"
             variant="outline"
@@ -163,6 +174,29 @@ export function StockTransferFooterAndDialogs({ model }: { model: StockTransferF
           </Button>
         )}
       </div>
+
+      <VoucherPhoneActionBar
+        summary={`${filledEntries} items · ${totalQuantity} qty${isPOS ? "" : ` · ${formatAmount(transferTotal)}`}`}
+        saveLabel="Save Transfer"
+        saving={stockTransferMutation.isPending}
+        disabled={filledEntries === 0}
+        onCancel={cancelEdit}
+        extra={
+          voucherIdToEdit && stockTransferToEdit?.id ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isTransferSavingRevision || filledEntries === 0}
+              onClick={handleTransferSaveAsRevision}
+              data-testid="button-save-transfer-revision"
+            >
+              <GitBranch className="h-4 w-4 mr-1" />
+              Save as Revision
+            </Button>
+          ) : undefined
+        }
+        data-testid="transfer-phone-actions"
+      />
 
       <ApproveRevisionDialog
         approveRevisionMutation={approveRevisionMutation}

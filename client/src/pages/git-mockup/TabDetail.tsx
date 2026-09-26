@@ -178,7 +178,7 @@ export function TabDetail() {
             </div>
           ) : (
             <div className="rounded-md border overflow-x-auto">
-              <Table className="text-xs whitespace-nowrap">
+              <Table className="text-xs whitespace-nowrap" mobileLayout="cards">
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Container #</TableHead>

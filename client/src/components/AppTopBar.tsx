@@ -69,7 +69,13 @@ export function AppTopBar({
       <div data-slot="app-top-bar-leading" className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2.5">
         <SidebarTrigger
           data-testid="button-sidebar-toggle"
-          className="!inline-flex h-10 w-10 shrink-0 text-foreground sm:h-8 sm:w-8"
+          // ERP phones open pages from the bottom navigation's More menu, so the sidebar toggle
+          // would only duplicate it there.
+          className={
+            simplifyMobileNavigation
+              ? "hidden h-10 w-10 shrink-0 text-foreground sm:inline-flex sm:h-8 sm:w-8"
+              : "!inline-flex h-10 w-10 shrink-0 text-foreground sm:h-8 sm:w-8"
+          }
           aria-label={t("accessibility.toggleSidebar")}
         />
         {leftContent && <div className="hidden min-w-0 sm:block">{leftContent}</div>}

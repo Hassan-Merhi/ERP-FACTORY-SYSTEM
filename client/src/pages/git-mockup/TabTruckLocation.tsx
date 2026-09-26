@@ -10,12 +10,15 @@ import { cn } from "@/lib/utils";
 import { gitContainersUrl, groupBySupplier } from "./helpers";
 import type { GitContainersResponse, EnrichedContainerApi, CompanyViewMode } from "./types";
 import { STATUS_BADGE as STATUS_BADGE_MAP } from "./types";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { ErpMobileRecordCard, ErpMobileRecordList } from "@/components/ui/erp-mobile-records";
 
 export function TabTruckLocation() {
   const [companyMode, setCompanyMode] = useState<CompanyViewMode>("session");
   const [waSending, setWaSending] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const isPhone = useErpPhoneLayout();
 
   const queryUrl = gitContainersUrl({ allCompanies: companyMode === "all", includeOffloaded: true });
 
@@ -197,94 +200,152 @@ export function TabTruckLocation() {
         <div className="py-10 text-center text-muted-foreground text-sm">No active containers found.</div>
       )}
 
+      {/* Phones: one card per container under the same shop → supplier grouping as the table. */}
+      {isPhone && withTruck.length > 0 && (
+        <div className="space-y-4" data-testid="git-trucks-cards">
+          {[...new Set(withTruck.map((r) => r.shopName ?? r.companyName ?? "Unknown"))]
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }))
+            .map((shop) => {
+              const shopRows = withTruck.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
+              const supplierGroups = groupBySupplier(shopRows);
+              return (
+                <section key={shop} className="space-y-2" data-testid={`git-trucks-shop-${shop}`}>
+                  <h3 className="rounded-md border border-yellow-500 bg-yellow-300 px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-yellow-950">
+                    {shop} — {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} on the road
+                  </h3>
+                  {supplierGroups.map(({ name: supplierName, rows: supplierRows }) => (
+                    <div key={supplierName} className="space-y-2">
+                      {supplierGroups.length > 1 && (
+                        <p className="px-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {supplierName} — {supplierRows.length}
+                        </p>
+                      )}
+                      <ErpMobileRecordList>
+                        {supplierRows.map((r) => (
+                          <ErpMobileRecordCard
+                            key={r.id}
+                            data-testid={`git-truck-card-${r.id}`}
+                            title={<span className="font-mono">{r.containerNumber}</span>}
+                            subtitle={r.supplierCode ?? supplierName}
+                            badges={
+                              <span
+                                className={cn(
+                                  "rounded px-1.5 py-0.5 text-[11px] font-medium",
+                                  (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
+                                )}
+                              >
+                                {r.status}
+                              </span>
+                            }
+                            fields={[
+                              {
+                                label: "Truck / Plate",
+                                value: <span className="font-mono">{r.numberPlate ?? "—"}</span>,
+                              },
+                              { label: "Location", value: r.trackingLocation ?? "—" },
+                              { label: "Agent", value: r.agent ?? "—" },
+                              { label: "Transporter", value: r.transporter ?? "—" },
+                            ]}
+                          />
+                        ))}
+                      </ErpMobileRecordList>
+                    </div>
+                  ))}
+                </section>
+              );
+            })}
+        </div>
+      )}
+
       {/* Always group by shop name across all companies — same merge logic as the WhatsApp print template */}
-      {[{ id: 0, rows: withTruck }].map((cg) => {
-        const cgShops = [...new Set(cg.rows.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-        );
-        return (
-          <div key={cg.id} className="space-y-1">
-            <div className="rounded-md border overflow-hidden">
-              <table className="w-full text-xs whitespace-nowrap border-collapse">
-                <thead>
-                  <tr className="bg-yellow-400 text-yellow-950 font-bold border-b-2 border-yellow-600">
-                    <th className="py-1.5 px-3 text-center">CONTAINER #</th>
-                    <th className="py-1.5 px-3 text-center">SUPPLIER</th>
-                    <th className="py-1.5 px-3 text-center">NUMBER PLATE</th>
-                    <th className="py-1.5 px-3 text-center">LOCATION</th>
-                    <th className="py-1.5 px-3 text-center">AGENT</th>
-                    <th className="py-1.5 px-3 text-center">TRANSPORTER</th>
-                    <th className="py-1.5 px-3 text-center">STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cgShops.flatMap((shop) => {
-                    const shopRows = cg.rows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
-                    const hdrRow = (
-                      <tr key={`hdr-${cg.id}-${shop}`} className="bg-yellow-300 border-t border-yellow-500">
-                        <td
-                          colSpan={7}
-                          className="py-1 px-3 font-bold text-yellow-900 text-center tracking-wide uppercase"
-                        >
-                          {shop} — {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} on the road
-                        </td>
-                      </tr>
-                    );
-                    const supplierGroups = groupBySupplier(shopRows);
-                    const hasMultiSupplier = supplierGroups.length > 1;
-                    const dataRows = supplierGroups.flatMap(({ name: supName, rows: supRows }) => {
-                      const supHdr = hasMultiSupplier ? (
-                        <tr key={`sup-${cg.id}-${shop}-${supName}`} className="bg-muted/40 border-t border-border">
+      {!isPhone &&
+        [{ id: 0, rows: withTruck }].map((cg) => {
+          const cgShops = [...new Set(cg.rows.map((r) => r.shopName ?? r.companyName ?? "Unknown"))].sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+          );
+          return (
+            <div key={cg.id} className="space-y-1">
+              <div className="rounded-md border overflow-hidden">
+                <table className="w-full text-xs whitespace-nowrap border-collapse">
+                  <thead>
+                    <tr className="bg-yellow-400 text-yellow-950 font-bold border-b-2 border-yellow-600">
+                      <th className="py-1.5 px-3 text-center">CONTAINER #</th>
+                      <th className="py-1.5 px-3 text-center">SUPPLIER</th>
+                      <th className="py-1.5 px-3 text-center">NUMBER PLATE</th>
+                      <th className="py-1.5 px-3 text-center">LOCATION</th>
+                      <th className="py-1.5 px-3 text-center">AGENT</th>
+                      <th className="py-1.5 px-3 text-center">TRANSPORTER</th>
+                      <th className="py-1.5 px-3 text-center">STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cgShops.flatMap((shop) => {
+                      const shopRows = cg.rows.filter((r) => (r.shopName ?? r.companyName ?? "Unknown") === shop);
+                      const hdrRow = (
+                        <tr key={`hdr-${cg.id}-${shop}`} className="bg-yellow-300 border-t border-yellow-500">
                           <td
                             colSpan={7}
-                            className="py-0.5 px-3 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+                            className="py-1 px-3 font-bold text-yellow-900 text-center tracking-wide uppercase"
                           >
-                            {supName} — {supRows.length}
+                            {shop} — {shopRows.length} container{shopRows.length !== 1 ? "s" : ""} on the road
                           </td>
                         </tr>
-                      ) : null;
-                      const rows = supRows.map((r) => (
-                        <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/40">
-                          <td className="py-0.5 px-3 text-center font-mono font-semibold tracking-tight">
-                            {r.containerNumber}
-                          </td>
-                          <td className="py-0.5 px-3 text-center">
-                            {r.supplierCode ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="py-0.5 px-3 text-center font-mono">
-                            {r.numberPlate ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="py-0.5 px-3 text-center">
-                            {r.trackingLocation ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="py-0.5 px-3 text-center">
-                            {r.agent ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="py-0.5 px-3 text-center">
-                            {r.transporter ?? <span className="text-muted-foreground">—</span>}
-                          </td>
-                          <td className="py-0.5 px-3 text-center">
-                            <span
-                              className={cn(
-                                "px-1.5 py-0.5 rounded text-[10px] font-medium",
-                                (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
-                              )}
+                      );
+                      const supplierGroups = groupBySupplier(shopRows);
+                      const hasMultiSupplier = supplierGroups.length > 1;
+                      const dataRows = supplierGroups.flatMap(({ name: supName, rows: supRows }) => {
+                        const supHdr = hasMultiSupplier ? (
+                          <tr key={`sup-${cg.id}-${shop}-${supName}`} className="bg-muted/40 border-t border-border">
+                            <td
+                              colSpan={7}
+                              className="py-0.5 px-3 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
                             >
-                              {r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ));
-                      return supHdr ? [supHdr, ...rows] : rows;
-                    });
-                    return [hdrRow, ...dataRows];
-                  })}
-                </tbody>
-              </table>
+                              {supName} — {supRows.length}
+                            </td>
+                          </tr>
+                        ) : null;
+                        const rows = supRows.map((r) => (
+                          <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/40">
+                            <td className="py-0.5 px-3 text-center font-mono font-semibold tracking-tight">
+                              {r.containerNumber}
+                            </td>
+                            <td className="py-0.5 px-3 text-center">
+                              {r.supplierCode ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-0.5 px-3 text-center font-mono">
+                              {r.numberPlate ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-0.5 px-3 text-center">
+                              {r.trackingLocation ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-0.5 px-3 text-center">
+                              {r.agent ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-0.5 px-3 text-center">
+                              {r.transporter ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-0.5 px-3 text-center">
+                              <span
+                                className={cn(
+                                  "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                  (STATUS_BADGE_MAP as Record<string, string>)[r.status] ?? "bg-muted text-foreground"
+                                )}
+                              >
+                                {r.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ));
+                        return supHdr ? [supHdr, ...rows] : rows;
+                      });
+                      return [hdrRow, ...dataRows];
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
       {/* Hidden Full-HD print template for WhatsApp image capture */}
       <div

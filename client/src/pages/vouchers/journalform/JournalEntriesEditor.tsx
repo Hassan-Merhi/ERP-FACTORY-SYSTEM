@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
 import type { useJournalFormModel } from "./useJournalFormModel";
 
 type Model = ReturnType<typeof useJournalFormModel>;
@@ -53,7 +55,11 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
     totalCredit,
     handleExportJournalVoucher,
     journalMutation,
+    voucherIdToEdit,
   } = model;
+  const isPhone = useErpPhoneLayout();
+  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
+  const isBalanced = Math.abs(totalDebit - totalCredit) <= 0.01;
 
   const pendingBlurTimeouts = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
@@ -85,7 +91,27 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
           const entryAmount = parseFloat(entry?.amount || "0");
           const projectedBalance = entry?.type === "DR" ? currentBalance + entryAmount : currentBalance - entryAmount;
           return (
-            <div key={field.id} className="border rounded-md p-3 space-y-2 bg-card">
+            <div
+              key={field.id}
+              className="border rounded-md p-3 space-y-2 bg-card"
+              data-testid={`journal-entry-card-${index}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted-foreground">Entry {index + 1}</p>
+                {journalFields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeJournal(index)}
+                    data-testid={`button-journal-remove-mobile-${index}`}
+                    className="-my-2 -me-2 shrink-0"
+                    aria-label={`Remove entry ${index + 1}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
               <div className="flex items-start gap-2">
                 <FormField
                   control={journalForm.control}
@@ -164,18 +190,6 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
                     </div>
                   )}
                 </div>
-                {journalFields.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeJournal(index)}
-                    data-testid={`button-journal-remove-mobile-${index}`}
-                    className="shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
               </div>
 
               <FormField
@@ -619,15 +633,30 @@ export function JournalEntriesEditor({ model }: { model: Model }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            type="submit"
-            disabled={journalMutation.isPending || Math.abs(totalDebit - totalCredit) > 0.01}
-            data-testid="button-save-journal-voucher"
-          >
-            {journalMutation.isPending ? "Saving..." : "Save Journal Voucher"}
-          </Button>
+          {!isPhone && (
+            <Button
+              type="submit"
+              disabled={journalMutation.isPending || Math.abs(totalDebit - totalCredit) > 0.01}
+              data-testid="button-save-journal-voucher"
+            >
+              {journalMutation.isPending ? "Saving..." : "Save Journal Voucher"}
+            </Button>
+          )}
         </div>
       </div>
+
+      <VoucherPhoneActionBar
+        summary={`Dr ${formatAmount(totalDebit)} · Cr ${formatAmount(totalCredit)}`}
+        status={{
+          ok: isBalanced,
+          label: isBalanced ? "Balanced" : `Off by ${formatAmount(Math.abs(totalDebit - totalCredit))}`,
+        }}
+        saveLabel="Save Journal Voucher"
+        saving={journalMutation.isPending}
+        disabled={!isBalanced}
+        onCancel={cancelEdit}
+        data-testid="journal-phone-actions"
+      />
     </>
   );
 }

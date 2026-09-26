@@ -499,7 +499,7 @@ export const phase3RemainingTranslationsPart02: readonly Phase3SharedUiEntry[] =
   { en: "Add Factory Container", ar: "حاويات مصنع", fr: "Ajouter un contenant d'usine" },
   { en: "Add first ride", ar: "الجولة الأولى", fr: "Ajouter le premier tour" },
   { en: "Add Freight Charge", ar: "مصاريف الشحن", fr: "Ajouter les frais de fret" },
-  { en: "Add Item", ar: "البند", fr: "Ajouter un élément" },
+  { en: "Add Item", ar: "إضافة بند", fr: "Ajouter un élément" },
   { en: "Add item by searching…", ar: "إضافة بند عن طريق البحث...", fr: "Ajouter un élément par recherche..." },
   { en: "Add Item to Order", ar: "إضافة بند إلى النظام", fr: "Ajouter un élément à la commande" },
   { en: "Add Item to Stock", ar: "إضافة بند إلى المخزون", fr: "Ajouter un élément au stock" },

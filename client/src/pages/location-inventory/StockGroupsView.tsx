@@ -26,6 +26,13 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { InventoryLocation as Location, StockGroupSummary } from "./locationInventoryTypes";
 import type { AuthMe } from "@shared/apiTypes";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import {
+  ErpMobileActionsMenu,
+  ErpMobileRecordCard,
+  ErpMobileRecordList,
+  ErpMobileSummaryGrid,
+} from "@/components/ui/erp-mobile-records";
 
 interface StockGroupsViewProps {
   selectedLocationLocal: Location;
@@ -94,6 +101,216 @@ export function StockGroupsView({
       : selectedLocationLocal.whatsappGroupChatId
         ? `WhatsApp group linked but stock reports disabled${selectedLocationLocal.whatsappGroupName ? `: ${selectedLocationLocal.whatsappGroupName}` : ""}`
         : "Link WhatsApp group for stock reports";
+  const isPhone = useErpPhoneLayout();
+
+  const openGroup = (g: StockGroupSummary) => {
+    setSelectedGroup(g);
+    setItemSearchTerm("");
+    setItemCategoryFilter([]);
+  };
+
+  const groupExportMenu = (g: StockGroupSummary) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-export-group-${g.groupId}`}>
+          <Printer className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canViewCost && (
+          <DropdownMenuItem
+            onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, true)}
+            data-testid={`menu-export-group-pdf-cost-${g.groupId}`}
+          >
+            <Printer className="h-4 w-4 mr-2" /> Export PDF (with cost)
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, false)}
+          data-testid={`menu-export-group-pdf-nocost-${g.groupId}`}
+        >
+          <Printer className="h-4 w-4 mr-2" /> Export PDF (without cost)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const groupSearchControls = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className={isPhone ? "relative w-full" : "relative flex-1 min-w-[200px] max-w-sm"}>
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search stock groups by name..."
+          value={groupSearchTerm}
+          onChange={(e) => setGroupSearchTerm(e.target.value)}
+          className="pl-9"
+          data-testid="input-group-search"
+        />
+      </div>
+      <Select value={groupCategoryFilter || "all"} onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}>
+        <SelectTrigger className={isPhone ? "w-full" : "w-48"} data-testid="select-category-filter">
+          <SelectValue placeholder="All Categories" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Categories</SelectItem>
+          <SelectItem value="none">Uncategorized</SelectItem>
+          {categoriesList.map((cat) => (
+            <SelectItem key={cat.id} value={String(cat.id)}>
+              {cat.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const emptyMessage = groupSearchTerm
+    ? "No groups match your search."
+    : showZeroStock
+      ? "No stock items found for this location."
+      : 'No items with stock. Toggle "Show zero stock" to see all items.';
+
+  // Phones: compact title with one Actions menu, a two-column summary and a card per stock group.
+  if (isPhone) {
+    return (
+      <div className="space-y-3" data-testid="stock-groups-phone">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h2 className="break-words text-xl font-bold leading-snug">{selectedLocationLocal.name}</h2>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Stock Groups</p>
+          </div>
+          <ErpMobileActionsMenu
+            data-testid="button-stock-groups-actions"
+            actions={[
+              {
+                label: "View All Stock Items",
+                icon: List,
+                onSelect: () => {
+                  setViewAllItems(true);
+                  setItemSearchTerm("");
+                },
+                testId: "button-view-all-items",
+              },
+              {
+                label: showZeroStock ? "Hide zero stock" : "Show zero stock",
+                icon: Eye,
+                onSelect: () => setShowZeroStock(!showZeroStock),
+                testId: "button-show-zero",
+              },
+              {
+                label: "Export to Excel",
+                icon: FileSpreadsheet,
+                onSelect: handleExportInventory,
+                separated: true,
+                testId: "menu-export-excel",
+              },
+              canViewCost && {
+                label: "Export to PDF (with cost)",
+                icon: Printer,
+                onSelect: () => handlePrintWithOption(true),
+                testId: "menu-export-pdf-cost",
+              },
+              {
+                label: "Export to PDF (without cost)",
+                icon: Printer,
+                onSelect: () => handlePrintWithOption(false),
+                testId: "menu-export-pdf-nocost",
+              },
+              !posUser && {
+                label: "Edit / Rename location",
+                icon: Pencil,
+                onSelect: () => openRenameDialog(selectedLocationLocal),
+                separated: true,
+                testId: "button-rename-location",
+              },
+              !posUser &&
+                canManageWhatsapp && {
+                  label: "WhatsApp Stock Reports",
+                  icon: MessageCircle,
+                  onSelect: () => openWaGroupDialog(selectedLocationLocal),
+                  testId: "button-wa-location",
+                },
+              !posUser && {
+                label: "Delete Location",
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => setDeleteDialogOpen(true),
+                testId: "menu-delete-location",
+              },
+            ]}
+          />
+        </div>
+
+        {!activeInventoryLoading && (
+          <ErpMobileSummaryGrid
+            data-testid="stock-groups-summary"
+            items={[
+              { label: "Groups", value: stockGroups.length },
+              { label: "Items", value: totalItems },
+              { label: "Qty (BL)", value: Math.floor(totalQty).toLocaleString(), wide: !canViewCost },
+              ...(canViewCost ? [{ label: "Value", value: formatAmount(totalValue) }] : []),
+            ]}
+          />
+        )}
+        {showZeroStock && (
+          <p className="text-xs text-muted-foreground" data-testid="text-zero-stock-shown">
+            Including zero-stock items.
+          </p>
+        )}
+
+        {groupSearchControls}
+
+        {activeInventoryLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <ErpMobileRecordList isEmpty={filteredStockGroups.length === 0} empty={emptyMessage}>
+            {filteredStockGroups.map((g) => (
+              <ErpMobileRecordCard
+                key={g.groupId}
+                data-testid={`row-group-${g.groupId}`}
+                title={g.groupName}
+                subtitle={`${g.itemCount} ${g.itemCount === 1 ? "item" : "items"}`}
+                value={
+                  <>
+                    {Math.floor(g.totalQuantity).toLocaleString()}
+                    <span className="ms-1 text-[11px] font-normal text-muted-foreground">BL</span>
+                  </>
+                }
+                fields={
+                  canViewCost
+                    ? [
+                        { label: "Avg Rate", value: formatAmount(g.averageRate), numeric: true },
+                        { label: "Value", value: formatAmount(g.totalValue), numeric: true },
+                      ]
+                    : []
+                }
+                onOpen={() => openGroup(g)}
+                openLabel={`Open ${g.groupName}`}
+                actions={groupExportMenu(g)}
+              />
+            ))}
+          </ErpMobileRecordList>
+        )}
+
+        {filteredStockGroups.length > 0 && (
+          <div
+            className="flex items-center justify-between rounded-lg border bg-muted/50 px-3 py-2 text-sm font-semibold"
+            data-testid="stock-groups-total"
+          >
+            <span>Total · {filteredStockGroups.reduce((sum, g) => sum + g.itemCount, 0)} items</span>
+            <span className="font-mono tabular-nums" dir="ltr">
+              {Math.floor(filteredStockGroups.reduce((sum, g) => sum + g.totalQuantity, 0)).toLocaleString()} BL
+              {canViewCost && ` · ${formatAmount(filteredStockGroups.reduce((sum, g) => sum + g.totalValue, 0))}`}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -240,35 +457,7 @@ export function StockGroupsView({
       </div>
 
       {/* Search + categories */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search stock groups by name..."
-            value={groupSearchTerm}
-            onChange={(e) => setGroupSearchTerm(e.target.value)}
-            className="pl-9"
-            data-testid="input-group-search"
-          />
-        </div>
-        <Select
-          value={groupCategoryFilter || "all"}
-          onValueChange={(v) => setGroupCategoryFilter(v === "all" ? "" : v)}
-        >
-          <SelectTrigger className="w-48" data-testid="select-category-filter">
-            <SelectValue placeholder="All Categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="none">Uncategorized</SelectItem>
-            {categoriesList.map((cat) => (
-              <SelectItem key={cat.id} value={String(cat.id)}>
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {groupSearchControls}
 
       {/* Stock groups table */}
       {activeInventoryLoading ? (
@@ -278,13 +467,7 @@ export function StockGroupsView({
           ))}
         </div>
       ) : filteredStockGroups.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed rounded-lg text-muted-foreground">
-          {groupSearchTerm
-            ? "No groups match your search."
-            : showZeroStock
-              ? "No stock items found for this location."
-              : 'No items with stock. Toggle "Show zero stock" to see all items.'}
-        </div>
+        <div className="py-16 text-center border-2 border-dashed rounded-lg text-muted-foreground">{emptyMessage}</div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm border-collapse">
@@ -307,11 +490,7 @@ export function StockGroupsView({
                 <tr
                   key={g.groupId}
                   className="border-b hover-elevate cursor-pointer"
-                  onClick={() => {
-                    setSelectedGroup(g);
-                    setItemSearchTerm("");
-                    setItemCategoryFilter([]);
-                  }}
+                  onClick={() => openGroup(g)}
                   data-testid={`row-group-${g.groupId}`}
                 >
                   <td className="px-4 py-3 font-medium">{g.groupName}</td>
@@ -331,34 +510,7 @@ export function StockGroupsView({
                     </>
                   )}
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          data-testid={`button-export-group-${g.groupId}`}
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canViewCost && (
-                          <DropdownMenuItem
-                            onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, true)}
-                            data-testid={`menu-export-group-pdf-cost-${g.groupId}`}
-                          >
-                            <Printer className="h-4 w-4 mr-2" /> Export PDF (with cost)
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => handlePrintGroup({ groupId: g.groupId, groupName: g.groupName }, false)}
-                          data-testid={`menu-export-group-pdf-nocost-${g.groupId}`}
-                        >
-                          <Printer className="h-4 w-4 mr-2" /> Export PDF (without cost)
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {groupExportMenu(g)}
                   </td>
                 </tr>
               ))}

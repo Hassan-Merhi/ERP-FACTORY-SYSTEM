@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { Suspense, lazy, useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
@@ -11,6 +11,7 @@ import { DailyRateModal } from "@/components/DailyRateModal";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
 import { ErpMobileBottomNav } from "@/components/ErpMobileBottomNav";
+import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
@@ -35,9 +36,17 @@ function CompanyDailyRateModal() {
   return <DailyRateModal companyId={selectedCompany.id} />;
 }
 
+// The page menu searches localized page names through the interface translator, which stays out
+// of the startup bundle; the menu loads on the first More tap.
+const ErpMobileNavSheet = lazy(() =>
+  import("@/components/ErpMobileNavSheet").then((module) => ({ default: module.ErpMobileNavSheet }))
+);
+
 export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog }: ErpShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Stays mounted after the first open so the menu keeps its close animation.
+  const [mobileNavLoaded, setMobileNavLoaded] = useState(false);
   const [currentLocation] = useLocation();
   const { t } = useApplicationLanguage();
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
@@ -50,6 +59,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   useEffect(() => installErpNavigationHistory(), []);
   // ERP-only dialog styling must not follow the user into Factory, POS or Properties.
   useDocumentAppShell("erp");
+  // Phone sheets and dialogs size to the visible viewport, so the keyboard never hides their actions.
+  useVisualViewportMetrics();
 
   return (
     <AppModeProvider mode="erp">
@@ -66,8 +77,6 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 user={{ username: user.username, role: user.role ?? "" }}
                 onLogout={handleLogout}
                 onSearchOpen={() => setPaletteOpen(true)}
-                mobileMoreOpen={mobileMoreOpen}
-                onMobileMoreOpenChange={setMobileMoreOpen}
                 simplifyMobileNavigation
               />
               <main
@@ -90,7 +99,19 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   </div>
                 </WorkspaceRouteBoundary>
               </main>
-              <ErpMobileBottomNav user={user} onMore={() => setMobileMoreOpen(true)} />
+              <ErpMobileBottomNav
+                user={user}
+                onMore={() => {
+                  setMobileNavLoaded(true);
+                  setMobileNavOpen(true);
+                }}
+                moreOpen={mobileNavOpen}
+              />
+              {mobileNavLoaded && (
+                <Suspense fallback={null}>
+                  <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
+                </Suspense>
+              )}
             </div>
           </div>
         </SidebarProvider>

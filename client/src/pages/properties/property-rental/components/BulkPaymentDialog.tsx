@@ -120,7 +120,7 @@ function BulkPaymentDialog({
               data-testid={`input-${testIdPrefix}-bulk-date`}
             />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label>Notes (optional)</Label>
             <Input
               value={notes}
@@ -130,7 +130,7 @@ function BulkPaymentDialog({
             />
           </div>
           {paymentDate > new Date().toISOString().slice(0, 10) && (
-            <div className="col-span-2 flex items-center gap-3">
+            <div className="sm:col-span-2 flex items-center gap-3">
               <Switch
                 id={`${testIdPrefix}-bulk-schedule-future`}
                 checked={scheduleFuturePayment}

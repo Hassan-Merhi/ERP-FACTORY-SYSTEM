@@ -17,6 +17,9 @@ import type {
   SaleRow,
 } from "./posTypes";
 import { getFilteredInventory } from "../utils/posCalculations";
+import type { PosItemSelectionOverrides } from "../hooks/usePosRowCalculations";
+import { PosMobileItemSheet, type PosItemRateInfo } from "./PosMobileItemSheet";
+import { useState } from "react";
 
 interface PosMobileLayoutProps {
   posUser?: AuthMe | null;
@@ -45,7 +48,11 @@ interface PosMobileLayoutProps {
   setSearchTerm: (v: string) => void;
   mobileSearchInputRef: React.RefObject<HTMLInputElement | null>;
   inventory: InventoryItem[];
-  selectItem: (item: InventoryItem) => void;
+  selectItem: (item: InventoryItem, targetRowOverride?: number, overrides?: PosItemSelectionOverrides) => void;
+  /** The POS stock rule; shows the zero-stock alert and returns false when the item may not be sold. */
+  ensureItemSellable: (item: InventoryItem) => boolean;
+  /** Default and reference prices for an item (the resolver the grid uses). */
+  resolveItemRate: (item: InventoryItem) => PosItemRateInfo;
   rows: SaleRow[];
   setRows: React.Dispatch<React.SetStateAction<SaleRow[]>>;
   updateRow: (index: number, field: keyof SaleRow, value: string | number) => void;
@@ -87,6 +94,8 @@ export function PosMobileLayout({
   mobileSearchInputRef,
   inventory,
   selectItem,
+  ensureItemSellable,
+  resolveItemRate,
   rows,
   setRows,
   updateRow,
@@ -108,6 +117,20 @@ export function PosMobileLayout({
   const total = validRows.reduce((sum, row) => sum + row.amount, 0);
   const quantity = validRows.reduce((sum, row) => sum + row.quantity, 0);
   const resultsId = "pos-mobile-product-results";
+  // Tapping a result opens the item sheet (quantity + price) instead of adding a line at once.
+  const [sheetItem, setSheetItem] = useState<InventoryItem | null>(null);
+
+  const openItemSheet = (item: InventoryItem) => {
+    if (!ensureItemSellable(item)) return;
+    setSheetItem(item);
+  };
+
+  const addFromSheet = (item: InventoryItem, quantity: number, rate: number) => {
+    // Same row placement, stock rule and currency handling as every other POS add; the search
+    // is cleared by selectItem and focus returns to it when the sheet closes.
+    selectItem(item, undefined, { quantity, rate });
+    setSheetItem(null);
+  };
 
   return (
     <div
@@ -169,10 +192,7 @@ export function PosMobileLayout({
                     aria-selected="false"
                     key={item.stockItemId ?? item.code}
                     className="flex min-h-14 w-full items-center justify-between gap-3 border-b px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/50 active:bg-primary/10 sm:px-4"
-                    onClick={() => {
-                      selectItem(item);
-                      setSearchTerm("");
-                    }}
+                    onClick={() => openItemSheet(item)}
                     data-testid={`button-mobile-select-item-${item.stockItemId ?? item.code}`}
                   >
                     <span className="min-w-0 flex-1">
@@ -496,6 +516,17 @@ export function PosMobileLayout({
           data-testid="input-mobile-notes"
         />
       </section>
+
+      <PosMobileItemSheet
+        item={sheetItem}
+        onOpenChange={(open) => {
+          if (!open) setSheetItem(null);
+        }}
+        rateInfo={sheetItem ? resolveItemRate(sheetItem) : null}
+        formatDisplayAmount={formatDisplayAmount}
+        onAdd={addFromSheet}
+        returnFocusRef={mobileSearchInputRef}
+      />
 
       <div
         data-pos-mobile-checkout="true"

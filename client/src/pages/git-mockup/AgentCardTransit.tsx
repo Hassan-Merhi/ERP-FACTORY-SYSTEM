@@ -1,3 +1,4 @@
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { useState } from "react";
 import { ChevronUp, ChevronDown, ArrowUp, Filter } from "lucide-react";
 import { fmt, fmtD } from "./helpers";
@@ -29,6 +30,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
   } = props;
 
   const [showActive, setShowActive] = useState(true);
+  const { tableProps } = useMobileCardTable();
 
   if (remainingTransitRows.length === 0 && prepaidTransitRows.length === 0) return null;
 
@@ -89,7 +91,7 @@ export function AgentCardTransit(props: AgentCardTransitProps) {
 
       {showActive && (
         <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-700">
-          <table className="w-full text-xs whitespace-nowrap border-collapse">
+          <table className="w-full text-xs whitespace-nowrap border-collapse" {...tableProps}>
             <thead>
               <tr className="bg-slate-600 dark:bg-slate-700 text-slate-100 border-b border-slate-500">
                 {["CONTAINER", "SUPPLIER", "PLATE", "BORDER DATE", "TRANSPORTER", "LOCATION", "DUTY", ""].map((h) => (

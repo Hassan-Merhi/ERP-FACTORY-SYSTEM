@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { insertUserSchema, insertCompanySchema, insertUserCompanyRoleSchema } from "@shared/schema";
 import type { SettingsLoginHistoryRow } from "./settingsTypes";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 const _userFormSchema = insertUserSchema;
 const _companyFormSchema = insertCompanySchema;
@@ -30,6 +31,7 @@ type _CompanyFormData = z.infer<typeof _companyFormSchema>;
 type _RoleAssignmentData = z.infer<typeof _roleAssignmentSchema>;
 
 export function LoginHistoryTab() {
+  const { tableProps } = useMobileCardTable();
   const { formatDisplayDate } = useDateFormat();
   const { data: history, isLoading } = useQuery<SettingsLoginHistoryRow[]>({
     queryKey: ["/api/login-history"],
@@ -75,7 +77,7 @@ export function LoginHistoryTab() {
       ) : (
         <Card>
           <div className="table-responsive">
-            <table className="w-full text-sm" data-testid="table-login-history">
+            <table className="w-full text-sm" data-testid="table-login-history" {...tableProps}>
               <thead className="sticky top-0 z-30 bg-muted/50">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">User</th>

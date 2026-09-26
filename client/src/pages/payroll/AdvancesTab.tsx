@@ -344,7 +344,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Advances + Deductions</h2>
+          <h2 className="text-2xl font-bold tracking-tight max-sm:text-xl">Advances + Deductions</h2>
           <p className="text-muted-foreground">Manage and track worker salary advances and repayments</p>
         </div>
       </div>
@@ -424,7 +424,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
 
           {/* Outstanding table */}
           <div className="border rounded-md">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader>{advanceTableHeaders}</TableHeader>
               <TableBody>
                 {outstanding.length === 0 ? (
@@ -463,7 +463,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                 )}
               </button>
               {showPaid && (
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>{advanceTableHeaders}</TableHeader>
                   <TableBody>{renderAdvanceRows(paid)}</TableBody>
                 </Table>

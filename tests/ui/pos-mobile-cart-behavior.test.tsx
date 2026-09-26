@@ -11,8 +11,16 @@ import { PosMobileLayout } from "@/pages/pos/pos-components/PosMobileLayout";
 import type { SaleRow } from "@/pages/pos/pos-components/posTypes";
 
 const item = { code: "P7-ITEM", name: "Browser Item", stock: 10, price: 25, configuredPrice: 20, stockItemId: 1 };
+const second = { code: "P7-TWO", name: "Second Item", stock: 4, price: 8, configuredPrice: 6, stockItemId: 2 };
+const empty = { code: "P7-OUT", name: "Sold Out Item", stock: 0, price: 5, configuredPrice: 4, stockItemId: 3 };
 
-function Harness({ onSave }: { onSave: (rows: SaleRow[]) => void }) {
+function Harness({
+  onSave,
+  ensureItemSellable = () => true,
+}: {
+  onSave: (rows: SaleRow[]) => void;
+  ensureItemSellable?: (picked: typeof item) => boolean;
+}) {
   const [rows, setRows] = useState<SaleRow[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const updateRow = (index: number, field: keyof SaleRow, value: string | number) =>
@@ -51,8 +59,17 @@ function Harness({ onSave }: { onSave: (rows: SaleRow[]) => void }) {
       searchTerm={searchTerm}
       setSearchTerm={setSearchTerm}
       mobileSearchInputRef={React.createRef()}
-      inventory={[item]}
-      selectItem={(picked) =>
+      inventory={[item, second, empty]}
+      ensureItemSellable={ensureItemSellable}
+      resolveItemRate={(picked) => ({
+        displayRate: picked.price,
+        normalDisplayRate: picked.price,
+        lastSoldDisplayRate: null,
+      })}
+      selectItem={(picked, _target, overrides) => {
+        const quantity = overrides?.quantity ?? 1;
+        const rate = overrides?.rate ?? picked.price;
+        setSearchTerm("");
         setRows((current) => [
           ...current,
           {
@@ -60,13 +77,13 @@ function Harness({ onSave }: { onSave: (rows: SaleRow[]) => void }) {
             itemName: picked.name,
             stockItemCode: picked.code,
             stockItemId: picked.stockItemId,
-            quantity: 1,
-            rate: picked.price,
-            rateUSD: picked.price,
-            amount: picked.price,
+            quantity,
+            rate,
+            rateUSD: rate,
+            amount: quantity * rate,
           },
-        ])
-      }
+        ]);
+      }}
       rows={rows}
       setRows={setRows}
       updateRow={updateRow}
@@ -87,6 +104,7 @@ describe("phone POS cart", () => {
 
     fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Browser" } });
     fireEvent.click(screen.getByTestId("button-mobile-select-item-1"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-add"));
 
     fireEvent.change(screen.getByTestId("input-mobile-qty-0"), { target: { value: "" } });
     // The line (and the input being edited) must still be there.
@@ -104,6 +122,7 @@ describe("phone POS cart", () => {
     render(<Harness onSave={vi.fn()} />);
     fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Browser" } });
     fireEvent.click(screen.getByTestId("button-mobile-select-item-1"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-add"));
     fireEvent.change(screen.getByTestId("input-mobile-qty-0"), { target: { value: "" } });
 
     expect(screen.getAllByText("0 items · Qty 0").length).toBeGreaterThan(0);
@@ -114,9 +133,59 @@ describe("phone POS cart", () => {
     render(<Harness onSave={vi.fn()} />);
     fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Browser" } });
     fireEvent.click(screen.getByTestId("button-mobile-select-item-1"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-add"));
     fireEvent.click(screen.getByTestId("button-mobile-delete-0"));
 
     expect(screen.queryByTestId("input-mobile-qty-0")).not.toBeInTheDocument();
     expect(screen.getByText("Search above to add items.")).toBeInTheDocument();
+  });
+
+  it("opens the item sheet on tap and adds the chosen quantity and price", () => {
+    const onSave = vi.fn();
+    render(<Harness onSave={onSave} />);
+
+    fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Browser" } });
+    fireEvent.click(screen.getByTestId("button-mobile-select-item-1"));
+    // Nothing enters the cart until Add Item.
+    expect(screen.queryByTestId("input-mobile-qty-0")).not.toBeInTheDocument();
+    expect(screen.getByTestId("sheet-pos-mobile-item")).toHaveTextContent("Browser Item");
+    expect(screen.getByTestId("input-pos-sheet-rate")).toHaveValue(25);
+
+    fireEvent.change(screen.getByTestId("input-pos-sheet-quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByTestId("input-pos-sheet-rate"), { target: { value: "30" } });
+    expect(screen.getByTestId("text-pos-sheet-total")).toHaveTextContent("$ 150");
+    fireEvent.click(screen.getByTestId("button-pos-sheet-add"));
+
+    // Second item straight after: search, tap, step quantity to 2, add.
+    fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Second" } });
+    fireEvent.click(screen.getByTestId("button-mobile-select-item-2"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-qty-plus"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-add"));
+
+    expect(screen.getByTestId("input-mobile-qty-0")).toHaveValue(5);
+    expect(screen.getByTestId("input-mobile-rate-0")).toHaveValue(30);
+    expect(screen.getByTestId("input-mobile-qty-1")).toHaveValue(2);
+    fireEvent.click(screen.getByTestId("button-mobile-checkout"));
+    expect(onSave).toHaveBeenCalledWith([
+      expect.objectContaining({ stockItemId: 1, quantity: 5, amount: 150 }),
+      expect.objectContaining({ stockItemId: 2, quantity: 2, amount: 16 }),
+    ]);
+  });
+
+  it("cancels without adding anything", () => {
+    render(<Harness onSave={vi.fn()} />);
+    fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Browser" } });
+    fireEvent.click(screen.getByTestId("button-mobile-select-item-1"));
+    fireEvent.click(screen.getByTestId("button-pos-sheet-cancel"));
+    expect(screen.queryByTestId("input-mobile-qty-0")).not.toBeInTheDocument();
+  });
+
+  it("keeps the stock rule: an item that may not be sold never opens the sheet", () => {
+    const ensureItemSellable = vi.fn((picked: typeof item) => picked.stock > 0);
+    render(<Harness onSave={vi.fn()} ensureItemSellable={ensureItemSellable} />);
+    fireEvent.change(screen.getByTestId("input-mobile-product-search"), { target: { value: "Sold" } });
+    fireEvent.click(screen.getByTestId("button-mobile-select-item-3"));
+    expect(ensureItemSellable).toHaveBeenCalledWith(empty);
+    expect(screen.queryByTestId("sheet-pos-mobile-item")).not.toBeInTheDocument();
   });
 });

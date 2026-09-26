@@ -121,6 +121,10 @@ export function InventoryTable({
                       >
                         <span className="flex items-center gap-2 min-w-0">
                           <span className="truncate">{item.stockItemName}</span>
+                          {/* The code is a column on desktop search; phone cards show it under the name. */}
+                          <span className="hidden font-mono text-xs font-normal text-muted-foreground [[data-mobile-cards=true]_&]:inline">
+                            {item.stockItemCode}
+                          </span>
                           {item.stockItemActive === false && (
                             <Badge variant="outline" className="text-xs shrink-0">
                               Inactive
@@ -163,8 +167,10 @@ export function InventoryTable({
                       </>
                     ) : (
                       <td className={`px-3 text-right font-mono font-semibold ${isNegative ? "text-red-600" : ""}`}>
-                        {Math.floor(closingQty).toLocaleString()}
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">BL</span>
+                        <span>
+                          {Math.floor(closingQty).toLocaleString()}
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">BL</span>
+                        </span>
                       </td>
                     )}
                     {canViewCost && (

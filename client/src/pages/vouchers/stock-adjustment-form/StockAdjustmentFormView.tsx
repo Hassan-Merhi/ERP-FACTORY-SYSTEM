@@ -18,6 +18,8 @@ import type { StockAdjustmentFormModel } from "./useStockAdjustmentFormModel";
 import { AdjustmentMobileRows } from "./AdjustmentMobileRows";
 import { AdjustmentSpreadsheet } from "./AdjustmentSpreadsheet";
 import { AdjustmentItemSidebar } from "./AdjustmentItemSidebar";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { VoucherPhoneActionBar, useVoucherEditCancel } from "../VoucherPhoneActionBar";
 
 export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormModel }) {
   const {
@@ -32,12 +34,16 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
     handleExportProductionConsumptionVoucher,
     onStockAdjustmentSubmit,
     formatAmount,
+    voucherIdToEdit,
   } = model;
+  const isPhone = useErpPhoneLayout();
+  const cancelEdit = useVoucherEditCancel(!!voucherIdToEdit);
+  const totalQuantity = adjustmentEntries.reduce((sum, e) => sum + parseFloat(e.quantity || "0"), 0);
 
   return (
     <div className="space-y-4">
       <Card>
-        <div className="p-5">
+        <div className="p-5 max-sm:p-3">
           <div className="flex items-center gap-2 mb-5">
             <span className="text-sm font-semibold">Production / Consumption Voucher</span>
           </div>
@@ -105,15 +111,16 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
 
               {/* Unified Production/Consumption Table + Sidebar */}
               <div className="flex flex-col lg:flex-row gap-4">
-                <Card className="flex-1 overflow-hidden min-w-0">
+                {/* Phones: the entry cards sit directly in the form card (no card-in-card padding). */}
+                <Card className="flex-1 overflow-hidden min-w-0 max-sm:border-0 max-sm:shadow-none max-sm:bg-transparent">
                   {/* Mobile: card-per-row */}
                   <AdjustmentMobileRows model={model} />
 
                   {/* Desktop: spreadsheet */}
                   <AdjustmentSpreadsheet model={model} />
 
-                  {/* Total Section */}
-                  <div className="border-t bg-muted/20 p-4">
+                  {/* Total Section (phones: the mobile rows carry Add Row, the save bar the totals) */}
+                  <div className="border-t bg-muted/20 p-4 hidden sm:block">
                     <div className="flex flex-wrap justify-between items-center gap-2">
                       <Button
                         type="button"
@@ -232,14 +239,25 @@ export function StockAdjustmentFormView({ model }: { model: StockAdjustmentFormM
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  type="submit"
-                  disabled={stockAdjustmentMutation.isPending || adjustmentEntries.length === 0}
-                  data-testid="button-save-adjustment-voucher"
-                >
-                  {stockAdjustmentMutation.isPending ? "Saving..." : "Save Production/Consumption Voucher"}
-                </Button>
+                {!isPhone && (
+                  <Button
+                    type="submit"
+                    disabled={stockAdjustmentMutation.isPending || adjustmentEntries.length === 0}
+                    data-testid="button-save-adjustment-voucher"
+                  >
+                    {stockAdjustmentMutation.isPending ? "Saving..." : "Save Production/Consumption Voucher"}
+                  </Button>
+                )}
               </div>
+
+              <VoucherPhoneActionBar
+                summary={`Qty ${formatNumber(totalQuantity)} · Total ${formatAmount(displayAdjustmentTotal)}`}
+                saveLabel="Save Voucher"
+                saving={stockAdjustmentMutation.isPending}
+                disabled={adjustmentEntries.length === 0}
+                onCancel={cancelEdit}
+                data-testid="adjustment-phone-actions"
+              />
             </form>
           </Form>
         </div>

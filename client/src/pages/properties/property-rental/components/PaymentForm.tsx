@@ -149,7 +149,7 @@ export function PaymentForm({
             />
           </div>
         )}
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Label>Notes</Label>
           <Textarea
             rows={2}
@@ -159,7 +159,7 @@ export function PaymentForm({
           />
         </div>
         {form.paymentDate > new Date().toISOString().slice(0, 10) && (
-          <div className="col-span-2 flex items-center gap-3">
+          <div className="sm:col-span-2 flex items-center gap-3">
             <Switch
               id={`${testIdPrefix}-schedule-future`}
               checked={scheduleFuturePayment}
