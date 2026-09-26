@@ -465,3 +465,31 @@ section.
 - Shared fix: in a `grid-cols-1 sm:grid-cols-2` form, a bare `col-span-2` row created an
   implicit second column that squeezed every field on phones. Such rows now span the single
   column (ERP phones), and the rental forms use `sm:col-span-2`.
+
+### R7 — Certification of the real-device workflows
+
+`scripts/verify-erp-mobile-program.mjs --workflows` adds workflow probes
+(`scripts/lib/erp-mobile-workflows.mjs`) to the route sweep. On every phone viewport (320,
+360, 393, 412 and phone landscape) and language they drive the fourteen remediation items:
+
+| # | Probe | What it proves |
+| - | ----- | -------------- |
+| 1 | `git-tracking` | every GIT tab renders without a table wider than the phone |
+| 2 | `location-inventory` | location → stock → Stock Groups → group items stay card-based |
+| 3 | `pos-item-sheet` | a search result opens the item sheet; Add closes it and refocuses search |
+| 4 | `account-statement` | tapping an account name opens the statement as cards |
+| 5 | `mobile-navigation` | More opens the page menu, search finds Payroll, navigation closes it |
+| 6 | `agent-ledger` | agent list → statement → Back to agents |
+| 7 | `daybook-voucher` | a voucher opens in a dialog that fits, with its last action reachable |
+| 8 | `edits-activity` | Edits & Activity renders without a wide table |
+| 9 | `all-daybook` | All Daybook renders without a wide table |
+| 10 | `voucher-types` | each of the seven voucher types reaches its Save action |
+| 11 | `profit-check` | Profit Check renders as cards |
+| 12 | `payroll` | every Payroll tab renders without a wide table |
+| 13 | `rental-shops` | unit cards open the unit dialog with uncut tabs |
+| 14 | `settings` | every Settings section renders, sub-tabs uncut |
+
+A probe without fixture data (for example no POS items) is reported as `skipped` with the
+reason, never as passed. `ERP_MOBILE_POS_QUERY` and `ERP_MOBILE_POS_LOCATION_ID` point the POS
+probe at fixture items. The report's `workflows` array and the `workflowFailures` summary join
+the route results; any workflow failure fails the run.
