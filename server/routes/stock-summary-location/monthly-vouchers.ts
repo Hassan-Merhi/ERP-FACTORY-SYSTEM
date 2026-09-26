@@ -686,7 +686,9 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
 
         // Use the expected opening (which reconciles with inventory) as the actual opening
         // For value, use the expected rate from inventory (this ensures consistency)
-        const historicalOpeningQty = openingHistoryRow ? parseFloat(openingHistoryRow.quantity) || 0 : expectedOpeningQty;
+        const historicalOpeningQty = openingHistoryRow
+          ? parseFloat(openingHistoryRow.quantity) || 0
+          : expectedOpeningQty;
         const historicalOpeningValue = openingHistoryRow
           ? parseFloat(openingHistoryRow.totalValue) || 0
           : expectedOpeningValue;
