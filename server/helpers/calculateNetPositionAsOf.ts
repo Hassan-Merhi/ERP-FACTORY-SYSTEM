@@ -8,7 +8,7 @@
 
 import { db, type RawQueryRow } from "../db";
 import { storage } from "../storage";
-import { locations, employees, suppliers, containers } from "@shared/schema";
+import { locations, employees, containers } from "@shared/schema";
 import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
 import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../netPositionHelper";
 import { calculateHistoricalLocationInventory } from "../routes/_helpers";
