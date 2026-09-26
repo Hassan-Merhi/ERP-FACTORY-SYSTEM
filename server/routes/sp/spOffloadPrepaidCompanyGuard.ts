@@ -58,11 +58,11 @@ export function registerSpOffloadPrepaidCompanyGuard(app: Express) {
               AND company_id = ${companyId}
           `);
         const ownedIds = new Set(resultRows<{ id: unknown }>(rows).map((row) => Number(row.id)));
-        const missingId = prepaidIds.find((prepaidId) => !ownedIds.has(prepaidId));
+        const prepaidId = prepaidIds.find((id) => !ownedIds.has(id));
 
-        if (missingId !== undefined) {
+        if (prepaidId !== undefined) {
           return res.status(400).json({
-            message: `Prepaid charge #${missingId} not found for this company`,
+            message: `Prepaid charge #${prepaidId} not found for this company`,
           });
         }
       }
