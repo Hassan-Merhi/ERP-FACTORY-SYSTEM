@@ -15,6 +15,11 @@
  *   - small interactive touch targets on phones
  *   - console errors and uncaught page errors
  *
+ * With --workflows it also drives the real-device phone workflows (remediation items 1–14:
+ * open the record, sheet or dialog and check its phone representation and reachable actions)
+ * on every phone viewport; see scripts/lib/erp-mobile-workflows.mjs. --workflows-only skips
+ * the route sweep and --workflow-ids=a,b limits the probes.
+ *
  * Usage:
  *   ERP_SMOKE_USERNAME=... ERP_SMOKE_PASSWORD=... \
  *   node scripts/verify-erp-mobile-program.mjs [--routes=/a,/b] [--viewports=phone-320,desktop-1440] \
@@ -29,6 +34,7 @@ import path from "node:path";
 import puppeteer from "puppeteer";
 
 import { awaitAuthenticatedShell, watchSignInResponses } from "./lib/browser-smoke-signin.mjs";
+import { runErpMobileWorkflows } from "./lib/erp-mobile-workflows.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((arg) => {
@@ -46,6 +52,9 @@ const COMPANY_CODE = args.company || process.env.ERP_MOBILE_PROGRAM_COMPANY || "
 const TAKE_SCREENSHOTS = args.screenshots === "true" || args.screenshots === "all";
 const SCREENSHOT_ALL_VIEWPORTS = args.screenshots === "all";
 const EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+const WORKFLOWS_ONLY = args["workflows-only"] === "true";
+const RUN_WORKFLOWS = WORKFLOWS_ONLY || args.workflows === "true";
+const WORKFLOW_IDS = args["workflow-ids"] ? new Set(args["workflow-ids"].split(",")) : undefined;
 
 if (!USERNAME || !PASSWORD) {
   console.error("ERP mobile program certification requires ERP_SMOKE_USERNAME and ERP_SMOKE_PASSWORD.");
@@ -88,6 +97,8 @@ export const ERP_ROUTES = [
   "/create",
   "/optional-vouchers",
   "/transaction-journal",
+  "/location-inventory",
+  "/pos",
   "/analytics",
   "/sales-report",
   "/sales-report/comparison",
@@ -388,7 +399,13 @@ function classify(result) {
   return { blocking, warnings };
 }
 
-const report = { startedAt: new Date().toISOString(), baseUrl: BASE_URL, company: COMPANY_CODE, cases: [] };
+const report = {
+  startedAt: new Date().toISOString(),
+  baseUrl: BASE_URL,
+  company: COMPANY_CODE,
+  cases: [],
+  workflows: [],
+};
 
 await fs.mkdir(OUTPUT_DIR, { recursive: true });
 const browser = await puppeteer.launch({
@@ -419,7 +436,7 @@ try {
         hasTouch: viewport.hasTouch,
         deviceScaleFactor: 1,
       });
-      for (const route of ROUTES) {
+      for (const route of WORKFLOWS_ONLY ? [] : ROUTES) {
         consoleErrors.length = 0;
         let result;
         let navigationRetried = false;
@@ -455,6 +472,21 @@ try {
             .catch(() => undefined);
         }
       }
+
+      // Workflow probes run where the phone layout applies: narrow phones and phone landscape.
+      if (RUN_WORKFLOWS && viewport.isMobile && (viewport.width < 640 || viewport.height <= 500)) {
+        const results = await runErpMobileWorkflows(page, {
+          baseUrl: BASE_URL,
+          timeoutMs: TIMEOUT_MS,
+          settle,
+          only: WORKFLOW_IDS,
+        });
+        for (const result of results) {
+          report.workflows.push({ language, viewport: viewport.name, ...result });
+          const detail = result.failures.length ? ` :: ${result.failures.join("; ")}` : result.reason ? ` (${result.reason})` : "";
+          console.log(`${result.status.toUpperCase()} workflow#${result.item} ${language} ${viewport.name} ${result.id}${detail}`);
+        }
+      }
     }
   }
 } finally {
@@ -466,7 +498,10 @@ report.summary = {
   cases: report.cases.length,
   failures: report.cases.filter((c) => c.blocking.length).length,
   warnings: report.cases.filter((c) => !c.blocking.length && c.warnings.length).length,
+  workflows: report.workflows.length,
+  workflowFailures: report.workflows.filter((w) => w.status === "fail").length,
+  workflowSkipped: report.workflows.filter((w) => w.status === "skipped").length,
 };
 await fs.writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report.summary));
-process.exit(report.summary.failures ? 1 : 0);
+process.exit(report.summary.failures || report.summary.workflowFailures ? 1 : 0);
