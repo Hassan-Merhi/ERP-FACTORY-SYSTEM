@@ -498,10 +498,13 @@ Certification result on the `PHASE7-ERP` fixture (EN, FR, AR):
 
 - Route sweep at 320, 360, 393, 412, phone landscape, 768 and 1440: 1,449 route cases with no
   blocking failure after the landscape fixes (landscape and tablet re-run: 414 cases, 0 failures).
-  The only remaining warning is the POS location picker's legacy `<h1>` title (pre-existing).
+  The POS location picker's legacy `<h1>` title was the last warning; it now uses `PageHeader`.
 - Workflow probes: 210 runs (14 probes × 5 phone viewports × 3 languages), 0 failures, 0 skipped.
 - Found and fixed by this pass: the account row edit pencil catching row taps; All Daybook's
   desktop table and a pinned sidebar in phone landscape; hover-only Daybook row actions on touch
   screens; the voucher entries header painting over the Payment/Receipt Save footer.
-- Outside the fourteen items: `/convergence-reconciliation` (a developer tool) still shows a
-  500px table on portrait phones.
+- Follow-ups outside the fourteen items, since fixed: `/convergence-reconciliation` lists its
+  discrepancies as cards on phones, and the Transfer Order phone save bar shows from the start
+  (Process disabled with "Add an item" until the order has a line and a destination) and now
+  pins to the screen (its wrapper clips with `overflow-x-clip` instead of creating a scroll
+  container with `overflow-x-hidden`).

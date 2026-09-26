@@ -228,6 +228,7 @@ export const sharedInterfaceTranslations: SharedEntry[] = [
   { en: "Increase quantity", ar: "زيادة الكمية", fr: "Augmenter la quantité" },
   { en: "Choose the voucher to enter.", ar: "اختر نوع السند المراد إدخاله.", fr: "Choisissez la pièce à saisir." },
   { en: "Voucher type", ar: "نوع السند", fr: "Type de pièce" },
+  { en: "Choose the location to sell from.", ar: "اختر موقع البيع.", fr: "Choisissez l’emplacement de vente." },
 ];
 const entryByVisibleText = new Map<string, SharedEntry>();
 

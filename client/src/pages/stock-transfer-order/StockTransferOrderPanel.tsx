@@ -302,16 +302,25 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
         </CardContent>
       </Card>
 
-      {orderItems.length > 0 && (
-        <VoucherPhoneActionBar
-          summary={`${orderItems.length} items · ${totalBales} bales`}
-          saveLabel={processLabel}
-          savingLabel={editVoucherId ? "Updating..." : "Processing..."}
-          saving={isProcessing}
-          disabled={!destinationLocationId}
-          onSave={handleProcessOrder}
-          onCancel={cancelEdit}
-          extra={
+      {/* Always on phones, so Process is visible from the start; it enables once the order has a
+          destination and at least one item, and the status says what is still missing. */}
+      <VoucherPhoneActionBar
+        summary={`${orderItems.length} items · ${totalBales} bales`}
+        status={
+          orderItems.length === 0
+            ? { ok: false, label: "Add an item" }
+            : !destinationLocationId
+              ? { ok: false, label: "Choose destination" }
+              : undefined
+        }
+        saveLabel={processLabel}
+        savingLabel={editVoucherId ? "Updating..." : "Processing..."}
+        saving={isProcessing}
+        disabled={orderItems.length === 0 || !destinationLocationId}
+        onSave={handleProcessOrder}
+        onCancel={cancelEdit}
+        extra={
+          orderItems.length > 0 ? (
             <>
               <Button variant="outline" onClick={handleValidate} data-testid="button-validate-order">
                 <Check className="h-4 w-4 mr-1" />
@@ -329,10 +338,10 @@ export function StockTransferOrderPanel({ model }: { model: Model }) {
                 </Button>
               )}
             </>
-          }
-          data-testid="transfer-order-phone-actions"
-        />
-      )}
+          ) : undefined
+        }
+        data-testid="transfer-order-phone-actions"
+      />
     </div>
   );
 }

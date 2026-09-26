@@ -11,9 +11,6 @@
 
 const VOUCHER_TYPES = ["payment", "receipt", "journal", "transfer", "transferorder", "adjustment", "creditnote"];
 
-/** Voucher types whose save action only exists once the voucher has a line (desktop too). */
-const EMPTY_UNTIL_LINES = new Set(["transferorder"]);
-
 /** Save / process controls of the voucher forms (phone save bar, payment footer, desktop rows). */
 const SAVE_CONTROLS =
   '[data-voucher-sticky-actions] button[data-testid$="-save"], [data-testid="button-save-voucher"], #main-content [data-testid^="button-save"], #main-content [data-testid^="button-process"]';
@@ -364,7 +361,7 @@ export const ERP_MOBILE_WORKFLOWS = [
         }
         await ctx.assertPhoneLayout(`voucher ${type}`);
         // The save control can be scrolled into view and is not covered (bottom nav, sticky bars).
-        await ctx.exists(SAVE_CONTROLS, { timeout: EMPTY_UNTIL_LINES.has(type) ? 1500 : 5000 });
+        await ctx.exists(SAVE_CONTROLS, { timeout: 5000 });
         const save = await ctx.page.evaluate((saveControls) => {
           const vh = window.innerHeight;
           const seen = [];
@@ -383,11 +380,7 @@ export const ERP_MOBILE_WORKFLOWS = [
           return { ok: false, detail: seen.join(", ") || "none rendered" };
         }, SAVE_CONTROLS);
         const reachable = save.ok;
-        if (!reachable && EMPTY_UNTIL_LINES.has(type)) {
-          ctx.note(`${type}: no lines yet, Process appears with the first item (as on desktop)`);
-        } else if (!reachable) {
-          ctx.fail(`voucher ${type}: no reachable, uncovered Save action (${save.detail})`);
-        }
+        if (!reachable) ctx.fail(`voucher ${type}: no reachable, uncovered Save action (${save.detail})`);
       }
     },
   },
