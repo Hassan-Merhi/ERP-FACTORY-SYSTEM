@@ -13,6 +13,7 @@ import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { _npsCached, _npsSetCache } from "./reportsNetProfitCache";
+import { isInventoryValuationOnlyAccount } from "../lib/inventoryPnlAccounts";
 
 export function registerReportsNetProfitStatementRoutes(app: Express) {
   // Net Profit Drill-down: Purchase Accounts
@@ -190,6 +191,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
         (acc) =>
           acc.code !== "PURCHASES" &&
           !acc.code?.startsWith("PURCHASES") &&
+          !isInventoryValuationOnlyAccount(acc) &&
           (acc.accountType === "Direct Expense" ||
             (acc.accountType === "Expense" && acc.subType === "Direct Expense") ||
             importChargesAccountIds.has(acc.id))
@@ -267,8 +269,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
         (acc) =>
           (acc.accountType === "Indirect Expense" ||
             (acc.accountType === "Expense" && acc.subType === "Indirect Expense")) &&
-          acc.code !== "PRODUCTION_ADJUSTMENT" &&
-          acc.code !== "CONSUMPTION_EXPENSE" &&
+          !isInventoryValuationOnlyAccount(acc) &&
           acc.code !== "PURCHASES" &&
           !acc.code?.startsWith("PURCHASES")
       );

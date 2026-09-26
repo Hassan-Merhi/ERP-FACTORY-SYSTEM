@@ -43,6 +43,53 @@ import { calculatePLTotal } from "./accountMath";
 
 import { useAccountRenderers } from "./useAccountRenderers";
 
+function isInventoryOnlyExpenseAccount(account: { code?: string | null; name?: string | null }): boolean {
+  const code = (account.code || "").trim().toUpperCase();
+  if (
+    code === "INVENTORY" ||
+    code === "STOCK_ADJUSTMENT" ||
+    code === "PRODUCTION_ADJUSTMENT" ||
+    code === "CONSUMPTION_EXPENSE"
+  ) {
+    return true;
+  }
+
+  const name = (account.name || "").trim().toLowerCase();
+  return name === "credit note - customer return" || name === "stock adjustment (production/consumption)";
+}
+
+function sanitizeNetProfitInventoryExpenses(data: NetProfitStatementData): NetProfitStatementData {
+  const directAccounts = data.leftPane.directExpenses.accounts.filter((acc) => !isInventoryOnlyExpenseAccount(acc));
+  const indirectAccounts = data.leftPane.indirectExpenses.accounts.filter((acc) => !isInventoryOnlyExpenseAccount(acc));
+
+  const directTotal = directAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+  const indirectTotal = indirectAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
+  const removedDirect = data.leftPane.directExpenses.total - directTotal;
+  const removedIndirect = data.leftPane.indirectExpenses.total - indirectTotal;
+
+  return {
+    ...data,
+    leftPane: {
+      ...data.leftPane,
+      directExpenses: {
+        ...data.leftPane.directExpenses,
+        accounts: directAccounts,
+        count: directAccounts.length,
+        total: directTotal,
+      },
+      indirectExpenses: {
+        ...data.leftPane.indirectExpenses,
+        accounts: indirectAccounts,
+        count: indirectAccounts.length,
+        total: indirectTotal,
+      },
+      tradingTotal: data.leftPane.tradingTotal - removedDirect,
+      grossProfit: data.leftPane.grossProfit + removedDirect,
+      netProfit: data.leftPane.netProfit + removedDirect + removedIndirect,
+    },
+  };
+}
+
 /**
  * State, queries and derived values for the legacy Analytics page.
  *
@@ -484,7 +531,8 @@ export function useAnalyticsLegacy() {
       const url = `${base}${params.toString() ? `?${params.toString()}` : ""}`;
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch net profit statement");
-      return response.json();
+      const data = (await response.json()) as NetProfitStatementData;
+      return sanitizeNetProfitInventoryExpenses(data);
     },
     enabled: !!selectedCompany,
   });
@@ -566,7 +614,7 @@ export function useAnalyticsLegacy() {
     const isExpenseAccount =
       acc.accountType === "Expense" || acc.accountType === "Indirect Expense" || acc.accountType === "Direct Expense";
 
-    return isExpenseAccount;
+    return isExpenseAccount && !isInventoryOnlyExpenseAccount(acc);
   });
 
   const directExpenseAccounts = expenseAccounts.filter(
